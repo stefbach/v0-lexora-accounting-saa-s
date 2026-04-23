@@ -3354,6 +3354,45 @@ export async function POST(request: Request) {
           console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folio=${refFolio}|${refFolioCLS}, lettre=${oldLettre})`)
         }
 
+        // ── RECLASSIFICATION CCA : nettoyer les mouvements_compte_courant ──
+        // Si la tx était classée 'compte_courant_associe' avant, ou si elle l'est
+        // maintenant et qu'un mouvement existe déjà pour ce (releve_id, txIdx),
+        // on supprime le mouvement précédent. Sans ça, re-classer une tx CCA
+        // (changer d'associé) OU classer en autre type laisse un fantôme dans
+        // mouvements_compte_courant + un solde CCA faux.
+        // Idempotent : si rien à supprimer, count=0.
+        try {
+          const { data: oldMvts, count: nbMvtsSupprimees } = await supabase
+            .from('mouvements_compte_courant')
+            .delete({ count: 'exact' })
+            .eq('societe_id', societe_id)
+            .eq('source_releve_id', releve_id)
+            .eq('source_transaction_idx', txIdx)
+            .select('compte_courant_id, type, montant')
+          // Ré-équilibrer le solde du/des CCA impactés (sans les anciens mouvements)
+          if (oldMvts && oldMvts.length > 0) {
+            const ccaIds = Array.from(new Set(oldMvts.map((m: any) => m.compte_courant_id)))
+            for (const ccaId of ccaIds) {
+              const { data: remaining } = await supabase
+                .from('mouvements_compte_courant')
+                .select('type, montant')
+                .eq('compte_courant_id', ccaId)
+              const newSolde = (remaining || []).reduce((sum: number, m: any) => {
+                const sign = ['avance', 'retrait'].includes(m.type) ? -1 :
+                             ['apport', 'remboursement'].includes(m.type) ? 1 : 0
+                return sum + sign * (Number(m.montant) || 0)
+              }, 0)
+              await supabase.from('comptes_courants_associes')
+                .update({ solde: Math.round(newSolde * 100) / 100, updated_at: new Date().toISOString() })
+                .eq('id', ccaId)
+            }
+            console.log(`[classer_transaction] ${nbMvtsSupprimees} ancien(s) mouvement(s) CCA supprimé(s) sur ${ccaIds.length} compte(s) — soldes recalculés`)
+          }
+        } catch (cleanupErr) {
+          console.warn('[classer_transaction] CCA cleanup failed:', cleanupErr)
+          // Non bloquant — on continue avec la nouvelle classification
+        }
+
         // R7 : pas de lettre sur comptes de résultat (6xxx/7xxx).
         // Le ref_folio assure la traçabilité, la lettre ne va que sur le 512.
         const compteClass = compte.charAt(0)
