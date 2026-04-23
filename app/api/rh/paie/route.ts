@@ -776,16 +776,20 @@ export async function POST(request: Request) {
         // Mois futur : today < début de mois → tous exclus (jours_absence=0).
         const today = new Date().toISOString().slice(0, 10)
         for (const day of workingDaysList) {
-          // F2 : skip les jours dans le futur
-          if (day > today) continue
           const pt = pointageByDate.get(day)
           const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+          // G-leaves-fix : si le jour est couvert par un congé approuvé,
+          //   on le traite TOUJOURS comme congé (AL/SL/UL) — jamais
+          //   comme absence, peu importe la date courante. Le check
+          //   enConge doit PRÉCÉDER le skip "jour futur".
           if (enConge) {
             if (pt?.heure_entree) {
               anomaliesPointage.push(`Pointage enregistré le ${day} alors que l'employé était en congé (le congé prévaut)`)
             }
             continue
           }
+          // F2 : skip les jours dans le futur (sans congé approuvé)
+          if (day > today) continue
           if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
             jours_absence_injust++
             anomaliesPointage.push(`Absence non justifiée le ${day}`)
@@ -1500,16 +1504,19 @@ export async function POST(request: Request) {
           // que dans le chemin SINGLE (cf. action='calculer').
           const todayBatch = new Date().toISOString().slice(0, 10)
           for (const day of workingDaysListBatch) {
-            // F2 : skip les jours dans le futur
-            if (day > todayBatch) continue
             const pt = pointageByDateBatch.get(day)
             const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+            // G-leaves-fix : un jour couvert par un congé approuvé est
+            //   TOUJOURS traité comme congé (jamais absence), même pour
+            //   une date future. Check enConge AVANT le skip "futur".
             if (enConge) {
               if (pt?.heure_entree) {
                 anomaliesPointageBatch.push(`Pointage le ${day} alors que l'employé était en congé`)
               }
               continue
             }
+            // F2 : skip les jours dans le futur (sans congé approuvé)
+            if (day > todayBatch) continue
             if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
               jours_absence_injust++
               anomaliesPointageBatch.push(`Absence non justifiée le ${day}`)
