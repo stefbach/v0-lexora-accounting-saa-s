@@ -179,13 +179,14 @@ export async function getCalculsExistants(
   supabase: SupabaseLike,
   societeId: string,
   annee: number,
-): Promise<Array<EoyBonusCalcul & { id: string; statut: string; updated_at: string }>> {
+): Promise<Array<EoyBonusCalcul & { id: string; statut: string; updated_at: string; bulletin_75pct_id: string | null; bulletin_25pct_id: string | null }>> {
   const { data } = await supabase
     .from('eoy_bonus_calculs')
     .select(`id, employe_id, societe_id, annee, earnings_annuel, nb_mois_travailles,
              salaire_decembre, moyenne_mensuelle, base_calcul, prorata_applique,
              bonus_calcule, eligible, motif_non_eligible, bulletins_trouves,
              bulletins_attendus, statut, updated_at,
+             bulletin_75pct_id, bulletin_25pct_id,
              employes:employe_id(prenom, nom)`)
     .eq('societe_id', societeId)
     .eq('annee', annee)
@@ -211,6 +212,8 @@ export async function getCalculsExistants(
     bulletins_attendus: Number(r.bulletins_attendus) || 0,
     statut: String(r.statut || 'calcule'),
     updated_at: String(r.updated_at || ''),
+    bulletin_75pct_id: r.bulletin_75pct_id || null,
+    bulletin_25pct_id: r.bulletin_25pct_id || null,
   }))
 }
 

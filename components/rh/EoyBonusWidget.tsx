@@ -72,7 +72,7 @@ export function EoyBonusWidget() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-sm" style={{ color: NAVY }}>
-                Préparez l&apos;EOY Bonus {annee}
+                {getWidgetTitle(now, annee, recap)}
               </p>
               <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
                 WRA S.54
@@ -124,4 +124,22 @@ export function EoyBonusWidget() {
 function fmtDate(ymd: string): string {
   if (!ymd || ymd.length < 10) return '—'
   return `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}`
+}
+
+/** Titre contextuel selon le mois + l'état des calculs. */
+function getWidgetTitle(now: Date, annee: number, recap: EoyBonusRecap | null): string {
+  const m = now.getMonth() + 1  // 1..12
+  const d = now.getDate()
+  if (m === 10 || m === 11) {
+    return `📅 EOY Bonus ${annee} : préparez le calcul`
+  }
+  // Décembre
+  if (m === 12) {
+    if (d <= 18) {
+      const n = recap?.nb_eligibles ?? 0
+      return `⚠ EOY 75% à payer avant le 18/12${n > 0 ? ` (${n} employé${n > 1 ? 's' : ''})` : ''}`
+    }
+    return `⚠ EOY 25% à payer avant le 31/12`
+  }
+  return `Préparez l'EOY Bonus ${annee}`
 }

@@ -20,18 +20,32 @@ import {
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
+type EoyCalculEnriched = EoyBonusCalcul & {
+  id?: string
+  bulletin_75pct_id?: string | null
+  bulletin_25pct_id?: string | null
+  statut?: string
+}
+
 export default function EoyBonusPage() {
   const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [annee, setAnnee] = useState<number>(new Date().getFullYear())
 
-  const [calculs, setCalculs] = useState<EoyBonusCalcul[]>([])
+  const [calculs, setCalculs] = useState<EoyCalculEnriched[]>([])
   const [recap, setRecap] = useState<EoyBonusRecap | null>(null)
   const [savedFlag, setSavedFlag] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(false)
   const [processing, setProcessing] = useState<'preview' | 'save' | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [authorized, setAuthorized] = useState<boolean | null>(null)
+  const [userRole, setUserRole] = useState<string>("")
+  const [rowLoading, setRowLoading] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<
+    | { kind: 'generer'; portion: '75pct' | '25pct'; calcul: EoyCalculEnriched }
+    | { kind: 'annuler'; portion: '75pct' | '25pct'; calcul: EoyCalculEnriched }
+    | null
+  >(null)
 
   const [detailOpen, setDetailOpen] = useState<EoyBonusCalcul | null>(null)
 
@@ -45,6 +59,7 @@ export default function EoyBonusPage() {
         if (!user) { setAuthorized(false); return }
         const { data: prof } = await sb.from('profiles').select('role').eq('id', user.id).maybeSingle()
         const role = (prof as any)?.role || ''
+        setUserRole(role)
         if (!['admin', 'rh'].includes(role)) { setAuthorized(false); return }
         setAuthorized(true)
 
@@ -103,6 +118,39 @@ export default function EoyBonusPage() {
       setFeedback(`⚠ ${e?.message || 'erreur'}`)
     } finally {
       setProcessing(null)
+    }
+  }
+
+  // G11.10 — génération / annulation d'un bulletin EOY.
+  const runGenererOrAnnuler = async (
+    kind: 'generer' | 'annuler',
+    portion: '75pct' | '25pct',
+    calcul: EoyCalculEnriched,
+    force = false,
+  ) => {
+    if (!calcul.id) return
+    setRowLoading(calcul.id)
+    setFeedback(null)
+    try {
+      const path = kind === 'generer'
+        ? `/api/rh/eoy-bonus/${calcul.id}/generer-bulletin-${portion.replace('pct', '')}`
+        : `/api/rh/eoy-bonus/${calcul.id}/annuler-bulletin?portion=${portion.replace('pct', '')}`
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(kind === 'generer' ? { force } : {}),
+      })
+      const d = await res.json()
+      if (!res.ok) { setFeedback(`⚠ ${d?.error || `HTTP ${res.status}`}`); return }
+      setFeedback(kind === 'generer'
+        ? `✅ Bulletin EOY ${portion} généré (${d.bulletin_id?.slice(0, 8) || 'OK'}).`
+        : `✅ Bulletin EOY ${portion} annulé.`)
+      await loadExisting()
+    } catch (e: any) {
+      setFeedback(`⚠ ${e?.message || 'erreur'}`)
+    } finally {
+      setRowLoading(null)
+      setConfirmAction(null)
     }
   }
 
@@ -308,12 +356,13 @@ export default function EoyBonusPage() {
                         <TableHead className="text-right">Bonus</TableHead>
                         <TableHead className="text-right">75% / 25%</TableHead>
                         <TableHead>Statut</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {calculs.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={10} className="text-center text-gray-400 py-8">
+                          <TableCell colSpan={11} className="text-center text-gray-400 py-8">
                             Aucun calcul. Cliquez sur <span className="font-semibold">Aperçu</span> ou <span className="font-semibold">Calculer &amp; sauver</span>.
                           </TableCell>
                         </TableRow>
@@ -358,6 +407,16 @@ export default function EoyBonusPage() {
                                   {getMotifLabel(c.motif_non_eligible)}
                                 </Badge>
                               )}
+                            </TableCell>
+                            {/* G11.10 — Actions : générer / annuler 75-25 */}
+                            <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                              <ActionCell
+                                calcul={c}
+                                userRole={userRole}
+                                rowLoading={rowLoading === c.id}
+                                onGenerer={(portion) => setConfirmAction({ kind: 'generer', portion, calcul: c })}
+                                onAnnuler={(portion) => setConfirmAction({ kind: 'annuler', portion, calcul: c })}
+                              />
                             </TableCell>
                           </TableRow>
                         )
@@ -416,8 +475,146 @@ export default function EoyBonusPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* G11.10 — Modale de confirmation génération / annulation */}
+        <Dialog open={confirmAction !== null} onOpenChange={v => !v && setConfirmAction(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle style={{ color: NAVY }}>
+                {confirmAction?.kind === 'generer' ? '🎁 Générer le bulletin' : '⚠ Annuler le bulletin'} {confirmAction?.portion === '75pct' ? '75%' : '25%'}
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                {confirmAction?.kind === 'generer'
+                  ? 'Un bulletin brouillon sera créé avec les déductions CSG et PAYE calculées selon la MRA.'
+                  : 'Le bulletin paie correspondant sera SUPPRIMÉ et la liaison dans eoy_bonus_calculs nullifiée. Action réservée admin.'}
+              </DialogDescription>
+            </DialogHeader>
+            {confirmAction && (
+              <div className="space-y-2 text-sm">
+                <p>
+                  Employé : <strong>{confirmAction.calcul.employe_nom || '—'}</strong>
+                </p>
+                <p>
+                  Bonus annuel : <span className="font-mono">{formaterMontantMUR(confirmAction.calcul.bonus_calcule)}</span>
+                </p>
+                <p>
+                  Portion {confirmAction.portion === '75pct' ? '75%' : '25%'} :{' '}
+                  <span className="font-mono font-semibold">
+                    {formaterMontantMUR(
+                      confirmAction.portion === '75pct'
+                        ? Math.round(confirmAction.calcul.bonus_calcule * 0.75 * 100) / 100
+                        : Math.round((confirmAction.calcul.bonus_calcule
+                            - Math.round(confirmAction.calcul.bonus_calcule * 0.75 * 100) / 100) * 100) / 100,
+                    )}
+                  </span>
+                </p>
+                {confirmAction.kind === 'annuler' && (
+                  <p className="text-amber-700 text-xs italic">
+                    Cette action est irréversible : le bulletin sera supprimé de la table bulletins_paie.
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setConfirmAction(null)}>Annuler</Button>
+              <Button
+                onClick={() => confirmAction && runGenererOrAnnuler(
+                  confirmAction.kind,
+                  confirmAction.portion,
+                  confirmAction.calcul,
+                )}
+                className="text-white"
+                style={{ backgroundColor: confirmAction?.kind === 'generer' ? NAVY : '#dc2626' }}
+              >
+                {confirmAction?.kind === 'generer' ? 'Générer' : 'Confirmer suppression'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </ClientPageShell>
+  )
+}
+
+// ─── G11.10 — Bouton d'action par ligne ──────────────────────────────
+function ActionCell({
+  calcul, userRole, rowLoading, onGenerer, onAnnuler,
+}: {
+  calcul: EoyCalculEnriched
+  userRole: string
+  rowLoading: boolean
+  onGenerer: (portion: '75pct' | '25pct') => void
+  onAnnuler: (portion: '75pct' | '25pct') => void
+}) {
+  if (!calcul.eligible) {
+    return <span className="text-[11px] text-gray-400 italic">—</span>
+  }
+  const has75 = !!calcul.bulletin_75pct_id
+  const has25 = !!calcul.bulletin_25pct_id
+  const isAdmin = userRole === 'admin'
+  // Garde période : désactivé hors novembre-décembre pour le 75, hors
+  // 15 déc-janv pour le 25. Admin bypass via la route (force=true).
+  const today = new Date()
+  const m = today.getMonth() + 1
+  const inPeriod75 = m === 11 || m === 12
+  const inPeriod25 = (m === 12 && today.getDate() >= 15) || m === 1
+
+  if (has75 && has25) {
+    return (
+      <div className="flex flex-col items-end gap-0.5 text-[11px]">
+        <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">✓ 75% payé</Badge>
+        <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">✓ 25% payé</Badge>
+        {isAdmin && !rowLoading && (
+          <button
+            type="button"
+            className="text-[10px] text-red-600 underline mt-1"
+            onClick={() => onAnnuler('25pct')}
+          >
+            Annuler 25%
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  if (has75 && !has25) {
+    return (
+      <div className="flex flex-col items-end gap-0.5 text-[11px]">
+        <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">✓ 75% payé</Badge>
+        <button
+          type="button"
+          disabled={rowLoading || (!inPeriod25 && !isAdmin)}
+          className="text-[10px] px-2 py-0.5 rounded bg-indigo-600 text-white disabled:opacity-40"
+          title={!inPeriod25 ? 'Période de génération : 15 déc → 31 janv' : 'Générer le bulletin 25%'}
+          onClick={() => onGenerer('25pct')}
+        >
+          {rowLoading ? '…' : 'Générer 25%'}
+        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            className="text-[10px] text-red-600 underline"
+            onClick={() => onAnnuler('75pct')}
+          >
+            Annuler 75%
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  // Ni 75 ni 25 générés
+  return (
+    <button
+      type="button"
+      disabled={rowLoading || (!inPeriod75 && !isAdmin)}
+      className="text-[11px] px-2 py-1 rounded text-white disabled:opacity-40"
+      style={{ backgroundColor: '#0B0F2E' }}
+      title={!inPeriod75 ? 'Période de génération : 1er nov → 31 déc' : 'Générer le bulletin 75%'}
+      onClick={() => onGenerer('75pct')}
+    >
+      {rowLoading ? '…' : 'Générer 75%'}
+    </button>
   )
 }
 
