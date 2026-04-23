@@ -114,6 +114,8 @@ export async function POST(request: Request) {
       type_conge = 'AL',
       applique_a: rawAppliqueA = 'all',
       groupe_id = null,
+      // F16 — pour applique_a='individuel', liste d'IDs à imposer.
+      employes_ids = null,
       societe_id,
       motif = null,
     } = body || {}
@@ -142,6 +144,10 @@ export async function POST(request: Request) {
     }
     if (applique_a === 'groupe' && !groupe_id) {
       return NextResponse.json({ error: 'groupe_id requis lorsque applique_a = "groupe"' }, { status: 400 })
+    }
+    // F16 — pour 'individuel', employes_ids (non vide) obligatoire.
+    if (applique_a === 'individuel' && (!Array.isArray(employes_ids) || employes_ids.length === 0)) {
+      return NextResponse.json({ error: 'employes_ids (tableau non vide) requis lorsque applique_a = "individuel"' }, { status: 400 })
     }
 
     // Tenant isolation — confirm caller has access to this societe
@@ -180,6 +186,8 @@ export async function POST(request: Request) {
       .eq('societe_id', societe_id)
       .is('date_depart', null)
     if (applique_a === 'groupe') empQuery = empQuery.eq('groupe_id', groupe_id)
+    // F16 — restriction aux IDs explicitement listés pour 'individuel'.
+    if (applique_a === 'individuel') empQuery = empQuery.in('id', employes_ids as string[])
     const { data: employes, error: empErr } = await empQuery
     if (empErr) return NextResponse.json({ error: `Employes: ${empErr.message}` }, { status: 500 })
     if (!employes || employes.length === 0) {
