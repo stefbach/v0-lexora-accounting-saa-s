@@ -24,29 +24,56 @@ import { BalanceComptes } from "@/components/rapprochement/BalanceComptes"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
+// Liste des classifications "évidentes" (raccourcis rapides).
+// Les codes sont alignés sur le PCM Mauricien 4-digits (migration 166).
+// Pour un compte hors liste, utiliser l'option "Autre compte…" qui ouvre
+// le plan comptable complet (v_plan_comptable_client).
 const CLASSIFICATION_CHOICES = [
-  { code: 'fournisseur',            label: 'Fournisseur',                compte: '401' },
-  { code: 'client',                 label: 'Encaissement client',        compte: '411' },
-  { code: 'frais_bancaires',        label: 'Frais bancaires',            compte: '627' },
-  { code: 'paiement_mra',           label: 'Paiement MRA (impôts)',      compte: '447' },
-  { code: 'charge_sociale',         label: 'Charges sociales (CSG/NSF)', compte: '431' },
-  { code: 'salaire',                label: 'Salaire net',                compte: '4210' },
-  { code: 'salaire_bulk',           label: 'Masse salariale (bulk)',     compte: '421' },
-  { code: 'compte_courant_associe', label: 'Compte courant associé',     compte: '455' },
-  { code: 'remboursement_associe',  label: 'Remboursement associé',      compte: '108' },
-  { code: 'avance_personnel',       label: 'Avance au personnel',        compte: '425' },
-  { code: 'virement_interne',       label: 'Virement interne',           compte: '580' },
-  { code: 'loyer',                  label: 'Loyer / charges locatives',  compte: '613' },
-  { code: 'entretien',              label: 'Entretien / réparations',    compte: '615' },
-  { code: 'assurance',              label: 'Assurance',                  compte: '616' },
-  { code: 'honoraires',             label: 'Honoraires / comptable',     compte: '622' },
-  { code: 'deplacement',            label: 'Déplacements / missions',    compte: '625' },
-  { code: 'telecom',                label: 'Télécom / internet',         compte: '626' },
-  { code: 'impot_taxe',             label: 'Impôts et taxes',            compte: '635' },
-  { code: 'materiel',               label: 'Matériel / équipement',      compte: '606' },
-  { code: 'charge_diverse',         label: 'Charge diverse',             compte: '658' },
-  { code: 'produit_divers',         label: 'Produit / prestation reçue', compte: '706' },
-  { code: 'autre',                  label: 'À classer plus tard',        compte: '471' },
+  // ── Tiers ───────────────────────────────────────────────────────────────
+  { code: 'fournisseur',            label: 'Fournisseur',                compte: '401'  },
+  { code: 'client',                 label: 'Encaissement client',        compte: '411'  },
+  { code: 'compte_courant_associe', label: 'Compte courant associé',     compte: '4550' },
+  { code: 'remboursement_associe',  label: 'Remboursement associé',      compte: '108'  },
+  { code: 'avance_personnel',       label: 'Avance au personnel',        compte: '4250' },
+  { code: 'virement_interne',       label: 'Virement interne',           compte: '5800' },
+  // ── Paie (PCM 4-digits) ────────────────────────────────────────────────
+  { code: 'salaire',                label: 'Salaire net individuel',     compte: '4210' },
+  { code: 'salaire_bulk',           label: 'Masse salariale (bulk)',     compte: '4210' },
+  { code: 'csg_salarie',            label: 'CSG salarié',                compte: '4311' },
+  { code: 'nsf_salarie',            label: 'NSF salarié',                compte: '4312' },
+  { code: 'csg_patronal',           label: 'CSG patronal',               compte: '4321' },
+  { code: 'nsf_patronal',           label: 'NSF patronal',               compte: '4322' },
+  { code: 'prgf',                   label: 'PRGF',                       compte: '4323' },
+  { code: 'training_levy',          label: 'Training Levy HRDC',         compte: '4324' },
+  { code: 'paye_mra',               label: 'PAYE à la MRA',              compte: '4330' },
+  // ── MRA / Fiscalité ────────────────────────────────────────────────────
+  { code: 'paiement_mra',           label: 'Paiement MRA (général)',     compte: '4471' },
+  { code: 'tva_decaisser',          label: 'TVA à décaisser',            compte: '4455' },
+  { code: 'impot_taxe',             label: 'Impôts et taxes divers',     compte: '6351' },
+  // ── Frais bancaires ────────────────────────────────────────────────────
+  { code: 'frais_bancaires',        label: 'Frais bancaires',            compte: '6271' },
+  { code: 'frais_swift',            label: 'Commission SWIFT / câble',   compte: '6272' },
+  // ── Charges externes ───────────────────────────────────────────────────
+  { code: 'loyer',                  label: 'Loyer',                      compte: '6131' },
+  { code: 'charges_locatives',      label: 'Charges locatives',          compte: '6135' },
+  { code: 'entretien',              label: 'Entretien / réparations',    compte: '6151' },
+  { code: 'assurance',              label: 'Assurance',                  compte: '6160' },
+  { code: 'honoraires_compta',      label: 'Honoraires comptables',      compte: '6221' },
+  { code: 'honoraires_juridique',   label: 'Honoraires juridiques',      compte: '6225' },
+  { code: 'publicite',              label: 'Publicité / marketing',      compte: '623'  },
+  { code: 'deplacement',            label: 'Déplacements / missions',    compte: '6251' },
+  { code: 'missions',               label: 'Missions / réceptions',      compte: '6256' },
+  { code: 'telecom',                label: 'Télécom / internet',         compte: '6261' },
+  { code: 'materiel',               label: 'Fournitures / matériel',     compte: '606'  },
+  { code: 'sous_traitance',         label: 'Sous-traitance',             compte: '611'  },
+  { code: 'licences_saas',          label: 'Licences SaaS / logiciels',  compte: '651'  },
+  // ── Produits ───────────────────────────────────────────────────────────
+  { code: 'produit_divers',         label: 'Produit / prestation reçue', compte: '706'  },
+  { code: 'commissions',            label: 'Commissions reçues',         compte: '753'  },
+  // ── Autres ─────────────────────────────────────────────────────────────
+  { code: 'charge_diverse',         label: 'Charge diverse',             compte: '628'  },
+  { code: 'exceptionnel',           label: 'Charge exceptionnelle',      compte: '671'  },
+  { code: 'autre',                  label: 'À classer plus tard (471)',  compte: '4710' },
 ] as const
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
 
