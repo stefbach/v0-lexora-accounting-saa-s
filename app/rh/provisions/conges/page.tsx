@@ -238,7 +238,7 @@ export default function ProvisionsCongesPage() {
             📊 Provisions IAS 19 — Congés payés
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Charge mensuelle à passer en comptabilité. Compte <strong>6417</strong> (charge) /
+            Charge mensuelle à passer en comptabilité. Compte <strong>64175</strong> (charge IAS 19) /
             compte <strong>4287</strong> (passif). Journal OD.
           </p>
         </div>
@@ -376,7 +376,7 @@ export default function ProvisionsCongesPage() {
                     <span>Date : {dateSnapshot}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>6417 DÉBIT  Provision congés (charge)</span>
+                    <span>64175 DÉBIT  Provision congés (charge)</span>
                     <span className="font-semibold">{formaterMUR(snapshotCalc.provision_total_mur)}</span>
                   </div>
                   <div className="flex justify-between">
@@ -449,7 +449,7 @@ export default function ProvisionsCongesPage() {
                         </TableCell>
                         <TableCell className="text-xs text-slate-500">
                           {s.ecriture_debit_id
-                            ? <span className="inline-flex items-center gap-1"><FileCheck className="h-3 w-3" /> 6417/4287</span>
+                            ? <span className="inline-flex items-center gap-1"><FileCheck className="h-3 w-3" /> 64175/4287</span>
                             : <span className="italic">—</span>}
                           {s.ecriture_extourne_debit_id && (
                             <span className="ml-2 inline-flex items-center gap-1 text-amber-700">

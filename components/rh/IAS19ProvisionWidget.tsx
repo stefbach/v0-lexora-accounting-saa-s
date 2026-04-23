@@ -95,7 +95,7 @@ export function IAS19ProvisionWidget() {
                   {formaterMUR(snapshot.provision_total_mur)}
                 </strong>
                 <span className="ml-2">
-                  (Compte 6417 / 4287, journal OD)
+                  (Compte 64175 / 4287, journal OD)
                 </span>
               </div>
             ) : (

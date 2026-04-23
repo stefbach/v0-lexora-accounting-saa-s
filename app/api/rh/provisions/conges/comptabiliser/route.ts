@@ -3,7 +3,7 @@
  *
  * 1. Extourne le snapshot précédent (mois-1) si comptabilisé
  * 2. Calcule et upserte le snapshot du mois
- * 3. Génère les 2 écritures comptables (6417 D / 4287 C)
+ * 3. Génère les 2 écritures comptables (64175 D / 4287 C)
  *
  * Auth : admin uniquement (sensible).
  */

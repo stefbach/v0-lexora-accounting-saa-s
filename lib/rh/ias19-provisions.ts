@@ -5,9 +5,10 @@
  *   1. calculerProvisionSociete     → RPC calculer_provision_conges_ias19
  *   2. sauvegarderSnapshot          → INSERT/UPDATE ias19_provisions_conges_snapshots
  *   3. extournerSnapshot (mois-1)   → crée 2 écritures inverses sur ecritures_comptables_v2
- *   4. genererEcrituresComptables   → 2 écritures (D 6417 / C 4287) sur date_snapshot
+ *   4. genererEcrituresComptables   → 2 écritures (D 64175 / C 4287) sur date_snapshot
  *
- * Comptes : 6417 (charge) / 4287 (passif). Journal : OD.
+ * Comptes : 64175 (charge dédiée IAS 19, sous-compte de 6417) /
+ *           4287  (passif). Journal : OD.
  * Pièce    : PRO-IAS19-YYYY-MM[-EXT] (ou -EXT pour l'extourne).
  */
 
@@ -43,8 +44,8 @@ export interface IAS19Snapshot {
   updated_at?: string
 }
 
-export const COMPTE_CHARGE = '6417'
-export const LIBELLE_COMPTE_CHARGE = 'Provisions pour congés payés (charge) — IAS 19'
+export const COMPTE_CHARGE = '64175'
+export const LIBELLE_COMPTE_CHARGE = 'Provisions congés payés (charge) — IAS 19'
 export const COMPTE_PASSIF = '4287'
 export const LIBELLE_COMPTE_PASSIF = 'Provisions congés payés (passif) — IAS 19'
 export const JOURNAL = 'OD'
@@ -272,7 +273,7 @@ export async function extournerSnapshot(
   const libelle = `Extourne provision congés IAS 19 — ${libellePeriode(s.date_snapshot)}`
   const montant = Number(s.provision_total_mur)
 
-  // Extourne = écritures inverses (crédit sur 6417, débit sur 4287)
+  // Extourne = écritures inverses (crédit sur 64175, débit sur 4287)
   const { data: dbt, error: errDbt } = await supabase
     .from('ecritures_comptables_v2')
     .insert({
