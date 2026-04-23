@@ -777,7 +777,30 @@ export async function POST(request: Request) {
         const today = new Date().toISOString().slice(0, 10)
         for (const day of workingDaysList) {
           const pt = pointageByDate.get(day)
-          const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+          // G-leaves-fix (debug+fix) : normaliser les bornes du congé
+          //   en "YYYY-MM-DD". Supabase-js peut renvoyer les colonnes
+          //   DATE en Date object OU string ISO complète selon la
+          //   version — la comparaison lexicographique échouait.
+          const enConge = (congesApprouves || []).some((c: any) => {
+            const debut = String(c.date_debut ?? '').slice(0, 10)
+            const fin = String(c.date_fin ?? '').slice(0, 10)
+            return debut && fin && day >= debut && day <= fin
+          })
+          // DEBUG temporaire Sheetal 24/04 — à retirer après validation
+          if (employe_id === '254979b5-7cf4-4563-9df3-60a12b881c2b' && day === '2026-04-24') {
+            console.log('[DEBUG Sheetal 24/04 single]', {
+              day, today, enConge,
+              congesCount: (congesApprouves || []).length,
+              conges: (congesApprouves || []).map((c: any) => ({
+                type: c.type_conge,
+                debut_raw: c.date_debut,
+                fin_raw: c.date_fin,
+                debut_typeof: typeof c.date_debut,
+                statut: c.statut,
+              })),
+              pt_present: !!pt?.heure_entree,
+            })
+          }
           // G-leaves-fix : si le jour est couvert par un congé approuvé,
           //   on le traite TOUJOURS comme congé (AL/SL/UL) — jamais
           //   comme absence, peu importe la date courante. Le check
@@ -1505,7 +1528,28 @@ export async function POST(request: Request) {
           const todayBatch = new Date().toISOString().slice(0, 10)
           for (const day of workingDaysListBatch) {
             const pt = pointageByDateBatch.get(day)
-            const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+            // G-leaves-fix (debug+fix) : normalisation défensive des
+            //   bornes du congé (idem single path).
+            const enConge = (congesApprouves || []).some((c: any) => {
+              const debut = String(c.date_debut ?? '').slice(0, 10)
+              const fin = String(c.date_fin ?? '').slice(0, 10)
+              return debut && fin && day >= debut && day <= fin
+            })
+            // DEBUG temporaire Sheetal 24/04 — à retirer après validation
+            if (emp.id === '254979b5-7cf4-4563-9df3-60a12b881c2b' && day === '2026-04-24') {
+              console.log('[DEBUG Sheetal 24/04 batch]', {
+                day, todayBatch, enConge,
+                congesCount: (congesApprouves || []).length,
+                conges: (congesApprouves || []).map((c: any) => ({
+                  type: c.type_conge,
+                  debut_raw: c.date_debut,
+                  fin_raw: c.date_fin,
+                  debut_typeof: typeof c.date_debut,
+                  statut: c.statut,
+                })),
+                pt_present: !!pt?.heure_entree,
+              })
+            }
             // G-leaves-fix : un jour couvert par un congé approuvé est
             //   TOUJOURS traité comme congé (jamais absence), même pour
             //   une date future. Check enConge AVANT le skip "futur".
