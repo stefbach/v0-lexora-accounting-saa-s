@@ -732,6 +732,102 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
 
+          {/* G13 — Éligibilité PRGF (Portable Retirement Gratuity Fund) */}
+          <Card className="rounded-2xl shadow-sm border-l-4 border-l-amber-400 bg-[#f8f9fc]">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                <Shield className="w-4 h-4 text-amber-500" />
+                PRGF — Portable Retirement Gratuity Fund
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="prgf_eligible_toggle"
+                  checked={form.inclus_prgf !== false}
+                  onCheckedChange={v => {
+                    u("inclus_prgf", v)
+                    if (v) u("prgf_motif_exemption", null)
+                  }}
+                />
+                <Label htmlFor="prgf_eligible_toggle" className="text-sm">Éligible PRGF (cotise 4.5%)</Label>
+              </div>
+
+              {form.inclus_prgf === false && (
+                <div className="space-y-2 p-3 border rounded bg-amber-50">
+                  <Label className="text-xs">Motif d'exemption</Label>
+                  <Select
+                    value={form.prgf_motif_exemption || ""}
+                    onValueChange={v => u("prgf_motif_exemption", v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Sélectionner un motif légal…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="salaire_au_dessus_200k">Salaire &gt; 200 000 MUR</SelectItem>
+                      <SelectItem value="migrant_non_citoyen">Migrant / non-citoyen</SelectItem>
+                      <SelectItem value="sbpf">SBPF</SelectItem>
+                      <SelectItem value="sipf">SIPF</SelectItem>
+                      <SelectItem value="private_pension_fsc">Private Pension Scheme FSC</SelectItem>
+                      <SelectItem value="job_contractor">Job Contractor</SelectItem>
+                      <SelectItem value="apprenti">Apprenti</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {form.prgf_motif_exemption === "private_pension_fsc" && (
+                    <div>
+                      <Label className="text-xs">URL certificat FSC</Label>
+                      <Input
+                        value={form.prgf_pension_scheme_certificate_url || ""}
+                        onChange={e => u("prgf_pension_scheme_certificate_url", e.target.value)}
+                        placeholder="https://..."
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Date début cotisation PRGF</Label>
+                  <Input
+                    type="date"
+                    value={form.prgf_date_debut || ""}
+                    onChange={e => u("prgf_date_debut", e.target.value || null)}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Past services dus (MUR)</Label>
+                  <Input
+                    type="number"
+                    value={form.prgf_past_services_montant ?? 0}
+                    onChange={e => u("prgf_past_services_montant", Number(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+
+              {Number(form.prgf_past_services_montant) > 0 && (
+                <div className="grid md:grid-cols-2 gap-3 p-3 border rounded bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="prgf_past_paid"
+                      checked={form.prgf_past_services_paid === true}
+                      onCheckedChange={v => u("prgf_past_services_paid", v)}
+                    />
+                    <Label htmlFor="prgf_past_paid" className="text-xs">Past services payés</Label>
+                  </div>
+                  {form.prgf_past_services_paid === true && (
+                    <div>
+                      <Label className="text-xs">Date paiement</Label>
+                      <Input
+                        type="date"
+                        value={form.prgf_past_services_date_paiement || ""}
+                        onChange={e => u("prgf_past_services_date_paiement", e.target.value || null)}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Historique des augmentations */}
           <Card className="rounded-2xl shadow-sm bg-[#f8f9fc]">
             <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><History className="w-4 h-4" />Historique des augmentations</CardTitle></CardHeader>

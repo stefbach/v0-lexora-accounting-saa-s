@@ -17,6 +17,7 @@ import { DocumentsEnAttenteWidget } from "@/components/rh/DocumentsEnAttenteWidg
 import { EoyBonusWidget } from "@/components/rh/EoyBonusWidget"
 import { IAS19ProvisionWidget } from "@/components/rh/IAS19ProvisionWidget"
 import { IAS19EoyProvisionWidget } from "@/components/rh/IAS19EoyProvisionWidget"
+import { DeclarationsMraWidget } from "@/components/rh/DeclarationsMraWidget"
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts"
 import Link from "next/link"
 
@@ -258,6 +259,9 @@ export default function RHDashboard() {
         {/* G8 Phase 2 — Widget Provision IAS 19 EOY Bonus. Visible
             à partir du 25 du mois, jan-nov (pas décembre). */}
         <IAS19EoyProvisionWidget />
+
+        {/* G13 — Widget Déclarations MRA (mois précédent à déclarer/payer). */}
+        <DeclarationsMraWidget />
 
         {/* Widget "Mon espace" — 4 actions rapides vers /salarie.
             Compact, en haut du dashboard pour un accès immédiat. */}
