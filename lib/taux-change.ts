@@ -268,9 +268,74 @@ export async function getTauxChange(): Promise<Record<string, number>> {
 }
 
 /**
- * Convert an amount to MUR using the provided rates.
+ * Raised by `convertToMUR` in strict mode when the requested currency is not
+ * present in the provided rate table. Carries the offending code and the set
+ * of known currencies to make debugging trivial.
  */
-export function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {
-  const taux = rates[devise.toUpperCase()] || rates[devise] || 1
+export class UnknownCurrencyError extends Error {
+  readonly devise: string
+  readonly knownCurrencies: string[]
+  constructor(devise: string, rates: Record<string, number>) {
+    const known = Object.keys(rates).sort()
+    super(
+      `Unknown currency "${devise}" — not found in rate table. ` +
+      `Known currencies: ${known.join(', ')}`
+    )
+    this.name = 'UnknownCurrencyError'
+    this.devise = devise
+    this.knownCurrencies = known
+  }
+}
+
+/**
+ * Type-guard assertion: narrows `devise` so the compiler trusts it is a
+ * known key of the rate table. Throws `UnknownCurrencyError` if not.
+ *
+ * Use this at API boundaries when you want TS to propagate currency safety
+ * through the rest of the function.
+ */
+export function assertKnownCurrency(
+  devise: string,
+  rates: Record<string, number>
+): asserts devise is keyof typeof rates {
+  const key = (devise || '').toUpperCase()
+  if (!key || !(key in rates)) {
+    throw new UnknownCurrencyError(devise, rates)
+  }
+}
+
+/**
+ * Convert an amount to MUR using the provided rates.
+ *
+ * @param amount  - Amount in the source currency.
+ * @param devise  - Currency code (case-insensitive).
+ * @param rates   - Rate table (MUR per 1 unit of foreign currency).
+ * @param strict  - When `true`, throws `UnknownCurrencyError` if `devise` is
+ *                  absent from `rates`. When `false` (default) preserves
+ *                  backward-compatible behaviour: logs a warning and falls
+ *                  back to a 1:1 conversion. Always preserve behaviour for
+ *                  legacy callers that don't pass `strict`.
+ */
+export function convertToMUR(
+  amount: number,
+  devise: string,
+  rates: Record<string, number>,
+  strict = false
+): number {
+  const key = (devise || '').toUpperCase()
+  if (!key || key === 'MUR') return amount
+
+  const taux = rates[key] ?? rates[devise]
+  if (taux === undefined || taux === null) {
+    if (strict) {
+      throw new UnknownCurrencyError(devise, rates)
+    }
+    console.warn(
+      `[convertToMUR] Unknown currency "${devise}" — falling back to 1:1. ` +
+      `Known: ${Object.keys(rates).sort().join(', ')}`
+    )
+    return amount * 1
+  }
+
   return amount * taux
 }

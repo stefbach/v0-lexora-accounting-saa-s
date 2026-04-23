@@ -355,9 +355,23 @@ export async function POST(request: Request) {
       const dossierIds = (dossiers || []).map((d: any) => d.id)
       let factures: any[] = factErr ? [] : (facturesData || [])
 
-      const toMUR = (amount: number, devise: string): number => {
-        if (!devise || devise === 'MUR') return amount
-        return amount * (rates[devise.toUpperCase()] || 1)
+      // F8/F10 — devise EFFECTIVE = tx.devise (si présent sur la tx) sinon devise du compte.
+      // Les anciennes tx (sans tx.devise) passent par le fallback → comportement inchangé.
+      // Les nouvelles tx en devise étrangère débitées sur un compte MUR (paiement Forex)
+      // utilisent leur propre devise au lieu d'être reconverties ×46.5 à tort.
+      const toMUR = (
+        amount: number,
+        txOrDevise: string | { devise?: string | null } | null | undefined,
+        compteDeviseFallback?: string
+      ): number => {
+        let effectiveDevise: string
+        if (txOrDevise && typeof txOrDevise === 'object') {
+          effectiveDevise = (txOrDevise.devise || compteDeviseFallback || 'MUR').toUpperCase()
+        } else {
+          effectiveDevise = ((txOrDevise as string | null | undefined) || 'MUR').toUpperCase()
+        }
+        if (!effectiveDevise || effectiveDevise === 'MUR') return amount
+        return amount * (rates[effectiveDevise] || 1)
       }
 
       const compteDeviseMap: Record<string, string> = {}
@@ -582,7 +596,9 @@ export async function POST(request: Request) {
                 tiers_detecte: tx.tiers_detecte || tx.tiers || null,
                 debit: Number(tx.debit) || 0,
                 credit: Number(tx.credit) || 0,
-                devise: releveDevise,
+                // F8/F10 — priorité : devise portée par la tx (nouveau pipeline OCR)
+                // puis devise du compte bancaire (tx legacy sans tx.devise).
+                devise: (tx.devise || releveDevise) as string,
               }
             })
           }
@@ -774,6 +790,7 @@ export async function POST(request: Request) {
             let facturesUpdated = 0
             // Calculer le montant total des factures pour détecter paiement partiel / TDS
             const totalFactures = match.factures.reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
+            // match.transaction.devise a déjà été résolu au push (priorité tx.devise > releveDevise)
             const txPayAmtMUR = toMUR(Math.max(Number(match.transaction.debit) || 0, Number(match.transaction.credit) || 0), match.transaction.devise || 'MUR')
             const isPartial = totalFactures > 0 && txPayAmtMUR < totalFactures * 0.90 // < 90% = partiel
             const diffForTds = totalFactures > 0 ? (totalFactures - txPayAmtMUR) / totalFactures : 0
@@ -816,7 +833,8 @@ export async function POST(request: Request) {
             // routé vers le bon 512xxx via cbToCompteComptable.
             const txRaw = entry.updatedTxs[txIdx]
             const txAmount = Math.max(Number(txRaw.debit) || 0, Number(txRaw.credit) || 0)
-            const payAmountMUR = toMUR(txAmount, entry.releveDevise)
+            // F8/F10 — lire tx.devise d'abord, fallback releveDevise
+            const payAmountMUR = toMUR(txAmount, txRaw, entry.releveDevise)
             const isOutgoing = (Number(txRaw.debit) || 0) > 0
             const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
             const tiers = (match.supplierName || txRaw.tiers_detecte || '').substring(0, 50)
@@ -1213,7 +1231,9 @@ export async function POST(request: Request) {
               const txCredit = Number(tx.credit) || 0
               const txAmount = txDebit > 0 ? txDebit : txCredit
               if (txAmount === 0) continue
-              const txAmountMUR = Math.round(toMUR(txAmount, entry.releveDevise) * 100) / 100
+              // F8/F10 — devise tx-level d'abord (paiement Forex sur compte MUR),
+              // fallback releveDevise (comportement legacy préservé).
+              const txAmountMUR = Math.round(toMUR(txAmount, tx, entry.releveDevise) * 100) / 100
               const txDate = tx.date || new Date().toISOString().split('T')[0]
 
               // ── Skip unmatched internal transfers (waiting for counterpart) ──
@@ -1367,7 +1387,8 @@ export async function POST(request: Request) {
               const txCredit2 = Number(tx.credit) || 0
               const txAmount2 = txDebit2 > 0 ? txDebit2 : txCredit2
               if (txAmount2 === 0) continue
-              const txAmountMUR2 = Math.round(toMUR(txAmount2, entry2.releveDevise) * 100) / 100
+              // F8/F10 — même règle : tx.devise prioritaire, sinon devise du compte.
+              const txAmountMUR2 = Math.round(toMUR(txAmount2, tx, entry2.releveDevise) * 100) / 100
               const txDate2 = tx.date || new Date().toISOString().split('T')[0]
 
             // ── NEW: Appliquer les règles de classification configurables (R01-R07+) ──
@@ -1380,7 +1401,8 @@ export async function POST(request: Request) {
                 tiers_detecte: tx.tiers_detecte || null,
                 debit: Number(tx.debit) || 0,
                 credit: Number(tx.credit) || 0,
-                devise: entry2.releveDevise,
+                // F8/F10 — devise portée par la tx > devise du compte bancaire
+                devise: tx.devise || entry2.releveDevise,
               }, classificationRules)
               if (classified.matched && classified.compte_debit) {
                 tx.statut = 'rapproche'
@@ -1418,7 +1440,8 @@ export async function POST(request: Request) {
                 tiers_detecte: tx.tiers_detecte || null,
                 debit: Number(tx.debit) || 0,
                 credit: Number(tx.credit) || 0,
-                devise: entry2.releveDevise,
+                // F8/F10 — devise portée par la tx > devise du compte bancaire
+                devise: tx.devise || entry2.releveDevise,
               }, directors)
               if (dirMatch) {
                 // NE PAS auto-rapprocher — exiger validation humaine (R07)
@@ -1435,7 +1458,7 @@ export async function POST(request: Request) {
                     societe_id, alert_type: 'director_transaction_pending',
                     severity: 'high',
                     title: `Qualification requise: ${dirMatch.director_name}`,
-                    description: `Virement de ${txAmount2.toFixed(2)} ${entry2.releveDevise} concernant ${dirMatch.director_name} (${dirMatch.role}). Doit être qualifié comme: A) Remboursement NDF / B) Avance salaire / C) Rémunération / D) Avance dividendes / E) Prêt (⚠ interdit dirigeants - Companies Act s.166)`,
+                    description: `Virement de ${txAmount2.toFixed(2)} ${(tx.devise || entry2.releveDevise)} concernant ${dirMatch.director_name} (${dirMatch.role}). Doit être qualifié comme: A) Remboursement NDF / B) Avance salaire / C) Rémunération / D) Avance dividendes / E) Prêt (⚠ interdit dirigeants - Companies Act s.166)`,
                     legal_reference: 'Companies Act 2001, Section 166 (si Prêt)',
                     amount: txAmount2,
                     related_entity_type: 'transaction',
@@ -2178,9 +2201,21 @@ export async function POST(request: Request) {
       ;(comptesBanc || []).forEach((c: any) => { deviseMap[c.id] = c.devise || 'MUR' })
 
       const rates = await getTauxChange()
-      const toMURLocal = (amount: number, devise: string): number => {
-        if (!devise || devise === 'MUR') return amount
-        return amount * (rates[devise.toUpperCase()] || 1)
+      // F8/F10 — tx.devise prioritaire sur la devise du compte bancaire.
+      // Les tx legacy (sans tx.devise) continuent à utiliser releveDevise comme avant.
+      const toMURLocal = (
+        amount: number,
+        txOrDevise: string | { devise?: string | null } | null | undefined,
+        compteDeviseFallback?: string
+      ): number => {
+        let effectiveDevise: string
+        if (txOrDevise && typeof txOrDevise === 'object') {
+          effectiveDevise = (txOrDevise.devise || compteDeviseFallback || 'MUR').toUpperCase()
+        } else {
+          effectiveDevise = ((txOrDevise as string | null | undefined) || 'MUR').toUpperCase()
+        }
+        if (!effectiveDevise || effectiveDevise === 'MUR') return amount
+        return amount * (rates[effectiveDevise] || 1)
       }
 
       let created = 0
@@ -2194,7 +2229,7 @@ export async function POST(request: Request) {
           const txCredit = Number(tx.credit) || 0
           const txAmount = txDebit > 0 ? txDebit : txCredit
           if (txAmount === 0) continue
-          const txAmountMUR = Math.round(toMURLocal(txAmount, releveDevise) * 100) / 100
+          const txAmountMUR = Math.round(toMURLocal(txAmount, tx, releveDevise) * 100) / 100
           const txDate = tx.date || new Date().toISOString().split('T')[0]
 
           // --- Internal transfers → 581 both sides ---
@@ -3234,10 +3269,15 @@ export async function POST(request: Request) {
       // Recuperer la devise du compte bancaire + taux de change pour conversion MUR
       const { data: compteBancaire } = await supabase
         .from('comptes_bancaires').select('devise').eq('id', releve.compte_bancaire_id).maybeSingle()
-      const txDevise = (compteBancaire?.devise || 'MUR').toUpperCase()
+      const compteDeviseClasser = (compteBancaire?.devise || 'MUR').toUpperCase()
       const rates: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
+      // F8/F10 — tx.devise prioritaire ; fallback sur la devise du compte bancaire (compat legacy).
+      // La tx vit dans releve.transactions_json[txIdx] — résolution plus bas après lecture de txIdx.
+      // On garde txDevise et tauxDevise comme valeurs par défaut issues du compte ;
+      // elles seront ré-évaluées par ligne si la tx porte sa propre devise.
+      const txDevise = compteDeviseClasser
       const tauxDevise = rates[txDevise] || 1
-      console.log(`[classer_transaction] devise=${txDevise} taux=${tauxDevise}`)
+      console.log(`[classer_transaction] devise_compte=${txDevise} taux=${tauxDevise}`)
 
       const txIdx = parseInt(transaction_id.split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
@@ -3317,9 +3357,13 @@ export async function POST(request: Request) {
         const tx = txs[txIdx]
         const txAmt = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
         const isOut = (Number(tx.debit) || 0) > 0
+        // F8/F10 — si la tx porte sa propre devise (paiement Forex), on l'utilise.
+        // Sinon on reste sur la devise du compte (comportement legacy).
+        const effectiveDevise = ((tx.devise as string | undefined) || compteDeviseClasser || 'MUR').toUpperCase()
+        const effectiveTaux = effectiveDevise === 'MUR' ? 1 : (rates[effectiveDevise] || 1)
         // Conversion en MUR : si la tx est en EUR/USD/GBP, on convertit via le taux
-        const txAmtMUR = Math.round(txAmt * tauxDevise * 100) / 100
-        const deviseLabel = txDevise === 'MUR' ? '' : ` [${txDevise} @ ${tauxDevise}]`
+        const txAmtMUR = Math.round(txAmt * effectiveTaux * 100) / 100
+        const deviseLabel = effectiveDevise === 'MUR' ? '' : ` [${effectiveDevise} @ ${effectiveTaux}]`
         // ref_folio determinISTE pour cette tx specifique (releve_id complet + txIdx)
         // Permet la detection idempotente du doublon = re-click sur la meme tx.
         const refFolio = `CL-${releve_id}-${txIdx}`
@@ -3557,13 +3601,16 @@ export async function POST(request: Request) {
 
             if (compteId) {
               const montantOrig = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+              // F8/F10 — tx.devise > devise du compte (si tx en Forex sur compte MUR).
+              const ccaDevise = ((tx.devise as string | undefined) || compteDeviseClasser || 'MUR').toUpperCase()
+              const ccaTaux = ccaDevise === 'MUR' ? 1 : (rates[ccaDevise] || 1)
               // Conversion en MUR : le solde du CCA doit etre coherent en MUR
               // meme si la tx est en EUR/USD/GBP. On convertit avec le taux.
-              const montant = Math.round(montantOrig * tauxDevise * 100) / 100
+              const montant = Math.round(montantOrig * ccaTaux * 100) / 100
               const isOut = (Number(tx.debit) || 0) > 0
               const type = isOut ? 'avance' : 'apport'
               const deltaSolde = isOut ? -montant : montant
-              const conversionLabel = txDevise === 'MUR' ? '' : ` (${montantOrig.toFixed(2)} ${txDevise} @ ${tauxDevise})`
+              const conversionLabel = ccaDevise === 'MUR' ? '' : ` (${montantOrig.toFixed(2)} ${ccaDevise} @ ${ccaTaux})`
               const description = `${isOut ? 'Avance societe a associe' : 'Apport associe a societe'}${conversionLabel} — ${(tx.libelle || '').substring(0, 60)}`
 
               const { error: mvtErr } = await supabase
