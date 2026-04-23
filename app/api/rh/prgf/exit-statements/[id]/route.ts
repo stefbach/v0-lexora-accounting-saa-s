@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { computeGratuityDeadline } from '@/lib/rh/declarations-mra'
+import { userHasAccessToSociete } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,16 @@ export async function PATCH(
     const params = await Promise.resolve(context.params as any)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+
+    // Multi-tenant guard
+    const { data: existing } = await supabase
+      .from('prgf_exit_statements')
+      .select('id, societe_id')
+      .eq('id', id)
+      .maybeSingle()
+    if (!existing) return NextResponse.json({ error: 'Exit statement introuvable' }, { status: 404 })
+    const hasAccess = await userHasAccessToSociete(user.id, String((existing as any).societe_id))
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
     const body = await request.json().catch(() => ({}))
     const update: any = {}
@@ -84,6 +95,16 @@ export async function DELETE(
     const params = await Promise.resolve(context.params as any)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+
+    // Multi-tenant guard
+    const { data: existing } = await supabase
+      .from('prgf_exit_statements')
+      .select('id, societe_id')
+      .eq('id', id)
+      .maybeSingle()
+    if (!existing) return NextResponse.json({ error: 'Exit statement introuvable' }, { status: 404 })
+    const hasAccess = await userHasAccessToSociete(user.id, String((existing as any).societe_id))
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
     const { error } = await supabase.from('prgf_exit_statements')
       .update({ statut: 'annule' }).eq('id', id)

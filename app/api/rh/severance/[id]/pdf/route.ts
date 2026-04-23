@@ -12,6 +12,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import React from 'react'
 import { renderToBuffer, Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
 import { getSimulation, formaterSeverance, formaterAnciennete, MOTIF_LABELS } from '@/lib/rh/severance'
+import { userHasAccessToSociete } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -186,6 +187,10 @@ export async function GET(
 
     const sim = await getSimulation(supabase, id)
     if (!sim) return new NextResponse('Simulation introuvable', { status: 404 })
+
+    // Multi-tenant guard : le PDF expose NIC + rémunération — critique.
+    const hasAccess = await userHasAccessToSociete(user.id, sim.societe_id)
+    if (!hasAccess) return new NextResponse('Accès refusé', { status: 403 })
 
     const { data: soc } = await supabase
       .from('societes').select('*').eq('id', sim.societe_id).maybeSingle()

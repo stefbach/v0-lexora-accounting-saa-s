@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { genererBulletinEoy, dansPeriodeGeneration } from '@/lib/rh/eoy-bonus-bulletin'
+import { userHasAccessToSociete } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,6 +52,16 @@ export async function POST(
     const params = await Promise.resolve(context.params as any)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+
+    // Multi-tenant guard avant génération de bulletin
+    const { data: calcul } = await supabase
+      .from('eoy_bonus_calculs')
+      .select('id, societe_id')
+      .eq('id', id)
+      .maybeSingle()
+    if (!calcul) return NextResponse.json({ error: 'Calcul introuvable' }, { status: 404 })
+    const hasAccess = await userHasAccessToSociete(user.id, String((calcul as any).societe_id))
+    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
     const result = await genererBulletinEoy(supabase, id, '75pct', user.id)
     if (!result.ok) {
