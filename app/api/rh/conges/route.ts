@@ -559,7 +559,23 @@ export async function GET(request: Request) {
     const { data: congesData, error: congesErr } = await query
     if (congesErr) throw congesErr
 
-    // Enrich with employee info (no FK join)
+    // DOC1 hotfix — count documents par demande (bulk, 1 roundtrip).
+    const congeIds = (congesData || []).map((c: any) => c.id).filter(Boolean)
+    const docCountByDemande = new Map<string, number>()
+    if (congeIds.length > 0) {
+      const { data: docsRows } = await supabase
+        .from('documents_rh')
+        .select('lien_demande_conge_id')
+        .in('lien_demande_conge_id', congeIds)
+        .eq('archive', false)
+      for (const row of (docsRows || []) as any[]) {
+        const id = row?.lien_demande_conge_id
+        if (!id) continue
+        docCountByDemande.set(id, (docCountByDemande.get(id) || 0) + 1)
+      }
+    }
+
+    // Enrich with employee info (no FK join) + documents_count (DOC1 hotfix)
     const empMap = new Map(employees.map((e: any) => [e.id, e]))
     const congesEnriched = (congesData || []).map((c: any) => {
       const emp = empMap.get(c.employe_id)
@@ -571,6 +587,7 @@ export async function GET(request: Request) {
           poste: emp.poste,
           societe_id: emp.societe_id,
         } : null,
+        documents_count: docCountByDemande.get(c.id) || 0,
       }
     })
 
