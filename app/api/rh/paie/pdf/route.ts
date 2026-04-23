@@ -208,6 +208,148 @@ const s = StyleSheet.create({
   otSubValue: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#ea580c', textAlign: 'right', width: 90 },
 })
 
+// G11.9 — Template PDF spécial bonus EOY (source = 'eoy_bonus_75pct' ou '25pct').
+// Rendu isolé — le BulletinPDF mensuel classique reste inchangé pour tous
+// les autres bulletins (non-régression garantie : condition if/else côté
+// handler GET/POST).
+function BulletinEoyPDF({ bulletin, emp, soc }: any) {
+  const portion = bulletin.source === 'eoy_bonus_75pct' ? '75%' : '25%'
+  const periodeDate = new Date((bulletin.periode || new Date().toISOString()) + 'T12:00:00')
+  const annee = periodeDate.getFullYear()
+  const csgSalarie = Number(bulletin.csg_bonus) || 0
+  const csgPatronal = Number(bulletin.csg_patronal_bonus) || 0
+  const payeBonus = Number(bulletin.paye_bonus) || 0
+  const bonusBrut = Number(bulletin.eoy_bonus) || Number(bulletin.salaire_brut) || 0
+  const bonusNet = Number(bulletin.salaire_net) || (bonusBrut - csgSalarie - payeBonus)
+
+  const Row = ({ label, value, style: rowStyle }: any) =>
+    React.createElement(View, { style: s.row },
+      React.createElement(Text, { style: [s.rowLabel, rowStyle] }, label),
+      React.createElement(Text, { style: [s.rowValue, rowStyle] }, value),
+    )
+  const DeductionRow = ({ label, value }: any) =>
+    React.createElement(View, { style: s.row },
+      React.createElement(Text, { style: [s.rowLabel, s.deduction] }, label),
+      React.createElement(Text, { style: [s.rowValue, s.deduction] }, value),
+    )
+
+  return React.createElement(Document, {},
+    React.createElement(Page, { size: 'A4', style: s.page },
+      // Header
+      React.createElement(View, { style: s.header },
+        React.createElement(View, { style: s.headerLeft },
+          React.createElement(Text, { style: s.companyName }, soc?.nom || 'N/A'),
+          React.createElement(Text, { style: s.smallGray }, soc?.adresse || ''),
+          React.createElement(Text, { style: s.smallGray },
+            `BRN: ${soc?.brn || '—'}${soc?.ern ? ` | ERN: ${soc.ern}` : ''}`),
+          soc?.paye_number
+            ? React.createElement(Text, { style: s.smallGray },
+                `PAYE: ${soc.paye_number}${soc?.csg_number ? ` | CSG: ${soc.csg_number}` : ''}`)
+            : null,
+        ),
+        React.createElement(View, { style: s.headerRight },
+          React.createElement(Text, { style: s.title }, 'BONUS DE FIN D\'ANNÉE'),
+          React.createElement(Text, { style: s.subtitle }, `${portion} — ${annee}`),
+          React.createElement(Text, { style: s.smallGray }, `Workers' Rights Act 2019, S.54`),
+          React.createElement(Text, { style: s.smallGray },
+            `Ref: EOY-${annee}-${portion.replace('%', '')}-${emp?.code || '000'}`),
+          React.createElement(Text, { style: s.smallGray },
+            `Date versement: ${periodeDate.toLocaleDateString('fr-FR')}`),
+        ),
+      ),
+
+      // Employee info
+      React.createElement(View, { style: s.infoBox },
+        React.createElement(View, { style: s.infoGrid },
+          ...[
+            ['Employé', `${emp?.prenom || ''} ${emp?.nom || ''}`],
+            ['Code', emp?.code || '—'],
+            ['Poste', emp?.poste || '—'],
+            ['NIC', emp?.nic_number || '—'],
+            ['TAN', emp?.tan || '—'],
+            ['Date d\'entrée', emp?.date_arrivee
+              ? new Date(emp.date_arrivee).toLocaleDateString('fr-FR') : '—'],
+          ].map(([label, val], i) =>
+            React.createElement(View, { style: s.infoItem, key: i },
+              React.createElement(Text, null,
+                React.createElement(Text, { style: s.infoLabel }, `${label} : `),
+                String(val),
+              ),
+            ),
+          ),
+        ),
+      ),
+
+      // Gains
+      React.createElement(View, { style: s.sectionHeader },
+        React.createElement(Text, { style: s.sectionTitle }, 'BONUS DE FIN D\'ANNÉE'),
+      ),
+      React.createElement(Row, {
+        label: `Portion ${portion} du bonus annuel`,
+        value: `${fmt(bonusBrut)} MUR`,
+      }),
+      React.createElement(View, { style: s.totalRow },
+        React.createElement(Text, { style: s.totalLabel }, 'BRUT BONUS'),
+        React.createElement(Text, { style: s.totalValue }, `${fmt(bonusBrut)} MUR`),
+      ),
+
+      // Déductions salarié
+      React.createElement(View, { style: [s.sectionHeader, { marginTop: 12 }] },
+        React.createElement(Text, { style: s.sectionTitle }, 'DÉDUCTIONS SALARIÉ'),
+      ),
+      React.createElement(DeductionRow, {
+        label: `CSG sur bonus (${Number(emp?.salaire_base) > 50000 ? '3%' : '1.5%'})`,
+        value: `-${fmt(csgSalarie)} MUR`,
+      }),
+      payeBonus > 0
+        ? React.createElement(DeductionRow, {
+            label: 'PAYE sur bonus (système cumulatif MRA)',
+            value: `-${fmt(payeBonus)} MUR`,
+          })
+        : React.createElement(View, { style: s.row },
+            React.createElement(Text, { style: [s.rowLabel, { color: '#27ae60' }] }, 'PAYE sur bonus'),
+            React.createElement(Text, { style: [s.rowValue, { color: '#27ae60' }] }, 'Exonéré'),
+          ),
+      React.createElement(View, { style: s.row },
+        React.createElement(Text, { style: [s.rowLabel, { color: '#888', fontSize: 8 }] }, 'NSF / Training Levy sur bonus'),
+        React.createElement(Text, { style: [s.rowValue, { color: '#888', fontSize: 8 }] }, 'Non applicable (MRA)'),
+      ),
+      React.createElement(View, { style: s.totalRow },
+        React.createElement(Text, { style: s.totalLabel }, 'TOTAL DÉDUCTIONS'),
+        React.createElement(Text, { style: s.totalValue }, `-${fmt(csgSalarie + payeBonus)} MUR`),
+      ),
+
+      // Net
+      React.createElement(View, { style: s.netBox },
+        React.createElement(Text, { style: s.netLabel }, 'NET À PAYER'),
+        React.createElement(Text, { style: s.netAmount }, `${fmt(bonusNet)} MUR`),
+        React.createElement(Text, { style: s.netBank },
+          `Virement ${emp?.bank_name || ''} — ****${(emp?.bank_account || '').slice(-4)}`),
+      ),
+
+      // Charges patronales indicatives
+      React.createElement(View, { style: s.patronalBox },
+        React.createElement(Text, { style: s.patronalTitle }, 'Charges patronales (indicatif)'),
+        React.createElement(View, { style: s.patronalRow },
+          React.createElement(Text, { style: s.patronalLabel },
+            `CSG patronale sur bonus (${Number(emp?.salaire_base) > 50000 ? '6%' : '3%'})`),
+          React.createElement(Text, { style: s.patronalValue }, `${fmt(csgPatronal)} MUR`),
+        ),
+      ),
+
+      // Mention légale
+      React.createElement(View, { style: s.footer },
+        React.createElement(Text, { style: s.footerText },
+          `Ce bonus est versé conformément à la Section 54 du Workers' Rights Act 2019.
+           Conservation sans limitation de durée. Signé électroniquement le ${new Date().toLocaleDateString('fr-FR')}.`,
+        ),
+      ),
+      React.createElement(Text, { style: s.footerCenter },
+        `Généré par le système de paie — ${soc?.nom || ''}`),
+    ),
+  )
+}
+
 function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete, periodePaieLabel, datePaiementLabel }: any) {
   const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
   const hasOT = Number(bulletin.heures_sup_montant) > 0
@@ -540,9 +682,17 @@ export async function GET(request: Request) {
     }
 
     const data = await fetchBulletinData(supabase, bulletin)
-    const doc = React.createElement(BulletinPDF, { bulletin, ...data })
+    // G11.9 — EOY bulletin : template dédié (source='eoy_bonus_XXpct').
+    // Tous les autres bulletins passent par le template mensuel standard.
+    const isEoy = typeof bulletin.source === 'string' && bulletin.source.startsWith('eoy_bonus_')
+    const doc = isEoy
+      ? React.createElement(BulletinEoyPDF, { bulletin, ...data })
+      : React.createElement(BulletinPDF, { bulletin, ...data })
     const pdfBuffer = await renderToBuffer(doc as any)
-    const filename = `bulletin_${data.emp?.code || data.emp?.nom || 'employe'}_${data.annee}-${String(data.periodeDate.getMonth() + 1).padStart(2, '0')}.pdf`
+    const filePrefix = isEoy
+      ? `bonus_eoy_${bulletin.source.replace('eoy_bonus_', '')}`
+      : 'bulletin'
+    const filename = `${filePrefix}_${data.emp?.code || data.emp?.nom || 'employe'}_${data.annee}-${String(data.periodeDate.getMonth() + 1).padStart(2, '0')}.pdf`
 
     return new NextResponse(pdfBuffer, {
       headers: {
@@ -578,9 +728,16 @@ export async function POST(request: Request) {
     }
 
     const data = await fetchBulletinData(supabase, bulletin)
-    const doc = React.createElement(BulletinPDF, { bulletin, ...data })
+    // G11.9 — template EOY si source='eoy_bonus_XXpct'.
+    const isEoy = typeof bulletin.source === 'string' && bulletin.source.startsWith('eoy_bonus_')
+    const doc = isEoy
+      ? React.createElement(BulletinEoyPDF, { bulletin, ...data })
+      : React.createElement(BulletinPDF, { bulletin, ...data })
     const pdfBuffer = await renderToBuffer(doc as any)
-    const filename = `bulletin_${data.emp?.code || data.emp?.nom || 'employe'}_${data.annee}-${String(data.periodeDate.getMonth() + 1).padStart(2, '0')}.pdf`
+    const filePrefix = isEoy
+      ? `bonus_eoy_${bulletin.source.replace('eoy_bonus_', '')}`
+      : 'bulletin'
+    const filename = `${filePrefix}_${data.emp?.code || data.emp?.nom || 'employe'}_${data.annee}-${String(data.periodeDate.getMonth() + 1).padStart(2, '0')}.pdf`
 
     return new NextResponse(pdfBuffer, {
       headers: {
