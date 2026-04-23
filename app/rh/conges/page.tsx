@@ -26,6 +26,7 @@ import {
   type EligibilityStatus,
 } from "@/app/salarie/_components/shared/conges-eligibilite"
 import { CashInLieuPanel } from "./_components/CashInLieuPanel"
+import { JustificatifBouton } from "@/components/rh/JustificatifDialog"
 
 // ─── Constants ───────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
@@ -536,6 +537,8 @@ export default function CongesPage() {
     demi_journee: false, matin_ou_apres_midi: 'matin',
   })
   const [formError, setFormError] = useState<string | null>(null)
+  // DOC1 — fichiers à joindre à la demande (uploadés après création).
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [refusDialog, setRefusDialog] = useState<string | null>(null)
   const [refusMotif, setRefusMotif] = useState("")
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -842,13 +845,42 @@ export default function CongesPage() {
       const payload = form.demi_journee
         ? { ...form, date_fin: form.date_debut }
         : form
+      // DOC1 hotfix — informer l'API qu'il y a des fichiers à attacher
+      // après création (bypass la validation d'URL de justificatifs).
+      const hasPendingFiles = pendingFiles.length > 0
       const res = await fetch("/api/rh/conges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "creer", ...payload }),
+        body: JSON.stringify({ action: "creer", has_pending_files: hasPendingFiles, ...payload }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Erreur")
+
+      // DOC1 — upload des fichiers joints (si présents) avec lien vers la
+      // demande tout juste créée. Non-bloquant : on informe via toast si un
+      // upload échoue mais on ne rollback pas la demande.
+      const demandeId = data?.conge?.id || data?.id
+      if (demandeId && pendingFiles.length > 0) {
+        const uploadResults = await Promise.all(pendingFiles.map(async (file) => {
+          try {
+            const fd = new FormData()
+            fd.append('file', file)
+            fd.append('employe_id', form.employe_id)
+            fd.append('categorie', form.type_conge === 'SL' || form.type_conge === 'FML' || form.type_conge === 'MAT'
+              ? 'certificat_medical' : 'justificatif_conge')
+            fd.append('direction', 'employe_vers_rh')
+            fd.append('lien_demande_conge_id', demandeId)
+            const r = await fetch('/api/documents-rh/upload', { method: 'POST', body: fd })
+            return r.ok
+          } catch { return false }
+        }))
+        const failed = uploadResults.filter(ok => !ok).length
+        if (failed > 0) {
+          setToast(`⚠ Demande créée mais ${failed} fichier(s) non uploadés — réessaie depuis l'onglet Documents.`)
+        }
+      }
+
+      setPendingFiles([])
       setDialogOpen(false)
       setForm({
         employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "",
@@ -1441,6 +1473,7 @@ export default function CongesPage() {
                       <TableHead>Nb jours</TableHead>
                       <TableHead>Approbation</TableHead>
                       <TableHead>Motif</TableHead>
+                      <TableHead className="w-24 text-center">Justif.</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1448,6 +1481,11 @@ export default function CongesPage() {
                     {conges.map(c => {
                       const niveau = c.niveau_approbation ?? 0
                       const needsCert = c.type_conge === "SL" && c.nb_jours > 3
+                      // DOC1 hotfix — types WRA nécessitant un justificatif.
+                      const needsJustif = needsCert || [
+                        'FML', 'SPC_MARIAGE_SELF', 'SPC_MARIAGE_ENFANT', 'SPC_DECES',
+                        'JUR', 'INT', 'CRT', 'MAT', 'PAT',
+                      ].includes(c.type_conge || '')
                       return (
                         <TableRow key={c.id}>
                           <TableCell className="font-medium">
@@ -1526,6 +1564,24 @@ export default function CongesPage() {
                                 )}
                               </div>
                             )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {/* DOC1 hotfix — bouton justificatifs pré-rempli
+                                (employe_id + lien_demande_conge_id). Count
+                                initial depuis c.documents_count (commit 2)
+                                sinon lazy-fetch. Rouge si requis & vide,
+                                vert dès 1 doc joint. */}
+                            <JustificatifBouton
+                              demande={{
+                                id: c.id,
+                                employe_id: c.employe_id,
+                                employe: c.employe,
+                                type_conge: c.type_conge,
+                                date_debut: c.date_debut,
+                              }}
+                              requisManquant={needsJustif}
+                              initialCount={(c as any).documents_count}
+                            />
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
@@ -1752,11 +1808,21 @@ export default function CongesPage() {
                         <TableHead>Approbation</TableHead>
                         <TableHead>Motif</TableHead>
                         <TableHead>Commentaire</TableHead>
+                        <TableHead className="w-24 text-center">Justif.</TableHead>
                         {canImposeCollectif && <TableHead className="text-right">Actions</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredHisto.map(c => (
+                      {filteredHisto.map(c => {
+                        // DOC1 hotfix 2 — justificatif requis selon le type,
+                        // SAUF si la demande est refusée (pas d'obligation).
+                        const needsCertSl = c.type_conge === "SL" && c.nb_jours > 3
+                        const needsJustifType = needsCertSl || [
+                          'FML', 'SPC_MARIAGE_SELF', 'SPC_MARIAGE_ENFANT', 'SPC_DECES',
+                          'JUR', 'INT', 'CRT', 'MAT', 'PAT',
+                        ].includes(c.type_conge || '')
+                        const requisEffectif = needsJustifType && c.statut !== 'refuse'
+                        return (
                         <TableRow key={c.id}>
                           <TableCell className="font-medium">
                             {c.employe?.prenom} {c.employe?.nom}
@@ -1800,6 +1866,22 @@ export default function CongesPage() {
                           <TableCell className="text-sm text-gray-500 max-w-32 truncate">
                             {c.commentaire_manager || "---"}
                           </TableCell>
+                          <TableCell className="text-center">
+                            {/* DOC1 hotfix 2 — bouton justificatif aussi dans
+                                l'historique. documents_count préchargé par
+                                GET /api/rh/conges (commit 39d5bcd). */}
+                            <JustificatifBouton
+                              demande={{
+                                id: c.id,
+                                employe_id: c.employe_id,
+                                employe: c.employe,
+                                type_conge: c.type_conge,
+                                date_debut: c.date_debut,
+                              }}
+                              requisManquant={requisEffectif}
+                              initialCount={(c as any).documents_count}
+                            />
+                          </TableCell>
                           {canImposeCollectif && (
                             <TableCell className="text-right">
                               <div className="flex gap-1 justify-end">
@@ -1838,7 +1920,7 @@ export default function CongesPage() {
                             </TableCell>
                           )}
                         </TableRow>
-                      ))}
+                      )})}
                     </TableBody>
                   </Table>
                 </div>
@@ -1991,6 +2073,58 @@ export default function CongesPage() {
                 onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
               />
             )}
+
+            {/* DOC1 — Joindre des justificatifs (fichiers uploadés après
+                création de la demande, liés via lien_demande_conge_id).
+                Visible pour les types WRA qui requièrent justificatif + SL. */}
+            {['SL', 'FML', 'SPC_MARIAGE_SELF', 'SPC_MARIAGE_ENFANT', 'SPC_DECES',
+              'JUR', 'INT', 'CRT', 'MAT', 'PAT'].includes(form.type_conge) && (() => {
+              // DOC1+G4 hotfix — libellé adapté selon WRA S.46 (SL <3j :
+              // certificat recommandé, SL >=3j : requis ; autres types :
+              // toujours requis).
+              let slDays = 0
+              if (form.type_conge === 'SL' && form.date_debut && form.date_fin) {
+                try {
+                  const d1 = new Date(form.date_debut + 'T12:00:00')
+                  const d2 = new Date(form.date_fin + 'T12:00:00')
+                  slDays = Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1)
+                } catch {}
+              }
+              const slCourt = form.type_conge === 'SL' && slDays > 0 && slDays < 3
+              const justifRequis = !slCourt
+              const tone = justifRequis
+                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                : 'bg-indigo-50 border-indigo-200 text-indigo-900'
+              const labelText = form.type_conge === 'SL'
+                ? (slCourt
+                  ? `📎 Certificat médical recommandé (${slDays}j < 3j, pas obligatoire WRA S.46)`
+                  : `📎 Certificat médical requis (≥ 3 jours consécutifs — WRA S.46)`)
+                : '📎 Joindre des justificatifs (requis par WRA)'
+              return (
+                <div className={`space-y-2 p-3 border rounded-md ${tone}`}>
+                  <Label className="text-xs font-semibold">{labelText}</Label>
+                  <Input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                    onChange={e => setPendingFiles(Array.from(e.target.files || []))}
+                    className="text-xs"
+                  />
+                  {pendingFiles.length > 0 && (
+                    <ul className="text-[11px] space-y-0.5">
+                      {pendingFiles.map((f, i) => (
+                        <li key={i}>• {f.name} ({(f.size / 1024).toFixed(0)} KB)</li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="text-[11px] italic opacity-80">
+                    Max 10 MB/fichier. Les fichiers seront envoyés après création
+                    de la demande et rattachés automatiquement. Tu pourras aussi
+                    en joindre plus tard depuis l&apos;onglet Documents.
+                  </p>
+                </div>
+              )
+            })()}
 
             {/* Demi-journée — only offered for leave types where it makes sense */}
             {DEMI_JOURNEE_ALLOWED_TYPES.has(form.type_conge) && (

@@ -559,7 +559,23 @@ export async function GET(request: Request) {
     const { data: congesData, error: congesErr } = await query
     if (congesErr) throw congesErr
 
-    // Enrich with employee info (no FK join)
+    // DOC1 hotfix — count documents par demande (bulk, 1 roundtrip).
+    const congeIds = (congesData || []).map((c: any) => c.id).filter(Boolean)
+    const docCountByDemande = new Map<string, number>()
+    if (congeIds.length > 0) {
+      const { data: docsRows } = await supabase
+        .from('documents_rh')
+        .select('lien_demande_conge_id')
+        .in('lien_demande_conge_id', congeIds)
+        .eq('archive', false)
+      for (const row of (docsRows || []) as any[]) {
+        const id = row?.lien_demande_conge_id
+        if (!id) continue
+        docCountByDemande.set(id, (docCountByDemande.get(id) || 0) + 1)
+      }
+    }
+
+    // Enrich with employee info (no FK join) + documents_count (DOC1 hotfix)
     const empMap = new Map(employees.map((e: any) => [e.id, e]))
     const congesEnriched = (congesData || []).map((c: any) => {
       const emp = empMap.get(c.employe_id)
@@ -571,6 +587,7 @@ export async function GET(request: Request) {
           poste: emp.poste,
           societe_id: emp.societe_id,
         } : null,
+        documents_count: docCountByDemande.get(c.id) || 0,
       }
     })
 
@@ -746,20 +763,49 @@ export async function POST(request: Request) {
               }, { status: 422 })
             }
           }
-          // Justificatifs conditionnels
-          const justifValid = validerJustificatifs(cfg, {
-            certificat_medical: body.certificat_medical_url || body.certificat_url,
-            acte_naissance: body.acte_naissance_url,
-            acte_deces: body.acte_deces_url,
-            convocation: body.convocation_url,
-          })
-          if (!justifValid.ok) {
-            return NextResponse.json({
-              error: 'justificatifs_manquants',
-              manquants: justifValid.manquants,
-              type_conge: body.type_conge,
-              reference_wra: cfg.reference_wra,
-            }, { status: 422 })
+          // Justificatifs conditionnels.
+          //
+          // DOC1 hotfix — le frontend (rh/conges/page.tsx + salarié) peut
+          // poster `has_pending_files: true` dans le body s'il a des
+          // fichiers sélectionnés qui seront uploadés après la création
+          // (via POST /api/documents-rh/upload avec lien_demande_conge_id).
+          // Dans ce cas on skip la validation URL (le fichier arrive juste
+          // après). Si l'upload échoue côté client, la ligne
+          // documents_rh.lien_demande_conge_id reste nulle et la demande
+          // peut être repérée via la colonne documents_count=0 côté UI.
+          //
+          // WRA S.46 — SL : certificat médical OBLIGATOIRE seulement si
+          // la demande couvre ≥ 3 jours consécutifs. Calcul calendaire
+          // (date_fin - date_debut + 1 jour). Court-circuite la règle
+          // generic de conges_regles qui dit requiert_certificat_medical
+          // pour tous les SL.
+          let cfgEffectif = cfg
+          if (body.type_conge === 'SL') {
+            const d1 = new Date(String(body.date_debut).slice(0, 10) + 'T12:00:00')
+            const d2 = new Date(String(body.date_fin).slice(0, 10) + 'T12:00:00')
+            const joursConsecutifs = Math.round(
+              (d2.getTime() - d1.getTime()) / (24 * 3600 * 1000),
+            ) + 1
+            if (joursConsecutifs < 3) {
+              cfgEffectif = { ...cfg, requiert_certificat_medical: false }
+            }
+          }
+          const hasPendingFiles = body.has_pending_files === true
+          if (!hasPendingFiles) {
+            const justifValid = validerJustificatifs(cfgEffectif, {
+              certificat_medical: body.certificat_medical_url || body.certificat_url,
+              acte_naissance: body.acte_naissance_url,
+              acte_deces: body.acte_deces_url,
+              convocation: body.convocation_url,
+            })
+            if (!justifValid.ok) {
+              return NextResponse.json({
+                error: 'justificatifs_manquants',
+                manquants: justifValid.manquants,
+                type_conge: body.type_conge,
+                reference_wra: cfgEffectif.reference_wra,
+              }, { status: 422 })
+            }
           }
         }
       } catch (e) {

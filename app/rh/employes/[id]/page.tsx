@@ -22,6 +22,7 @@ import {
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 import { createClient } from "@/lib/supabase/client"
 import { ProtectionLegalePanel } from "./_components/ProtectionLegalePanel"
+import { DocumentsTabRH } from "./_components/DocumentsTabRH"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
@@ -925,49 +926,13 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
 
         {/* ===== TAB 8: Documents ===== */}
         <TabsContent value="documents" className="space-y-6">
-          <Card className="rounded-2xl shadow-sm bg-[#f8f9fc]">
-            <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><FolderOpen className="w-4 h-4 text-[#4191FF]" />Documents employe</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="border-2 border-dashed border-[#4191FF]/30 rounded-2xl p-10 text-center bg-[#4191FF]/5 hover:bg-[#4191FF]/10 hover:border-[#4191FF]/50 transition-colors cursor-pointer">
-                <div className="w-14 h-14 rounded-full bg-[#4191FF]/10 flex items-center justify-center mx-auto mb-3">
-                  <Upload className="w-7 h-7 text-[#4191FF]" />
-                </div>
-                <p className="text-sm font-medium text-gray-700">Glisser un fichier ou cliquer pour telecharger</p>
-                <p className="text-xs text-gray-400 mt-1">PDF, Word, Images (max 10MB)</p>
-                <Button variant="outline" className="mt-4 text-[#0B0F2E] border-[#0B0F2E] rounded-full px-6">
-                  <Upload className="w-4 h-4 mr-2" />Ajouter un document
-                </Button>
-              </div>
-              {documents.length === 0 ? (
-                <p className="text-center text-gray-500 text-sm py-4">Aucun document</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Type</TableHead><TableHead>Date</TableHead>
-                      <TableHead>Description</TableHead><TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {documents.map((doc: any) => (
-                      <TableRow key={doc.id}>
-                        <TableCell>{doc.type || "--"}</TableCell>
-                        <TableCell>{fmtDate(doc.created_at)}</TableCell>
-                        <TableCell>{doc.description || doc.nom || "--"}</TableCell>
-                        <TableCell>
-                          {doc.url && (
-                            <Button variant="ghost" size="sm" onClick={() => window.open(doc.url, "_blank")} className="text-[#D4AF37]">
-                              <Download className="w-4 h-4 mr-1" />Telecharger
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+          {/* DOC1 — module documents_rh bidirectionnel avec filtres + upload +
+              archivage + confidentiel + suppression. Remplace l'ancien
+              placeholder + table legacy 'documents'. */}
+          <DocumentsTabRH
+            employeId={id}
+            employeNom={employe ? `${employe.prenom || ''} ${employe.nom || ''}`.trim() : undefined}
+          />
         </TabsContent>
 
         {/* ===== TAB 9: Historique ===== */}
