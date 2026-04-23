@@ -1808,11 +1808,21 @@ export default function CongesPage() {
                         <TableHead>Approbation</TableHead>
                         <TableHead>Motif</TableHead>
                         <TableHead>Commentaire</TableHead>
+                        <TableHead className="w-24 text-center">Justif.</TableHead>
                         {canImposeCollectif && <TableHead className="text-right">Actions</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredHisto.map(c => (
+                      {filteredHisto.map(c => {
+                        // DOC1 hotfix 2 — justificatif requis selon le type,
+                        // SAUF si la demande est refusée (pas d'obligation).
+                        const needsCertSl = c.type_conge === "SL" && c.nb_jours > 3
+                        const needsJustifType = needsCertSl || [
+                          'FML', 'SPC_MARIAGE_SELF', 'SPC_MARIAGE_ENFANT', 'SPC_DECES',
+                          'JUR', 'INT', 'CRT', 'MAT', 'PAT',
+                        ].includes(c.type_conge || '')
+                        const requisEffectif = needsJustifType && c.statut !== 'refuse'
+                        return (
                         <TableRow key={c.id}>
                           <TableCell className="font-medium">
                             {c.employe?.prenom} {c.employe?.nom}
@@ -1856,6 +1866,22 @@ export default function CongesPage() {
                           <TableCell className="text-sm text-gray-500 max-w-32 truncate">
                             {c.commentaire_manager || "---"}
                           </TableCell>
+                          <TableCell className="text-center">
+                            {/* DOC1 hotfix 2 — bouton justificatif aussi dans
+                                l'historique. documents_count préchargé par
+                                GET /api/rh/conges (commit 39d5bcd). */}
+                            <JustificatifBouton
+                              demande={{
+                                id: c.id,
+                                employe_id: c.employe_id,
+                                employe: c.employe,
+                                type_conge: c.type_conge,
+                                date_debut: c.date_debut,
+                              }}
+                              requisManquant={requisEffectif}
+                              initialCount={(c as any).documents_count}
+                            />
+                          </TableCell>
                           {canImposeCollectif && (
                             <TableCell className="text-right">
                               <div className="flex gap-1 justify-end">
@@ -1894,7 +1920,7 @@ export default function CongesPage() {
                             </TableCell>
                           )}
                         </TableRow>
-                      ))}
+                      )})}
                     </TableBody>
                   </Table>
                 </div>
