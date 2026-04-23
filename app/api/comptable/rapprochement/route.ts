@@ -3252,8 +3252,13 @@ export async function POST(request: Request) {
       }
 
       const code = `CL${String(Date.now()).slice(-6)}`
-      // Lire l'ancien code lettre AVANT de mettre à jour la transaction
-      const oldLettre = txs[txIdx]?.lettre || null
+      // Lire l'ancien état de la tx AVANT de mettre à jour. Sert au cleanup
+      // systémique (écritures BNQ, lettres ACH, factures liées, CCA).
+      const prevTx = { ...(txs[txIdx] || {}) }
+      const oldLettre = prevTx.lettre || null
+      const oldFactureIds: string[] = Array.isArray(prevTx.facture_ids) && prevTx.facture_ids.length > 0
+        ? prevTx.facture_ids
+        : (prevTx.facture_id ? [prevTx.facture_id] : [])
       txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
       const { error: updRelErr, data: updRelData } = await supabase
         .from('releves_bancaires')
@@ -3339,6 +3344,31 @@ export async function POST(request: Request) {
           .eq('societe_id', societe_id)
           .eq('ref_folio', refFolioCLS)
         nbEcrituresSupprimees += (delByCLS || 0)
+        // 2bis) Supprimer les écritures BANK-xxx-txIdx (créées par marquer_paye
+        // ou par lettrer_multi côté BNQ) — couvre les paiements groupés avec
+        // ref_folio unique par facture : BANK-<rel>-<idx>-<facId_short>
+        const bankPrefix = `BANK-${releve_id}-${txIdx}`
+        const { count: delByBankExact } = await supabase
+          .from('ecritures_comptables_v2')
+          .delete({ count: 'exact' })
+          .eq('societe_id', societe_id)
+          .eq('ref_folio', bankPrefix)
+        nbEcrituresSupprimees += (delByBankExact || 0)
+        const { count: delByBankPrefix } = await supabase
+          .from('ecritures_comptables_v2')
+          .delete({ count: 'exact' })
+          .eq('societe_id', societe_id)
+          .like('ref_folio', `${bankPrefix}-%`)
+        nbEcrituresSupprimees += (delByBankPrefix || 0)
+        // 2ter) Supprimer TDS-xxx et MC-xxx (retenues à source + classifications manuelles)
+        for (const prefix of [`TDS-${releve_id}-${txIdx}`, `MC-${releve_id}-${txIdx}`]) {
+          const { count } = await supabase
+            .from('ecritures_comptables_v2')
+            .delete({ count: 'exact' })
+            .eq('societe_id', societe_id)
+            .eq('ref_folio', prefix)
+          nbEcrituresSupprimees += (count || 0)
+        }
         // 3) Supprimer par ancien code lettre (A043, CLS005, etc.)
         // oldLettre est lu AVANT la mise à jour de txs[txIdx] (ligne 3200)
         if (oldLettre && oldLettre !== code) {
@@ -3349,9 +3379,42 @@ export async function POST(request: Request) {
             .eq('lettre', oldLettre)
             .eq('journal', 'BNQ')
           nbEcrituresSupprimees += (delByLettre || 0)
+          // 3bis) Délettrer les ACH/OD/VTE qui partagaient la même lettre
+          // (elles sont préservées mais leur lettre est retirée pour permettre
+          // un re-lettrage ultérieur si besoin).
+          await supabase
+            .from('ecritures_comptables_v2')
+            .update({ lettre: null, date_lettrage: null })
+            .eq('societe_id', societe_id)
+            .eq('lettre', oldLettre)
+            .neq('journal', 'BNQ')
         }
         if (nbEcrituresSupprimees > 0) {
-          console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folio=${refFolio}|${refFolioCLS}, lettre=${oldLettre})`)
+          console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folios CL/CLS/BANK/TDS/MC, lettre=${oldLettre})`)
+        }
+
+        // ── RECLASSIFICATION FACTURES : détacher les factures qui étaient
+        // rapprochées à cette tx. Sans ça, une facture reste en statut 'paye'
+        // avec un rapproche_releve_id pointant vers la tx alors qu'on vient
+        // de classer la tx en autre chose (ex: 'loyer') → incohérence visible
+        // sur /client/fournisseurs et dans les rapports fiscaux.
+        if (oldFactureIds.length > 0 && classification !== 'fournisseur' && classification !== 'client') {
+          const { error: resetFacErr } = await supabase
+            .from('factures')
+            .update({
+              statut: 'en_attente',
+              rapproche_releve_id: null,
+              rapproche_transaction_idx: null,
+              rapproche_date: null,
+              rapproche_source: null,
+            })
+            .in('id', oldFactureIds)
+          if (!resetFacErr) {
+            console.log(`[classer_transaction] ${oldFactureIds.length} facture(s) remise(s) en_attente (classification devient ${classification})`)
+          }
+          // Et on clear les facture_id/facture_ids de la tx dans transactions_json
+          txs[txIdx] = { ...txs[txIdx], facture_id: null, facture_ids: undefined, rapprochement_multi: undefined, nb_factures: undefined }
+          await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
         }
 
         // ── RECLASSIFICATION CCA : nettoyer les mouvements_compte_courant ──
