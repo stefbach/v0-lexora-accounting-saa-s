@@ -169,6 +169,9 @@ export async function PUT(req: NextRequest) {
       'eoy_bonus_inclut_hors_seuil',
       'eoy_bonus_date_paiement_75pct',
       'eoy_bonus_date_paiement_25pct',
+      // G9 — Disturbance Allowance WRA S.17A FMPA 2024 (mig 184)
+      'disturbance_allowance_active',
+      'disturbance_hourly_multiplier',
     ]
 
     const updates: Record<string, unknown> = {}
