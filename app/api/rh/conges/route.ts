@@ -773,9 +773,26 @@ export async function POST(request: Request) {
           // après). Si l'upload échoue côté client, la ligne
           // documents_rh.lien_demande_conge_id reste nulle et la demande
           // peut être repérée via la colonne documents_count=0 côté UI.
+          //
+          // WRA S.46 — SL : certificat médical OBLIGATOIRE seulement si
+          // la demande couvre ≥ 3 jours consécutifs. Calcul calendaire
+          // (date_fin - date_debut + 1 jour). Court-circuite la règle
+          // generic de conges_regles qui dit requiert_certificat_medical
+          // pour tous les SL.
+          let cfgEffectif = cfg
+          if (body.type_conge === 'SL') {
+            const d1 = new Date(String(body.date_debut).slice(0, 10) + 'T12:00:00')
+            const d2 = new Date(String(body.date_fin).slice(0, 10) + 'T12:00:00')
+            const joursConsecutifs = Math.round(
+              (d2.getTime() - d1.getTime()) / (24 * 3600 * 1000),
+            ) + 1
+            if (joursConsecutifs < 3) {
+              cfgEffectif = { ...cfg, requiert_certificat_medical: false }
+            }
+          }
           const hasPendingFiles = body.has_pending_files === true
           if (!hasPendingFiles) {
-            const justifValid = validerJustificatifs(cfg, {
+            const justifValid = validerJustificatifs(cfgEffectif, {
               certificat_medical: body.certificat_medical_url || body.certificat_url,
               acte_naissance: body.acte_naissance_url,
               acte_deces: body.acte_deces_url,
@@ -786,7 +803,7 @@ export async function POST(request: Request) {
                 error: 'justificatifs_manquants',
                 manquants: justifValid.manquants,
                 type_conge: body.type_conge,
-                reference_wra: cfg.reference_wra,
+                reference_wra: cfgEffectif.reference_wra,
               }, { status: 422 })
             }
           }
