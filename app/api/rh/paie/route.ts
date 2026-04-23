@@ -201,6 +201,44 @@ function calcOT(hEntree: string, hSortie: string, ferieDay: boolean, planningHou
   return { normales, ot15, ot2: 0, ot3: 0, heuresNuit }
 }
 
+// ═══ G9bis.4 — Night Shift Allowance WRA S.20 STRICT ══════════════════
+// Un shift est "complet nuit" si heure_entree >= 21:00 ET heure_sortie
+// <= 05:00 le lendemain (donc session qui démarre au plus tôt à 21h et
+// se termine au plus tard à 5h du matin). Une session partiellement
+// nocturne ne déclenche PAS la S.20 allowance — elle peut en revanche
+// déclencher la disturbance allowance S.17A (G9) si la société l'a
+// activée.
+//
+// Montant = salaire_base × 0.15 × (nb_shifts_nuit_complets /
+//                                  nb_jours_travailles_du_mois)
+// Sur employé qui fait que des shifts nuit, le ratio ≈ 1 -> allocation
+// = 15% du salaire. Sur employé nuit partielle, ratio = 0.
+function compterShiftsNuitComplets(
+  pointagesMois: Array<{ heure_entree: string | null; heure_sortie: string | null }>,
+): number {
+  let n = 0
+  for (const pt of pointagesMois || []) {
+    if (!pt.heure_entree || !pt.heure_sortie) continue
+    const entree = String(pt.heure_entree).slice(0, 5)
+    const sortie = String(pt.heure_sortie).slice(0, 5)
+    // Normalisation : HH:MM string compare fonctionne pour le seuil 21:00.
+    if (entree >= '21:00' && sortie <= '05:00') n++
+  }
+  return n
+}
+
+function calculerNightShiftS20(
+  salaireBase: number,
+  pointagesMois: Array<{ heure_entree: string | null; heure_sortie: string | null }>,
+  nbJoursTravailles: number,
+  nightShiftPct: number = 0.15,
+): { allowance: number; nbShiftsNuit: number } {
+  const nbShiftsNuit = compterShiftsNuitComplets(pointagesMois)
+  if (nbShiftsNuit === 0 || nbJoursTravailles <= 0) return { allowance: 0, nbShiftsNuit }
+  const allowance = Math.round(salaireBase * nightShiftPct * (nbShiftsNuit / nbJoursTravailles))
+  return { allowance, nbShiftsNuit }
+}
+
 export async function GET(request: Request) {
   // Sprint 5 BUG A — traçabilité étape par étape pour identifier la
   // ligne qui provoque le 500. Les logs apparaissent dans Vercel Functions.
@@ -621,6 +659,21 @@ export async function POST(request: Request) {
         total_ot_montant += montant15 + montant2 + montant3
         total_heures_nuit_single += ot.heuresNuit || 0
       }
+
+      // G9bis.4 — Night Shift Allowance WRA S.20 STRICT (harmonisé avec
+      // le batch). Compte les shifts complets 21h→05h du mois et calcule
+      // l'allocation = salaire_base × 15% × (shifts_nuit / jours_travailles).
+      const nightShiftPctSingle = Number((params as any).night_shift_pct ?? 0.15)
+      const nightShiftResSingle = calculerNightShiftS20(
+        Number(emp.salaire_base) || 0,
+        (pointagesMois || []).map(pt => ({
+          heure_entree: pt.heure_entree,
+          heure_sortie: pt.heure_sortie,
+        })),
+        jours_travailles,
+        nightShiftPctSingle,
+      )
+      total_ot_montant += nightShiftResSingle.allowance
 
       // INTÉGRATION 4 — Primes de la période : on ne compte QUE celles
       // qui sont approuvées (approuve=true) ET pas encore intégrées
@@ -1220,15 +1273,25 @@ export async function POST(request: Request) {
           total_heures_nuit += ot.heuresNuit
         }
 
-        // Night Shift Allowance: majoration % of base salary for night hours (21h-6h)
-        // Does NOT apply if employee's schedule is exclusively nocturnal.
-        // Sprint 2 — taux paramétrable via params.night_shift_pct (défaut 15%).
-        const shiftCode = (planAssignments || [])[0]?.shift_code || ''
-        const isExclusivelyNight = shiftCode.toLowerCase() === 'nuit' || shiftCode === 'N'
+        // G9bis.4 — Night Shift Allowance WRA S.20 STRICT.
+        // Ancien calcul (prorata horaire heures 21h-6h) remplacé par :
+        //   allowance = salaire_base × pct × (shifts_nuit_complets /
+        //              nb_jours_travailles), avec shift "complet nuit" =
+        //              entrée >= 21:00 ET sortie <= 05:00.
+        // Un shift partiellement nocturne (ex: 18h-2h) ne déclenche pas
+        // la S.20 — il déclenche la disturbance S.17A (G9) si active.
         const nightShiftPct = Number((params as any).night_shift_pct ?? 0.15)
-        const nightShiftAllowance = (!isExclusivelyNight && total_heures_nuit > 0)
-          ? Math.round(Number(emp.salaire_base) * nightShiftPct * (total_heures_nuit / (45 * 52 / 12)))
-          : 0
+        const { allowance: nightShiftAllowance, nbShiftsNuit: nbShiftsNuitBatch } =
+          calculerNightShiftS20(
+            Number(emp.salaire_base) || 0,
+            (pointagesMois || []).map(pt => ({
+              heure_entree: pt.heure_entree,
+              heure_sortie: pt.heure_sortie,
+            })),
+            jours_travailles,
+            nightShiftPct,
+          )
+        // Laisse total_heures_nuit inchangé pour les logs existants.
 
         // INTÉGRATION 4 — Primes de la période : approuve=true ET
         // integre_paie=false uniquement (cf. calculer pour rationale).
