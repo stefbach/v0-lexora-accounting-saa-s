@@ -1,9 +1,18 @@
 /**
  * GET /api/documents-rh — liste les documents accessibles.
  *
- * Query params :
- *   employe_id (requis côté RH, ignoré côté employé qui voit les siens)
- *   categorie, direction, archive, lien_demande_conge_id : filtres facultatifs
+ * Query params (tous optionnels, combinables) :
+ *   employe_id              : filtre par employé
+ *   categorie               : filtre par catégorie
+ *   direction               : 'employe_vers_rh' | 'rh_vers_employe'
+ *   archive                 : 'true' | 'false' (défaut : tous)
+ *   lien_demande_conge_id   : filtre par demande de congé liée
+ *   lien_bulletin_id        : filtre par bulletin lié
+ *   lien_grossesse_id       : filtre par grossesse liée
+ *
+ * Au moins un filtre est requis côté RH, sauf si 'archive=false' (liste
+ * globale des docs actifs pour le dashboard widget). Côté employé,
+ * employe_id est forcé sur son propre id.
  *
  * RLS filtre automatiquement les docs visibles :
  *   - employé : ses propres docs (sauf confidentiel_rh_only)
@@ -12,7 +21,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { getDocumentsEmploye, type DocumentCategorie, type DocumentDirection } from '@/lib/rh/documents-rh'
+import type { DocumentRH } from '@/lib/rh/documents-rh'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,10 +45,18 @@ export async function GET(request: Request) {
     const role = (prof as any)?.role || ''
     const isRH = ['admin', 'rh'].includes(role)
 
-    const url = new URL(request.url)
-    let employeId = url.searchParams.get('employe_id') || ''
+    const params = new URL(request.url).searchParams
+    const employeIdRaw = params.get('employe_id')
+    const categorie = params.get('categorie')
+    const direction = params.get('direction')
+    const archive = params.get('archive')
+    const lienDemandeId = params.get('lien_demande_conge_id')
+    const lienBulletinId = params.get('lien_bulletin_id')
+    const lienGrossesseId = params.get('lien_grossesse_id')
 
-    // Si non-RH : forcer l'employe_id = son propre id employé.
+    // Côté employé : forcer employe_id = son propre id, quelles que soient
+    // les autres clauses (les RLS feraient filtrer mais on assure aussi ici).
+    let employeId = employeIdRaw || ''
     if (!isRH) {
       const { data: selfEmp } = await supabase
         .from('employes')
@@ -48,37 +65,52 @@ export async function GET(request: Request) {
         .limit(1)
         .maybeSingle()
       if (!selfEmp) {
-        return NextResponse.json({ documents: [], error: 'Profil employé non trouvé' }, { status: 403 })
+        return NextResponse.json(
+          { documents: [], total: 0, error: 'Profil employé non trouvé' },
+          { status: 403 },
+        )
       }
       employeId = (selfEmp as any).id
     }
 
-    if (!employeId) {
-      return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
+    // Construire la query avec tous les filtres optionnels. Au moins un
+    // doit être fourni côté RH pour éviter un SELECT * global imprudent
+    // (hormis archive=false pour les widgets).
+    let query = supabase
+      .from('documents_rh')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (employeId) query = query.eq('employe_id', employeId)
+    if (categorie) query = query.eq('categorie', categorie)
+    if (direction) query = query.eq('direction', direction)
+    if (archive !== null) query = query.eq('archive', archive === 'true')
+    if (lienDemandeId) query = query.eq('lien_demande_conge_id', lienDemandeId)
+    if (lienBulletinId) query = query.eq('lien_bulletin_id', lienBulletinId)
+    if (lienGrossesseId) query = query.eq('lien_grossesse_id', lienGrossesseId)
+
+    // Guard côté RH : au moins UN filtre. 'archive=false' seul est
+    // acceptable (widget dashboard). Sinon on refuse pour limiter la
+    // surface des données retournées.
+    const hasAnyFilter = Boolean(
+      employeId || categorie || direction || archive !== null
+        || lienDemandeId || lienBulletinId || lienGrossesseId,
+    )
+    if (!hasAnyFilter) {
+      return NextResponse.json(
+        { error: 'Au moins un filtre requis (employe_id, lien_demande_conge_id, …)' },
+        { status: 400 },
+      )
     }
 
-    const options: {
-      categorie?: DocumentCategorie
-      direction?: DocumentDirection
-      archive?: boolean
-      lienDemandeId?: string
-    } = {}
-    const cat = url.searchParams.get('categorie')
-    if (cat) options.categorie = cat as DocumentCategorie
-    const dir = url.searchParams.get('direction')
-    if (dir) options.direction = dir as DocumentDirection
-    const arch = url.searchParams.get('archive')
-    if (arch !== null) options.archive = arch === 'true'
-    const lien = url.searchParams.get('lien_demande_conge_id')
-    if (lien) options.lienDemandeId = lien
+    const { data, error } = await query
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
-    const documents = await getDocumentsEmploye(supabase, employeId, options)
-
-    // Pour les employés non-RH : filtre supplémentaire côté API (défense en
-    // profondeur) pour cacher les docs confidentiel_rh_only.
-    const filtered = isRH
-      ? documents
-      : documents.filter(d => !d.confidentiel_rh_only)
+    const rows = (data || []) as DocumentRH[]
+    // Défense en profondeur côté employé : cacher les docs confidentiel_rh_only.
+    const filtered = isRH ? rows : rows.filter(d => !d.confidentiel_rh_only)
 
     return NextResponse.json({ documents: filtered, total: filtered.length })
   } catch (e: any) {

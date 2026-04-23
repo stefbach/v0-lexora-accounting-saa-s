@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -87,6 +87,10 @@ export function JustificatifDialog({ open, onOpenChange, demande, onChange }: Pr
           <DialogTitle style={{ color: NAVY }}>
             📎 Justificatifs — {titreDemande}
           </DialogTitle>
+          <DialogDescription className="text-xs text-gray-500">
+            Consulter les documents déjà attachés ou en ajouter un nouveau.
+            Les pièces jointes sont liées automatiquement à cette demande.
+          </DialogDescription>
         </DialogHeader>
         <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)}>
           <TabsList className="grid grid-cols-2 w-full">
