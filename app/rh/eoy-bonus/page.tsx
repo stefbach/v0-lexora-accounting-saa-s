@@ -1,0 +1,441 @@
+"use client"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import {
+  Gift, Loader2, Calculator, Save, AlertTriangle, CheckCircle2,
+  Eye, ShieldAlert, CalendarDays, Wallet,
+} from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import {
+  formaterMontantMUR, formaterPct, getMotifLabel,
+  type EoyBonusCalcul, type EoyBonusRecap,
+} from "@/lib/rh/eoy-bonus"
+
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
+
+export default function EoyBonusPage() {
+  const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
+  const [societeId, setSocieteId] = useState<string>("")
+  const [annee, setAnnee] = useState<number>(new Date().getFullYear())
+
+  const [calculs, setCalculs] = useState<EoyBonusCalcul[]>([])
+  const [recap, setRecap] = useState<EoyBonusRecap | null>(null)
+  const [savedFlag, setSavedFlag] = useState<boolean | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [processing, setProcessing] = useState<'preview' | 'save' | null>(null)
+  const [feedback, setFeedback] = useState<string | null>(null)
+  const [authorized, setAuthorized] = useState<boolean | null>(null)
+
+  const [detailOpen, setDetailOpen] = useState<EoyBonusCalcul | null>(null)
+
+  // Charge liste sociétés + vérif rôle
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const { createClient } = await import('@/lib/supabase/client')
+        const sb = createClient()
+        const { data: { user } } = await sb.auth.getUser()
+        if (!user) { setAuthorized(false); return }
+        const { data: prof } = await sb.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        const role = (prof as any)?.role || ''
+        if (!['admin', 'rh'].includes(role)) { setAuthorized(false); return }
+        setAuthorized(true)
+
+        const res = await fetch('/api/comptable/societes')
+        const d = res.ok ? await res.json() : { societes: [] }
+        setSocietes(d?.societes || [])
+        if (d?.societes?.length > 0) setSocieteId(d.societes[0].id)
+      } catch { setAuthorized(false) }
+    })()
+  }, [])
+
+  const loadExisting = useCallback(async () => {
+    if (!societeId || !annee) return
+    setLoading(true)
+    setFeedback(null)
+    try {
+      const res = await fetch(`/api/rh/eoy-bonus?societe_id=${societeId}&annee=${annee}`)
+      const d = await res.json()
+      if (!res.ok) { setFeedback(`⚠ ${d?.error || 'erreur'}`); return }
+      setCalculs(d.calculs || [])
+      setRecap(d.recap || null)
+      setSavedFlag(d.saved ?? null)
+    } catch (e: any) {
+      setFeedback(`⚠ ${e?.message || 'réseau'}`)
+    } finally {
+      setLoading(false)
+    }
+  }, [societeId, annee])
+
+  useEffect(() => {
+    if (authorized && societeId) loadExisting()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authorized, societeId, annee])
+
+  const runAction = async (path: 'preview' | 'calculer') => {
+    if (!societeId) return
+    setProcessing(path === 'preview' ? 'preview' : 'save')
+    setFeedback(null)
+    try {
+      const res = await fetch(`/api/rh/eoy-bonus/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId, annee }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setFeedback(`⚠ ${d?.error || `HTTP ${res.status}`}`); return }
+      setCalculs(d.calculs || [])
+      setRecap(d.recap || null)
+      setSavedFlag(d.saved === true || d.saved > 0)
+      if (path === 'calculer') {
+        setFeedback(`✅ ${d.saved || 0} calcul(s) sauvegardé(s).`)
+      } else {
+        setFeedback(`🔍 Aperçu : ${(d.calculs || []).length} calcul(s). Non sauvegardé.`)
+      }
+    } catch (e: any) {
+      setFeedback(`⚠ ${e?.message || 'erreur'}`)
+    } finally {
+      setProcessing(null)
+    }
+  }
+
+  const anneesDisponibles = useMemo(() => {
+    const y = new Date().getFullYear()
+    return [y - 2, y - 1, y, y + 1]
+  }, [])
+
+  if (authorized === false) {
+    return (
+      <ClientPageShell hideHero disableParticles>
+        <Card className="max-w-lg mx-auto mt-12 border-red-300 bg-red-50">
+          <CardContent className="p-6 flex items-start gap-3">
+            <ShieldAlert className="h-6 w-6 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-900">Accès refusé</p>
+              <p className="text-sm text-red-800 mt-1">
+                Cette page est réservée aux RH et administrateurs.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </ClientPageShell>
+    )
+  }
+
+  if (authorized === null) {
+    return (
+      <ClientPageShell hideHero disableParticles>
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-10 w-10 animate-spin text-gray-400" />
+        </div>
+      </ClientPageShell>
+    )
+  }
+
+  return (
+    <ClientPageShell hideHero disableParticles>
+      <div className="space-y-6 max-w-[1400px] mx-auto">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2" style={{ color: NAVY }}>
+            <Gift className="h-7 w-7" style={{ color: GOLD }} />
+            End of Year Bonus
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Workers&apos; Rights Act 2019 Section 54. Paiement 75% avant le 25/12 et 25% avant le 31/12.
+          </p>
+        </div>
+
+        {/* Filtres + actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base" style={{ color: NAVY }}>Paramètres de calcul</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <Label className="text-sm">Société</Label>
+              <Select value={societeId} onValueChange={setSocieteId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm">Année</Label>
+              <Select value={String(annee)} onValueChange={v => setAnnee(parseInt(v, 10))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {anneesDisponibles.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button
+                variant="outline" className="w-full"
+                disabled={!societeId || processing !== null}
+                onClick={() => runAction('preview')}
+              >
+                {processing === 'preview' ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                Aperçu
+              </Button>
+            </div>
+            <div className="flex items-end">
+              <Button
+                className="w-full text-white"
+                style={{ backgroundColor: NAVY }}
+                disabled={!societeId || processing !== null}
+                onClick={() => runAction('calculer')}
+              >
+                {processing === 'save' ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Calculer & sauver
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {feedback && (
+          <div className={`rounded-md px-4 py-2 text-sm border ${feedback.startsWith('⚠') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-800 border-green-200'}`}>
+            {feedback}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
+        ) : recap ? (
+          <>
+            {/* Récap */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card className="border-2" style={{ borderColor: GOLD + '40' }}>
+                <CardContent className="p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Total à payer</p>
+                  <p className="text-2xl font-bold mt-1" style={{ color: NAVY }}>{formaterMontantMUR(recap.total_bonus)}</p>
+                  <p className="text-[11px] text-gray-400 mt-1">{recap.nb_eligibles} employé{recap.nb_eligibles > 1 ? 's' : ''} éligible{recap.nb_eligibles > 1 ? 's' : ''}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                    <Wallet className="h-3 w-3" /> 75% avant
+                  </p>
+                  <p className="text-xl font-bold mt-1" style={{ color: NAVY }}>{formaterMontantMUR(recap.total_75pct)}</p>
+                  <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+                    <CalendarDays className="h-3 w-3" /> {formatDateFR(recap.date_paiement_75pct)}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                    <Wallet className="h-3 w-3" /> 25% avant
+                  </p>
+                  <p className="text-xl font-bold mt-1" style={{ color: NAVY }}>{formaterMontantMUR(recap.total_25pct)}</p>
+                  <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+                    <CalendarDays className="h-3 w-3" /> {formatDateFR(recap.date_paiement_25pct)}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className={recap.nb_bulletins_manquants_total > 0 ? 'border-2 border-amber-300 bg-amber-50' : ''}>
+                <CardContent className="p-4">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Diagnostic</p>
+                  {recap.nb_bulletins_manquants_total > 0 ? (
+                    <>
+                      <p className="text-lg font-bold text-amber-700 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="h-4 w-4" /> {recap.nb_bulletins_manquants_total} bulletin{recap.nb_bulletins_manquants_total > 1 ? 's' : ''} manquant{recap.nb_bulletins_manquants_total > 1 ? 's' : ''}
+                      </p>
+                      <p className="text-[11px] text-amber-700 mt-1">
+                        {recap.nb_employes_avec_bulletins_manquants} employé{recap.nb_employes_avec_bulletins_manquants > 1 ? 's' : ''} concerné{recap.nb_employes_avec_bulletins_manquants > 1 ? 's' : ''}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-lg font-bold text-emerald-700 mt-1 flex items-center gap-1">
+                      <CheckCircle2 className="h-4 w-4" /> Données complètes
+                    </p>
+                  )}
+                  {recap.nb_non_eligibles > 0 && (
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      {recap.nb_non_eligibles} non éligible{recap.nb_non_eligibles > 1 ? 's' : ''}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Banner Phase 1 */}
+            <div className="rounded-md border-2 border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-900">
+                <p className="font-semibold">Phase 1 — calculs uniquement</p>
+                <p className="text-[13px]">
+                  Seuls les calculs sont disponibles. La génération automatique des bulletins
+                  75/25 sera ajoutée en Phase 2 après validation visuelle. Pour l&apos;instant,
+                  les paiements doivent être saisis manuellement depuis /rh/paie.
+                </p>
+              </div>
+            </div>
+
+            {/* Tableau détaillé */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center justify-between" style={{ color: NAVY }}>
+                  <span>Détail par employé ({calculs.length})</span>
+                  {savedFlag !== null && (
+                    <Badge className={savedFlag ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}>
+                      {savedFlag ? 'Sauvegardé' : 'Aperçu'}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Employé</TableHead>
+                        <TableHead className="text-right">Earnings</TableHead>
+                        <TableHead className="text-right">Mois</TableHead>
+                        <TableHead className="text-right">Moyenne</TableHead>
+                        <TableHead className="text-right">Sal. déc</TableHead>
+                        <TableHead className="text-right">Base</TableHead>
+                        <TableHead className="text-right">Prorata</TableHead>
+                        <TableHead className="text-right">Bonus</TableHead>
+                        <TableHead className="text-right">75% / 25%</TableHead>
+                        <TableHead>Statut</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {calculs.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={10} className="text-center text-gray-400 py-8">
+                            Aucun calcul. Cliquez sur <span className="font-semibold">Aperçu</span> ou <span className="font-semibold">Calculer &amp; sauver</span>.
+                          </TableCell>
+                        </TableRow>
+                      ) : calculs.map(c => {
+                        const manquants = c.bulletins_attendus - c.bulletins_trouves
+                        const b75 = Math.round(c.bonus_calcule * 0.75 * 100) / 100
+                        const b25 = Math.round((c.bonus_calcule - b75) * 100) / 100
+                        return (
+                          <TableRow key={c.employe_id} className="cursor-pointer hover:bg-gray-50" onClick={() => setDetailOpen(c)}>
+                            <TableCell className="font-medium">
+                              {c.employe_nom || c.employe_id.slice(0, 8)}
+                              {manquants > 0 && c.eligible && (
+                                <span className="ml-2 text-[10px] text-amber-700" title={`${manquants} bulletin(s) manquant(s)`}>
+                                  ⚠ {manquants}j
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs">{formaterMontantMUR(c.earnings_annuel)}</TableCell>
+                            <TableCell className="text-right text-xs">{c.nb_mois_travailles.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-mono text-xs">{formaterMontantMUR(c.moyenne_mensuelle)}</TableCell>
+                            <TableCell className="text-right font-mono text-xs">
+                              {c.salaire_decembre == null ? '—' : formaterMontantMUR(c.salaire_decembre)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs font-semibold">{formaterMontantMUR(c.base_calcul)}</TableCell>
+                            <TableCell className="text-right text-xs">{formaterPct(c.prorata, 1)}</TableCell>
+                            <TableCell className="text-right font-mono text-sm font-bold" style={{ color: c.eligible ? NAVY : '#9ca3af' }}>
+                              {formaterMontantMUR(c.bonus_calcule)}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-[11px] text-gray-500">
+                              {c.eligible ? (
+                                <>
+                                  <div>{formaterMontantMUR(b75)}</div>
+                                  <div>{formaterMontantMUR(b25)}</div>
+                                </>
+                              ) : '—'}
+                            </TableCell>
+                            <TableCell>
+                              {c.eligible ? (
+                                <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Éligible</Badge>
+                              ) : (
+                                <Badge className="bg-red-100 text-red-700 text-[10px]" title={c.motif_non_eligible || ''}>
+                                  {getMotifLabel(c.motif_non_eligible)}
+                                </Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <Card>
+            <CardContent className="text-center py-16 text-gray-500">
+              <Gift className="h-10 w-10 mx-auto text-gray-300 mb-3" />
+              <p>Sélectionnez une société et une année, puis cliquez sur Aperçu ou Calculer & sauver.</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Modale détail employé */}
+        <Dialog open={detailOpen !== null} onOpenChange={v => !v && setDetailOpen(null)}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle style={{ color: NAVY }}>
+                {detailOpen?.employe_nom || 'Détail'} — EOY {detailOpen?.annee}
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Détail du calcul Workers&apos; Rights Act S.54
+              </DialogDescription>
+            </DialogHeader>
+            {detailOpen && (
+              <div className="space-y-3 text-sm">
+                <LineDetail label="Earnings annuels" value={formaterMontantMUR(detailOpen.earnings_annuel)} />
+                <LineDetail label="Mois travaillés" value={detailOpen.nb_mois_travailles.toFixed(2)} />
+                <LineDetail label="Bulletins trouvés" value={`${detailOpen.bulletins_trouves} / ${detailOpen.bulletins_attendus}`} warning={detailOpen.bulletins_trouves < detailOpen.bulletins_attendus} />
+                <LineDetail label="Moyenne mensuelle" value={formaterMontantMUR(detailOpen.moyenne_mensuelle)} />
+                <LineDetail label="Salaire décembre" value={detailOpen.salaire_decembre == null ? '—' : formaterMontantMUR(detailOpen.salaire_decembre)} />
+                <LineDetail
+                  label="Base de calcul"
+                  value={formaterMontantMUR(detailOpen.base_calcul)}
+                  hint={detailOpen.salaire_decembre != null && detailOpen.salaire_decembre > detailOpen.moyenne_mensuelle
+                    ? 'Max = salaire décembre (WRA S.54 favorable)'
+                    : 'Max = moyenne mensuelle'}
+                />
+                <LineDetail label="Prorata" value={formaterPct(detailOpen.prorata, 2)} />
+                <div className="pt-2 border-t">
+                  <LineDetail
+                    label={detailOpen.eligible ? 'Bonus calculé' : 'Non éligible'}
+                    value={detailOpen.eligible
+                      ? formaterMontantMUR(detailOpen.bonus_calcule)
+                      : getMotifLabel(detailOpen.motif_non_eligible)}
+                    big
+                  />
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+    </ClientPageShell>
+  )
+}
+
+function LineDetail({ label, value, hint, warning, big }: { label: string; value: string; hint?: string; warning?: boolean; big?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <p className={big ? 'text-sm font-semibold' : 'text-xs text-gray-500'}>{label}</p>
+        {hint && <p className="text-[10px] text-gray-400 italic">{hint}</p>}
+      </div>
+      <p className={`font-mono ${big ? 'text-lg font-bold' : warning ? 'text-amber-700 font-semibold' : 'text-sm'}`} style={big ? { color: NAVY } : undefined}>
+        {value}
+      </p>
+    </div>
+  )
+}
+
+function formatDateFR(ymd: string): string {
+  if (!ymd || ymd.length < 10) return '—'
+  return `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}/${ymd.slice(0, 4)}`
+}
