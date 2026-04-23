@@ -105,12 +105,15 @@ export async function genererBulletinEoy(
   const cumulEmoluments = (bulletinsNormaux || []).reduce(
     (s: number, b: any) => s + (Number(b.salaire_brut) || 0), 0,
   )
-  const payeDeja = (bulletinsNormaux || []).reduce(
+  let payeDeja = (bulletinsNormaux || []).reduce(
     (s: number, b: any) => s + (Number(b.paye) || 0), 0,
   )
 
-  // Si on génère la 25%, le PAYE du 75% déjà généré doit être inclus
-  // dans payeDeja pour que le cumulatif soit correct.
+  // WRA S.54 + MRA cumulative : le PAYE du 25% =
+  //   PAYE_total_annuel_avec_bonus - PAYE_déjà_prélevé
+  // Le PAYE_déjà_prélevé inclut obligatoirement le paye_bonus du 75%,
+  // sinon le système oublie que le 75% a déjà ponctionné du PAYE et
+  // surtaxe le 25%.
   if (portion === '25pct' && calcul.bulletin_75pct_id) {
     const { data: b75 } = await supabase
       .from('bulletins_paie')
@@ -118,9 +121,7 @@ export async function genererBulletinEoy(
       .eq('id', calcul.bulletin_75pct_id)
       .maybeSingle()
     if (b75) {
-      // On inclut dans la base cumulative le bonus 75% déjà imposé.
-      // (emoluments += bonus_75, paye_deja += paye_bonus_75)
-      // Note : portionBrut pour 25% ne contient que la 25, on cumule.
+      payeDeja += Number((b75 as any).paye_bonus) || 0
     }
   }
 
