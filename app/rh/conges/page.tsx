@@ -845,10 +845,13 @@ export default function CongesPage() {
       const payload = form.demi_journee
         ? { ...form, date_fin: form.date_debut }
         : form
+      // DOC1 hotfix — informer l'API qu'il y a des fichiers à attacher
+      // après création (bypass la validation d'URL de justificatifs).
+      const hasPendingFiles = pendingFiles.length > 0
       const res = await fetch("/api/rh/conges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "creer", ...payload }),
+        body: JSON.stringify({ action: "creer", has_pending_files: hasPendingFiles, ...payload }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Erreur")

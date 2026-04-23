@@ -763,20 +763,32 @@ export async function POST(request: Request) {
               }, { status: 422 })
             }
           }
-          // Justificatifs conditionnels
-          const justifValid = validerJustificatifs(cfg, {
-            certificat_medical: body.certificat_medical_url || body.certificat_url,
-            acte_naissance: body.acte_naissance_url,
-            acte_deces: body.acte_deces_url,
-            convocation: body.convocation_url,
-          })
-          if (!justifValid.ok) {
-            return NextResponse.json({
-              error: 'justificatifs_manquants',
-              manquants: justifValid.manquants,
-              type_conge: body.type_conge,
-              reference_wra: cfg.reference_wra,
-            }, { status: 422 })
+          // Justificatifs conditionnels.
+          //
+          // DOC1 hotfix — le frontend (rh/conges/page.tsx + salarié) peut
+          // poster `has_pending_files: true` dans le body s'il a des
+          // fichiers sélectionnés qui seront uploadés après la création
+          // (via POST /api/documents-rh/upload avec lien_demande_conge_id).
+          // Dans ce cas on skip la validation URL (le fichier arrive juste
+          // après). Si l'upload échoue côté client, la ligne
+          // documents_rh.lien_demande_conge_id reste nulle et la demande
+          // peut être repérée via la colonne documents_count=0 côté UI.
+          const hasPendingFiles = body.has_pending_files === true
+          if (!hasPendingFiles) {
+            const justifValid = validerJustificatifs(cfg, {
+              certificat_medical: body.certificat_medical_url || body.certificat_url,
+              acte_naissance: body.acte_naissance_url,
+              acte_deces: body.acte_deces_url,
+              convocation: body.convocation_url,
+            })
+            if (!justifValid.ok) {
+              return NextResponse.json({
+                error: 'justificatifs_manquants',
+                manquants: justifValid.manquants,
+                type_conge: body.type_conge,
+                reference_wra: cfg.reference_wra,
+              }, { status: 422 })
+            }
           }
         }
       } catch (e) {

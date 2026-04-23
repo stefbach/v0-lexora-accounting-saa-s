@@ -98,10 +98,14 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
     setSubmitting(true); setError(""); setSuccess("")
     try {
       // 1) Créer la demande (JSON comme avant).
+      // DOC1 hotfix — flag has_pending_files pour que l'API bypass la
+      // validation des justificatifs URL (le fichier sera uploadé juste
+      // après via /api/documents-rh/upload OU /api/rh/conges/:id/certificat).
       const res = await fetch("/api/rh/conges", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "creer",
+          has_pending_files: !!file,
           employe_id: employe.id,
           type_conge: typeConge,
           date_debut: dateDebut,
