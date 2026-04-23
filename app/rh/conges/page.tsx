@@ -26,6 +26,7 @@ import {
   type EligibilityStatus,
 } from "@/app/salarie/_components/shared/conges-eligibilite"
 import { CashInLieuPanel } from "./_components/CashInLieuPanel"
+import { JustificatifBouton } from "@/components/rh/JustificatifDialog"
 
 // ─── Constants ───────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
@@ -1469,6 +1470,7 @@ export default function CongesPage() {
                       <TableHead>Nb jours</TableHead>
                       <TableHead>Approbation</TableHead>
                       <TableHead>Motif</TableHead>
+                      <TableHead className="w-24 text-center">Justif.</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1476,6 +1478,11 @@ export default function CongesPage() {
                     {conges.map(c => {
                       const niveau = c.niveau_approbation ?? 0
                       const needsCert = c.type_conge === "SL" && c.nb_jours > 3
+                      // DOC1 hotfix — types WRA nécessitant un justificatif.
+                      const needsJustif = needsCert || [
+                        'FML', 'SPC_MARIAGE_SELF', 'SPC_MARIAGE_ENFANT', 'SPC_DECES',
+                        'JUR', 'INT', 'CRT', 'MAT', 'PAT',
+                      ].includes(c.type_conge || '')
                       return (
                         <TableRow key={c.id}>
                           <TableCell className="font-medium">
@@ -1554,6 +1561,24 @@ export default function CongesPage() {
                                 )}
                               </div>
                             )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {/* DOC1 hotfix — bouton justificatifs pré-rempli
+                                (employe_id + lien_demande_conge_id). Count
+                                initial depuis c.documents_count (commit 2)
+                                sinon lazy-fetch. Rouge si requis & vide,
+                                vert dès 1 doc joint. */}
+                            <JustificatifBouton
+                              demande={{
+                                id: c.id,
+                                employe_id: c.employe_id,
+                                employe: c.employe,
+                                type_conge: c.type_conge,
+                                date_debut: c.date_debut,
+                              }}
+                              requisManquant={needsJustif}
+                              initialCount={(c as any).documents_count}
+                            />
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
