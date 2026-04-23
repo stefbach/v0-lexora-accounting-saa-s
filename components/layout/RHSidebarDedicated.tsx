@@ -8,7 +8,7 @@ import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import {
   Clock, Users, Calendar, CreditCard, TrendingUp, Banknote,
-  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle, ShieldCheck, Gift,
+  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle, ShieldCheck, Gift, Wallet,
 } from "lucide-react"
 
 interface NavLink {
@@ -27,6 +27,8 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/juridique', label: 'Contrats Travail', icon: FilePen, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'direction'] },
   { href: '/rh/groupes', label: 'Groupes / Équipes', icon: Users, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/depart', label: 'Gestion départs', icon: UserMinus, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  // G12 — Severance Calculator WRA S.70. Réservé admin/rh.
+  { href: '/rh/severance', label: 'Severance (S.70)', icon: Wallet, roles: ['admin', 'rh'] },
   { href: '/rh/planning', label: 'Planning', icon: CalendarDays, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager'] },
   // Sprint 5 FIX 7 — lien "Regles planning" supprimé du menu : la page
   // /rh/planning a déjà un bouton "Règles" intégré, le lien sidebar était
