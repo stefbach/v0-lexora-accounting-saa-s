@@ -839,7 +839,7 @@ Voulez-vous vraiment continuer ?`
   }
 
   // Lettrage multi-facture : 1 transaction bancaire vs N factures
-  const handleManualLinkMulti = async (tx: any, factures: any[]) => {
+  const handleManualLinkMulti = async (tx: any, factures: any[], typeEcart?: string) => {
     if (!societeId || factures.length === 0) return
     // Garde: sans tx bancaire réelle (releve_id + id), l'API renvoie 400 "releve_id requis".
     if (!tx?.releve_id || !tx?.id) {
@@ -856,17 +856,40 @@ Voulez-vous vraiment continuer ?`
           releve_id: tx.releve_id,
           facture_ids: ids,
           societe_id: societeId,
+          ...(typeEcart ? { type_ecart: typeEcart } : {}),
         }),
       })
       const d = await res.json().catch(() => ({}))
       console.log('[lettrer_multi] response', res.status, d)
+
+      // 409 ecart_requires_qualification : propose à l'opérateur de qualifier
+      // l'écart ou de forcer (compte 471 - à régulariser).
+      if (res.status === 409 && d.error === 'ecart_requires_qualification' && Array.isArray(d.options)) {
+        const optsList = (d.options as Array<{ type_ecart: string; label: string; compte: string }>)
+          .map((o, i) => `${i + 1}. ${o.label} → compte ${o.compte}`)
+          .join('\n')
+        const choice = window.prompt(
+          `⚠️ Écart de ${d.ecart} MUR (tx: ${d.tx_amount}, factures: ${d.factures_total}).\n\n` +
+          `Choisis un type d'écart pour générer l'OD comptable correspondante :\n\n${optsList}\n\n` +
+          `Tape le numéro (1-${d.options.length}), ou laisse vide pour annuler :`
+        )
+        const idx = choice ? parseInt(choice, 10) - 1 : -1
+        if (idx >= 0 && idx < d.options.length) {
+          const chosen = d.options[idx].type_ecart
+          // Retry avec le type_ecart choisi
+          return await handleManualLinkMulti(tx, factures, chosen)
+        }
+        setToast({ type: 'error', message: `Lettrage annulé (écart ${d.ecart} MUR non qualifié).` })
+        return
+      }
+
       if (!res.ok) {
         setToast({ type: 'error', message: `❌ ${d.error || `HTTP ${res.status}`}` })
         return
       }
       setToast({
         type: 'success',
-        message: `✓ ${ids.length} factures lettrees avec la transaction (lettre ${d.lettre || '—'})`,
+        message: `✓ ${ids.length} factures lettrees avec la transaction (lettre ${d.lettre || '—'})${typeEcart ? ` — écart classé '${typeEcart}'` : ''}`,
       })
       setLinkDialog(null)
       setSelectedFactureIds(new Set())

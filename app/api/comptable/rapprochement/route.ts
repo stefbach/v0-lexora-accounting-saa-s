@@ -1978,7 +1978,7 @@ export async function POST(request: Request) {
         releve_id?: string
         facture_ids?: string[]
         societe_id?: string
-        type_ecart?: 'auto' | 'change' | 'escompte' | 'penalite' | 'exceptionnel'
+        type_ecart?: 'auto' | 'change' | 'escompte' | 'penalite' | 'exceptionnel' | 'a_regulariser'
       }
       if (!releve_id || !facture_ids || !Array.isArray(facture_ids) || facture_ids.length === 0) {
         return NextResponse.json({ error: 'releve_id et facture_ids[] requis' }, { status: 400 })
@@ -2019,6 +2019,7 @@ export async function POST(request: Request) {
             { type_ecart: 'escompte', label: 'Escompte', compte: ecartSigne > 0 ? '765 (escompte obtenu)' : '665 (escompte accordé)' },
             { type_ecart: 'penalite', label: 'Pénalité de retard', compte: '631' },
             { type_ecart: 'exceptionnel', label: 'Écart exceptionnel', compte: ecartSigne > 0 ? '758' : '658' },
+            { type_ecart: 'a_regulariser', label: 'Forcer — à régulariser plus tard', compte: '471 (Comptes d\'attente)' },
           ],
         }, { status: 409 })
       }
@@ -2109,6 +2110,14 @@ export async function POST(request: Request) {
                 compteEcart = '631'
                 libelleEcart = `Pénalité de retard — ${lettreCode}`
                 break
+              case 'a_regulariser':
+                // FORCE — l'opérateur ne peut/veut pas qualifier maintenant.
+                // L'écart va sur 471 (compte d'attente, classe 4 = bilan donc
+                // lettrable plus tard quand la régularisation comptable arrive).
+                // À surveiller via /admin/health (check ecritures_orphelines_471).
+                compteEcart = '471'
+                libelleEcart = `Écart forcé — à régulariser (${ecartSigne > 0 ? '+' : ''}${ecartAbs.toFixed(2)} MUR) — ${lettreCode}`
+                break
               case 'exceptionnel':
               default:
                 compteEcart = ecartSigne > 0 ? '758' : '658'
@@ -2116,16 +2125,32 @@ export async function POST(request: Request) {
                 break
             }
           }
+          // Sens débit/crédit selon classe du compte :
+          //   • 6xxx (charge) → débit
+          //   • 7xxx (produit) → crédit
+          //   • 4xxx (471 attente) → débit si ecartSigne < 0, crédit si > 0
+          //     (équilibre le solde 411/401 dans le sens opposé à l'écart)
+          let debitOd = 0, creditOd = 0
+          if (/^6/.test(compteEcart)) debitOd = ecartAbs
+          else if (/^7/.test(compteEcart)) creditOd = ecartAbs
+          else if (/^4/.test(compteEcart)) {
+            // Compte 471 (à régulariser) : on inverse le sens pour neutraliser
+            // l'écart 411/401. ecartSigne > 0 (banque > facture) → 471 crédit.
+            if (ecartSigne > 0) creditOd = ecartAbs
+            else debitOd = ecartAbs
+          }
           await supabase.from('ecritures_comptables').insert({
             dossier_id: dossier.id,
             date_ecriture: new Date().toISOString().split('T')[0],
             journal: 'OD',
             compte: compteEcart,
             libelle: libelleEcart,
-            // 631/658/666/665 = charges → débit. 758/766/765 = produits → crédit.
-            debit: /^(6)/.test(compteEcart) ? ecartAbs : 0,
-            credit: /^(7)/.test(compteEcart) ? ecartAbs : 0,
-            // Règle R7 : pas de lettrage sur 6xxx/7xxx. `lettre` volontairement omis.
+            debit: debitOd,
+            credit: creditOd,
+            // Règle R7 : pas de lettrage sur 6xxx/7xxx. Sur 471 (4xxx) le
+            // lettrage est autorisé mais on l'omet ici — la régularisation
+            // future créera l'écriture miroir et lettrera les deux à ce
+            // moment-là.
           })
         }
       }
