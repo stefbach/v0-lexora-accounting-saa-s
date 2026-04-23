@@ -319,3 +319,112 @@ export function getMotifLabel(motif: string | null): string {
   }
   return MOTIFS_NON_ELIGIBLES_LABELS[motif] || motif
 }
+
+// ─── G11.6 — Déductions MRA sur EOY Bonus ────────────────────────────
+//
+// Règles MRA (mra.mu, Social Contribution Act 2021) :
+//
+//   CSG : s'applique sur le bonus (basic wage component uniquement,
+//         taux réduit si basic ≤ 50 000).
+//           basic ≤ 50 000 : 1.5% salarié + 3%  patronal
+//           basic > 50 000 : 3%   salarié + 6%  patronal
+//
+//   NSF + Training Levy : ne s'appliquent PAS au bonus.
+//
+//   PAYE : système cumulatif MRA. On reconstitue le PAYE total annuel
+//          (emoluments + bonus) sur les tranches Finance Act 2025/26
+//          puis on soustrait le PAYE déjà prélevé.
+
+export interface DeductionsBonus {
+  csg_salarie: number
+  csg_patronal: number
+  paye: number
+  nsf: 0
+  training_levy: 0
+  bonus_net: number
+}
+
+export interface CalculDeductionsInput {
+  /** Portion du bonus à imposer (75% ou 25% du total). */
+  bonus_brut: number
+  /** Salaire de base mensuel (déclenche le taux CSG). */
+  basic_salary: number
+  /** Cumul annuel des emoluments hors EOY déjà déclarés. */
+  emoluments_annuels_cumules: number
+  /** PAYE déjà prélevé sur les bulletins mensuels (YTD). */
+  paye_deja_preleve: number
+  /** TRUE si emoluments ≤ seuil exonération PAYE. */
+  est_exonere_paye: boolean
+  paye_seuil_exoneration?: number
+  paye_taux_1?: number
+  paye_seuil_taux_2?: number
+  paye_taux_2?: number
+}
+
+const DEFAULT_PAYE_SEUIL_EXONERATION = 390000
+const DEFAULT_PAYE_TAUX_1 = 0.10
+const DEFAULT_PAYE_SEUIL_TAUX_2 = 650000
+const DEFAULT_PAYE_TAUX_2 = 0.15
+
+function payeAnnuelSurIncome(
+  income: number,
+  seuilExo = DEFAULT_PAYE_SEUIL_EXONERATION,
+  taux1 = DEFAULT_PAYE_TAUX_1,
+  seuilTaux2 = DEFAULT_PAYE_SEUIL_TAUX_2,
+  taux2 = DEFAULT_PAYE_TAUX_2,
+): number {
+  if (income <= seuilExo) return 0
+  if (income <= seuilTaux2) return (income - seuilExo) * taux1
+  return (seuilTaux2 - seuilExo) * taux1 + (income - seuilTaux2) * taux2
+}
+
+/**
+ * Déductions MRA sur une portion EOY (75% ou 25%).
+ * Tous les montants arrondis à 2 décimales.
+ */
+export function calculerDeductionsBonus(params: CalculDeductionsInput): DeductionsBonus {
+  const bonus = Math.max(0, Number(params.bonus_brut) || 0)
+  const basic = Math.max(0, Number(params.basic_salary) || 0)
+  const cumul = Math.max(0, Number(params.emoluments_annuels_cumules) || 0)
+  const payeDeja = Math.max(0, Number(params.paye_deja_preleve) || 0)
+
+  const tauxCsgSal = basic <= 50000 ? 0.015 : 0.03
+  const tauxCsgPat = basic <= 50000 ? 0.03 : 0.06
+  const csgSalarie = round2Local(bonus * tauxCsgSal)
+  const csgPatronal = round2Local(bonus * tauxCsgPat)
+
+  let paye = 0
+  if (!params.est_exonere_paye && bonus > 0) {
+    const seuilExo = params.paye_seuil_exoneration ?? DEFAULT_PAYE_SEUIL_EXONERATION
+    const taux1 = params.paye_taux_1 ?? DEFAULT_PAYE_TAUX_1
+    const seuilTaux2 = params.paye_seuil_taux_2 ?? DEFAULT_PAYE_SEUIL_TAUX_2
+    const taux2 = params.paye_taux_2 ?? DEFAULT_PAYE_TAUX_2
+    const payeTotal = payeAnnuelSurIncome(cumul + bonus, seuilExo, taux1, seuilTaux2, taux2)
+    paye = round2Local(Math.max(0, payeTotal - payeDeja))
+  }
+
+  const bonusNet = round2Local(bonus - csgSalarie - paye)
+  return {
+    csg_salarie: csgSalarie,
+    csg_patronal: csgPatronal,
+    paye,
+    nsf: 0,
+    training_levy: 0,
+    bonus_net: bonusNet,
+  }
+}
+
+function round2Local(n: number): number {
+  return Math.round((Number(n) || 0) * 100) / 100
+}
+
+export function formaterCsgBonus(csg: number, basic: number): string {
+  const pct = basic <= 50000 ? '1.5%' : '3%'
+  return `CSG sur bonus (${pct}) : ${formaterMontantMUR(csg)}`
+}
+
+export function formaterPayeBonus(paye: number): string {
+  return paye > 0
+    ? `PAYE sur bonus (MRA cumulatif) : ${formaterMontantMUR(paye)}`
+    : 'PAYE sur bonus : exonéré'
+}
