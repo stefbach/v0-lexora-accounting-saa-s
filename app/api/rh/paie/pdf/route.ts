@@ -498,6 +498,15 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
             value: `${fmt(Number(bulletin.allocation_naissance))} MUR`,
           })
         : null,
+      // G9 — Disturbance allowance WRA S.17A FMPA 2024 (heures unsocial).
+      // Assimilée à un salary normal (soumise CSG/NSF/PAYE). Ligne omise
+      // si montant = 0 (société non activée ou pas d'heures unsocial).
+      Number(bulletin.disturbance_allowance) > 0
+        ? React.createElement(Row, {
+            label: `Disturbance allowance (${Number(bulletin.disturbance_heures) || 0}h) — WRA S.17A`,
+            value: `${fmt(Number(bulletin.disturbance_allowance))} MUR`,
+          })
+        : null,
       // Sprint — allowances & primes détaillées (cf. distribution sa1/sa2/sa3
       // dans app/api/rh/paie/route.ts) :
       // 1) Primes variables approuvées (libellé via catalogue_primes)
