@@ -5,6 +5,11 @@ import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTE
 import { findTiersInAnnuaire, incrementTiersUsage, createTiersFromOcr } from '@/lib/tiers-annuaire'
 import { createHash } from 'crypto'
 import { isBankName, validateAndCleanExtraction, computeConfidence } from '@/lib/utils/bank-utils'
+import {
+  resolveBankCurrency,
+  compareCurrency,
+  type Currency,
+} from '@/lib/accounting/validate-bank-currency'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -726,9 +731,51 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       }
     }
 
-    // Check bank statement coherence and create alert if needed
-    if (typeDocument === 'releve_bancaire' && extraction.lignes_manquantes && Math.abs(extraction.ecart_solde || 0) > 1) {
-      console.warn(`[upload] Bank statement coherence issue: ecart_solde=${extraction.ecart_solde} for doc ${docId}`)
+    // F6 — lignes_manquantes is now BLOCKING. We must never persist a
+    // releve_bancaire whose balance equation doesn't close, otherwise the
+    // rapprochement engine feeds on corrupted data.
+    if (
+      typeDocument === 'releve_bancaire' &&
+      (extraction.lignes_manquantes === true || Math.abs(Number(extraction.ecart_solde) || 0) > 1)
+    ) {
+      const ecart = Number(extraction.ecart_solde) || 0
+      const errMsg =
+        `Releve incoherent — lignes_manquantes=${!!extraction.lignes_manquantes}, ecart_solde=${ecart}. ` +
+        `Nous ne pouvons pas persister ce releve sans revue humaine.`
+      console.error(`[upload] F6 BLOCK: ${errMsg} (doc ${docId})`)
+
+      if (docId) {
+        await supabase.from('documents').update({
+          statut: 'erreur_ocr',
+          message_erreur: errMsg,
+        }).eq('id', docId)
+
+        // Best-effort alert creation — swallow errors if the table is missing.
+        try {
+          await supabase.from('alertes').insert({
+            societe_id: null,
+            type_alerte: 'releve_incoherent',
+            niveau: 'critique',
+            titre: 'Releve bancaire incoherent',
+            description: errMsg,
+            statut: 'active',
+          })
+        } catch (alertErr) {
+          console.error('[upload] alertes insert failed (non-fatal):', alertErr)
+        }
+      }
+
+      return NextResponse.json(
+        {
+          error: 'Releve bancaire incoherent',
+          details: {
+            lignes_manquantes: !!extraction.lignes_manquantes,
+            ecart_solde: ecart,
+            message: errMsg,
+          },
+        },
+        { status: 400 },
+      )
     }
 
     // === OVERHAUL: Validate extraction + compute confidence ===
@@ -1441,10 +1488,43 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     // Handle bank statement: auto-detect société + create/update bank account + store statement
     if (typeDocument === 'releve_bancaire') {
       // Do NOT set banque from detectedSociete — it's the account holder, not the bank
-      // Currency: use extracted devise, validate against IBAN suffix, default MUR
-      const ibanCurrency = extraction.iban?.match(/[A-Z]{3}$/)?.[0] || null
-      const rawDevise = extraction.devise || ibanCurrency || 'MUR'
-      const bankDevise = rawDevise.toUpperCase().replace(/[^A-Z]/g, '') || 'MUR'
+      // F2/F3 — resolve currency with strict priority (extraction → IBAN whitelist → block).
+      // NO more silent MUR fallback, NO more naive IBAN regex (which matched any trailing
+      // 3 letters, including non-currency BBAN suffixes).
+      const resolvedCurrency = resolveBankCurrency({
+        extractedDevise: extraction.devise,
+        iban: extraction.iban,
+      })
+
+      if (!resolvedCurrency.confident) {
+        const errMsg = `Devise du releve non resolvable: ${resolvedCurrency.reason}`
+        console.error(`[upload] F2 BLOCK: ${errMsg} (doc ${docId})`)
+        if (docId) {
+          await supabase.from('documents').update({
+            statut: 'erreur_ocr',
+            message_erreur: errMsg,
+          }).eq('id', docId)
+          try {
+            await supabase.from('alertes').insert({
+              societe_id: null,
+              type_alerte: 'devise_indetermine',
+              niveau: 'critique',
+              titre: 'Devise du releve indetermine',
+              description: errMsg,
+              statut: 'active',
+            })
+          } catch (alertErr) {
+            console.error('[upload] alertes insert failed (non-fatal):', alertErr)
+          }
+        }
+        return NextResponse.json(
+          { error: 'Devise du releve non determinee', details: { reason: resolvedCurrency.reason } },
+          { status: 400 },
+        )
+      }
+
+      const bankDevise: Currency = resolvedCurrency.currency
+      console.log(`[upload] Bank currency resolved: ${bankDevise} (source=${resolvedCurrency.source})`)
       const bankName = extraction.banque || extraction.compte_bancaire || null
       const rawSolde = parseFloat(extraction.solde_cloture) || parseFloat(extraction.solde_fin) || NaN
       const solde = isNaN(rawSolde) ? null : rawSolde
@@ -1556,10 +1636,38 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           if (byName && byName.societe_id === bankSocieteId) existingBank = byName
         }
 
+        // F1 — if we matched an existing account but its currency differs from
+        // the one we just extracted, DO NOT update it. The bank has either
+        // opened a separate FX sub-account sharing the IBAN/numero, or the
+        // current OCR is wrong. Either way, silent rewrite corrupts history.
+        let currencyConflict = false
+        if (existingBank) {
+          const cmp = compareCurrency(existingBank.devise, bankDevise)
+          if (cmp === 'conflict') {
+            currencyConflict = true
+            console.error(
+              `[upload] F1 CURRENCY CONFLICT: account ${existingBank.id} devise=${existingBank.devise} vs releve devise=${bankDevise} — will create a NEW account instead of overwriting`,
+            )
+            try {
+              await supabase.from('alertes').insert({
+                societe_id: bankSocieteId,
+                type_alerte: 'devise_conflit',
+                niveau: 'important',
+                titre: 'Conflit de devise sur compte bancaire',
+                description: `Compte existant ${existingBank.id} en ${existingBank.devise}, releve en ${bankDevise}. Nouveau compte cree, revue humaine requise.`,
+                statut: 'active',
+              })
+            } catch (alertErr) {
+              console.error('[upload] alertes insert failed (non-fatal):', alertErr)
+            }
+            existingBank = null // Force the create-new branch below
+          }
+        }
+
         if (existingBank) {
           // HARD GUARD: verify société matches before ANY update
           const { data: guardCheck } = await supabase.from('comptes_bancaires')
-            .select('societe_id, numero_compte').eq('id', existingBank.id).single()
+            .select('societe_id, numero_compte, devise').eq('id', existingBank.id).single()
 
           if (guardCheck && guardCheck.societe_id !== bankSocieteId) {
             console.error(`[upload] BLOCKED: Attempt to update account ${existingBank.id} from société ${guardCheck.societe_id} with data for société ${bankSocieteId}`)
@@ -1573,6 +1681,12 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             if (extractedIBAN && !existingBank.iban) bankUpdate.iban = extractedIBAN
             // NEVER overwrite numero_compte if it already has a value
             if (!guardCheck?.numero_compte && normNumeroCompte) bankUpdate.numero_compte = normNumeroCompte
+            // F1 — only write devise when it MATCHES (or when no prior value existed).
+            // NEVER on conflict: that branch already bailed out above.
+            const deviseCmp = compareCurrency(guardCheck?.devise, bankDevise)
+            if (deviseCmp === 'no_existing') {
+              bankUpdate.devise = bankDevise
+            }
             if (Object.keys(bankUpdate).length > 0) {
               await supabase.from('comptes_bancaires').update(bankUpdate).eq('id', existingBank.id)
             }
@@ -1589,13 +1703,22 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             || (extractedNomSociete && !isBankName(extractedNomSociete) ? null : extractedNomSociete)
             || (extractedIBAN ? `Banque (${extractedIBAN.slice(0, 4)}…)` : null)
             || 'Banque non identifiée'
-          console.log(`[upload] Creating bank account (fallback): ${finalBankName} for societe=${bankSocieteId}`)
+          // F1 — when we are here because of a currency conflict with an existing
+          // account, disambiguate the numero_compte and IBAN with a devise suffix
+          // so future lookups don't collide with the previous account row.
+          const suffixedNumero =
+            currencyConflict && normNumeroCompte ? `${normNumeroCompte}-${bankDevise}` : normNumeroCompte
+          const suffixedIban =
+            currencyConflict && extractedIBAN ? `${extractedIBAN}-${bankDevise}` : extractedIBAN
+          console.log(
+            `[upload] Creating bank account (fallback${currencyConflict ? ', currency conflict' : ''}): ${finalBankName} for societe=${bankSocieteId} (devise=${bankDevise})`,
+          )
           const { error: bankInsertError } = await supabase.from('comptes_bancaires').insert({
             societe_id: bankSocieteId,
             banque: finalBankName,
-            nom_compte: normNumeroCompte || null,
-            numero_compte: normNumeroCompte,
-            iban: extractedIBAN,
+            nom_compte: suffixedNumero || null,
+            numero_compte: suffixedNumero,
+            iban: suffixedIban,
             devise: bankDevise,
             solde_actuel: solde,
             solde_dernier_releve: solde,
