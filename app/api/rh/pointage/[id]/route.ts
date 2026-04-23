@@ -3,13 +3,23 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
-const JOURS_FERIES_MU = [
-  "01-01", "02-01", "12-03", "01-05", "09-05", "15-08", "02-11", "25-12"
-]
-
-function isFerie(dateStr: string): boolean {
-  const mmdd = dateStr.slice(5)
-  return JOURS_FERIES_MU.includes(mmdd)
+// G9bis.2 — détection férié via lecture DB jours_feries (remplace la
+// liste hardcodée 2025). Match override société OR global.
+async function isFerieDb(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  dateStr: string,
+  societeId: string | null,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('jours_feries')
+    .select('travail_autorise, societe_id')
+    .eq('date', dateStr)
+    .limit(5)
+  const rows = (data || []) as any[]
+  return rows.some(r =>
+    !r.travail_autorise
+    && (r.societe_id === null || r.societe_id === societeId)
+  )
 }
 
 function calcOT(hEntree: string, hSortie: string, ferieDay: boolean) {
@@ -48,8 +58,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params
     const body = await request.json()
 
-    // Récupérer le pointage existant
-    const { data: existing } = await supabase.from('pointages').select('*').eq('id', id).single()
+    // Récupérer le pointage existant + societe_id de l'employé pour isFerieDb.
+    const { data: existing } = await supabase
+      .from('pointages')
+      .select('*, employe:employes(societe_id)')
+      .eq('id', id).single()
     if (!existing) return NextResponse.json({ error: 'Pointage non trouvé' }, { status: 404 })
 
     const updates: any = {}
@@ -79,7 +92,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
       // Recalcul OT automatique
       const datePointage = existing.date_pointage || existing.date
-      const ot = calcOT(hEntree, hSortie, isFerie(datePointage))
+      const ferieFlag = await isFerieDb(
+        supabase, datePointage, existing.employe?.societe_id || null,
+      )
+      const ot = calcOT(hEntree, hSortie, ferieFlag)
       updates.heures_normales = Math.round(ot.normales * 100) / 100
       updates.heures_ot_1_5x = Math.round(ot.ot15 * 100) / 100
       updates.heures_ot_2x = Math.round(ot.ot2 * 100) / 100

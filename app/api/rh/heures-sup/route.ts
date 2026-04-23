@@ -3,13 +3,22 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
-const JOURS_FERIES_MU = [
-  "01-01", "02-01", "12-03", "01-05", "09-05", "15-08", "02-11", "25-12"
-]
-
-function isFerie(dateStr: string): boolean {
-  const mmdd = dateStr.slice(5)
-  return JOURS_FERIES_MU.includes(mmdd)
+// G9bis.2 — détection férié via lecture DB au lieu de liste hardcodée.
+async function isFerieDb(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  dateStr: string,
+  societeId: string | null,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('jours_feries')
+    .select('date, travail_autorise, societe_id')
+    .eq('date', dateStr)
+    .limit(5)
+  const rows = (data || []) as any[]
+  return rows.some(r =>
+    !r.travail_autorise
+    && (r.societe_id === null || r.societe_id === societeId)
+  )
 }
 
 function calcOT(hEntree: string, hSortie: string, ferieDay: boolean) {
@@ -34,14 +43,17 @@ async function traiterUneOT(
 ) {
   const { data: pointage } = await supabase
     .from('pointages')
-    .select('*, employe:employes(salaire_base, nom, prenom)')
+    .select('*, employe:employes(salaire_base, nom, prenom, societe_id)')
     .eq('id', pointage_id)
     .single()
 
   if (!pointage) throw new Error(`Pointage ${pointage_id} non trouvé`)
 
   const datePointage = pointage.date_pointage || pointage.date
-  const ferie = isFerie(datePointage)
+  // G9bis.2 — détection férié via lecture DB jours_feries.
+  const ferie = await isFerieDb(
+    supabase, datePointage, pointage.employe?.societe_id || null,
+  )
   const ot = calcOT(pointage.heure_entree, pointage.heure_sortie, ferie)
 
   const salaire_base = Number(pointage.employe?.salaire_base) || 0

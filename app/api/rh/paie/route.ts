@@ -137,9 +137,9 @@ function computeProrataFirstLastMonth(
   return { ratio, joursTravailles, joursOuvrables, motif }
 }
 
-const JOURS_FERIES_MU = ["01-01", "02-01", "12-03", "01-05", "09-05", "15-08", "02-11", "25-12"]
-
-function isFerie(dateStr: string): boolean { return JOURS_FERIES_MU.includes(dateStr.slice(5)) }
+// G9bis.2 — suppression de la liste hardcodée JOURS_FERIES_MU (2025 obsolète).
+// La détection férié passe désormais par `joursFeriesSet.has(date)` construit
+// depuis la table `jours_feries` (chargement par action paie).
 function isWeekend(dateStr: string): boolean { const d = new Date(dateStr + "T12:00:00"); return d.getDay() === 0 || d.getDay() === 6 }
 
 // ═══ OT Calculation — Workers' Rights Act 2019 ═══
@@ -544,6 +544,30 @@ export async function POST(request: Request) {
       const periodeStartSingle = periodeInfo.periode_debut
       const periodeEndSingle = periodeInfo.periode_fin
 
+      // G9bis.2 — charger les jours fériés de la période (override société
+      // OR global) pour la détection au calcul OT. Remplace la liste
+      // hardcodée JOURS_FERIES_MU. Réutilisé plus bas pour les
+      // working-days math.
+      const periodeYearSingle = parseInt(periodeStr.slice(0, 4), 10)
+      let joursFeriesSetSingle = new Set<string>()
+      {
+        const sidForFeries = targetSocieteId || emp.societe_id
+        const { data: feriesRowsSingle } = await supabase
+          .from('jours_feries')
+          .select('date, travail_autorise, societe_id')
+          .gte('date', `${periodeYearSingle}-01-01`)
+          .lte('date', `${periodeYearSingle}-12-31`)
+        joursFeriesSetSingle = new Set(
+          (feriesRowsSingle || [])
+            .filter((r: any) => !r.travail_autorise)
+            .filter((r: any) => r.societe_id === null || r.societe_id === sidForFeries)
+            .map((r: any) => String(r.date).slice(0, 10)),
+        )
+        if (joursFeriesSetSingle.size === 0) {
+          joursFeriesSetSingle = getMauritiusPublicHolidays(periodeYearSingle)
+        }
+      }
+
       // 1. Récupérer OT de la période depuis les pointages
       const { data: pointagesMois } = await supabase.from('pointages')
         .select('*').eq('employe_id', employe_id)
@@ -568,7 +592,8 @@ export async function POST(request: Request) {
       for (const pt of pointagesMois || []) {
         if (!pt.heure_entree) continue
         jours_travailles++
-        const ferie = isFerie(pt.date_pointage)
+        // G9bis.2 — détection férié via Set depuis DB.
+        const ferie = joursFeriesSetSingle.has(pt.date_pointage)
         const plan = planMap[pt.date_pointage]
         // If planning exists, use planned hours as OT threshold; default to 9 (standard)
         const planningHours = plan ? plan.heures_prevues : 9
@@ -639,20 +664,7 @@ export async function POST(request: Request) {
         .select('*').eq('employe_id', employe_id).eq('statut', 'approuve')
         .lte('date_debut', periodeEndSingle).gte('date_fin', periodeStartSingle)
 
-      // Build holiday set for working-days math.
-      const periodeYearSingle = parseInt(periodeStr.slice(0, 4), 10)
-      let joursFeriesSetSingle = new Set<string>()
-      try {
-        const { data: feriesRowsSingle } = await supabase.from('jours_feries')
-          .select('date, travail_autorise').gte('date', `${periodeYearSingle}-01-01`).lte('date', `${periodeYearSingle}-12-31`)
-        // Sprint 4 — exclure travail_autorise=true (jours fériés ouvrables).
-        joursFeriesSetSingle = new Set(
-          (feriesRowsSingle || [])
-            .filter((r: any) => !r.travail_autorise)
-            .map((r: any) => String(r.date).slice(0, 10)),
-        )
-      } catch {}
-      if (joursFeriesSetSingle.size === 0) joursFeriesSetSingle = getMauritiusPublicHolidays(periodeYearSingle)
+      // G9bis.2 — joursFeriesSetSingle déjà chargé plus haut (avant OT loop).
 
       // Leave-type counters intersected with this month — used below for
       // UL deduction AND for the conges_details object returned with the
@@ -1123,6 +1135,28 @@ export async function POST(request: Request) {
       const periodeStartBatch = periodeInfoBatch.periode_debut
       const periodeEndBatch = periodeInfoBatch.periode_fin
 
+      // G9bis.2 — charge jours fériés de l'année une fois pour tout le
+      // batch (override société OR global). Utilisé par le calcul OT
+      // + les working-days math plus bas (réutilisation).
+      const periodeYearBatch = parseInt(periodeStr.slice(0, 4), 10)
+      let joursFeriesSetBatch = new Set<string>()
+      {
+        const { data: feriesRowsBatch } = await supabase
+          .from('jours_feries')
+          .select('date, travail_autorise, societe_id')
+          .gte('date', `${periodeYearBatch}-01-01`)
+          .lte('date', `${periodeYearBatch}-12-31`)
+        joursFeriesSetBatch = new Set(
+          (feriesRowsBatch || [])
+            .filter((r: any) => !r.travail_autorise)
+            .filter((r: any) => r.societe_id === null || r.societe_id === societe_id)
+            .map((r: any) => String(r.date).slice(0, 10)),
+        )
+        if (joursFeriesSetBatch.size === 0) {
+          joursFeriesSetBatch = getMauritiusPublicHolidays(periodeYearBatch)
+        }
+      }
+
       // Fetch auto-prime rules for this société (once for all employees)
       let autoRegles: any[] = []
       try {
@@ -1156,7 +1190,7 @@ export async function POST(request: Request) {
         for (const pt of pointagesMois || []) {
           if (!pt.heure_entree) continue
           jours_travailles++
-          const ferie = isFerie(pt.date_pointage)
+          const ferie = joursFeriesSetBatch.has(pt.date_pointage)
           const weekend = isWeekend(pt.date_pointage)
           const plan = planMap[pt.date_pointage]
           const planningHours = plan ? plan.heures_prevues : 9
@@ -1308,20 +1342,10 @@ export async function POST(request: Request) {
           .select('*').eq('employe_id', emp.id).eq('statut', 'approuve')
           .lte('date_debut', periodeEnd).gte('date_fin', periodeStart)
 
-        // Build the holiday set once for the period's year (DB → fallback to hardcoded MU).
-        const periodeYear = parseInt(periodeStr.slice(0, 4), 10)
-        let joursFeriesSet = new Set<string>()
-        try {
-          const { data: feriesRows } = await supabase.from('jours_feries')
-            .select('date, travail_autorise').gte('date', `${periodeYear}-01-01`).lte('date', `${periodeYear}-12-31`)
-          // Sprint 4 — exclure travail_autorise=true (jours ouvrables avec majoration).
-          joursFeriesSet = new Set(
-            (feriesRows || [])
-              .filter((r: any) => !r.travail_autorise)
-              .map((r: any) => String(r.date).slice(0, 10)),
-          )
-        } catch {}
-        if (joursFeriesSet.size === 0) joursFeriesSet = getMauritiusPublicHolidays(periodeYear)
+        // G9bis.2 — joursFeriesSetBatch déjà chargé une fois avant la boucle
+        // employés (optimisation + source unique). On aliase pour préserver
+        // les références existantes plus bas.
+        const joursFeriesSet = joursFeriesSetBatch
 
         // Count leave days (working-days only) intersected with the period.
         // SL reduces the OT threshold; AL does not; UL triggers a deduction
