@@ -212,7 +212,28 @@ export async function POST(request: Request) {
       working_days: any
     }
     const rows: Row[] = []
+    // H9 — skip les employés non concernés par la période du CC :
+    //   - date_arrivee > CC.date_debut : pas encore embauché au début du CC.
+    //   - date_depart < CC.date_fin : déjà parti avant la fin du CC.
+    // Cela évite d'imposer un congé à quelqu'un qui n'existait pas dans la
+    // société à cette date.
+    const skippedArrivee: Array<{ id: string; nom: string; prenom: string; date_arrivee: string }> = []
+    const skippedDepart: Array<{ id: string; nom: string; prenom: string; date_depart: string }> = []
     for (const emp of employes) {
+      if (emp.date_arrivee && String(emp.date_arrivee).slice(0, 10) > String(date_debut).slice(0, 10)) {
+        skippedArrivee.push({
+          id: emp.id, nom: emp.nom || '', prenom: emp.prenom || '',
+          date_arrivee: String(emp.date_arrivee).slice(0, 10),
+        })
+        continue
+      }
+      if (emp.date_depart && String(emp.date_depart).slice(0, 10) < String(date_fin).slice(0, 10)) {
+        skippedDepart.push({
+          id: emp.id, nom: emp.nom || '', prenom: emp.prenom || '',
+          date_depart: String(emp.date_depart).slice(0, 10),
+        })
+        continue
+      }
       const nb = calculateWorkingDays(date_debut, date_fin, {
         workingDays: getWorkingDaysForEmploye(emp),
         joursFeries: feries,
@@ -228,6 +249,8 @@ export async function POST(request: Request) {
     if (rows.length === 0) {
       return NextResponse.json({
         error: 'La période sélectionnée ne contient aucun jour ouvrable pour les employés ciblés.',
+        skipped_arrivee: skippedArrivee,
+        skipped_depart: skippedDepart,
       }, { status: 400 })
     }
 
@@ -325,6 +348,9 @@ export async function POST(request: Request) {
       total_jours_imposes: details.reduce((s, d) => s + d.nb_jours, 0),
       details,
       errors,
+      // H9 — exposer les employés non concernés par la période du CC.
+      skipped_arrivee: skippedArrivee,
+      skipped_depart: skippedDepart,
     }, { status: 201 })
   } catch (e: unknown) {
     console.error('[conges/collectif] error:', e)
