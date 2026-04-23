@@ -2401,23 +2401,7 @@ export async function POST(request: Request) {
       const deviseMap: Record<string, string> = {}
       ;(comptesBanc || []).forEach((c: any) => { deviseMap[c.id] = c.devise || 'MUR' })
 
-      const rates = await getTauxChange()
-      // F8/F10 — tx.devise prioritaire sur la devise du compte bancaire.
-      // Les tx legacy (sans tx.devise) continuent à utiliser releveDevise comme avant.
-      const toMURLocal = (
-        amount: number,
-        txOrDevise: string | { devise?: string | null } | null | undefined,
-        compteDeviseFallback?: string
-      ): number => {
-        let effectiveDevise: string
-        if (txOrDevise && typeof txOrDevise === 'object') {
-          effectiveDevise = (txOrDevise.devise || compteDeviseFallback || 'MUR').toUpperCase()
-        } else {
-          effectiveDevise = ((txOrDevise as string | null | undefined) || 'MUR').toUpperCase()
-        }
-        if (!effectiveDevise || effectiveDevise === 'MUR') return amount
-        return amount * (rates[effectiveDevise] || 1)
-      }
+      const ratesLiveGen = await getTauxChange()
 
       let created = 0
 
@@ -2430,8 +2414,18 @@ export async function POST(request: Request) {
           const txCredit = Number(tx.credit) || 0
           const txAmount = txDebit > 0 ? txDebit : txCredit
           if (txAmount === 0) continue
-          const txAmountMUR = Math.round(toMURLocal(txAmount, tx, releveDevise) * 100) / 100
           const txDate = tx.date || new Date().toISOString().split('T')[0]
+          // Migration 171/172 — taux HISTORIQUE par (date, devise).
+          const effectiveDeviseGen = (tx.devise || releveDevise || 'MUR').toUpperCase()
+          const genOutcome = await resolveHistoricalRateSafe(
+            supabase, txDate, effectiveDeviseGen, ratesLiveGen,
+          )
+          const effectiveRateGen = genOutcome.rate != null
+            ? genOutcome.rate
+            : (effectiveDeviseGen === 'MUR' ? 1 : (ratesLiveGen[effectiveDeviseGen] || 1))
+          const txAmountMUR = Math.round(
+            (effectiveDeviseGen === 'MUR' ? txAmount : txAmount * effectiveRateGen) * 100,
+          ) / 100
 
           // --- Internal transfers → 581 both sides ---
           if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
@@ -2847,6 +2841,32 @@ export async function POST(request: Request) {
             const isSupplier = achCredit > 0 // ACH 401 credit → supplier
             const libelleBase = `Règlement ${f.numero_facture || ''} — ${(f.tiers || '').substring(0, 40)}`.trim()
 
+            // Migration 171/172 — taux HISTORIQUE à payDate (fallback au
+            // taux stocké sur la facture si absent : meilleure source de
+            // vérité pour un paiement reconstruit).
+            const factureDevise = (f.devise || 'MUR').toUpperCase()
+            const factureTauxStored = Number((f as any).taux_change) > 0
+              ? Number((f as any).taux_change)
+              : null
+            let historicalRateSync: number
+            if (factureDevise === 'MUR') {
+              historicalRateSync = 1
+            } else {
+              const outc = await resolveHistoricalRateSafe(supabase, payDate, factureDevise)
+              historicalRateSync = outc.rate != null
+                ? outc.rate
+                : (factureTauxStored ?? 1)
+              if (outc.rate == null) {
+                console.warn(
+                  `[sync_lettrage] no historical rate ${factureDevise}@${payDate}, fallback facture.taux_change=${factureTauxStored}`,
+                )
+              }
+            }
+            const montantOrigineSync = factureDevise === 'MUR'
+              ? null
+              : Math.round((montantMur / historicalRateSync) * 100) / 100
+            const freezeSync = bnqFreezeColumns(factureDevise, montantOrigineSync, historicalRateSync)
+
             const tierSide = {
               dossier_id: dossierId,
               date_ecriture: payDate,
@@ -2858,6 +2878,11 @@ export async function POST(request: Request) {
               credit: isSupplier ? 0 : montantMur,
               piece_justificative: f.id,
               facture_id: f.id,
+              // NB : safeInsertBnq préserve les extras via EcritureCandidate
+              // [key: string]: any. Quand table='ecritures_comptables' (v1),
+              // la vue rejette les colonnes inconnues — on insère donc via v2
+              // directement plus bas.
+              ...freezeSync,
             }
             const bankSide = {
               dossier_id: dossierId,
@@ -2870,20 +2895,47 @@ export async function POST(request: Request) {
               credit: isSupplier ? montantMur : 0,
               piece_justificative: f.id,
               facture_id: f.id,
+              ...freezeSync,
             }
             // Sprint 2 — anti-doublon BNQ : si sync_lettrage retourne 2x
             // sur la même facture, on ne crée pas 2 paires d'écritures.
-            // safeInsertBnq normalise compte→numero_compte / debit→debit_mur
-            // pour la comparaison côté v2.
-            const insSync = await safeInsertBnq(supabase, [tierSide, bankSide] as any, 'ecritures_comptables')
+            // On insère via v2 (pas via la view v1) pour que les 3 colonnes
+            // de la migration 172 soient effectivement persistées (le trigger
+            // INSTEAD OF INSERT de la vue v1 ne les propage pas).
+            const toV2 = (e: any, societeId: string) => ({
+              societe_id: societeId,
+              dossier_id: e.dossier_id ?? null,
+              date_ecriture: e.date_ecriture,
+              journal: e.journal,
+              numero_piece: e.numero_piece ?? null,
+              ref_folio: e.piece_justificative ?? null,
+              numero_compte: e.compte,
+              libelle: e.libelle,
+              debit_mur: Number(e.debit) || 0,
+              credit_mur: Number(e.credit) || 0,
+              facture_id: e.facture_id ?? null,
+              devise_origine: e.devise_origine ?? null,
+              montant_origine: e.montant_origine ?? null,
+              taux_change_applique: e.taux_change_applique ?? null,
+            })
+            const insSync = await safeInsertBnq(
+              supabase,
+              [toV2(tierSide, socId), toV2(bankSide, socId)] as any,
+              'ecritures_comptables_v2',
+            )
             if (insSync.error) {
               errors.push({ facture_id: f.id, reason: `BNQ insert failed: ${(insSync.error as any).message || insSync.error}` })
               continue
             }
             if (insSync.skipped > 0) console.log(`[sync_lettrage BNQ] skipped:`, insSync.skipReasons)
             const createdRows = insSync.data || []
-            const createdTier = createdRows.find((r: any) => r.compte === achRow.compte) || createdRows[0]
-            const createdBank = createdRows.find((r: any) => r.compte === compteBanque) || createdRows[1]
+            // v2 expose numero_compte (pas compte) — on couvre les 2 noms.
+            const createdTier = createdRows.find((r: any) =>
+              (r.compte ?? r.numero_compte) === achRow.compte,
+            ) || createdRows[0]
+            const createdBank = createdRows.find((r: any) =>
+              (r.compte ?? r.numero_compte) === compteBanque,
+            ) || createdRows[1]
             bnqRow = createdTier
             bnqBanqueRow = createdBank
             pairsCreatedBnq++
