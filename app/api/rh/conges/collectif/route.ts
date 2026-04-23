@@ -114,6 +114,8 @@ export async function POST(request: Request) {
       type_conge = 'AL',
       applique_a: rawAppliqueA = 'all',
       groupe_id = null,
+      // F16 — pour applique_a='individuel', liste d'IDs à imposer.
+      employes_ids = null,
       societe_id,
       motif = null,
     } = body || {}
@@ -142,6 +144,10 @@ export async function POST(request: Request) {
     }
     if (applique_a === 'groupe' && !groupe_id) {
       return NextResponse.json({ error: 'groupe_id requis lorsque applique_a = "groupe"' }, { status: 400 })
+    }
+    // F16 — pour 'individuel', employes_ids (non vide) obligatoire.
+    if (applique_a === 'individuel' && (!Array.isArray(employes_ids) || employes_ids.length === 0)) {
+      return NextResponse.json({ error: 'employes_ids (tableau non vide) requis lorsque applique_a = "individuel"' }, { status: 400 })
     }
 
     // Tenant isolation — confirm caller has access to this societe
@@ -180,6 +186,8 @@ export async function POST(request: Request) {
       .eq('societe_id', societe_id)
       .is('date_depart', null)
     if (applique_a === 'groupe') empQuery = empQuery.eq('groupe_id', groupe_id)
+    // F16 — restriction aux IDs explicitement listés pour 'individuel'.
+    if (applique_a === 'individuel') empQuery = empQuery.in('id', employes_ids as string[])
     const { data: employes, error: empErr } = await empQuery
     if (empErr) return NextResponse.json({ error: `Employes: ${empErr.message}` }, { status: 500 })
     if (!employes || employes.length === 0) {
@@ -204,7 +212,28 @@ export async function POST(request: Request) {
       working_days: any
     }
     const rows: Row[] = []
+    // H9 — skip les employés non concernés par la période du CC :
+    //   - date_arrivee > CC.date_debut : pas encore embauché au début du CC.
+    //   - date_depart < CC.date_fin : déjà parti avant la fin du CC.
+    // Cela évite d'imposer un congé à quelqu'un qui n'existait pas dans la
+    // société à cette date.
+    const skippedArrivee: Array<{ id: string; nom: string; prenom: string; date_arrivee: string }> = []
+    const skippedDepart: Array<{ id: string; nom: string; prenom: string; date_depart: string }> = []
     for (const emp of employes) {
+      if (emp.date_arrivee && String(emp.date_arrivee).slice(0, 10) > String(date_debut).slice(0, 10)) {
+        skippedArrivee.push({
+          id: emp.id, nom: emp.nom || '', prenom: emp.prenom || '',
+          date_arrivee: String(emp.date_arrivee).slice(0, 10),
+        })
+        continue
+      }
+      if (emp.date_depart && String(emp.date_depart).slice(0, 10) < String(date_fin).slice(0, 10)) {
+        skippedDepart.push({
+          id: emp.id, nom: emp.nom || '', prenom: emp.prenom || '',
+          date_depart: String(emp.date_depart).slice(0, 10),
+        })
+        continue
+      }
       const nb = calculateWorkingDays(date_debut, date_fin, {
         workingDays: getWorkingDaysForEmploye(emp),
         joursFeries: feries,
@@ -220,6 +249,8 @@ export async function POST(request: Request) {
     if (rows.length === 0) {
       return NextResponse.json({
         error: 'La période sélectionnée ne contient aucun jour ouvrable pour les employés ciblés.',
+        skipped_arrivee: skippedArrivee,
+        skipped_depart: skippedDepart,
       }, { status: 400 })
     }
 
@@ -317,6 +348,9 @@ export async function POST(request: Request) {
       total_jours_imposes: details.reduce((s, d) => s + d.nb_jours, 0),
       details,
       errors,
+      // H9 — exposer les employés non concernés par la période du CC.
+      skipped_arrivee: skippedArrivee,
+      skipped_depart: skippedDepart,
     }, { status: 201 })
   } catch (e: unknown) {
     console.error('[conges/collectif] error:', e)
