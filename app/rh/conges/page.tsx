@@ -2052,32 +2052,53 @@ export default function CongesPage() {
                 création de la demande, liés via lien_demande_conge_id).
                 Visible pour les types WRA qui requièrent justificatif + SL. */}
             {['SL', 'FML', 'SPC_MARIAGE_SELF', 'SPC_MARIAGE_ENFANT', 'SPC_DECES',
-              'JUR', 'INT', 'CRT', 'MAT', 'PAT'].includes(form.type_conge) && (
-              <div className="space-y-2 p-3 bg-indigo-50 border border-indigo-200 rounded-md">
-                <Label className="text-xs text-indigo-900 font-semibold">
-                  📎 Joindre des justificatifs (recommandé)
-                </Label>
-                <Input
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
-                  onChange={e => setPendingFiles(Array.from(e.target.files || []))}
-                  className="text-xs"
-                />
-                {pendingFiles.length > 0 && (
-                  <ul className="text-[11px] text-indigo-800 space-y-0.5">
-                    {pendingFiles.map((f, i) => (
-                      <li key={i}>• {f.name} ({(f.size / 1024).toFixed(0)} KB)</li>
-                    ))}
-                  </ul>
-                )}
-                <p className="text-[11px] text-indigo-700 italic">
-                  Max 10 MB/fichier. Les fichiers seront envoyés après création
-                  de la demande et rattachés automatiquement.
-                  Tu pourras aussi en joindre plus tard depuis l&apos;onglet Documents.
-                </p>
-              </div>
-            )}
+              'JUR', 'INT', 'CRT', 'MAT', 'PAT'].includes(form.type_conge) && (() => {
+              // DOC1+G4 hotfix — libellé adapté selon WRA S.46 (SL <3j :
+              // certificat recommandé, SL >=3j : requis ; autres types :
+              // toujours requis).
+              let slDays = 0
+              if (form.type_conge === 'SL' && form.date_debut && form.date_fin) {
+                try {
+                  const d1 = new Date(form.date_debut + 'T12:00:00')
+                  const d2 = new Date(form.date_fin + 'T12:00:00')
+                  slDays = Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1)
+                } catch {}
+              }
+              const slCourt = form.type_conge === 'SL' && slDays > 0 && slDays < 3
+              const justifRequis = !slCourt
+              const tone = justifRequis
+                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                : 'bg-indigo-50 border-indigo-200 text-indigo-900'
+              const labelText = form.type_conge === 'SL'
+                ? (slCourt
+                  ? `📎 Certificat médical recommandé (${slDays}j < 3j, pas obligatoire WRA S.46)`
+                  : `📎 Certificat médical requis (≥ 3 jours consécutifs — WRA S.46)`)
+                : '📎 Joindre des justificatifs (requis par WRA)'
+              return (
+                <div className={`space-y-2 p-3 border rounded-md ${tone}`}>
+                  <Label className="text-xs font-semibold">{labelText}</Label>
+                  <Input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                    onChange={e => setPendingFiles(Array.from(e.target.files || []))}
+                    className="text-xs"
+                  />
+                  {pendingFiles.length > 0 && (
+                    <ul className="text-[11px] space-y-0.5">
+                      {pendingFiles.map((f, i) => (
+                        <li key={i}>• {f.name} ({(f.size / 1024).toFixed(0)} KB)</li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="text-[11px] italic opacity-80">
+                    Max 10 MB/fichier. Les fichiers seront envoyés après création
+                    de la demande et rattachés automatiquement. Tu pourras aussi
+                    en joindre plus tard depuis l&apos;onglet Documents.
+                  </p>
+                </div>
+              )
+            })()}
 
             {/* Demi-journée — only offered for leave types where it makes sense */}
             {DEMI_JOURNEE_ALLOWED_TYPES.has(form.type_conge) && (
