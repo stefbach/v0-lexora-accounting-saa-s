@@ -31,9 +31,19 @@ export default function SeverancePage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [userRole, setUserRole] = useState<string>("")
 
-  // Form simulation
-  const [employeId, setEmployeId] = useState<string>("")
-  const [dateLicenciement, setDateLicenciement] = useState<string>(new Date().toISOString().slice(0, 10))
+  // Form simulation (pré-rempli via ?employe_id=&date= depuis /rh/depart)
+  const initialFromUrl = (() => {
+    if (typeof window === 'undefined') return { emp: '', date: '' }
+    const p = new URLSearchParams(window.location.search)
+    return {
+      emp: p.get('employe_id') || '',
+      date: p.get('date') || '',
+    }
+  })()
+  const [employeId, setEmployeId] = useState<string>(initialFromUrl.emp)
+  const [dateLicenciement, setDateLicenciement] = useState<string>(
+    initialFromUrl.date || new Date().toISOString().slice(0, 10),
+  )
   const [motif, setMotif] = useState<MotifLicenciement>('non_justifie')
   const [dGratif, setDGratif] = useState<string>('0')
   const [dPension, setDPension] = useState<string>('0')
