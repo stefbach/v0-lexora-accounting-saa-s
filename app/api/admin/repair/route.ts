@@ -436,6 +436,283 @@ async function repair_relettrer_factures(
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// ACTION 7 — purge_montants_amplifies
+// Détecte les écritures BNQ classes 6xx/43xx avec montants amplifiés ×~55
+// (signature : tx EUR convertie 2× en MUR). Heuristique : débit > 5× la
+// médiane des autres lignes du même couple (compte, journal). En apply,
+// supprime la paire (ligne suspecte + contrepartie 512 même ref_folio).
+// Préserve les lignes lettrées (sécurité comptable).
+// ─────────────────────────────────────────────────────────────────────────
+async function repair_purge_montants_amplifies(
+  admin: SupabaseAdmin, societeId: string, dryRun: boolean
+): Promise<RepairResult> {
+  const { data: ecrs } = await admin.from('ecritures_comptables_v2')
+    .select('id, numero_compte, journal, debit_mur, credit_mur, ref_folio, libelle, date_ecriture, lettre')
+    .eq('societe_id', societeId)
+    .eq('journal', 'BNQ') as { data: Array<Record<string, unknown>> | null }
+
+  if (!ecrs || ecrs.length === 0) {
+    return { action: 'purge_montants_amplifies', status: 'pass', affected: 0, message: 'Aucune écriture BNQ' }
+  }
+
+  // Filtre cibles : classe 6 (charges) ou classe 43xx (sociaux/fiscaux)
+  const isTarget = (c: string) => c.startsWith('6') || c.startsWith('43')
+  const targets = ecrs.filter(e => {
+    const c = String(e.numero_compte || '')
+    const debit = Number(e.debit_mur) || 0
+    return isTarget(c) && debit > 0
+  })
+
+  // Groupe par (compte, journal) → calcule médiane des débits
+  const groups = new Map<string, number[]>()
+  for (const e of targets) {
+    const key = `${e.numero_compte}|${e.journal}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(Number(e.debit_mur) || 0)
+  }
+  const medians = new Map<string, number>()
+  for (const [key, arr] of groups) {
+    const sorted = [...arr].sort((a, b) => a - b)
+    const mid = Math.floor(sorted.length / 2)
+    const median = sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid]
+    medians.set(key, median)
+  }
+
+  // Détecte suspects : débit > 5× médiane (sur groupes ≥ 3 lignes pour stat fiable)
+  const suspects: Array<Record<string, unknown>> = []
+  const skippedLettrees: Array<Record<string, unknown>> = []
+  for (const e of targets) {
+    const key = `${e.numero_compte}|${e.journal}`
+    const grp = groups.get(key) || []
+    if (grp.length < 3) continue
+    const median = medians.get(key) || 0
+    if (median <= 0) continue
+    const debit = Number(e.debit_mur) || 0
+    if (debit <= 5 * median) continue
+    if (e.lettre != null) {
+      skippedLettrees.push({
+        id: e.id, compte: e.numero_compte, debit_mur: debit, lettre: e.lettre,
+      })
+      continue
+    }
+    suspects.push(e)
+  }
+
+  if (dryRun) {
+    return {
+      action: 'purge_montants_amplifies',
+      status: 'pass', affected: suspects.length,
+      message: `${suspects.length} ligne(s) suspecte(s) détectée(s) (dry-run), ${skippedLettrees.length} lettrée(s) ignorée(s)`,
+      details: [
+        ...suspects.slice(0, 10).map(e => ({
+          id: e.id, compte: e.numero_compte, debit_mur: e.debit_mur,
+          ref_folio: e.ref_folio, libelle: e.libelle, date: e.date_ecriture,
+        })),
+        ...(skippedLettrees.length > 0 ? [{ skipped_lettrees: skippedLettrees.slice(0, 5) }] : []),
+      ],
+    }
+  }
+
+  // Apply : supprime la paire (suspect + contrepartie 512 sur même ref_folio)
+  let deleted = 0, failed = 0
+  for (const s of suspects) {
+    const refFolio = s.ref_folio as string | null
+    if (!refFolio) { failed++; continue }
+    // Récupère la paire complète sur ce ref_folio (ligne suspecte + contreparties banque)
+    const { data: pair } = await admin.from('ecritures_comptables_v2')
+      .select('id, numero_compte, lettre')
+      .eq('societe_id', societeId).eq('ref_folio', refFolio)
+    const pairList = (pair as Array<{ id: string; numero_compte: string; lettre: string | null }> | null) || []
+    // Sécurité : si une ligne de la paire est lettrée, on n'efface pas
+    if (pairList.some(p => p.lettre != null)) {
+      skippedLettrees.push({ id: s.id, ref_folio: refFolio, reason: 'pair contains lettré' })
+      continue
+    }
+    const ids = pairList.map(p => p.id)
+    if (ids.length === 0) { failed++; continue }
+    const { error } = await admin.from('ecritures_comptables_v2').delete().in('id', ids)
+    if (error) failed++
+    else deleted += ids.length
+  }
+  console.log('[repair/purge_montants_amplifies]', { suspects: suspects.length, deleted, failed, skipped: skippedLettrees.length })
+  return {
+    action: 'purge_montants_amplifies',
+    status: failed === 0 ? 'pass' : 'fail',
+    affected: deleted,
+    message: `${deleted} ligne(s) supprimée(s) (${suspects.length} paires détectées)${failed > 0 ? `, ${failed} échec(s)` : ''}, ${skippedLettrees.length} lettrée(s) préservée(s)`,
+    details: skippedLettrees.length > 0 ? [{ skipped_lettrees: skippedLettrees.slice(0, 10) }] : undefined,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ACTION 8 — purge_classifications_bogus_npf_nsf
+// Détecte les BNQ classe 43xx avec libellé "NPF/NSF — <tiers>" où le tiers
+// n'est PAS la MRA. Bug de la règle R04_NPF_NSF (avant fix migration 170)
+// qui matchait les codes bancaires "NPF/NSF" sur n'importe quel virement.
+// Apply :
+//   - credit_mur > 0 (encaissement client mal classé) → DELETE la paire
+//   - debit_mur > 0 (paiement à reclasser) → MOVE vers 4710 (compte d'attente)
+// Préserve les lignes lettrées.
+// ─────────────────────────────────────────────────────────────────────────
+async function repair_purge_classifications_bogus_npf_nsf(
+  admin: SupabaseAdmin, societeId: string, dryRun: boolean
+): Promise<RepairResult> {
+  const { data: ecrs } = await admin.from('ecritures_comptables_v2')
+    .select('id, numero_compte, journal, debit_mur, credit_mur, ref_folio, libelle, date_ecriture, lettre')
+    .eq('societe_id', societeId)
+    .eq('journal', 'BNQ')
+    .ilike('libelle', 'NPF/NSF — %') as { data: Array<Record<string, unknown>> | null }
+
+  if (!ecrs || ecrs.length === 0) {
+    return { action: 'purge_classifications_bogus_npf_nsf', status: 'pass', affected: 0, message: 'Aucune classification NPF/NSF bogue' }
+  }
+
+  // Filtre : compte 43xx + libellé qui N'inclut PAS MRA
+  const bogus = ecrs.filter(e => {
+    const c = String(e.numero_compte || '')
+    if (c.length < 2 || c.substring(0, 2) !== '43') return false
+    const lib = String(e.libelle || '').toLowerCase()
+    if (lib.includes('mauritius revenue') || lib.includes('mra')) return false
+    return true
+  })
+
+  if (bogus.length === 0) {
+    return { action: 'purge_classifications_bogus_npf_nsf', status: 'pass', affected: 0, message: 'Aucune classification 43xx bogue détectée' }
+  }
+
+  const toDelete: Array<Record<string, unknown>> = []   // credit > 0
+  const toMove: Array<Record<string, unknown>> = []     // debit > 0
+  const skippedLettrees: Array<Record<string, unknown>> = []
+
+  for (const e of bogus) {
+    if (e.lettre != null) {
+      skippedLettrees.push({ id: e.id, libelle: e.libelle, lettre: e.lettre })
+      continue
+    }
+    const credit = Number(e.credit_mur) || 0
+    const debit = Number(e.debit_mur) || 0
+    if (credit > 0) toDelete.push(e)
+    else if (debit > 0) toMove.push(e)
+  }
+
+  if (dryRun) {
+    return {
+      action: 'purge_classifications_bogus_npf_nsf',
+      status: 'pass', affected: toDelete.length + toMove.length,
+      message: `${toDelete.length} paire(s) à supprimer + ${toMove.length} ligne(s) à déplacer vers 4710 (dry-run), ${skippedLettrees.length} lettrée(s) ignorée(s)`,
+      details: [
+        ...toDelete.slice(0, 5).map(e => ({ action: 'DELETE_PAIR', id: e.id, libelle: e.libelle, credit_mur: e.credit_mur, ref_folio: e.ref_folio })),
+        ...toMove.slice(0, 5).map(e => ({ action: 'MOVE_TO_4710', id: e.id, libelle: e.libelle, debit_mur: e.debit_mur, ref_folio: e.ref_folio })),
+      ],
+    }
+  }
+
+  // Apply DELETE pour la paire (ref_folio identique)
+  let deleted = 0, moved = 0, failed = 0
+  for (const e of toDelete) {
+    const refFolio = e.ref_folio as string | null
+    if (!refFolio) { failed++; continue }
+    const { data: pair } = await admin.from('ecritures_comptables_v2')
+      .select('id, lettre')
+      .eq('societe_id', societeId).eq('ref_folio', refFolio)
+    const pairList = (pair as Array<{ id: string; lettre: string | null }> | null) || []
+    if (pairList.some(p => p.lettre != null)) {
+      skippedLettrees.push({ id: e.id, ref_folio: refFolio, reason: 'pair contains lettré' })
+      continue
+    }
+    const ids = pairList.map(p => p.id)
+    if (ids.length === 0) { failed++; continue }
+    const { error } = await admin.from('ecritures_comptables_v2').delete().in('id', ids)
+    if (error) failed++
+    else deleted += ids.length
+  }
+
+  // Apply MOVE vers 4710 (compte d'attente) — uniquement la ligne, pas la contrepartie
+  for (const e of toMove) {
+    const { error } = await admin.from('ecritures_comptables_v2')
+      .update({
+        numero_compte: '4710',
+        nom_compte: 'Comptes d\'attente (ex-NPF/NSF à reclasser)',
+      })
+      .eq('id', e.id as string)
+    if (error) failed++
+    else moved++
+  }
+  console.log('[repair/purge_classifications_bogus_npf_nsf]', { detected: bogus.length, deleted, moved, failed, skipped: skippedLettrees.length })
+  return {
+    action: 'purge_classifications_bogus_npf_nsf',
+    status: failed === 0 ? 'pass' : 'fail',
+    affected: deleted + moved,
+    message: `${deleted} ligne(s) supprimée(s), ${moved} déplacée(s) vers 4710${failed > 0 ? `, ${failed} échec(s)` : ''}, ${skippedLettrees.length} lettrée(s) préservée(s)`,
+    details: skippedLettrees.length > 0 ? [{ skipped_lettrees: skippedLettrees.slice(0, 10) }] : undefined,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ACTION 9 — vider_580_vers_4710
+// Le compte 580 (Virements internes, classe 5) doit être soldé à la clôture
+// (règle R3 mauricienne). Toutes les écritures BNQ qui ont pollué 580
+// (fournisseurs/salaires/personnes mal classés par R05_INTERCO catch-all)
+// sont déplacées vers 4710 pour reclasse manuelle par le comptable.
+// Préserve les lignes lettrées.
+// ─────────────────────────────────────────────────────────────────────────
+async function repair_vider_580_vers_4710(
+  admin: SupabaseAdmin, societeId: string, dryRun: boolean
+): Promise<RepairResult> {
+  const { data: ecrs } = await admin.from('ecritures_comptables_v2')
+    .select('id, debit_mur, credit_mur, libelle, date_ecriture, ref_folio, lettre')
+    .eq('societe_id', societeId)
+    .eq('journal', 'BNQ')
+    .eq('numero_compte', '580') as { data: Array<Record<string, unknown>> | null }
+
+  if (!ecrs || ecrs.length === 0) {
+    return { action: 'vider_580_vers_4710', status: 'pass', affected: 0, message: 'Compte 580 déjà vide en BNQ' }
+  }
+
+  const moveable = ecrs.filter(e => e.lettre == null)
+  const skippedLettrees = ecrs.filter(e => e.lettre != null)
+
+  const totalDebit = moveable.reduce((s, e) => s + (Number(e.debit_mur) || 0), 0)
+  const totalCredit = moveable.reduce((s, e) => s + (Number(e.credit_mur) || 0), 0)
+
+  if (dryRun) {
+    return {
+      action: 'vider_580_vers_4710',
+      status: 'pass', affected: moveable.length,
+      message: `${moveable.length} ligne(s) 580 BNQ à déplacer vers 4710 (dry-run), total débit=${totalDebit.toFixed(2)} MUR, total crédit=${totalCredit.toFixed(2)} MUR, ${skippedLettrees.length} lettrée(s) ignorée(s)`,
+      details: moveable.slice(0, 10).map(e => ({
+        id: e.id, debit_mur: e.debit_mur, credit_mur: e.credit_mur,
+        libelle: e.libelle, date: e.date_ecriture, ref_folio: e.ref_folio,
+      })),
+    }
+  }
+
+  if (moveable.length === 0) {
+    return { action: 'vider_580_vers_4710', status: 'pass', affected: 0, message: `Aucune ligne 580 non lettrée à déplacer (${skippedLettrees.length} lettrée(s) préservée(s))` }
+  }
+
+  const ids = moveable.map(e => e.id as string)
+  const { error, count } = await admin.from('ecritures_comptables_v2')
+    .update({
+      numero_compte: '4710',
+      nom_compte: 'Comptes d\'attente (ex-580 à reclasser)',
+    }, { count: 'exact' })
+    .in('id', ids)
+
+  if (error) {
+    return { action: 'vider_580_vers_4710', status: 'fail', affected: 0, message: error.message }
+  }
+  console.log('[repair/vider_580_vers_4710]', { moved: count, totalDebit, totalCredit, skipped: skippedLettrees.length })
+  return {
+    action: 'vider_580_vers_4710',
+    status: 'pass', affected: count || 0,
+    message: `${count} ligne(s) déplacée(s) vers 4710, total débit=${totalDebit.toFixed(2)} MUR, total crédit=${totalCredit.toFixed(2)} MUR, ${skippedLettrees.length} lettrée(s) préservée(s)`,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // HANDLER POST
 // ─────────────────────────────────────────────────────────────────────────
 export async function POST(request: Request) {
@@ -475,6 +752,9 @@ export async function POST(request: Request) {
       delete_cca_banques_frais: repair_delete_cca_banques_frais,
       remap_legacy_comptes: repair_remap_legacy_comptes,
       relettrer_factures: repair_relettrer_factures,
+      purge_montants_amplifies: repair_purge_montants_amplifies,
+      purge_classifications_bogus_npf_nsf: repair_purge_classifications_bogus_npf_nsf,
+      vider_580_vers_4710: repair_vider_580_vers_4710,
     }
 
     const results: RepairResult[] = []
@@ -516,6 +796,9 @@ export async function GET() {
       { id: 'delete_cca_banques_frais', label: 'Supprimer les faux CCA (noms banques/frais)', severity: 'destructive' },
       { id: 'remap_legacy_comptes', label: 'Remap 421/431/432/433/444 → PCM 4-digits', severity: 'safe' },
       { id: 'relettrer_factures', label: 'Lettrer les 411/401 par facture_id', severity: 'safe' },
+      { id: 'purge_montants_amplifies', label: 'Purger les écritures BNQ avec montants amplifiés (×~55, double conversion EUR→MUR)', severity: 'destructive' },
+      { id: 'purge_classifications_bogus_npf_nsf', label: 'Purger/déplacer les classifications bogues NPF/NSF (43xx hors MRA)', severity: 'destructive' },
+      { id: 'vider_580_vers_4710', label: 'Vider le compte 580 (virements internes) vers 4710 (compte d\'attente)', severity: 'destructive' },
     ],
   })
 }
