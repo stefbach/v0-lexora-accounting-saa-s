@@ -3210,9 +3210,17 @@ export async function POST(request: Request) {
     // Si apply_to_similar=true : classe aussi TOUTES les autres tx de la société
     // avec le même tiers (propagation retroactive en 1 clic).
     if (action === 'classer_transaction') {
-      const { transaction_id, releve_id, societe_id, classification, learn_pattern, apply_to_similar } = body
+      const { transaction_id, releve_id, societe_id, classification, learn_pattern, apply_to_similar, compte_custom } = body
       if (!releve_id || !transaction_id || !classification) {
         return NextResponse.json({ error: 'releve_id, transaction_id, classification requis' }, { status: 400 })
+      }
+      // Si un compte_custom est fourni (via le picker plan comptable), on valide
+      // qu'il correspond à un compte réel avant d'accepter la classification.
+      if (compte_custom) {
+        const { data: pc } = await supabase.from('plan_comptable').select('compte').eq('compte', compte_custom).maybeSingle()
+        if (!pc) {
+          return NextResponse.json({ error: `Compte "${compte_custom}" absent du plan comptable` }, { status: 400 })
+        }
       }
       console.log(`[classer_transaction] societe=${societe_id} tx=${transaction_id} classification=${classification}`)
 
@@ -3290,7 +3298,7 @@ export async function POST(request: Request) {
         produit_divers: '706',
         autre: '471',
       }
-      const compte = CLASSE_COMPTES[classification] || '471'
+      const compte = compte_custom || CLASSE_COMPTES[classification] || '471'
 
       const { data: dossier, error: dossierErr } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
       let nbEcritures = 0

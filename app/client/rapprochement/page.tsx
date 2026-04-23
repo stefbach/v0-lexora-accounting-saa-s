@@ -21,6 +21,7 @@ import { bucketizeTransactions, type BucketItem } from "@/lib/accounting/classif
 import { RapprochementKpiDashboard } from "@/components/rapprochement/KpiDashboard"
 import { PeriodeBar } from "@/components/rapprochement/PeriodeBar"
 import { BalanceComptes } from "@/components/rapprochement/BalanceComptes"
+import { PlanComptablePicker } from "@/components/accounting/PlanComptablePicker"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
@@ -190,6 +191,8 @@ export default function ClientRapprochementPage() {
 
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  // Picker de compte PCM : quand ouvert, on applique la classe choisie à la tx référencée
+  const [pcmPickerFor, setPcmPickerFor] = useState<{ tx: any; applyToSimilar: boolean } | null>(null)
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 4000)
@@ -962,12 +965,19 @@ Voulez-vous vraiment continuer ?`
   // Classer une transaction "à vérifier" en un type comptable
   // applyToSimilar=true : propage la meme classification a toutes les autres
   // tx de la societe avec le meme tiers (retroactif, 1 clic)
-  const handleClasserTx = async (tx: any, classification: string, applyToSimilar: boolean = false) => {
+  // compteCustom : si fourni, override le mapping classification→compte (picker PCM)
+  const handleClasserTx = async (
+    tx: any,
+    classification: string,
+    applyToSimilar: boolean = false,
+    compteCustom?: string,
+  ) => {
     if (!societeId) {
       setToast({ type: 'error', message: 'Aucune société sélectionnée' })
       return
     }
-    setToast({ type: 'success', message: applyToSimilar ? `Classification + propagation…` : `Classification "${classification}"…` })
+    const lbl = compteCustom ? `${classification} (${compteCustom})` : classification
+    setToast({ type: 'success', message: applyToSimilar ? `Classification + propagation…` : `Classification "${lbl}"…` })
     try {
       const res = await fetch("/api/comptable/rapprochement", {
         method: "POST",
@@ -980,6 +990,7 @@ Voulez-vous vraiment continuer ?`
           societe_id: societeId,
           classification,
           apply_to_similar: applyToSimilar,
+          ...(compteCustom ? { compte_custom: compteCustom } : {}),
           learn_pattern: {
             tiers: tx.tiers_detecte || null,
             libelle: tx.libelle || null,
@@ -2294,6 +2305,13 @@ Voulez-vous vraiment continuer ?`
                                 <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>{c.label}
                               </DropdownMenuItem>
                             ))}
+                            <DropdownMenuItem
+                              onClick={() => setPcmPickerFor({ tx, applyToSimilar: false })}
+                              className="border-t mt-1 pt-2"
+                            >
+                              <span className="text-xs font-mono text-gray-500 mr-2">🔍</span>
+                              <span className="font-medium text-[#0B0F2E]">Autre compte… (plan comptable complet)</span>
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuLabel className="text-xs text-amber-700">⚡ Corriger + propager à toutes les tx du même tiers</DropdownMenuLabel>
                             {CLASSIFICATION_CHOICES.map(c => (
@@ -2301,6 +2319,13 @@ Voulez-vous vraiment continuer ?`
                                 <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>{c.label} <span className="ml-auto text-[10px] text-amber-600">(propager)</span>
                               </DropdownMenuItem>
                             ))}
+                            <DropdownMenuItem
+                              onClick={() => setPcmPickerFor({ tx, applyToSimilar: true })}
+                              className="border-t mt-1 pt-2"
+                            >
+                              <span className="text-xs font-mono text-gray-500 mr-2">🔍</span>
+                              <span className="font-medium text-[#0B0F2E]">Autre compte… (+ propager)</span>
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
@@ -4245,6 +4270,19 @@ Voulez-vous vraiment continuer ?`
           </div>
         </div>
       )}
+
+      {/* Picker plan comptable complet — pour les classifications hors liste rapide */}
+      <PlanComptablePicker
+        open={!!pcmPickerFor}
+        onClose={() => setPcmPickerFor(null)}
+        onSelect={(compte) => {
+          if (pcmPickerFor) {
+            const classificationCode = `custom_${compte.compte}`
+            handleClasserTx(pcmPickerFor.tx, classificationCode, pcmPickerFor.applyToSimilar, compte.compte)
+            setPcmPickerFor(null)
+          }
+        }}
+      />
 
     </div>
     </ClientPageShell>
