@@ -317,6 +317,17 @@ export async function createEcrituresForPayment(
     facture_id?: string | null
     lettre_code?: string | null
     numero_piece?: string | null
+    // ── Migration 172 — taux figé par écriture ────────────────────────
+    // Propagés depuis la transaction bancaire (transactions_json) au moment
+    // du rapprochement. Cf. docs/TX_JSON_SCHEMA.md. Règle : on fige ici le
+    // taux utilisé à la création de l'écriture pour que le reporting futur
+    // ne recalcule jamais avec le taux du jour.
+    //   • devise_origine       : ex. 'EUR', 'USD' ; NULL = MUR natif.
+    //   • montant_origine      : montant dans la devise d'origine (avant × taux).
+    //   • taux_change_applique : taux ORIGINE→MUR figé ; NULL = MUR natif.
+    devise_origine?: string | null
+    montant_origine?: number | null
+    taux_change_applique?: number | null
   }
 ): Promise<{ ok: boolean; error?: string; bnq_ids?: string[] }> {
   try {
@@ -340,6 +351,27 @@ export async function createEcrituresForPayment(
     const compteBanque = (payment.compte_banque || '512').trim() || '512'
     const nomBanque = compteBanque.startsWith('512') ? `Banque ${compteBanque.slice(3) || ''}`.trim() : 'Banque'
 
+    // ── Migration 172 — normalisation du taux figé ─────────────────────
+    // On écrit NULL pour une tx MUR native ou quand le caller n'a pas fourni
+    // le taux (ex. paiement interne sans devise). On n'accepte que des
+    // valeurs strictement positives pour taux/montant.
+    const deviseOrigine: string | null =
+      typeof payment.devise_origine === 'string' && payment.devise_origine.trim().length > 0
+        ? payment.devise_origine.trim().toUpperCase()
+        : null
+    const tauxRaw = Number(payment.taux_change_applique)
+    const tauxChangeApplique: number | null =
+      Number.isFinite(tauxRaw) && tauxRaw > 0 ? tauxRaw : null
+    const montantRaw = Number(payment.montant_origine)
+    const montantOrigine: number | null =
+      Number.isFinite(montantRaw) && montantRaw > 0 ? montantRaw : null
+    // Si la tx est en MUR natif (pas de devise_origine ou devise = MUR),
+    // on neutralise taux/montant pour éviter des lignes incohérentes.
+    const isMurNative = deviseOrigine === null || deviseOrigine === 'MUR'
+    const deviseFinale: string | null = isMurNative ? null : deviseOrigine
+    const tauxFinal: number | null = isMurNative ? null : tauxChangeApplique
+    const montantFinal: number | null = isMurNative ? null : montantOrigine
+
     // Base fields shared by both sides of the écriture
     const base = {
       societe_id: payment.societe_id,
@@ -356,6 +388,10 @@ export async function createEcrituresForPayment(
       // FIX 1 — lettre apposée dès la création quand un code est fourni
       lettre: payment.lettre_code || null,
       date_lettrage: payment.lettre_code ? payment.date_payment : null,
+      // Migration 172 — taux figé propagé sur les 2 lignes BNQ.
+      devise_origine: deviseFinale,
+      montant_origine: montantFinal,
+      taux_change_applique: tauxFinal,
     }
 
     const tierSide = {
