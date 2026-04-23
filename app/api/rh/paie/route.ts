@@ -586,6 +586,7 @@ export async function POST(request: Request) {
       }
 
       let total_ot_montant = 0
+      let total_heures_nuit_single = 0
       const taux_horaire = Number(emp.salaire_base) / (45 * 52 / 12)
       let jours_travailles = 0
 
@@ -600,6 +601,8 @@ export async function POST(request: Request) {
         // Work day is "planned" if planning says it's a work day (not repos)
         // If no planning exists, fall back to weekday=planned, weekend=unplanned
         const isPlannedWorkDay = plan ? !plan.est_repos : !isWeekend(pt.date_pointage)
+        // G9bis.3 — rest day détecté (plan.est_repos OR weekend sans planning).
+        const isRestDaySingle = plan ? Boolean(plan.est_repos) : isWeekend(pt.date_pointage)
         // Compute actual pause from pointage (fallback to 60 min = 1h lunch)
         let pauseMinutes = 60
         if (pt.heure_pause_debut && pt.heure_pause_fin) {
@@ -608,10 +611,15 @@ export async function POST(request: Request) {
           pauseMinutes = (peh * 60 + pem) - (psh * 60 + psm)
           if (pauseMinutes < 0) pauseMinutes = 60
         }
-        const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay, false, pauseMinutes)
+        // G9bis.3 — passe isRestDaySingle (était forcé à false) + additionne
+        // ot3 × 3 qui était calculé par calcOT mais jamais consommé dans
+        // le path single. Comportement aligné sur le path batch.
+        const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay, isRestDaySingle, pauseMinutes)
         const montant15 = ot.ot15 * taux_horaire * 1.5
         const montant2 = ot.ot2 * taux_horaire * 2
-        total_ot_montant += montant15 + montant2
+        const montant3 = ot.ot3 * taux_horaire * 3
+        total_ot_montant += montant15 + montant2 + montant3
+        total_heures_nuit_single += ot.heuresNuit || 0
       }
 
       // INTÉGRATION 4 — Primes de la période : on ne compte QUE celles
