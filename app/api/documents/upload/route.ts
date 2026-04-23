@@ -10,6 +10,7 @@ import {
   compareCurrency,
   type Currency,
 } from '@/lib/accounting/validate-bank-currency'
+import { parseAmount, parseAmountSafe, ParseAmountError } from '@/lib/utils/bank-amount'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -686,25 +687,45 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       const rawLignes: any[] = extraction.lignes || []
       const rawTransactions: any[] = extraction.transactions || []
       if (rawTransactions.length === 0 && rawLignes.length > 0) {
-        extraction.transactions = rawLignes.map((l: any) => {
-          // Support ancien format (montant + sens) ET nouveau format (debit + credit)
-          let debit = Number(l.debit) || 0
-          let credit = Number(l.credit) || 0
-          if (debit === 0 && credit === 0 && l.montant) {
-            if (l.sens === 'debit') debit = Number(l.montant) || 0
-            else credit = Number(l.montant) || 0
+        try {
+          extraction.transactions = rawLignes.map((l: any) => {
+            // Support ancien format (montant + sens) ET nouveau format (debit + credit)
+            // parseAmount (throw on bad) — montant d'une tx est CRITIQUE.
+            let debit = parseAmount(l.debit)
+            let credit = parseAmount(l.credit)
+            if (debit === 0 && credit === 0 && l.montant) {
+              const montant = parseAmount(l.montant)
+              if (l.sens === 'debit') debit = montant
+              else credit = montant
+            }
+            return {
+              date: l.date || '',
+              libelle: l.libelle || '',
+              debit,
+              credit,
+              solde_apres: l.solde_apres ?? null,
+              tiers_detecte: l.tiers_detecte || null,
+              compte_comptable: l.compte_debit || l.compte_credit || (debit > 0 ? l.compte_debit : l.compte_credit) || null,
+              statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
+            }
+          })
+        } catch (err) {
+          // F4/F5 — montant illisible sur au moins une ligne. On refuse de persister.
+          const errMsg = err instanceof ParseAmountError
+            ? `Montant de transaction illisible: ${err.message}. Review humaine requise.`
+            : `Erreur parsing montants relevé: ${err instanceof Error ? err.message : String(err)}`
+          console.error(`[upload] F4/F5 BLOCK: ${errMsg} (doc ${docId})`)
+          if (docId) {
+            await supabase.from('documents').update({
+              statut: 'erreur_ocr',
+              message_erreur: errMsg,
+            }).eq('id', docId)
           }
-          return {
-            date: l.date || '',
-            libelle: l.libelle || '',
-            debit,
-            credit,
-            solde_apres: l.solde_apres ?? null,
-            tiers_detecte: l.tiers_detecte || null,
-            compte_comptable: l.compte_debit || l.compte_credit || (debit > 0 ? l.compte_debit : l.compte_credit) || null,
-            statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
-          }
-        })
+          return NextResponse.json(
+            { error: 'Montants du relevé illisibles', details: { message: errMsg } },
+            { status: 400 },
+          )
+        }
       }
       // Log extraction stats
       const nbExtracted = (extraction.transactions || []).length
@@ -736,9 +757,9 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     // rapprochement engine feeds on corrupted data.
     if (
       typeDocument === 'releve_bancaire' &&
-      (extraction.lignes_manquantes === true || Math.abs(Number(extraction.ecart_solde) || 0) > 1)
+      (extraction.lignes_manquantes === true || Math.abs(parseAmountSafe(extraction.ecart_solde, 'ecart_solde')) > 1)
     ) {
-      const ecart = Number(extraction.ecart_solde) || 0
+      const ecart = parseAmountSafe(extraction.ecart_solde, 'ecart_solde')
       const errMsg =
         `Releve incoherent — lignes_manquantes=${!!extraction.lignes_manquantes}, ecart_solde=${ecart}. ` +
         `Nous ne pouvons pas persister ce releve sans revue humaine.`
@@ -1032,19 +1053,42 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       }
       if (!dateEcriture) dateEcriture = new Date().toISOString().split('T')[0]
 
-      const entries = ecritures
-        .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
-        .map((e: any) => ({
-          dossier_id: finalDossierId,
-          // Use transaction-level date if available, otherwise document-level date
-          date_ecriture: e.date || dateEcriture,
-          journal: effectiveJournal,
-          numero_piece: e.reference || extraction.numero_reference || null,
-          compte: String(e.compte), libelle: e.libelle || file.name,
-          debit: Number(e.debit) || 0, credit: Number(e.credit) || 0, piece_justificative: doc.id,
-          // Mark as auto-lettrée if affectation says so
-          ...(extraction._auto_lettrage ? { lettrage: 'AUTO' } : {}),
-        }))
+      let entries: Record<string, unknown>[] = []
+      try {
+        entries = ecritures
+          .filter((e: any) => {
+            if (!e.compte) return false
+            // parseAmountSafe here — the filter just checks presence of a non-zero amount.
+            // The authoritative parse happens below with parseAmount (throw on bad).
+            return parseAmountSafe(e.debit, 'ecriture.debit') > 0 || parseAmountSafe(e.credit, 'ecriture.credit') > 0
+          })
+          .map((e: any) => ({
+            dossier_id: finalDossierId,
+            // Use transaction-level date if available, otherwise document-level date
+            date_ecriture: e.date || dateEcriture,
+            journal: effectiveJournal,
+            numero_piece: e.reference || extraction.numero_reference || null,
+            compte: String(e.compte), libelle: e.libelle || file.name,
+            debit: parseAmount(e.debit), credit: parseAmount(e.credit), piece_justificative: doc.id,
+            // Mark as auto-lettrée if affectation says so
+            ...(extraction._auto_lettrage ? { lettrage: 'AUTO' } : {}),
+          }))
+      } catch (err) {
+        const errMsg = err instanceof ParseAmountError
+          ? `Écriture comptable avec montant illisible: ${err.message}. Review humaine requise.`
+          : `Erreur parsing écritures: ${err instanceof Error ? err.message : String(err)}`
+        console.error(`[upload] ecritures parse error: ${errMsg} (doc ${docId})`)
+        if (docId) {
+          await supabase.from('documents').update({
+            statut: 'erreur_ocr',
+            message_erreur: errMsg,
+          }).eq('id', docId)
+        }
+        return NextResponse.json(
+          { error: 'Écriture comptable illisible', details: { message: errMsg } },
+          { status: 400 },
+        )
+      }
       if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
     }
 
@@ -1075,7 +1119,8 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           if (existingEmp) {
             employeId = existingEmp.id
             // Update salary if changed
-            const newBase = Number(emp.salaire_base || emp.basic_salary) || 0
+            const newBase = parseAmountSafe(emp.salaire_base ?? emp.basic_salary, 'emp.salaire_base')
+            // existingEmp.salaire_base comes from the DB (already typed as number) — keep Number()
             if (newBase > 0 && newBase !== Number(existingEmp.salaire_base)) {
               await supabase.from('employes').update({ salaire_base: newBase }).eq('id', existingEmp.id)
             }
@@ -1087,7 +1132,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               code_employe: emp.code || null,
               poste: emp.poste || emp.job || null,
               departement: emp.departement || emp.department || null,
-              salaire_base: Number(emp.salaire_base || emp.basic_salary) || 0,
+              salaire_base: parseAmountSafe(emp.salaire_base ?? emp.basic_salary, 'emp.salaire_base'),
               date_arrivee: emp.date_arrivee || emp.arr_date || null,
               date_depart: emp.date_depart || emp.dep_date || null,
             }).select('id').single()
@@ -1101,22 +1146,22 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               employe_id: employeId,
               societe_id: prSocieteId,
               periode: periodeDate,
-              salaire_base: Number(emp.salaire_base || emp.basic_salary) || 0,
-              heures_sup_montant: (Number(emp.overtime_1_5x) || 0) + (Number(emp.overtime_2x) || 0),
+              salaire_base: parseAmountSafe(emp.salaire_base ?? emp.basic_salary, 'emp.salaire_base'),
+              heures_sup_montant: parseAmountSafe(emp.overtime_1_5x, 'emp.overtime_1_5x') + parseAmountSafe(emp.overtime_2x, 'emp.overtime_2x'),
               transport_allowance: 0,
-              special_allowance_1: Number(emp.special_allowance) || 0,
-              special_allowance_2: Number(emp.internet_allowance) || 0,
-              special_allowance_3: Number(emp.meal_allowance) || 0,
-              salaire_net: Number(emp.net_pay) || 0,
-              csg_salarie: Number(emp.csg) || 0,
-              csg_patronal: Number(emp.er_csg) || 0,
-              nsf_salarie: Number(emp.nsf) || 0,
-              nsf_patronal: Number(emp.er_nsf) || 0,
-              paye: Number(emp.paye) || 0,
-              training_levy: Number(emp.er_levy) || 0,
-              prgf: Number(emp.er_prgf) || 0,
-              total_deductions: Number(emp.total_deductions) || 0,
-              total_charges_patronales: Number(emp.total_er_contributions) || 0,
+              special_allowance_1: parseAmountSafe(emp.special_allowance, 'emp.special_allowance'),
+              special_allowance_2: parseAmountSafe(emp.internet_allowance, 'emp.internet_allowance'),
+              special_allowance_3: parseAmountSafe(emp.meal_allowance, 'emp.meal_allowance'),
+              salaire_net: parseAmountSafe(emp.net_pay, 'emp.net_pay'),
+              csg_salarie: parseAmountSafe(emp.csg, 'emp.csg'),
+              csg_patronal: parseAmountSafe(emp.er_csg, 'emp.er_csg'),
+              nsf_salarie: parseAmountSafe(emp.nsf, 'emp.nsf'),
+              nsf_patronal: parseAmountSafe(emp.er_nsf, 'emp.er_nsf'),
+              paye: parseAmountSafe(emp.paye, 'emp.paye'),
+              training_levy: parseAmountSafe(emp.er_levy, 'emp.er_levy'),
+              prgf: parseAmountSafe(emp.er_prgf, 'emp.er_prgf'),
+              total_deductions: parseAmountSafe(emp.total_deductions, 'emp.total_deductions'),
+              total_charges_patronales: parseAmountSafe(emp.total_er_contributions, 'emp.total_er_contributions'),
               statut: 'valide',
               source: 'ocr_payroll_report',
               document_id: doc.id,
@@ -1167,9 +1212,10 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             employeId = existingEmp.id
             // Update salary if higher than current (in case of raise)
             if (extraction.salaire_brut) {
+              const salaireBrut = parseAmountSafe(extraction.salaire_brut, 'salaire_brut')
               await supabase.from('employes').update({
-                salaire_base: Number(extraction.salaire_brut) || undefined,
-              }).eq('id', existingEmp.id).lt('salaire_base', Number(extraction.salaire_brut) || 0)
+                salaire_base: salaireBrut || undefined,
+              }).eq('id', existingEmp.id).lt('salaire_base', salaireBrut)
             }
           } else {
             // Create employee from payslip data
@@ -1177,7 +1223,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               societe_id: rhSocieteId,
               nom: nom.toUpperCase(),
               prenom,
-              salaire_base: Number(extraction.salaire_brut) || 0,
+              salaire_base: parseAmountSafe(extraction.salaire_brut, 'salaire_brut'),
               date_arrivee: extraction.date_embauche || null,
               poste: extraction.poste || extraction.fonction || null,
               nic_number: extraction.nic || extraction.numero_nic || null,
@@ -1197,18 +1243,18 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             employe_id: employeId,
             societe_id: rhSocieteId,
             periode: periodeDate,
-            salaire_base: Number(extraction.salaire_brut) || Number(extraction.salaire_base) || 0,
-            salaire_net: Number(extraction.salaire_net) || 0,
-            csg_salarie: Number(extraction.npf_salarie_3pct) || Number(extraction.csg_salarie) || 0,
-            csg_patronal: Number(extraction.npf_patronal_6pct) || Number(extraction.csg_patronal) || 0,
-            paye: Number(extraction.paye) || 0,
-            nsf_salarie: Number(extraction.nps_salarie) || Number(extraction.nsf_salarie) || 0,
-            nsf_patronal: Number(extraction.nps_employeur) || Number(extraction.nsf_patronal) || 0,
-            training_levy: Number(extraction.hrdc_1pct) || Number(extraction.training_levy) || 0,
-            total_deductions: Number(extraction.cotisations_salariales) || Number(extraction.total_retenues) || 0,
-            total_charges_patronales: Number(extraction.cotisations_patronales) || 0,
-            transport_allowance: Number(extraction.transport_allowance) || 0,
-            heures_sup_montant: Number(extraction.heures_sup_montant) || Number(extraction.overtime) || 0,
+            salaire_base: parseAmountSafe(extraction.salaire_brut, 'salaire_brut') || parseAmountSafe(extraction.salaire_base, 'salaire_base'),
+            salaire_net: parseAmountSafe(extraction.salaire_net, 'salaire_net'),
+            csg_salarie: parseAmountSafe(extraction.npf_salarie_3pct, 'npf_salarie_3pct') || parseAmountSafe(extraction.csg_salarie, 'csg_salarie'),
+            csg_patronal: parseAmountSafe(extraction.npf_patronal_6pct, 'npf_patronal_6pct') || parseAmountSafe(extraction.csg_patronal, 'csg_patronal'),
+            paye: parseAmountSafe(extraction.paye, 'paye'),
+            nsf_salarie: parseAmountSafe(extraction.nps_salarie, 'nps_salarie') || parseAmountSafe(extraction.nsf_salarie, 'nsf_salarie'),
+            nsf_patronal: parseAmountSafe(extraction.nps_employeur, 'nps_employeur') || parseAmountSafe(extraction.nsf_patronal, 'nsf_patronal'),
+            training_levy: parseAmountSafe(extraction.hrdc_1pct, 'hrdc_1pct') || parseAmountSafe(extraction.training_levy, 'training_levy'),
+            total_deductions: parseAmountSafe(extraction.cotisations_salariales, 'cotisations_salariales') || parseAmountSafe(extraction.total_retenues, 'total_retenues'),
+            total_charges_patronales: parseAmountSafe(extraction.cotisations_patronales, 'cotisations_patronales'),
+            transport_allowance: parseAmountSafe(extraction.transport_allowance, 'transport_allowance'),
+            heures_sup_montant: parseAmountSafe(extraction.heures_sup_montant, 'heures_sup_montant') || parseAmountSafe(extraction.overtime, 'overtime'),
             statut: 'valide',
             source: 'ocr',
             document_id: doc.id,
@@ -1240,7 +1286,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         // Create declaration records
         for (const d of details) {
           const type = d.type || ''
-          const montant = Number(d.montant) || 0
+          const montant = parseAmountSafe(d.montant, 'declaration.montant')
           if (montant <= 0) continue
 
           if (type.includes('CSG') || type.includes('NPF')) {
@@ -1284,61 +1330,63 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       }
       if (factureSocieteId) {
         // Detect devise: explicit field → totaux EUR presence → default MUR
+        // NB: on utilise parseAmountSafe sur les fallback-chains — un champ
+        // illisible ne doit pas bloquer un autre candidat du chaînage.
         const totaux = extraction.totaux || {}
         const devise =
           extraction.devise ||
           extraction.currency ||
-          (Number(totaux.total_ttc_eur) > 0 ? 'EUR' : null) ||
+          (parseAmountSafe(totaux.total_ttc_eur, 'totaux.total_ttc_eur') > 0 ? 'EUR' : null) ||
           'MUR'
         // Prefer explicit taux_change from totaux when available
         const fxRate =
           devise !== 'MUR'
-            ? (Number(totaux.taux_change?.EUR_to_MUR) ||
-               Number(totaux.taux_change?.[`${devise}_to_MUR`]) ||
+            ? (parseAmountSafe(totaux.taux_change?.EUR_to_MUR, 'taux_change.EUR_to_MUR') ||
+               parseAmountSafe(totaux.taux_change?.[`${devise}_to_MUR`], `taux_change.${devise}_to_MUR`) ||
                tauxChange[devise] ||
                1)
             : 1
         const montantHT = devise === 'EUR'
-          ? (Number(totaux.montant_ht_eur) ||
-             Number(extraction.montant_ht) ||
-             Number(extraction.total_ht) ||
-             Number(extraction.subtotal) ||
+          ? (parseAmountSafe(totaux.montant_ht_eur, 'totaux.montant_ht_eur') ||
+             parseAmountSafe(extraction.montant_ht, 'montant_ht') ||
+             parseAmountSafe(extraction.total_ht, 'total_ht') ||
+             parseAmountSafe(extraction.subtotal, 'subtotal') ||
              0)
-          : (Number(extraction.montant_ht) ||
-             Number(totaux.montant_ht_mur) ||
-             Number(extraction.montant_ht_mur) ||
-             Number(extraction.total_ht) ||
-             Number(extraction.subtotal) ||
+          : (parseAmountSafe(extraction.montant_ht, 'montant_ht') ||
+             parseAmountSafe(totaux.montant_ht_mur, 'totaux.montant_ht_mur') ||
+             parseAmountSafe(extraction.montant_ht_mur, 'montant_ht_mur') ||
+             parseAmountSafe(extraction.total_ht, 'total_ht') ||
+             parseAmountSafe(extraction.subtotal, 'subtotal') ||
              0)
         const montantTVA = devise === 'EUR'
-          ? (Number(totaux.tva_eur) ||
-             Number(extraction.montant_tva) ||
-             Number(extraction.tva) ||
+          ? (parseAmountSafe(totaux.tva_eur, 'totaux.tva_eur') ||
+             parseAmountSafe(extraction.montant_tva, 'montant_tva') ||
+             parseAmountSafe(extraction.tva, 'tva') ||
              0)
-          : (Number(extraction.montant_tva) ||
-             Number(totaux.tva_mur) ||
-             Number(extraction.tva_mur) ||
-             Number(extraction.tva) ||
+          : (parseAmountSafe(extraction.montant_tva, 'montant_tva') ||
+             parseAmountSafe(totaux.tva_mur, 'totaux.tva_mur') ||
+             parseAmountSafe(extraction.tva_mur, 'tva_mur') ||
+             parseAmountSafe(extraction.tva, 'tva') ||
              0)
         const montantTTC = devise === 'EUR'
-          ? (Number(totaux.total_ttc_eur) ||
-             Number(totaux.net_a_payer_eur) ||
-             Number(extraction.montant_ttc) ||
-             Number(extraction.total_ttc) ||
-             Number(extraction.total) ||
-             Number(extraction.amount) ||
+          ? (parseAmountSafe(totaux.total_ttc_eur, 'totaux.total_ttc_eur') ||
+             parseAmountSafe(totaux.net_a_payer_eur, 'totaux.net_a_payer_eur') ||
+             parseAmountSafe(extraction.montant_ttc, 'montant_ttc') ||
+             parseAmountSafe(extraction.total_ttc, 'total_ttc') ||
+             parseAmountSafe(extraction.total, 'total') ||
+             parseAmountSafe(extraction.amount, 'amount') ||
              (montantHT + montantTVA))
-          : (Number(extraction.montant_ttc) ||
-             Number(totaux.total_ttc_mur) ||
-             Number(totaux.net_a_payer_mur) ||
-             Number(extraction.total_ttc) ||
-             Number(extraction.total) ||
-             Number(extraction.amount) ||
+          : (parseAmountSafe(extraction.montant_ttc, 'montant_ttc') ||
+             parseAmountSafe(totaux.total_ttc_mur, 'totaux.total_ttc_mur') ||
+             parseAmountSafe(totaux.net_a_payer_mur, 'totaux.net_a_payer_mur') ||
+             parseAmountSafe(extraction.total_ttc, 'total_ttc') ||
+             parseAmountSafe(extraction.total, 'total') ||
+             parseAmountSafe(extraction.amount, 'amount') ||
              (montantHT + montantTVA))
 
         // Vérification TVA
         const tvaApplicable = extraction.tva_applicable !== false && !extraction.tva_exonere
-        const tauxTva = tvaApplicable ? (Number(extraction.taux_tva) || 15) : 0
+        const tauxTva = tvaApplicable ? (parseAmountSafe(extraction.taux_tva, 'taux_tva') || 15) : 0
         let montantTVAFinal = montantTVA
 
         // Si TVA applicable mais montant_tva=0, recalculer
@@ -1526,8 +1574,36 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       const bankDevise: Currency = resolvedCurrency.currency
       console.log(`[upload] Bank currency resolved: ${bankDevise} (source=${resolvedCurrency.source})`)
       const bankName = extraction.banque || extraction.compte_bancaire || null
-      const rawSolde = parseFloat(extraction.solde_cloture) || parseFloat(extraction.solde_fin) || NaN
-      const solde = isNaN(rawSolde) ? null : rawSolde
+      // solde_cloture is CRITICAL (seeds rapprochement). parseAmount throws on garbage;
+      // on échec, doc marqué erreur_ocr puis 400 (mêmes semantics que F6).
+      let solde: number | null = null
+      try {
+        const rawSoldeCloture = extraction.solde_cloture
+        const rawSoldeFin = extraction.solde_fin
+        // Si l'OCR renvoie vide/null sur les deux → solde reste null (comportement d'origine).
+        const hasCloture = rawSoldeCloture !== null && rawSoldeCloture !== undefined && rawSoldeCloture !== ''
+        const hasFin = rawSoldeFin !== null && rawSoldeFin !== undefined && rawSoldeFin !== ''
+        if (hasCloture) {
+          solde = parseAmount(rawSoldeCloture)
+        } else if (hasFin) {
+          solde = parseAmount(rawSoldeFin)
+        }
+      } catch (err) {
+        const errMsg = err instanceof ParseAmountError
+          ? `Solde de clôture illisible: ${err.message}. Review humaine requise.`
+          : `Erreur parsing solde: ${err instanceof Error ? err.message : String(err)}`
+        console.error(`[upload] F4 BLOCK (solde_cloture): ${errMsg} (doc ${docId})`)
+        if (docId) {
+          await supabase.from('documents').update({
+            statut: 'erreur_ocr',
+            message_erreur: errMsg,
+          }).eq('id', docId)
+        }
+        return NextResponse.json(
+          { error: 'Solde de clôture illisible', details: { message: errMsg } },
+          { status: 400 },
+        )
+      }
       const extractedIBAN = extraction.iban || null
       const extractedNumeroCompte = extraction.numero_compte || extraction.compte_bancaire || null
       const extractedBRN = extraction.brn || null
@@ -1796,40 +1872,131 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           const rawTransactions: any[] = extraction.transactions || []
           const rawLignes: any[] = extraction.lignes || []
 
-          // Convert lignes[] format → transactions[] format
-          const lignesAsTransactions = rawLignes.map((l: any) => {
-            let debit = Number(l.debit) || 0
-            let credit = Number(l.credit) || 0
-            if (debit === 0 && credit === 0 && l.montant) {
-              if (l.sens === 'debit') debit = Number(l.montant) || 0
-              else credit = Number(l.montant) || 0
-            }
-            return {
-              date: l.date || '',
-              libelle: l.libelle || '',
-              debit,
-              credit,
-              solde_apres: l.solde_apres ?? null,
-              tiers_detecte: l.tiers_detecte || null,
-              compte_comptable: l.compte_debit || l.compte_credit || null,
-              statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
-            }
-          })
+          // Convert lignes[] format → transactions[] format.
+          // parseAmount (throw on bad) — le montant d'une tx est CRITIQUE.
+          // Si UNE ligne échoue, le relevé entier est refusé (marqué erreur_ocr).
+          let lignesAsTransactions: Array<{
+            date: string
+            libelle: string
+            debit: number
+            credit: number
+            solde_apres: unknown
+            tiers_detecte: unknown
+            compte_comptable: unknown
+            statut: string
+          }> = []
+          let normalizedTransactions: any[] = []
+          let totalDebits = 0
+          let totalCredits = 0
+          let soldeOuverture = 0
+          let soldeCloture = 0
+          try {
+            lignesAsTransactions = rawLignes.map((l: any) => {
+              let debit = parseAmount(l.debit)
+              let credit = parseAmount(l.credit)
+              if (debit === 0 && credit === 0 && l.montant) {
+                const montant = parseAmount(l.montant)
+                if (l.sens === 'debit') debit = montant
+                else credit = montant
+              }
+              return {
+                date: l.date || '',
+                libelle: l.libelle || '',
+                debit,
+                credit,
+                solde_apres: l.solde_apres ?? null,
+                tiers_detecte: l.tiers_detecte || null,
+                compte_comptable: l.compte_debit || l.compte_credit || null,
+                statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
+              }
+            })
 
-          // Merge: prefer explicit transactions[], fall back to converted lignes[]
-          const normalizedTransactions = rawTransactions.length > 0
-            ? rawTransactions
-            : lignesAsTransactions
+            // Merge: prefer explicit transactions[], fall back to converted lignes[]
+            normalizedTransactions = rawTransactions.length > 0
+              ? rawTransactions.map((t: any) => ({
+                  ...t,
+                  debit: parseAmount(t.debit),
+                  credit: parseAmount(t.credit),
+                }))
+              : lignesAsTransactions
 
-          // Compute totals if missing
-          const totalDebits = Number(extraction.total_debits) ||
-            normalizedTransactions.reduce((s: number, t: any) => s + (Number(t.debit) || 0), 0)
-          const totalCredits = Number(extraction.total_credits) ||
-            normalizedTransactions.reduce((s: number, t: any) => s + (Number(t.credit) || 0), 0)
+            // Compute totals if missing.
+            // parseAmountSafe sur les totaux globaux (fallback vers somme recalculée).
+            totalDebits = parseAmountSafe(extraction.total_debits, 'total_debits') ||
+              normalizedTransactions.reduce((s: number, t: any) => s + parseAmountSafe(t.debit, 'tx.debit'), 0)
+            totalCredits = parseAmountSafe(extraction.total_credits, 'total_credits') ||
+              normalizedTransactions.reduce((s: number, t: any) => s + parseAmountSafe(t.credit, 'tx.credit'), 0)
+
+            // solde_ouverture est CRITIQUE (equation bilancielle).
+            soldeOuverture = parseAmount(
+              extraction.solde_ouverture ?? extraction.solde_debut ?? 0,
+            )
+            soldeCloture = solde ?? parseAmount(extraction.solde_fin ?? 0)
+          } catch (err) {
+            const errMsg = err instanceof ParseAmountError
+              ? `Montant relevé illisible: ${err.message}. Review humaine requise.`
+              : `Erreur parsing relevé: ${err instanceof Error ? err.message : String(err)}`
+            console.error(`[upload] F4/F5 BLOCK (releve lignes): ${errMsg} (doc ${docId})`)
+            if (docId) {
+              await supabase.from('documents').update({
+                statut: 'erreur_ocr',
+                message_erreur: errMsg,
+              }).eq('id', docId)
+            }
+            return NextResponse.json(
+              { error: 'Montants du relevé illisibles', details: { message: errMsg } },
+              { status: 400 },
+            )
+          }
+
+          // F7 — sanity check : refuse toute tx dont le montant est anormalement élevé.
+          // Heuristique : si max(debit, credit) > SEUIL_ABSOLU (20M MUR équivalent) OU
+          // > 50× la médiane des autres tx du relevé → flag 'montant_suspect'.
+          const seuilAbsolu = 20_000_000 // 20M MUR = cap raisonnable pour 1 tx bancaire
+          const lignesF7: any[] = normalizedTransactions
+          if (lignesF7.length > 0) {
+            const montants = lignesF7.map(l => Math.max(parseAmountSafe(l.debit, 'f7.debit'), parseAmountSafe(l.credit, 'f7.credit')))
+            const sorted = [...montants].sort((a, b) => a - b)
+            const median = sorted[Math.floor(sorted.length / 2)] || 0
+            const suspectes = lignesF7.filter(l => {
+              const m = Math.max(parseAmountSafe(l.debit, 'f7.debit'), parseAmountSafe(l.credit, 'f7.credit'))
+              return m > seuilAbsolu || (median > 0 && m > 50 * median)
+            })
+            if (suspectes.length > 0) {
+              const maxMontant = montants.length > 0 ? Math.max(...montants) : 0
+              const f7Msg = `F7: ${suspectes.length} tx avec montant anormalement élevé (max=${maxMontant}, médiane=${median}). Review humaine requise.`
+              console.error(`[upload] F7 BLOCK: ${f7Msg} (doc ${docId})`)
+              // Marque le doc en erreur_ocr pour review humaine, ne PAS créer le relevé
+              if (docId) {
+                await supabase.from('documents').update({
+                  statut: 'erreur_ocr',
+                  message_erreur: f7Msg,
+                }).eq('id', docId)
+              }
+              // Alerte compliance — best-effort, schema aligné sur les autres alertes du fichier
+              try {
+                await supabase.from('alertes').insert({
+                  societe_id: bankSocieteId,
+                  type_alerte: 'montant_suspect_ocr',
+                  niveau: 'critique',
+                  titre: 'Montants OCR anormalement élevés',
+                  description: `OCR relevé bancaire: ${suspectes.length} tx > 20M MUR ou > 50× médiane. Doc ${docId}.`,
+                  statut: 'active',
+                })
+              } catch (alertErr) {
+                console.error('[upload] alertes insert failed (non-fatal):', alertErr)
+              }
+              return NextResponse.json(
+                {
+                  error: `Montants anormalement élevés détectés (${suspectes.length} tx). Review humaine requise avant import.`,
+                  suspectes: suspectes.slice(0, 5).map((l: any) => ({ libelle: l.libelle, debit: l.debit, credit: l.credit })),
+                },
+                { status: 400 },
+              )
+            }
+          }
 
           // Detect ecart
-          const soldeOuverture = Number(extraction.solde_ouverture) || Number(extraction.solde_debut) || 0
-          const soldeCloture = solde || Number(extraction.solde_fin) || 0
           const ecartSolde = Math.abs((soldeOuverture + totalCredits - totalDebits) - soldeCloture)
           const statutRapprochement = ecartSolde > 1 ? 'ecart_detecte' : 'en_attente'
 
