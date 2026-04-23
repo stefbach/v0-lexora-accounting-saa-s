@@ -20,6 +20,8 @@ import {
   Phone, MapPin, Building2, Hash, CircleDot
 } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
+import { createClient } from "@/lib/supabase/client"
+import { ProtectionLegalePanel } from "./_components/ProtectionLegalePanel"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
@@ -69,6 +71,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [employe, setEmploye] = useState<any>(null)
+  // G7 — role de l'utilisateur connecte (pour afficher le panneau ProtectionLegale)
+  const [userRole, setUserRole] = useState<string>("")
   const [form, setForm] = useState<any>(null)
   const [bulletins, setBulletins] = useState<any[]>([])
   const [conges, setConges] = useState<any[]>([])
@@ -123,6 +127,16 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   }, [id])
 
   useEffect(() => { load(yearFilter, pointageMois) }, [load, yearFilter, pointageMois])
+
+  // G7 — charger le role de l'utilisateur connecte pour ProtectionLegalePanel
+  useEffect(() => {
+    const sb = createClient()
+    sb.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      sb.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        .then(({ data }) => { if (data?.role) setUserRole(String(data.role)) })
+    })
+  }, [])
 
   // On first load, set form from employe
   useEffect(() => {
@@ -309,10 +323,39 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   <CalendarDays className="w-3 h-3" />{anciennete(employe.date_arrivee)}
                 </span>
               )}
+              {/* G3 — Statut WRA 2019 S.2 (computed depuis salaire_base) */}
+              {employe.statut_wra === 'worker' ? (
+                <span
+                  className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-100 px-3 py-1 rounded-full text-xs border border-emerald-300/30"
+                  title="Worker au sens WRA 2019 S.2 — basic ≤ 50 000 MUR/mois. Bénéficie de l'intégralité des droits WRA (AL 22j, SL 15j, VL 30j/5a, etc.)."
+                >
+                  Worker (WRA intégral)
+                </span>
+              ) : employe.statut_wra === 'hors_wra' ? (
+                <span
+                  className="inline-flex items-center gap-1.5 bg-purple-500/20 text-purple-100 px-3 py-1 rounded-full text-xs border border-purple-300/30"
+                  title="Hors WRA — basic > 50 000 MUR/mois. Droits via contrat individuel + policy société (WRA S.3(3)(a) permet d'appliquer des conditions plus favorables)."
+                >
+                  Hors WRA (basic &gt; 50 000)
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
+
+      {/* G7 — Protection légale WRA S.52/S.53/S.64 (visible RH + admins) */}
+      <ProtectionLegalePanel
+        employe={{
+          id: employe.id,
+          prenom: employe.prenom,
+          nom: employe.nom,
+          genre: employe.genre,
+          gender: employe.gender,
+          date_arrivee: employe.date_arrivee,
+        }}
+        canManage={['admin', 'super_admin', 'rh', 'rh_manager'].includes(String(userRole || '').toLowerCase())}
+      />
 
       {/* 9 Tabs */}
       <Tabs defaultValue="personnel" className="space-y-6">

@@ -94,10 +94,43 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const supabase = getAdminClient()
     const body = await request.json()
 
+    // G7 — WRA S.64 + S.5(5)(aa) : protection absolue contre licenciement
+    // pendant grossesse/congé maternité. Bloque PATCH date_depart sauf
+    // si body.force = true (faute grave documentée).
+    if (body.date_depart && !body.force) {
+      const { data: prot } = await supabase
+        .rpc('is_employe_protege_licenciement', {
+          p_employe_id: id,
+          p_date_reference: body.date_depart,
+        })
+        .maybeSingle()
+      if (prot && (prot as any).est_protege === true) {
+        return NextResponse.json({
+          error: 'wra_protection_licenciement',
+          message: `Impossible de modifier la date de départ : ${(prot as any).motif}. Protection active jusqu'au ${String((prot as any).date_fin_protection).slice(0, 10)}. Pour une faute grave non liée à la grossesse, renvoyez avec { force: true } et un motif documenté.`,
+          motif: (prot as any).motif,
+          date_fin_protection: (prot as any).date_fin_protection,
+        }, { status: 403 })
+      }
+    }
+    if (body.force && body.date_depart) {
+      console.warn(`[employes PATCH] date_depart FORCED sur employe=${id} par user=${user.id} — motif=${body.motif_force || 'non-documente'}`)
+    }
+    delete body.force
+    delete body.motif_force
+
     // Remove fields that shouldn't be updated directly
     delete body.id
     delete body.created_at
+    // F17 — Colonnes GENERATED ALWAYS (interdites en UPDATE) :
+    //   - actif (expression: date_depart IS NULL)
+    //   - statut_wra (G3 mig 162, expression: worker/hors_wra selon salaire_base)
+    // Le frontend copie l'employe complet via SELECT * puis le renvoie au PATCH
+    // avec `form`, donc ces colonnes GENERATED arrivent ici et faisaient echouer
+    // Supabase avec erreur "cannot insert into column ... has a generation
+    // expression" -> 500 silencieux cote UI.
     delete body.actif
+    delete body.statut_wra
 
     // Même renommage que POST : role (envoyé par certains clients legacy)
     // → role_rh (colonne réelle en prod). profiles.role est un autre champ
@@ -151,7 +184,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .eq('id', id)
       .select()
       .single()
-    if (error) throw error
+    if (error) {
+      // F17 — log explicite cote serveur (Vercel Functions) pour faciliter
+      // le diagnostic des 500 futurs : message + code + details + hint.
+      console.error('[employes PATCH] UPDATE failed', {
+        employe_id: id,
+        body_keys: Object.keys(body),
+        error_code: (error as any).code,
+        error_message: error.message,
+        error_details: (error as any).details,
+        error_hint: (error as any).hint,
+      })
+      throw error
+    }
 
     // Sprint 9 BUG 2 — si le salaire a changé, propager aux bulletins
     // NON VERROUILLÉS (verrouille != true) du mois en cours uniquement.

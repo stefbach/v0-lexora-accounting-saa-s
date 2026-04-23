@@ -5,13 +5,15 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Bell, CreditCard, Calendar, CalendarPlus, Coffee, FileText, HeartPulse, LogIn, LogOut } from "lucide-react"
 import { NAVY, GOLD, BLUE, GREEN, MONTH_NAMES_FR } from "../shared/constants"
-import { fmt, fmtH, lastDayOfMonth } from "../shared/helpers"
+import { fmt, lastDayOfMonth } from "../shared/helpers"
 import {
   EligibiliteBadge,
+  VacationLeaveCard,
   formatPeriodeFR,
   formatDateFR,
   computeDatePlus6Months,
   type EligibilityStatus,
+  type VlEligibilityStatus,
 } from "../shared/conges-eligibilite"
 import { useEffect, useState } from "react"
 
@@ -66,9 +68,42 @@ export function DashboardTab({
     ? `Éligibilité le ${formatDateFR(computeDatePlus6Months(conges?.date_arrivee))} (6 mois d'ancienneté)`
     : null
 
-  const hasEntry = !!pointageToday?.heure_entree
-  const hasExit = !!pointageToday?.heure_sortie
-  const onPause = pointageToday?.heure_pause_debut && !pointageToday?.heure_pause_fin
+  // PO1 — résumé sessions du jour (timeline + session en cours pour
+  // activer/désactiver les bons boutons). Rafraîchi après chaque punch.
+  const [sessionsData, setSessionsData] = useState<{
+    sessions: any[]
+    total_travail_minutes: number
+    total_pause_minutes: number
+    session_en_cours: any | null
+  }>({ sessions: [], total_travail_minutes: 0, total_pause_minutes: 0, session_en_cours: null })
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/rh/pointage/session")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!cancelled && d && !d.error) {
+          setSessionsData({
+            sessions: d.sessions || [],
+            total_travail_minutes: Number(d.total_travail_minutes) || 0,
+            total_pause_minutes: Number(d.total_pause_minutes) || 0,
+            session_en_cours: d.session_en_cours || null,
+          })
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+    // Dépendance `punching` : re-fetch dès qu'un clic s'est terminé.
+  }, [punching, feedback])
+
+  const sessionEnCours = sessionsData.session_en_cours
+  const isEnTravail = sessionEnCours?.type_session === 'travail'
+  const isEnPause = sessionEnCours?.type_session === 'pause'
+  const hasAnySession = sessionsData.sessions.length > 0
+  const formatMin = (m: number) => {
+    const h = Math.floor(m / 60), r = m % 60
+    return h > 0 ? `${h}h${r > 0 ? ` ${String(r).padStart(2, '0')}min` : ''}` : `${r}min`
+  }
+  const fmtTime = (t?: string | null) => (t ? String(t).slice(0, 5) : '—')
 
   // V3.5 — bannière "contrat à signer" tirée du même endpoint
   // que la sidebar pour cohérence.
@@ -78,6 +113,21 @@ export function DashboardTab({
     fetch("/api/salarie/notifications")
       .then(r => r.ok ? r.json() : { contrats_a_signer: 0 })
       .then(d => { if (!cancelled) setContratsASigner(Number(d.contrats_a_signer) || 0) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  // G7 — carte grossesse/paternité read-only (RLS SELECT_SELF garantit
+  // que l'employé(e) ne voit que SES données).
+  const [protection, setProtection] = useState<{
+    grossesse: any | null
+    paternite: any | null
+  }>({ grossesse: null, paternite: null })
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/salarie/protection-legale")
+      .then(r => r.ok ? r.json() : { grossesse: null, paternite: null })
+      .then(d => { if (!cancelled) setProtection({ grossesse: d.grossesse, paternite: d.paternite }) })
       .catch(() => {})
     return () => { cancelled = true }
   }, [])
@@ -111,6 +161,75 @@ export function DashboardTab({
         </Card>
       )}
 
+      {/* G7 — Carte grossesse active (read-only, transparence WRA S.52/S.64) */}
+      {protection.grossesse && (() => {
+        const g = protection.grossesse
+        const fmt = (iso: string | null) => iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}` : "—"
+        return (
+          <Card className="overflow-hidden rounded-xl shadow-sm border-0"
+            style={{ background: "linear-gradient(135deg, #fce7f3, #fdf2f8)", borderLeft: "4px solid #ec4899" }}>
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-pink-200 shrink-0">
+                  <span className="text-xl">🤱</span>
+                </div>
+                <div className="flex-1 space-y-1 text-sm">
+                  <p className="font-semibold text-pink-900">
+                    {g.statut === 'declaree' && 'Grossesse enregistrée'}
+                    {g.statut === 'conge_en_cours' && 'Congé maternité en cours'}
+                    {g.statut === 'retour_effectue' && 'Congé maternité terminé'}
+                  </p>
+                  <div className="text-xs text-pink-800 space-y-0.5">
+                    {g.date_presume_accouchement && (
+                      <p>Date prévue : <strong>{fmt(g.date_presume_accouchement)}</strong></p>
+                    )}
+                    {g.conge_mat_debut && g.conge_mat_fin && (
+                      <p>Congé maternité : <strong>{fmt(g.conge_mat_debut)} → {fmt(g.conge_mat_fin)}</strong></p>
+                    )}
+                    {g.allocation_naissance_payee && (
+                      <p className="text-emerald-700">✓ Allocation naissance 3 000 MUR versée</p>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-pink-600 pt-1">
+                    Protection WRA 2019 Sections 52 &amp; 64. Pour toute modification, contactez le RH.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
+
+      {/* G7 — Carte paternité active (read-only) */}
+      {protection.paternite && (() => {
+        const p = protection.paternite
+        const fmt = (iso: string | null) => iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}` : "—"
+        return (
+          <Card className="overflow-hidden rounded-xl shadow-sm border-0"
+            style={{ background: "linear-gradient(135deg, #dbeafe, #eff6ff)", borderLeft: "4px solid #2563eb" }}>
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-blue-200 shrink-0">
+                  <span className="text-xl">👶</span>
+                </div>
+                <div className="flex-1 space-y-1 text-sm">
+                  <p className="font-semibold text-blue-900">
+                    Congé paternité ({p.conge_paye ? '4 semaines payées' : '4 semaines non payées'})
+                  </p>
+                  <div className="text-xs text-blue-800 space-y-0.5">
+                    <p>Naissance : <strong>{fmt(p.date_naissance_enfant)}</strong></p>
+                    {p.conge_pat_debut && p.conge_pat_fin && (
+                      <p>Congé : <strong>{fmt(p.conge_pat_debut)} → {fmt(p.conge_pat_fin)}</strong></p>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-blue-600 pt-1">WRA 2019 Section 53.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
+
       {estimatedNet > 0 && (
         <Card className="overflow-hidden rounded-xl shadow-sm" style={{ border: `2px solid ${GOLD}30` }}>
           <CardContent className="p-4 md:p-5">
@@ -134,18 +253,94 @@ export function DashboardTab({
 
       <Card className="rounded-xl shadow-sm">
         <CardContent className="p-4 space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-            <div className="p-3 bg-emerald-50 rounded-xl"><p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-wide">Entree</p><p className="font-mono text-lg text-emerald-700 mt-1">{fmtH(pointageToday?.heure_entree)}</p></div>
-            <div className="p-3 bg-amber-50 rounded-xl"><p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-wide">Pause</p><p className="font-mono text-lg text-amber-600 mt-1">{pointageToday?.heure_pause_debut ? `${fmtH(pointageToday.heure_pause_debut)}${pointageToday.heure_pause_fin ? `-${fmtH(pointageToday.heure_pause_fin)}` : "..."}` : "—"}</p></div>
-            <div className="p-3 bg-red-50 rounded-xl"><p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-wide">Sortie</p><p className="font-mono text-lg text-red-600 mt-1">{fmtH(pointageToday?.heure_sortie)}</p></div>
-            <div className="p-3 bg-blue-50 rounded-xl"><p className="text-[10px] md:text-xs text-gray-500 uppercase tracking-wide">Duree</p><p className="font-mono text-lg mt-1" style={{ color: NAVY }}>{pointageToday?.duree_minutes ? `${(pointageToday.duree_minutes / 60).toFixed(1)}h` : "—"}</p></div>
+          {/* PO1 — 3 boutons contextuels + timeline.
+             - aucune session en cours -> seule [Entrée] est active
+             - session travail en cours -> [Pause] + [Sortie] actives
+             - session pause en cours   -> seule [Reprendre] active
+             Les pointages multiples dans la même journée (intervention
+             tardive, pauses fractionnées) sont autorisés. */}
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              onClick={() => doPunch("entree")}
+              disabled={punching || !!sessionEnCours}
+              className="h-12 md:h-14 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm md:text-base disabled:opacity-40"
+            >
+              <LogIn className="h-5 w-5 mr-2" /> Entrée
+            </Button>
+            {isEnPause ? (
+              <Button
+                onClick={() => doPunch("pause_fin")}
+                disabled={punching}
+                className="h-12 md:h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm md:text-base"
+              >
+                <Coffee className="h-5 w-5 mr-2" /> Reprendre
+              </Button>
+            ) : (
+              <Button
+                onClick={() => doPunch("pause_debut")}
+                disabled={punching || !isEnTravail}
+                className="h-12 md:h-14 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm md:text-base disabled:opacity-40"
+              >
+                <Coffee className="h-5 w-5 mr-2" /> Pause
+              </Button>
+            )}
+            <Button
+              onClick={() => doPunch("sortie")}
+              disabled={punching || !isEnTravail}
+              className="h-12 md:h-14 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm md:text-base disabled:opacity-40"
+            >
+              <LogOut className="h-5 w-5 mr-2" /> Sortie
+            </Button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <Button onClick={() => doPunch("entree")} disabled={punching || hasEntry} className="h-12 md:h-14 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm md:text-base transition-all duration-200 active:scale-[0.97]"><LogIn className="h-5 w-5 mr-2" /> Entree</Button>
-            <Button onClick={() => doPunch("pause_debut")} disabled={punching || !hasEntry || hasExit || onPause} className="h-12 md:h-14 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm md:text-base transition-all duration-200 active:scale-[0.97]"><Coffee className="h-5 w-5 mr-2" /> Pause</Button>
-            <Button onClick={() => doPunch("pause_fin")} disabled={punching || !onPause} className="h-12 md:h-14 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm md:text-base transition-all duration-200 active:scale-[0.97]"><Coffee className="h-5 w-5 mr-2" /> Fin pause</Button>
-            <Button onClick={() => doPunch("sortie")} disabled={punching || !hasEntry || hasExit} className="h-12 md:h-14 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm md:text-base transition-all duration-200 active:scale-[0.97]"><LogOut className="h-5 w-5 mr-2" /> Sortie</Button>
-          </div>
+
+          {/* Timeline des sessions du jour. Affichée dès qu'il y a au moins
+              une session (même encore ouverte). */}
+          {hasAnySession && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                Journée en cours
+              </p>
+              <div className="space-y-1.5">
+                {sessionsData.sessions.map((s: any) => {
+                  const isTravail = s.type_session === 'travail'
+                  const isOuverte = s.heure_fin == null
+                  const duree = s.duree_minutes != null ? formatMin(s.duree_minutes) : null
+                  return (
+                    <div key={s.id} className="flex items-center gap-2 text-sm">
+                      <span className={`inline-block h-2 w-2 rounded-full ${isTravail ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      <span className="font-mono text-gray-700">{fmtTime(s.heure_debut)}</span>
+                      <span className="text-gray-400">→</span>
+                      <span className="font-mono text-gray-700">
+                        {isOuverte ? <span className="italic text-blue-600">en cours</span> : fmtTime(s.heure_fin)}
+                      </span>
+                      <span className="ml-auto text-xs text-gray-500">
+                        {isTravail ? 'Travail' : 'Pause'}
+                        {duree ? ` · ${duree}` : isOuverte ? ' · …' : ''}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-3 pt-2 border-t border-gray-200 flex gap-4 text-xs text-gray-600">
+                <span>
+                  <span className="font-semibold" style={{ color: NAVY }}>Travaillé :</span>{' '}
+                  <span className="font-mono">{formatMin(sessionsData.total_travail_minutes)}</span>
+                  {isEnTravail ? <span className="italic text-blue-600"> (+ en cours)</span> : null}
+                </span>
+                <span>
+                  <span className="font-semibold" style={{ color: NAVY }}>Pauses :</span>{' '}
+                  <span className="font-mono">{formatMin(sessionsData.total_pause_minutes)}</span>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {!hasAnySession && (
+            <p className="text-xs text-center text-gray-400 italic">
+              Aucune session aujourd&apos;hui — cliquez sur <span className="font-semibold text-emerald-700">Entrée</span> pour commencer.
+            </p>
+          )}
+
           {feedback && <p className="text-sm text-center p-2.5 rounded-xl bg-blue-50 text-blue-700">{feedback}</p>}
         </CardContent>
       </Card>
@@ -202,6 +397,15 @@ export function DashboardTab({
         {notEligibleMessage && (
           <p className="text-[11px] text-center text-gray-500 italic">{notEligibleMessage}</p>
         )}
+        <VacationLeaveCard
+          vl_droit={conges?.vl_droit ?? null}
+          vl_pris={conges?.vl_pris ?? null}
+          vl_solde={conges?.vl_solde ?? null}
+          vl_cycle_debut={conges?.vl_cycle_debut ?? null}
+          vl_cycle_fin={conges?.vl_cycle_fin ?? null}
+          vl_eligibility_status={(conges?.vl_eligibility_status as VlEligibilityStatus) || "no_date_arrivee"}
+          vl_eligibility_date={conges?.vl_eligibility_date ?? null}
+        />
       </div>
       )}
 

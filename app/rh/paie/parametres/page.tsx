@@ -1,24 +1,26 @@
 "use client"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Save, Info, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, Save, Info, RefreshCw, CheckCircle2, AlertTriangle, CalendarClock } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import {
+  calculerPeriodePaieSync,
+  formaterPeriodeLibelle,
+  DEFAULT_CONFIG,
+  type PeriodePaieConfig,
+  type PeriodePaieMode,
+} from "@/lib/rh/periode-paie"
 
 const NAVY = "#0B0F2E"
 
-const JOURS_FERIES_MU_DEFAUT = [
-  { date: "2025-01-01", label: "Jour de l'An" },
-  { date: "2025-01-02", label: "Jour de l'An (suite)" },
-  { date: "2025-03-12", label: "Jour de la Nation" },
-  { date: "2025-05-01", label: "Fête du Travail" },
-  { date: "2025-05-09", label: "Ascension" },
-  { date: "2025-08-15", label: "Assomption" },
-  { date: "2025-11-02", label: "Toussaint" },
-  { date: "2025-12-25", label: "Noël" },
-]
+// PE1 — les jours fériés Maurice sont chargés dynamiquement depuis la
+// table jours_feries (15 fériés officiels 2026 seedés). L'ancienne liste
+// hardcodée contenait 2 erreurs (Ascension non fériée à Maurice, et le
+// Labour Day positionné au 9/5 au lieu du 1/5).
 
 // ---------------------------------------------------------------------------
 // Isolated number field — has its own local state so typing never causes the
@@ -72,6 +74,284 @@ function NumField({
 }
 
 // ---------------------------------------------------------------------------
+// PE1 — Section "Période de paie" (paramétrable par société)
+// ---------------------------------------------------------------------------
+function PeriodePaieSection() {
+  const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
+  const [societeId, setSocieteId] = useState<string>("")
+  const [cfg, setCfg] = useState<PeriodePaieConfig>({ ...DEFAULT_CONFIG })
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [feedback, setFeedback] = useState<string | null>(null)
+
+  // Liste des sociétés accessibles.
+  useEffect(() => {
+    fetch("/api/comptable/societes")
+      .then(r => r.json())
+      .then(d => {
+        const rows = (d?.societes || []) as Array<{ id: string; nom: string }>
+        setSocietes(rows)
+        if (rows.length > 0 && !societeId) setSocieteId(rows[0].id)
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Charge la config de la société sélectionnée.
+  useEffect(() => {
+    if (!societeId) return
+    setLoading(true)
+    setFeedback(null)
+    fetch(`/api/rh/societe?societe_id=${societeId}`)
+      .then(r => r.json())
+      .then(d => {
+        const s = d?.societe || d || {}
+        setCfg({
+          mode: (s.periode_paie_mode as PeriodePaieMode) || 'calendaire',
+          jour_cut_off: Number(s.periode_paie_jour_cut_off) || 24,
+          jour_paiement: s.periode_paie_jour_paiement == null
+            ? null
+            : Number(s.periode_paie_jour_paiement),
+          offset_paiement_mois: (Number(s.periode_paie_offset_paiement_mois) === 1 ? 1 : 0) as 0 | 1,
+          notes: s.periode_paie_notes || "",
+        })
+      })
+      .catch(() => setCfg({ ...DEFAULT_CONFIG }))
+      .finally(() => setLoading(false))
+  }, [societeId])
+
+  // Aperçu live calculé côté client (même logique que la RPC).
+  const aperçu = useMemo(() => {
+    const today = new Date()
+    const refYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+    return calculerPeriodePaieSync(cfg, refYmd)
+  }, [cfg])
+
+  const save = async () => {
+    if (!societeId) return
+    setSaving(true)
+    setFeedback(null)
+    try {
+      const res = await fetch("/api/rh/societe", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: societeId,
+          periode_paie_mode: cfg.mode,
+          periode_paie_jour_cut_off: cfg.jour_cut_off,
+          periode_paie_jour_paiement: cfg.jour_paiement,
+          periode_paie_offset_paiement_mois: cfg.offset_paiement_mois,
+          periode_paie_notes: cfg.notes || null,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d?.error || `HTTP ${res.status}`)
+      }
+      setFeedback("✅ Configuration enregistrée. Les bulletins existants conservent leur période d'origine.")
+    } catch (e: any) {
+      setFeedback(`⚠ ${e?.message || "Erreur réseau"}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card className="border-2 border-indigo-200">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
+          <CalendarClock className="h-5 w-5 text-indigo-600" />
+          Période de paie
+          <span className="ml-auto text-xs font-normal text-gray-500">PE1</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-end gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <Label className="text-sm">Société</Label>
+            <Select value={societeId} onValueChange={setSocieteId}>
+              <SelectTrigger><SelectValue placeholder="Choisir une société" /></SelectTrigger>
+              <SelectContent>
+                {societes.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">Mode de calcul de la période</Label>
+              <div className="space-y-1.5 mt-1.5">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="periode-mode"
+                    checked={cfg.mode === 'calendaire'}
+                    onChange={() => setCfg(c => ({ ...c, mode: 'calendaire' }))}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium">Mois calendaire</span>
+                    <span className="text-gray-500"> — du 1er au dernier jour du mois (défaut).</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="periode-mode"
+                    checked={cfg.mode === 'cut_off_jour'}
+                    onChange={() => setCfg(c => ({ ...c, mode: 'cut_off_jour' }))}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium">Période glissante avec cut-off</span>
+                    <span className="text-gray-500"> — ex. 25/03 → 24/04.</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {cfg.mode === 'cut_off_jour' && (
+              <div>
+                <Label className="text-sm">Jour de clôture (1-31)</Label>
+                <Input
+                  type="number" min={1} max={31}
+                  value={cfg.jour_cut_off}
+                  onChange={e => setCfg(c => ({ ...c, jour_cut_off: Math.max(1, Math.min(31, Number(e.target.value) || 1)) }))}
+                  className="w-24"
+                />
+              </div>
+            )}
+
+            <div>
+              <Label className="text-sm font-medium">Date de paiement</Label>
+              <div className="space-y-1.5 mt-1.5">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="periode-paiement"
+                    checked={cfg.jour_paiement == null}
+                    onChange={() => setCfg(c => ({ ...c, jour_paiement: null }))}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm">Dernier jour du mois</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="periode-paiement"
+                    checked={cfg.jour_paiement != null}
+                    onChange={() => setCfg(c => ({ ...c, jour_paiement: c.jour_paiement ?? 28 }))}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm">Jour fixe :</span>
+                  <Input
+                    type="number" min={1} max={31} disabled={cfg.jour_paiement == null}
+                    value={cfg.jour_paiement ?? ''}
+                    onChange={e => setCfg(c => ({ ...c, jour_paiement: Math.max(1, Math.min(31, Number(e.target.value) || 1)) }))}
+                    className="w-20"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Paiement</Label>
+              <div className="space-y-1.5 mt-1.5">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="periode-offset"
+                    checked={cfg.offset_paiement_mois === 0}
+                    onChange={() => setCfg(c => ({ ...c, offset_paiement_mois: 0 }))}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm">Dans le même mois que la période</span>
+                </label>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="periode-offset"
+                    checked={cfg.offset_paiement_mois === 1}
+                    onChange={() => setCfg(c => ({ ...c, offset_paiement_mois: 1 }))}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm">Le mois suivant</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm">Notes internes (optionnel)</Label>
+              <textarea
+                className="w-full text-sm border rounded-md p-2 resize-none"
+                rows={2}
+                value={cfg.notes || ''}
+                onChange={e => setCfg(c => ({ ...c, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-md p-3 text-sm">
+              <p className="font-semibold text-indigo-900 mb-1">
+                💡 Aperçu pour {new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+              </p>
+              <p className="text-indigo-900">{formaterPeriodeLibelle(aperçu)}</p>
+              <p className="text-xs text-indigo-700 mt-1.5 font-mono">
+                Période : {aperçu.periode_debut} → {aperçu.periode_fin}
+              </p>
+              <p className="text-xs text-indigo-700 font-mono">
+                Paiement prévu : {aperçu.date_paiement}
+              </p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-300 rounded-md p-3 text-xs text-amber-900 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold mb-0.5">Rappels légaux Maurice</p>
+                <p>
+                  WRA 2019 S.27 n'impose pas de date précise — seule la fréquence mensuelle
+                  est obligatoire. Pratique majoritaire : cut-off 24, paiement 25-28.
+                </p>
+                <ul className="list-disc list-inside mt-1 space-y-0.5">
+                  <li>PAYE reversé à la MRA dans les 20 jours suivant la fin du mois</li>
+                  <li>La date de paiement doit figurer dans le contrat de travail</li>
+                </ul>
+              </div>
+            </div>
+
+            {feedback && (
+              <div className={`rounded-md p-2 text-sm border ${feedback.startsWith('⚠') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-800 border-green-200'}`}>
+                {feedback}
+              </div>
+            )}
+
+            <Button
+              onClick={save}
+              disabled={saving || !societeId}
+              className="w-full text-white"
+              style={{ backgroundColor: NAVY }}
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+              Enregistrer la période de paie
+            </Button>
+            <p className="text-[11px] text-gray-500 italic">
+              Seuls les nouveaux bulletins suivront la nouvelle période. Les bulletins
+              existants (verrouillés ou payés) conservent leur période d'origine.
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 export default function ParametresPaiePage() {
@@ -115,6 +395,30 @@ export default function ParametresPaiePage() {
   const [mraError, setMraError] = useState<string | null>(null)
   const [mraUpdatedAt, setMraUpdatedAt] = useState<string | null>(null)
   const [mraSource, setMraSource] = useState<string | null>(null)
+
+  // PE1 — fetch dynamique des jours fériés depuis la DB.
+  const [anneeFeries] = useState(new Date().getFullYear())
+  const [joursFeries, setJoursFeries] = useState<Array<{ date: string; libelle: string }>>([])
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/rh/jours-feries?annee=${anneeFeries}`)
+      .then(r => r.ok ? r.json() : { jours_feries: [] })
+      .then(d => {
+        if (cancelled) return
+        const rows = (d?.jours_feries || d?.data || []) as any[]
+        setJoursFeries(
+          rows
+            .filter(r => r?.date)
+            .map(r => ({
+              date: String(r.date).slice(0, 10),
+              libelle: String(r.libelle || r.label || ''),
+            }))
+            .sort((a, b) => a.date.localeCompare(b.date)),
+        )
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [anneeFeries])
 
   const fetchMraRates = async (opts: { fromMount?: boolean } = {}) => {
     setMraStatus('loading')
@@ -201,7 +505,14 @@ export default function ParametresPaiePage() {
             paye_taux_1: String(d.params.paye_taux_1 || 0.10),
             paye_seuil_taux_2: String(d.params.paye_seuil_taux_2 || 650000),
             paye_taux_2: String(d.params.paye_taux_2 || 0.15),
-            night_shift_pct: String(d.params.night_shift_pct ?? 0.15),
+            // PE1 BUG 2 — night_shift_pct était parfois stocké en %
+            // (15) au lieu de décimal (0.15), d'où affichage "1500%".
+            // Normalisation défensive : valeur > 1 ⇒ diviser par 100.
+            night_shift_pct: String(
+              Number(d.params.night_shift_pct ?? 0.15) > 1
+                ? Number(d.params.night_shift_pct) / 100
+                : (d.params.night_shift_pct ?? 0.15),
+            ),
           })
         }
       })
@@ -319,6 +630,9 @@ export default function ParametresPaiePage() {
         </div>
       )}
 
+      {/* PE1 — Section période de paie (paramétrable par société) */}
+      <PeriodePaieSection />
+
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin" />
@@ -362,7 +676,7 @@ export default function ParametresPaiePage() {
               />
               <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>Finance Act 2024/25 : 1.5% si brut ≤ 50 000 MUR, 3% au-delà. Patronal fixe à 6%.</p>
+                <p>Finance Act 2025/26 : 1.5% si brut ≤ 50 000 MUR, 3% au-delà. Patronal fixe à 6%.</p>
               </div>
             </CardContent>
           </Card>
@@ -452,7 +766,7 @@ export default function ParametresPaiePage() {
               />
               <div className="bg-blue-50 p-3 rounded text-xs text-blue-800 flex gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <p>Barème 2024/25 : 0% jusqu'à 390K MUR/an, 10% jusqu'à 650K, 15% au-delà.</p>
+                <p>Barème Finance Act 2025/26 : 0% jusqu'à 390 000 MUR/an, 10% jusqu'à 650 000, 15% au-delà.</p>
               </div>
 
               {/* Sprint 2 — night shift majoration paramétrable (mig 137) */}
@@ -571,29 +885,39 @@ export default function ParametresPaiePage() {
             </CardContent>
           </Card>
 
-          {/* Jours fériés */}
+          {/* Jours fériés (PE1 — chargés dynamiquement depuis la DB) */}
           <Card className="col-span-2">
             <CardHeader>
-              <CardTitle className="text-base" style={{ color: NAVY }}>
-                Jours fériés Maurice 2025
+              <CardTitle className="text-base flex items-center justify-between" style={{ color: NAVY }}>
+                <span>Jours fériés Maurice {anneeFeries}</span>
+                <span className="text-xs font-normal text-gray-500">
+                  {joursFeries.length > 0 ? `${joursFeries.length} fériés` : 'Chargement…'}
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-4 gap-2">
-                {JOURS_FERIES_MU_DEFAUT.map(j => (
-                  <div key={j.date} className="flex items-center gap-2 p-2 bg-purple-50 rounded border border-purple-100">
-                    <span className="text-purple-600 text-sm">🎌</span>
-                    <div>
-                      <p className="text-xs font-medium text-purple-900">{j.label}</p>
-                      <p className="text-xs text-purple-500">
-                        {new Date(j.date + "T12:00:00").toLocaleDateString("fr-FR")}
-                      </p>
+              {joursFeries.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">
+                  Aucun jour férié enregistré pour {anneeFeries}.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {joursFeries.map(j => (
+                    <div key={j.date} className="flex items-center gap-2 p-2 bg-purple-50 rounded border border-purple-100">
+                      <span className="text-purple-600 text-sm">🎌</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-purple-900 truncate" title={j.libelle}>{j.libelle}</p>
+                        <p className="text-xs text-purple-500">
+                          {new Date(j.date + "T12:00:00").toLocaleDateString("fr-FR")}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
               <p className="text-xs text-gray-400 mt-3">
-                Les jours fériés sont pris en compte automatiquement dans le calcul des OT (toutes heures × 2)
+                Les jours fériés sont pris en compte automatiquement dans le calcul des OT (× 2).
+                Modification : <code className="text-[11px] bg-gray-100 px-1 rounded">public.jours_feries</code>.
               </p>
             </CardContent>
           </Card>

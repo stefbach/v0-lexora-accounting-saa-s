@@ -3,6 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
 import { lastDayOfMonth } from '@/lib/rh/period'
+import {
+  calculerPeriodePaie,
+  formaterPeriodeCourte,
+  type PeriodePaieCalculee,
+} from '@/lib/rh/periode-paie'
 import React from 'react'
 import { renderToBuffer, Document, Page, View, Text, StyleSheet, Font } from '@react-pdf/renderer'
 
@@ -60,6 +65,35 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
   const alDroit = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 22
   const slDroit = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 15
 
+  // G4 — VL (S.47) + FML (S.47A). VL vient de soldes_conges (cycle 5 ans),
+  // FML est déductible donc pas de colonne dédiée : on compte les demandes
+  // approuvées dans le cycle anniversaire courant.
+  const { data: soldeCourant } = await supabase
+    .from('soldes_conges')
+    .select('periode_debut, periode_fin, vl_droit, vl_pris')
+    .eq('employe_id', bulletin.employe_id)
+    .lte('periode_debut', bulletin.periode)
+    .gte('periode_fin', bulletin.periode)
+    .maybeSingle()
+  const vlDroit = Number(soldeCourant?.vl_droit) || 0
+  const vlPris = Number(soldeCourant?.vl_pris) || 0
+
+  let fmlUtilisesTotal = 0
+  const cycleDebut = soldeCourant?.periode_debut || `${annee}-01-01`
+  const cycleFin = soldeCourant?.periode_fin || `${annee}-12-31`
+  const { data: fmlRows } = await supabase
+    .from('demandes_conges')
+    .select('nb_jours')
+    .eq('employe_id', bulletin.employe_id)
+    .eq('type_conge', 'FML')
+    .eq('statut', 'approuve')
+    .gte('date_debut', cycleDebut)
+    .lte('date_debut', cycleFin)
+  fmlUtilisesTotal = (fmlRows || []).reduce(
+    (sum: number, r: any) => sum + (Number(r.nb_jours) || 0),
+    0,
+  )
+
   // Primes variables du mois — avec libellé depuis catalogue_primes.
   // Sprint 11 BUG 3 — on ne retient que les primes approuvées (les brouillons
   // ne doivent pas apparaître sur le bulletin).
@@ -91,7 +125,25 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
     anciennete = y > 0 ? `${y} an(s) ${m} mois` : `${m} mois`
   }
 
-  return { emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois: primesMois || [], totalFraisKm, anciennete }
+  // PE1 — période + date paiement dynamiques selon la config société.
+  // En mode 'calendaire' (défaut), retombe sur 1er -> dernier du mois
+  // (rétrocompat). En mode 'cut_off_jour', affiche 25/03 → 24/04.
+  const periodePaie: PeriodePaieCalculee = await calculerPeriodePaie(
+    supabase,
+    bulletin.societe_id,
+    bulletin.periode, // stocké YYYY-MM-01
+  )
+  const periodePaieLabel = formaterPeriodeCourte(periodePaie)
+  const datePaiementLabel = (() => {
+    const dp = periodePaie.date_paiement
+    return `${dp.slice(8, 10)}/${dp.slice(5, 7)}/${dp.slice(0, 4)}`
+  })()
+
+  return {
+    emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit,
+    vlDroit, vlPris, fmlUtilisesTotal, primesMois: primesMois || [], totalFraisKm,
+    anciennete, periodePaie, periodePaieLabel, datePaiementLabel,
+  }
 }
 
 // ─── PDF Document Component ──────────────────────────────────────
@@ -156,7 +208,7 @@ const s = StyleSheet.create({
   otSubValue: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#ea580c', textAlign: 'right', width: 90 },
 })
 
-function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, primesMois, totalFraisKm, anciennete }: any) {
+function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete, periodePaieLabel, datePaiementLabel }: any) {
   const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
   const hasOT = Number(bulletin.heures_sup_montant) > 0
 
@@ -227,6 +279,13 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         React.createElement(View, { style: s.headerRight },
           React.createElement(Text, { style: s.title }, 'BULLETIN DE PAIE'),
           React.createElement(Text, { style: s.subtitle }, `${moisLabel} ${annee}`),
+          // PE1 — période exacte + date paiement (dynamiques si cut_off_jour).
+          periodePaieLabel
+            ? React.createElement(Text, { style: s.smallGray }, `Période : ${periodePaieLabel}`)
+            : null,
+          datePaiementLabel
+            ? React.createElement(Text, { style: s.smallGray }, `Versement prévu : ${datePaiementLabel}`)
+            : null,
           React.createElement(Text, { style: s.smallGray }, `Ref: BUL-${annee}-${String(periodeDate.getMonth() + 1).padStart(2, '0')}-${emp?.code || '000'}`),
           React.createElement(Text, { style: s.smallGray }, `Emis le: ${new Date().toLocaleDateString('fr-FR')}`),
         )
@@ -283,6 +342,20 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         React.createElement(Text, { style: s.otSubLabel }, 'Sous-total heures supplementaires'),
         React.createElement(Text, { style: s.otSubValue }, `${fmt(bulletin.heures_sup_montant)} MUR`)
       ) : null,
+      // G1 — Cash-in-lieu (WRA S.45 AL / S.47 VL) ligne dediee dans Gains.
+      Number(bulletin.montant_cash_in_lieu) > 0
+        ? React.createElement(Row, {
+            label: `Paiement compensatoire conges (${Number(bulletin.jours_cash_in_lieu) || 0}j ${bulletin.cash_in_lieu_type || ''}) — WRA S.45/S.47`,
+            value: `${fmt(Number(bulletin.montant_cash_in_lieu))} MUR`,
+          })
+        : null,
+      // G7 — Allocation naissance WRA S.52 (forfait non-imposable).
+      Number(bulletin.allocation_naissance) > 0
+        ? React.createElement(Row, {
+            label: 'Allocation naissance — WRA S.52 (forfait non-imposable)',
+            value: `${fmt(Number(bulletin.allocation_naissance))} MUR`,
+          })
+        : null,
       // Sprint — allowances & primes détaillées (cf. distribution sa1/sa2/sa3
       // dans app/api/rh/paie/route.ts) :
       // 1) Primes variables approuvées (libellé via catalogue_primes)
@@ -349,35 +422,28 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
       ),
       React.createElement(DeductionRow, { label: `CSG salarie (${csgPct})`, value: `-${fmt(bulletin.csg_salarie)} MUR` }),
       Number(bulletin.csg_bonus) > 0 ? React.createElement(DeductionRow, { label: 'CSG sur 13eme mois (3%)', value: `-${fmt(bulletin.csg_bonus)} MUR` }) : null,
-      React.createElement(DeductionRow, { label: 'NSF salarie (1.5%)', value: `-${fmt(bulletin.nsf_salarie)} MUR` }),
+      React.createElement(DeductionRow, { label: 'NSF salarie (1%)', value: `-${fmt(bulletin.nsf_salarie)} MUR` }),
       Number(bulletin.paye) > 0
         ? React.createElement(DeductionRow, { label: 'PAYE', value: `-${fmt(bulletin.paye)} MUR` })
         : React.createElement(View, { style: s.row },
             React.createElement(Text, { style: [s.rowLabel, { color: '#27ae60' }] }, 'PAYE'),
             React.createElement(Text, { style: [s.rowValue, { color: '#27ae60' }] }, 'Exonere')
           ),
-      // BUG 2+3 — distinguer UL (congés non payés) des absences injustifiées.
-      // Si montant_absence > 0 et jours_absence = 0 → c'est du UL déduit.
-      // Si jours_absence > 0 → c'est de l'absence injustifiée.
-      (() => {
-        const montant = Number(bulletin.montant_absence) || 0
-        const jours = Number(bulletin.jours_absence) || 0
-        if (montant <= 0) return null
-        if (jours > 0 && montant > 0) {
-          // Absences injustifiées réelles
-          return React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
-            React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Absences injustifiees (${jours}j)`),
-            React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(montant)} MUR`)
+      // F6 — Lignes séparées pour UL (Unpaid Leave) et absences injustifiées.
+      // Les 2 sont désormais stockées dans des colonnes distinctes
+      // (montant_ul / jours_ul vs montant_absence / jours_absence).
+      Number(bulletin.montant_ul) > 0
+        ? React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
+            React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Conges non payes UL (${Number(bulletin.jours_ul) || 0}j)`),
+            React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(Number(bulletin.montant_ul))} MUR`)
           )
-        }
-        // UL (congés non payés) — extraire nb jours depuis notes
-        const ulMatch = (bulletin.notes || '').match(/UL:\s*(\d+)j/)
-        const ulJours = ulMatch ? ulMatch[1] : '?'
-        return React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
-          React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Conges non payes UL (${ulJours}j)`),
-          React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(montant)} MUR`)
-        )
-      })(),
+        : null,
+      Number(bulletin.montant_absence) > 0
+        ? React.createElement(View, { style: [s.row, { backgroundColor: '#fdf0f0' }] },
+            React.createElement(Text, { style: [s.rowLabel, { color: '#e74c3c' }] }, `Absences injustifiees (${Number(bulletin.jours_absence) || 0}j)`),
+            React.createElement(Text, { style: [s.rowValue, { color: '#e74c3c' }] }, `-${fmt(Number(bulletin.montant_absence))} MUR`)
+          )
+        : null,
       React.createElement(View, { style: s.totalRow },
         React.createElement(Text, { style: s.totalLabel }, 'TOTAL DEDUCTIONS'),
         React.createElement(Text, { style: s.totalValue }, `-${fmt(bulletin.total_deductions)} MUR`)
@@ -391,6 +457,9 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
       ),
 
       // ─── Leave Balances ─────────────────────────
+      // G4 — VL et FML affichés conditionnellement :
+      //  - VL si vl_droit>0 (eligible 5 ans) ou vl_pris>0 (a deja utilise)
+      //  - FML si l'employe a deja consomme au moins 1 jour dans le cycle
       React.createElement(View, { style: s.leaveBox },
         React.createElement(Text, { style: s.leaveTitle }, `Soldes Conges — ${annee}`),
         React.createElement(View, { style: s.leaveGrid },
@@ -403,7 +472,21 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
             React.createElement(Text, { style: s.leaveCardLabel }, 'Sick Leave (SL)'),
             React.createElement(Text, { style: [s.leaveCardValue, { color: '#ea580c' }] }, `${slDroit - slPris}j`),
             React.createElement(Text, { style: s.leaveCardSub }, `restants / ${slDroit}j (${slPris}j pris)`)
-          )
+          ),
+          (Number(vlDroit) > 0 || Number(vlPris) > 0)
+            ? React.createElement(View, { style: s.leaveCard, key: 'vl' },
+                React.createElement(Text, { style: s.leaveCardLabel }, 'Vacation Leave (VL)'),
+                React.createElement(Text, { style: [s.leaveCardValue, { color: '#7c3aed' }] }, `${Number(vlDroit) - Number(vlPris)}j`),
+                React.createElement(Text, { style: s.leaveCardSub }, `restants / ${Number(vlDroit)}j (${Number(vlPris)}j pris)`)
+              )
+            : null,
+          Number(fmlUtilisesTotal) > 0
+            ? React.createElement(View, { style: s.leaveCard, key: 'fml' },
+                React.createElement(Text, { style: s.leaveCardLabel }, 'Family Medical Leave (FML)'),
+                React.createElement(Text, { style: [s.leaveCardValue, { color: '#0891b2' }] }, `${Number(fmlUtilisesTotal)}j`),
+                React.createElement(Text, { style: s.leaveCardSub }, `utilises / 10j (cycle courant)`)
+              )
+            : null
         )
       ),
 

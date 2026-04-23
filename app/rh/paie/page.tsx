@@ -12,6 +12,12 @@ import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, Check
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { PaieValidationPanel } from "@/components/rh/PaieValidationPanel"
+import {
+  calculerPeriodePaieSync,
+  DEFAULT_CONFIG as DEFAULT_PERIODE_CFG,
+  type PeriodePaieConfig,
+  type PeriodePaieMode,
+} from "@/lib/rh/periode-paie"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 const STATUT_COLORS: Record<string, string> = {
@@ -44,6 +50,9 @@ export default function PaiePage() {
   const [periode, setPeriode] = useState("")
   const [periodeReady, setPeriodeReady] = useState(false)
   const [availablePeriodes, setAvailablePeriodes] = useState<string[]>([])
+  // PE1 — config période paie de la société active (pour afficher
+  // '25/03 → 24/04' dans le sélecteur quand mode != calendaire).
+  const [periodeCfg, setPeriodeCfg] = useState<PeriodePaieConfig>({ ...DEFAULT_PERIODE_CFG })
   const [bulletins, setBulletins] = useState<any[]>([])
   const [totaux, setTotaux] = useState<any>({})
   // Migration 135 — toggle pointage_actif renvoyé par /api/rh/paie pour
@@ -159,6 +168,26 @@ export default function PaiePage() {
     } finally { setLoading(false) }
   }, [societe, periode, periodeReady])
 
+  // PE1 — charge la config période paie de la société sélectionnée.
+  useEffect(() => {
+    if (!societe || societe === "all") { setPeriodeCfg({ ...DEFAULT_PERIODE_CFG }); return }
+    let cancelled = false
+    fetch(`/api/rh/societe?societe_id=${societe}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (cancelled) return
+        const s = d?.societe || d || {}
+        setPeriodeCfg({
+          mode: (s.periode_paie_mode as PeriodePaieMode) || 'calendaire',
+          jour_cut_off: Number(s.periode_paie_jour_cut_off) || 24,
+          jour_paiement: s.periode_paie_jour_paiement == null ? null : Number(s.periode_paie_jour_paiement),
+          offset_paiement_mois: (Number(s.periode_paie_offset_paiement_mois) === 1 ? 1 : 0) as 0 | 1,
+        })
+      })
+      .catch(() => setPeriodeCfg({ ...DEFAULT_PERIODE_CFG }))
+    return () => { cancelled = true }
+  }, [societe])
+
   const loadWorkflow = useCallback(async () => {
     if (!periode || societe === "all") { setWorkflow(null); return }
     try {
@@ -211,9 +240,31 @@ export default function PaiePage() {
       if (!res.ok) {
         alert("Erreur [" + res.status + "]: " + (data.error || JSON.stringify(data).slice(0, 300)))
       } else {
-        const nb = data.nb || data.bulletins?.length || 0
-        const erreurs = data.erreurs || []
-        alert(`${nb} bulletin(s) calcule(s) pour ${calcPeriode}${erreurs.length > 0 ? `\n\n${erreurs.length} erreur(s):\n${erreurs.join("\n")}` : ""}`)
+        // F14 — Toast detaille avec breakdown updates/inserts/skip/erreurs.
+        const r = data.recalcul
+        if (r) {
+          const parts: string[] = []
+          parts.push(`${r.action === 'recalcul_batch' ? '🔄 Recalcul' : '✅ Calcul initial'} — ${calcPeriode}`)
+          parts.push(`${r.nb_modifies} bulletin(s) modifie(s)`)
+          if (r.nb_updates > 0 && r.nb_inserts > 0) {
+            parts.push(`(${r.nb_updates} mis a jour, ${r.nb_inserts} crees)`)
+          }
+          if (r.nb_skip > 0) {
+            const raisonsList: string[] = []
+            for (const [k, v] of Object.entries(r.raisons_skip || {})) {
+              raisonsList.push(`${v} ${k}`)
+            }
+            parts.push(`${r.nb_skip} skip (${raisonsList.join(', ')})`)
+          }
+          if (r.nb_erreurs > 0) parts.push(`⚠️ ${r.nb_erreurs} erreur(s)`)
+          parts.push(`Duree : ${(r.duree_ms / 1000).toFixed(1)}s`)
+          const msg = parts.join('\n')
+          alert(msg + (r.nb_erreurs > 0 && data.erreurs ? `\n\nDetails:\n${data.erreurs.join("\n")}` : ""))
+        } else {
+          const nb = data.nb || data.bulletins?.length || 0
+          const erreurs = data.erreurs || []
+          alert(`${nb} bulletin(s) calcule(s) pour ${calcPeriode}${erreurs.length > 0 ? `\n\n${erreurs.length} erreur(s):\n${erreurs.join("\n")}` : ""}`)
+        }
         if (!availablePeriodes.includes(calcPeriode)) {
           setAvailablePeriodes(prev => [calcPeriode, ...prev].sort((a, b) => b.localeCompare(a)))
         }
@@ -348,27 +399,50 @@ export default function PaiePage() {
   const [simResult, setSimResult] = useState<{ brut: number; deductions: number; net: number; coutEmployeur: number; detailCSG: string } | null>(null)
 
   const runSimulation = () => {
-    const brut = parseFloat((document.getElementById("sim-brut") as HTMLInputElement)?.value || "0")
+    // F9 + F10 + F11 — simulation alignée sur le moteur calculerBulletin :
+    //  - CSG  : 1.5% si BASIC ≤ 50K, 3% sinon (sur BASIC SEUL, règle MRA F11)
+    //  - NSF  : 1% plafonné à 28 600 MUR (sur BASIC SEUL, règle MRA F11)
+    //  - PAYE : cumulatif annuel × 13 / 13 sur 500k-1M-20% (sur BRUT TOTAL)
+    // Le champ "Salaire brut" ici = salaire_base (basic) ; OT et primes
+    // sont considérés comme allowances qui s'ajoutent au brut pour PAYE
+    // mais PAS à la base CSG/NSF.
+    const basic = parseFloat((document.getElementById("sim-brut") as HTMLInputElement)?.value || "0")
     const ot = parseFloat((document.getElementById("sim-ot") as HTMLInputElement)?.value || "0")
     const prime = parseFloat((document.getElementById("sim-prime") as HTMLInputElement)?.value || "0")
-    const totalBrut = brut + ot + prime
-    const csgRate = totalBrut <= 50000 ? 0.015 : 0.03
-    const csg = Math.round(totalBrut * csgRate)
-    const nsf = Math.round(totalBrut * 0.015)
-    const paye = totalBrut > 25000 ? Math.round((totalBrut - 25000) * 0.10) : 0
+    const brutTotal = basic + ot + prime
+
+    // F11 — CSG et NSF sur basic salary uniquement.
+    const csgRate = basic <= 50000 ? 0.015 : 0.03
+    const csg = Math.round(basic * csgRate)
+
+    const NSF_PLAFOND = 28600
+    const nsfBase = Math.min(basic, NSF_PLAFOND)
+    const nsf = Math.round(nsfBase * 0.01)
+
+    // PAYE sur brut total (basic + allowances/OT/primes).
+    const revenuAnnuel = brutTotal * 13
+    let payeAnnuel = 0
+    if (revenuAnnuel > 500000) {
+      if (revenuAnnuel <= 1000000) payeAnnuel = (revenuAnnuel - 500000) * 0.10
+      else payeAnnuel = 50000 + (revenuAnnuel - 1000000) * 0.20
+    }
+    const paye = Math.floor(payeAnnuel / 13)
+
     const deductions = csg + nsf + paye
-    const net = totalBrut - deductions
-    const csgP = Math.round(totalBrut * 0.06)
-    const nsfP = Math.round(totalBrut * 0.025)
-    const tl = Math.round(totalBrut * 0.01)
+    const net = brutTotal - deductions
+    // F11 — Charges patronales CSG/NSF sur basic. Training levy & PRGF inchangés.
+    const csgPRate = basic <= 50000 ? 0.03 : 0.06
+    const csgP = Math.round(basic * csgPRate)
+    const nsfP = Math.round(nsfBase * 0.025)
+    const tl = Math.round(basic * 0.01)
     const prgf = Math.round(4.5 * 26)
     const totalCharges = csgP + nsfP + tl + prgf
     setSimResult({
-      brut: totalBrut,
+      brut: brutTotal,
       deductions,
       net,
-      coutEmployeur: totalBrut + totalCharges,
-      detailCSG: `CSG ${(csgRate * 100).toFixed(1)}% + NSF 1.5%${paye > 0 ? " + PAYE " + fmt(paye) : ""}`
+      coutEmployeur: brutTotal + totalCharges,
+      detailCSG: `CSG ${(csgRate * 100).toFixed(1)}% sur basic + NSF 1% (plafond ${NSF_PLAFOND})${paye > 0 ? " + PAYE " + fmt(paye) : ""}`
     })
   }
 
@@ -521,12 +595,20 @@ export default function PaiePage() {
               </SelectContent>
             </Select>
             <Select value={periode} onValueChange={setPeriode}>
-              <SelectTrigger className="w-52"><SelectValue placeholder="Periode" /></SelectTrigger>
+              <SelectTrigger className="w-72"><SelectValue placeholder="Periode" /></SelectTrigger>
               <SelectContent>
                 {availablePeriodes.map(p => {
                   const d = new Date(p + "-15")
                   const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-                  return <SelectItem key={p} value={p}>{label.charAt(0).toUpperCase() + label.slice(1)}</SelectItem>
+                  const base = label.charAt(0).toUpperCase() + label.slice(1)
+                  // PE1 — suffixe '(25/03 → 24/04)' si mode cut_off_jour.
+                  let suffix = ""
+                  if (periodeCfg.mode === 'cut_off_jour') {
+                    const r = calculerPeriodePaieSync(periodeCfg, `${p}-01`)
+                    const fmt = (s: string) => `${s.slice(8, 10)}/${s.slice(5, 7)}`
+                    suffix = ` (${fmt(r.periode_debut)} → ${fmt(r.periode_fin)})`
+                  }
+                  return <SelectItem key={p} value={p}>{base}{suffix}</SelectItem>
                 })}
               </SelectContent>
             </Select>

@@ -258,7 +258,7 @@ export async function GET(request: Request) {
     try {
       let q = supabase
         .from('employes')
-        .select('id, nom, prenom, poste, societe_id, date_arrivee, genre, gender, actif, date_depart')
+        .select('id, nom, prenom, poste, societe_id, date_arrivee, genre, gender, actif, date_depart, salaire_base, is_migrant_worker, statut_wra')
         .in('societe_id', societeIds)
         .eq('actif', true)
         .is('date_depart', null)
@@ -297,7 +297,7 @@ export async function GET(request: Request) {
       const today = now.toISOString().slice(0, 10)
 
       // 1. Lire soldes_conges pour la PÉRIODE COURANTE de chaque employé
-      const SOLDES_FIELDS = 'employe_id, periode_debut, periode_fin, al_droit, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule'
+      const SOLDES_FIELDS = 'employe_id, periode_debut, periode_fin, al_droit, al_acquis, al_pris, al_solde, al_reporte, al_impose_societe, al_impose_employe, sl_droit, sl_pris, sl_solde, sl_accumule, vl_droit, vl_pris, vl_solde, vl_paye_compensation, vl_cycle_debut, vl_cycle_fin'
       const { data: soldesData } = await supabase
         .from('soldes_conges')
         .select(SOLDES_FIELDS)
@@ -344,9 +344,62 @@ export async function GET(request: Request) {
         const alDroit = solde ? Number(solde.al_droit) : null
         const alPris = solde ? Number(solde.al_pris) : null
         const alSolde = solde ? Number(solde.al_solde) : null
+        // G5 — Modèle C accrual linéaire mensuel (base paiement compensatoire).
+        const alAcquis = solde?.al_acquis != null ? Number(solde.al_acquis) : null
+        const alSoldeAcquis = alAcquis != null && alPris != null
+          ? Math.round((alAcquis - alPris) * 100) / 100
+          : null
         const slDroit = solde ? Number(solde.sl_droit) : null
         const slPris = solde ? Number(solde.sl_pris) : null
         const slSolde = solde ? Number(solde.sl_solde) : null
+
+        // G2 — Vacation Leave (WRA S.47). Null si row soldes_conges absent.
+        const vlDroit = solde ? Number(solde.vl_droit ?? 0) : null
+        const vlPris = solde ? Number(solde.vl_pris ?? 0) : null
+        const vlSolde = solde ? Number(solde.vl_solde ?? 0) : null
+        const vlCycleDebut = solde?.vl_cycle_debut
+          ? String(solde.vl_cycle_debut).slice(0, 10)
+          : null
+        const vlCycleFin = solde?.vl_cycle_fin
+          ? String(solde.vl_cycle_fin).slice(0, 10)
+          : null
+        // Déterminer le statut VL. G3 — on considère statut_wra + le
+        // fait que vl_droit > 0 (déjà calculé par le helper via RPC en
+        // tenant compte de la policy société).
+        // Statut dérivé :
+        //   - pas de date_arrivee → no_date_arrivee
+        //   - migrant              → migrant_worker_exclu
+        //   - vl_droit > 0 et worker   → eligible
+        //   - vl_droit > 0 et hors_wra → eligible_via_policy_societe (policy étendue)
+        //   - vl_droit = 0 et hors_wra → hors_wra_basic_sup_50k (policy stricte)
+        //   - sinon (worker < 5 ans) → en_acquisition
+        const isHorsWra = (Number(emp.salaire_base) || 0) > 50000
+        let vlEligibilityStatus:
+          | 'eligible'
+          | 'eligible_via_policy_societe'
+          | 'en_acquisition'
+          | 'hors_wra_basic_sup_50k'
+          | 'migrant_worker_exclu'
+          | 'no_date_arrivee' = 'no_date_arrivee'
+        if (!emp.date_arrivee) {
+          vlEligibilityStatus = 'no_date_arrivee'
+        } else if (emp.is_migrant_worker) {
+          vlEligibilityStatus = 'migrant_worker_exclu'
+        } else if ((vlDroit || 0) > 0) {
+          vlEligibilityStatus = isHorsWra ? 'eligible_via_policy_societe' : 'eligible'
+        } else if (isHorsWra) {
+          vlEligibilityStatus = 'hors_wra_basic_sup_50k'
+        } else {
+          vlEligibilityStatus = 'en_acquisition'
+        }
+        // Date à laquelle l'employé deviendra éligible VL (arrivée + 5 ans).
+        let vlEligibilityDate: string | null = null
+        if (emp.date_arrivee && vlEligibilityStatus === 'en_acquisition') {
+          const arr = new Date(String(emp.date_arrivee).slice(0, 10) + 'T12:00:00')
+          const fin5y = new Date(arr)
+          fin5y.setFullYear(fin5y.getFullYear() + 5)
+          vlEligibilityDate = fin5y.toISOString().slice(0, 10)
+        }
 
         // Sick certificate alert — dérivé des demandes SL approuvées
         const empSl = (slApproved || []).filter((c: any) => c.employe_id === emp.id)
@@ -392,6 +445,9 @@ export async function GET(request: Request) {
           societe_id: emp.societe_id,
           gender: emp.genre || emp.gender,
           date_arrivee: emp.date_arrivee,
+          salaire_base: emp.salaire_base,
+          // G3 — Statut WRA 2019 (computed column mig 162)
+          statut_wra: emp.statut_wra || (isHorsWra ? 'hors_wra' : 'worker'),
           // ─── Période courante (B.1) ───
           periode_debut: solde ? String(solde.periode_debut).slice(0, 10) : null,
           periode_fin: solde ? String(solde.periode_fin).slice(0, 10) : null,
@@ -403,12 +459,26 @@ export async function GET(request: Request) {
           al_pris: alPris,
           al_solde: alSolde,
           al_reporte: solde ? Number(solde.al_reporte ?? 0) : 0,
+          // G5 — Modèle C (accrual mensuel linéaire). al_acquis est la base
+          // du paiement compensatoire en cas de départ. al_solde_acquis =
+          // al_acquis - al_pris (peut différer de al_solde avant M12).
+          al_acquis: alAcquis,
+          al_solde_acquis: alSoldeAcquis,
           al_impose_societe: solde ? Number(solde.al_impose_societe ?? 0) : 0,
           al_impose_employe: solde ? Number(solde.al_impose_employe ?? 0) : 0,
           sl_droit: slDroit,
           sl_pris: slPris,
           sl_solde: slSolde,
           sl_accumule: solde ? Number(solde.sl_accumule ?? 0) : 0,
+          // ─── G2 : Vacation Leave (WRA S.47) ───
+          vl_droit: vlDroit,
+          vl_pris: vlPris,
+          vl_solde: vlSolde,
+          vl_paye_compensation: solde ? Number(solde.vl_paye_compensation ?? 0) : 0,
+          vl_cycle_debut: vlCycleDebut,
+          vl_cycle_fin: vlCycleFin,
+          vl_eligibility_status: vlEligibilityStatus,
+          vl_eligibility_date: vlEligibilityDate,
           // ─── Rétrocompat : al_deduits / sl_deduits restent exposés ───
           // Avant F5 ils distinguaient "pris approuvés" de "posés pending
           // inclus" — maintenant al_pris = al_deduits (source de vérité).
@@ -611,7 +681,8 @@ export async function POST(request: Request) {
       if (demi_journee === true && newDebut === newFin) {
         updates.nb_jours = 0.5
       } else if (date_debut || date_fin || demi_journee !== undefined) {
-        updates.nb_jours = countWorkingDays(newDebut, newFin)
+        // F13 — employee-aware + jours_feries DB (cohérence avec création).
+        updates.nb_jours = await computeNbJoursForEmploye(supabase, existing.employe_id, newDebut, newFin)
       }
 
       const { data, error } = await supabase.from('demandes_conges').update(updates).eq('id', id).select().single()
@@ -632,11 +703,11 @@ export async function POST(request: Request) {
       let emp: any = null
       {
         const { data, error } = await supabase.from('employes')
-          .select('id, societe_id, gender, genre, auth_user_id, email, date_arrivee')
+          .select('id, societe_id, gender, genre, auth_user_id, email, date_arrivee, salaire_base, is_migrant_worker')
           .eq('id', body.employe_id).maybeSingle()
         if (error && error.code === '42703') {
           const { data: d2 } = await supabase.from('employes')
-            .select('id, societe_id, gender, auth_user_id, email, date_arrivee')
+            .select('id, societe_id, gender, auth_user_id, email, date_arrivee, salaire_base')
             .eq('id', body.employe_id).maybeSingle()
           emp = d2
         } else {
@@ -645,6 +716,89 @@ export async function POST(request: Request) {
       }
       if (!emp) {
         return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
+      }
+
+      // G4 — Validation generique selon conges_regles (mig 170).
+      // Gere tous les types (AL/SL/VL/FML/SPC_*/JUR/INT/CRT/MAT/PAT/UL/COM)
+      // en lisant la config effective (override societe > globale) et en
+      // verifiant anciennete min, basic max, migrant, justificatifs requis.
+      //
+      // Exceptions pour retrocompat :
+      //   - AL/SL : logique interne historique (accrual M6-M12 gere par
+      //     get_conges_droits) > garde-fou conges_regles en premier filet.
+      //   - VL : logique G2 (get_vacation_leave_droit) plus precise -> garde
+      //     la validation VL specifique plus bas comme source autoritaire.
+      try {
+        const { getTypeCongeConfig, validerJustificatifs, verifierEligibilite } = await import('@/lib/rh/types-conges')
+        const cfg = await getTypeCongeConfig(supabase, body.type_conge, emp.societe_id)
+        if (cfg.source !== 'default') {
+          // Eligibilite (skippee pour VL qui a sa propre route below, et
+          // pour AL/SL qui ont le systeme accrual anciennete-aware).
+          if (!['AL', 'SL', 'VL'].includes(body.type_conge)) {
+            const elig = verifierEligibilite(cfg, emp, body.date_debut)
+            if (!elig.eligible) {
+              return NextResponse.json({
+                error: 'eligibilite_refusee',
+                raison: elig.raison,
+                date_eligibilite: elig.date_eligibilite || null,
+                type_conge: body.type_conge,
+                reference_wra: cfg.reference_wra,
+              }, { status: 422 })
+            }
+          }
+          // Justificatifs conditionnels
+          const justifValid = validerJustificatifs(cfg, {
+            certificat_medical: body.certificat_medical_url || body.certificat_url,
+            acte_naissance: body.acte_naissance_url,
+            acte_deces: body.acte_deces_url,
+            convocation: body.convocation_url,
+          })
+          if (!justifValid.ok) {
+            return NextResponse.json({
+              error: 'justificatifs_manquants',
+              manquants: justifValid.manquants,
+              type_conge: body.type_conge,
+              reference_wra: cfg.reference_wra,
+            }, { status: 422 })
+          }
+        }
+      } catch (e) {
+        console.warn('[conges creer G4] validation generique skippee:', (e as any)?.message)
+      }
+
+      // G2 + G3 — Validation VL (WRA S.47). Un employé non-éligible
+      // (migrant, ou < 5 ans d'ancienneté, ou hors_wra sous policy stricte)
+      // ne peut pas soumettre de demande VL.
+      if (body.type_conge === 'VL') {
+        // Charger la policy de la société pour les hors_wra
+        let policyHorsWra = 'applique_wra_etendu'
+        if (emp.societe_id) {
+          const { data: soc } = await supabase
+            .from('societes')
+            .select('policy_conges_hors_wra')
+            .eq('id', emp.societe_id)
+            .maybeSingle()
+          if (soc?.policy_conges_hors_wra === 'contrat_uniquement') {
+            policyHorsWra = 'contrat_uniquement'
+          }
+        }
+        const { data: vlCheck } = await supabase.rpc('get_vacation_leave_droit', {
+          p_date_arrivee: emp.date_arrivee,
+          p_salaire_base: Number(emp.salaire_base) || 0,
+          p_is_migrant: Boolean(emp.is_migrant_worker),
+          p_date_reference: new Date().toISOString().slice(0, 10),
+          p_policy_hors_wra: policyHorsWra,
+        }).maybeSingle()
+        const status = (vlCheck as any)?.eligibility_status
+        // 'eligible' (worker) et 'eligible_via_policy_societe' (hors_wra avec policy étendue) sont OK.
+        const isEligible = status === 'eligible' || status === 'eligible_via_policy_societe'
+        if (!isEligible) {
+          return NextResponse.json({
+            error: 'vacation_leave_not_eligible',
+            detail: "Le salarié n'a pas atteint 5 ans de service OU la policy société hors WRA ne l'autorise pas.",
+            eligibility_status: status || 'unknown',
+          }, { status: 400 })
+        }
       }
 
       // Access check: either user has société access OR user IS the employee (self-service)
@@ -1094,7 +1248,8 @@ export async function POST(request: Request) {
       }
 
       const dateFin = body.date_fin || body.date_debut
-      const nb_jours = countWorkingDays(body.date_debut, dateFin)
+      // F13 — employee-aware + jours_feries DB pour cohérence modal/back-end.
+      const nb_jours = await computeNbJoursForEmploye(supabase, body.employe_id, body.date_debut, dateFin)
 
       const { data, error } = await supabase.from('demandes_conges').insert({
         employe_id: body.employe_id,
@@ -1126,7 +1281,8 @@ export async function POST(request: Request) {
       }
 
       const dateFin = body.date_fin || body.date_debut
-      const nb_jours = countWorkingDays(body.date_debut, dateFin)
+      // F13 — employee-aware + jours_feries DB pour cohérence modal/back-end.
+      const nb_jours = await computeNbJoursForEmploye(supabase, body.employe_id, body.date_debut, dateFin)
 
       const { data, error } = await supabase.from('demandes_conges').insert({
         employe_id: body.employe_id,

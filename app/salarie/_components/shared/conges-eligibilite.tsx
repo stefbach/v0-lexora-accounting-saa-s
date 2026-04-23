@@ -10,9 +10,17 @@
  */
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { CheckCircle2, Clock, Lock } from "lucide-react"
+import { CheckCircle2, Clock, Lock, Plane } from "lucide-react"
 
 export type EligibilityStatus = "not_eligible" | "accruing" | "eligible"
+
+/** G2 — Statuts VL (Vacation Leave WRA S.47). */
+export type VlEligibilityStatus =
+  | "eligible"
+  | "en_acquisition"
+  | "hors_wra_basic_sup_50k"
+  | "migrant_worker_exclu"
+  | "no_date_arrivee"
 
 export function formatDateFR(iso: string | null | undefined): string {
   if (!iso) return "—"
@@ -115,5 +123,98 @@ export function EligibiliteBannerConges({
       </Card>
     )
   }
+  return null
+}
+
+/**
+ * G2 — Card "Vacation Leave" (WRA S.47) :
+ * 30 jours payés par cycle de 5 ans pour les workers (basic ≤ 50k, non migrant)
+ * avec 5+ ans d'ancienneté continue.
+ */
+export function VacationLeaveCard({
+  vl_droit,
+  vl_pris,
+  vl_solde,
+  vl_cycle_debut,
+  vl_cycle_fin,
+  vl_eligibility_status,
+  vl_eligibility_date,
+}: {
+  vl_droit: number | null
+  vl_pris: number | null
+  vl_solde: number | null
+  vl_cycle_debut: string | null
+  vl_cycle_fin: string | null
+  vl_eligibility_status: VlEligibilityStatus
+  vl_eligibility_date: string | null
+}) {
+  if (vl_eligibility_status === "eligible") {
+    const solde = vl_solde ?? 0
+    const droit = vl_droit ?? 30
+    return (
+      <Card className="rounded-xl shadow-sm border-purple-200">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-purple-100">
+                <Plane className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-purple-900">Vacation Leave</p>
+                <p className="text-[10px] text-purple-700">WRA S.47 — 30j / 5 ans</p>
+              </div>
+            </div>
+            <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 gap-1 font-medium">
+              <CheckCircle2 className="w-3 h-3" /> Éligible
+            </Badge>
+          </div>
+          <p className="text-2xl font-bold text-purple-900">
+            {solde}<span className="text-sm font-normal text-purple-500">/{droit}j restants</span>
+          </p>
+          <p className="text-[11px] text-purple-700">
+            Cycle : <strong>{formatDateFR(vl_cycle_debut)} → {formatDateFR(vl_cycle_fin)}</strong>
+            {(vl_pris ?? 0) > 0 && <> · Pris : <strong>{vl_pris}j</strong></>}
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (vl_eligibility_status === "en_acquisition") {
+    return (
+      <Card className="rounded-xl shadow-sm border-gray-200 bg-gray-50">
+        <CardContent className="p-4 space-y-1">
+          <div className="flex items-center gap-2">
+            <Plane className="h-4 w-4 text-gray-500" />
+            <p className="text-sm font-semibold text-gray-700">Vacation Leave (WRA S.47)</p>
+          </div>
+          <p className="text-xs text-gray-600">
+            Éligible à partir du <strong>{formatDateFR(vl_eligibility_date)}</strong> (5 ans d'ancienneté).
+          </p>
+          <p className="text-[10px] text-gray-500">
+            30 jours payés par cycle de 5 ans dès éligibilité.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (vl_eligibility_status === "hors_wra_basic_sup_50k" || vl_eligibility_status === "migrant_worker_exclu") {
+    const motif = vl_eligibility_status === "hors_wra_basic_sup_50k"
+      ? "basic salary > 50 000 MUR"
+      : "migrant worker"
+    return (
+      <Card className="rounded-xl shadow-sm border-gray-200 bg-gray-50 opacity-70">
+        <CardContent className="p-4 space-y-1">
+          <div className="flex items-center gap-2">
+            <Plane className="h-4 w-4 text-gray-400" />
+            <p className="text-sm font-semibold text-gray-600">Vacation Leave (WRA S.47)</p>
+          </div>
+          <p className="text-xs text-gray-500">Non applicable ({motif}).</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return null
 }

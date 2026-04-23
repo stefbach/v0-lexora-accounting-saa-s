@@ -16,14 +16,16 @@ import {
   Loader2, Plus, CheckCircle, XCircle, AlertTriangle,
   Calendar, Thermometer, Clock, ShieldAlert, Users, FileWarning,
   Upload, ChevronLeft, ChevronRight, Eye, Pencil, Save, X,
-  Megaphone
+  Megaphone, Trash2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { createClient } from "@/lib/supabase/client"
+import { countJoursOuvrablesSync, buildJoursFeriesSet } from "@/lib/rh/jours-ouvrables"
 import {
   EligibiliteBadge,
   type EligibilityStatus,
 } from "@/app/salarie/_components/shared/conges-eligibilite"
+import { CashInLieuPanel } from "./_components/CashInLieuPanel"
 
 // ─── Constants ───────────────────────────────────────────────────
 const TYPE_LABELS: Record<string, string> = {
@@ -115,9 +117,23 @@ interface BalanceRow {
   /** Subset of al_pris chosen by the employee. */
   al_impose_employe?: number
   al_solde: number
+  /** G5 — Modèle C accrual linéaire mensuel (jours accumulés au prorata). */
+  al_acquis?: number | null
+  /** G5 — al_acquis - al_pris : base paiement compensatoire (WRA S.45(2)). */
+  al_solde_acquis?: number | null
   sl_droit: number
   sl_pris: number
   sl_solde: number
+  /** G2 — Vacation Leave (WRA S.47) : 30j/5 ans pour workers (basic ≤ 50k). */
+  vl_droit?: number | null
+  vl_pris?: number | null
+  vl_solde?: number | null
+  vl_cycle_debut?: string | null
+  vl_cycle_fin?: string | null
+  vl_eligibility_status?: 'eligible' | 'eligible_via_policy_societe' | 'en_acquisition' | 'hors_wra_basic_sup_50k' | 'migrant_worker_exclu' | 'no_date_arrivee'
+  /** G3 — Statut WRA 2019 S.2 : "worker" (basic ≤ 50k) ou "hors_wra" (basic > 50k). */
+  statut_wra?: 'worker' | 'hors_wra' | 'indetermine'
+  salaire_base?: number | null
   status_color: string
   sick_cert_alert: boolean
 }
@@ -173,6 +189,19 @@ interface CongeRecord {
 const DEMI_JOURNEE_ALLOWED_TYPES = new Set(['AL', 'SL', 'CAR', 'UL'])
 
 // ─── Helper ──────────────────────────────────────────────────────
+// F13 — Compte le nombre de jours de weekend (sam+dim) entre 2 dates inclus.
+// Utilisé pour l'affichage détaillé de l'aperçu modal.
+function countWeekends(startDate: Date, endDate: Date): number {
+  let weekends = 0
+  const cursor = new Date(startDate)
+  while (cursor <= endDate) {
+    const day = cursor.getDay()
+    if (day === 0 || day === 6) weekends++
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return weekends
+}
+
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
@@ -471,6 +500,8 @@ export default function CongesPage() {
   const [balances, setBalances] = useState<BalanceRow[]>([])
   const [kpis, setKpis] = useState<KPIs>({ total_al_taken: 0, total_sl_taken: 0, pending_requests: 0, alerts: 0 })
   const [loadingBalances, setLoadingBalances] = useState(true)
+  // F13 — jours feries charges une fois, utilises par l'apercu du modal
+  const [joursFeriesSet, setJoursFeriesSet] = useState<Set<string>>(() => new Set())
   const [editingBalId, setEditingBalId] = useState<string | null>(null)
   const [editBalFields, setEditBalFields] = useState<{ al_droit: number; al_pris: number; sl_droit: number; sl_pris: number; date_arrivee: string; periode_debut: string | null }>({ al_droit: 22, al_pris: 0, sl_droit: 15, sl_pris: 0, date_arrivee: "", periode_debut: null })
   const [savingBal, setSavingBal] = useState(false)
@@ -511,6 +542,9 @@ export default function CongesPage() {
 
   // Fix 2 — cancel-imposed-leave dialog state
   const [annulerTarget, setAnnulerTarget] = useState<CongeRecord | null>(null)
+  // S1 — suppression definitive (hard delete + audit)
+  const [supprimerTarget, setSupprimerTarget] = useState<CongeRecord | null>(null)
+  const [supprimerMotif, setSupprimerMotif] = useState<string>("")
   const [annulerMotif, setAnnulerMotif] = useState("")
   const [toast, setToast] = useState<string | null>(null)
 
@@ -537,6 +571,8 @@ export default function CongesPage() {
 
   // Roles allowed to impose collective leave (matches the API gate).
   const canImposeCollectif = ['admin', 'super_admin', 'client_admin', 'rh', 'rh_manager', 'direction'].includes(userRole)
+  // S1 — seuls RH et admin peuvent supprimer definitivement une demande
+  const canSupprimer = ['admin', 'super_admin', 'rh', 'rh_manager'].includes(userRole)
 
   // Calendar tab
   const [calendarConges, setCalendarConges] = useState<CongeRecord[]>([])
@@ -547,6 +583,8 @@ export default function CongesPage() {
 
   // Search
   const [searchBal, setSearchBal] = useState("")
+  // G3 — Filtre statut WRA (all / worker / hors_wra)
+  const [filterStatutWra, setFilterStatutWra] = useState<'all' | 'worker' | 'hors_wra'>('all')
   const [searchHisto, setSearchHisto] = useState("")
 
   // ─── Data fetching ─────────────────────────────────────────────
@@ -680,6 +718,23 @@ export default function CongesPage() {
 
   // Initial load
   useEffect(() => { loadSocietes() }, [loadSocietes])
+
+  // F13 — charger les jours_feries (année en cours + prochaine) pour aligner
+  // l'aperçu du modal sur le calcul backend (qui utilise la même DB).
+  useEffect(() => {
+    const year = new Date().getFullYear()
+    const supabase = createClient()
+    supabase.from('jours_feries')
+      .select('date, travail_autorise')
+      .gte('date', `${year}-01-01`)
+      .lte('date', `${year + 1}-12-31`)
+      .then(({ data }) => {
+        const dates = ((data || []) as any[])
+          .filter(r => !r.travail_autorise)
+          .map(r => String(r.date).slice(0, 10))
+        setJoursFeriesSet(buildJoursFeriesSet(dates))
+      })
+  }, [])
 
   // Fetch current user's role so we can gate the "Imposer collectif" button.
   useEffect(() => {
@@ -888,6 +943,36 @@ export default function CongesPage() {
     }
   }
 
+  // S1 — hard delete d'une demande (RH/admin uniquement).
+  // Appelle DELETE /api/rh/conges/:id?hard=true avec motif dans le body.
+  // Backend fait un snapshot JSONB dans demandes_conges_supprimees puis
+  // delete + recompute solde si applicable.
+  const supprimerDefinitivement = async () => {
+    if (!supprimerTarget) return
+    setActionLoading(supprimerTarget.id)
+    try {
+      const res = await fetch(`/api/rh/conges/${supprimerTarget.id}?hard=true`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motif: supprimerMotif || null }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      setToast(data?.message || "Demande supprimée")
+      setSupprimerTarget(null)
+      setSupprimerMotif("")
+      loadDemandes()
+      loadBalances()
+      if (tab === "historique") loadHistorique()
+      setTimeout(() => setToast(null), 4500)
+    } catch (e: any) {
+      setToast(`⚠ Suppression échouée : ${e?.message || 'erreur'}`)
+      setTimeout(() => setToast(null), 6000)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const sickRetroactif = async (empId: string) => {
     setActionLoading(empId)
     const today = new Date().toISOString().split("T")[0]
@@ -932,6 +1017,11 @@ export default function CongesPage() {
 
   // ─── Filtered data ────────────────────────────────────────────
   const filteredBalances = balances.filter(b => {
+    // G3 — Filtre statut WRA
+    if (filterStatutWra !== 'all') {
+      const statut = (b as any).statut_wra || 'worker'
+      if (statut !== filterStatutWra) return false
+    }
     if (!searchBal) return true
     const q = searchBal.toLowerCase()
     return `${b.prenom} ${b.nom}`.toLowerCase().includes(q) || (b.poste || "").toLowerCase().includes(q)
@@ -1084,7 +1174,7 @@ export default function CongesPage() {
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="dashboard">Tableau de bord</TabsTrigger>
           <TabsTrigger value="demandes" className="relative">
             Demandes
@@ -1099,25 +1189,41 @@ export default function CongesPage() {
           </TabsTrigger>
           <TabsTrigger value="absents">Absences aujourd&apos;hui</TabsTrigger>
           <TabsTrigger value="historique">Historique</TabsTrigger>
+          <TabsTrigger value="cash-in-lieu" className="text-purple-700">
+            Cash-in-lieu
+          </TabsTrigger>
         </TabsList>
 
         {/* ═══ TAB 1: TABLEAU DE BORD ═══ */}
         <TabsContent value="dashboard">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <CardTitle className="text-[#0B0F2E]">
                   Soldes de conges par employe (periode anniversaire)
                 </CardTitle>
-                <Input
-                  placeholder="Rechercher un employe..."
-                  value={searchBal}
-                  onChange={e => setSearchBal(e.target.value)}
-                  className="w-64"
-                />
+                <div className="flex items-center gap-2">
+                  {/* G3 — Filtre statut WRA */}
+                  <Select value={filterStatutWra} onValueChange={(v) => setFilterStatutWra(v as 'all' | 'worker' | 'hors_wra')}>
+                    <SelectTrigger className="w-44 h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous (worker + hors WRA)</SelectItem>
+                      <SelectItem value="worker">Workers uniquement</SelectItem>
+                      <SelectItem value="hors_wra">Hors WRA uniquement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder="Rechercher un employe..."
+                    value={searchBal}
+                    onChange={e => setSearchBal(e.target.value)}
+                    className="w-56"
+                  />
+                </div>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                AL = Conge annuel (22j) | SL = Conge maladie (15j) | Periode de 12 mois glissante basee sur la date d&apos;arrivee de chaque employe (WRA 2019)
+                AL = Conge annuel (22j) | SL = Conge maladie (15j) | VL = Vacation Leave (30j/5a, workers WRA S.47) | Periode de 12 mois glissante basee sur la date d&apos;arrivee (WRA 2019)
               </p>
             </CardHeader>
             <CardContent className="p-0">
@@ -1136,12 +1242,21 @@ export default function CongesPage() {
                         <TableHead className="text-xs">Arrivee</TableHead>
                         <TableHead className="text-xs">Periode</TableHead>
                         <TableHead className="text-xs">Eligibilite</TableHead>
-                        <TableHead className="text-center">AL Droit</TableHead>
+                        <TableHead className="text-xs" title="WRA 2019 S.2 : worker (basic ≤ 50k) ou hors_wra (basic > 50k)">Statut WRA</TableHead>
+                        <TableHead className="text-center" title="AL utilisable (après 12 mois) — source historique, inchangé.">AL Droit</TableHead>
+                        <TableHead
+                          className="text-center text-teal-700"
+                          title="G5 Modèle C — jours accumulés au prorata mensuel (22/12 par mois). Base pour paiement compensatoire en cas de départ (WRA S.45(2)) et provisions IAS 19. Peut différer de 'AL Droit' avant le 12ème mois."
+                        >
+                          AL Acquis
+                        </TableHead>
                         <TableHead className="text-center">AL Pris</TableHead>
                         <TableHead className="text-center">AL Solde</TableHead>
                         <TableHead className="text-center">SL Droit</TableHead>
                         <TableHead className="text-center">SL Pris</TableHead>
                         <TableHead className="text-center">SL Solde</TableHead>
+                        <TableHead className="text-center text-purple-700" title="Vacation Leave WRA S.47 — 30j/5 ans, workers basic ≤ 50k">VL Droit</TableHead>
+                        <TableHead className="text-center text-purple-700">VL Solde</TableHead>
                         <TableHead>Alertes</TableHead>
                         <TableHead className="w-24 text-right">Actions</TableHead>
                       </TableRow>
@@ -1170,11 +1285,26 @@ export default function CongesPage() {
                           <TableCell>
                             <EligibiliteBadge status={(b.eligibility_status as EligibilityStatus) || "eligible"} />
                           </TableCell>
+                          <TableCell>
+                            {(b as any).statut_wra === 'hors_wra' ? (
+                              <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-[10px]" title="Basic > 50 000 MUR — droits via contrat + policy société">
+                                Hors WRA
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px]" title="WRA 2019 intégral — basic ≤ 50 000 MUR">
+                                Worker
+                              </Badge>
+                            )}
+                          </TableCell>
                           <TableCell className="text-center text-sm">
                             {isEditing ? (
                               <Input type="number" className="h-7 text-xs w-14 text-center" value={editBalFields.al_droit}
                                 onChange={e => setEditBalFields(f => ({ ...f, al_droit: parseFloat(e.target.value) || 0 }))} />
                             ) : b.al_droit}
+                          </TableCell>
+                          {/* G5 — AL Acquis (Modèle C accrual linéaire mensuel) */}
+                          <TableCell className="text-center text-sm text-teal-700 font-medium">
+                            {b.al_acquis != null ? Number(b.al_acquis).toFixed(2) : '—'}
                           </TableCell>
                           <TableCell className="text-center text-sm">
                             {isEditing ? (
@@ -1223,6 +1353,24 @@ export default function CongesPage() {
                             <span className={`font-semibold ${b.sl_solde <= 0 ? "text-red-600" : b.sl_solde <= 3 ? "text-orange-500" : "text-green-600"}`}>
                               {isEditing ? (editBalFields.sl_droit - editBalFields.sl_pris) : b.sl_solde}
                             </span>
+                          </TableCell>
+                          <TableCell className="text-center text-sm">
+                            {b.vl_eligibility_status === 'eligible' ? (
+                              <span className="font-semibold text-purple-700" title={`Cycle ${b.vl_cycle_debut || ''} → ${b.vl_cycle_fin || ''}`}>
+                                {b.vl_droit ?? 30}
+                              </span>
+                            ) : b.vl_eligibility_status === 'en_acquisition' ? (
+                              <span className="text-[10px] text-gray-400">en acquisition</span>
+                            ) : (
+                              <span className="text-[10px] text-gray-300">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {b.vl_eligibility_status === 'eligible' ? (
+                              <span className="font-semibold text-purple-700">{b.vl_solde ?? 0}</span>
+                            ) : (
+                              <span className="text-[10px] text-gray-300">—</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {b.sick_cert_alert && (
@@ -1403,6 +1551,18 @@ export default function CongesPage() {
                               >
                                 <XCircle className="w-4 h-4 mr-1" />Refuser
                               </Button>
+                              {/* S1 — Suppression definitive (RH/admin uniquement) */}
+                              {canSupprimer && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-gray-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
+                                  title="Supprimer definitivement (audit trail conserve)"
+                                  onClick={() => { setSupprimerTarget(c); setSupprimerMotif("") }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1642,25 +1802,39 @@ export default function CongesPage() {
                           </TableCell>
                           {canImposeCollectif && (
                             <TableCell className="text-right">
-                              {/* Annuler button — visible only on approved imposed leaves
-                                  (the original spec). We still gate by role for defence in
-                                  depth, even though the API also gates. */}
-                              {c.statut === "approuve" && c.impose_par_societe && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 text-xs text-red-600 hover:bg-red-50"
-                                  disabled={actionLoading === c.id}
-                                  onClick={() => { setAnnulerTarget(c); setAnnulerMotif("") }}
-                                >
-                                  {actionLoading === c.id ? (
-                                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                                  ) : (
-                                    <XCircle className="w-3 h-3 mr-1" />
-                                  )}
-                                  Annuler
-                                </Button>
-                              )}
+                              <div className="flex gap-1 justify-end">
+                                {/* Annuler button — visible only on approved imposed leaves
+                                    (the original spec). We still gate by role for defence in
+                                    depth, even though the API also gates. */}
+                                {c.statut === "approuve" && c.impose_par_societe && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-xs text-red-600 hover:bg-red-50"
+                                    disabled={actionLoading === c.id}
+                                    onClick={() => { setAnnulerTarget(c); setAnnulerMotif("") }}
+                                  >
+                                    {actionLoading === c.id ? (
+                                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                    ) : (
+                                      <XCircle className="w-3 h-3 mr-1" />
+                                    )}
+                                    Annuler
+                                  </Button>
+                                )}
+                                {/* S1 — suppression definitive (RH/admin) */}
+                                {canSupprimer && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 text-gray-500 hover:text-red-700 hover:bg-red-50"
+                                    title="Supprimer definitivement (audit trail conserve)"
+                                    onClick={() => { setSupprimerTarget(c); setSupprimerMotif("") }}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                           )}
                         </TableRow>
@@ -1671,6 +1845,11 @@ export default function CongesPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ═══ TAB 6: CASH-IN-LIEU (G1 — WRA S.45/S.47) ═══ */}
+        <TabsContent value="cash-in-lieu">
+          <CashInLieuPanel />
         </TabsContent>
       </Tabs>
 
@@ -1707,18 +1886,111 @@ export default function CongesPage() {
               <Select value={form.type_conge} onValueChange={v => setForm(f => ({ ...f, type_conge: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.entries(TYPE_LABELS).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                  ))}
+                  {/* G4 — groupes WRA 2019 */}
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Principaux (WRA S.45-47)</div>
+                  <SelectItem value="AL">Annual Leave (22j/an)</SelectItem>
+                  <SelectItem value="SL">Sick Leave (15j/an)</SelectItem>
+                  <SelectItem value="VL">Vacation Leave (30j/5 ans, workers)</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Familial (S.47A)</div>
+                  <SelectItem value="FML">Family Medical Leave (10j/an, déductible AL/SL/VL)</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Exceptionnels (S.48)</div>
+                  <SelectItem value="SPC_MARIAGE_SELF">Mariage du salarié (6j)</SelectItem>
+                  <SelectItem value="SPC_MARIAGE_ENFANT">Mariage d'un enfant (3j)</SelectItem>
+                  <SelectItem value="SPC_DECES">Décès famille proche (3j)</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Légaux (S.49-51)</div>
+                  <SelectItem value="JUR">Juré (durée service)</SelectItem>
+                  <SelectItem value="INT">Événement international (durée)</SelectItem>
+                  <SelectItem value="CRT">Convocation judiciaire</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Maternité / Paternité (S.52-53)</div>
+                  <SelectItem value="MAT">Maternité (16 semaines)</SelectItem>
+                  <SelectItem value="PAT">Paternité (4 semaines)</SelectItem>
+                  <div className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase text-gray-400">Autres</div>
+                  <SelectItem value="UL">Sans solde (UL)</SelectItem>
+                  <SelectItem value="COM">Récupération (compensatoire)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-400 mt-1">
-                {form.type_conge === "AL" && "Conge annuel: 20 jours ouvrables/an (prorata si embauche en cours d'annee)"}
-                {form.type_conge === "SL" && "Conge maladie: 15 jours ouvrables/an. Certificat medical requis si > 3 jours consecutifs"}
-                {form.type_conge === "MAT" && "Maternite: 14 semaines (98 jours calendaires). Reserves aux femmes."}
-                {form.type_conge === "PAT" && "Paternite: 5 jours ouvrables. Reserves aux hommes."}
+                {form.type_conge === "AL" && "Annual Leave : 22 jours ouvrables / an (WRA S.45)."}
+                {form.type_conge === "SL" && "Sick Leave : 15 jours / an (WRA S.46). Certificat medical si ≥ 3 jours."}
+                {form.type_conge === "VL" && "Vacation Leave : 30 jours / 5 ans (WRA S.47). Workers (basic ≤ 50k) uniquement."}
+                {form.type_conge === "FML" && "Family Medical Leave : 10j/an pour soigner parent/enfant/grand-parent (WRA S.47A). Déductible AL/SL/VL."}
+                {form.type_conge === "SPC_MARIAGE_SELF" && "6j pour premier mariage du salarié (WRA S.48)."}
+                {form.type_conge === "SPC_MARIAGE_ENFANT" && "3j pour premier mariage d'un enfant (WRA S.48)."}
+                {form.type_conge === "SPC_DECES" && "3j pour décès conjoint/enfant/parent/frère/sœur (WRA S.48)."}
+                {form.type_conge === "JUR" && "Durée du service juré (WRA S.49). Convocation officielle requise."}
+                {form.type_conge === "INT" && "Durée événement sportif/culturel international (WRA S.50)."}
+                {form.type_conge === "CRT" && "Temps nécessaire convocation judiciaire (WRA S.51)."}
+                {form.type_conge === "MAT" && "Maternité : 16 semaines, +2 si multiple/prématurée (WRA S.52). Allocation 3 000 MUR."}
+                {form.type_conge === "PAT" && "Paternité : 4 semaines (WRA S.53). Payé si ≥ 12 mois de service."}
               </p>
             </div>
+
+            {/* G4 — Champs conditionnels selon type (justificatifs) */}
+            {form.type_conge === 'FML' && (
+              <div className="space-y-2 p-3 bg-cyan-50 border border-cyan-200 rounded-md">
+                <Label className="text-xs text-cyan-900">Déduction du solde de :</Label>
+                <Select
+                  value={(form as any).deduction_source || 'AL'}
+                  onValueChange={v => setForm(f => ({ ...f, deduction_source: v } as any))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AL">Annual Leave</SelectItem>
+                    <SelectItem value="SL">Sick Leave</SelectItem>
+                    <SelectItem value="VL">Vacation Leave (si éligible)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="URL certificat médical du parent malade (requis)"
+                  value={(form as any).certificat_medical_url || ''}
+                  onChange={e => setForm(f => ({ ...f, certificat_medical_url: e.target.value } as any))}
+                />
+                <Input
+                  placeholder="URL acte de naissance / preuve parenté (requis)"
+                  value={(form as any).acte_naissance_url || ''}
+                  onChange={e => setForm(f => ({ ...f, acte_naissance_url: e.target.value } as any))}
+                />
+              </div>
+            )}
+            {form.type_conge === 'SPC_MARIAGE_SELF' && (
+              <Input
+                placeholder="URL certificat de mariage (requis)"
+                value={(form as any).convocation_url || ''}
+                onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
+              />
+            )}
+            {form.type_conge === 'SPC_MARIAGE_ENFANT' && (
+              <div className="space-y-2">
+                <Input
+                  placeholder="URL certificat de mariage de l'enfant (requis)"
+                  value={(form as any).convocation_url || ''}
+                  onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
+                />
+                <Input
+                  placeholder="URL acte de naissance de l'enfant (requis)"
+                  value={(form as any).acte_naissance_url || ''}
+                  onChange={e => setForm(f => ({ ...f, acte_naissance_url: e.target.value } as any))}
+                />
+              </div>
+            )}
+            {form.type_conge === 'SPC_DECES' && (
+              <Input
+                placeholder="URL acte de décès (requis)"
+                value={(form as any).acte_deces_url || ''}
+                onChange={e => setForm(f => ({ ...f, acte_deces_url: e.target.value } as any))}
+              />
+            )}
+            {['JUR', 'INT', 'CRT'].includes(form.type_conge) && (
+              <Input
+                placeholder={
+                  form.type_conge === 'JUR' ? "URL convocation tribunal (requis)" :
+                  form.type_conge === 'INT' ? "URL documentation officielle événement (requis)" :
+                  "URL convocation judiciaire (requis)"
+                }
+                value={(form as any).convocation_url || ''}
+                onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
+              />
+            )}
 
             {/* Demi-journée — only offered for leave types where it makes sense */}
             {DEMI_JOURNEE_ALLOWED_TYPES.has(form.type_conge) && (
@@ -1819,31 +2091,33 @@ export default function CongesPage() {
               }
               return null
             })()}
-            {/* Aperçu nb_jours — montre au RH le calcul AVANT soumission */}
-            {form.date_debut && form.date_fin && !form.demi_journee && (() => {
+            {/* F13 — Aperçu nb_jours aligné sur le backend : utilise la
+                fonction canonique countJoursOuvrablesSync avec les
+                jours_feries chargés depuis la DB (joursFeriesSet). */}
+            {form.date_debut && form.date_fin && (() => {
               const s = new Date(form.date_debut + 'T12:00:00')
               const e = new Date(form.date_fin + 'T12:00:00')
               if (e < s) return null
               const calDays = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1
-              let workDays = 0
-              const cursor = new Date(s)
-              while (cursor <= e) {
-                const day = cursor.getDay()
-                if (day !== 0 && day !== 6) workDays++
-                cursor.setDate(cursor.getDate() + 1)
-              }
+              const workDays = countJoursOuvrablesSync({
+                date_debut: form.date_debut,
+                date_fin: form.date_fin,
+                demi_journee: form.demi_journee,
+                jours_feries: joursFeriesSet,
+              })
+              const feriesDansPlage = calDays - workDays - countWeekends(s, e) - (form.demi_journee ? 0.5 : 0)
               return (
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                   <p className="text-sm font-medium text-blue-900">
                     Estimation : <strong>{workDays} jour{workDays > 1 ? "s" : ""} ouvrable{workDays > 1 ? "s" : ""}</strong>
-                    {calDays !== workDays && (
-                      <span className="text-xs text-blue-600 ml-2">
-                        ({calDays} jour{calDays > 1 ? "s" : ""} calendaire{calDays > 1 ? "s" : ""} dont {calDays - workDays} weekend{calDays - workDays > 1 ? "s" : ""})
-                      </span>
-                    )}
+                    <span className="text-xs text-blue-600 ml-2">
+                      ({calDays} calendaire{calDays > 1 ? "s" : ""}
+                      {feriesDansPlage > 0 ? ` · ${Math.round(feriesDansPlage)} férié${feriesDansPlage > 1 ? "s" : ""}` : ""}
+                      {form.demi_journee ? " · ½ journée" : ""})
+                    </span>
                   </p>
                   <p className="text-[10px] text-blue-600 mt-0.5">
-                    Le calcul final tiendra compte du planning de l'employé et des jours fériés.
+                    Aligné sur le calcul final (WRA 2019 + jours_feries Maurice).
                   </p>
                 </div>
               )
@@ -2113,6 +2387,79 @@ export default function CongesPage() {
             >
               {actionLoading === annulerTarget?.id && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               <XCircle className="w-4 h-4 mr-2" />Confirmer l'annulation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ S1 — DIALOG suppression definitive (RH/admin) ═══ */}
+      <Dialog open={!!supprimerTarget} onOpenChange={open => { if (!open) { setSupprimerTarget(null); setSupprimerMotif("") } }}>
+        <DialogContent aria-describedby="supprimer-desc">
+          <DialogHeader>
+            <DialogTitle className="text-red-700 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" />
+              Supprimer cette demande de congé ?
+            </DialogTitle>
+            <DialogDescription id="supprimer-desc">
+              Action irréversible. Audit trail conservé dans la DB.
+            </DialogDescription>
+          </DialogHeader>
+          {supprimerTarget && (
+            <div className="space-y-3 text-sm">
+              <div className="p-3 bg-gray-50 rounded-md border">
+                <div className="font-semibold text-[#0B0F2E]">
+                  {supprimerTarget.employe?.prenom} {supprimerTarget.employe?.nom}
+                </div>
+                <div className="text-xs text-gray-600 mt-1">
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium mr-2 ${TYPE_COLORS[supprimerTarget.type_conge] || "bg-gray-100 text-gray-800"}`}>
+                    {TYPE_LABELS[supprimerTarget.type_conge] || supprimerTarget.type_conge}
+                  </span>
+                  {formatDate(supprimerTarget.date_debut)} → {formatDate(supprimerTarget.date_fin)} — <strong>{supprimerTarget.nb_jours}j</strong>
+                  <span className={`ml-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${STATUT_COLORS[supprimerTarget.statut] || ""}`}>
+                    {STATUT_LABELS[supprimerTarget.statut] || supprimerTarget.statut}
+                  </span>
+                </div>
+              </div>
+              <div className="text-xs text-gray-600 space-y-1">
+                <p>Cette action :</p>
+                <ul className="list-disc list-inside space-y-0.5 ml-2">
+                  <li>Supprimera définitivement la demande de la base.</li>
+                  <li>Recomputera automatiquement le solde de l&apos;employé (si la demande était approuvée).</li>
+                  <li>Sera tracée dans <code className="text-[10px] bg-gray-100 px-1 rounded">demandes_conges_supprimees</code>.</li>
+                </ul>
+                {supprimerTarget.statut === 'approuve' && (
+                  <p className="text-orange-700 font-medium pt-1">
+                    ⚠️ Si cette demande approuvée avait déjà été comptée sur un bulletin verrouillé, celui-ci ne sera PAS modifié — retraiter manuellement.
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600">Motif de la suppression (optionnel)</Label>
+                <Textarea
+                  value={supprimerMotif}
+                  onChange={e => setSupprimerMotif(e.target.value)}
+                  placeholder="Ex : doublon, mauvaise saisie, test..."
+                  rows={2}
+                  className="mt-1 text-sm"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setSupprimerTarget(null); setSupprimerMotif("") }}>
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={supprimerDefinitivement}
+              disabled={actionLoading === supprimerTarget?.id}
+            >
+              {actionLoading === supprimerTarget?.id ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Supprimer définitivement
             </Button>
           </DialogFooter>
         </DialogContent>

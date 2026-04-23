@@ -5,6 +5,9 @@ import { calculerBulletin, PARAMS_MRA_DEFAUT } from '@/lib/rh/paie'
 import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } from '@/lib/rh/access'
 import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
 import { lastDayOfMonth } from '@/lib/rh/period'
+import { calculerPeriodePaie, type PeriodePaieCalculee } from '@/lib/rh/periode-paie'
+import { fetchPaiementsValidesPourBulletin, marquerPaiementPaye } from '@/lib/rh/cash-in-lieu'
+import { fetchGrossessePourAllocationBulletin, marquerAllocationPayee } from '@/lib/rh/protection-maternite'
 
 export const dynamic = 'force-dynamic'
 
@@ -465,17 +468,26 @@ export async function POST(request: Request) {
       csg_salarie_taux_reduit: Number(paramsDB.csg_salarie_taux_reduit),
       csg_salarie_taux_plein: Number(paramsDB.csg_salarie_taux_plein),
       csg_patronal: Number(paramsDB.csg_patronal),
+      csg_patronal_taux_reduit: Number(paramsDB.csg_patronal_taux_reduit ?? 0.030),
       nsf_salarie: Number(paramsDB.nsf_salarie),
       nsf_patronal: Number(paramsDB.nsf_patronal),
+      // F9 — Plafond insurable NSF (28 600 MUR en 2025-2026, mig 159).
+      nsf_plafond_mensuel: Number(paramsDB.nsf_plafond_mensuel ?? 28600),
       training_levy: Number(paramsDB.training_levy),
       prgf_patronal_par_jour: Number(paramsDB.prgf_patronal_par_jour ?? 4.50),
       prgf_taux_emoluments: Number(paramsDB.prgf_taux_emoluments ?? 0.045),
-      paye_seuil_exoneration: Number(paramsDB.paye_seuil_exoneration ?? 390000),
+      paye_seuil_exoneration: Number(paramsDB.paye_seuil_exoneration ?? 500000),
       paye_taux_1: Number(paramsDB.paye_taux_1 ?? 0.10),
-      paye_seuil_taux_2: Number(paramsDB.paye_seuil_taux_2 ?? 650000),
-      paye_taux_2: Number(paramsDB.paye_taux_2 ?? 0.15),
-      // Sprint 2 — night shift majoration paramétrable (defaut 15%)
-      night_shift_pct: Number(paramsDB.night_shift_pct ?? 0.15),
+      paye_seuil_taux_2: Number(paramsDB.paye_seuil_taux_2 ?? 1000000),
+      paye_taux_2: Number(paramsDB.paye_taux_2 ?? 0.20),
+      // Sprint 2 — night shift majoration paramétrable (defaut 15%).
+      // PE1 BUG 2 — normalisation défensive : si la valeur stockée est
+      // > 1, on suppose qu'elle est en pourcentage (15) au lieu du
+      // décimal attendu (0.15) et on divise par 100.
+      night_shift_pct: (() => {
+        const raw = Number(paramsDB.night_shift_pct ?? 0.15)
+        return raw > 1 ? raw / 100 : raw
+      })(),
       // POLICY Lexora — compensation 635 MUR considérée incluse dans le
       // salaire. Forcé à 0 peu importe la valeur DB (paramsDB legacy).
       salary_compensation: 0,
@@ -522,18 +534,28 @@ export async function POST(request: Request) {
         }
       }
 
+      // PE1 — période paie paramétrable. En mode 'calendaire' (défaut),
+      // periodeStartSingle/periodeEndSingle = 1er/dernier du mois de
+      // `periodeStr`. En mode 'cut_off_jour', ce sera par ex. 25/03 → 24/04.
+      const sidForPeriode = targetSocieteId || emp.societe_id
+      const periodeInfo: PeriodePaieCalculee = await calculerPeriodePaie(
+        supabase, sidForPeriode, `${periodeStr}-01`,
+      )
+      const periodeStartSingle = periodeInfo.periode_debut
+      const periodeEndSingle = periodeInfo.periode_fin
+
       // 1. Récupérer OT de la période depuis les pointages
       const { data: pointagesMois } = await supabase.from('pointages')
         .select('*').eq('employe_id', employe_id)
-        .gte('date_pointage', `${periodeStr}-01`)
-        .lte('date_pointage', lastDayOfMonth(periodeStr))
+        .gte('date_pointage', periodeStartSingle)
+        .lte('date_pointage', periodeEndSingle)
 
       // Bug 4 fix: fetch planning assignments for this employee+period to determine planned hours
       const { data: planAssignments } = await supabase.from('planning_assignments')
         .select('date, shift_code, heures_prevues, est_repos')
         .eq('employe_id', employe_id)
-        .gte('date', `${periodeStr}-01`)
-        .lte('date', lastDayOfMonth(periodeStr))
+        .gte('date', periodeStartSingle)
+        .lte('date', periodeEndSingle)
       const planMap: Record<string, { heures_prevues: number; est_repos: boolean }> = {}
       for (const pa of planAssignments || []) {
         planMap[pa.date] = { heures_prevues: Number(pa.heures_prevues) || 8, est_repos: pa.est_repos }
@@ -612,8 +634,7 @@ export async function POST(request: Request) {
       }
 
       // 3. Congés approuvés qui CHEVAUCHENT le mois (cf. fix de calculer_batch).
-      const periodeStartSingle = `${periodeStr}-01`
-      const periodeEndSingle = lastDayOfMonth(periodeStr)
+      // periodeStartSingle/periodeEndSingle définis plus haut (PE1).
       const { data: congesApprouves } = await supabase.from('demandes_conges')
         .select('*').eq('employe_id', employe_id).eq('statut', 'approuve')
         .lte('date_debut', periodeEndSingle).gte('date_fin', periodeStartSingle)
@@ -673,7 +694,7 @@ export async function POST(request: Request) {
           pointageByDate.set(pt.date_pointage, pt)
         }
         const workingDaysList = listWorkingDaysInPeriod(
-          `${periodeStr}-01`, lastDayOfMonth(periodeStr), emp, joursFeriesSetSingle,
+          periodeStartSingle, periodeEndSingle, emp, joursFeriesSetSingle,
         )
         // F2 — date de référence "aujourd'hui" en ISO. Les jours du mois
         // qui sont dans le futur ne sont NI absents NI présents : ils
@@ -771,41 +792,88 @@ export async function POST(request: Request) {
       }
 
       const joursTravailles = jours_travailles > 0 ? jours_travailles : (body.jours_travailles || 26)
-      const resultat = calculerBulletin(elements, params as any, joursTravailles, Number(emp.pct_refacturation) || 0)
 
-      // UL deduction: days in-period × salaire_brut / nb_jours_ouvres_mois.
-      // INTÉGRATION 3 — diagnostic log (cf. calculer_batch).
+      // F10 — Pré-calcul du salaire_brut_base (hors EOY bonus) pour pouvoir
+      // calculer l'UL AVANT calculerBulletin. CSG/NSF/PAYE seront ensuite
+      // calculés sur salaire_imposable = brut_base - total_absence.
+      const salaireBrutBaseSingle =
+        Number(elements.salaire_base)
+        + (Number(elements.transport_allowance) || 0)
+        + (Number(elements.petrol_allowance) || 0)
+        + (Number(elements.heures_sup_montant) || 0)
+        + (Number(elements.special_allowance_1) || 0)
+        + (Number(elements.special_allowance_2) || 0)
+        + (Number(elements.special_allowance_3) || 0)
+        + (Number(elements.increment_salaire) || 0)
+        + (Number(elements.other_refund) || 0)
+        + (Number(elements.departure_notice) || 0)
+
+      // UL deduction: days in-period × salaire_brut_base / nb_jours_ouvres_mois.
       let montant_ul_single = 0
       if (joursUnpaidLeaveSingle > 0) {
         const nbJoursOuvresMoisSingle = calculateWorkingDays(periodeStartSingle, periodeEndSingle, {
           workingDays: getWorkingDaysForEmploye(emp),
           joursFeries: joursFeriesSetSingle,
         })
-        const salaireBrutSingle = Number(resultat.salaire_brut ?? 0)
-          || (salaire_base_mur
-            + (Number(elements.transport_allowance) || 0)
-            + (Number(elements.petrol_allowance) || 0)
-            + (Number(elements.heures_sup_montant) || 0)
-            + (Number(elements.special_allowance_1) || 0)
-            + (Number(elements.special_allowance_2) || 0)
-            + (Number(elements.special_allowance_3) || 0))
-        if (nbJoursOuvresMoisSingle > 0 && salaireBrutSingle > 0) {
-          montant_ul_single = Math.round(joursUnpaidLeaveSingle * (salaireBrutSingle / nbJoursOuvresMoisSingle) * 100) / 100
-          console.log(`[paie] UL OK (single) ${emp.prenom} ${emp.nom} — ${joursUnpaidLeaveSingle}j × (${salaireBrutSingle} / ${nbJoursOuvresMoisSingle}) = ${montant_ul_single} MUR`)
+        if (nbJoursOuvresMoisSingle > 0 && salaireBrutBaseSingle > 0) {
+          montant_ul_single = Math.round(joursUnpaidLeaveSingle * (salaireBrutBaseSingle / nbJoursOuvresMoisSingle) * 100) / 100
+          console.log(`[paie] UL OK (single) ${emp.prenom} ${emp.nom} — ${joursUnpaidLeaveSingle}j × (${salaireBrutBaseSingle} / ${nbJoursOuvresMoisSingle}) = ${montant_ul_single} MUR`)
         } else {
-          console.warn(`[paie] UL SKIP zero-guard (single) — ${emp.prenom} ${emp.nom} joursOuvres=${nbJoursOuvresMoisSingle} salaireBrut=${salaireBrutSingle}`)
+          console.warn(`[paie] UL SKIP zero-guard (single) — ${emp.prenom} ${emp.nom} joursOuvres=${nbJoursOuvresMoisSingle} salaireBrut=${salaireBrutBaseSingle}`)
         }
       }
 
-      // POLICY Lexora — UL déduction plafonnée au salaire_brut (jamais plus
-      // que ce que l'employé gagne le mois). Idem pour le cumul absences +
-      // UL. Et le net final est cappé à 0.
-      const salaireBrutPlafond = Number(resultat.salaire_brut) || 0
+      // POLICY Lexora — cumul absences + UL plafonné au salaire_brut_base.
       const totalAbsenceRaw = montant_absence + montant_ul_single
-      const totalDeductionAbsence = Math.min(totalAbsenceRaw, salaireBrutPlafond)
+      const totalDeductionAbsence = Math.min(totalAbsenceRaw, salaireBrutBaseSingle)
+
+      // F6 — Split UL / injustifiées pour stockage séparé. Si le cap
+      // plafond a été touché (raw > brut), on prorate les 2 montants
+      // proportionnellement pour que leur somme = totalDeductionAbsence.
+      let montantInjustFinal = montant_absence
+      let montantUlFinal = montant_ul_single
+      if (totalAbsenceRaw > salaireBrutBaseSingle && totalAbsenceRaw > 0) {
+        const scale = salaireBrutBaseSingle / totalAbsenceRaw
+        montantInjustFinal = Math.round(montant_absence * scale * 100) / 100
+        montantUlFinal = Math.round(montant_ul_single * scale * 100) / 100
+      }
+
+      // G1 — Cash-in-lieu (WRA S.45/S.47) : injecter les paiements compensation
+      // valides pour cette periode_bulletin. Le montant s'ajoute au brut et a
+      // la base CSG/NSF/PAYE (assimile a du salary normal).
+      const periodeBulletinSingle = periodeDate.slice(0, 10)
+      const cilPaiementsSingle = await fetchPaiementsValidesPourBulletin(supabase, employe_id, periodeBulletinSingle)
+      const cilMontantSingle = cilPaiementsSingle.reduce((s, p) => s + Number(p.montant_total || 0), 0)
+      const cilJoursSingle = cilPaiementsSingle.reduce((s, p) => s + Number(p.jours_payes_compensation || 0), 0)
+      const cilTypesSingle = new Set(cilPaiementsSingle.map(p => p.type_conge))
+      const cilTypeSingle: 'AL' | 'VL' | 'mixte' | null = cilTypesSingle.size === 0
+        ? null
+        : cilTypesSingle.size > 1 ? 'mixte' : (Array.from(cilTypesSingle)[0] as 'AL' | 'VL')
+
+      // G7 — Allocation naissance 3 000 MUR (WRA S.52). Forfait social
+      // NON soumis a CSG/NSF/PAYE : on NE l'ajoute PAS a calculerBulletin,
+      // on l'ecrit directement sur le bulletin en colonne dediee.
+      const allocNaissanceSingle = await fetchGrossessePourAllocationBulletin(
+        supabase, employe_id, periodeBulletinSingle.slice(0, 7),
+      )
+      const allocMontantSingle = allocNaissanceSingle?.montant || 0
+
+      // F10 + G1 — calculerBulletin recoit totalDeductionAbsence ET cilMontant.
+      const resultat = calculerBulletin(
+        elements,
+        params as any,
+        joursTravailles,
+        Number(emp.pct_refacturation) || 0,
+        undefined,
+        undefined,
+        totalDeductionAbsence,
+        cilMontantSingle,
+      )
+
+      // G7 — Allocation naissance s'ajoute au net (non-imposable, hors cotisations).
       const salaire_net_final = Math.max(
         0,
-        Math.round((resultat.salaire_net - totalDeductionAbsence) * 100) / 100,
+        Math.round((resultat.salaire_net - totalDeductionAbsence + allocMontantSingle) * 100) / 100,
       )
 
       const bulletin: Record<string, any> = {
@@ -830,22 +898,43 @@ export async function POST(request: Request) {
         transport_allowance: elements.transport_allowance || 0,
         petrol_allowance: elements.petrol_allowance || 0,
         other_refund: elements.other_refund || 0,
-        // montant_absence = unjustified absence + UL deduction (merged).
-        montant_absence: Math.round(totalDeductionAbsence * 100) / 100,
-        // F1 — écrire jours_absence en DB (avant bug : champ jamais posé,
-        // default 0 → incohérence montant_absence>0 / jours_absence=0).
-        // On stocke le nombre de jours d'absences NON JUSTIFIÉES. Les
-        // jours UL sont comptés séparément (cf. notes et F6 à venir).
+        // F6 — Colonnes séparées :
+        //   montant_absence / jours_absence = absences INJUSTIFIÉES uniquement
+        //   montant_ul / jours_ul           = Unpaid Leave approuvés uniquement
+        // CSG/NSF/PAYE basés sur la SOMME des deux (cf. totalDeductionAbsence).
+        montant_absence: Math.round(montantInjustFinal * 100) / 100,
         jours_absence: jours_absence_injust || 0,
+        montant_ul: Math.round(montantUlFinal * 100) / 100,
+        jours_ul: joursUnpaidLeaveSingle || 0,
+        // G1 — Cash-in-lieu (WRA S.45/S.47)
+        montant_cash_in_lieu: Math.round(cilMontantSingle * 100) / 100,
+        jours_cash_in_lieu: cilJoursSingle,
+        cash_in_lieu_type: cilTypeSingle,
+        // G7 — Allocation naissance 3 000 MUR (WRA S.52, forfait non-imposable)
+        allocation_naissance: Math.round(allocMontantSingle * 100) / 100,
         // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI
         notes: prorataSingle.ratio < 1 ? `[${prorataSingle.motif}]` : null,
         statut: 'brouillon',
       }
 
-      const { data, error } = await supabase.from('bulletins_paie').upsert(bulletin, { onConflict: 'employe_id,periode' }).select().single()
+      // F14 — force updated_at pour que le recalcul soit visible cote UI.
+      const bulletinAvecTs = { ...bulletin, updated_at: new Date().toISOString() }
+      const { data, error } = await supabase.from('bulletins_paie').upsert(bulletinAvecTs, { onConflict: 'employe_id,periode' }).select().single()
       if (error) {
         console.error('[paie calculer]', error.message, error.details, error.hint)
         return NextResponse.json({ error: `Erreur bulletin: ${error.message}`, details: error.details, hint: error.hint }, { status: 500 })
+      }
+
+      // G1 — Marquer les paiements compensation comme 'paye' avec bulletin_paie_id.
+      if (data?.id && cilPaiementsSingle.length > 0) {
+        for (const pcc of cilPaiementsSingle) {
+          await marquerPaiementPaye(supabase, pcc.id, data.id)
+        }
+      }
+
+      // G7 — Marquer l'allocation naissance payee avec reference bulletin.
+      if (data?.id && allocNaissanceSingle) {
+        await marquerAllocationPayee(supabase, allocNaissanceSingle.id, data.id)
       }
 
       // Marquer les primes comme intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
@@ -886,6 +975,13 @@ export async function POST(request: Request) {
       if (!societe_id) {
         return NextResponse.json({ error: 'societe_id requis pour calculer_batch', bulletins: [], nb: 0 }, { status: 400 })
       }
+
+      // F14 — audit trail : start timer + track counters
+      const auditStart = Date.now()
+      const auditRaisonsSkip: Record<string, number> = {}
+      let auditNbUpdates = 0
+      let auditNbInserts = 0
+      let auditNbErreurs = 0
 
       // Multi-tenant: verify access to this société
       const hasAccess = await userHasAccessToSociete(user.id, societe_id)
@@ -972,6 +1068,14 @@ export async function POST(request: Request) {
       const bulletinsSauvegardes = []
       const erreurs: string[] = []
 
+      // PE1 — Période paie paramétrable. Tous les employés d'un batch
+      // partagent `societe_id`, donc on résout la période une seule fois.
+      const periodeInfoBatch: PeriodePaieCalculee = await calculerPeriodePaie(
+        supabase, societe_id || null, `${periodeStr}-01`,
+      )
+      const periodeStartBatch = periodeInfoBatch.periode_debut
+      const periodeEndBatch = periodeInfoBatch.periode_fin
+
       // Fetch auto-prime rules for this société (once for all employees)
       let autoRegles: any[] = []
       try {
@@ -984,14 +1088,14 @@ export async function POST(request: Request) {
         // 1. OT depuis pointages
         const { data: pointagesMois } = await supabase.from('pointages')
           .select('*').eq('employe_id', emp.id)
-          .gte('date_pointage', `${periodeStr}-01`).lte('date_pointage', lastDayOfMonth(periodeStr))
+          .gte('date_pointage', periodeStartBatch).lte('date_pointage', periodeEndBatch)
 
         // Bug 4 fix: fetch planning assignments for this employee+period
         const { data: planAssignments } = await supabase.from('planning_assignments')
           .select('date, shift_code, heures_prevues, est_repos')
           .eq('employe_id', emp.id)
-          .gte('date', `${periodeStr}-01`)
-          .lte('date', lastDayOfMonth(periodeStr))
+          .gte('date', periodeStartBatch)
+          .lte('date', periodeEndBatch)
         const planMap: Record<string, { heures_prevues: number; est_repos: boolean }> = {}
         for (const pa of planAssignments || []) {
           planMap[pa.date] = { heures_prevues: Number(pa.heures_prevues) || 8, est_repos: pa.est_repos }
@@ -1150,8 +1254,9 @@ export async function POST(request: Request) {
         // was invisible when computing the March 2026 bulletin). Correct
         // "overlaps" filter: leave.date_debut <= periodeEnd AND
         // leave.date_fin >= periodeStart.
-        const periodeStart = `${periodeStr}-01`
-        const periodeEnd = lastDayOfMonth(periodeStr)
+        // PE1 — utilise periodeStartBatch/periodeEndBatch résolus en haut.
+        const periodeStart = periodeStartBatch
+        const periodeEnd = periodeEndBatch
         const { data: congesApprouves } = await supabase.from('demandes_conges')
           .select('*').eq('employe_id', emp.id).eq('statut', 'approuve')
           .lte('date_debut', periodeEnd).gte('date_fin', periodeStart)
@@ -1374,7 +1479,89 @@ export async function POST(request: Request) {
         }
 
         const jt = jours_travailles > 0 ? jours_travailles : 26
-        const resultat = calculerBulletin(elements, params as any, jt, Number(emp.pct_refacturation) || 0)
+
+        // F10 — Pré-calcul du salaire_brut_base (hors EOY) pour calculer
+        // l'UL AVANT calculerBulletin, et passer le total absence comme
+        // base de cotisation.
+        const salaireBrutBaseBatch =
+          Number(elements.salaire_base)
+          + (Number(elements.transport_allowance) || 0)
+          + (Number(elements.petrol_allowance) || 0)
+          + (Number(elements.heures_sup_montant) || 0)
+          + (Number(elements.special_allowance_1) || 0)
+          + (Number(elements.special_allowance_2) || 0)
+          + (Number(elements.special_allowance_3) || 0)
+          + (Number((elements as any).increment_salaire) || 0)
+          + (Number(elements.other_refund) || 0)
+          + (Number((elements as any).departure_notice) || 0)
+
+        // ── UL (Unpaid Leave) deduction ─────────────────────────────────
+        // Formula: deduction_ul = nb_jours_ul × (salaire_brut_base / nb_jours_ouvres_mois)
+        // INTÉGRATION 3 + Sprint 3 BUG 3 — UL deduction TOUJOURS appliquée
+        // (même pour isHorsMRA). Le flag isHorsMRA ne contrôle QUE
+        // l'inclusion dans les déclarations CSG/NSF/PAYE, pas le calcul net.
+        let montant_ul = 0
+        let ul_skip_reason: string | null = null
+        if (joursUnpaidLeave > 0) {
+          const nbJoursOuvresMois = calculateWorkingDays(periodeStart, periodeEnd, {
+            workingDays: getWorkingDaysForEmploye(emp),
+            joursFeries: joursFeriesSet,
+          })
+          if (nbJoursOuvresMois > 0 && salaireBrutBaseBatch > 0) {
+            montant_ul = Math.round(joursUnpaidLeave * (salaireBrutBaseBatch / nbJoursOuvresMois) * 100) / 100
+            const tag = isHorsMRA ? ' [hors MRA — déduction net seule]' : ''
+            console.log(`[paie] UL OK ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutBaseBatch} / ${nbJoursOuvresMois}) = ${montant_ul} MUR${tag}`)
+          } else {
+            ul_skip_reason = `joursOuvres=${nbJoursOuvresMois} salaireBrut=${salaireBrutBaseBatch}`
+            console.warn(`[paie] UL SKIP zero-guard — ${emp.prenom} ${emp.nom} ${ul_skip_reason}`)
+          }
+        }
+
+        // POLICY Lexora — cumul absences + UL plafonné au salaire_brut_base.
+        const totalAbsenceRawBatch = montant_absence_final + montant_ul
+        const totalDeductionAbsence = Math.min(totalAbsenceRawBatch, salaireBrutBaseBatch)
+
+        // F6 — Split UL / injustifiées pour stockage séparé. Si le cap
+        // plafond a été touché, on prorate les 2 montants proportionnellement.
+        let montantInjustFinalBatch = montant_absence_final
+        let montantUlFinalBatch = montant_ul
+        if (totalAbsenceRawBatch > salaireBrutBaseBatch && totalAbsenceRawBatch > 0) {
+          const scale = salaireBrutBaseBatch / totalAbsenceRawBatch
+          montantInjustFinalBatch = Math.round(montant_absence_final * scale * 100) / 100
+          montantUlFinalBatch = Math.round(montant_ul * scale * 100) / 100
+        }
+
+        // G1 — Cash-in-lieu (WRA S.45/S.47) : injecter paiements compensation
+        // valides pour cette periode_bulletin (= 1er du mois).
+        const periodeBulletinBatch = `${periodeStr}-01`
+        const cilPaiementsBatch = isHorsMRA
+          ? []
+          : await fetchPaiementsValidesPourBulletin(supabase, emp.id, periodeBulletinBatch)
+        const cilMontantBatch = cilPaiementsBatch.reduce((s, p) => s + Number(p.montant_total || 0), 0)
+        const cilJoursBatch = cilPaiementsBatch.reduce((s, p) => s + Number(p.jours_payes_compensation || 0), 0)
+        const cilTypesBatch = new Set(cilPaiementsBatch.map(p => p.type_conge))
+        const cilTypeBatch: 'AL' | 'VL' | 'mixte' | null = cilTypesBatch.size === 0
+          ? null
+          : cilTypesBatch.size > 1 ? 'mixte' : (Array.from(cilTypesBatch)[0] as 'AL' | 'VL')
+
+        // G7 — Allocation naissance 3 000 MUR (WRA S.52). Injectee directement
+        // sur le bulletin (hors CSG/NSF/PAYE, forfait social non-imposable).
+        const allocNaissanceBatch = await fetchGrossessePourAllocationBulletin(
+          supabase, emp.id, periodeStr,
+        )
+        const allocMontantBatch = allocNaissanceBatch?.montant || 0
+
+        // F10 + G1 — calculerBulletin avec totalDeductionAbsence + cilMontant.
+        const resultat = calculerBulletin(
+          elements,
+          params as any,
+          jt,
+          Number(emp.pct_refacturation) || 0,
+          undefined,
+          undefined,
+          isHorsMRA ? 0 : totalDeductionAbsence,
+          cilMontantBatch,
+        )
 
         // Hors champs MRA : pas de CSG, NSF, PAYE, pas de charges patronales
         if (isHorsMRA) {
@@ -1391,57 +1578,6 @@ export async function POST(request: Request) {
           resultat.total_charges_patronales = 0
           resultat.salaire_net = salaire_base_mur // net = base pour hors MRA
         }
-
-        // ── UL (Unpaid Leave) deduction ─────────────────────────────────
-        // Formula: deduction_ul = nb_jours_ul × (salaire_brut / nb_jours_ouvres_mois)
-        // where nb_jours_ouvres_mois is computed using the EMPLOYEE'S
-        // working_days pattern + applicable jours fériés (Mon–Fri + MU
-        // holidays by default). This differs from the unjustified-absence
-        // formula which uses salaire_base/26 — UL docks the full gross
-        // pro rata, not just the basic salary.
-        // INTÉGRATION 3 + Sprint 3 BUG 3 — UL deduction TOUJOURS appliquée.
-        // Avant : la garde !isHorsMRA skippait silencieusement le calcul UL
-        // pour les employés exclure_mra=true (cas Sheetal Sekely). Or la
-        // déduction UL est INDÉPENDANTE de la déclaration MRA : un employé
-        // hors MRA peut quand même avoir des congés UL qui doivent être
-        // déduits du salaire net.
-        // Le flag isHorsMRA ne contrôle QUE l'inclusion dans les
-        // déclarations CSG/NSF/PAYE, pas le calcul net.
-        let montant_ul = 0
-        let ul_skip_reason: string | null = null
-        if (joursUnpaidLeave > 0) {
-          const nbJoursOuvresMois = calculateWorkingDays(periodeStart, periodeEnd, {
-            workingDays: getWorkingDaysForEmploye(emp),
-            joursFeries: joursFeriesSet,
-          })
-          const salaireBrutPaie = Number(resultat.salaire_brut ?? 0)
-            || (salaire_base_mur
-              + (Number(elements.transport_allowance) || 0)
-              + (Number(elements.petrol_allowance) || 0)
-              + (Number(elements.heures_sup_montant) || 0)
-              + (Number(elements.special_allowance_1) || 0)
-              + (Number(elements.special_allowance_2) || 0)
-              + (Number(elements.special_allowance_3) || 0))
-          if (nbJoursOuvresMois > 0 && salaireBrutPaie > 0) {
-            montant_ul = Math.round(joursUnpaidLeave * (salaireBrutPaie / nbJoursOuvresMois) * 100) / 100
-            const tag = isHorsMRA ? ' [hors MRA — déduction net seule]' : ''
-            console.log(`[paie] UL OK ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutPaie} / ${nbJoursOuvresMois}) = ${montant_ul} MUR${tag}`)
-          } else {
-            ul_skip_reason = `joursOuvres=${nbJoursOuvresMois} salaireBrut=${salaireBrutPaie}`
-            console.warn(`[paie] UL SKIP zero-guard — ${emp.prenom} ${emp.nom} ${ul_skip_reason} (resultat.salaire_brut=${resultat.salaire_brut})`)
-          }
-        }
-
-        // Sprint 3 BUG 3 — déduction UL appliquée AUSSI quand isHorsMRA.
-        // Avant : net = salaire_base si hors MRA → ignorait l'UL. Maintenant :
-        // net = salaire_base - totalDeductionAbsence si hors MRA.
-        // POLICY Lexora — on plafonne le cumul absences + UL au salaire_brut
-        // (cas limite : UL > brut du mois, ex. premier mois prorata faible).
-        const salaireBrutPlafondBatch = isHorsMRA
-          ? salaire_base_mur
-          : (Number(resultat.salaire_brut) || 0)
-        const totalAbsenceRawBatch = montant_absence_final + montant_ul
-        const totalDeductionAbsence = Math.min(totalAbsenceRawBatch, salaireBrutPlafondBatch)
 
         // Sprint 15 FIX 1 — Avance sur salaire (WRA Art. 29).
         // Déduire la mensualité de l'avance active du salaire net.
@@ -1474,11 +1610,12 @@ export async function POST(request: Request) {
         }
 
         // POLICY Lexora — salaire_net final plafonné à 0.
+        // G7 — Allocation naissance s'ajoute au net (hors cotisations).
         const salaire_net_final = Math.max(
           0,
           isHorsMRA
-            ? Math.round((salaire_base_mur - totalDeductionAbsence - avanceDeduction) * 100) / 100
-            : Math.round((resultat.salaire_net - totalDeductionAbsence - avanceDeduction) * 100) / 100,
+            ? Math.round((salaire_base_mur - totalDeductionAbsence - avanceDeduction + allocMontantBatch) * 100) / 100
+            : Math.round((resultat.salaire_net - totalDeductionAbsence - avanceDeduction + allocMontantBatch) * 100) / 100,
         )
 
         // Résumé notes pour le bulletin
@@ -1541,14 +1678,20 @@ export async function POST(request: Request) {
           // Sprint 11 BUG 7 — other_refund = refund fiche employé + frais km approuvés du mois
           other_refund: isHorsMRA ? 0 : ((Number(emp.other_refund) || 0) + total_frais_km),
           eoy_bonus: isHorsMRA ? 0 : eoy_bonus_montant,
-          // montant_absence holds the TOTAL deduction from absences (unjustified
-          // + UL). The breakdown is recorded in `notes` and can be recomputed
-          // from demandes_conges for reporting (Commit 11 conges_details).
-          montant_absence: isHorsMRA ? 0 : Math.round(totalDeductionAbsence * 100) / 100,
-          // F1 — écrire jours_absence en DB (avant bug : champ jamais posé,
-          // default 0 → incohérence montant_absence>0 / jours_absence=0).
-          // Stocke le nombre de jours d'absences NON JUSTIFIÉES.
+          // F6 — Colonnes séparées pour la traçabilité :
+          //   montant_absence / jours_absence = absences INJUSTIFIÉES uniquement
+          //   montant_ul / jours_ul           = Unpaid Leave approuvés uniquement
+          // CSG/NSF/PAYE basés sur la SOMME des deux (cf. totalDeductionAbsence).
+          montant_absence: isHorsMRA ? 0 : Math.round(montantInjustFinalBatch * 100) / 100,
           jours_absence: isHorsMRA ? 0 : (jours_absence_injust || 0),
+          montant_ul: isHorsMRA ? 0 : Math.round(montantUlFinalBatch * 100) / 100,
+          jours_ul: isHorsMRA ? 0 : (joursUnpaidLeave || 0),
+          // G1 — Cash-in-lieu (WRA S.45/S.47)
+          montant_cash_in_lieu: Math.round(cilMontantBatch * 100) / 100,
+          jours_cash_in_lieu: cilJoursBatch,
+          cash_in_lieu_type: cilTypeBatch,
+          // G7 — Allocation naissance 3 000 MUR (WRA S.52, non-imposable)
+          allocation_naissance: Math.round(allocMontantBatch * 100) / 100,
           notes: notesResume,
           statut: 'brouillon',
         }
@@ -1567,25 +1710,42 @@ export async function POST(request: Request) {
         let saved: any = null
         let error: any = null
 
-        // Check if bulletin already exists for this employee+period
+        // F14 — Check if bulletin already exists + ses flags verrouille/paiement
+        //        (pour compter les skip precis dans l'audit).
         const { data: existing } = await supabase.from('bulletins_paie')
-          .select('id').eq('employe_id', emp.id).eq('periode', periodeDate).maybeSingle()
+          .select('id, verrouille, date_paiement')
+          .eq('employe_id', emp.id).eq('periode', periodeDate).maybeSingle()
 
         if (existing) {
-          // UPDATE existing bulletin
+          // F14 — skip si bulletin verrouille ou deja paye (immuables).
+          if (existing.verrouille === true) {
+            auditRaisonsSkip['verrouille'] = (auditRaisonsSkip['verrouille'] || 0) + 1
+            console.log(`[paie batch F14] SKIP ${emp.prenom} ${emp.nom} — bulletin verrouille`)
+            continue
+          }
+          if (existing.date_paiement) {
+            auditRaisonsSkip['paye'] = (auditRaisonsSkip['paye'] || 0) + 1
+            console.log(`[paie batch F14] SKIP ${emp.prenom} ${emp.nom} — bulletin paye (${existing.date_paiement})`)
+            continue
+          }
+          // F14 — force updated_at pour que le recalcul soit visible cote UI.
+          const bulletinAvecTs = { ...bulletin, updated_at: new Date().toISOString() }
           const { data: updated, error: upErr } = await supabase.from('bulletins_paie')
-            .update(bulletin).eq('id', existing.id).select().single()
+            .update(bulletinAvecTs).eq('id', existing.id).select().single()
           saved = updated
           error = upErr
+          if (!upErr) auditNbUpdates++
         } else {
           // INSERT new bulletin
           const { data: inserted, error: insErr } = await supabase.from('bulletins_paie')
             .insert(bulletin).select().single()
           saved = inserted
           error = insErr
+          if (!insErr) auditNbInserts++
         }
 
         if (error) {
+          auditNbErreurs++
           const errMsg = `${emp.nom} ${emp.prenom}: ${error.message}${error.details ? ' — ' + error.details : ''}${error.hint ? ' (hint: ' + error.hint + ')' : ''}`
           console.error(`[paie batch] SAVE FAILED:`, errMsg)
           erreurs.push(errMsg)
@@ -1615,6 +1775,17 @@ export async function POST(request: Request) {
             employe: { id: emp.id, code: emp.code_employe, nom: emp.nom, prenom: emp.prenom, poste: emp.poste },
             conges_details: congesDetailsForBulletin,
           })
+          // G1 — Marquer les paiements compensation comme 'paye' avec bulletin_paie_id.
+          if (saved?.id && cilPaiementsBatch.length > 0) {
+            for (const pcc of cilPaiementsBatch) {
+              await marquerPaiementPaye(supabase, pcc.id, saved.id)
+            }
+          }
+
+          // G7 — Marquer l'allocation naissance payee avec reference bulletin.
+          if (saved?.id && allocNaissanceBatch) {
+            await marquerAllocationPayee(supabase, allocNaissanceBatch.id, saved.id)
+          }
           // Marquer primes intégrées (colonne integre_paie + date_integration ajoutées en migration 028)
           if (primesMois && primesMois.length > 0) {
             await supabase.from('primes_variables_mois')
@@ -1631,12 +1802,49 @@ export async function POST(request: Request) {
         cout_total_employeur: bulletinsSauvegardes.reduce((s, b) => s + Number(b.salaire_brut || 0) + Number(b.total_charges_patronales || 0), 0),
       }
 
+      // F14 — Audit trail : insertion d'une ligne par appel calculer_batch.
+      //   action = 'recalcul_batch' si au moins 1 UPDATE, sinon 'calcul_initial'.
+      //   nb_skip = bulletins verrouilles/payes non modifies.
+      const auditAction = auditNbUpdates > 0 ? 'recalcul_batch' : 'calcul_initial'
+      const auditNbSkip = Object.values(auditRaisonsSkip).reduce((a, b) => a + b, 0)
+      try {
+        await supabase.from('audit_recalcul_paie').insert({
+          societe_id,
+          periode: `${periodeStr}-01`,
+          action: auditAction,
+          nb_bulletins_cibles: (finalEmployes || []).length,
+          nb_bulletins_modifies: auditNbUpdates + auditNbInserts,
+          nb_bulletins_skip: auditNbSkip,
+          nb_bulletins_erreur: auditNbErreurs,
+          raisons_skip: Object.keys(auditRaisonsSkip).length > 0 ? auditRaisonsSkip : null,
+          erreurs: erreurs.length > 0 ? erreurs : null,
+          declenche_par: user.id,
+          duree_ms: Date.now() - auditStart,
+        })
+      } catch (auditErr: any) {
+        console.warn('[paie batch F14] audit insert failed (non-blocking):', auditErr?.message || auditErr)
+      }
+
+      console.log(`[paie batch F14] ${auditAction} — cibles=${(finalEmployes || []).length} updates=${auditNbUpdates} inserts=${auditNbInserts} skip=${auditNbSkip} erreurs=${auditNbErreurs} duree=${Date.now() - auditStart}ms`)
+
       return NextResponse.json({
         bulletins: bulletinsSauvegardes,
         totaux,
         nb: bulletinsSauvegardes.length,
         nb_employes: employes.length,
         erreurs: erreurs.length > 0 ? erreurs : undefined,
+        // F14 — detail du recalcul pour feedback UI precis
+        recalcul: {
+          action: auditAction,
+          nb_cibles: (finalEmployes || []).length,
+          nb_modifies: auditNbUpdates + auditNbInserts,
+          nb_updates: auditNbUpdates,
+          nb_inserts: auditNbInserts,
+          nb_skip: auditNbSkip,
+          nb_erreurs: auditNbErreurs,
+          raisons_skip: auditRaisonsSkip,
+          duree_ms: Date.now() - auditStart,
+        },
         debug: { societe_id, periode: periodeStr, nb_employes_total: allEmps.length, nb_actifs: employes.length, nb_bulletins: bulletinsSauvegardes.length, nb_erreurs: erreurs.length }
       })
     }

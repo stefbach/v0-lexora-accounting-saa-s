@@ -13,7 +13,28 @@ function getAdminClient() {
   )
 }
 
-function computeHours(heure_entree: string | null, heure_sortie: string | null, duree_minutes_existing: number | null) {
+/**
+ * F12 — Seuil OT par défaut WRA 2019 Art. 20(1) : 9h/jour (45h/semaine sur
+ * 5 jours). Utilisé quand le shift planning n'a pas de `heures_prevues`
+ * défini (pointage hors planning, ou société sans shifts configurés).
+ */
+const DEFAULT_SEUIL_OT_HEURES = 9
+
+/**
+ * F12 — Calcule heures travaillées + heures supplémentaires à partir des
+ * horaires de pointage. Le seuil OT est dynamique : il vient du shift
+ * assigné (planning_assignments.heures_prevues) quand disponible, sinon
+ * fallback 9h (règle WRA par défaut).
+ *
+ * AVANT F12 : le seuil était hardcodé à 8h, ce qui créditait ~1h d'OT
+ * injustifiée pour les employés OCC travaillant leur 9h journalier normal.
+ */
+function computeHours(
+  heure_entree: string | null,
+  heure_sortie: string | null,
+  duree_minutes_existing: number | null,
+  seuilOT: number = DEFAULT_SEUIL_OT_HEURES,
+) {
   let duree_minutes = duree_minutes_existing || null
   let heures_travaillees: number | null = null
   let heures_sup: number | null = null
@@ -28,7 +49,9 @@ function computeHours(heure_entree: string | null, heure_sortie: string | null, 
 
   if (duree_minutes && duree_minutes > 0) {
     heures_travaillees = parseFloat((duree_minutes / 60).toFixed(2))
-    heures_sup = heures_travaillees > 8 ? parseFloat((heures_travaillees - 8).toFixed(2)) : 0
+    heures_sup = heures_travaillees > seuilOT
+      ? parseFloat((heures_travaillees - seuilOT).toFixed(2))
+      : 0
   }
 
   return { duree_minutes, heures_travaillees, heures_sup }
@@ -313,8 +336,10 @@ export async function GET(request: Request) {
       }
 
       const enriched = (data || []).map(p => {
-        const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes)
         const pa = planMap.get(`${p.employe_id}|${p.date_pointage}`) || null
+        // F12 — seuil OT = heures_prevues du shift (fallback 9h WRA Art. 20(1))
+        const seuilOT = Number(pa?.heures_prevues) > 0 ? Number(pa.heures_prevues) : DEFAULT_SEUIL_OT_HEURES
+        const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes, seuilOT)
         const punctuality = computePointagePunctuality(pa, p.heure_entree, p.heure_sortie, heures_travaillees)
         return {
           ...p,
@@ -397,8 +422,10 @@ export async function GET(request: Request) {
     }
 
     const enriched = (data || []).map(p => {
-      const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes)
       const pa = planMapDaily.get(p.employe_id) || null
+      // F12 — seuil OT = heures_prevues du shift (fallback 9h WRA Art. 20(1))
+      const seuilOT = Number(pa?.heures_prevues) > 0 ? Number(pa.heures_prevues) : DEFAULT_SEUIL_OT_HEURES
+      const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes, seuilOT)
       const punctuality = computePointagePunctuality(pa, p.heure_entree, p.heure_sortie, heures_travaillees)
       return {
         ...p,
@@ -599,8 +626,14 @@ export async function POST(request: Request) {
       })
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+      // F12 — seuil OT = heures_prevues du shift (fallback 9h WRA Art. 20(1))
+      const seuilOT = Number(planAssignment?.heures_prevues) > 0
+        ? Number(planAssignment?.heures_prevues)
+        : DEFAULT_SEUIL_OT_HEURES
       const heures_travaillees = parseFloat((duree_minutes / 60).toFixed(2))
-      const heures_sup = heures_travaillees > 8 ? parseFloat((heures_travaillees - 8).toFixed(2)) : 0
+      const heures_sup = heures_travaillees > seuilOT
+        ? parseFloat((heures_travaillees - seuilOT).toFixed(2))
+        : 0
       return NextResponse.json({ pointage: { ...data, duree_minutes, heures_travaillees, heures_sup } })
     }
 

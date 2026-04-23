@@ -8,7 +8,7 @@ import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import {
   Clock, Users, Calendar, CreditCard, TrendingUp, Banknote,
-  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle
+  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle, ShieldCheck,
 } from "lucide-react"
 
 interface NavLink {
@@ -45,6 +45,9 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/exports/paie', label: 'Exports Paie & MRA', icon: Banknote, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   { href: '/rh/import-paie', label: 'Import Paie Excel', icon: Upload, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/historique-paie', label: 'Historique Paie', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
+  // G6 — Exports légaux WRA S.116 : placés après 'Historique Paie' dans la
+  // section paie/compliance. Réservés admin + rh (seuls rôles réels en DB).
+  { href: '/rh/exports-legaux', label: 'Exports légaux (S.116)', icon: ShieldCheck, roles: ['admin', 'rh'] },
   { href: '/rh/annonces', label: 'Annonces', icon: Megaphone, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/chat', label: 'CLARA — Assistant IA', icon: Bot },
   // Sprint 2 — hub central de paramètres en plus des sous-pages spécifiques.
