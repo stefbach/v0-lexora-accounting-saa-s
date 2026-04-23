@@ -70,6 +70,10 @@ export interface ElementsBrut {
   eoy_bonus?: number           // 13eme mois
   departure_notice?: number    // Preavis
   commission?: number          // Commission
+  /** G9 — Disturbance Allowance WRA S.17A FMPA 2024 (heures unsocial).
+   *  Assimilé à un salaire normal (soumis CSG/NSF/PAYE).
+   *  Calcul externe via lib/rh/disturbance-allowance. */
+  disturbance_allowance?: number
 }
 
 export interface ResultatPaie {
@@ -139,15 +143,19 @@ export function calculerBulletin(
     eoy_bonus = 0,
     departure_notice = 0,
     commission = 0,
+    disturbance_allowance = 0,
   } = elements
 
   // POLICY Lexora — plus de salary_compensation ajoutée au brut.
   // G1 — cashInLieuMontant ajouté au brut total (impacte PAYE et net).
+  // G9 — disturbance_allowance (S.17A) s'ajoute comme un salary normal
+  //      (soumis CSG/NSF/PAYE), même rang que les autres allowances.
   const salaire_brut_base = salaire_base + increment_salaire +
     heures_sup_montant +
     transport_allowance + petrol_allowance +
     special_allowance_1 + special_allowance_2 + special_allowance_3 +
     other_refund + departure_notice + commission +
+    disturbance_allowance +
     (cashInLieuMontant || 0)
 
   const salaire_brut = salaire_brut_base + eoy_bonus

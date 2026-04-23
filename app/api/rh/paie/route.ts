@@ -773,6 +773,35 @@ export async function POST(request: Request) {
       const pf2 = Number(emp.prime_fixe_2) || 0
       const pf3 = Number(emp.prime_fixe_3) || 0
 
+      // G9 — Disturbance Allowance (S.17A FMPA 2024).
+      // Si la société active cette option, on calcule en amont le montant
+      // mensuel + on le sauvegarde dans elements.disturbance_allowance (qui
+      // rejoindra ensuite salaire_brut_base -> CSG/NSF/PAYE).
+      let disturbanceMontantSingle = 0
+      let disturbanceHeuresSingle = 0
+      let disturbanceRecapSingle: any = null
+      try {
+        const { data: socDist } = await supabase
+          .from('societes')
+          .select('disturbance_allowance_active, disturbance_hourly_multiplier')
+          .eq('id', targetSocieteId || emp.societe_id)
+          .maybeSingle()
+        if ((socDist as any)?.disturbance_allowance_active === true) {
+          const { calculerDisturbanceEmploye } = await import('@/lib/rh/disturbance-allowance')
+          disturbanceRecapSingle = await calculerDisturbanceEmploye(
+            supabase, employe_id, periodeStartSingle, periodeEndSingle,
+            {
+              multiplier: Number((socDist as any).disturbance_hourly_multiplier) || 1.0,
+              salaireBase: Number(emp.salaire_base) || 0,
+            },
+          )
+          disturbanceMontantSingle = disturbanceRecapSingle.montant_total
+          disturbanceHeuresSingle = disturbanceRecapSingle.heures_total
+        }
+      } catch (e: any) {
+        console.warn('[paie calculer] disturbance allowance skip:', e?.message || e)
+      }
+
       const elements = {
         salaire_base: salaire_base_mur,
         transport_allowance: Number(emp.transport_allowance) || 0,
@@ -789,6 +818,8 @@ export async function POST(request: Request) {
         other_refund: (body.other_refund || 0) + total_frais_km_single,
         eoy_bonus: body.eoy_bonus || 0,
         departure_notice: body.departure_notice || 0,
+        // G9 — disturbance allowance (0 si société n'active pas).
+        disturbance_allowance: disturbanceMontantSingle,
       }
 
       const joursTravailles = jours_travailles > 0 ? jours_travailles : (body.jours_travailles || 26)
@@ -805,6 +836,9 @@ export async function POST(request: Request) {
         + (Number(elements.special_allowance_2) || 0)
         + (Number(elements.special_allowance_3) || 0)
         + (Number(elements.increment_salaire) || 0)
+        // G9 — disturbance assimilé à du salary normal : il entre dans
+        // la base brut utilisée pour calculer UL et proratas.
+        + (Number(elements.disturbance_allowance) || 0)
         + (Number(elements.other_refund) || 0)
         + (Number(elements.departure_notice) || 0)
 
@@ -912,6 +946,9 @@ export async function POST(request: Request) {
         cash_in_lieu_type: cilTypeSingle,
         // G7 — Allocation naissance 3 000 MUR (WRA S.52, forfait non-imposable)
         allocation_naissance: Math.round(allocMontantSingle * 100) / 100,
+        // G9 — Disturbance Allowance S.17A FMPA 2024 (heures unsocial).
+        disturbance_allowance: Math.round(disturbanceMontantSingle * 100) / 100,
+        disturbance_heures: Math.round(disturbanceHeuresSingle * 100) / 100,
         // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI
         notes: prorataSingle.ratio < 1 ? `[${prorataSingle.motif}]` : null,
         statut: 'brouillon',
@@ -923,6 +960,16 @@ export async function POST(request: Request) {
       if (error) {
         console.error('[paie calculer]', error.message, error.details, error.hint)
         return NextResponse.json({ error: `Erreur bulletin: ${error.message}`, details: error.details, hint: error.hint }, { status: 500 })
+      }
+
+      // G9 — Sauvegarde des détails disturbance (si présents) liés au bulletin.
+      if (data?.id && disturbanceRecapSingle && disturbanceRecapSingle.details.length > 0) {
+        try {
+          const { sauvegarderDisturbanceBulletin } = await import('@/lib/rh/disturbance-allowance')
+          await sauvegarderDisturbanceBulletin(supabase, data.id, employe_id, disturbanceRecapSingle)
+        } catch (e: any) {
+          console.warn('[paie calculer] sauvegarde disturbance détail skip:', e?.message || e)
+        }
       }
 
       // G1 — Marquer les paiements compensation comme 'paye' avec bulletin_paie_id.
