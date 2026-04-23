@@ -164,6 +164,11 @@ export async function PUT(req: NextRequest) {
       'periode_paie_jour_paiement',
       'periode_paie_offset_paiement_mois',
       'periode_paie_notes',
+      // G11 — End of Year Bonus WRA S.54 (mig 182)
+      'eoy_bonus_seuil_max',
+      'eoy_bonus_inclut_hors_seuil',
+      'eoy_bonus_date_paiement_75pct',
+      'eoy_bonus_date_paiement_25pct',
     ]
 
     const updates: Record<string, unknown> = {}

@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import MonEspacePersonnel from "@/components/rh/MonEspacePersonnel"
 import { MraDeadlineAlert } from "@/components/rh/MraDeadlineAlert"
 import { DocumentsEnAttenteWidget } from "@/components/rh/DocumentsEnAttenteWidget"
+import { EoyBonusWidget } from "@/components/rh/EoyBonusWidget"
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts"
 import Link from "next/link"
 
@@ -243,6 +244,10 @@ export default function RHDashboard() {
         {/* DOC1 — Widget documents reçus des employés non lus. Rendu
             uniquement si docs en attente (le composant retourne null sinon). */}
         <DocumentsEnAttenteWidget />
+
+        {/* G11 — Widget EOY Bonus. Visible uniquement oct-déc.
+            Retourne null avant octobre. */}
+        <EoyBonusWidget />
 
         {/* Widget "Mon espace" — 4 actions rapides vers /salarie.
             Compact, en haut du dashboard pour un accès immédiat. */}
