@@ -1,7 +1,7 @@
 "use client"
+import { useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Building2, ArrowRight, Loader2, Layers } from "lucide-react"
 import { useRHSocieteActive } from "@/components/rh/RHSocieteActiveProvider"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
@@ -9,10 +9,12 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 /**
  * Page /rh/select-societe — équivalent /client/select-societe pour l'espace RH.
  *
- * Contrairement au flow client, on NE force PAS de redirection automatique :
- * cette page n'est accessible que si l'utilisateur clique "Changer" dans le
- * sidebar OU arrive ici via un deep link. Les admins/comptables peuvent
- * choisir "Toutes les sociétés" pour une vue consolidée.
+ * Flow :
+ *   1. Middleware redirige ici si pas de cookie de choix fait.
+ *   2. Si l'utilisateur n'a qu'UNE société, auto-select silencieux.
+ *   3. Sinon, l'utilisateur choisit une société OU "Toutes les sociétés"
+ *      (mode consolidé admin/comptable). Les deux écrivent le flag
+ *      `rh_societe_choice_made=true` pour éviter de revenir ici.
  *
  * Après sélection : redirect vers `?returnTo=` ou /rh par défaut.
  */
@@ -21,6 +23,7 @@ export default function SelectSocietePage() {
   const search = useSearchParams()
   const returnTo = search?.get("returnTo") || "/rh"
   const { societes, loading, switchSociete, selectAll } = useRHSocieteActive()
+  const autoPickedRef = useRef(false)
 
   const handlePick = (id: string) => {
     switchSociete(id)
@@ -31,11 +34,33 @@ export default function SelectSocietePage() {
     router.push(returnTo)
   }
 
+  // Auto-select silencieux : si l'utilisateur n'a qu'UNE société accessible,
+  // on la pose et on redirige immédiatement sans passer par la page.
+  useEffect(() => {
+    if (loading || autoPickedRef.current) return
+    if (societes.length === 1) {
+      autoPickedRef.current = true
+      switchSociete(societes[0].id)
+      router.replace(returnTo)
+    }
+  }, [loading, societes, switchSociete, router, returnTo])
+
   if (loading) {
     return (
       <ClientPageShell>
         <div className="flex items-center gap-2 text-slate-500 p-6">
           <Loader2 className="h-4 w-4 animate-spin" /> Chargement des sociétés…
+        </div>
+      </ClientPageShell>
+    )
+  }
+
+  // Pendant la redirection auto (1 société), on affiche un spinner.
+  if (societes.length === 1) {
+    return (
+      <ClientPageShell>
+        <div className="flex items-center gap-2 text-slate-500 p-6">
+          <Loader2 className="h-4 w-4 animate-spin" /> Redirection…
         </div>
       </ClientPageShell>
     )
@@ -107,9 +132,6 @@ export default function SelectSocietePage() {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end">
-          <Button variant="outline" onClick={() => router.back()}>Annuler</Button>
-        </div>
       </div>
     </ClientPageShell>
   )

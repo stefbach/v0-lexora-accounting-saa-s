@@ -34,6 +34,15 @@ import {
 
 export const ACTIVE_SOCIETE_COOKIE = "active_societe_id"
 export const ACTIVE_SOCIETE_STORAGE_KEY = "lexora_active_societe"
+/**
+ * Cookie distinct pour marquer "l'utilisateur a fait un choix RH".
+ * Nécessaire pour distinguer :
+ *   - user frais (pas de cookie) → middleware redirige vers /rh/select-societe
+ *   - user qui a choisi "Toutes les sociétés" (active_societe_id vide) → pas de redirect
+ * Ne touche pas le cookie active_societe_id (partagé avec /client/* qui lui
+ * est mono-société strict).
+ */
+export const RH_CHOICE_COOKIE = "rh_societe_choice_made"
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30 // 30 days
 
 export interface Societe {
@@ -165,6 +174,7 @@ export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
         return
       }
       writeCookie(ACTIVE_SOCIETE_COOKIE, id, COOKIE_MAX_AGE_SECONDS)
+      writeCookie(RH_CHOICE_COOKIE, "true", COOKIE_MAX_AGE_SECONDS)
       writeStorage(ACTIVE_SOCIETE_STORAGE_KEY, id)
       setSocieteId(id)
       setError(null)
@@ -173,15 +183,19 @@ export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
   )
 
   const selectAll = useCallback(() => {
-    // Mode "toutes les sociétés" : on retire le cookie pour que /client/*
-    // repasse aussi en sélection manuelle au prochain passage.
+    // Mode "toutes les sociétés" : on retire le cookie active_societe_id
+    // (pour que /client/* repasse en sélection manuelle au prochain passage)
+    // MAIS on pose rh_societe_choice_made=true pour que le middleware ne
+    // nous renvoie pas sur /rh/select-societe.
     deleteCookie(ACTIVE_SOCIETE_COOKIE)
     deleteStorage(ACTIVE_SOCIETE_STORAGE_KEY)
+    writeCookie(RH_CHOICE_COOKIE, "true", COOKIE_MAX_AGE_SECONDS)
     setSocieteId(null)
   }, [])
 
   const clearSociete = useCallback(() => {
     deleteCookie(ACTIVE_SOCIETE_COOKIE)
+    deleteCookie(RH_CHOICE_COOKIE)
     deleteStorage(ACTIVE_SOCIETE_STORAGE_KEY)
     setSocieteId(null)
   }, [])

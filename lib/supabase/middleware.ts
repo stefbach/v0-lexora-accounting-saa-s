@@ -190,6 +190,29 @@ export async function updateSession(request: NextRequest) {
         }
       }
 
+      // Sprint RH-société-active : même pattern pour /rh/*.
+      // On redirige vers /rh/select-societe si l'utilisateur n'a pas
+      // encore fait de choix (ni société active ni mode "Toutes").
+      // Distinction via 2 cookies :
+      //   - active_societe_id : UUID (partagé avec /client/*)
+      //   - rh_societe_choice_made : 'true' après 1er choix RH (permet
+      //     le mode "Toutes les sociétés" sans boucle middleware)
+      if (isRhRoute) {
+        const hasActiveSociete = !!request.cookies.get('active_societe_id')?.value
+        const hasRhChoice = !!request.cookies.get('rh_societe_choice_made')?.value
+        const bypassPaths = [
+          '/rh/select-societe',
+          '/rh/profil',
+        ]
+        const isBypassed = bypassPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
+        if (!hasActiveSociete && !hasRhChoice && !isBypassed) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/rh/select-societe'
+          url.searchParams.set('returnTo', pathname + (request.nextUrl.search || ''))
+          return NextResponse.redirect(url)
+        }
+      }
+
       // Salarié portal: employees only, plus admins/HR for support views.
       // We also allow users whose profile carries an employe_id back-link
       // even if the role column is empty (migration 108/109 link arrived
