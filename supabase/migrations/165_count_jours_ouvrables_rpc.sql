@@ -6,7 +6,7 @@
 -- exclus). Cohérence avec lib/rh/calculateWorkingDays.ts côté TS.
 --
 -- Utilisée par :
---   - migration 201 (recompute rétroactif de demandes_conges.nb_jours)
+--   - migration 166 (recompute rétroactif de demandes_conges.nb_jours)
 --   - rapports SQL ad-hoc
 --   - UI RH (future intégration pour aperçu modal)
 --

@@ -21,60 +21,32 @@ import { bucketizeTransactions, type BucketItem } from "@/lib/accounting/classif
 import { RapprochementKpiDashboard } from "@/components/rapprochement/KpiDashboard"
 import { PeriodeBar } from "@/components/rapprochement/PeriodeBar"
 import { BalanceComptes } from "@/components/rapprochement/BalanceComptes"
-import { PlanComptablePicker } from "@/components/accounting/PlanComptablePicker"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
-// Liste des classifications "évidentes" (raccourcis rapides).
-// Les codes sont alignés sur le PCM Mauricien 4-digits (migration 201).
-// Pour un compte hors liste, utiliser l'option "Autre compte…" qui ouvre
-// le plan comptable complet (v_plan_comptable_client).
 const CLASSIFICATION_CHOICES = [
-  // ── Tiers ───────────────────────────────────────────────────────────────
-  { code: 'fournisseur',            label: 'Fournisseur',                compte: '401'  },
-  { code: 'client',                 label: 'Encaissement client',        compte: '411'  },
-  { code: 'compte_courant_associe', label: 'Compte courant associé',     compte: '4550' },
-  { code: 'remboursement_associe',  label: 'Remboursement associé',      compte: '108'  },
-  { code: 'avance_personnel',       label: 'Avance au personnel',        compte: '4250' },
-  { code: 'virement_interne',       label: 'Virement interne',           compte: '5800' },
-  // ── Paie (PCM 4-digits) ────────────────────────────────────────────────
-  { code: 'salaire',                label: 'Salaire net individuel',     compte: '4210' },
-  { code: 'salaire_bulk',           label: 'Masse salariale (bulk)',     compte: '4210' },
-  { code: 'csg_salarie',            label: 'CSG salarié',                compte: '4311' },
-  { code: 'nsf_salarie',            label: 'NSF salarié',                compte: '4312' },
-  { code: 'csg_patronal',           label: 'CSG patronal',               compte: '4321' },
-  { code: 'nsf_patronal',           label: 'NSF patronal',               compte: '4322' },
-  { code: 'prgf',                   label: 'PRGF',                       compte: '4323' },
-  { code: 'training_levy',          label: 'Training Levy HRDC',         compte: '4324' },
-  { code: 'paye_mra',               label: 'PAYE à la MRA',              compte: '4330' },
-  // ── MRA / Fiscalité ────────────────────────────────────────────────────
-  { code: 'paiement_mra',           label: 'Paiement MRA (général)',     compte: '4471' },
-  { code: 'tva_decaisser',          label: 'TVA à décaisser',            compte: '4455' },
-  { code: 'impot_taxe',             label: 'Impôts et taxes divers',     compte: '6351' },
-  // ── Frais bancaires ────────────────────────────────────────────────────
-  { code: 'frais_bancaires',        label: 'Frais bancaires',            compte: '6271' },
-  { code: 'frais_swift',            label: 'Commission SWIFT / câble',   compte: '6272' },
-  // ── Charges externes ───────────────────────────────────────────────────
-  { code: 'loyer',                  label: 'Loyer',                      compte: '6131' },
-  { code: 'charges_locatives',      label: 'Charges locatives',          compte: '6135' },
-  { code: 'entretien',              label: 'Entretien / réparations',    compte: '6151' },
-  { code: 'assurance',              label: 'Assurance',                  compte: '6160' },
-  { code: 'honoraires_compta',      label: 'Honoraires comptables',      compte: '6221' },
-  { code: 'honoraires_juridique',   label: 'Honoraires juridiques',      compte: '6225' },
-  { code: 'publicite',              label: 'Publicité / marketing',      compte: '623'  },
-  { code: 'deplacement',            label: 'Déplacements / missions',    compte: '6251' },
-  { code: 'missions',               label: 'Missions / réceptions',      compte: '6256' },
-  { code: 'telecom',                label: 'Télécom / internet',         compte: '6261' },
-  { code: 'materiel',               label: 'Fournitures / matériel',     compte: '606'  },
-  { code: 'sous_traitance',         label: 'Sous-traitance',             compte: '611'  },
-  { code: 'licences_saas',          label: 'Licences SaaS / logiciels',  compte: '651'  },
-  // ── Produits ───────────────────────────────────────────────────────────
-  { code: 'produit_divers',         label: 'Produit / prestation reçue', compte: '706'  },
-  { code: 'commissions',            label: 'Commissions reçues',         compte: '753'  },
-  // ── Autres ─────────────────────────────────────────────────────────────
-  { code: 'charge_diverse',         label: 'Charge diverse',             compte: '628'  },
-  { code: 'exceptionnel',           label: 'Charge exceptionnelle',      compte: '671'  },
-  { code: 'autre',                  label: 'À classer plus tard (471)',  compte: '4710' },
+  { code: 'fournisseur',            label: 'Fournisseur',                compte: '401' },
+  { code: 'client',                 label: 'Encaissement client',        compte: '411' },
+  { code: 'frais_bancaires',        label: 'Frais bancaires',            compte: '627' },
+  { code: 'paiement_mra',           label: 'Paiement MRA (impôts)',      compte: '447' },
+  { code: 'charge_sociale',         label: 'Charges sociales (CSG/NSF)', compte: '431' },
+  { code: 'salaire',                label: 'Salaire net',                compte: '4210' },
+  { code: 'salaire_bulk',           label: 'Masse salariale (bulk)',     compte: '421' },
+  { code: 'compte_courant_associe', label: 'Compte courant associé',     compte: '455' },
+  { code: 'remboursement_associe',  label: 'Remboursement associé',      compte: '108' },
+  { code: 'avance_personnel',       label: 'Avance au personnel',        compte: '425' },
+  { code: 'virement_interne',       label: 'Virement interne',           compte: '580' },
+  { code: 'loyer',                  label: 'Loyer / charges locatives',  compte: '613' },
+  { code: 'entretien',              label: 'Entretien / réparations',    compte: '615' },
+  { code: 'assurance',              label: 'Assurance',                  compte: '616' },
+  { code: 'honoraires',             label: 'Honoraires / comptable',     compte: '622' },
+  { code: 'deplacement',            label: 'Déplacements / missions',    compte: '625' },
+  { code: 'telecom',                label: 'Télécom / internet',         compte: '626' },
+  { code: 'impot_taxe',             label: 'Impôts et taxes',            compte: '635' },
+  { code: 'materiel',               label: 'Matériel / équipement',      compte: '606' },
+  { code: 'charge_diverse',         label: 'Charge diverse',             compte: '658' },
+  { code: 'produit_divers',         label: 'Produit / prestation reçue', compte: '706' },
+  { code: 'autre',                  label: 'À classer plus tard',        compte: '471' },
 ] as const
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
 
@@ -191,29 +163,9 @@ export default function ClientRapprochementPage() {
 
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-  // Picker de compte PCM : quand ouvert, on applique la classe choisie à la tx référencée
-  const [pcmPickerFor, setPcmPickerFor] = useState<{ tx: any; applyToSimilar: boolean } | null>(null)
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 4000)
-  }
-
-  // Build the { date_debut, date_fin } payload for analysis endpoints.
-  // selectedMois wins (scope the UI visible month) → fallback on fiscal year.
-  const buildAnalysisDateFilter = (): { date_debut?: string; date_fin?: string } => {
-    if (selectedMois) {
-      const [yy, mm] = selectedMois.split('-').map(Number)
-      const start = `${yy}-${String(mm).padStart(2, '0')}-01`
-      const lastDay = new Date(yy, mm, 0).getDate()
-      const end = `${yy}-${String(mm).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-      return { date_debut: start, date_fin: end }
-    }
-    if (selectedPeriode !== 'tout') {
-      return selectedPeriode === '2025-2026'
-        ? { date_debut: '2025-07-01', date_fin: '2026-06-30' }
-        : { date_debut: '2024-07-01', date_fin: '2025-06-30' }
-    }
-    return {}
   }
 
   const handleSmartRapprochement = async () => {
@@ -227,7 +179,10 @@ export default function ClientRapprochementPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           societe_id: societeId,
-          ...buildAnalysisDateFilter(),
+          ...(selectedPeriode !== 'tout' ? {
+            date_debut: selectedPeriode === '2025-2026' ? '2025-07-01' : '2024-07-01',
+            date_fin: selectedPeriode === '2025-2026' ? '2026-06-30' : '2025-06-30',
+          } : {}),
         }),
       })
       const data = await res.json()
@@ -455,7 +410,10 @@ Voulez-vous vraiment continuer ?`
           societe_id: societeId,
           use_claude: false, // heuristic only for speed — avoids timeouts
           apply: false,
-          ...buildAnalysisDateFilter(),
+          ...(selectedPeriode !== 'tout' ? {
+            date_debut: selectedPeriode === '2025-2026' ? '2025-07-01' : '2024-07-01',
+            date_fin: selectedPeriode === '2025-2026' ? '2026-06-30' : '2025-06-30',
+          } : {}),
         }),
       })
       const data = await res.json()
@@ -781,7 +739,7 @@ Voulez-vous vraiment continuer ?`
   // lands on a stale empty page (e.g. change month → fewer rows → old page
   // is out of bounds until our clamp logic kicks in).
   useEffect(() => { setFacturesPage(1) }, [societeId, selectedMois, selectedPeriode])
-  useEffect(() => { setUnmatchedPage(1) }, [societeId, selectedMois, selectedPeriode, selectedCompte, transactionTab, txSearch])
+  useEffect(() => { setUnmatchedPage(1) }, [societeId, selectedMois, selectedPeriode, selectedCompte, transactionTab])
 
   const handleAutoMatch = async () => {
     if (!societeId) return
@@ -834,12 +792,7 @@ Voulez-vous vraiment continuer ?`
         showToast(`⚠️ 0 résultat — total=${result.total}, factures=${dbg.factures_count || '?'}, non-classifiées=${dbg.global_unclassified || '?'}, version=${dbg.version || 'inconnue'}`, 'error')
       }
       load()
-    } catch (e: any) {
-      console.error('[handleAutoMatch] network/parse error:', e)
-      setAutoStep("")
-      setAutoResult(null)
-      showToast(`❌ Erreur réseau : ${e?.message || 'connexion perdue'}`, 'error')
-    }
+    } catch { setAutoStep(""); setAutoResult({ matched: 0, total: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, not_matched: 0, total_classified: 0, matches: [] }) }
     finally { setAutoMatching(false) }
   }
 
@@ -869,7 +822,7 @@ Voulez-vous vraiment continuer ?`
   }
 
   // Lettrage multi-facture : 1 transaction bancaire vs N factures
-  const handleManualLinkMulti = async (tx: any, factures: any[], typeEcart?: string) => {
+  const handleManualLinkMulti = async (tx: any, factures: any[]) => {
     if (!societeId || factures.length === 0) return
     // Garde: sans tx bancaire réelle (releve_id + id), l'API renvoie 400 "releve_id requis".
     if (!tx?.releve_id || !tx?.id) {
@@ -886,40 +839,17 @@ Voulez-vous vraiment continuer ?`
           releve_id: tx.releve_id,
           facture_ids: ids,
           societe_id: societeId,
-          ...(typeEcart ? { type_ecart: typeEcart } : {}),
         }),
       })
       const d = await res.json().catch(() => ({}))
       console.log('[lettrer_multi] response', res.status, d)
-
-      // 409 ecart_requires_qualification : propose à l'opérateur de qualifier
-      // l'écart ou de forcer (compte 471 - à régulariser).
-      if (res.status === 409 && d.error === 'ecart_requires_qualification' && Array.isArray(d.options)) {
-        const optsList = (d.options as Array<{ type_ecart: string; label: string; compte: string }>)
-          .map((o, i) => `${i + 1}. ${o.label} → compte ${o.compte}`)
-          .join('\n')
-        const choice = window.prompt(
-          `⚠️ Écart de ${d.ecart} MUR (tx: ${d.tx_amount}, factures: ${d.factures_total}).\n\n` +
-          `Choisis un type d'écart pour générer l'OD comptable correspondante :\n\n${optsList}\n\n` +
-          `Tape le numéro (1-${d.options.length}), ou laisse vide pour annuler :`
-        )
-        const idx = choice ? parseInt(choice, 10) - 1 : -1
-        if (idx >= 0 && idx < d.options.length) {
-          const chosen = d.options[idx].type_ecart
-          // Retry avec le type_ecart choisi
-          return await handleManualLinkMulti(tx, factures, chosen)
-        }
-        setToast({ type: 'error', message: `Lettrage annulé (écart ${d.ecart} MUR non qualifié).` })
-        return
-      }
-
       if (!res.ok) {
         setToast({ type: 'error', message: `❌ ${d.error || `HTTP ${res.status}`}` })
         return
       }
       setToast({
         type: 'success',
-        message: `✓ ${ids.length} factures lettrees avec la transaction (lettre ${d.lettre || '—'})${typeEcart ? ` — écart classé '${typeEcart}'` : ''}`,
+        message: `✓ ${ids.length} factures lettrees avec la transaction (lettre ${d.lettre || '—'})`,
       })
       setLinkDialog(null)
       setSelectedFactureIds(new Set())
@@ -965,19 +895,12 @@ Voulez-vous vraiment continuer ?`
   // Classer une transaction "à vérifier" en un type comptable
   // applyToSimilar=true : propage la meme classification a toutes les autres
   // tx de la societe avec le meme tiers (retroactif, 1 clic)
-  // compteCustom : si fourni, override le mapping classification→compte (picker PCM)
-  const handleClasserTx = async (
-    tx: any,
-    classification: string,
-    applyToSimilar: boolean = false,
-    compteCustom?: string,
-  ) => {
+  const handleClasserTx = async (tx: any, classification: string, applyToSimilar: boolean = false) => {
     if (!societeId) {
       setToast({ type: 'error', message: 'Aucune société sélectionnée' })
       return
     }
-    const lbl = compteCustom ? `${classification} (${compteCustom})` : classification
-    setToast({ type: 'success', message: applyToSimilar ? `Classification + propagation…` : `Classification "${lbl}"…` })
+    setToast({ type: 'success', message: applyToSimilar ? `Classification + propagation…` : `Classification "${classification}"…` })
     try {
       const res = await fetch("/api/comptable/rapprochement", {
         method: "POST",
@@ -990,7 +913,6 @@ Voulez-vous vraiment continuer ?`
           societe_id: societeId,
           classification,
           apply_to_similar: applyToSimilar,
-          ...(compteCustom ? { compte_custom: compteCustom } : {}),
           learn_pattern: {
             tiers: tx.tiers_detecte || null,
             libelle: tx.libelle || null,
@@ -1031,24 +953,12 @@ Voulez-vous vraiment continuer ?`
 
   const handleUnlink = async (tx: any) => {
     try {
-      const res = await fetch("/api/comptable/rapprochement", {
+      await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "delettrer",
-          societe_id: societeId,
-          transaction_id: tx.id,
-          releve_id: tx.releve_id,
-          facture_id: tx.facture_id,
-          ecriture_id: tx.ecriture_id,
-        }),
+        body: JSON.stringify({ action: "delettrer", transaction_id: tx.id, releve_id: tx.releve_id, facture_id: tx.facture_id, ecriture_id: tx.ecriture_id }),
       })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setToast({ type: 'error', message: `❌ ${d.error || `HTTP ${res.status}`}` })
-        return
-      }
       load()
-    } catch (e: any) { setToast({ type: 'error', message: `❌ ${e?.message || 'Erreur réseau'}` }) }
+    } catch { alert("Erreur") }
   }
 
   // ── Annuler le paiement d'une ou plusieurs factures ──────────────
@@ -1311,19 +1221,12 @@ Voulez-vous vraiment continuer ?`
 
   const handleDelettrer = async (e: any) => {
     try {
-      // Écriture sans tx bancaire → endpoint lettrage (le /rapprochement delettrer
-      // exige releve_id et renverrait un 400 silencieux ici).
-      const res = await fetch("/api/comptable/lettrage", {
+      await fetch("/api/comptable/rapprochement", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delettrer", ecriture_ids: [e.id] }),
+        body: JSON.stringify({ action: "delettrer", ecriture_id: e.id }),
       })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setToast({ type: 'error', message: `❌ ${d.error || `HTTP ${res.status}`}` })
-        return
-      }
       load()
-    } catch (err: any) { setToast({ type: 'error', message: `❌ ${err?.message || 'Erreur réseau'}` }) }
+    } catch { alert("Erreur") }
   }
 
   /**
@@ -1781,21 +1684,18 @@ Voulez-vous vraiment continuer ?`
                 <span className="text-xs font-normal text-gray-400 ml-auto">
                   {rows.length} facture{rows.length > 1 ? 's' : ''}
                 </span>
-                {rows.some(r => r.status === 'paye') && (() => {
-                  const payeIds = rows.filter(r => r.status === 'paye').map(r => r.f.id).filter(Boolean)
-                  return (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs gap-1 border-[#9F1239]/40 text-[#9F1239] hover:bg-[#9F1239]/5"
-                      disabled={annulationEnCours || payeIds.length === 0}
-                      onClick={() => handleAnnulerPaiement(payeIds)}
-                    >
-                      {annulationEnCours ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                      Tout remettre en attente ({payeIds.length})
-                    </Button>
-                  )
-                })()}
+                {rows.some(r => r.status === 'paye') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1 border-[#9F1239]/40 text-[#9F1239] hover:bg-[#9F1239]/5"
+                    disabled={annulationEnCours}
+                    onClick={() => handleAnnulerPaiement(['ALL'])}
+                  >
+                    {annulationEnCours ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Tout remettre en attente ({rows.filter(r => r.status === 'paye').length})
+                  </Button>
+                )}
               </CardTitle>
               {selectedFacturesForAnnulation.size > 0 && (
                 <div className="flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-3 py-2 mt-2">
@@ -2305,13 +2205,6 @@ Voulez-vous vraiment continuer ?`
                                 <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>{c.label}
                               </DropdownMenuItem>
                             ))}
-                            <DropdownMenuItem
-                              onClick={() => setPcmPickerFor({ tx, applyToSimilar: false })}
-                              className="border-t mt-1 pt-2"
-                            >
-                              <span className="text-xs font-mono text-gray-500 mr-2">🔍</span>
-                              <span className="font-medium text-[#0B0F2E]">Autre compte… (plan comptable complet)</span>
-                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuLabel className="text-xs text-amber-700">⚡ Corriger + propager à toutes les tx du même tiers</DropdownMenuLabel>
                             {CLASSIFICATION_CHOICES.map(c => (
@@ -2319,13 +2212,6 @@ Voulez-vous vraiment continuer ?`
                                 <span className="text-xs font-mono text-gray-500 mr-2">{c.compte}</span>{c.label} <span className="ml-auto text-[10px] text-amber-600">(propager)</span>
                               </DropdownMenuItem>
                             ))}
-                            <DropdownMenuItem
-                              onClick={() => setPcmPickerFor({ tx, applyToSimilar: true })}
-                              className="border-t mt-1 pt-2"
-                            >
-                              <span className="text-xs font-mono text-gray-500 mr-2">🔍</span>
-                              <span className="font-medium text-[#0B0F2E]">Autre compte… (+ propager)</span>
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
@@ -4270,19 +4156,6 @@ Voulez-vous vraiment continuer ?`
           </div>
         </div>
       )}
-
-      {/* Picker plan comptable complet — pour les classifications hors liste rapide */}
-      <PlanComptablePicker
-        open={!!pcmPickerFor}
-        onClose={() => setPcmPickerFor(null)}
-        onSelect={(compte) => {
-          if (pcmPickerFor) {
-            const classificationCode = `custom_${compte.compte}`
-            handleClasserTx(pcmPickerFor.tx, classificationCode, pcmPickerFor.applyToSimilar, compte.compte)
-            setPcmPickerFor(null)
-          }
-        }}
-      />
 
     </div>
     </ClientPageShell>

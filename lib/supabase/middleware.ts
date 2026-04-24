@@ -58,29 +58,9 @@ export async function updateSession(request: NextRequest) {
     // Public contract-signing flow (signed link URL)
     '/signer-contrat',
   ]
-  // API routes explicitly whitelisted as public (no auth required).
-  // All other /api/* routes require an authenticated user (see below).
-  //   /api/cron/*    → protégé par verifyCronSecret (header secret)
-  //   /api/public/*  → endpoints publics (ex: signer-contrat flow)
-  //   /api/contact   → formulaire de support (lead-capture)
-  //   /api/auth/*    → callbacks / endpoints Supabase auth
-  //   /api/health    → probes infrastructure (liveness / readiness)
-  const publicApiPrefixes = [
-    '/api/cron/',
-    '/api/public/',
-    '/api/auth/',
-  ]
-  const publicApiExact = [
-    '/api/contact',
-    '/api/health',
-  ]
-  const isPublicApi =
-    publicApiPrefixes.some((p) => pathname.startsWith(p)) ||
-    publicApiExact.includes(pathname)
-
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith(route + '/')
-  ) || isPublicApi
+  ) || pathname.startsWith('/api/')
 
   // Protected routes requiring authentication (explicit list for clarity)
   // All non-public routes are protected:
@@ -89,14 +69,6 @@ export async function updateSession(request: NextRequest) {
   // /direction → Direction dashboard (roles: admin, direction)
   // /comptable → Accounting module
   // /admin    → Platform administration
-
-  // Non-public /api/* without session → 401 JSON (pas de redirect HTML pour les APIs)
-  if (!user && pathname.startsWith('/api/') && !isPublicApi) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 },
-    )
-  }
 
   // If not authenticated and trying to access a protected route, redirect to login
   if (!user && !isPublicRoute) {

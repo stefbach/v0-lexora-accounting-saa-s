@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createSbClient } from '@supabase/supabase-js'
 import { genererContrat, verifierContrat } from '@/lib/rh/expertRH'
-import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -29,19 +28,6 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const { action } = body
-
-    // Multi-tenant guard : si un societe_id est fourni, l'utilisateur doit pouvoir y accéder
-    // avant toute lecture de societes.contacts (ou autres données tenantées).
-    if (body.societe_id) {
-      try {
-        await assertSocieteAccess(supabase, user.id, body.societe_id)
-      } catch (err) {
-        if (err instanceof SocieteAccessError) {
-          return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
-        }
-        throw err
-      }
-    }
 
     if (action === 'generer_contrat') {
       // Sprint 6 FIX 4 — pré-remplissage étendu :

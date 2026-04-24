@@ -6,7 +6,7 @@
 -- dans les autres environnements (staging, CI).
 --
 -- CONTEXTE
---   Le trigger reconcile (PO1 mig 206) renseignait heure_sortie avec
+--   Le trigger reconcile (PO1 mig 171) renseignait heure_sortie avec
 --   MAX(heure_fin) sur les sessions FERMÉES. Conséquence :
 --   - Session matin fermée 12:00 + session après-midi ouverte
 --     -> pointages.heure_sortie = 12:00  (faux : journée non finie)

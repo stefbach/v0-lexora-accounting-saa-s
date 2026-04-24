@@ -4,7 +4,7 @@
  * Source de vérité :
  *   - Côté TS pur : `calculateWorkingDays()` dans lib/rh/calculateWorkingDays.ts
  *     (utilisé depuis longtemps par les routes API + le batch paie).
- *   - Côté SQL : `count_jours_ouvrables()` (migration 200).
+ *   - Côté SQL : `count_jours_ouvrables()` (migration 165).
  *
  * Ce fichier fournit 2 wrappers pour éviter la duplication de logique dans
  * les consommateurs :

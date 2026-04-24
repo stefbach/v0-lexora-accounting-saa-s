@@ -735,7 +735,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Employe non trouve' }, { status: 404 })
       }
 
-      // G4 — Validation generique selon conges_regles (mig 205).
+      // G4 — Validation generique selon conges_regles (mig 170).
       // Gere tous les types (AL/SL/VL/FML/SPC_*/JUR/INT/CRT/MAT/PAT/UL/COM)
       // en lisant la config effective (override societe > globale) et en
       // verifiant anciennete min, basic max, migrant, justificatifs requis.

@@ -400,27 +400,6 @@ Apres traitement de toutes les lignes, verifier:
 solde_ouverture + total_credits - total_debits = solde_cloture (tolerance 1 MUR)
 - Si ecart > 1 MUR: ajouter 'lignes_manquantes: true' et 'ecart_solde: X' dans le JSON
 
-REGLES STRICTES SUR LES MONTANTS :
-- Tous les montants sont des nombres JSON valides (pas de separateur de milliers, point decimal uniquement)
-- Exemples : 1234.56 (OK), "1,234.56" (KO), "1.234,56" (KO)
-- Si tu vois "1,234.56" dans le PDF, renvoie 1234.56
-- Si tu vois "1.234,56" dans le PDF, renvoie 1234.56 (format europeen)
-
-REGLES STRICTES SUR LA DEVISE :
-- Le champ "devise" du releve DOIT etre non-vide et valide (MUR, EUR, USD, GBP, ZAR, INR, CNY, JPY, AUD, CAD, CHF)
-- Si tu ne peux pas determiner la devise avec certitude depuis le header du releve, le symbole de monnaie, ou l'IBAN → retourne "_extraction_incertaine": true + devise: null au lieu de deviner
-- Ne JAMAIS utiliser "MUR" comme fallback par defaut
-
-AUTO-VERIFICATION DES MONTANTS :
-- Calcule mentalement : Σ(debit) - Σ(credit) doit etre ≈ (solde_ouverture - solde_cloture)
-- Tolerance : 1 unite de devise
-- Si l'ecart est plus grand, retourne "lignes_manquantes": true + "ecart_solde": <valeur> + liste partielle
-
-DEVISE PAR TRANSACTION :
-- Pour chaque ligne, ajoute "devise" et "montant_origine" si la transaction est dans une devise differente du releve
-- Ex : compte MUR, paiement EUR converti → ligne avec devise: "EUR", montant_origine: 500, debit: 23250 (MUR)
-- Par defaut (pas de conversion), laisse devise: null au niveau ligne
-
 EXTRACTION OBLIGATOIRE EN-TETE:
 - Extraire le nom du TITULAIRE DU COMPTE — c'est la compagnie/personne proprietaire du compte (champ "nom_societe"). JAMAIS le nom de la banque.
 - Copier aussi dans le champ "titulaire" (meme valeur que "nom_societe")

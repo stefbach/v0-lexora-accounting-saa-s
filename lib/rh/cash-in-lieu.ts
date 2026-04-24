@@ -60,7 +60,7 @@ export interface PaiementCompensation {
 
 /**
  * Détecte les cycles AL se fermant dans les `joursAvance` prochains jours.
- * Wrapper autour de la RPC detect_cycles_a_clore (mig 199).
+ * Wrapper autour de la RPC detect_cycles_a_clore (mig 164).
  */
 export async function detectCyclesAClore(
   supabase: AdminClient,

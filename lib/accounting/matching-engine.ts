@@ -17,58 +17,10 @@ const FALLBACK_FX: Record<string, number> = {
   EUR: 46.50, GBP: 54.20, USD: 44.80, MUR: 1,
 }
 
-/**
- * Convert an amount to MUR.
- *
- * Priority order for the effective currency (F8/F10 fix):
- *   1. `tx.devise` — currency carried on the transaction itself (e.g. EUR paid
- *      from a MUR account via Forex). This is the ground truth when the upload
- *      pipeline has extracted a per-tx currency.
- *   2. `compteDevise` / fallback string — the bank account currency used when
- *      the tx doesn't carry its own `devise` (legacy transactions).
- *
- * Overloads:
- *   - `toMUR(amount, tx, compteDevise, rates)` — preferred, tx-aware signature.
- *   - `toMUR(amount, devise, rates?)`          — legacy signature kept for
- *      backward compatibility (callers that only have a plain currency string).
- */
-export function toMUR(
-  amount: number,
-  tx: { devise?: string | null; montant_origine?: number | null },
-  compteDevise: string,
-  rates?: Record<string, number>
-): number
-export function toMUR(
-  amount: number,
-  devise: string | null,
-  rates?: Record<string, number>
-): number
-export function toMUR(
-  amount: number,
-  txOrDevise: string | null | { devise?: string | null; montant_origine?: number | null },
-  compteDeviseOrRates?: string | Record<string, number>,
-  maybeRates?: Record<string, number>
-): number {
-  // Disambiguate the two overloads
-  let effectiveDevise: string | null
-  let rates: Record<string, number> | undefined
-
-  if (txOrDevise && typeof txOrDevise === 'object') {
-    // New signature: (amount, tx, compteDevise, rates)
-    const tx = txOrDevise
-    const compteDevise = typeof compteDeviseOrRates === 'string' ? compteDeviseOrRates : 'MUR'
-    effectiveDevise = (tx.devise || compteDevise || 'MUR').toUpperCase()
-    rates = maybeRates
-  } else {
-    // Legacy signature: (amount, devise, rates?)
-    effectiveDevise = txOrDevise
-    rates = typeof compteDeviseOrRates === 'object' ? compteDeviseOrRates : undefined
-  }
-
-  if (!effectiveDevise || effectiveDevise.toUpperCase() === 'MUR') return amount
+export function toMUR(amount: number, devise: string | null, rates?: Record<string, number>): number {
+  if (!devise || devise === 'MUR') return amount
   const r = rates || FALLBACK_FX
-  const key = effectiveDevise.toUpperCase()
-  return amount * (r[key] || FALLBACK_FX[key] || 1)
+  return amount * (r[devise.toUpperCase()] || FALLBACK_FX[devise.toUpperCase()] || 1)
 }
 
 export interface MatchingFacture {
