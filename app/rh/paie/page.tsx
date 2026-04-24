@@ -46,10 +46,11 @@ function last12Months(): string[] {
 }
 
 export default function PaiePage() {
-  // Société active du sidebar RH (cookie partagé avec /client/*).
-  const { societeId: activeSocieteId, societes: providerSocietes } = useRHSocieteActive()
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState<string>(activeSocieteId || "all")
+  // Copie stricte pattern client : société active unique. Middleware garantit
+  // societeId non-null ici (sinon redirect /rh/select-societe).
+  const { societeId, societes } = useRHSocieteActive()
+  // Alias pour minimiser le diff avec le code existant (2620 lignes).
+  const societe = societeId ?? ""
   const [periode, setPeriode] = useState("")
   const [periodeReady, setPeriodeReady] = useState(false)
   const [availablePeriodes, setAvailablePeriodes] = useState<string[]>([])
@@ -101,37 +102,16 @@ export default function PaiePage() {
     router.replace(qs ? `/rh/paie?${qs}` : "/rh/paie", { scroll: false })
   }
 
-  // Sync filtre local avec la société active du sidebar RH (cookie partagé).
+  // Charge la liste des périodes disponibles (mois en cours + 11 mois
+  // précédents + mois avec bulletins existants).
   useEffect(() => {
-    setSociete(activeSocieteId || "all")
-  }, [activeSocieteId])
-
-  useEffect(() => {
-    // Sprint RH-société-active : réutilise la liste du provider quand dispo.
-    // Fallback double fetch legacy si le provider n'a pas encore chargé.
-    const providerReady = providerSocietes.length > 0
-    const loadList = providerReady
-      ? Promise.resolve([{ societes: providerSocietes }, { societes: [] as any[] }])
-      : Promise.all([
-          fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-          fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-        ])
-    loadList.then(async ([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
-      setSocietes(unique)
-      const firstSociete = activeSocieteId || (unique.length >= 1 ? unique[0].id : "all")
-      setSociete(firstSociete)
-
-      // FIX — le sélecteur doit TOUJOURS proposer le mois en cours + les
-      // 11 mois précédents, même si aucun bulletin n'existe encore. On
-      // fusionne ces 12 mois avec les périodes qui ont des bulletins en
-      // DB (historique plus ancien). Défaut = mois en cours, toujours.
-      const todayYm = new Date().toISOString().slice(0, 7)
-      const derniersMois = last12Months()
+    if (!societe) { setPeriodeReady(false); return }
+    const todayYm = new Date().toISOString().slice(0, 7)
+    const derniersMois = last12Months()
+    ;(async () => {
       try {
         const params = new URLSearchParams()
-        if (firstSociete !== "all") params.set("societe_id", firstSociete)
+        params.set("societe_id", societe)
         const data = await fetch(`/api/rh/paie?${params}`).then(r => r.json())
         const allBulletins = data.bulletins || []
         const moisAvecBulletins = allBulletins
@@ -145,9 +125,8 @@ export default function PaiePage() {
       }
       setPeriode(todayYm)
       setPeriodeReady(true)
-    })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providerSocietes])
+    })()
+  }, [societe])
 
   const load = useCallback(async () => {
     if (!periodeReady || !periode) return
@@ -602,13 +581,6 @@ export default function PaiePage() {
         {/* Period selector */}
         <Card>
           <CardContent className="p-4 flex gap-3 items-center flex-wrap">
-            <Select value={societe} onValueChange={setSociete}>
-              <SelectTrigger className="w-56"><SelectValue placeholder="Societe" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes</SelectItem>
-                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-              </SelectContent>
-            </Select>
             <Select value={periode} onValueChange={setPeriode}>
               <SelectTrigger className="w-72"><SelectValue placeholder="Periode" /></SelectTrigger>
               <SelectContent>

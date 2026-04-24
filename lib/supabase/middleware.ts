@@ -190,25 +190,19 @@ export async function updateSession(request: NextRequest) {
         }
       }
 
-      // Sprint RH-société-active : même pattern pour /rh/*.
-      // On redirige vers /rh/select-societe si l'utilisateur n'a pas
-      // encore fait de choix (ni société active ni mode "Toutes").
-      // Distinction via 2 cookies :
-      //   - active_societe_id : UUID (partagé avec /client/*)
-      //   - rh_societe_choice_made : 'true' après 1er choix RH (permet
-      //     le mode "Toutes les sociétés" sans boucle middleware)
+      // Sprint RH-société-active : copie stricte du pattern /client/*.
+      // Si pas de cookie `active_societe_id`, redirect vers /rh/select-societe.
       if (isRhRoute) {
         const hasActiveSociete = !!request.cookies.get('active_societe_id')?.value
-        const hasRhChoice = !!request.cookies.get('rh_societe_choice_made')?.value
         const bypassPaths = [
           '/rh/select-societe',
           '/rh/profil',
         ]
         const isBypassed = bypassPaths.some(p => pathname === p || pathname.startsWith(p + '/'))
-        if (!hasActiveSociete && !hasRhChoice && !isBypassed) {
+        if (!hasActiveSociete && !isBypassed) {
           const url = request.nextUrl.clone()
           url.pathname = '/rh/select-societe'
-          url.searchParams.set('returnTo', pathname + (request.nextUrl.search || ''))
+          url.search = ''
           return NextResponse.redirect(url)
         }
       }

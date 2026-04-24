@@ -75,13 +75,11 @@ export function RHSidebarDedicated() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userRole, setUserRole] = useState<string>('')
   const [societeMenuOpen, setSocieteMenuOpen] = useState(false)
-  const { societeId, societe, societes, switchSociete, selectAll, choiceMade } = useRHSocieteActive()
+  const { societeId, societe, societes, switchSociete } = useRHSocieteActive()
 
-  // Pattern aligné sur ClientSidebarFull : si l'utilisateur n'a pas encore
-  // fait de choix (ni société précise, ni "Toutes les sociétés") on masque
-  // la navigation principale et on affiche un placeholder. Concerne
-  // notamment /rh/select-societe au premier passage.
-  const showNavigation = choiceMade || !!societeId
+  // Pattern ClientSidebarFull : si pas de société active OU sur la page
+  // select-societe, on masque la navigation et on affiche un placeholder.
+  const showNavigation = !!societeId
   const onSelectPage = pathname === '/rh/select-societe' || pathname.startsWith('/rh/select-societe/')
 
   useEffect(() => { setMobileOpen(false); setSocieteMenuOpen(false) }, [pathname])
@@ -199,9 +197,8 @@ export function RHSidebarDedicated() {
         </div>
 
         {/* Bloc Société active — cookie active_societe_id partagé avec /client/*.
-            Le hook useRHSocieteActive lit /api/comptable/societes (filtré par rôle).
-            societeId peut être null = mode "Toutes les sociétés" (admin vue consolidée). */}
-        {societes.length > 0 && (
+            Copie stricte du pattern client : mono-société uniquement. */}
+        {societe && (
           <div className="mx-3 mt-3 p-3 rounded-xl flex-shrink-0 relative"
             style={{
               background: "linear-gradient(135deg, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.04) 100%)",
@@ -211,10 +208,10 @@ export function RHSidebarDedicated() {
             <div className="text-[9px] font-bold uppercase tracking-[0.14em] mb-1" style={{ color: "#D4AF37" }}>
               Société active
             </div>
-            <div className="text-sm font-semibold truncate" style={{ color: "#E8EAFC" }} title={societe?.nom || "Toutes les sociétés"}>
-              {societe?.nom || "Toutes les sociétés"}
+            <div className="text-sm font-semibold truncate" style={{ color: "#E8EAFC" }} title={societe.nom}>
+              {societe.nom}
             </div>
-            {societe?.brn && (
+            {societe.brn && (
               <div className="text-[10px] mt-0.5 truncate" style={{ color: "#A8AFC7" }}>
                 BRN {societe.brn}
               </div>
@@ -238,20 +235,6 @@ export function RHSidebarDedicated() {
                       boxShadow: "0 12px 28px -8px rgba(0,0,0,0.6)",
                     }}
                   >
-                    <button
-                      onClick={() => { selectAll(); setSocieteMenuOpen(false) }}
-                      className={cn(
-                        "w-full text-left px-3 py-2 text-[12px] transition-colors",
-                        !societeId ? "font-semibold" : "",
-                      )}
-                      style={{
-                        color: !societeId ? "#D4AF37" : "#E8EAFC",
-                        borderBottom: "1px solid rgba(232,234,252,0.08)",
-                      }}
-                    >
-                      <Building2 className="inline w-3 h-3 mr-1.5 -mt-0.5" />
-                      Toutes les sociétés
-                    </button>
                     {societes.map(s => (
                       <button
                         key={s.id}

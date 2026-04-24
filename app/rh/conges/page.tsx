@@ -492,12 +492,12 @@ function TeamCalendarView({ conges, employes, societeFilter }: {
 
 // ─── Page component ──────────────────────────────────────────────
 export default function CongesPage() {
-  // Société active du sidebar RH (cookie partagé /client/*).
-  const { societeId: activeSocieteId, societes: providerSocietes } = useRHSocieteActive()
-  // State
+  // Copie stricte pattern client : société active unique. Middleware garantit
+  // societeId non-null ici (sinon redirect /rh/select-societe).
+  const { societeId, societes } = useRHSocieteActive()
+  // Alias pour minimiser le diff avec le code existant qui utilisait `societe`.
+  const societe = societeId ?? ""
   const [tab, setTab] = useState("dashboard")
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState<string>(activeSocieteId || "all")
   const [employes, setEmployes] = useState<any[]>([])
 
   // Balances tab
@@ -594,27 +594,8 @@ export default function CongesPage() {
   const [searchHisto, setSearchHisto] = useState("")
 
   // ─── Data fetching ─────────────────────────────────────────────
-  const socParam = societe !== "all" ? `societe_id=${societe}` : ""
-
-  const loadSocietes = useCallback(async () => {
-    // Sprint RH-société-active : on s'appuie sur la liste fournie par le
-    // provider (qui a déjà fait le fetch filtré par rôle). Fallback fetch
-    // si le provider n'a pas encore chargé.
-    if (providerSocietes.length > 0) {
-      setSocietes(providerSocietes)
-      return
-    }
-    try {
-      const res = await fetch("/api/comptable/societes")
-      const data = await res.json()
-      setSocietes(Array.isArray(data.societes) ? data.societes : [])
-    } catch (e) { console.error(e) }
-  }, [providerSocietes])
-
-  // Sync filtre local avec la société active du sidebar.
-  useEffect(() => {
-    setSociete(activeSocieteId || "all")
-  }, [activeSocieteId])
+  // Middleware RH garantit societeId non-null → socParam toujours défini.
+  const socParam = societe ? `societe_id=${societe}` : ""
 
   const loadEmployes = useCallback(async () => {
     try {
@@ -735,7 +716,7 @@ export default function CongesPage() {
   }, [societe])
 
   // Initial load
-  useEffect(() => { loadSocietes() }, [loadSocietes])
+  // loadSocietes supprimé — la liste vient désormais de useRHSocieteActive()
 
   // F13 — charger les jours_feries (année en cours + prochaine) pour aligner
   // l'aperçu du modal sur le calcul backend (qui utilise la même DB).
@@ -1117,17 +1098,6 @@ export default function CongesPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-52">
-              <SelectValue placeholder="Toutes societes" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes les societes</SelectItem>
-              {societes.map((s: any) => (
-                <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Button onClick={() => { setDialogOpen(true); setFormError(null) }} className="bg-[#0B0F2E] text-white">
             <Plus className="w-4 h-4 mr-2" />Nouvelle demande
           </Button>

@@ -14,35 +14,17 @@ import {
 /**
  * RHSocieteActiveProvider — Context "société active" pour l'espace /rh/*.
  *
- * Partage le MÊME cookie `active_societe_id` que le provider client
- * (`components/client/SocieteActiveProvider.tsx`). Cela permet à un user
- * (client_admin, admin, rh, comptable, …) de naviguer entre /client/* et
- * /rh/* sans perdre sa société active.
+ * Copie stricte du pattern SocieteActiveProvider (client). Partage le
+ * même cookie `active_societe_id` pour que la navigation croisée
+ * /client/* ↔ /rh/* conserve automatiquement la société active.
  *
- * Différences avec le provider client :
- *   - societeId peut être `null` = mode "toutes les sociétés" (pour admin /
- *     super_admin qui veulent un dashboard consolidé). Le provider client
- *     force une société unique, pas celui-ci.
- *   - Charge les sociétés via /api/comptable/societes qui applique déjà le
- *     filtrage par rôle (getUserSocieteIds) — comptables voient leurs
- *     clients, client_admin voit ses sociétés, admin voit tout.
- *
- * Usage dans une page /rh/* :
- *   const { societeId, societe, societes } = useRHSocieteActive()
- *   // societeId = null → l'utilisateur veut voir toutes ses sociétés
+ * Mono-société : un seul cookie, pas de "toutes les sociétés", pas de
+ * flag parallèle. Si `societeId` est null → middleware redirige vers
+ * /rh/select-societe.
  */
 
 export const ACTIVE_SOCIETE_COOKIE = "active_societe_id"
 export const ACTIVE_SOCIETE_STORAGE_KEY = "lexora_active_societe"
-/**
- * Cookie distinct pour marquer "l'utilisateur a fait un choix RH".
- * Nécessaire pour distinguer :
- *   - user frais (pas de cookie) → middleware redirige vers /rh/select-societe
- *   - user qui a choisi "Toutes les sociétés" (active_societe_id vide) → pas de redirect
- * Ne touche pas le cookie active_societe_id (partagé avec /client/* qui lui
- * est mono-société strict).
- */
-export const RH_CHOICE_COOKIE = "rh_societe_choice_made"
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30 // 30 days
 
 export interface Societe {
@@ -62,21 +44,12 @@ export interface Societe {
 }
 
 export interface RHSocieteActiveContextValue {
-  /** null = mode "toutes les sociétés" (vue consolidée). */
   societeId: string | null
   societe: Societe | null
   societes: Societe[]
   loading: boolean
   error: string | null
-  /**
-   * true si l'utilisateur a déjà fait un choix explicite (société précise OU
-   * "Toutes les sociétés"). Sinon false = user frais, sidebar doit masquer
-   * les liens de navigation et proposer select-societe.
-   */
-  choiceMade: boolean
   switchSociete: (id: string) => void
-  /** Bascule en mode "toutes les sociétés" (societeId = null). */
-  selectAll: () => void
   clearSociete: () => void
   refresh: () => Promise<void>
 }
@@ -125,7 +98,6 @@ function readInitialSocieteId(): string | null {
 export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string | null>(null)
-  const [choiceMade, setChoiceMade] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const hasLoadedOnce = useRef<boolean>(false)
@@ -151,16 +123,13 @@ export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // First mount : read persisted id + choiceMade flag + fetch sociétés list.
   useEffect(() => {
     setSocieteId(readInitialSocieteId())
-    setChoiceMade(!!readCookie(RH_CHOICE_COOKIE))
     void loadSocietes()
   }, [loadSocietes])
 
   // Reconcile persisted id with loaded list. If saved id is no longer
-  // accessible (role change, revocation, …), drop it and fall back to
-  // "toutes sociétés" (null).
+  // accessible, drop it (middleware renverra vers /rh/select-societe).
   useEffect(() => {
     if (!hasLoadedOnce.current) return
     if (!societeId) return
@@ -182,33 +151,17 @@ export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
         return
       }
       writeCookie(ACTIVE_SOCIETE_COOKIE, id, COOKIE_MAX_AGE_SECONDS)
-      writeCookie(RH_CHOICE_COOKIE, "true", COOKIE_MAX_AGE_SECONDS)
       writeStorage(ACTIVE_SOCIETE_STORAGE_KEY, id)
       setSocieteId(id)
-      setChoiceMade(true)
       setError(null)
     },
     [societes],
   )
 
-  const selectAll = useCallback(() => {
-    // Mode "toutes les sociétés" : on retire le cookie active_societe_id
-    // (pour que /client/* repasse en sélection manuelle au prochain passage)
-    // MAIS on pose rh_societe_choice_made=true pour que le middleware ne
-    // nous renvoie pas sur /rh/select-societe.
-    deleteCookie(ACTIVE_SOCIETE_COOKIE)
-    deleteStorage(ACTIVE_SOCIETE_STORAGE_KEY)
-    writeCookie(RH_CHOICE_COOKIE, "true", COOKIE_MAX_AGE_SECONDS)
-    setSocieteId(null)
-    setChoiceMade(true)
-  }, [])
-
   const clearSociete = useCallback(() => {
     deleteCookie(ACTIVE_SOCIETE_COOKIE)
-    deleteCookie(RH_CHOICE_COOKIE)
     deleteStorage(ACTIVE_SOCIETE_STORAGE_KEY)
     setSocieteId(null)
-    setChoiceMade(false)
   }, [])
 
   const societe = useMemo<Societe | null>(
@@ -223,13 +176,11 @@ export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
       societes,
       loading,
       error,
-      choiceMade,
       switchSociete,
-      selectAll,
       clearSociete,
       refresh: loadSocietes,
     }),
-    [societeId, societe, societes, loading, error, choiceMade, switchSociete, selectAll, clearSociete, loadSocietes],
+    [societeId, societe, societes, loading, error, switchSociete, clearSociete, loadSocietes],
   )
 
   return (

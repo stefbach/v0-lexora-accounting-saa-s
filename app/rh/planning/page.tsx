@@ -114,18 +114,13 @@ const DEFAULT_CRENEAUX: Creneau[] = [
 
 export default function PlanningPage() {
   const now = new Date()
-  // Société active du sidebar RH (cookie partagé avec /client/*).
-  const { societeId: activeSocieteId, societes: providerSocietes } = useRHSocieteActive()
+  // Copie stricte pattern client : société active unique. Middleware garantit
+  // societeId non-null ici (sinon redirect /rh/select-societe).
+  const { societeId, societes } = useRHSocieteActive()
+  // Alias pour minimiser le diff avec le code existant.
+  const societe = societeId ?? ""
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
-  const [societes, setSocietes] = useState<any[]>([])
-  // Sprint 5 BUG B — persister la sélection société pour ne pas revenir à
-  // "all" après un refresh. Initialisée depuis le provider RH (qui lit le
-  // cookie partagé) ; fallback sur localStorage legacy.
-  const [societe, setSociete] = useState<string>(() => {
-    if (typeof window === "undefined") return "all"
-    try { return localStorage.getItem("rh_planning_societe") || "all" } catch { return "all" }
-  })
   // Sprint 1 — Limite hebdo lue depuis /api/rh/planning/regles (config WRA
   // par société). Fallback 45 si la société n'a pas de règle persistée.
   const [weeklyLimit, setWeeklyLimit] = useState<number>(WEEKLY_HOURS_LIMIT_DEFAULT)
@@ -564,51 +559,9 @@ export default function PlanningPage() {
   }
 
   // ─── Load data ──────────────────────────────────────────────────
-
-  useEffect(() => {
-    // Sprint RH-société-active : réutilise la liste du provider quand dispo.
-    // Fallback double fetch si le provider n'a pas encore chargé (SSR warm-up).
-    const providerReady = providerSocietes.length > 0
-    const loader = providerReady
-      ? Promise.resolve([{ societes: providerSocietes }, { societes: [] as any[] }])
-      : Promise.all([
-          fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-          fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-        ])
-    loader.then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
-      setSocietes(unique)
-      if (unique.length >= 1) {
-        setSociete(prev => {
-          // Priorité 1 : société active du sidebar si définie et valide
-          if (activeSocieteId && unique.some((s: any) => s.id === activeSocieteId)) {
-            return activeSocieteId
-          }
-          // Priorité 2 : sélection persistée localStorage valide
-          const stillValid = prev && prev !== "all" && unique.some((s: any) => s.id === prev)
-          return stillValid ? prev : unique[0].id
-        })
-      }
-    })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providerSocietes])
-
-  // Sync planning societe avec la société active du sidebar.
-  useEffect(() => {
-    if (!activeSocieteId) return  // en mode "Toutes", on garde la sélection précédente
-    setSociete(activeSocieteId)
-  }, [activeSocieteId])
-
-  // Sprint 5 BUG B — persister la sélection société au changement.
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      if (societe && societe !== "all") {
-        localStorage.setItem("rh_planning_societe", societe)
-      }
-    } catch {}
-  }, [societe])
+  // Copie stricte pattern client : aucun fetch de sociétés, aucune
+  // persistance localStorage. La source unique est le cookie
+  // active_societe_id lu via useRHSocieteActive().
 
   // Sprint 1 — fetch la limite hebdo depuis les règles WRA persistées de
   // la société. Évite de bloquer l'utilisateur si la règle n'existe pas
@@ -1100,13 +1053,6 @@ export default function PlanningPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes</SelectItem>
-              {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-            </SelectContent>
-          </Select>
           {groupes.length > 0 && (
             <Select value={selectedGroupe} onValueChange={v => {
               setSelectedGroupe(v)

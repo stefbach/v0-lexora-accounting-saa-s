@@ -756,14 +756,12 @@ function computeTotalBrut(emp: any): number {
 
 export default function EmployesPage() {
   const router = useRouter()
-  // Société active du provider (cookie partagé avec /client/*).
-  // societeId null → filtre "all" (vue multi-société admin). Sinon → pré-filtré.
-  const { societeId: activeSocieteId, societes: allSocietes } = useRHSocieteActive()
-  const societes = allSocietes
+  // Copie stricte pattern client : société active du provider, pas de
+  // filtre local. Le middleware garantit societeId non-null ici.
+  const { societeId, societes } = useRHSocieteActive()
   const [employes, setEmployes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
-  const [filterSociete, setFilterSociete] = useState<string>(activeSocieteId || "all")
   const [filterStatut, setFilterStatut] = useState("presents")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -928,20 +926,15 @@ export default function EmployesPage() {
     setLoading(true)
     try {
       const params = new URLSearchParams()
-      if (filterSociete !== "all") params.set("societe_id", filterSociete)
+      if (societeId) params.set("societe_id", societeId)
       if (filterStatut !== "tous") params.set("statut", filterStatut)
       const empRes = await fetch(`/api/rh/employes?${params}`)
       setEmployes((await empRes.json()).employes || [])
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
-  }, [filterSociete, filterStatut])
+  }, [societeId, filterStatut])
 
   useEffect(() => { load() }, [load])
-
-  // Sync filtre local avec la société active du sidebar.
-  useEffect(() => {
-    setFilterSociete(activeSocieteId || "all")
-  }, [activeSocieteId])
 
   const handleImport = async () => {
     if (!importFile || !importSociete) { setImportError("Fichier et société requis"); return }
@@ -1058,7 +1051,6 @@ export default function EmployesPage() {
         </div>
         <div className="flex gap-2">
           <Select value={filterStatut} onValueChange={setFilterStatut}><SelectTrigger className="w-36 h-11 rounded-xl"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="presents">Presents</SelectItem><SelectItem value="sortis">Sortis</SelectItem><SelectItem value="tous">Tous</SelectItem></SelectContent></Select>
-          <Select value={filterSociete} onValueChange={setFilterSociete}><SelectTrigger className="w-44 h-11 rounded-xl"><SelectValue placeholder="Toutes societes"/></SelectTrigger><SelectContent><SelectItem value="all">Toutes</SelectItem>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select>
         </div>
       </CardContent></Card>
 
