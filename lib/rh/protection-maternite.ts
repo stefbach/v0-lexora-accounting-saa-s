@@ -2,7 +2,7 @@
  * Helper canonique pour la protection maternité/paternité WRA 2019
  * (Sections 52, 53, 64, 5(5)(aa)). Sprint G7.
  *
- * Tables : grossesses_employees + paternites_employees (mig 168).
+ * Tables : grossesses_employees + paternites_employees (mig 203).
  *
  * IMPORTANT : ces fonctions sont server-side uniquement. Elles utilisent
  * l'admin client (service_role) pour bypasser RLS. L'authentification et

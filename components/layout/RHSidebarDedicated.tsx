@@ -8,7 +8,7 @@ import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import {
   Clock, Users, Calendar, CreditCard, TrendingUp, Banknote,
-  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle, ShieldCheck,
+  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle, ShieldCheck, Gift, Wallet, BookOpenCheck, FileBarChart,
 } from "lucide-react"
 
 interface NavLink {
@@ -27,6 +27,12 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/juridique', label: 'Contrats Travail', icon: FilePen, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'direction'] },
   { href: '/rh/groupes', label: 'Groupes / Équipes', icon: Users, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/depart', label: 'Gestion départs', icon: UserMinus, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  // G12 — Severance Calculator WRA S.70. Réservé admin/rh.
+  { href: '/rh/severance', label: 'Severance (S.70)', icon: Wallet, roles: ['admin', 'rh'] },
+  // G8 Phase 1 — Provisions congés payés IAS 19. Admin/rh.
+  { href: '/rh/provisions/conges', label: 'IAS 19 — Congés payés', icon: BookOpenCheck, roles: ['admin', 'rh'] },
+  // G8 Phase 2 — Provisions EOY Bonus IAS 19. Admin/rh.
+  { href: '/rh/provisions/eoy', label: 'IAS 19 — EOY Bonus', icon: Gift, roles: ['admin', 'rh'] },
   { href: '/rh/planning', label: 'Planning', icon: CalendarDays, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager'] },
   // Sprint 5 FIX 7 — lien "Regles planning" supprimé du menu : la page
   // /rh/planning a déjà un bouton "Règles" intégré, le lien sidebar était
@@ -38,6 +44,8 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/conges/parametres', label: 'Règles congés', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/jours-feries', label: 'Jours fériés', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie', label: 'Paie & Bulletins', labelKey: 'hr.payslips', icon: CreditCard, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
+  // G11 — End of Year Bonus (WRA S.54). Réservé admin/rh.
+  { href: '/rh/eoy-bonus', label: 'End of Year Bonus', icon: Gift, roles: ['admin', 'rh'] },
   { href: '/rh/paie/validation', label: 'Contrôle pré-paie', icon: CheckCircle, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie/primes', label: 'Primes & OT', labelKey: 'rh.bonuses_ot', icon: TrendingUp },
   { href: '/rh/frais-km', label: 'Frais kilométriques', icon: Car },
@@ -48,6 +56,9 @@ const ALL_LINKS: NavLink[] = [
   // G6 — Exports légaux WRA S.116 : placés après 'Historique Paie' dans la
   // section paie/compliance. Réservés admin + rh (seuls rôles réels en DB).
   { href: '/rh/exports-legaux', label: 'Exports légaux (S.116)', icon: ShieldCheck, roles: ['admin', 'rh'] },
+  // G13 — Déclarations MRA mensuelles + Exit Statements PRGF.
+  { href: '/rh/declarations-mra', label: 'Déclarations MRA', icon: FileBarChart, roles: ['admin', 'rh'] },
+  { href: '/rh/prgf/exit-statements', label: 'Exit Statements PRGF', icon: LogOut, roles: ['admin', 'rh'] },
   { href: '/rh/annonces', label: 'Annonces', icon: Megaphone, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/chat', label: 'CLARA — Assistant IA', icon: Bot },
   // Sprint 2 — hub central de paramètres en plus des sous-pages spécifiques.

@@ -14,6 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import MonEspacePersonnel from "@/components/rh/MonEspacePersonnel"
 import { MraDeadlineAlert } from "@/components/rh/MraDeadlineAlert"
 import { DocumentsEnAttenteWidget } from "@/components/rh/DocumentsEnAttenteWidget"
+import { EoyBonusWidget } from "@/components/rh/EoyBonusWidget"
+import { IAS19ProvisionWidget } from "@/components/rh/IAS19ProvisionWidget"
+import { IAS19EoyProvisionWidget } from "@/components/rh/IAS19EoyProvisionWidget"
+import { DeclarationsMraWidget } from "@/components/rh/DeclarationsMraWidget"
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts"
 import Link from "next/link"
 
@@ -243,6 +247,21 @@ export default function RHDashboard() {
         {/* DOC1 — Widget documents reçus des employés non lus. Rendu
             uniquement si docs en attente (le composant retourne null sinon). */}
         <DocumentsEnAttenteWidget />
+
+        {/* G11 — Widget EOY Bonus. Visible uniquement oct-déc.
+            Retourne null avant octobre. */}
+        <EoyBonusWidget />
+
+        {/* G8 Phase 1 — Widget Provision IAS 19 congés. Visible à
+            partir du 25 du mois. Retourne null avant. */}
+        <IAS19ProvisionWidget />
+
+        {/* G8 Phase 2 — Widget Provision IAS 19 EOY Bonus. Visible
+            à partir du 25 du mois, jan-nov (pas décembre). */}
+        <IAS19EoyProvisionWidget />
+
+        {/* G13 — Widget Déclarations MRA (mois précédent à déclarer/payer). */}
+        <DeclarationsMraWidget />
 
         {/* Widget "Mon espace" — 4 actions rapides vers /salarie.
             Compact, en haut du dashboard pour un accès immédiat. */}

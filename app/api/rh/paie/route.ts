@@ -137,9 +137,9 @@ function computeProrataFirstLastMonth(
   return { ratio, joursTravailles, joursOuvrables, motif }
 }
 
-const JOURS_FERIES_MU = ["01-01", "02-01", "12-03", "01-05", "09-05", "15-08", "02-11", "25-12"]
-
-function isFerie(dateStr: string): boolean { return JOURS_FERIES_MU.includes(dateStr.slice(5)) }
+// G9bis.2 — suppression de la liste hardcodée JOURS_FERIES_MU (2025 obsolète).
+// La détection férié passe désormais par `joursFeriesSet.has(date)` construit
+// depuis la table `jours_feries` (chargement par action paie).
 function isWeekend(dateStr: string): boolean { const d = new Date(dateStr + "T12:00:00"); return d.getDay() === 0 || d.getDay() === 6 }
 
 // ═══ OT Calculation — Workers' Rights Act 2019 ═══
@@ -199,6 +199,44 @@ function calcOT(hEntree: string, hSortie: string, ferieDay: boolean, planningHou
   const normales = Math.min(totalH, planningHours)
   const ot15 = Math.max(totalH - planningHours, 0)
   return { normales, ot15, ot2: 0, ot3: 0, heuresNuit }
+}
+
+// ═══ G9bis.4 — Night Shift Allowance WRA S.20 STRICT ══════════════════
+// Un shift est "complet nuit" si heure_entree >= 21:00 ET heure_sortie
+// <= 05:00 le lendemain (donc session qui démarre au plus tôt à 21h et
+// se termine au plus tard à 5h du matin). Une session partiellement
+// nocturne ne déclenche PAS la S.20 allowance — elle peut en revanche
+// déclencher la disturbance allowance S.17A (G9) si la société l'a
+// activée.
+//
+// Montant = salaire_base × 0.15 × (nb_shifts_nuit_complets /
+//                                  nb_jours_travailles_du_mois)
+// Sur employé qui fait que des shifts nuit, le ratio ≈ 1 -> allocation
+// = 15% du salaire. Sur employé nuit partielle, ratio = 0.
+function compterShiftsNuitComplets(
+  pointagesMois: Array<{ heure_entree: string | null; heure_sortie: string | null }>,
+): number {
+  let n = 0
+  for (const pt of pointagesMois || []) {
+    if (!pt.heure_entree || !pt.heure_sortie) continue
+    const entree = String(pt.heure_entree).slice(0, 5)
+    const sortie = String(pt.heure_sortie).slice(0, 5)
+    // Normalisation : HH:MM string compare fonctionne pour le seuil 21:00.
+    if (entree >= '21:00' && sortie <= '05:00') n++
+  }
+  return n
+}
+
+function calculerNightShiftS20(
+  salaireBase: number,
+  pointagesMois: Array<{ heure_entree: string | null; heure_sortie: string | null }>,
+  nbJoursTravailles: number,
+  nightShiftPct: number = 0.15,
+): { allowance: number; nbShiftsNuit: number } {
+  const nbShiftsNuit = compterShiftsNuitComplets(pointagesMois)
+  if (nbShiftsNuit === 0 || nbJoursTravailles <= 0) return { allowance: 0, nbShiftsNuit }
+  const allowance = Math.round(salaireBase * nightShiftPct * (nbShiftsNuit / nbJoursTravailles))
+  return { allowance, nbShiftsNuit }
 }
 
 export async function GET(request: Request) {
@@ -471,7 +509,7 @@ export async function POST(request: Request) {
       csg_patronal_taux_reduit: Number(paramsDB.csg_patronal_taux_reduit ?? 0.030),
       nsf_salarie: Number(paramsDB.nsf_salarie),
       nsf_patronal: Number(paramsDB.nsf_patronal),
-      // F9 — Plafond insurable NSF (28 600 MUR en 2025-2026, mig 159).
+      // F9 — Plafond insurable NSF (28 600 MUR en 2025-2026, mig 197).
       nsf_plafond_mensuel: Number(paramsDB.nsf_plafond_mensuel ?? 28600),
       training_levy: Number(paramsDB.training_levy),
       prgf_patronal_par_jour: Number(paramsDB.prgf_patronal_par_jour ?? 4.50),
@@ -544,6 +582,30 @@ export async function POST(request: Request) {
       const periodeStartSingle = periodeInfo.periode_debut
       const periodeEndSingle = periodeInfo.periode_fin
 
+      // G9bis.2 — charger les jours fériés de la période (override société
+      // OR global) pour la détection au calcul OT. Remplace la liste
+      // hardcodée JOURS_FERIES_MU. Réutilisé plus bas pour les
+      // working-days math.
+      const periodeYearSingle = parseInt(periodeStr.slice(0, 4), 10)
+      let joursFeriesSetSingle = new Set<string>()
+      {
+        const sidForFeries = targetSocieteId || emp.societe_id
+        const { data: feriesRowsSingle } = await supabase
+          .from('jours_feries')
+          .select('date, travail_autorise, societe_id')
+          .gte('date', `${periodeYearSingle}-01-01`)
+          .lte('date', `${periodeYearSingle}-12-31`)
+        joursFeriesSetSingle = new Set(
+          (feriesRowsSingle || [])
+            .filter((r: any) => !r.travail_autorise)
+            .filter((r: any) => r.societe_id === null || r.societe_id === sidForFeries)
+            .map((r: any) => String(r.date).slice(0, 10)),
+        )
+        if (joursFeriesSetSingle.size === 0) {
+          joursFeriesSetSingle = getMauritiusPublicHolidays(periodeYearSingle)
+        }
+      }
+
       // 1. Récupérer OT de la période depuis les pointages
       const { data: pointagesMois } = await supabase.from('pointages')
         .select('*').eq('employe_id', employe_id)
@@ -562,19 +624,23 @@ export async function POST(request: Request) {
       }
 
       let total_ot_montant = 0
+      let total_heures_nuit_single = 0
       const taux_horaire = Number(emp.salaire_base) / (45 * 52 / 12)
       let jours_travailles = 0
 
       for (const pt of pointagesMois || []) {
         if (!pt.heure_entree) continue
         jours_travailles++
-        const ferie = isFerie(pt.date_pointage)
+        // G9bis.2 — détection férié via Set depuis DB.
+        const ferie = joursFeriesSetSingle.has(pt.date_pointage)
         const plan = planMap[pt.date_pointage]
         // If planning exists, use planned hours as OT threshold; default to 9 (standard)
         const planningHours = plan ? plan.heures_prevues : 9
         // Work day is "planned" if planning says it's a work day (not repos)
         // If no planning exists, fall back to weekday=planned, weekend=unplanned
         const isPlannedWorkDay = plan ? !plan.est_repos : !isWeekend(pt.date_pointage)
+        // G9bis.3 — rest day détecté (plan.est_repos OR weekend sans planning).
+        const isRestDaySingle = plan ? Boolean(plan.est_repos) : isWeekend(pt.date_pointage)
         // Compute actual pause from pointage (fallback to 60 min = 1h lunch)
         let pauseMinutes = 60
         if (pt.heure_pause_debut && pt.heure_pause_fin) {
@@ -583,11 +649,31 @@ export async function POST(request: Request) {
           pauseMinutes = (peh * 60 + pem) - (psh * 60 + psm)
           if (pauseMinutes < 0) pauseMinutes = 60
         }
-        const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay, false, pauseMinutes)
+        // G9bis.3 — passe isRestDaySingle (était forcé à false) + additionne
+        // ot3 × 3 qui était calculé par calcOT mais jamais consommé dans
+        // le path single. Comportement aligné sur le path batch.
+        const ot = calcOT(pt.heure_entree, pt.heure_sortie || '', ferie, planningHours, isPlannedWorkDay, isRestDaySingle, pauseMinutes)
         const montant15 = ot.ot15 * taux_horaire * 1.5
         const montant2 = ot.ot2 * taux_horaire * 2
-        total_ot_montant += montant15 + montant2
+        const montant3 = ot.ot3 * taux_horaire * 3
+        total_ot_montant += montant15 + montant2 + montant3
+        total_heures_nuit_single += ot.heuresNuit || 0
       }
+
+      // G9bis.4 — Night Shift Allowance WRA S.20 STRICT (harmonisé avec
+      // le batch). Compte les shifts complets 21h→05h du mois et calcule
+      // l'allocation = salaire_base × 15% × (shifts_nuit / jours_travailles).
+      const nightShiftPctSingle = Number((params as any).night_shift_pct ?? 0.15)
+      const nightShiftResSingle = calculerNightShiftS20(
+        Number(emp.salaire_base) || 0,
+        (pointagesMois || []).map(pt => ({
+          heure_entree: pt.heure_entree,
+          heure_sortie: pt.heure_sortie,
+        })),
+        jours_travailles,
+        nightShiftPctSingle,
+      )
+      total_ot_montant += nightShiftResSingle.allowance
 
       // INTÉGRATION 4 — Primes de la période : on ne compte QUE celles
       // qui sont approuvées (approuve=true) ET pas encore intégrées
@@ -639,20 +725,7 @@ export async function POST(request: Request) {
         .select('*').eq('employe_id', employe_id).eq('statut', 'approuve')
         .lte('date_debut', periodeEndSingle).gte('date_fin', periodeStartSingle)
 
-      // Build holiday set for working-days math.
-      const periodeYearSingle = parseInt(periodeStr.slice(0, 4), 10)
-      let joursFeriesSetSingle = new Set<string>()
-      try {
-        const { data: feriesRowsSingle } = await supabase.from('jours_feries')
-          .select('date, travail_autorise').gte('date', `${periodeYearSingle}-01-01`).lte('date', `${periodeYearSingle}-12-31`)
-        // Sprint 4 — exclure travail_autorise=true (jours fériés ouvrables).
-        joursFeriesSetSingle = new Set(
-          (feriesRowsSingle || [])
-            .filter((r: any) => !r.travail_autorise)
-            .map((r: any) => String(r.date).slice(0, 10)),
-        )
-      } catch {}
-      if (joursFeriesSetSingle.size === 0) joursFeriesSetSingle = getMauritiusPublicHolidays(periodeYearSingle)
+      // G9bis.2 — joursFeriesSetSingle déjà chargé plus haut (avant OT loop).
 
       // Leave-type counters intersected with this month — used below for
       // UL deduction AND for the conges_details object returned with the
@@ -703,16 +776,28 @@ export async function POST(request: Request) {
         // Mois futur : today < début de mois → tous exclus (jours_absence=0).
         const today = new Date().toISOString().slice(0, 10)
         for (const day of workingDaysList) {
-          // F2 : skip les jours dans le futur
-          if (day > today) continue
           const pt = pointageByDate.get(day)
-          const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+          // G-leaves-fix (debug+fix) : normaliser les bornes du congé
+          //   en "YYYY-MM-DD". Supabase-js peut renvoyer les colonnes
+          //   DATE en Date object OU string ISO complète selon la
+          //   version — la comparaison lexicographique échouait.
+          const enConge = (congesApprouves || []).some((c: any) => {
+            const debut = String(c.date_debut ?? '').slice(0, 10)
+            const fin = String(c.date_fin ?? '').slice(0, 10)
+            return debut && fin && day >= debut && day <= fin
+          })
+          // G-leaves-fix : si le jour est couvert par un congé approuvé,
+          //   on le traite TOUJOURS comme congé (AL/SL/UL) — jamais
+          //   comme absence, peu importe la date courante. Le check
+          //   enConge doit PRÉCÉDER le skip "jour futur".
           if (enConge) {
             if (pt?.heure_entree) {
               anomaliesPointage.push(`Pointage enregistré le ${day} alors que l'employé était en congé (le congé prévaut)`)
             }
             continue
           }
+          // F2 : skip les jours dans le futur (sans congé approuvé)
+          if (day > today) continue
           if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
             jours_absence_injust++
             anomaliesPointage.push(`Absence non justifiée le ${day}`)
@@ -773,6 +858,35 @@ export async function POST(request: Request) {
       const pf2 = Number(emp.prime_fixe_2) || 0
       const pf3 = Number(emp.prime_fixe_3) || 0
 
+      // G9 — Disturbance Allowance (S.17A FMPA 2024).
+      // Si la société active cette option, on calcule en amont le montant
+      // mensuel + on le sauvegarde dans elements.disturbance_allowance (qui
+      // rejoindra ensuite salaire_brut_base -> CSG/NSF/PAYE).
+      let disturbanceMontantSingle = 0
+      let disturbanceHeuresSingle = 0
+      let disturbanceRecapSingle: any = null
+      try {
+        const { data: socDist } = await supabase
+          .from('societes')
+          .select('disturbance_allowance_active, disturbance_hourly_multiplier')
+          .eq('id', targetSocieteId || emp.societe_id)
+          .maybeSingle()
+        if ((socDist as any)?.disturbance_allowance_active === true) {
+          const { calculerDisturbanceEmploye } = await import('@/lib/rh/disturbance-allowance')
+          disturbanceRecapSingle = await calculerDisturbanceEmploye(
+            supabase, employe_id, periodeStartSingle, periodeEndSingle,
+            {
+              multiplier: Number((socDist as any).disturbance_hourly_multiplier) || 1.0,
+              salaireBase: Number(emp.salaire_base) || 0,
+            },
+          )
+          disturbanceMontantSingle = disturbanceRecapSingle.montant_total
+          disturbanceHeuresSingle = disturbanceRecapSingle.heures_total
+        }
+      } catch (e: any) {
+        console.warn('[paie calculer] disturbance allowance skip:', e?.message || e)
+      }
+
       const elements = {
         salaire_base: salaire_base_mur,
         transport_allowance: Number(emp.transport_allowance) || 0,
@@ -789,6 +903,8 @@ export async function POST(request: Request) {
         other_refund: (body.other_refund || 0) + total_frais_km_single,
         eoy_bonus: body.eoy_bonus || 0,
         departure_notice: body.departure_notice || 0,
+        // G9 — disturbance allowance (0 si société n'active pas).
+        disturbance_allowance: disturbanceMontantSingle,
       }
 
       const joursTravailles = jours_travailles > 0 ? jours_travailles : (body.jours_travailles || 26)
@@ -805,6 +921,9 @@ export async function POST(request: Request) {
         + (Number(elements.special_allowance_2) || 0)
         + (Number(elements.special_allowance_3) || 0)
         + (Number(elements.increment_salaire) || 0)
+        // G9 — disturbance assimilé à du salary normal : il entre dans
+        // la base brut utilisée pour calculer UL et proratas.
+        + (Number(elements.disturbance_allowance) || 0)
         + (Number(elements.other_refund) || 0)
         + (Number(elements.departure_notice) || 0)
 
@@ -912,6 +1031,9 @@ export async function POST(request: Request) {
         cash_in_lieu_type: cilTypeSingle,
         // G7 — Allocation naissance 3 000 MUR (WRA S.52, forfait non-imposable)
         allocation_naissance: Math.round(allocMontantSingle * 100) / 100,
+        // G9 — Disturbance Allowance S.17A FMPA 2024 (heures unsocial).
+        disturbance_allowance: Math.round(disturbanceMontantSingle * 100) / 100,
+        disturbance_heures: Math.round(disturbanceHeuresSingle * 100) / 100,
         // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI
         notes: prorataSingle.ratio < 1 ? `[${prorataSingle.motif}]` : null,
         statut: 'brouillon',
@@ -923,6 +1045,16 @@ export async function POST(request: Request) {
       if (error) {
         console.error('[paie calculer]', error.message, error.details, error.hint)
         return NextResponse.json({ error: `Erreur bulletin: ${error.message}`, details: error.details, hint: error.hint }, { status: 500 })
+      }
+
+      // G9 — Sauvegarde des détails disturbance (si présents) liés au bulletin.
+      if (data?.id && disturbanceRecapSingle && disturbanceRecapSingle.details.length > 0) {
+        try {
+          const { sauvegarderDisturbanceBulletin } = await import('@/lib/rh/disturbance-allowance')
+          await sauvegarderDisturbanceBulletin(supabase, data.id, employe_id, disturbanceRecapSingle)
+        } catch (e: any) {
+          console.warn('[paie calculer] sauvegarde disturbance détail skip:', e?.message || e)
+        }
       }
 
       // G1 — Marquer les paiements compensation comme 'paye' avec bulletin_paie_id.
@@ -1076,6 +1208,28 @@ export async function POST(request: Request) {
       const periodeStartBatch = periodeInfoBatch.periode_debut
       const periodeEndBatch = periodeInfoBatch.periode_fin
 
+      // G9bis.2 — charge jours fériés de l'année une fois pour tout le
+      // batch (override société OR global). Utilisé par le calcul OT
+      // + les working-days math plus bas (réutilisation).
+      const periodeYearBatch = parseInt(periodeStr.slice(0, 4), 10)
+      let joursFeriesSetBatch = new Set<string>()
+      {
+        const { data: feriesRowsBatch } = await supabase
+          .from('jours_feries')
+          .select('date, travail_autorise, societe_id')
+          .gte('date', `${periodeYearBatch}-01-01`)
+          .lte('date', `${periodeYearBatch}-12-31`)
+        joursFeriesSetBatch = new Set(
+          (feriesRowsBatch || [])
+            .filter((r: any) => !r.travail_autorise)
+            .filter((r: any) => r.societe_id === null || r.societe_id === societe_id)
+            .map((r: any) => String(r.date).slice(0, 10)),
+        )
+        if (joursFeriesSetBatch.size === 0) {
+          joursFeriesSetBatch = getMauritiusPublicHolidays(periodeYearBatch)
+        }
+      }
+
       // Fetch auto-prime rules for this société (once for all employees)
       let autoRegles: any[] = []
       try {
@@ -1109,7 +1263,7 @@ export async function POST(request: Request) {
         for (const pt of pointagesMois || []) {
           if (!pt.heure_entree) continue
           jours_travailles++
-          const ferie = isFerie(pt.date_pointage)
+          const ferie = joursFeriesSetBatch.has(pt.date_pointage)
           const weekend = isWeekend(pt.date_pointage)
           const plan = planMap[pt.date_pointage]
           const planningHours = plan ? plan.heures_prevues : 9
@@ -1131,15 +1285,25 @@ export async function POST(request: Request) {
           total_heures_nuit += ot.heuresNuit
         }
 
-        // Night Shift Allowance: majoration % of base salary for night hours (21h-6h)
-        // Does NOT apply if employee's schedule is exclusively nocturnal.
-        // Sprint 2 — taux paramétrable via params.night_shift_pct (défaut 15%).
-        const shiftCode = (planAssignments || [])[0]?.shift_code || ''
-        const isExclusivelyNight = shiftCode.toLowerCase() === 'nuit' || shiftCode === 'N'
+        // G9bis.4 — Night Shift Allowance WRA S.20 STRICT.
+        // Ancien calcul (prorata horaire heures 21h-6h) remplacé par :
+        //   allowance = salaire_base × pct × (shifts_nuit_complets /
+        //              nb_jours_travailles), avec shift "complet nuit" =
+        //              entrée >= 21:00 ET sortie <= 05:00.
+        // Un shift partiellement nocturne (ex: 18h-2h) ne déclenche pas
+        // la S.20 — il déclenche la disturbance S.17A (G9) si active.
         const nightShiftPct = Number((params as any).night_shift_pct ?? 0.15)
-        const nightShiftAllowance = (!isExclusivelyNight && total_heures_nuit > 0)
-          ? Math.round(Number(emp.salaire_base) * nightShiftPct * (total_heures_nuit / (45 * 52 / 12)))
-          : 0
+        const { allowance: nightShiftAllowance, nbShiftsNuit: nbShiftsNuitBatch } =
+          calculerNightShiftS20(
+            Number(emp.salaire_base) || 0,
+            (pointagesMois || []).map(pt => ({
+              heure_entree: pt.heure_entree,
+              heure_sortie: pt.heure_sortie,
+            })),
+            jours_travailles,
+            nightShiftPct,
+          )
+        // Laisse total_heures_nuit inchangé pour les logs existants.
 
         // INTÉGRATION 4 — Primes de la période : approuve=true ET
         // integre_paie=false uniquement (cf. calculer pour rationale).
@@ -1261,20 +1425,10 @@ export async function POST(request: Request) {
           .select('*').eq('employe_id', emp.id).eq('statut', 'approuve')
           .lte('date_debut', periodeEnd).gte('date_fin', periodeStart)
 
-        // Build the holiday set once for the period's year (DB → fallback to hardcoded MU).
-        const periodeYear = parseInt(periodeStr.slice(0, 4), 10)
-        let joursFeriesSet = new Set<string>()
-        try {
-          const { data: feriesRows } = await supabase.from('jours_feries')
-            .select('date, travail_autorise').gte('date', `${periodeYear}-01-01`).lte('date', `${periodeYear}-12-31`)
-          // Sprint 4 — exclure travail_autorise=true (jours ouvrables avec majoration).
-          joursFeriesSet = new Set(
-            (feriesRows || [])
-              .filter((r: any) => !r.travail_autorise)
-              .map((r: any) => String(r.date).slice(0, 10)),
-          )
-        } catch {}
-        if (joursFeriesSet.size === 0) joursFeriesSet = getMauritiusPublicHolidays(periodeYear)
+        // G9bis.2 — joursFeriesSetBatch déjà chargé une fois avant la boucle
+        // employés (optimisation + source unique). On aliase pour préserver
+        // les références existantes plus bas.
+        const joursFeriesSet = joursFeriesSetBatch
 
         // Count leave days (working-days only) intersected with the period.
         // SL reduces the OT threshold; AL does not; UL triggers a deduction
@@ -1358,16 +1512,25 @@ export async function POST(request: Request) {
           // que dans le chemin SINGLE (cf. action='calculer').
           const todayBatch = new Date().toISOString().slice(0, 10)
           for (const day of workingDaysListBatch) {
-            // F2 : skip les jours dans le futur
-            if (day > todayBatch) continue
             const pt = pointageByDateBatch.get(day)
-            const enConge = (congesApprouves || []).some(c => day >= c.date_debut && day <= c.date_fin)
+            // G-leaves-fix (debug+fix) : normalisation défensive des
+            //   bornes du congé (idem single path).
+            const enConge = (congesApprouves || []).some((c: any) => {
+              const debut = String(c.date_debut ?? '').slice(0, 10)
+              const fin = String(c.date_fin ?? '').slice(0, 10)
+              return debut && fin && day >= debut && day <= fin
+            })
+            // G-leaves-fix : un jour couvert par un congé approuvé est
+            //   TOUJOURS traité comme congé (jamais absence), même pour
+            //   une date future. Check enConge AVANT le skip "futur".
             if (enConge) {
               if (pt?.heure_entree) {
                 anomaliesPointageBatch.push(`Pointage le ${day} alors que l'employé était en congé`)
               }
               continue
             }
+            // F2 : skip les jours dans le futur (sans congé approuvé)
+            if (day > todayBatch) continue
             if (!pt || (!pt.heure_entree && pt.absent_justifie !== true)) {
               jours_absence_injust++
               anomaliesPointageBatch.push(`Absence non justifiée le ${day}`)

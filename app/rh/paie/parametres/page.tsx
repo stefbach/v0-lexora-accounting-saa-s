@@ -352,6 +352,343 @@ function PeriodePaieSection() {
 }
 
 // ---------------------------------------------------------------------------
+// G11 — Section End of Year Bonus (WRA S.54)
+// ---------------------------------------------------------------------------
+interface EoyBonusConfig {
+  seuil_max: number
+  inclut_hors_seuil: boolean
+  date_paiement_75pct: string | null
+  date_paiement_25pct: string | null
+}
+
+const EOY_DEFAULT: EoyBonusConfig = {
+  seuil_max: 100000,
+  inclut_hors_seuil: false,
+  date_paiement_75pct: null,
+  date_paiement_25pct: null,
+}
+
+function EoyBonusSection() {
+  const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
+  const [societeId, setSocieteId] = useState<string>("")
+  const [cfg, setCfg] = useState<EoyBonusConfig>({ ...EOY_DEFAULT })
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [feedback, setFeedback] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch("/api/comptable/societes")
+      .then(r => r.json())
+      .then(d => {
+        const rows = (d?.societes || []) as Array<{ id: string; nom: string }>
+        setSocietes(rows)
+        if (rows.length > 0 && !societeId) setSocieteId(rows[0].id)
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!societeId) return
+    setLoading(true)
+    setFeedback(null)
+    fetch(`/api/rh/societe?societe_id=${societeId}`)
+      .then(r => r.json())
+      .then(d => {
+        const s = d?.societe || d || {}
+        setCfg({
+          seuil_max: Number(s.eoy_bonus_seuil_max) || 100000,
+          inclut_hors_seuil: Boolean(s.eoy_bonus_inclut_hors_seuil),
+          date_paiement_75pct: s.eoy_bonus_date_paiement_75pct || null,
+          date_paiement_25pct: s.eoy_bonus_date_paiement_25pct || null,
+        })
+      })
+      .catch(() => setCfg({ ...EOY_DEFAULT }))
+      .finally(() => setLoading(false))
+  }, [societeId])
+
+  const save = async () => {
+    if (!societeId) return
+    setSaving(true)
+    setFeedback(null)
+    try {
+      const res = await fetch("/api/rh/societe", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: societeId,
+          eoy_bonus_seuil_max: cfg.seuil_max,
+          eoy_bonus_inclut_hors_seuil: cfg.inclut_hors_seuil,
+          eoy_bonus_date_paiement_75pct: cfg.date_paiement_75pct,
+          eoy_bonus_date_paiement_25pct: cfg.date_paiement_25pct,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d?.error || `HTTP ${res.status}`)
+      }
+      setFeedback("✅ Configuration EOY sauvegardée.")
+    } catch (e: any) {
+      setFeedback(`⚠ ${e?.message || "Erreur réseau"}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card className="border-2 border-amber-200">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
+          <span>🎁</span>
+          End of Year Bonus
+          <span className="ml-auto text-xs font-normal text-gray-500">WRA S.54 — G11</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-end gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <Label className="text-sm">Société</Label>
+            <Select value={societeId} onValueChange={setSocieteId}>
+              <SelectTrigger><SelectValue placeholder="Choisir une société" /></SelectTrigger>
+              <SelectContent>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label className="text-sm">Seuil maximum (MUR/mois)</Label>
+            <Input
+              type="number"
+              value={cfg.seuil_max}
+              onChange={e => setCfg(c => ({ ...c, seuil_max: Number(e.target.value) || 0 }))}
+              className="w-48"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">Défaut S.54 : 100 000 MUR.</p>
+          </div>
+          <div className="flex items-start gap-2 pt-6">
+            <input
+              type="checkbox"
+              id="inclut-hors-seuil"
+              checked={cfg.inclut_hors_seuil}
+              onChange={e => setCfg(c => ({ ...c, inclut_hors_seuil: e.target.checked }))}
+              className="mt-0.5"
+            />
+            <Label htmlFor="inclut-hors-seuil" className="text-sm cursor-pointer">
+              Étendre aux salariés &gt; seuil
+              <p className="text-[11px] text-gray-500 font-normal">Politique interne plus généreuse.</p>
+            </Label>
+          </div>
+          <div>
+            <Label className="text-sm">Date paiement 75%</Label>
+            <Input
+              type="date"
+              value={cfg.date_paiement_75pct || ''}
+              onChange={e => setCfg(c => ({ ...c, date_paiement_75pct: e.target.value || null }))}
+              className="w-48"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">
+              Vide = auto (5 jours ouvrables avant le 25/12).
+            </p>
+          </div>
+          <div>
+            <Label className="text-sm">Date paiement 25%</Label>
+            <Input
+              type="date"
+              value={cfg.date_paiement_25pct || ''}
+              onChange={e => setCfg(c => ({ ...c, date_paiement_25pct: e.target.value || null }))}
+              className="w-48"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">
+              Vide = auto (dernier jour ouvrable de décembre).
+            </p>
+          </div>
+        </div>
+
+        {feedback && (
+          <div className={`rounded-md p-2 text-sm border ${feedback.startsWith('⚠') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-800 border-green-200'}`}>
+            {feedback}
+          </div>
+        )}
+
+        <div className="flex justify-between items-center pt-1">
+          <p className="text-[11px] text-gray-500 italic">
+            Les calculs et la génération des bonus se font depuis <code className="bg-gray-100 px-1 rounded">/rh/eoy-bonus</code>.
+          </p>
+          <Button
+            onClick={save}
+            disabled={saving || !societeId}
+            className="text-white"
+            style={{ backgroundColor: NAVY }}
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+            Enregistrer
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// G9 — Section Disturbance Allowance (WRA S.17A FMPA 2024)
+// ---------------------------------------------------------------------------
+interface DisturbanceConfig {
+  active: boolean
+  multiplier: number
+}
+
+const DISTURBANCE_DEFAULT: DisturbanceConfig = { active: false, multiplier: 1.0 }
+
+function DisturbanceSection() {
+  const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
+  const [societeId, setSocieteId] = useState<string>("")
+  const [cfg, setCfg] = useState<DisturbanceConfig>({ ...DISTURBANCE_DEFAULT })
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [feedback, setFeedback] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch("/api/comptable/societes")
+      .then(r => r.json())
+      .then(d => {
+        const rows = (d?.societes || []) as Array<{ id: string; nom: string }>
+        setSocietes(rows)
+        if (rows.length > 0 && !societeId) setSocieteId(rows[0].id)
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!societeId) return
+    setLoading(true)
+    setFeedback(null)
+    fetch(`/api/rh/societe?societe_id=${societeId}`)
+      .then(r => r.json())
+      .then(d => {
+        const s = d?.societe || d || {}
+        setCfg({
+          active: Boolean(s.disturbance_allowance_active),
+          multiplier: Number(s.disturbance_hourly_multiplier) || 1.0,
+        })
+      })
+      .catch(() => setCfg({ ...DISTURBANCE_DEFAULT }))
+      .finally(() => setLoading(false))
+  }, [societeId])
+
+  const save = async () => {
+    if (!societeId) return
+    setSaving(true)
+    setFeedback(null)
+    try {
+      const res = await fetch("/api/rh/societe", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: societeId,
+          disturbance_allowance_active: cfg.active,
+          disturbance_hourly_multiplier: cfg.multiplier,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d?.error || `HTTP ${res.status}`)
+      }
+      setFeedback("✅ Paramètres disturbance enregistrés.")
+    } catch (e: any) {
+      setFeedback(`⚠ ${e?.message || "Erreur réseau"}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card className="border-2 border-indigo-200">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
+          <span>🌙</span>
+          Disturbance Allowance
+          <span className="ml-auto text-xs font-normal text-gray-500">WRA S.17A — FMPA 2024 — G9</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-end gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <Label className="text-sm">Société</Label>
+            <Select value={societeId} onValueChange={setSocieteId}>
+              <SelectTrigger><SelectValue placeholder="Choisir une société" /></SelectTrigger>
+              <SelectContent>
+                {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+        </div>
+
+        <div className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            id="disturbance-active"
+            checked={cfg.active}
+            onChange={e => setCfg(c => ({ ...c, active: e.target.checked }))}
+            className="mt-0.5"
+          />
+          <Label htmlFor="disturbance-active" className="text-sm cursor-pointer">
+            Activer l&apos;allocation automatique
+            <p className="text-[11px] text-gray-500 font-normal">
+              Si actif, chaque bulletin mensuel ajoute automatiquement la
+              disturbance allowance calculée depuis les sessions de pointage.
+            </p>
+          </Label>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label className="text-sm">Multiplicateur taux horaire</Label>
+            <Input
+              type="number" step="0.05" min={1.0}
+              value={cfg.multiplier}
+              onChange={e => setCfg(c => ({ ...c, multiplier: Math.max(1.0, Number(e.target.value) || 1.0) }))}
+              className="w-32"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">
+              1.0 = taux horaire standard S.17A. Au-delà = politique plus généreuse.
+            </p>
+          </div>
+          <div className="bg-indigo-50 border border-indigo-200 rounded-md p-3 text-[12px] text-indigo-900 space-y-1">
+            <p className="font-semibold">Unsocial hours (non modifiable — légal)</p>
+            <p>• Semaine : 22h00 → 06h00</p>
+            <p>• Weekend : samedi 13h00 → lundi 06h00</p>
+          </div>
+        </div>
+
+        {feedback && (
+          <div className={`rounded-md p-2 text-sm border ${feedback.startsWith('⚠') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-800 border-green-200'}`}>
+            {feedback}
+          </div>
+        )}
+
+        <div className="flex justify-end pt-1">
+          <Button
+            onClick={save}
+            disabled={saving || !societeId}
+            className="text-white"
+            style={{ backgroundColor: NAVY }}
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+            Enregistrer
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 export default function ParametresPaiePage() {
@@ -632,6 +969,12 @@ export default function ParametresPaiePage() {
 
       {/* PE1 — Section période de paie (paramétrable par société) */}
       <PeriodePaieSection />
+
+      {/* G11 — Section End of Year Bonus (WRA S.54) */}
+      <EoyBonusSection />
+
+      {/* G9 — Section Disturbance Allowance (WRA S.17A FMPA 2024) */}
+      <DisturbanceSection />
 
       {loading ? (
         <div className="flex justify-center py-12">

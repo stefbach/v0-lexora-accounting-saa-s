@@ -2,7 +2,7 @@
 -- Migration 166 — Sprint bugs paie/conges F13
 --
 -- Recompute rétroactif de demandes_conges.nb_jours pour aligner les
--- valeurs legacy sur la fonction canonique count_jours_ouvrables (mig 165).
+-- valeurs legacy sur la fonction canonique count_jours_ouvrables (mig 200).
 --
 -- Contexte : certaines demandes créées avant le fix F13 utilisaient une
 -- formule buggée (probablement date_fin - date_debut, oublie du +1 et
@@ -18,7 +18,7 @@
 --      nb_jours visibles ne seront plus cohérents, à retraiter manuellement).
 --   4. Recompute bulk des soldes_conges touchés via helper canonique.
 --
--- Prérequis : migration 165 (fonction count_jours_ouvrables).
+-- Prérequis : migration 200 (fonction count_jours_ouvrables).
 -- IDEMPOTENTE : le backup existe IF NOT EXISTS, l'UPDATE est
 -- naturellement idempotent (déjà corrigé → mêmes valeurs).
 -- ============================================================

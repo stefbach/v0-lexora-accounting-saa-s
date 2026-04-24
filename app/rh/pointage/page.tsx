@@ -60,9 +60,12 @@ function dureeFmt(min: number | null): string {
   return `${hrs}h${String(mins).padStart(2, "0")}`
 }
 
-function statutLabel(p: Pointage): { text: string; variant: "present" | "sorti" | "absent" | "none" | "conge" } {
+function statutLabel(p: Pointage): { text: string; variant: "present" | "pause" | "sorti" | "absent" | "none" | "conge" } {
   if (p.en_conge) return { text: `En congé${p.type_conge ? ` (${p.type_conge})` : ""}`, variant: "conge" }
   if (p.heure_entree && p.heure_sortie) return { text: "Termine", variant: "sorti" }
+  // Hotfix 190 — pointages.heure_pause_debut/fin reflète la dernière pause.
+  // Si heure_pause_debut renseigné sans heure_pause_fin => pause en cours.
+  if (p.heure_entree && p.heure_pause_debut && !p.heure_pause_fin) return { text: "En pause", variant: "pause" }
   if (p.heure_entree && !p.heure_sortie) return { text: "Present", variant: "present" }
   if (p.absent_justifie) return { text: "Absent", variant: "absent" }
   if (!p.heure_entree) return { text: "Non pointe", variant: "none" }
@@ -71,6 +74,7 @@ function statutLabel(p: Pointage): { text: string; variant: "present" | "sorti" 
 
 const BADGE_CLASSES: Record<string, string> = {
   present: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  pause: "bg-amber-100 text-amber-800 border-amber-200",
   sorti: "bg-blue-100 text-blue-800 border-blue-200",
   absent: "bg-red-100 text-red-800 border-red-200",
   conge: "bg-green-100 text-green-800 border-green-200",

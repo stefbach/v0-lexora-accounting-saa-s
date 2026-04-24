@@ -295,7 +295,19 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {/* Severance */}
             {breakdown.indemnite_licenciement.applicable && (
               <TableRow className="bg-red-50">
-                <TableCell className="font-medium text-red-800">Indemnité de licenciement</TableCell>
+                <TableCell className="font-medium text-red-800">
+                  Indemnité de licenciement
+                  {/* G12 — lien calculateur dédié WRA S.70 */}
+                  {typeof (breakdown as any).employe_id === 'string' && (
+                    <a
+                      href={`/rh/severance?employe_id=${(breakdown as any).employe_id}&date=${encodeURIComponent(breakdown?.date_depart || '')}`}
+                      className="ml-2 text-[11px] underline text-indigo-700"
+                      title="Ouvrir le calculateur WRA S.70 avec pré-remplissage"
+                    >
+                      → calculateur S.70
+                    </a>
+                  )}
+                </TableCell>
                 <TableCell className="text-center text-sm text-red-600">
                   {breakdown.indemnite_licenciement.formule} ({breakdown.indemnite_licenciement.annees_service} ans)
                 </TableCell>

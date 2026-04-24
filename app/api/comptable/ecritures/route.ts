@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
+import { assertSocieteAccess, SocieteAccessError } from '@/lib/supabase/assert-societe-access'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -49,6 +50,17 @@ export async function GET(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
+    }
+
     const { data: dossier } = await supabase
       .from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
     if (!dossier) return NextResponse.json({ ecritures: [], total: 0, message: 'Aucun dossier' })
@@ -141,6 +153,16 @@ export async function POST(request: Request) {
     }
 
     const supabase = getAdminClient()
+
+    // Multi-tenant guard : l'utilisateur doit pouvoir accéder à cette société
+    try {
+      await assertSocieteAccess(supabase, user.id, societe_id)
+    } catch (err) {
+      if (err instanceof SocieteAccessError) {
+        return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+      }
+      throw err
+    }
 
     // Verifier periode non verrouillee
     const lockStatus = await checkPeriodLock(supabase, societe_id, date_ecriture)

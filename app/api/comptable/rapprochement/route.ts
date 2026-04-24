@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { lastDayOfMonth } from '@/lib/rh/period'
 import { getTauxChange } from '@/lib/taux-change'
+import { getHistoricalRate, MissingHistoricalRateError } from '@/lib/accounting/historical-rates'
 import { accountClass } from '@/lib/accounting/classification-rules'
 import { validateLettrageGroup } from '@/lib/accounting/accounting-rules'
 import { classifyTransaction, detectDirector, getComplianceSeverity, type ClassificationRule } from '@/lib/accounting/classification-engine'
@@ -15,6 +16,94 @@ import { checkPeriodLock } from '@/lib/accounting/period-lock'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
+
+// ─────────────────────────────────────────────────────────────────────────
+// Migration 171/172 — Taux de change HISTORIQUE pour les écritures BNQ.
+//
+// Règle comptable : une écriture créée AUJOURD'HUI pour une tx du 15/11/2025
+// doit utiliser le taux EUR→MUR du 15/11/2025 (pas le taux live). Sans ça,
+// le montant MUR dérive de plusieurs % et casse la balance du compte 512.
+//
+// `resolveHistoricalRateSafe` enveloppe `getHistoricalRate` pour :
+//   • retourner 1 quand la devise effective = MUR (no-op)
+//   • catcher `MissingHistoricalRateError` et retourner `null` (le caller
+//     choisit son fallback selon le contexte : live rate + alerte vs skip)
+//   • lever les autres erreurs DB (signal d'intégrité)
+//
+// Contract de retour :
+//   { rate: number, fromHistorical: true  }  → taux historique OK
+//   { rate: null,   fromHistorical: false, missing: true } → tuple absent
+//   { rate: number, fromHistorical: false, fallback: 'live' } → utilisé live
+// ─────────────────────────────────────────────────────────────────────────
+type HistoricalRateOutcome = {
+  rate: number | null
+  fromHistorical: boolean
+  missing: boolean
+  devise: string
+  date: string
+}
+
+async function resolveHistoricalRateSafe(
+  supabase: any,
+  date: string | Date | null | undefined,
+  devise: string | null | undefined,
+  liveRates?: Record<string, number>,
+): Promise<HistoricalRateOutcome> {
+  const devCaps = (devise || 'MUR').toUpperCase()
+  const dateStr = typeof date === 'string'
+    ? (date.length >= 10 ? date.slice(0, 10) : date)
+    : (date instanceof Date ? date.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10))
+
+  if (devCaps === 'MUR') {
+    return { rate: 1, fromHistorical: true, missing: false, devise: devCaps, date: dateStr }
+  }
+  try {
+    const rate = await getHistoricalRate(supabase, dateStr, devCaps)
+    return { rate, fromHistorical: true, missing: false, devise: devCaps, date: dateStr }
+  } catch (err) {
+    if (err instanceof MissingHistoricalRateError) {
+      console.warn(
+        `[rapprochement] MissingHistoricalRate ${devCaps}@${dateStr} — fallback live=${liveRates?.[devCaps] ?? 'n/a'}`,
+      )
+      if (liveRates && typeof liveRates[devCaps] === 'number' && liveRates[devCaps]! > 0) {
+        return {
+          rate: liveRates[devCaps]!,
+          fromHistorical: false,
+          missing: true,
+          devise: devCaps,
+          date: dateStr,
+        }
+      }
+      return { rate: null, fromHistorical: false, missing: true, devise: devCaps, date: dateStr }
+    }
+    // Non-missing errors (DB down, RLS, …) → propage vers le caller.
+    throw err
+  }
+}
+
+/**
+ * Helper pour enrichir une paire (ou N-uplet) d'écritures BNQ avec les
+ * 3 colonnes de la migration 207. Si `devise === 'MUR'`, on pose les champs
+ * à null (NOT MUR-sentinel) côté `devise_origine`, et on normalise les
+ * 3 colonnes sur TOUTES les lignes passées.
+ */
+function bnqFreezeColumns(
+  devise: string | null | undefined,
+  montantOrigine: number | null | undefined,
+  tauxChange: number | null | undefined,
+): { devise_origine: string | null; montant_origine: number | null; taux_change_applique: number | null } {
+  const devCaps = (devise || 'MUR').toUpperCase()
+  if (devCaps === 'MUR') {
+    return { devise_origine: 'MUR', montant_origine: null, taux_change_applique: 1 }
+  }
+  const mt = Number(montantOrigine)
+  const tx = Number(tauxChange)
+  return {
+    devise_origine: devCaps,
+    montant_origine: Number.isFinite(mt) && mt > 0 ? mt : null,
+    taux_change_applique: Number.isFinite(tx) && tx > 0 ? tx : null,
+  }
+}
 
 // ── Advanced tiers scoring for Phase 5 (BNQ↔ACH lettrage) ──
 function advancedTiersScoreForRoute(a: string, b: string): number {
@@ -355,9 +444,23 @@ export async function POST(request: Request) {
       const dossierIds = (dossiers || []).map((d: any) => d.id)
       let factures: any[] = factErr ? [] : (facturesData || [])
 
-      const toMUR = (amount: number, devise: string): number => {
-        if (!devise || devise === 'MUR') return amount
-        return amount * (rates[devise.toUpperCase()] || 1)
+      // F8/F10 — devise EFFECTIVE = tx.devise (si présent sur la tx) sinon devise du compte.
+      // Les anciennes tx (sans tx.devise) passent par le fallback → comportement inchangé.
+      // Les nouvelles tx en devise étrangère débitées sur un compte MUR (paiement Forex)
+      // utilisent leur propre devise au lieu d'être reconverties ×46.5 à tort.
+      const toMUR = (
+        amount: number,
+        txOrDevise: string | { devise?: string | null } | null | undefined,
+        compteDeviseFallback?: string
+      ): number => {
+        let effectiveDevise: string
+        if (txOrDevise && typeof txOrDevise === 'object') {
+          effectiveDevise = (txOrDevise.devise || compteDeviseFallback || 'MUR').toUpperCase()
+        } else {
+          effectiveDevise = ((txOrDevise as string | null | undefined) || 'MUR').toUpperCase()
+        }
+        if (!effectiveDevise || effectiveDevise === 'MUR') return amount
+        return amount * (rates[effectiveDevise] || 1)
       }
 
       const compteDeviseMap: Record<string, string> = {}
@@ -582,7 +685,9 @@ export async function POST(request: Request) {
                 tiers_detecte: tx.tiers_detecte || tx.tiers || null,
                 debit: Number(tx.debit) || 0,
                 credit: Number(tx.credit) || 0,
-                devise: releveDevise,
+                // F8/F10 — priorité : devise portée par la tx (nouveau pipeline OCR)
+                // puis devise du compte bancaire (tx legacy sans tx.devise).
+                devise: (tx.devise || releveDevise) as string,
               }
             })
           }
@@ -774,6 +879,7 @@ export async function POST(request: Request) {
             let facturesUpdated = 0
             // Calculer le montant total des factures pour détecter paiement partiel / TDS
             const totalFactures = match.factures.reduce((s: number, f: any) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0), 0)
+            // match.transaction.devise a déjà été résolu au push (priorité tx.devise > releveDevise)
             const txPayAmtMUR = toMUR(Math.max(Number(match.transaction.debit) || 0, Number(match.transaction.credit) || 0), match.transaction.devise || 'MUR')
             const isPartial = totalFactures > 0 && txPayAmtMUR < totalFactures * 0.90 // < 90% = partiel
             const diffForTds = totalFactures > 0 ? (totalFactures - txPayAmtMUR) / totalFactures : 0
@@ -816,7 +922,6 @@ export async function POST(request: Request) {
             // routé vers le bon 512xxx via cbToCompteComptable.
             const txRaw = entry.updatedTxs[txIdx]
             const txAmount = Math.max(Number(txRaw.debit) || 0, Number(txRaw.credit) || 0)
-            const payAmountMUR = toMUR(txAmount, entry.releveDevise)
             const isOutgoing = (Number(txRaw.debit) || 0) > 0
             const payType: 'supplier' | 'client' = isOutgoing ? 'supplier' : 'client'
             const tiers = (match.supplierName || txRaw.tiers_detecte || '').substring(0, 50)
@@ -825,6 +930,36 @@ export async function POST(request: Request) {
             const compteBanque = (releveRef && cbToCompteComptable[releveRef.compte_bancaire_id]) || '512'
             const datePayment = txRaw.date || new Date().toISOString().split('T')[0]
             const txLibelle = String(txRaw.libelle || '').substring(0, 100)
+
+            // Migration 171/172 — taux HISTORIQUE figé à la date de la tx.
+            // Devise = priorité tx.devise (pipeline Forex), fallback sur la
+            // devise du compte bancaire. Si la table est incomplète, on bascule
+            // sur le taux live mais on log/alerte (voir resolveHistoricalRateSafe).
+            const payDevise = (txRaw.devise || entry.releveDevise || 'MUR').toUpperCase()
+            const payRateOutcome = await resolveHistoricalRateSafe(
+              supabase, datePayment, payDevise, rates,
+            )
+            // Si aucun taux (ni historique ni live) et devise ≠ MUR → on skip
+            // la création d'écriture pour cette paire : marquer tx "à vérifier".
+            if (payRateOutcome.rate == null && payDevise !== 'MUR') {
+              console.warn(
+                `[rapprochement] skip BNQ creation — no rate ${payDevise}@${datePayment} for tx ${releveId}-${txIdx}`,
+              )
+              try {
+                entry.updatedTxs[txIdx] = {
+                  ...entry.updatedTxs[txIdx],
+                  statut: 'a_verifier_taux',
+                  note: `Taux ${payDevise} absent pour la date ${datePayment} — seeder taux_change_historique`,
+                }
+                entry.changed = true
+              } catch { /* best-effort */ }
+              continue
+            }
+            const historicalRate = payRateOutcome.rate ?? 1
+            // Recompute payAmountMUR à partir du taux figé (source de vérité).
+            const payAmountMUR = payDevise === 'MUR'
+              ? txAmount
+              : txAmount * historicalRate
 
             // Montant par facture : réparti au prorata du montant_ttc,
             // fallback équi-split. Arrondi à 2 décimales, reste sur la
@@ -851,6 +986,11 @@ export async function POST(request: Request) {
               const fac = match.factures[i]
               const amountPerFacture = perFactureAmounts[i] || 0
               if (amountPerFacture <= 0) continue
+              // Migration 172 — par facture : montant_origine au prorata sur le
+              // total MUR, inversé via historicalRate pour retrouver la devise.
+              const montantOrigineFacture = payDevise === 'MUR'
+                ? null
+                : Math.round((amountPerFacture / historicalRate) * 100) / 100
               const { error: payErr } = await createEcrituresForPayment(supabase, {
                 societe_id,
                 date_payment: datePayment,
@@ -863,6 +1003,10 @@ export async function POST(request: Request) {
                 facture_id: fac.id,
                 lettre_code: code,
                 numero_piece: txLibelle,
+                // Migration 172 — taux figé propagé sur les 2 lignes BNQ
+                devise_origine: payDevise,
+                montant_origine: montantOrigineFacture,
+                taux_change_applique: payDevise === 'MUR' ? 1 : historicalRate,
               })
               if (payErr) {
                 console.warn(`[rapprochement] BNQ insert failed for facture ${fac.id}:`, payErr)
@@ -1213,8 +1357,35 @@ export async function POST(request: Request) {
               const txCredit = Number(tx.credit) || 0
               const txAmount = txDebit > 0 ? txDebit : txCredit
               if (txAmount === 0) continue
-              const txAmountMUR = Math.round(toMUR(txAmount, entry.releveDevise) * 100) / 100
               const txDate = tx.date || new Date().toISOString().split('T')[0]
+
+              // Migration 171/172 — taux HISTORIQUE figé pour conversion MUR.
+              // Si le tuple (date, devise) manque en DB, on bascule sur le
+              // taux live (tx legacy / ré-éxécution) avec log, OU si la tx
+              // est encore non_identifie on skip et on la marque.
+              const txDeviseEffective = (tx.devise || entry.releveDevise || 'MUR').toUpperCase()
+              const rateOutcomeLoop = await resolveHistoricalRateSafe(
+                supabase, txDate, txDeviseEffective, rates,
+              )
+              if (rateOutcomeLoop.rate == null && txDeviseEffective !== 'MUR') {
+                if (tx.statut === 'non_identifie' || !tx.statut) {
+                  try {
+                    entry.updatedTxs[i] = { ...tx, statut: 'a_verifier_taux' }
+                    entry.changed = true
+                  } catch { /* best-effort */ }
+                  continue
+                }
+                // Déjà classifiée → on poursuit avec le taux live (ou 1 en dernier recours) + log.
+                console.warn(
+                  `[rapprochement] phase-finale: no rate ${txDeviseEffective}@${txDate}, using live fallback`,
+                )
+              }
+              const txHistoricalRate = rateOutcomeLoop.rate ?? (rates[txDeviseEffective] || 1)
+              const txAmountMUR = Math.round(
+                (txDeviseEffective === 'MUR' ? txAmount : txAmount * txHistoricalRate) * 100,
+              ) / 100
+              // Montant dans la devise d'origine (utile pour les 3 colonnes fig 172).
+              const txMontantOrigine = txDeviseEffective === 'MUR' ? null : Math.round(txAmount * 100) / 100
 
               // ── Skip unmatched internal transfers (waiting for counterpart) ──
               if (tx.statut === 'interne_en_attente') {
@@ -1235,15 +1406,18 @@ export async function POST(request: Request) {
                 const isOutgoing = txDebit > 0
                 const libelle = `Virement interne ${(tx.libelle || '').substring(0, 30)}`
                 const socIdForInt = (dossiers || []).find((d: any) => d.id === dossier.id)?.societe_id || societe_id
+                const freezeVI = bnqFreezeColumns(txDeviseEffective, txMontantOrigine, txHistoricalRate)
                 await supabase.from('ecritures_comptables_v2').insert([
                   { dossier_id: dossier.id, societe_id: socIdForInt, date_ecriture: txDate, journal: 'BNQ',
                     numero_compte: '512', libelle,
                     debit_mur: isOutgoing ? 0 : txAmountMUR, credit_mur: isOutgoing ? txAmountMUR : 0,
-                    lettre: lettre581, ref_folio: intRef },
+                    lettre: lettre581, ref_folio: intRef,
+                    ...freezeVI },
                   { dossier_id: dossier.id, societe_id: socIdForInt, date_ecriture: txDate, journal: 'BNQ',
                     numero_compte: '581', libelle,
                     debit_mur: isOutgoing ? txAmountMUR : 0, credit_mur: isOutgoing ? 0 : txAmountMUR,
-                    lettre: lettre581, ref_folio: intRef },
+                    lettre: lettre581, ref_folio: intRef,
+                    ...freezeVI },
                 ])
                 ecrituresCreees++
                 continue
@@ -1290,17 +1464,20 @@ export async function POST(request: Request) {
               } else {
                 // Create new BNQ entries
                 const societeIdForInsert = societe_id
+                const freezeBnqFac = bnqFreezeColumns(txDeviseEffective, txMontantOrigine, txHistoricalRate)
                 await supabase.from('ecritures_comptables_v2').insert([
                   { dossier_id: dossier.id, societe_id: societeIdForInsert, date_ecriture: txDate, journal: 'BNQ',
                     numero_compte: compte401,
                     libelle: `Paiement ${(facture.tiers || '').substring(0, 30)} — ${facture.numero_facture || ''}`,
                     debit_mur: isPayment ? txAmountMUR : 0, credit_mur: isPayment ? 0 : txAmountMUR,
-                    lettre: lettreCode, ref_folio: refFolio },
+                    lettre: lettreCode, ref_folio: refFolio,
+                    ...freezeBnqFac },
                   { dossier_id: dossier.id, societe_id: societeIdForInsert, date_ecriture: txDate, journal: 'BNQ',
                     numero_compte: '512',
                     libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
                     debit_mur: isPayment ? 0 : txAmountMUR, credit_mur: isPayment ? txAmountMUR : 0,
-                    lettre: lettreCode, ref_folio: refFolio },
+                    lettre: lettreCode, ref_folio: refFolio,
+                    ...freezeBnqFac },
                 ])
               }
               ecrituresCreees++
@@ -1367,8 +1544,29 @@ export async function POST(request: Request) {
               const txCredit2 = Number(tx.credit) || 0
               const txAmount2 = txDebit2 > 0 ? txDebit2 : txCredit2
               if (txAmount2 === 0) continue
-              const txAmountMUR2 = Math.round(toMUR(txAmount2, entry2.releveDevise) * 100) / 100
               const txDate2 = tx.date || new Date().toISOString().split('T')[0]
+              // Migration 171/172 — taux HISTORIQUE pour la conversion MUR.
+              const txDeviseEffective2 = (tx.devise || entry2.releveDevise || 'MUR').toUpperCase()
+              const rateOutcome2 = await resolveHistoricalRateSafe(
+                supabase, txDate2, txDeviseEffective2, rates,
+              )
+              if (rateOutcome2.rate == null && txDeviseEffective2 !== 'MUR') {
+                if (tx.statut === 'non_identifie' || !tx.statut) {
+                  try {
+                    entry2.updatedTxs[i2] = { ...tx, statut: 'a_verifier_taux' }
+                    entry2.changed = true
+                  } catch { /* best-effort */ }
+                  continue
+                }
+                console.warn(
+                  `[rapprochement] phase-final-2: no rate ${txDeviseEffective2}@${txDate2}, using live`,
+                )
+              }
+              const txHistoricalRate2 = rateOutcome2.rate ?? (rates[txDeviseEffective2] || 1)
+              const txAmountMUR2 = Math.round(
+                (txDeviseEffective2 === 'MUR' ? txAmount2 : txAmount2 * txHistoricalRate2) * 100,
+              ) / 100
+              const txMontantOrigine2 = txDeviseEffective2 === 'MUR' ? null : Math.round(txAmount2 * 100) / 100
 
             // ── NEW: Appliquer les règles de classification configurables (R01-R07+) ──
             // Pour les transactions non rapprochées par facture (non_identifie + a_verifier)
@@ -1380,7 +1578,8 @@ export async function POST(request: Request) {
                 tiers_detecte: tx.tiers_detecte || null,
                 debit: Number(tx.debit) || 0,
                 credit: Number(tx.credit) || 0,
-                devise: entry2.releveDevise,
+                // F8/F10 — devise portée par la tx > devise du compte bancaire
+                devise: tx.devise || entry2.releveDevise,
               }, classificationRules)
               if (classified.matched && classified.compte_debit) {
                 tx.statut = 'rapproche'
@@ -1418,7 +1617,8 @@ export async function POST(request: Request) {
                 tiers_detecte: tx.tiers_detecte || null,
                 debit: Number(tx.debit) || 0,
                 credit: Number(tx.credit) || 0,
-                devise: entry2.releveDevise,
+                // F8/F10 — devise portée par la tx > devise du compte bancaire
+                devise: tx.devise || entry2.releveDevise,
               }, directors)
               if (dirMatch) {
                 // NE PAS auto-rapprocher — exiger validation humaine (R07)
@@ -1435,7 +1635,7 @@ export async function POST(request: Request) {
                     societe_id, alert_type: 'director_transaction_pending',
                     severity: 'high',
                     title: `Qualification requise: ${dirMatch.director_name}`,
-                    description: `Virement de ${txAmount2.toFixed(2)} ${entry2.releveDevise} concernant ${dirMatch.director_name} (${dirMatch.role}). Doit être qualifié comme: A) Remboursement NDF / B) Avance salaire / C) Rémunération / D) Avance dividendes / E) Prêt (⚠ interdit dirigeants - Companies Act s.166)`,
+                    description: `Virement de ${txAmount2.toFixed(2)} ${(tx.devise || entry2.releveDevise)} concernant ${dirMatch.director_name} (${dirMatch.role}). Doit être qualifié comme: A) Remboursement NDF / B) Avance salaire / C) Rémunération / D) Avance dividendes / E) Prêt (⚠ interdit dirigeants - Companies Act s.166)`,
                     legal_reference: 'Companies Act 2001, Section 166 (si Prêt)',
                     amount: txAmount2,
                     related_entity_type: 'transaction',
@@ -1451,12 +1651,19 @@ export async function POST(request: Request) {
             // Salaires → D 421 / C 512, Particuliers → D 467 / C 512
             if (tx.statut === 'rapproche' && !tx.facture_id && tx.matched_type) {
               const classRef = `CLS-${releveId2}-${i2}`
-              // Vérifier si une écriture BNQ existe DÉJÀ pour cette tx, quel que soit le ref_folio
-              // (évite les doublons entre CLS-xxx, CL-xxx, BANK-xxx)
+              // Check idempotence STRICT : query DB direct sur ref_folio.
+              // Historiquement on lisait allEcr401v2 (filtré par journal + comptes 401/411),
+              // ce qui ratait les doublons créés sur d'autres comptes (4312, 627, 421…)
+              // par les règles R03/R04. Un SELECT sur index idx_ecritures_v2_societe_ref_folio
+              // (migration 146) est peu coûteux et couvre TOUS les comptes.
               const anyRef = `${releveId2}-${i2}`
-              const classExists = (allEcr401v2 || []).some((e: any) =>
-                e.ref_folio && (e.ref_folio === classRef || e.ref_folio.endsWith(anyRef))
-              )
+              const { data: existingRefs } = await supabase
+                .from('ecritures_comptables_v2')
+                .select('id, ref_folio')
+                .eq('societe_id', societe_id)
+                .or(`ref_folio.eq.${classRef},ref_folio.like.%-${anyRef},ref_folio.like.%-${anyRef}-%`)
+                .limit(1)
+              const classExists = !!(existingRefs && existingRefs.length > 0)
               if (!classExists) {
                 let compteCharge = '471'
                 let libellePrefix = 'Opération bancaire'
@@ -1491,15 +1698,18 @@ export async function POST(request: Request) {
                 const chargeClass = compteCharge.charAt(0)
                 const lettreOnCharge = (chargeClass !== '6' && chargeClass !== '7') ? classLettre : null
 
+                const freezeClass = bnqFreezeColumns(txDeviseEffective2, txMontantOrigine2, txHistoricalRate2)
                 await supabase.from('ecritures_comptables_v2').insert([
                   { dossier_id: dossier.id, societe_id: societe_id, date_ecriture: txDate2, journal: 'BNQ',
                     numero_compte: compteCharge, libelle: classLib,
                     debit_mur: isOut ? txAmountMUR2 : 0, credit_mur: isOut ? 0 : txAmountMUR2,
-                    lettre: lettreOnCharge, ref_folio: classRef },
+                    lettre: lettreOnCharge, ref_folio: classRef,
+                    ...freezeClass },
                   { dossier_id: dossier.id, societe_id: societe_id, date_ecriture: txDate2, journal: 'BNQ',
                     numero_compte: '512', libelle: `Banque — ${(tx.tiers_detecte || '').substring(0, 25)}`,
                     debit_mur: isOut ? 0 : txAmountMUR2, credit_mur: isOut ? txAmountMUR2 : 0,
-                    lettre: classLettre, ref_folio: classRef },
+                    lettre: classLettre, ref_folio: classRef,
+                    ...freezeClass },
                 ])
                 ecrituresCreees++
 
@@ -1661,13 +1871,34 @@ export async function POST(request: Request) {
           const tx = txs[txIdx]
           const txAmt = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
           const isOut = (Number(tx.debit) || 0) > 0
+          // Migration 171/172 — résoudre la devise de la tx + taux historique.
+          const dateEcr = tx.date || new Date().toISOString().split('T')[0]
+          const deviseMC = (tx.devise || 'MUR').toUpperCase()
+          let historicalRateMC = 1
+          let amountMurMC = txAmt
+          if (deviseMC !== 'MUR') {
+            const mcOutcome = await resolveHistoricalRateSafe(supabase, dateEcr, deviseMC)
+            if (mcOutcome.rate != null) {
+              historicalRateMC = mcOutcome.rate
+              amountMurMC = Math.round(txAmt * historicalRateMC * 100) / 100
+            } else {
+              console.warn(`[lettrer_manuel] missing rate ${deviseMC}@${dateEcr} — debit_mur écrit en devise d'origine`)
+            }
+          }
+          const freezeMC = bnqFreezeColumns(
+            deviseMC,
+            deviseMC === 'MUR' ? null : Math.round(txAmt * 100) / 100,
+            historicalRateMC,
+          )
           await supabase.from('ecritures_comptables_v2').insert([
-            { dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+            { dossier_id: dossier.id, societe_id, date_ecriture: dateEcr,
               journal: 'BNQ', numero_compte: compteCharge, libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 30)}`,
-              debit_mur: isOut ? txAmt : 0, credit_mur: isOut ? 0 : txAmt, lettre: code, ref_folio: `MC-${releve_id}-${txIdx}` },
-            { dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+              debit_mur: isOut ? amountMurMC : 0, credit_mur: isOut ? 0 : amountMurMC, lettre: code, ref_folio: `MC-${releve_id}-${txIdx}`,
+              ...freezeMC },
+            { dossier_id: dossier.id, societe_id, date_ecriture: dateEcr,
               journal: 'BNQ', numero_compte: '512', libelle: `Banque — ${(tx.tiers_detecte || '').substring(0, 25)}`,
-              debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0, lettre: code, ref_folio: `MC-${releve_id}-${txIdx}` },
+              debit_mur: isOut ? 0 : amountMurMC, credit_mur: isOut ? amountMurMC : 0, lettre: code, ref_folio: `MC-${releve_id}-${txIdx}`,
+              ...freezeMC },
           ])
         }
 
@@ -1971,7 +2202,7 @@ export async function POST(request: Request) {
         releve_id?: string
         facture_ids?: string[]
         societe_id?: string
-        type_ecart?: 'auto' | 'change' | 'escompte' | 'penalite' | 'exceptionnel'
+        type_ecart?: 'auto' | 'change' | 'escompte' | 'penalite' | 'exceptionnel' | 'a_regulariser'
       }
       if (!releve_id || !facture_ids || !Array.isArray(facture_ids) || facture_ids.length === 0) {
         return NextResponse.json({ error: 'releve_id et facture_ids[] requis' }, { status: 400 })
@@ -2012,6 +2243,7 @@ export async function POST(request: Request) {
             { type_ecart: 'escompte', label: 'Escompte', compte: ecartSigne > 0 ? '765 (escompte obtenu)' : '665 (escompte accordé)' },
             { type_ecart: 'penalite', label: 'Pénalité de retard', compte: '631' },
             { type_ecart: 'exceptionnel', label: 'Écart exceptionnel', compte: ecartSigne > 0 ? '758' : '658' },
+            { type_ecart: 'a_regulariser', label: 'Forcer — à régulariser plus tard', compte: '471 (Comptes d\'attente)' },
           ],
         }, { status: 409 })
       }
@@ -2102,6 +2334,14 @@ export async function POST(request: Request) {
                 compteEcart = '631'
                 libelleEcart = `Pénalité de retard — ${lettreCode}`
                 break
+              case 'a_regulariser':
+                // FORCE — l'opérateur ne peut/veut pas qualifier maintenant.
+                // L'écart va sur 471 (compte d'attente, classe 4 = bilan donc
+                // lettrable plus tard quand la régularisation comptable arrive).
+                // À surveiller via /admin/health (check ecritures_orphelines_471).
+                compteEcart = '471'
+                libelleEcart = `Écart forcé — à régulariser (${ecartSigne > 0 ? '+' : ''}${ecartAbs.toFixed(2)} MUR) — ${lettreCode}`
+                break
               case 'exceptionnel':
               default:
                 compteEcart = ecartSigne > 0 ? '758' : '658'
@@ -2109,16 +2349,32 @@ export async function POST(request: Request) {
                 break
             }
           }
+          // Sens débit/crédit selon classe du compte :
+          //   • 6xxx (charge) → débit
+          //   • 7xxx (produit) → crédit
+          //   • 4xxx (471 attente) → débit si ecartSigne < 0, crédit si > 0
+          //     (équilibre le solde 411/401 dans le sens opposé à l'écart)
+          let debitOd = 0, creditOd = 0
+          if (/^6/.test(compteEcart)) debitOd = ecartAbs
+          else if (/^7/.test(compteEcart)) creditOd = ecartAbs
+          else if (/^4/.test(compteEcart)) {
+            // Compte 471 (à régulariser) : on inverse le sens pour neutraliser
+            // l'écart 411/401. ecartSigne > 0 (banque > facture) → 471 crédit.
+            if (ecartSigne > 0) creditOd = ecartAbs
+            else debitOd = ecartAbs
+          }
           await supabase.from('ecritures_comptables').insert({
             dossier_id: dossier.id,
             date_ecriture: new Date().toISOString().split('T')[0],
             journal: 'OD',
             compte: compteEcart,
             libelle: libelleEcart,
-            // 631/658/666/665 = charges → débit. 758/766/765 = produits → crédit.
-            debit: /^(6)/.test(compteEcart) ? ecartAbs : 0,
-            credit: /^(7)/.test(compteEcart) ? ecartAbs : 0,
-            // Règle R7 : pas de lettrage sur 6xxx/7xxx. `lettre` volontairement omis.
+            debit: debitOd,
+            credit: creditOd,
+            // Règle R7 : pas de lettrage sur 6xxx/7xxx. Sur 471 (4xxx) le
+            // lettrage est autorisé mais on l'omet ici — la régularisation
+            // future créera l'écriture miroir et lettrera les deux à ce
+            // moment-là.
           })
         }
       }
@@ -2145,11 +2401,7 @@ export async function POST(request: Request) {
       const deviseMap: Record<string, string> = {}
       ;(comptesBanc || []).forEach((c: any) => { deviseMap[c.id] = c.devise || 'MUR' })
 
-      const rates = await getTauxChange()
-      const toMURLocal = (amount: number, devise: string): number => {
-        if (!devise || devise === 'MUR') return amount
-        return amount * (rates[devise.toUpperCase()] || 1)
-      }
+      const ratesLiveGen = await getTauxChange()
 
       let created = 0
 
@@ -2162,8 +2414,18 @@ export async function POST(request: Request) {
           const txCredit = Number(tx.credit) || 0
           const txAmount = txDebit > 0 ? txDebit : txCredit
           if (txAmount === 0) continue
-          const txAmountMUR = Math.round(toMURLocal(txAmount, releveDevise) * 100) / 100
           const txDate = tx.date || new Date().toISOString().split('T')[0]
+          // Migration 171/172 — taux HISTORIQUE par (date, devise).
+          const effectiveDeviseGen = (tx.devise || releveDevise || 'MUR').toUpperCase()
+          const genOutcome = await resolveHistoricalRateSafe(
+            supabase, txDate, effectiveDeviseGen, ratesLiveGen,
+          )
+          const effectiveRateGen = genOutcome.rate != null
+            ? genOutcome.rate
+            : (effectiveDeviseGen === 'MUR' ? 1 : (ratesLiveGen[effectiveDeviseGen] || 1))
+          const txAmountMUR = Math.round(
+            (effectiveDeviseGen === 'MUR' ? txAmount : txAmount * effectiveRateGen) * 100,
+          ) / 100
 
           // --- Internal transfers → 581 both sides ---
           if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
@@ -2332,7 +2594,7 @@ export async function POST(request: Request) {
       // lettrage.
       let facturesQuery = supabase
         .from('factures')
-        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_mur, devise, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture, type_document, facture_origine_id')
+        .select('id, numero_facture, montant_ht, montant_tva, montant_ttc, montant_mur, devise, taux_change, date_facture, date_echeance, rapproche_date, rapproche_releve_id, rapproche_transaction_idx, tiers, type_facture, type_document, facture_origine_id')
         .eq('societe_id', socId)
         .eq('statut', 'paye')
       // Filtre optionnel sur le mois (pour sync_lettrage scope mensuel)
@@ -2471,6 +2733,9 @@ export async function POST(request: Request) {
               montant_tva: Number(f.montant_tva) || 0,
               montant_ttc: Number(f.montant_ttc) || 0,
               type_facture: (f.type_facture === 'client' ? 'client' : 'fournisseur'),
+              devise: f.devise || 'MUR',
+              taux_change: Number(f.taux_change) || 1,
+              montant_mur: Number(f.montant_mur) || undefined,
             })
             if (!gen.ok) {
               errors.push({ facture_id: f.id, reason: `ACH/VTE absente et recréation échouée : ${gen.error || 'inconnue'}` })
@@ -2576,6 +2841,32 @@ export async function POST(request: Request) {
             const isSupplier = achCredit > 0 // ACH 401 credit → supplier
             const libelleBase = `Règlement ${f.numero_facture || ''} — ${(f.tiers || '').substring(0, 40)}`.trim()
 
+            // Migration 171/172 — taux HISTORIQUE à payDate (fallback au
+            // taux stocké sur la facture si absent : meilleure source de
+            // vérité pour un paiement reconstruit).
+            const factureDevise = (f.devise || 'MUR').toUpperCase()
+            const factureTauxStored = Number((f as any).taux_change) > 0
+              ? Number((f as any).taux_change)
+              : null
+            let historicalRateSync: number
+            if (factureDevise === 'MUR') {
+              historicalRateSync = 1
+            } else {
+              const outc = await resolveHistoricalRateSafe(supabase, payDate, factureDevise)
+              historicalRateSync = outc.rate != null
+                ? outc.rate
+                : (factureTauxStored ?? 1)
+              if (outc.rate == null) {
+                console.warn(
+                  `[sync_lettrage] no historical rate ${factureDevise}@${payDate}, fallback facture.taux_change=${factureTauxStored}`,
+                )
+              }
+            }
+            const montantOrigineSync = factureDevise === 'MUR'
+              ? null
+              : Math.round((montantMur / historicalRateSync) * 100) / 100
+            const freezeSync = bnqFreezeColumns(factureDevise, montantOrigineSync, historicalRateSync)
+
             const tierSide = {
               dossier_id: dossierId,
               date_ecriture: payDate,
@@ -2587,6 +2878,11 @@ export async function POST(request: Request) {
               credit: isSupplier ? 0 : montantMur,
               piece_justificative: f.id,
               facture_id: f.id,
+              // NB : safeInsertBnq préserve les extras via EcritureCandidate
+              // [key: string]: any. Quand table='ecritures_comptables' (v1),
+              // la vue rejette les colonnes inconnues — on insère donc via v2
+              // directement plus bas.
+              ...freezeSync,
             }
             const bankSide = {
               dossier_id: dossierId,
@@ -2599,20 +2895,47 @@ export async function POST(request: Request) {
               credit: isSupplier ? montantMur : 0,
               piece_justificative: f.id,
               facture_id: f.id,
+              ...freezeSync,
             }
             // Sprint 2 — anti-doublon BNQ : si sync_lettrage retourne 2x
             // sur la même facture, on ne crée pas 2 paires d'écritures.
-            // safeInsertBnq normalise compte→numero_compte / debit→debit_mur
-            // pour la comparaison côté v2.
-            const insSync = await safeInsertBnq(supabase, [tierSide, bankSide] as any, 'ecritures_comptables')
+            // On insère via v2 (pas via la view v1) pour que les 3 colonnes
+            // de la migration 207 soient effectivement persistées (le trigger
+            // INSTEAD OF INSERT de la vue v1 ne les propage pas).
+            const toV2 = (e: any, societeId: string) => ({
+              societe_id: societeId,
+              dossier_id: e.dossier_id ?? null,
+              date_ecriture: e.date_ecriture,
+              journal: e.journal,
+              numero_piece: e.numero_piece ?? null,
+              ref_folio: e.piece_justificative ?? null,
+              numero_compte: e.compte,
+              libelle: e.libelle,
+              debit_mur: Number(e.debit) || 0,
+              credit_mur: Number(e.credit) || 0,
+              facture_id: e.facture_id ?? null,
+              devise_origine: e.devise_origine ?? null,
+              montant_origine: e.montant_origine ?? null,
+              taux_change_applique: e.taux_change_applique ?? null,
+            })
+            const insSync = await safeInsertBnq(
+              supabase,
+              [toV2(tierSide, socId), toV2(bankSide, socId)] as any,
+              'ecritures_comptables_v2',
+            )
             if (insSync.error) {
               errors.push({ facture_id: f.id, reason: `BNQ insert failed: ${(insSync.error as any).message || insSync.error}` })
               continue
             }
             if (insSync.skipped > 0) console.log(`[sync_lettrage BNQ] skipped:`, insSync.skipReasons)
             const createdRows = insSync.data || []
-            const createdTier = createdRows.find((r: any) => r.compte === achRow.compte) || createdRows[0]
-            const createdBank = createdRows.find((r: any) => r.compte === compteBanque) || createdRows[1]
+            // v2 expose numero_compte (pas compte) — on couvre les 2 noms.
+            const createdTier = createdRows.find((r: any) =>
+              (r.compte ?? r.numero_compte) === achRow.compte,
+            ) || createdRows[0]
+            const createdBank = createdRows.find((r: any) =>
+              (r.compte ?? r.numero_compte) === compteBanque,
+            ) || createdRows[1]
             bnqRow = createdTier
             bnqBanqueRow = createdBank
             pairsCreatedBnq++
@@ -3175,9 +3498,17 @@ export async function POST(request: Request) {
     // Si apply_to_similar=true : classe aussi TOUTES les autres tx de la société
     // avec le même tiers (propagation retroactive en 1 clic).
     if (action === 'classer_transaction') {
-      const { transaction_id, releve_id, societe_id, classification, learn_pattern, apply_to_similar } = body
+      const { transaction_id, releve_id, societe_id, classification, learn_pattern, apply_to_similar, compte_custom } = body
       if (!releve_id || !transaction_id || !classification) {
         return NextResponse.json({ error: 'releve_id, transaction_id, classification requis' }, { status: 400 })
+      }
+      // Si un compte_custom est fourni (via le picker plan comptable), on valide
+      // qu'il correspond à un compte réel avant d'accepter la classification.
+      if (compte_custom) {
+        const { data: pc } = await supabase.from('plan_comptable').select('compte').eq('compte', compte_custom).maybeSingle()
+        if (!pc) {
+          return NextResponse.json({ error: `Compte "${compte_custom}" absent du plan comptable` }, { status: 400 })
+        }
       }
       console.log(`[classer_transaction] societe=${societe_id} tx=${transaction_id} classification=${classification}`)
 
@@ -3191,10 +3522,15 @@ export async function POST(request: Request) {
       // Recuperer la devise du compte bancaire + taux de change pour conversion MUR
       const { data: compteBancaire } = await supabase
         .from('comptes_bancaires').select('devise').eq('id', releve.compte_bancaire_id).maybeSingle()
-      const txDevise = (compteBancaire?.devise || 'MUR').toUpperCase()
+      const compteDeviseClasser = (compteBancaire?.devise || 'MUR').toUpperCase()
       const rates: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
+      // F8/F10 — tx.devise prioritaire ; fallback sur la devise du compte bancaire (compat legacy).
+      // La tx vit dans releve.transactions_json[txIdx] — résolution plus bas après lecture de txIdx.
+      // On garde txDevise et tauxDevise comme valeurs par défaut issues du compte ;
+      // elles seront ré-évaluées par ligne si la tx porte sa propre devise.
+      const txDevise = compteDeviseClasser
       const tauxDevise = rates[txDevise] || 1
-      console.log(`[classer_transaction] devise=${txDevise} taux=${tauxDevise}`)
+      console.log(`[classer_transaction] devise_compte=${txDevise} taux=${tauxDevise}`)
 
       const txIdx = parseInt(transaction_id.split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
@@ -3209,8 +3545,13 @@ export async function POST(request: Request) {
       }
 
       const code = `CL${String(Date.now()).slice(-6)}`
-      // Lire l'ancien code lettre AVANT de mettre à jour la transaction
-      const oldLettre = txs[txIdx]?.lettre || null
+      // Lire l'ancien état de la tx AVANT de mettre à jour. Sert au cleanup
+      // systémique (écritures BNQ, lettres ACH, factures liées, CCA).
+      const prevTx = { ...(txs[txIdx] || {}) }
+      const oldLettre = prevTx.lettre || null
+      const oldFactureIds: string[] = Array.isArray(prevTx.facture_ids) && prevTx.facture_ids.length > 0
+        ? prevTx.facture_ids
+        : (prevTx.facture_id ? [prevTx.facture_id] : [])
       txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
       const { error: updRelErr, data: updRelData } = await supabase
         .from('releves_bancaires')
@@ -3255,7 +3596,7 @@ export async function POST(request: Request) {
         produit_divers: '706',
         autre: '471',
       }
-      const compte = CLASSE_COMPTES[classification] || '471'
+      const compte = compte_custom || CLASSE_COMPTES[classification] || '471'
 
       const { data: dossier, error: dossierErr } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
       let nbEcritures = 0
@@ -3269,9 +3610,21 @@ export async function POST(request: Request) {
         const tx = txs[txIdx]
         const txAmt = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
         const isOut = (Number(tx.debit) || 0) > 0
+        // F8/F10 — si la tx porte sa propre devise (paiement Forex), on l'utilise.
+        // Sinon on reste sur la devise du compte (comportement legacy).
+        const effectiveDevise = ((tx.devise as string | undefined) || compteDeviseClasser || 'MUR').toUpperCase()
+        const dateEcrCT = tx.date || new Date().toISOString().split('T')[0]
+        // Migration 171/172 — taux HISTORIQUE figé. Fallback live si absent,
+        // mais avec log ; on continue pour ne pas bloquer la classification.
+        const ctOutcome = await resolveHistoricalRateSafe(supabase, dateEcrCT, effectiveDevise, rates)
+        const effectiveTaux = ctOutcome.rate != null
+          ? ctOutcome.rate
+          : (effectiveDevise === 'MUR' ? 1 : (rates[effectiveDevise] || 1))
         // Conversion en MUR : si la tx est en EUR/USD/GBP, on convertit via le taux
-        const txAmtMUR = Math.round(txAmt * tauxDevise * 100) / 100
-        const deviseLabel = txDevise === 'MUR' ? '' : ` [${txDevise} @ ${tauxDevise}]`
+        const txAmtMUR = Math.round(txAmt * effectiveTaux * 100) / 100
+        const deviseLabel = effectiveDevise === 'MUR' ? '' : ` [${effectiveDevise} @ ${effectiveTaux}]`
+        const txMontantOrigineCT = effectiveDevise === 'MUR' ? null : Math.round(txAmt * 100) / 100
+        const freezeCT = bnqFreezeColumns(effectiveDevise, txMontantOrigineCT, effectiveTaux)
         // ref_folio determinISTE pour cette tx specifique (releve_id complet + txIdx)
         // Permet la detection idempotente du doublon = re-click sur la meme tx.
         const refFolio = `CL-${releve_id}-${txIdx}`
@@ -3296,6 +3649,31 @@ export async function POST(request: Request) {
           .eq('societe_id', societe_id)
           .eq('ref_folio', refFolioCLS)
         nbEcrituresSupprimees += (delByCLS || 0)
+        // 2bis) Supprimer les écritures BANK-xxx-txIdx (créées par marquer_paye
+        // ou par lettrer_multi côté BNQ) — couvre les paiements groupés avec
+        // ref_folio unique par facture : BANK-<rel>-<idx>-<facId_short>
+        const bankPrefix = `BANK-${releve_id}-${txIdx}`
+        const { count: delByBankExact } = await supabase
+          .from('ecritures_comptables_v2')
+          .delete({ count: 'exact' })
+          .eq('societe_id', societe_id)
+          .eq('ref_folio', bankPrefix)
+        nbEcrituresSupprimees += (delByBankExact || 0)
+        const { count: delByBankPrefix } = await supabase
+          .from('ecritures_comptables_v2')
+          .delete({ count: 'exact' })
+          .eq('societe_id', societe_id)
+          .like('ref_folio', `${bankPrefix}-%`)
+        nbEcrituresSupprimees += (delByBankPrefix || 0)
+        // 2ter) Supprimer TDS-xxx et MC-xxx (retenues à source + classifications manuelles)
+        for (const prefix of [`TDS-${releve_id}-${txIdx}`, `MC-${releve_id}-${txIdx}`]) {
+          const { count } = await supabase
+            .from('ecritures_comptables_v2')
+            .delete({ count: 'exact' })
+            .eq('societe_id', societe_id)
+            .eq('ref_folio', prefix)
+          nbEcrituresSupprimees += (count || 0)
+        }
         // 3) Supprimer par ancien code lettre (A043, CLS005, etc.)
         // oldLettre est lu AVANT la mise à jour de txs[txIdx] (ligne 3200)
         if (oldLettre && oldLettre !== code) {
@@ -3306,9 +3684,81 @@ export async function POST(request: Request) {
             .eq('lettre', oldLettre)
             .eq('journal', 'BNQ')
           nbEcrituresSupprimees += (delByLettre || 0)
+          // 3bis) Délettrer les ACH/OD/VTE qui partagaient la même lettre
+          // (elles sont préservées mais leur lettre est retirée pour permettre
+          // un re-lettrage ultérieur si besoin).
+          await supabase
+            .from('ecritures_comptables_v2')
+            .update({ lettre: null, date_lettrage: null })
+            .eq('societe_id', societe_id)
+            .eq('lettre', oldLettre)
+            .neq('journal', 'BNQ')
         }
         if (nbEcrituresSupprimees > 0) {
-          console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folio=${refFolio}|${refFolioCLS}, lettre=${oldLettre})`)
+          console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folios CL/CLS/BANK/TDS/MC, lettre=${oldLettre})`)
+        }
+
+        // ── RECLASSIFICATION FACTURES : détacher les factures qui étaient
+        // rapprochées à cette tx. Sans ça, une facture reste en statut 'paye'
+        // avec un rapproche_releve_id pointant vers la tx alors qu'on vient
+        // de classer la tx en autre chose (ex: 'loyer') → incohérence visible
+        // sur /client/fournisseurs et dans les rapports fiscaux.
+        if (oldFactureIds.length > 0 && classification !== 'fournisseur' && classification !== 'client') {
+          const { error: resetFacErr } = await supabase
+            .from('factures')
+            .update({
+              statut: 'en_attente',
+              rapproche_releve_id: null,
+              rapproche_transaction_idx: null,
+              rapproche_date: null,
+              rapproche_source: null,
+            })
+            .in('id', oldFactureIds)
+          if (!resetFacErr) {
+            console.log(`[classer_transaction] ${oldFactureIds.length} facture(s) remise(s) en_attente (classification devient ${classification})`)
+          }
+          // Et on clear les facture_id/facture_ids de la tx dans transactions_json
+          txs[txIdx] = { ...txs[txIdx], facture_id: null, facture_ids: undefined, rapprochement_multi: undefined, nb_factures: undefined }
+          await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+        }
+
+        // ── RECLASSIFICATION CCA : nettoyer les mouvements_compte_courant ──
+        // Si la tx était classée 'compte_courant_associe' avant, ou si elle l'est
+        // maintenant et qu'un mouvement existe déjà pour ce (releve_id, txIdx),
+        // on supprime le mouvement précédent. Sans ça, re-classer une tx CCA
+        // (changer d'associé) OU classer en autre type laisse un fantôme dans
+        // mouvements_compte_courant + un solde CCA faux.
+        // Idempotent : si rien à supprimer, count=0.
+        try {
+          const { data: oldMvts, count: nbMvtsSupprimees } = await supabase
+            .from('mouvements_compte_courant')
+            .delete({ count: 'exact' })
+            .eq('societe_id', societe_id)
+            .eq('source_releve_id', releve_id)
+            .eq('source_transaction_idx', txIdx)
+            .select('compte_courant_id, type, montant')
+          // Ré-équilibrer le solde du/des CCA impactés (sans les anciens mouvements)
+          if (oldMvts && oldMvts.length > 0) {
+            const ccaIds = Array.from(new Set(oldMvts.map((m: any) => m.compte_courant_id)))
+            for (const ccaId of ccaIds) {
+              const { data: remaining } = await supabase
+                .from('mouvements_compte_courant')
+                .select('type, montant')
+                .eq('compte_courant_id', ccaId)
+              const newSolde = (remaining || []).reduce((sum: number, m: any) => {
+                const sign = ['avance', 'retrait'].includes(m.type) ? -1 :
+                             ['apport', 'remboursement'].includes(m.type) ? 1 : 0
+                return sum + sign * (Number(m.montant) || 0)
+              }, 0)
+              await supabase.from('comptes_courants_associes')
+                .update({ solde: Math.round(newSolde * 100) / 100, updated_at: new Date().toISOString() })
+                .eq('id', ccaId)
+            }
+            console.log(`[classer_transaction] ${nbMvtsSupprimees} ancien(s) mouvement(s) CCA supprimé(s) sur ${ccaIds.length} compte(s) — soldes recalculés`)
+          }
+        } catch (cleanupErr) {
+          console.warn('[classer_transaction] CCA cleanup failed:', cleanupErr)
+          // Non bloquant — on continue avec la nouvelle classification
         }
 
         // R7 : pas de lettre sur comptes de résultat (6xxx/7xxx).
@@ -3318,18 +3768,20 @@ export async function POST(request: Request) {
 
         const ecrituresPayload = [
           {
-            dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+            dossier_id: dossier.id, societe_id, date_ecriture: dateEcrCT,
             journal: 'BNQ', numero_compte: compte,
             libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 60)}${deviseLabel}`,
             debit_mur: isOut ? txAmtMUR : 0, credit_mur: isOut ? 0 : txAmtMUR,
             lettre: lettreOnCompte, ref_folio: refFolio,
+            ...freezeCT,
           },
           {
-            dossier_id: dossier.id, societe_id, date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+            dossier_id: dossier.id, societe_id, date_ecriture: dateEcrCT,
             journal: 'BNQ', numero_compte: '512',
             libelle: `Banque${deviseLabel} — ${(tx.tiers_detecte || '').substring(0, 25)}`,
             debit_mur: isOut ? 0 : txAmtMUR, credit_mur: isOut ? txAmtMUR : 0,
             lettre: code, ref_folio: refFolio,
+            ...freezeCT,
           },
         ]
         const { error: insEcrErr, data: insEcrData } = await supabase
@@ -3373,8 +3825,16 @@ export async function POST(request: Request) {
         try {
           const tx = txs[txIdx]
           const nomAssocie = (tx.tiers_detecte || '').trim()
+          // Blocklist : noms de banques / frais / tiers techniques qui ne
+          // peuvent JAMAIS être un compte courant associé. Évite la création
+          // de faux CCA "MCB", "SBM", "MAURITIUS TELECOM" etc. observée en
+          // prod (libellés bancaires détectés comme tiers à tort).
+          const BANK_LIKE_NAMES = /^(mcb|sbm|bom|bank of mauritius|mauritius commercial bank|state bank|absa|hsbc|barclays|afrasia|standard chartered)(\s|$)/i
+          const FEE_LIKE_NAMES = /^(tax amount due|service fee|outward transfer|swift charge|stamp duty|merchant|bank charge|commission)/i
           if (!nomAssocie || nomAssocie.length < 3) {
             ccaError = 'Tiers absent ou trop court pour creer le CCA'
+          } else if (BANK_LIKE_NAMES.test(nomAssocie) || FEE_LIKE_NAMES.test(nomAssocie)) {
+            ccaError = `Tiers "${nomAssocie}" ressemble à une banque ou un frais bancaire — refus de créer un CCA. Re-classifie cette transaction en 'frais_bancaires'.`
           } else {
             // Trouver ou creer le compte courant associe
             const { data: existingCompte } = await supabase
@@ -3404,13 +3864,16 @@ export async function POST(request: Request) {
 
             if (compteId) {
               const montantOrig = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+              // F8/F10 — tx.devise > devise du compte (si tx en Forex sur compte MUR).
+              const ccaDevise = ((tx.devise as string | undefined) || compteDeviseClasser || 'MUR').toUpperCase()
+              const ccaTaux = ccaDevise === 'MUR' ? 1 : (rates[ccaDevise] || 1)
               // Conversion en MUR : le solde du CCA doit etre coherent en MUR
               // meme si la tx est en EUR/USD/GBP. On convertit avec le taux.
-              const montant = Math.round(montantOrig * tauxDevise * 100) / 100
+              const montant = Math.round(montantOrig * ccaTaux * 100) / 100
               const isOut = (Number(tx.debit) || 0) > 0
               const type = isOut ? 'avance' : 'apport'
               const deltaSolde = isOut ? -montant : montant
-              const conversionLabel = txDevise === 'MUR' ? '' : ` (${montantOrig.toFixed(2)} ${txDevise} @ ${tauxDevise})`
+              const conversionLabel = ccaDevise === 'MUR' ? '' : ` (${montantOrig.toFixed(2)} ${ccaDevise} @ ${ccaTaux})`
               const description = `${isOut ? 'Avance societe a associe' : 'Apport associe a societe'}${conversionLabel} — ${(tx.libelle || '').substring(0, 60)}`
 
               const { error: mvtErr } = await supabase
@@ -3422,6 +3885,11 @@ export async function POST(request: Request) {
                   type,
                   montant,
                   description,
+                  // Traçabilité + clé d'unicité (migration 202) — empêche un 2e
+                  // INSERT pour la même tx bancaire (propagation self-target).
+                  source_releve_id: releve_id,
+                  source_transaction_idx: txIdx,
+                  source_kind: 'classifier',
                 })
               if (mvtErr) {
                 ccaError = `Mouvement CCA non cree: ${mvtErr.message}`
@@ -3557,28 +4025,42 @@ export async function POST(request: Request) {
                 nbPropagated++
                 if (dossier) {
                   const txAmtOrig = Math.max(Number(t.debit) || 0, Number(t.credit) || 0)
-                  // Conversion en MUR par tx (devise du compte bancaire du releve)
-                  const txAmt = Math.round(txAmtOrig * relTauxDevise * 100) / 100
                   const isOut = (Number(t.debit) || 0) > 0
                   const propRef = `CL-${rel.id}-${i}`
-                  const devLbl = relDevise === 'MUR' ? '' : ` [${relDevise} @ ${relTauxDevise}]`
+                  const propDate = t.date || new Date().toISOString().split('T')[0]
+                  const propDevise = (t.devise || relDevise || 'MUR').toUpperCase()
+                  // Migration 171/172 — taux HISTORIQUE par tx propagée
+                  const propOutcome = await resolveHistoricalRateSafe(
+                    supabase, propDate, propDevise, rates,
+                  )
+                  const propRate = propOutcome.rate != null
+                    ? propOutcome.rate
+                    : (propDevise === 'MUR' ? 1 : (rates[propDevise] || 1))
+                  const txAmt = Math.round(
+                    (propDevise === 'MUR' ? txAmtOrig : txAmtOrig * propRate) * 100,
+                  ) / 100
+                  const propMontantOrig = propDevise === 'MUR' ? null : Math.round(txAmtOrig * 100) / 100
+                  const freezeProp = bnqFreezeColumns(propDevise, propMontantOrig, propRate)
+                  const devLbl = propDevise === 'MUR' ? '' : ` [${propDevise} @ ${propRate}]`
                   try {
                     const { error: insErr } = await supabase.from('ecritures_comptables_v2').insert([
                       {
                         dossier_id: dossier.id, societe_id,
-                        date_ecriture: t.date || new Date().toISOString().split('T')[0],
+                        date_ecriture: propDate,
                         journal: 'BNQ', numero_compte: compte,
                         libelle: `${classification} — ${(rawTxTiers || t.libelle || '').substring(0, 60)}${devLbl}`,
                         debit_mur: isOut ? txAmt : 0, credit_mur: isOut ? 0 : txAmt,
                         lettre: propCode, ref_folio: propRef,
+                        ...freezeProp,
                       },
                       {
                         dossier_id: dossier.id, societe_id,
-                        date_ecriture: t.date || new Date().toISOString().split('T')[0],
+                        date_ecriture: propDate,
                         journal: 'BNQ', numero_compte: '512',
                         libelle: `Banque${devLbl} — ${(rawTxTiers || '').substring(0, 25)}`,
                         debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0,
                         lettre: propCode, ref_folio: propRef,
+                        ...freezeProp,
                       },
                     ])
                     if (insErr && !/duplicate key|unique constraint/i.test(String(insErr.message))) {
@@ -3610,16 +4092,35 @@ export async function POST(request: Request) {
                       }
                       if (ccaId) {
                         const delta = isOut ? -txAmt : txAmt
-                        await supabase.from('mouvements_compte_courant').insert({
-                          compte_courant_id: ccaId, societe_id,
-                          date_mouvement: t.date || new Date().toISOString().split('T')[0],
-                          type: isOut ? 'avance' : 'apport',
-                          montant: txAmt,
-                          description: `Propage (${classification}) ${relDevise !== 'MUR' ? `[${txAmtOrig.toFixed(2)} ${relDevise} @ ${relTauxDevise}]` : ''} — ${(t.libelle || '').substring(0, 60)}`,
-                        })
-                        await supabase.from('comptes_courants_associes')
-                          .update({ solde: solde + delta, updated_at: new Date().toISOString() })
-                          .eq('id', ccaId)
+                        // Idempotent : si la tx (rel.id, i) a déjà un mouvement
+                        // sur ce compte, on skip (index unique partiel
+                        // ux_mouvements_cca_source — migration 202).
+                        const { data: existingMvt } = await supabase
+                          .from('mouvements_compte_courant')
+                          .select('id')
+                          .eq('compte_courant_id', ccaId)
+                          .eq('source_releve_id', rel.id)
+                          .eq('source_transaction_idx', i)
+                          .limit(1)
+                        if (!existingMvt || existingMvt.length === 0) {
+                          const { error: propInsErr } = await supabase.from('mouvements_compte_courant').insert({
+                            compte_courant_id: ccaId, societe_id,
+                            date_mouvement: t.date || new Date().toISOString().split('T')[0],
+                            type: isOut ? 'avance' : 'apport',
+                            montant: txAmt,
+                            description: `Propage (${classification}) ${propDevise !== 'MUR' ? `[${txAmtOrig.toFixed(2)} ${propDevise} @ ${propRate}]` : ''} — ${(t.libelle || '').substring(0, 60)}`,
+                            source_releve_id: rel.id,
+                            source_transaction_idx: i,
+                            source_kind: 'propagation',
+                          })
+                          if (!propInsErr) {
+                            await supabase.from('comptes_courants_associes')
+                              .update({ solde: solde + delta, updated_at: new Date().toISOString() })
+                              .eq('id', ccaId)
+                          }
+                          // Si l'INSERT échoue sur violation unique, l'index a
+                          // bien fait son travail — on ignore silencieusement.
+                        }
                       }
                     } catch (e: any) {
                       console.warn(`[propagation] CCA sync exception:`, e.message)
@@ -3829,9 +4330,8 @@ export async function POST(request: Request) {
 
       const { data: cb } = await supabase
         .from('comptes_bancaires').select('devise').eq('id', releve.compte_bancaire_id).maybeSingle()
-      const devise = (cb?.devise || 'MUR').toUpperCase()
-      const rates: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
-      const taux = rates[devise] || 1
+      const compteDeviseNdf = (cb?.devise || 'MUR').toUpperCase()
+      const ratesNdfLive: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
 
       const txIdx = parseInt(transaction_id.split('-').pop() || '0')
       const txs = [...(releve.transactions_json || [])]
@@ -3848,7 +4348,16 @@ export async function POST(request: Request) {
 
       const tx = txs[txIdx]
       const montantOrig = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
+      // Migration 171/172 — taux HISTORIQUE à la date de la tx.
+      const devise = (tx.devise || compteDeviseNdf || 'MUR').toUpperCase()
+      const dateEcrNdf = tx.date || new Date().toISOString().split('T')[0]
+      const ndfOutcome = await resolveHistoricalRateSafe(supabase, dateEcrNdf, devise, ratesNdfLive)
+      const taux = ndfOutcome.rate != null
+        ? ndfOutcome.rate
+        : (devise === 'MUR' ? 1 : (ratesNdfLive[devise] || 1))
       const montantMUR = Math.round(montantOrig * taux * 100) / 100
+      const montantOrigineNdf = devise === 'MUR' ? null : Math.round(montantOrig * 100) / 100
+      const freezeNdf = bnqFreezeColumns(devise, montantOrigineNdf, taux)
 
       // Employe optionnel
       let employeInfo = null
@@ -3883,19 +4392,21 @@ export async function POST(request: Request) {
         await supabase.from('ecritures_comptables_v2').insert([
           {
             dossier_id: dossier.id, societe_id,
-            date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+            date_ecriture: dateEcrNdf,
             journal: 'BNQ', numero_compte: compteDebit,
             libelle: `Remboursement ${nomEmploye} — ${(description || 'NDF').substring(0, 60)}${devLbl}`,
             debit_mur: montantMUR, credit_mur: 0,
             lettre: code, ref_folio: refFolio,
+            ...freezeNdf,
           },
           {
             dossier_id: dossier.id, societe_id,
-            date_ecriture: tx.date || new Date().toISOString().split('T')[0],
+            date_ecriture: dateEcrNdf,
             journal: 'BNQ', numero_compte: '512',
             libelle: `Banque${devLbl} — Remboursement ${nomEmploye.substring(0, 40)}`,
             debit_mur: 0, credit_mur: montantMUR,
             lettre: code, ref_folio: refFolio,
+            ...freezeNdf,
           },
         ])
       }
