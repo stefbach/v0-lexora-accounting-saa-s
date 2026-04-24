@@ -17,16 +17,16 @@ import {
   getMotifNonEligibleLabel, MOTIF_LABELS, STATUT_LABELS,
   type SeveranceCalcul, type SeveranceRecord, type MotifLicenciement,
 } from "@/lib/rh/severance"
+import { useRHSocieteActive } from "@/components/rh/RHSocieteActiveProvider"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
 interface Employe { id: string; nom: string; prenom: string; societe_id: string }
-interface Societe { id: string; nom: string }
 
 export default function SeverancePage() {
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [societeId, setSocieteId] = useState<string>("")
+  // Société active depuis le sidebar RH (cookie partagé avec /client/*).
+  const { societeId, societe } = useRHSocieteActive()
   const [employes, setEmployes] = useState<Employe[]>([])
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [userRole, setUserRole] = useState<string>("")
@@ -60,7 +60,7 @@ export default function SeverancePage() {
   const [filtreStatut, setFiltreStatut] = useState<string>('all')
   const [rowLoading, setRowLoading] = useState<string | null>(null)
 
-  // Auth + liste sociétés
+  // Auth uniquement — la liste des sociétés vient du provider RH.
   useEffect(() => {
     ;(async () => {
       try {
@@ -73,10 +73,6 @@ export default function SeverancePage() {
         setUserRole(role)
         if (!['admin', 'rh'].includes(role)) { setAuthorized(false); return }
         setAuthorized(true)
-        const r = await fetch('/api/comptable/societes')
-        const d = r.ok ? await r.json() : { societes: [] }
-        setSocietes(d?.societes || [])
-        if (d?.societes?.length > 0) setSocieteId(d.societes[0].id)
       } catch { setAuthorized(false) }
     })()
   }, [])
@@ -227,12 +223,10 @@ export default function SeverancePage() {
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label className="text-sm">Société</Label>
-              <Select value={societeId} onValueChange={setSocieteId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <div className="h-10 px-3 py-2 text-sm rounded-md border bg-slate-50 flex items-center"
+                style={{ color: NAVY }}>
+                {societe?.nom || <span className="text-slate-500 italic">Sélectionnez une société dans le menu de gauche</span>}
+              </div>
             </div>
             <div>
               <Label className="text-sm">Employé</Label>

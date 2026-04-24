@@ -18,11 +18,10 @@ import {
   type DeclarationMraRecap, type DeclarationPayeRecord, type DeclarationCsgRecord,
   type StatutDeclarationMra,
 } from "@/lib/rh/declarations-mra"
+import { useRHSocieteActive } from "@/components/rh/RHSocieteActiveProvider"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
-
-interface Societe { id: string; nom: string; ern?: string }
 
 const MOIS_LABELS = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -31,8 +30,7 @@ const MOIS_LABELS = [
 
 export default function DeclarationsMraPage() {
   const now = new Date()
-  const [societes, setSocietes] = useState<Societe[]>([])
-  const [societeId, setSocieteId] = useState<string>("")
+  const { societeId, societe } = useRHSocieteActive()
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [userRole, setUserRole] = useState<string>("")
 
@@ -74,10 +72,6 @@ export default function DeclarationsMraPage() {
         setUserRole(role)
         if (!['admin', 'rh'].includes(role)) { setAuthorized(false); return }
         setAuthorized(true)
-        const r = await fetch('/api/comptable/societes')
-        const d = r.ok ? await r.json() : { societes: [] }
-        setSocietes(d?.societes || [])
-        if (d?.societes?.length > 0) setSocieteId(d.societes[0].id)
       } catch { setAuthorized(false) }
     })()
   }, [])
@@ -212,12 +206,10 @@ export default function DeclarationsMraPage() {
             <div className="grid md:grid-cols-5 gap-3">
               <div>
                 <Label>Société</Label>
-                <Select value={societeId} onValueChange={setSocieteId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="h-10 px-3 py-2 text-sm rounded-md border bg-slate-50 flex items-center"
+                  style={{ color: NAVY }}>
+                  {societe?.nom || <span className="text-slate-500 italic">Sélectionnez dans le menu</span>}
+                </div>
               </div>
               <div>
                 <Label>Année</Label>

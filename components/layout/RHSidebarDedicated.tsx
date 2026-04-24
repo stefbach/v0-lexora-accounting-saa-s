@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
+import { useRHSocieteActive } from "@/components/rh/RHSocieteActiveProvider"
 import {
   Clock, Users, Calendar, CreditCard, TrendingUp, Banknote,
-  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle, ShieldCheck, Gift, Wallet, BookOpenCheck, FileBarChart,
+  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle, ShieldCheck, Gift, Wallet, BookOpenCheck, FileBarChart, Building2, ChevronDown,
 } from "lucide-react"
 
 interface NavLink {
@@ -73,8 +74,10 @@ export function RHSidebarDedicated() {
   const locale = getLocale()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userRole, setUserRole] = useState<string>('')
+  const [societeMenuOpen, setSocieteMenuOpen] = useState(false)
+  const { societeId, societe, societes, switchSociete, selectAll } = useRHSocieteActive()
 
-  useEffect(() => { setMobileOpen(false) }, [pathname])
+  useEffect(() => { setMobileOpen(false); setSocieteMenuOpen(false) }, [pathname])
 
   // Fetch user role
   useEffect(() => {
@@ -187,6 +190,82 @@ export function RHSidebarDedicated() {
             </span>
           </div>
         </div>
+
+        {/* Bloc Société active — cookie active_societe_id partagé avec /client/*.
+            Le hook useRHSocieteActive lit /api/comptable/societes (filtré par rôle).
+            societeId peut être null = mode "Toutes les sociétés" (admin vue consolidée). */}
+        {societes.length > 0 && (
+          <div className="mx-3 mt-3 p-3 rounded-xl flex-shrink-0 relative"
+            style={{
+              background: "linear-gradient(135deg, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.04) 100%)",
+              border: "1px solid rgba(212,175,55,0.25)",
+            }}
+          >
+            <div className="text-[9px] font-bold uppercase tracking-[0.14em] mb-1" style={{ color: "#D4AF37" }}>
+              Société active
+            </div>
+            <div className="text-sm font-semibold truncate" style={{ color: "#E8EAFC" }} title={societe?.nom || "Toutes les sociétés"}>
+              {societe?.nom || "Toutes les sociétés"}
+            </div>
+            {societe?.brn && (
+              <div className="text-[10px] mt-0.5 truncate" style={{ color: "#A8AFC7" }}>
+                BRN {societe.brn}
+              </div>
+            )}
+            {societes.length > 1 && (
+              <>
+                <button
+                  onClick={() => setSocieteMenuOpen(v => !v)}
+                  className="mt-2 w-full text-[11px] font-semibold py-1.5 px-2 rounded-md flex items-center justify-between gap-2"
+                  style={{ color: "#0B0F2E", background: "linear-gradient(135deg, #D4AF37 0%, #E4C547 100%)" }}
+                >
+                  <span>Changer de société</span>
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                {societeMenuOpen && (
+                  <div
+                    className="absolute left-0 right-0 top-full mt-1 mx-3 rounded-xl overflow-hidden z-50 max-h-64 overflow-y-auto"
+                    style={{
+                      background: "#0B0F2E",
+                      border: "1px solid rgba(212,175,55,0.35)",
+                      boxShadow: "0 12px 28px -8px rgba(0,0,0,0.6)",
+                    }}
+                  >
+                    <button
+                      onClick={() => { selectAll(); setSocieteMenuOpen(false) }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-[12px] transition-colors",
+                        !societeId ? "font-semibold" : "",
+                      )}
+                      style={{
+                        color: !societeId ? "#D4AF37" : "#E8EAFC",
+                        borderBottom: "1px solid rgba(232,234,252,0.08)",
+                      }}
+                    >
+                      <Building2 className="inline w-3 h-3 mr-1.5 -mt-0.5" />
+                      Toutes les sociétés
+                    </button>
+                    {societes.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => { switchSociete(s.id); setSocieteMenuOpen(false) }}
+                        className="w-full text-left px-3 py-2 text-[12px] transition-colors truncate"
+                        style={{
+                          color: s.id === societeId ? "#D4AF37" : "#E8EAFC",
+                          fontWeight: s.id === societeId ? 600 : 400,
+                          background: s.id === societeId ? "rgba(212,175,55,0.08)" : "transparent",
+                        }}
+                        title={s.nom}
+                      >
+                        {s.nom}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {/* Back to client space */}

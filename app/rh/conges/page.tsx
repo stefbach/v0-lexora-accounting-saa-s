@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { createClient } from "@/lib/supabase/client"
+import { useRHSocieteActive } from "@/components/rh/RHSocieteActiveProvider"
 import { countJoursOuvrablesSync, buildJoursFeriesSet } from "@/lib/rh/jours-ouvrables"
 import {
   EligibiliteBadge,
@@ -491,10 +492,12 @@ function TeamCalendarView({ conges, employes, societeFilter }: {
 
 // ─── Page component ──────────────────────────────────────────────
 export default function CongesPage() {
+  // Société active du sidebar RH (cookie partagé /client/*).
+  const { societeId: activeSocieteId, societes: providerSocietes } = useRHSocieteActive()
   // State
   const [tab, setTab] = useState("dashboard")
   const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState("all")
+  const [societe, setSociete] = useState<string>(activeSocieteId || "all")
   const [employes, setEmployes] = useState<any[]>([])
 
   // Balances tab
@@ -594,12 +597,24 @@ export default function CongesPage() {
   const socParam = societe !== "all" ? `societe_id=${societe}` : ""
 
   const loadSocietes = useCallback(async () => {
+    // Sprint RH-société-active : on s'appuie sur la liste fournie par le
+    // provider (qui a déjà fait le fetch filtré par rôle). Fallback fetch
+    // si le provider n'a pas encore chargé.
+    if (providerSocietes.length > 0) {
+      setSocietes(providerSocietes)
+      return
+    }
     try {
       const res = await fetch("/api/comptable/societes")
       const data = await res.json()
       setSocietes(Array.isArray(data.societes) ? data.societes : [])
     } catch (e) { console.error(e) }
-  }, [])
+  }, [providerSocietes])
+
+  // Sync filtre local avec la société active du sidebar.
+  useEffect(() => {
+    setSociete(activeSocieteId || "all")
+  }, [activeSocieteId])
 
   const loadEmployes = useCallback(async () => {
     try {

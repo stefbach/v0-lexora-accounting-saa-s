@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key, User, Briefcase, Banknote, Building2, Trash2, AlertTriangle, Eye, EyeOff, Mail, CheckCircle2, XCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useRHSocieteActive } from "@/components/rh/RHSocieteActiveProvider"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 import { toast } from "sonner"
 
@@ -755,11 +756,14 @@ function computeTotalBrut(emp: any): number {
 
 export default function EmployesPage() {
   const router = useRouter()
+  // Société active du provider (cookie partagé avec /client/*).
+  // societeId null → filtre "all" (vue multi-société admin). Sinon → pré-filtré.
+  const { societeId: activeSocieteId, societes: allSocietes } = useRHSocieteActive()
+  const societes = allSocietes
   const [employes, setEmployes] = useState<any[]>([])
-  const [societes, setSocietes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
-  const [filterSociete, setFilterSociete] = useState("all")
+  const [filterSociete, setFilterSociete] = useState<string>(activeSocieteId || "all")
   const [filterStatut, setFilterStatut] = useState("presents")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -926,14 +930,18 @@ export default function EmployesPage() {
       const params = new URLSearchParams()
       if (filterSociete !== "all") params.set("societe_id", filterSociete)
       if (filterStatut !== "tous") params.set("statut", filterStatut)
-      const [empRes, socRes] = await Promise.all([fetch(`/api/rh/employes?${params}`), fetch("/api/comptable/societes")])
+      const empRes = await fetch(`/api/rh/employes?${params}`)
       setEmployes((await empRes.json()).employes || [])
-      setSocietes((await socRes.json()).societes || [])
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }, [filterSociete, filterStatut])
 
   useEffect(() => { load() }, [load])
+
+  // Sync filtre local avec la société active du sidebar.
+  useEffect(() => {
+    setFilterSociete(activeSocieteId || "all")
+  }, [activeSocieteId])
 
   const handleImport = async () => {
     if (!importFile || !importSociete) { setImportError("Fichier et société requis"); return }

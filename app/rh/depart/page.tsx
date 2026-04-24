@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useRHSocieteActive } from "@/components/rh/RHSocieteActiveProvider"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
@@ -30,11 +31,12 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 // ── Sub-component: Departure Form (isolated state) ──
-function DepartureForm({ societes, onCalculated }: {
+function DepartureForm({ societes, onCalculated, initialSocieteId }: {
   societes: any[]
   onCalculated: (breakdown: any, formData: any) => void
+  initialSocieteId?: string | null
 }) {
-  const [societeId, setSocieteId] = useState("")
+  const [societeId, setSocieteId] = useState(initialSocieteId || "")
   const [employes, setEmployes] = useState<any[]>([])
   const [employeId, setEmployeId] = useState("")
   const [dateDepart, setDateDepart] = useState("")
@@ -515,19 +517,19 @@ function RecentDepartures({ refreshKey, onReintegrated }: { refreshKey: number; 
 
 // ── Main page ──
 export default function DepartPage() {
-  const [societes, setSocietes] = useState<any[]>([])
+  // Sprint RH-société-active : la liste vient du provider (cookie partagé).
+  // Si societeId est null (mode "Toutes sociétés"), on passe TOUTES les sociétés
+  // au formulaire qui demandera le choix. Si societeId est défini, on pré-filtre
+  // pour ne montrer que la société active.
+  const { societeId, societes: allSocietes } = useRHSocieteActive()
+  const societes = societeId
+    ? allSocietes.filter(s => s.id === societeId)
+    : allSocietes
   const [breakdown, setBreakdown] = useState<any>(null)
   const [formData, setFormData] = useState<any>(null)
   const [confirming, setConfirming] = useState(false)
   const [confirmResult, setConfirmResult] = useState<any>(null)
   const [refreshKey, setRefreshKey] = useState(0)
-
-  useEffect(() => {
-    fetch("/api/comptable/societes")
-      .then(r => r.json())
-      .then(d => setSocietes(d.societes || []))
-      .catch(() => {})
-  }, [])
 
   const handleCalculated = (b: any, fd: any) => {
     setBreakdown(b)
@@ -586,7 +588,7 @@ export default function DepartPage() {
       )}
 
       {/* Form */}
-      <DepartureForm societes={societes} onCalculated={handleCalculated} />
+      <DepartureForm societes={societes} onCalculated={handleCalculated} initialSocieteId={societeId} />
 
       {/* Breakdown */}
       {breakdown && formData && (

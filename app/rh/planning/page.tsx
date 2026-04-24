@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { toast } from "sonner"
+import { useRHSocieteActive } from "@/components/rh/RHSocieteActiveProvider"
 import Link from "next/link"
 import type { PlanningShift, JourCode } from "@/types/planning"
 import { type Creneau, shiftToCreneau, creneauToShift } from "@/lib/planning/converters"
@@ -113,12 +114,14 @@ const DEFAULT_CRENEAUX: Creneau[] = [
 
 export default function PlanningPage() {
   const now = new Date()
+  // Société active du sidebar RH (cookie partagé avec /client/*).
+  const { societeId: activeSocieteId, societes: providerSocietes } = useRHSocieteActive()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
   const [societes, setSocietes] = useState<any[]>([])
   // Sprint 5 BUG B — persister la sélection société pour ne pas revenir à
-  // "all" après un refresh, ce qui masquait les plannings brouillon de
-  // l'utilisateur et affichait "Sélectionnez une société".
+  // "all" après un refresh. Initialisée depuis le provider RH (qui lit le
+  // cookie partagé) ; fallback sur localStorage legacy.
   const [societe, setSociete] = useState<string>(() => {
     if (typeof window === "undefined") return "all"
     try { return localStorage.getItem("rh_planning_societe") || "all" } catch { return "all" }
@@ -563,24 +566,39 @@ export default function PlanningPage() {
   // ─── Load data ──────────────────────────────────────────────────
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
+    // Sprint RH-société-active : réutilise la liste du provider quand dispo.
+    // Fallback double fetch si le provider n'a pas encore chargé (SSR warm-up).
+    const providerReady = providerSocietes.length > 0
+    const loader = providerReady
+      ? Promise.resolve([{ societes: providerSocietes }, { societes: [] as any[] }])
+      : Promise.all([
+          fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+          fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+        ])
+    loader.then(([d1, d2]) => {
       const all = [...(d1.societes || []), ...(d2.societes || [])]
       const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
       setSocietes(unique)
-      // Sprint 5 BUG B — ne pas écraser une sélection persistée valide.
-      // Fallback sur la première société si la sélection stockée n'est plus
-      // accessible (perte de droits, société supprimée, etc.).
       if (unique.length >= 1) {
         setSociete(prev => {
+          // Priorité 1 : société active du sidebar si définie et valide
+          if (activeSocieteId && unique.some((s: any) => s.id === activeSocieteId)) {
+            return activeSocieteId
+          }
+          // Priorité 2 : sélection persistée localStorage valide
           const stillValid = prev && prev !== "all" && unique.some((s: any) => s.id === prev)
           return stillValid ? prev : unique[0].id
         })
       }
     })
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerSocietes])
+
+  // Sync planning societe avec la société active du sidebar.
+  useEffect(() => {
+    if (!activeSocieteId) return  // en mode "Toutes", on garde la sélection précédente
+    setSociete(activeSocieteId)
+  }, [activeSocieteId])
 
   // Sprint 5 BUG B — persister la sélection société au changement.
   useEffect(() => {

@@ -16,6 +16,7 @@ import {
   formaterMontantMUR, formaterPct, getMotifLabel,
   type EoyBonusCalcul, type EoyBonusRecap,
 } from "@/lib/rh/eoy-bonus"
+import { useRHSocieteActive } from "@/components/rh/RHSocieteActiveProvider"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -28,8 +29,7 @@ type EoyCalculEnriched = EoyBonusCalcul & {
 }
 
 export default function EoyBonusPage() {
-  const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
-  const [societeId, setSocieteId] = useState<string>("")
+  const { societeId, societe } = useRHSocieteActive()
   const [annee, setAnnee] = useState<number>(new Date().getFullYear())
 
   const [calculs, setCalculs] = useState<EoyCalculEnriched[]>([])
@@ -62,11 +62,6 @@ export default function EoyBonusPage() {
         setUserRole(role)
         if (!['admin', 'rh'].includes(role)) { setAuthorized(false); return }
         setAuthorized(true)
-
-        const res = await fetch('/api/comptable/societes')
-        const d = res.ok ? await res.json() : { societes: [] }
-        setSocietes(d?.societes || [])
-        if (d?.societes?.length > 0) setSocieteId(d.societes[0].id)
       } catch { setAuthorized(false) }
     })()
   }, [])
@@ -209,12 +204,10 @@ export default function EoyBonusPage() {
           <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <Label className="text-sm">Société</Label>
-              <Select value={societeId} onValueChange={setSocieteId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <div className="h-10 px-3 py-2 text-sm rounded-md border bg-slate-50 flex items-center"
+                style={{ color: NAVY }}>
+                {societe?.nom || <span className="text-slate-500 italic">Sélectionnez dans le menu</span>}
+              </div>
             </div>
             <div>
               <Label className="text-sm">Année</Label>

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, CheckCircle, Lock, Unlock, ShieldCheck, ArrowRight, Clock, CreditCard, FileSpreadsheet, Receipt, Pencil, X, Save, RefreshCw, History } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useRHSocieteActive } from "@/components/rh/RHSocieteActiveProvider"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { PaieValidationPanel } from "@/components/rh/PaieValidationPanel"
 import {
@@ -45,8 +46,10 @@ function last12Months(): string[] {
 }
 
 export default function PaiePage() {
+  // Société active du sidebar RH (cookie partagé avec /client/*).
+  const { societeId: activeSocieteId, societes: providerSocietes } = useRHSocieteActive()
   const [societes, setSocietes] = useState<any[]>([])
-  const [societe, setSociete] = useState("all")
+  const [societe, setSociete] = useState<string>(activeSocieteId || "all")
   const [periode, setPeriode] = useState("")
   const [periodeReady, setPeriodeReady] = useState(false)
   const [availablePeriodes, setAvailablePeriodes] = useState<string[]>([])
@@ -98,15 +101,26 @@ export default function PaiePage() {
     router.replace(qs ? `/rh/paie?${qs}` : "/rh/paie", { scroll: false })
   }
 
+  // Sync filtre local avec la société active du sidebar RH (cookie partagé).
   useEffect(() => {
-    Promise.all([
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(async ([d1, d2]) => {
+    setSociete(activeSocieteId || "all")
+  }, [activeSocieteId])
+
+  useEffect(() => {
+    // Sprint RH-société-active : réutilise la liste du provider quand dispo.
+    // Fallback double fetch legacy si le provider n'a pas encore chargé.
+    const providerReady = providerSocietes.length > 0
+    const loadList = providerReady
+      ? Promise.resolve([{ societes: providerSocietes }, { societes: [] as any[] }])
+      : Promise.all([
+          fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+          fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
+        ])
+    loadList.then(async ([d1, d2]) => {
       const all = [...(d1.societes || []), ...(d2.societes || [])]
       const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
       setSocietes(unique)
-      const firstSociete = unique.length >= 1 ? unique[0].id : "all"
+      const firstSociete = activeSocieteId || (unique.length >= 1 ? unique[0].id : "all")
       setSociete(firstSociete)
 
       // FIX — le sélecteur doit TOUJOURS proposer le mois en cours + les
@@ -132,7 +146,8 @@ export default function PaiePage() {
       setPeriode(todayYm)
       setPeriodeReady(true)
     })
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerSocietes])
 
   const load = useCallback(async () => {
     if (!periodeReady || !periode) return
