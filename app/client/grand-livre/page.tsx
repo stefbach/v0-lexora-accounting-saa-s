@@ -145,11 +145,16 @@ export default function ClientGrandLivrePage() {
       const { pdf } = await import('@react-pdf/renderer')
       const { GrandLivrePDF } = await import('@/components/pdf/GrandLivrePDF')
       const socData = societe
+      const exerciceYears: [string, string] | null = pdfData?.exercice
+        ? (pdfData.exercice.match(/^(\d{4})-(\d{4})$/) ? [pdfData.exercice.split('-')[0], pdfData.exercice.split('-')[1]] : null)
+        : null
+      const pdfDateDebut = dateDebut || (exerciceYears ? `${exerciceYears[0]}-07-01` : '')
+      const pdfDateFin = dateFin || (exerciceYears ? `${exerciceYears[1]}-06-30` : '')
       const blob = await pdf(
         <GrandLivrePDF
           societe={socData}
-          dateDebut={dateDebut || pdfData?.exercice ? `${pdfData.exercice?.split('-')[0]}-07-01` : ''}
-          dateFin={dateFin || pdfData?.exercice ? `${pdfData.exercice?.split('-')[1]}-06-30` : ''}
+          dateDebut={pdfDateDebut}
+          dateFin={pdfDateFin}
           ecritures={allPdfEcritures}
           compteNames={COMPTE_NAMES}
         />

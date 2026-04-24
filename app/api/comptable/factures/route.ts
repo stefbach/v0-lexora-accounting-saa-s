@@ -156,6 +156,9 @@ export async function POST(request: Request) {
         montant_tva: Number(data.montant_tva) || 0,
         montant_ttc: Number(data.montant_ttc) || 0,
         type_facture: data.type_facture || 'client',
+        devise: data.devise || 'MUR',
+        taux_change: Number(data.taux_change) || 1,
+        montant_mur: Number(data.montant_mur) || undefined,
       })
     }
 

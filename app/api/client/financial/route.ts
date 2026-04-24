@@ -237,10 +237,19 @@ export async function GET(request: Request) {
     const allDocs = documents || []
 
     // Augment depensesFromFactures with payroll expenses from écritures
-    // Classe 6 uniquement : charges réelles (641x salaires, 645x patronales, 627 frais, 63x impôts)
-    // PAS les classe 4 (4210, 4311...) qui sont les DETTES, pas les charges → double-comptage
+    // Classe 6 uniquement : charges réelles (641x salaires, 645x patronales, 627 frais, 63x impôts).
+    // IMPORTANT : on EXCLUT journal ACH parce que les 607/6418 ACH viennent déjà de
+    // `factures` (depensesFournisseursFactures) — les inclure = double-comptage.
+    // Bug observé en prod : +1.3M MUR de dépenses fictives sur une société (607 ACH
+    // + factures fournisseurs HT comptés 2 fois). Fix : filter journal IN (SAL,OD-PAIE,BNQ,OD)
+    // mais PAS ACH.
     const depensesNonFournisseursEcritures = allEcritures
-      .filter((e: any) => e.compte?.startsWith('6') && !e.compte?.startsWith('628'))
+      .filter((e: any) =>
+        e.compte?.startsWith('6')
+        && !e.compte?.startsWith('628')
+        && e.journal !== 'ACH'      // exclut factures fournisseurs (déjà dans depensesFournisseursFactures)
+        && e.journal !== 'VTE'      // exclut ventes (journal client, au cas où)
+      )
       .reduce((sum: number, e: any) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
     depensesFromFactures = depensesFournisseursFactures + depensesNonFournisseursEcritures
 

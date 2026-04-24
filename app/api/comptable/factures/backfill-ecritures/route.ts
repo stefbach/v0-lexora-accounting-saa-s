@@ -82,6 +82,9 @@ export async function POST(request: Request) {
         montant_tva: Number(f.montant_tva) || 0,
         montant_ttc: Number(f.montant_ttc) || 0,
         type_facture: (f.type_facture === 'fournisseur' ? 'fournisseur' : 'client'),
+        devise: f.devise || 'MUR',
+        taux_change: Number(f.taux_change) || 1,
+        montant_mur: Number(f.montant_mur) || undefined,
       })
 
       if (r.ok) {

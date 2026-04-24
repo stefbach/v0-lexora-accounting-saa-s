@@ -160,32 +160,42 @@ export async function GET(request: Request) {
     const soldeOuvertureParCompte: Record<string, number> = {}
 
     if (effectiveDateDebut) {
-      // Fetch all entries BEFORE the start date to compute opening balances
+      // Fetch all entries BEFORE the start date to compute opening balances.
+      // Must mirror the current-period logic and merge V1+V2 — SAL entries
+      // (accounts 421/431/444, balance sheet) live in V1, VTE/ACH in V2.
+      // Deduping V1 against V2 by id, same as above.
       let priorV2Query = supabase.from('ecritures_comptables_v2')
-        .select('numero_compte, debit_mur, credit_mur')
+        .select('id, numero_compte, debit_mur, credit_mur')
         .eq('societe_id', societe_id)
         .lt('date_ecriture', effectiveDateDebut)
       if (compte_debut) priorV2Query = priorV2Query.gte('numero_compte', compte_debut)
       if (compte_fin) priorV2Query = priorV2Query.lte('numero_compte', compte_fin)
 
       const { data: priorV2Data } = await priorV2Query
-      let priorEntries: any[] = priorV2Data || []
+      const priorEntries: { id?: any; numero_compte: string; debit_mur: number; credit_mur: number }[] =
+        (priorV2Data || []).map((e: any) => ({
+          id: e.id, numero_compte: e.numero_compte,
+          debit_mur: Number(e.debit_mur) || 0, credit_mur: Number(e.credit_mur) || 0,
+        }))
 
-      // V1 fallback for prior entries
-      if (priorEntries.length === 0) {
-        const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
-        const dossierIds = (dossiers || []).map((d: any) => d.id)
-        if (dossierIds.length > 0) {
-          let priorV1Query = supabase.from('ecritures_comptables')
-            .select('compte, debit, credit')
-            .in('dossier_id', dossierIds)
-            .lt('date_ecriture', effectiveDateDebut)
-          if (compte_debut) priorV1Query = priorV1Query.gte('compte', compte_debut)
-          if (compte_fin) priorV1Query = priorV1Query.lte('compte', compte_fin)
-          const { data: priorV1Data } = await priorV1Query
-          priorEntries = (priorV1Data || []).map((e: any) => ({
-            numero_compte: e.compte, debit_mur: Number(e.debit) || 0, credit_mur: Number(e.credit) || 0
-          }))
+      const { data: priorDossiers } = await supabase
+        .from('dossiers').select('id').eq('societe_id', societe_id)
+      const priorDossierIds = (priorDossiers || []).map((d: any) => d.id)
+      if (priorDossierIds.length > 0) {
+        let priorV1Query = supabase.from('ecritures_comptables')
+          .select('id, compte, debit, credit')
+          .in('dossier_id', priorDossierIds)
+          .lt('date_ecriture', effectiveDateDebut)
+        if (compte_debut) priorV1Query = priorV1Query.gte('compte', compte_debut)
+        if (compte_fin) priorV1Query = priorV1Query.lte('compte', compte_fin)
+        const { data: priorV1Data } = await priorV1Query
+        const existingPriorIds = new Set(priorEntries.map(e => e.id).filter(Boolean))
+        for (const e of (priorV1Data || []) as any[]) {
+          if (e.id && existingPriorIds.has(e.id)) continue
+          priorEntries.push({
+            id: e.id, numero_compte: e.compte,
+            debit_mur: Number(e.debit) || 0, credit_mur: Number(e.credit) || 0,
+          })
         }
       }
 
@@ -196,7 +206,7 @@ export async function GET(request: Request) {
         const firstChar = compte.charAt(0)
         // Only carry forward balance sheet accounts (1-5), not P&L (6, 7)
         if (firstChar >= '1' && firstChar <= '5') {
-          soldeOuvertureParCompte[compte] = (soldeOuvertureParCompte[compte] || 0) + (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0)
+          soldeOuvertureParCompte[compte] = (soldeOuvertureParCompte[compte] || 0) + e.debit_mur - e.credit_mur
         }
       }
     }
