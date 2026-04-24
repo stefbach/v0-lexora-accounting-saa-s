@@ -13,6 +13,20 @@ export interface FactureForEcritures {
   montant_tva: number
   montant_ttc: number
   type_facture: 'client' | 'fournisseur'
+  // MUR conversion — sans ces champs, les factures en devise étrangère
+  // étaient écrites en montant d'origine sur `debit_mur` / `credit_mur`, ce
+  // qui causait un écart 411/401 massif lorsque le paiement bancaire (BNQ)
+  // était, lui, converti en MUR.
+  //
+  // Règle appliquée par `createEcrituresForFacture` :
+  //   - `montant_mur` fourni → utilisé tel quel pour la ligne TTC (411/401)
+  //   - sinon fallback `montant_ttc × (taux_change || 1)`
+  //   - `devise` par défaut 'MUR' (taux = 1)
+  //   - les lignes HT (607/706) et TVA (4456/4457) sont converties au taux
+  //     de la facture pour rester cohérentes avec la ligne TTC.
+  devise?: string
+  taux_change?: number
+  montant_mur?: number
 }
 
 /**
@@ -82,6 +96,28 @@ export async function createEcrituresForFacture(
     const isClient = facture.type_facture === 'client'
     const journal = isClient ? 'VTE' : 'ACH'
 
+    // ── Conversion MUR ─────────────────────────────────────────────────
+    // Priorité : (1) montant_mur fourni par l'appelant (colonne DB déjà
+    // calculée à la création/MàJ de la facture côté /api/client/factures)
+    // (2) fallback montant_ttc × taux_change pour les appelants legacy.
+    const devise = (facture.devise || 'MUR').toUpperCase()
+    const taux = Number(facture.taux_change) > 0 ? Number(facture.taux_change) : 1
+    const ttcMur = Number.isFinite(Number(facture.montant_mur)) && Number(facture.montant_mur) > 0
+      ? Number(facture.montant_mur)
+      : Number(facture.montant_ttc || 0) * taux
+    // Pour préserver la cohérence ttc = ht + tva en MUR, on ventile au prorata.
+    const ttcRaw = Number(facture.montant_ttc) || 0
+    const htRaw = Number(facture.montant_ht) || 0
+    const tvaRaw = Number(facture.montant_tva) || 0
+    const murRatio = ttcRaw > 0 ? ttcMur / ttcRaw : taux
+    const htMur = Math.round(htRaw * murRatio * 100) / 100
+    // Arrondi au centime près ; on force tvaMur = ttcMur - htMur pour éviter
+    // des écarts d'arrondi qui casseraient l'équilibre débit/crédit.
+    const tvaMur = Math.round((ttcMur - htMur) * 100) / 100
+    if (devise !== 'MUR' && Math.abs(taux - 1) < 0.001 && !facture.montant_mur) {
+      console.warn(`[createEcrituresForFacture] facture ${facture.id} en ${devise} sans taux_change ni montant_mur — debit_mur écrit en devise d'origine`)
+    }
+
     // Vérifier si des écritures ACH/VTE existent déjà pour cette facture
     // (par ref_folio OU par facture_id) — évite les doublons au re-backfill
     const { data: byRef } = await supabase
@@ -109,7 +145,7 @@ export async function createEcrituresForFacture(
     const entries: Array<Record<string, unknown>> = []
 
     if (isClient) {
-      // Debit 411 Clients
+      // Debit 411 Clients (TTC en MUR)
       entries.push({
         societe_id: facture.societe_id,
         dossier_id,
@@ -121,13 +157,13 @@ export async function createEcrituresForFacture(
         nom_compte: 'Clients',
         libelle,
         description: libelle,
-        debit_mur: Number(facture.montant_ttc) || 0,
+        debit_mur: ttcMur,
         credit_mur: 0,
         exercice,
         facture_id: facture.id,
       })
-      // Credit 706 Prestations
-      if (Number(facture.montant_ht) > 0) {
+      // Credit 706 Prestations (HT en MUR)
+      if (htMur > 0) {
         entries.push({
           societe_id: facture.societe_id,
           dossier_id,
@@ -140,13 +176,13 @@ export async function createEcrituresForFacture(
           libelle,
           description: libelle,
           debit_mur: 0,
-          credit_mur: Number(facture.montant_ht) || 0,
+          credit_mur: htMur,
           exercice,
           facture_id: facture.id,
         })
       }
-      // Credit 4457 TVA collectee
-      if (Number(facture.montant_tva) > 0) {
+      // Credit 4457 TVA collectée (TVA en MUR)
+      if (tvaMur > 0) {
         entries.push({
           societe_id: facture.societe_id,
           dossier_id,
@@ -159,15 +195,15 @@ export async function createEcrituresForFacture(
           libelle,
           description: libelle,
           debit_mur: 0,
-          credit_mur: Number(facture.montant_tva) || 0,
+          credit_mur: tvaMur,
           exercice,
           facture_id: facture.id,
         })
       }
     } else {
-      // FOURNISSEUR (supplier): journal ACH
-      // Debit 607 Achats
-      if (Number(facture.montant_ht) > 0) {
+      // FOURNISSEUR (supplier): journal ACH — tous montants en MUR
+      // Debit 607 Achats (HT en MUR)
+      if (htMur > 0) {
         entries.push({
           societe_id: facture.societe_id,
           dossier_id,
@@ -179,14 +215,14 @@ export async function createEcrituresForFacture(
           nom_compte: 'Achats',
           libelle,
           description: libelle,
-          debit_mur: Number(facture.montant_ht) || 0,
+          debit_mur: htMur,
           credit_mur: 0,
           exercice,
           facture_id: facture.id,
         })
       }
-      // Debit 4456 TVA deductible
-      if (Number(facture.montant_tva) > 0) {
+      // Debit 4456 TVA déductible (TVA en MUR)
+      if (tvaMur > 0) {
         entries.push({
           societe_id: facture.societe_id,
           dossier_id,
@@ -198,13 +234,13 @@ export async function createEcrituresForFacture(
           nom_compte: 'TVA deductible',
           libelle,
           description: libelle,
-          debit_mur: Number(facture.montant_tva) || 0,
+          debit_mur: tvaMur,
           credit_mur: 0,
           exercice,
           facture_id: facture.id,
         })
       }
-      // Credit 401 Fournisseurs
+      // Credit 401 Fournisseurs (TTC en MUR)
       entries.push({
         societe_id: facture.societe_id,
         dossier_id,
@@ -217,7 +253,7 @@ export async function createEcrituresForFacture(
         libelle,
         description: libelle,
         debit_mur: 0,
-        credit_mur: Number(facture.montant_ttc) || 0,
+        credit_mur: ttcMur,
         exercice,
         facture_id: facture.id,
       })
@@ -281,6 +317,17 @@ export async function createEcrituresForPayment(
     facture_id?: string | null
     lettre_code?: string | null
     numero_piece?: string | null
+    // ── Migration 172 — taux figé par écriture ────────────────────────
+    // Propagés depuis la transaction bancaire (transactions_json) au moment
+    // du rapprochement. Cf. docs/TX_JSON_SCHEMA.md. Règle : on fige ici le
+    // taux utilisé à la création de l'écriture pour que le reporting futur
+    // ne recalcule jamais avec le taux du jour.
+    //   • devise_origine       : ex. 'EUR', 'USD' ; NULL = MUR natif.
+    //   • montant_origine      : montant dans la devise d'origine (avant × taux).
+    //   • taux_change_applique : taux ORIGINE→MUR figé ; NULL = MUR natif.
+    devise_origine?: string | null
+    montant_origine?: number | null
+    taux_change_applique?: number | null
   }
 ): Promise<{ ok: boolean; error?: string; bnq_ids?: string[] }> {
   try {
@@ -304,6 +351,27 @@ export async function createEcrituresForPayment(
     const compteBanque = (payment.compte_banque || '512').trim() || '512'
     const nomBanque = compteBanque.startsWith('512') ? `Banque ${compteBanque.slice(3) || ''}`.trim() : 'Banque'
 
+    // ── Migration 172 — normalisation du taux figé ─────────────────────
+    // On écrit NULL pour une tx MUR native ou quand le caller n'a pas fourni
+    // le taux (ex. paiement interne sans devise). On n'accepte que des
+    // valeurs strictement positives pour taux/montant.
+    const deviseOrigine: string | null =
+      typeof payment.devise_origine === 'string' && payment.devise_origine.trim().length > 0
+        ? payment.devise_origine.trim().toUpperCase()
+        : null
+    const tauxRaw = Number(payment.taux_change_applique)
+    const tauxChangeApplique: number | null =
+      Number.isFinite(tauxRaw) && tauxRaw > 0 ? tauxRaw : null
+    const montantRaw = Number(payment.montant_origine)
+    const montantOrigine: number | null =
+      Number.isFinite(montantRaw) && montantRaw > 0 ? montantRaw : null
+    // Si la tx est en MUR natif (pas de devise_origine ou devise = MUR),
+    // on neutralise taux/montant pour éviter des lignes incohérentes.
+    const isMurNative = deviseOrigine === null || deviseOrigine === 'MUR'
+    const deviseFinale: string | null = isMurNative ? null : deviseOrigine
+    const tauxFinal: number | null = isMurNative ? null : tauxChangeApplique
+    const montantFinal: number | null = isMurNative ? null : montantOrigine
+
     // Base fields shared by both sides of the écriture
     const base = {
       societe_id: payment.societe_id,
@@ -320,6 +388,10 @@ export async function createEcrituresForPayment(
       // FIX 1 — lettre apposée dès la création quand un code est fourni
       lettre: payment.lettre_code || null,
       date_lettrage: payment.lettre_code ? payment.date_payment : null,
+      // Migration 172 — taux figé propagé sur les 2 lignes BNQ.
+      devise_origine: deviseFinale,
+      montant_origine: montantFinal,
+      taux_change_applique: tauxFinal,
     }
 
     const tierSide = {

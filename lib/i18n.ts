@@ -149,6 +149,10 @@ const translations = {
     'admin.services': 'Services & Plans',
     'admin.settings_section': 'Parametres',
     'admin.configuration': 'Configuration',
+    'admin.maintenance_section': 'Maintenance',
+    'admin.repair': 'Réparation comptable',
+    'admin.health': 'Santé système',
+    'admin.reset_societe': 'Reset société',
 
     // RH sidebar
     'rh.module_title': 'Module RH & Paie',
@@ -442,6 +446,10 @@ const translations = {
     'admin.services': 'Services & Plans',
     'admin.settings_section': 'Settings',
     'admin.configuration': 'Configuration',
+    'admin.maintenance_section': 'Maintenance',
+    'admin.repair': 'Accounting Repair',
+    'admin.health': 'System Health',
+    'admin.reset_societe': 'Reset Company',
 
     // RH sidebar
     'rh.module_title': 'HR & Payroll Module',

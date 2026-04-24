@@ -19,6 +19,8 @@ import {
   Menu,
   X,
   ShieldAlert,
+  Wrench,
+  Activity,
 } from "lucide-react"
 
 const MENU = [
@@ -32,6 +34,13 @@ const MENU = [
       { href: "/admin/societes", label: "Societes", labelKey: "admin.companies", icon: Building2 },
       { href: "/admin/documents", label: "Documents", labelKey: "admin.documents", icon: FileText },
       { href: "/admin/services", label: "Services & Plans", labelKey: "admin.services", icon: Settings },
+    ],
+  },
+  {
+    section: "Maintenance", sectionKey: "admin.maintenance_section",
+    items: [
+      { href: "/admin/repair", label: "Réparation comptable", labelKey: "admin.repair", icon: Wrench },
+      { href: "/admin/health", label: "Santé système", labelKey: "admin.health", icon: Activity },
     ],
   },
   {
