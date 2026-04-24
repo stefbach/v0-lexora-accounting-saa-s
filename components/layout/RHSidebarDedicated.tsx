@@ -75,7 +75,14 @@ export function RHSidebarDedicated() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userRole, setUserRole] = useState<string>('')
   const [societeMenuOpen, setSocieteMenuOpen] = useState(false)
-  const { societeId, societe, societes, switchSociete, selectAll } = useRHSocieteActive()
+  const { societeId, societe, societes, switchSociete, selectAll, choiceMade } = useRHSocieteActive()
+
+  // Pattern aligné sur ClientSidebarFull : si l'utilisateur n'a pas encore
+  // fait de choix (ni société précise, ni "Toutes les sociétés") on masque
+  // la navigation principale et on affiche un placeholder. Concerne
+  // notamment /rh/select-societe au premier passage.
+  const showNavigation = choiceMade || !!societeId
+  const onSelectPage = pathname === '/rh/select-societe' || pathname.startsWith('/rh/select-societe/')
 
   useEffect(() => { setMobileOpen(false); setSocieteMenuOpen(false) }, [pathname])
 
@@ -267,6 +274,29 @@ export function RHSidebarDedicated() {
           </div>
         )}
 
+        {(!showNavigation || onSelectPage) ? (
+          /* Pattern ClientSidebarFull : placeholder tant qu'aucun choix
+             n'a été fait — ou tant qu'on est sur /rh/select-societe.
+             Masque les liens de navigation pour éviter la confusion. */
+          <div className="flex-1 flex items-center justify-center px-6 py-10">
+            <div className="text-center">
+              <div
+                aria-hidden="true"
+                className="mx-auto mb-3 inline-flex items-center justify-center w-10 h-10 rounded-full"
+                style={{
+                  background: "rgba(232,234,252,0.04)",
+                  border: "1px solid rgba(232,234,252,0.08)",
+                  color: "#6B7390",
+                }}
+              >
+                <Building2 className="w-5 h-5" />
+              </div>
+              <p className="text-[11px] leading-relaxed" style={{ color: "#6B7390" }}>
+                Sélectionnez une société pour accéder à l&apos;espace RH
+              </p>
+            </div>
+          </div>
+        ) : (
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {/* Back to client space */}
           {['client_admin', 'client_user', 'comptable', 'comptable_dedie', 'admin', 'super_admin'].includes(userRole) && (
@@ -375,6 +405,7 @@ export function RHSidebarDedicated() {
             <span className="truncate relative">Mon espace</span>
           </Link>
         </nav>
+        )}
 
         {/* Ancien composant dynamique MonEspaceSalarieLink supprimé :
             l'entrée statique ci-dessus le remplace. */}

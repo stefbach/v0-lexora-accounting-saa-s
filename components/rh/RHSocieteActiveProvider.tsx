@@ -68,6 +68,12 @@ export interface RHSocieteActiveContextValue {
   societes: Societe[]
   loading: boolean
   error: string | null
+  /**
+   * true si l'utilisateur a déjà fait un choix explicite (société précise OU
+   * "Toutes les sociétés"). Sinon false = user frais, sidebar doit masquer
+   * les liens de navigation et proposer select-societe.
+   */
+  choiceMade: boolean
   switchSociete: (id: string) => void
   /** Bascule en mode "toutes les sociétés" (societeId = null). */
   selectAll: () => void
@@ -119,6 +125,7 @@ function readInitialSocieteId(): string | null {
 export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string | null>(null)
+  const [choiceMade, setChoiceMade] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const hasLoadedOnce = useRef<boolean>(false)
@@ -144,9 +151,10 @@ export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // First mount : read persisted id + fetch sociétés list
+  // First mount : read persisted id + choiceMade flag + fetch sociétés list.
   useEffect(() => {
     setSocieteId(readInitialSocieteId())
+    setChoiceMade(!!readCookie(RH_CHOICE_COOKIE))
     void loadSocietes()
   }, [loadSocietes])
 
@@ -177,6 +185,7 @@ export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
       writeCookie(RH_CHOICE_COOKIE, "true", COOKIE_MAX_AGE_SECONDS)
       writeStorage(ACTIVE_SOCIETE_STORAGE_KEY, id)
       setSocieteId(id)
+      setChoiceMade(true)
       setError(null)
     },
     [societes],
@@ -191,6 +200,7 @@ export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
     deleteStorage(ACTIVE_SOCIETE_STORAGE_KEY)
     writeCookie(RH_CHOICE_COOKIE, "true", COOKIE_MAX_AGE_SECONDS)
     setSocieteId(null)
+    setChoiceMade(true)
   }, [])
 
   const clearSociete = useCallback(() => {
@@ -198,6 +208,7 @@ export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
     deleteCookie(RH_CHOICE_COOKIE)
     deleteStorage(ACTIVE_SOCIETE_STORAGE_KEY)
     setSocieteId(null)
+    setChoiceMade(false)
   }, [])
 
   const societe = useMemo<Societe | null>(
@@ -212,12 +223,13 @@ export function RHSocieteActiveProvider({ children }: { children: ReactNode }) {
       societes,
       loading,
       error,
+      choiceMade,
       switchSociete,
       selectAll,
       clearSociete,
       refresh: loadSocietes,
     }),
-    [societeId, societe, societes, loading, error, switchSociete, selectAll, clearSociete, loadSocietes],
+    [societeId, societe, societes, loading, error, choiceMade, switchSociete, selectAll, clearSociete, loadSocietes],
   )
 
   return (
