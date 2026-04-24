@@ -2,7 +2,7 @@
  * Helper canonique pour les types de congés WRA 2019 — sprint G4.
  *
  * Source de vérité :
- *   - Table `conges_regles` (mig 170) avec seed des règles globales
+ *   - Table `conges_regles` (mig 205) avec seed des règles globales
  *   - RPC `get_conge_regle(societe_id, type_conge)` pour la règle effective
  *     (priorité override société > globale)
  *
