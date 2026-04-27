@@ -363,6 +363,14 @@ export function ImportPrimesDialog({
 
   const handleConfirmer = useCallback(async () => {
     if (!societeId) return
+    // UX : si toutes les lignes sont sur "-- ignorer --", pas de POST
+    // (économie audit log + message clair). Le backend court-circuite
+    // déjà 200 sur lignes:[] (STEP D.0.1) mais autant ne pas le solliciter.
+    if (lignesAEnvoyer.length === 0) {
+      toast.info('Aucune ligne à importer (toutes les lignes sont sur "ignorer").')
+      handleOpenChange(false)
+      return
+    }
     setSubmitting(true)
     try {
       const res = await fetch('/api/rh/paie/primes/import', {
@@ -679,7 +687,9 @@ export function ImportPrimesDialog({
                 {submitting
                   ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   : null}
-                Confirmer l'import
+                {lignesAEnvoyer.length === 0
+                  ? 'Aucune ligne à importer'
+                  : `Confirmer l'import (${lignesAEnvoyer.length} ligne${lignesAEnvoyer.length > 1 ? 's' : ''})`}
               </Button>
             </DialogFooter>
           </div>
