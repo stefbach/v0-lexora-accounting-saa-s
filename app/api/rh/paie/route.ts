@@ -7,6 +7,7 @@ import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolid
 import { lastDayOfMonth } from '@/lib/rh/period'
 import { calculerPeriodePaie, type PeriodePaieCalculee } from '@/lib/rh/periode-paie'
 import { lireMontantOTDuMois } from '@/lib/rh/overtime'
+import { calculerUnpaidImplicite } from '@/lib/rh/unpaid'
 import { fetchPaiementsValidesPourBulletin, marquerPaiementPaye } from '@/lib/rh/cash-in-lieu'
 import { fetchGrossessePourAllocationBulletin, marquerAllocationPayee } from '@/lib/rh/protection-maternite'
 
@@ -760,6 +761,24 @@ export async function POST(request: Request) {
           joursUnpaidLeaveSingle += n
         }
       }
+      // Bug unpaid implicite — Excédent AL/SL pris au-delà du droit cycle
+      // est aussi de l'unpaid (cas Alicia OCC al_pris=22.5 > al_droit=22).
+      // Le helper retourne la part À DÉDUIRE CE MOIS (idempotent : exclut
+      // ce qui a déjà été pris en compte dans les bulletins antérieurs du
+      // cycle anniversaire). Cumulé avec les UL explicites ci-dessus.
+      {
+        const unpaidImplSingle = await calculerUnpaidImplicite(
+          supabase, emp.id, periodeStartSingle, periodeEndSingle,
+        )
+        if (unpaidImplSingle.jours > 0) {
+          console.log(
+            `[paie] UL implicite (single) — ${emp.prenom} ${emp.nom} ${periodeStr}: ` +
+            `+${unpaidImplSingle.jours}j (${unpaidImplSingle.motif})`,
+          )
+          joursUnpaidLeaveSingle += unpaidImplSingle.jours
+        }
+      }
+
       if (joursUnpaidLeaveSingle > 0) {
         console.log(`[paie] UL detected (single) — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeaveSingle}j`)
       }
@@ -1461,6 +1480,25 @@ export async function POST(request: Request) {
           else if (tc === 'UL') joursUnpaidLeave += n
           else if (tc === 'MAT' || tc === 'PAT') joursMatPat += n
         }
+
+        // Bug unpaid implicite — Excédent AL/SL pris au-delà du droit cycle
+        // est aussi de l'unpaid (cas Alicia OCC al_pris=22.5 > al_droit=22).
+        // Le helper retourne la part À DÉDUIRE CE MOIS (idempotent : exclut
+        // ce qui a déjà été pris en compte dans les bulletins antérieurs du
+        // cycle anniversaire). Cumulé avec les UL explicites ci-dessus.
+        {
+          const unpaidImplBatch = await calculerUnpaidImplicite(
+            supabase, emp.id, periodeStart, periodeEnd,
+          )
+          if (unpaidImplBatch.jours > 0) {
+            console.log(
+              `[paie] UL implicite — ${emp.prenom} ${emp.nom} ${periodeStr}: ` +
+              `+${unpaidImplBatch.jours}j (${unpaidImplBatch.motif})`,
+            )
+            joursUnpaidLeave += unpaidImplBatch.jours
+          }
+        }
+
         if (joursUnpaidLeave > 0) {
           console.log(`[paie] UL detected — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeave}j (${(congesApprouves || []).filter(c => String(c.type_conge || '').trim().toUpperCase() === 'UL').map(c => `${c.date_debut}→${c.date_fin}`).join(', ')})`)
         }
