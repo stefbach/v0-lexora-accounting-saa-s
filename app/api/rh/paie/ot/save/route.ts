@@ -17,6 +17,7 @@ export const dynamic = 'force-dynamic'
  * Body (mode saisie détaillée libre par date, depuis STEP 4.0.2) :
  *   {
  *     periode: 'YYYY-MM-01',
+ *     societe_id?: string,         // optionnel, fallback cookie
  *     lignes: Array<{
  *       employe_id: string,
  *       jours: Array<{
@@ -28,8 +29,9 @@ export const dynamic = 'force-dynamic'
  *     }>,
  *   }
  *
- * Auth : identique à /api/rh/paie/ot/preview (user_societes.role ∈
- * {rh, manager, client_admin}, pas profiles.role).
+ * Auth : identique à /api/rh/paie/ot/preview. Société active résolue
+ * par body.societe_id prioritaire, fallback cookie. Le check
+ * user_societes vérifie l'accès en même temps que le rôle.
  *
  * Sécurité : la route ne fait JAMAIS confiance aux taux, montants ou
  * statut_jour envoyés par le front. preparerLignesPourSave recharge la
@@ -42,6 +44,7 @@ export const dynamic = 'force-dynamic'
 
 const ALLOWED_ROLES = ['rh', 'manager', 'client_admin'] as const
 const PERIODE_REGEX = /^\d{4}-(0[1-9]|1[0-2])-01$/
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function getAdminClient() {
   return createClient(
@@ -206,13 +209,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
 
-    // 2. Société active depuis le cookie
-    const societeId = await getActiveSocieteIdFromCookies()
+    // 2. Parse body — fait avant le role check pour pouvoir extraire le
+    //    societe_id éventuellement passé en body (pattern /rh).
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Format de la requête invalide' }, { status: 400 })
+    }
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Format de la requête invalide' }, { status: 400 })
+    }
+    const { periode, lignes: rawLignes, societe_id: societeIdFromBody } = body as {
+      periode?: unknown
+      lignes?: unknown
+      societe_id?: unknown
+    }
+
+    // 3. Société active : body.societe_id prioritaire (pattern /rh),
+    //    fallback cookie active_societe_id (pattern /client).
+    const explicitSocieteId =
+      typeof societeIdFromBody === 'string' && societeIdFromBody.length > 0
+        ? societeIdFromBody
+        : null
+    if (explicitSocieteId && !UUID_REGEX.test(explicitSocieteId)) {
+      return NextResponse.json({ error: 'societe_id invalide' }, { status: 400 })
+    }
+    const societeId = explicitSocieteId ?? await getActiveSocieteIdFromCookies()
     if (!societeId) {
       return NextResponse.json({ error: 'Aucune société sélectionnée' }, { status: 400 })
     }
 
-    // 3. Vérification rôle sur user_societes
+    // 4. Vérification rôle sur user_societes (couvre AUSSI le check
+    //    d'accès : si l'user n'a pas de ligne pour ce societe_id, link
+    //    est null et on retourne 403).
     const supabase = getAdminClient()
     const { data: link } = await supabase
       .from('user_societes')
@@ -225,20 +255,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 
-    // 4. Parse + validation forme du body
-    let body: unknown
-    try {
-      body = await request.json()
-    } catch {
-      return NextResponse.json({ error: 'Format de la requête invalide' }, { status: 400 })
-    }
-    if (!body || typeof body !== 'object') {
-      return NextResponse.json({ error: 'Format de la requête invalide' }, { status: 400 })
-    }
-    const { periode, lignes: rawLignes } = body as {
-      periode?: unknown
-      lignes?: unknown
-    }
+    // 5. Validation forme du body (periode + lignes).
     if (typeof periode !== 'string' || !PERIODE_REGEX.test(periode)) {
       return NextResponse.json(
         { error: 'Période invalide (format attendu: YYYY-MM-01)' },
@@ -253,7 +270,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // 5. Court-circuit si rien à sauver — évite un audit_log "ot_save
+    // 6. Court-circuit si rien à sauver — évite un audit_log "ot_save
     //    avec 0 employés" et un round-trip DB inutile.
     if (validation.lignes.length === 0) {
       return NextResponse.json({
@@ -266,7 +283,7 @@ export async function POST(request: Request) {
       })
     }
 
-    // 6. Validation métier serveur (employé société + dates fenêtre) +
+    // 7. Validation métier serveur (employé société + dates fenêtre) +
     //    recompute taux DB + reconstruction OvertimeLigneEmploye.
     const { lignes_validees, erreurs_validation } = await preparerLignesPourSave(
       supabase,
@@ -281,7 +298,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // 7. Écriture DB (heures_travaillees + bulletins_paie + audit_log).
+    // 8. Écriture DB (heures_travaillees + bulletins_paie + audit_log).
     const result = await saveOvertimeMois(
       supabase,
       societeId,
