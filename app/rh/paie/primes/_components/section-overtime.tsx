@@ -92,11 +92,15 @@ const MOIS_FR = [
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ]
 
-// Taux WRA par défaut. Le serveur recharge les vrais taux depuis
-// parametres_paie_mra au moment du save — ces constantes ne servent qu'à
-// l'affichage live du montant pendant la saisie.
-const TAUX_OT_1_5 = 1.5
-const TAUX_OT_2 = 2.0
+// Taux WRA hardcodés UNIQUEMENT pour le calcul live côté client.
+// Source de vérité : parametres_paie_mra.heures_sup_taux_normal et
+// heures_sup_taux_majore, lus côté serveur par lib/rh/overtime.ts au
+// moment du save.
+// Si la MRA modifie ces valeurs, le client peut afficher temporairement
+// un montant différent du montant réel persisté, jusqu'à mise à jour du
+// composant.
+const TAUX_NORMAL_AFFICHAGE = 1.5
+const TAUX_MAJORE_AFFICHAGE = 2.0
 
 const HEURES_PAR_MOIS = 195   // 45h × 52 / 12, formule WRA
 
@@ -163,7 +167,7 @@ function newLigneSaisie(initial?: Partial<LigneSaisie>): LigneSaisie {
 }
 
 function montantLigne(taux: number, ot15: number, ot2: number): number {
-  return ot15 * taux * TAUX_OT_1_5 + ot2 * taux * TAUX_OT_2
+  return ot15 * taux * TAUX_NORMAL_AFFICHAGE + ot2 * taux * TAUX_MAJORE_AFFICHAGE
 }
 
 // ─── Composant principal ────────────────────────────────────────────────────
