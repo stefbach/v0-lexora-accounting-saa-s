@@ -440,11 +440,11 @@ export async function previewOvertimeMois(
  *     référence planning : si saisi en OT, c'est de l'OT)
  *   - heures_ot_1_5 / heures_ot_2 = valeurs front
  *   - total_ot_montant recalculé avec taux DB (jamais front)
- *   - alertes_semaines = recalcul sur les jours saisis groupés par
- *     semaine ISO ; > 55h → illegal=true. Note : c'est le total
- *     d'OT saisi par semaine, PAS le total travaillé (la lib n'a
- *     plus de visibilité sur les heures normales planning en mode
- *     saisie libre). Informationnel, ne bloque pas.
+ *   - alertes_semaines = [] et a_alerte_illegal = false. L'alerte 55h
+ *     WRA légale n'a de sens qu'avec visibilité sur les heures normales
+ *     du planning ; elle vit donc dans `previewOvertimeMois` et n'est
+ *     PAS recalculée ici. L'UI affichera les alertes preview à côté de
+ *     la saisie.
  *
  * Comportement :
  *   - lignesFront vide → retour immédiat `{ [], [] }` (pas d'appel DB)
@@ -577,25 +577,9 @@ export async function preparerLignesPourSave(
       + totalOt2Round * tauxHoraire * params.taux_majore,
     )
 
-    // Alertes 55h informationnelles, basées sur la saisie front
-    // uniquement (sans heures normales planning — la saisie est libre).
-    const semainesMap = new Map<string, number>()
-    for (const j of jours) {
-      const lundi = getSemaineIso(j.date)
-      semainesMap.set(lundi, (semainesMap.get(lundi) ?? 0) + j.heures_ot_1_5 + j.heures_ot_2)
-    }
-    const alertes_semaines: OvertimeAlerteSemaine[] = []
-    for (const [lundi, h] of semainesMap) {
-      alertes_semaines.push({
-        debut_semaine: lundi,
-        heures_totales: round2(h),
-        illegal: h > 55,
-      })
-    }
-    alertes_semaines.sort((a, b) =>
-      a.debut_semaine < b.debut_semaine ? -1 : a.debut_semaine > b.debut_semaine ? 1 : 0,
-    )
-
+    // alertes_semaines : non recalculé ici. L'alerte 55h WRA légale
+    // n'est pertinente qu'avec les heures normales planning, dont la
+    // saisie libre n'a pas connaissance. Elle vit dans previewOvertimeMois.
     lignes_validees.push({
       employe_id: empId,
       employe_nom: `${employe.prenom ?? ''} ${employe.nom ?? ''}`.trim(),
@@ -605,8 +589,8 @@ export async function preparerLignesPourSave(
       total_ot_1_5_heures: totalOt15Round,
       total_ot_2_heures: totalOt2Round,
       total_ot_montant: montant,
-      alertes_semaines,
-      a_alerte_illegal: alertes_semaines.some(a => a.illegal),
+      alertes_semaines: [],
+      a_alerte_illegal: false,
     })
   }
 
