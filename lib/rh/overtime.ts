@@ -399,15 +399,15 @@ export async function previewOvertimeMois(
  *   2. Pour chaque ligne front, lit uniquement `employe_id`,
  *      `total_ot_1_5_heures`, `total_ot_2_heures`.
  *   3. Valide : employé éligible côté serveur, heures positives, plafond
- *      `plafond_heures_total` (200 par défaut), cohérence OT 2× / fériés.
+ *      `plafond_heures_total` (200 par défaut), cohérence OT 2× / fériés,
+ *      saisies <= capacité physique calculée par la preview (tolérance
+ *      0.01h). La sous-saisie est autorisée (mode hybride : auto-calcul
+ *      + ajustement manuel à la baisse possible).
  *   4. Redistribue le détail journalier :
  *      - OT 2× : proportionnel sur les jours fériés (heures_prevues),
  *                résidu d'arrondi sur le jour férié le plus tardif.
  *      - OT 1.5× : du jour normal le plus tardif vers le plus récent,
- *                  borné par `heures_prevues` du jour. Si l'utilisateur
- *                  a saisi plus que la capacité physique, l'excédent est
- *                  conservé dans le total (paie utilise `total_ot_1_5_heures`)
- *                  mais n'apparaît pas dans le détail journalier.
+ *                  borné par `heures_prevues` du jour.
  *   5. Recalcule `total_ot_montant` avec les taux DB (jamais front).
  *
  * Comportement :
@@ -495,6 +495,29 @@ export async function preparerLignesPourSave(
       continue
     }
 
+    // Capacité physique : ne JAMAIS accepter une saisie au-delà de ce
+    // que le planning + WRA permettent. Sinon le bulletin paie est
+    // gonflé artificiellement vs heures_travaillees → incohérence DB,
+    // risque d'audit, risque légal (paie d'OT non rattachables à du
+    // travail enregistré). Tolérance 0.01h pour absorber les arrondis.
+    const TOLERANCE = 0.01
+    const capacite_ot_1_5 = previewLigne.total_ot_1_5_heures
+    const capacite_ot_2 = previewLigne.total_ot_2_heures
+    if (ot15 > capacite_ot_1_5 + TOLERANCE) {
+      erreurs.push({
+        employe_id: empId,
+        raison: `OT 1.5× saisies (${round2(ot15)}h) > capacité physique calculée depuis le planning (${capacite_ot_1_5.toFixed(2)}h)`,
+      })
+      continue
+    }
+    if (ot2 > capacite_ot_2 + TOLERANCE) {
+      erreurs.push({
+        employe_id: empId,
+        raison: `OT 2× saisies (${round2(ot2)}h) > capacité physique (jours fériés travaillés : ${capacite_ot_2.toFixed(2)}h)`,
+      })
+      continue
+    }
+
     // Reconstruction d'un détail journalier neuf basé sur le squelette
     // de la preview (dates, statut_jour, libelle_ferie, heures_prevues).
     const nouveauxJours: OvertimeLigneJour[] = previewLigne.jours.map(j => ({
@@ -547,11 +570,8 @@ export async function preparerLignesPourSave(
         j.heures_ot_1_5 = round2(ot)
         restant = round2(restant - ot)
       }
-      // Si restant > 0 : excédent saisi par l'utilisateur au-delà de
-      // la capacité physique des jours non fériés. V1 : silencieusement
-      // accepté côté total (le bulletin paie ot15 entier), pas reflété
-      // dans le détail jour. La cohérence registre vs paie est mineure
-      // et la situation est rare (saisie manuelle au-delà du planning).
+      // Avec le check capacité physique en amont, restant ne peut être
+      // > 0 qu'à hauteur de la TOLERANCE (0.01h max), absorbé sans bruit.
     }
 
     // heures_normales = heures_prevues - heures_ot_1_5 - heures_ot_2.
