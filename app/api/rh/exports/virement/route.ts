@@ -178,7 +178,10 @@ export async function POST(request: Request) {
     }
     const empMap = new Map(employes.map((e: any) => [e.id, e]))
 
-    const date = new Date().toISOString().split('T')[0]
+    // La date passée aux générateurs de fichiers bancaires DOIT être le
+    // dernier jour de la période de paie (header BP-V1 + filename),
+    // pas la date d'exécution de l'export.
+    const date = lastDayOfMonth(periode)
 
     // --- 3. Construire les lignes de virement ---
     const lignes: LigneBulletin[] = allBulletins.map((b: any) => {
