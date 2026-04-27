@@ -180,7 +180,8 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
   })()
 
   return {
-    emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit,
+    emp, soc, moisLabel, annee, periodeDate,
+    alPris, slPris, alDroit, slDroit, alSolde, slSolde,
     vlDroit, vlPris, fmlUtilisesTotal, primesMois: primesMois || [], totalFraisKm,
     anciennete, periodePaie, periodePaieLabel, datePaiementLabel,
   }
@@ -390,7 +391,7 @@ function BulletinEoyPDF({ bulletin, emp, soc }: any) {
   )
 }
 
-function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete, periodePaieLabel, datePaiementLabel }: any) {
+function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, alSolde, slSolde, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete, periodePaieLabel, datePaiementLabel }: any) {
   const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
   const hasOT = Number(bulletin.heures_sup_montant) > 0
 
