@@ -74,9 +74,8 @@ function validateBodyLignes(
   if (!Array.isArray(raw)) {
     return { ok: false, errors: [{ path: 'lignes', error: 'array attendu' }] }
   }
-  if (raw.length === 0) {
-    return { ok: false, errors: [{ path: 'lignes', error: 'au moins une ligne requise' }] }
-  }
+  // Array vide accepté : l'utilisateur peut avoir mis tous les Selects
+  // sur "-- ignorer --" dans l'UI. La lib gère le no-op.
   const errors: BodyValidationError[] = []
   const lignes: LigneFront[] = []
 
