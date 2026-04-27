@@ -65,6 +65,25 @@ export interface SaveOvertimeResult {
   warnings: string[]            // erreurs non bloquantes (audit log, observabilité)
 }
 
+/** Ligne envoyée par le front au save. Le client peut éditer les heures
+ *  totales 1.5× et 2× par employé. Tout le reste (jours, taux, montant)
+ *  est ignoré et recalculé côté serveur. */
+export interface LigneFront {
+  employe_id: string
+  total_ot_1_5_heures: number
+  total_ot_2_heures: number
+}
+
+export interface ErreurValidation {
+  employe_id: string
+  raison: string
+}
+
+export interface PreparerResult {
+  lignes_validees: OvertimeLigneEmploye[]
+  erreurs_validation: ErreurValidation[]
+}
+
 interface ParametresOT {
   heures_standard_semaine: number
   taux_normal: number             // multiplicateur 1.5×
@@ -367,6 +386,200 @@ export async function previewOvertimeMois(
   // Tri par nom pour stabilité d'affichage.
   lignes.sort((a, b) => a.employe_nom.localeCompare(b.employe_nom))
   return lignes
+}
+
+/**
+ * Valide les lignes envoyées par le front et reconstruit des
+ * `OvertimeLigneEmploye` propres prêts à être passés à `saveOvertimeMois`.
+ *
+ * Sécurité — la fonction NE FAIT JAMAIS confiance aux montants ou jours
+ * envoyés par le front. Elle :
+ *   1. Recharge la vérité serveur via `previewOvertimeMois` (planning,
+ *      employés actifs, jours fériés, taux).
+ *   2. Pour chaque ligne front, lit uniquement `employe_id`,
+ *      `total_ot_1_5_heures`, `total_ot_2_heures`.
+ *   3. Valide : employé éligible côté serveur, heures positives, plafond
+ *      `plafond_heures_total` (200 par défaut), cohérence OT 2× / fériés.
+ *   4. Redistribue le détail journalier :
+ *      - OT 2× : proportionnel sur les jours fériés (heures_prevues),
+ *                résidu d'arrondi sur le jour férié le plus tardif.
+ *      - OT 1.5× : du jour normal le plus tardif vers le plus récent,
+ *                  borné par `heures_prevues` du jour. Si l'utilisateur
+ *                  a saisi plus que la capacité physique, l'excédent est
+ *                  conservé dans le total (paie utilise `total_ot_1_5_heures`)
+ *                  mais n'apparaît pas dans le détail journalier.
+ *   5. Recalcule `total_ot_montant` avec les taux DB (jamais front).
+ *
+ * Comportement :
+ *   - `lignesFront` vide → retour immédiat `{[], []}` (pas de chargement DB).
+ *   - Doublons d'`employe_id` dans `lignesFront` → LWW (last write wins),
+ *     pas d'erreur.
+ *   - Employé en preview mais absent du front → IGNORÉ (pas de zéroter
+ *     implicite). Pour zéroter, le front doit envoyer
+ *     `{ employe_id, total_ot_1_5_heures: 0, total_ot_2_heures: 0 }`.
+ *   - Employé front absent de la preview → erreur de validation, ligne
+ *     skippée. Permet de poursuivre la validation des autres lignes.
+ *     C'est l'API route qui décide de rejeter le batch entier (V1).
+ */
+export async function preparerLignesPourSave(
+  supabase: SupabaseLike,
+  societeId: string,
+  periode: string,
+  lignesFront: LigneFront[],
+  options?: { plafond_heures_total?: number },
+): Promise<PreparerResult> {
+  const plafond = options?.plafond_heures_total ?? 200
+
+  if (!Array.isArray(lignesFront) || lignesFront.length === 0) {
+    return { lignes_validees: [], erreurs_validation: [] }
+  }
+
+  // Dédoublonnage LWW + filtre des employe_id manifestement invalides.
+  const lignesDedup = new Map<string, LigneFront>()
+  for (const l of lignesFront) {
+    if (l && typeof l.employe_id === 'string' && l.employe_id.length > 0) {
+      lignesDedup.set(l.employe_id, l)
+    }
+  }
+  if (lignesDedup.size === 0) {
+    return { lignes_validees: [], erreurs_validation: [] }
+  }
+
+  // Vérité serveur + paramètres taux (jamais front).
+  const [preview, params] = await Promise.all([
+    previewOvertimeMois(supabase, societeId, periode),
+    loadParametres(supabase),
+  ])
+  const previewMap = new Map(preview.map(p => [p.employe_id, p]))
+
+  const lignesValidees: OvertimeLigneEmploye[] = []
+  const erreurs: ErreurValidation[] = []
+
+  for (const [empId, ligneFront] of lignesDedup) {
+    const ot15 = Number(ligneFront.total_ot_1_5_heures)
+    const ot2 = Number(ligneFront.total_ot_2_heures)
+
+    if (!Number.isFinite(ot15) || !Number.isFinite(ot2) || ot15 < 0 || ot2 < 0) {
+      erreurs.push({
+        employe_id: empId,
+        raison: 'heures négatives ou non numériques',
+      })
+      continue
+    }
+
+    if (ot15 + ot2 > plafond) {
+      erreurs.push({
+        employe_id: empId,
+        raison: `heures saisies hors limite raisonnable (${round2(ot15 + ot2)}h > ${plafond}h)`,
+      })
+      continue
+    }
+
+    const previewLigne = previewMap.get(empId)
+    if (!previewLigne) {
+      erreurs.push({
+        employe_id: empId,
+        raison: 'employé non éligible OT pour cette période',
+      })
+      continue
+    }
+
+    const ferieDays = previewLigne.jours.filter(j => j.statut_jour === 'ferie')
+    const sumFerieHeures = ferieDays.reduce((s, j) => s + j.heures_prevues, 0)
+
+    if (ot2 > 0 && sumFerieHeures === 0) {
+      erreurs.push({
+        employe_id: empId,
+        raison: 'OT 2× saisies mais aucun jour férié travaillé ce mois',
+      })
+      continue
+    }
+
+    // Reconstruction d'un détail journalier neuf basé sur le squelette
+    // de la preview (dates, statut_jour, libelle_ferie, heures_prevues).
+    const nouveauxJours: OvertimeLigneJour[] = previewLigne.jours.map(j => ({
+      date: j.date,
+      heures_prevues: j.heures_prevues,
+      heures_normales: 0,
+      heures_ot_1_5: 0,
+      heures_ot_2: 0,
+      statut_jour: j.statut_jour,
+      libelle_ferie: j.libelle_ferie,
+    }))
+
+    // OT 2× — proportionnel sur jours fériés, résidu sur le plus tardif.
+    if (ot2 > 0 && sumFerieHeures > 0) {
+      const ferieIndicesAsc = nouveauxJours
+        .map((j, i) => (j.statut_jour === 'ferie' ? i : -1))
+        .filter(i => i >= 0)
+        .sort((a, b) =>
+          nouveauxJours[a].date < nouveauxJours[b].date ? -1
+          : nouveauxJours[a].date > nouveauxJours[b].date ? 1 : 0,
+        )
+      let alloc = 0
+      for (let k = 0; k < ferieIndicesAsc.length - 1; k++) {
+        const idx = ferieIndicesAsc[k]
+        const part = round2((nouveauxJours[idx].heures_prevues * ot2) / sumFerieHeures)
+        nouveauxJours[idx].heures_ot_2 = part
+        alloc += part
+      }
+      // Le plus tardif (dernier en ASC) reçoit le résidu pour que la
+      // somme par jour matche exactement total_ot_2_heures (pas de drift).
+      const lastIdx = ferieIndicesAsc[ferieIndicesAsc.length - 1]
+      nouveauxJours[lastIdx].heures_ot_2 = round2(ot2 - alloc)
+    }
+
+    // OT 1.5× — du jour normal le plus tardif vers le plus récent,
+    //          borné par heures_prevues du jour.
+    if (ot15 > 0) {
+      const normalIndicesDesc = nouveauxJours
+        .map((j, i) => (j.statut_jour === 'normal' ? i : -1))
+        .filter(i => i >= 0)
+        .sort((a, b) =>
+          nouveauxJours[a].date < nouveauxJours[b].date ? 1
+          : nouveauxJours[a].date > nouveauxJours[b].date ? -1 : 0,
+        )
+      let restant = ot15
+      for (const idx of normalIndicesDesc) {
+        if (restant <= 0) break
+        const j = nouveauxJours[idx]
+        const ot = Math.min(j.heures_prevues, restant)
+        j.heures_ot_1_5 = round2(ot)
+        restant = round2(restant - ot)
+      }
+      // Si restant > 0 : excédent saisi par l'utilisateur au-delà de
+      // la capacité physique des jours non fériés. V1 : silencieusement
+      // accepté côté total (le bulletin paie ot15 entier), pas reflété
+      // dans le détail jour. La cohérence registre vs paie est mineure
+      // et la situation est rare (saisie manuelle au-delà du planning).
+    }
+
+    // heures_normales = heures_prevues - heures_ot_1_5 - heures_ot_2.
+    for (const j of nouveauxJours) {
+      const reste = j.heures_prevues - j.heures_ot_1_5 - j.heures_ot_2
+      j.heures_normales = round2(reste < 0 ? 0 : reste)
+    }
+
+    const montant = round2(
+      ot15 * previewLigne.taux_horaire_base * params.taux_normal
+      + ot2 * previewLigne.taux_horaire_base * params.taux_majore,
+    )
+
+    lignesValidees.push({
+      employe_id: previewLigne.employe_id,
+      employe_nom: previewLigne.employe_nom,
+      salaire_base: previewLigne.salaire_base,
+      taux_horaire_base: previewLigne.taux_horaire_base,
+      jours: nouveauxJours,
+      total_ot_1_5_heures: round2(ot15),
+      total_ot_2_heures: round2(ot2),
+      total_ot_montant: montant,
+      alertes_semaines: previewLigne.alertes_semaines,
+      a_alerte_illegal: previewLigne.a_alerte_illegal,
+    })
+  }
+
+  return { lignes_validees: lignesValidees, erreurs_validation: erreurs }
 }
 
 /**
