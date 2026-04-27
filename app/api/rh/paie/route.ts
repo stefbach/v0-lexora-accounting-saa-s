@@ -695,31 +695,20 @@ export async function POST(request: Request) {
       )
       total_ot_montant += nightShiftResSingle.allowance
 
-      // INTÉGRATION 4 — Primes de la période : on ne compte QUE celles
-      // qui sont approuvées (approuve=true) ET pas encore intégrées
-      // à un bulletin (integre_paie=false). Ancienne version incluait
-      // les primes en attente de validation (sur-paie) et pouvait
-      // double-compter entre deux runs du calcul.
+      // Bug 7 — On lit toutes les primes approuvées de la période.
+      // integre_paie est audit-only (n'exclut PAS du recalcul). Le
+      // bulletin write est destructif (UPSERT pleine valeur), donc
+      // pas de double-comptage possible. Avant : un 2e recalcul après
+      // l'UPDATE integre_paie=true effaçait les primes du bulletin
+      // (SELECT ne les remontait plus, total_primes=0).
       let primesMois: any[] = []
       {
-        const { data, error } = await supabase.from('primes_variables_mois')
+        const { data } = await supabase.from('primes_variables_mois')
           .select('*')
           .eq('employe_id', employe_id)
           .eq('periode', periodeDate)
           .eq('approuve', true)
-          .eq('integre_paie', false)
-        if (error) {
-          // Fallback si la colonne integre_paie n'a pas encore été
-          // backfillée en env hors-prod : on retire le filtre et on se
-          // contente de approuve=true (risque de double-compter, mais
-          // moins pire que de ne rien compter).
-          console.warn('[paie calculer] primes fetch with integre_paie filter failed — fallback:', error.message)
-          const retry = await supabase.from('primes_variables_mois')
-            .select('*').eq('employe_id', employe_id).eq('periode', periodeDate).eq('approuve', true)
-          primesMois = retry.data || []
-        } else {
-          primesMois = data || []
-        }
+        primesMois = data || []
       }
       const total_primes = primesMois.reduce((s, p) => s + Number(p.montant || 0), 0)
 
@@ -1325,24 +1314,18 @@ export async function POST(request: Request) {
           )
         // Laisse total_heures_nuit inchangé pour les logs existants.
 
-        // INTÉGRATION 4 — Primes de la période : approuve=true ET
-        // integre_paie=false uniquement (cf. calculer pour rationale).
+        // Bug 7 — On lit toutes les primes approuvées de la période.
+        // integre_paie est audit-only (n'exclut PAS du recalcul). Le
+        // bulletin write est destructif (UPSERT pleine valeur), donc
+        // pas de double-comptage possible. Cohérent avec le mode single.
         let primesMois: any[] = []
         {
-          const { data, error } = await supabase.from('primes_variables_mois')
+          const { data } = await supabase.from('primes_variables_mois')
             .select('*')
             .eq('employe_id', emp.id)
             .eq('periode', periodeDate)
             .eq('approuve', true)
-            .eq('integre_paie', false)
-          if (error) {
-            console.warn('[paie batch] primes fetch with integre_paie filter failed — fallback:', error.message)
-            const retry = await supabase.from('primes_variables_mois')
-              .select('*').eq('employe_id', emp.id).eq('periode', periodeDate).eq('approuve', true)
-            primesMois = retry.data || []
-          } else {
-            primesMois = data || []
-          }
+          primesMois = data || []
         }
         let total_primes = primesMois.reduce((s, p) => s + Number(p.montant || 0), 0)
 
