@@ -14,15 +14,21 @@ export const dynamic = 'force-dynamic'
  *
  * Auth :
  *   1. User connecté
- *   2. Société active lue depuis le cookie ACTIVE_SOCIETE_COOKIE
+ *   2. Société active : query param `societe_id` prioritaire (pattern
+ *      legacy /rh/...), sinon fallback cookie active_societe_id (pattern
+ *      /client/... via SocieteActiveProvider)
  *   3. Rôle ∈ {rh, manager, client_admin} sur cette société dans
  *      user_societes (PAS profiles.role — décision métier : les admins
  *      Lexora gèrent la plateforme, pas les chiffres métier des clients).
- *      Defense-in-depth alignée avec la RLS posée en migration 209.
+ *      Defense-in-depth alignée avec la RLS posée en migration 209. Le
+ *      check user_societes vérifie d'un coup (a) accès et (b) rôle, donc
+ *      un user qui passerait un societe_id auquel il n'a pas accès se
+ *      verra retourner 403.
  */
 
 const ALLOWED_ROLES = ['rh', 'manager', 'client_admin'] as const
 const PERIODE_REGEX = /^\d{4}-(0[1-9]|1[0-2])-01$/
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function getAdminClient() {
   return createClient(
@@ -41,8 +47,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
 
-    // 2. Société active depuis le cookie
-    const societeId = await getActiveSocieteIdFromCookies()
+    // 2. Société active : query param `societe_id` prioritaire, fallback
+    //    cookie active_societe_id. Le query param sert au pattern /rh
+    //    (Select explicite, cf. legacy /rh/paie/primes), le cookie sert au
+    //    pattern /client (SocieteActiveProvider).
+    const { searchParams } = new URL(request.url)
+    const societeIdFromQuery = searchParams.get('societe_id')
+    if (societeIdFromQuery && !UUID_REGEX.test(societeIdFromQuery)) {
+      return NextResponse.json({ error: 'societe_id invalide' }, { status: 400 })
+    }
+    const societeId = societeIdFromQuery ?? await getActiveSocieteIdFromCookies()
     if (!societeId) {
       return NextResponse.json({ error: 'Aucune société sélectionnée' }, { status: 400 })
     }
@@ -62,8 +76,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 
-    // 4. Validation periode
-    const { searchParams } = new URL(request.url)
+    // 4. Validation periode (searchParams déjà parsé en étape 2)
     const periode = searchParams.get('periode') ?? ''
     if (!PERIODE_REGEX.test(periode)) {
       return NextResponse.json(
