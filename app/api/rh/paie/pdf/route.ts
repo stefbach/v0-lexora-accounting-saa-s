@@ -69,13 +69,24 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
   // FML est déductible donc pas de colonne dédiée : on compte les demandes
   // approuvées dans le cycle anniversaire courant.
   // Bug PDF — étendu aux colonnes AL/SL pour résoudre l'écart vs vérité DB.
-  const { data: soldeCourant } = await supabase
+  // Note : `sl_acquis` n'existe PAS en DB. Sémantique WRA Mauritius : SL est
+  // crédité en bloc au début du cycle (pas proratisé mensuel comme AL).
+  // L'inclure dans le SELECT faisait échouer la requête (PostgREST renvoyait
+  // une erreur "column does not exist"), ce qui passait inaperçu sans capture
+  // explicite de `error` → fallback civil silencieux pour tous les employés.
+  const { data: soldeCourant, error: soldeErr } = await supabase
     .from('soldes_conges')
-    .select('periode_debut, periode_fin, al_droit, al_acquis, al_pris, al_solde, sl_droit, sl_acquis, sl_pris, sl_solde, vl_droit, vl_pris')
+    .select('periode_debut, periode_fin, al_droit, al_acquis, al_pris, al_solde, sl_droit, sl_pris, sl_solde, vl_droit, vl_pris')
     .eq('employe_id', bulletin.employe_id)
     .lte('periode_debut', bulletin.periode)
     .gte('periode_fin', bulletin.periode)
     .maybeSingle()
+  if (soldeErr) {
+    console.error(
+      `[bulletin pdf] soldes_conges SELECT failed for employe=${bulletin.employe_id} ` +
+      `periode=${bulletin.periode}: ${soldeErr.message}`,
+    )
+  }
   const vlDroit = Number(soldeCourant?.vl_droit) || 0
   const vlPris = Number(soldeCourant?.vl_pris) || 0
 
