@@ -57,11 +57,12 @@ export interface OvertimeLigneEmploye {
 }
 
 export interface SaveOvertimeResult {
-  success: boolean
+  success: boolean              // false uniquement si écriture métier en échec
   nb_lignes_upsert: number
   nb_bulletins_maj: number
-  erreurs: string[]
-  bulletins_bloques?: Array<{ employe_id: string; raison: 'valide' | 'verrouille' }>
+  bulletins_bloques: string[]   // employe_id des bulletins verrouillés/validés
+  erreurs: string[]             // erreurs métier bloquantes
+  warnings: string[]            // erreurs non bloquantes (audit log, observabilité)
 }
 
 interface ParametresOT {
@@ -373,12 +374,20 @@ export async function previewOvertimeMois(
  *   1. Refuse si un bulletin du mois est verrouillé/validé pour un employé concerné
  *   2. UPSERT heures_travaillees pour chaque (employe, date) avec OT > 0
  *   3. UPDATE bulletins_paie.heures_sup_montant (uniquement non verrouillés)
- *   4. Audit log
+ *   4. Audit log (non bloquant — échec → warnings, pas erreurs)
  *
- * IMPORTANT : les montants envoyés par le front ne sont PAS lus ici. La
- * fonction recalcule depuis params + taux_horaire = salaire_base / 195
- * (lu en DB dans la même transaction). C'est le contrat de sécurité côté
- * API — voir route /api/rh/paie/ot/save.
+ * Sémantique du retour :
+ *   - `success = true` si les écritures métier (heures_travaillees +
+ *     bulletins_paie) ont réussi. Une panne audit log ne fait PAS basculer
+ *     `success` à false : elle remonte dans `warnings` pour observabilité.
+ *   - `erreurs` : pannes métier bloquantes
+ *   - `warnings` : pannes non bloquantes (audit, etc.)
+ *   - `bulletins_bloques` : liste des employe_id ayant un bulletin
+ *     verrouillé/validé (renvoyée AVANT toute écriture, vide sinon).
+ *
+ * Sécurité : les taux 1.5×/2× sont relus depuis `parametres_paie_mra`
+ * (actif=true) et appliqués au `montant_ot` stocké jour par jour. Le
+ * front ne peut donc pas influencer ces taux via un payload manipulé.
  */
 export async function saveOvertimeMois(
   supabase: SupabaseLike,
@@ -388,6 +397,7 @@ export async function saveOvertimeMois(
   user: { id: string; email?: string | null },
 ): Promise<SaveOvertimeResult> {
   const erreurs: string[] = []
+  const warnings: string[] = []
   const periodeDb = firstDayOfMonth(periode)
   const dateFin = lastDayOfMonth(periode)
   const employesIds = lignes.map(l => l.employe_id)
@@ -409,23 +419,24 @@ export async function saveOvertimeMois(
       verrouille: boolean | null
     }>)
       .filter(b => b.statut === 'valide' || b.verrouille === true)
-      .map(b => ({
-        employe_id: b.employe_id,
-        raison: (b.verrouille ? 'verrouille' : 'valide') as 'valide' | 'verrouille',
-      }))
+      .map(b => b.employe_id)
 
     if (bloques.length > 0) {
       return {
         success: false,
         nb_lignes_upsert: 0,
         nb_bulletins_maj: 0,
-        erreurs: [`${bloques.length} bulletin(s) verrouillé(s) ou validé(s) — déverrouillez avant de modifier les OT.`],
         bulletins_bloques: bloques,
+        erreurs: [`${bloques.length} bulletin(s) verrouillé(s) ou validé(s) — déverrouillez avant de modifier les OT.`],
+        warnings: [],
       }
     }
   }
 
-  // 2. UPSERT heures_travaillees — une ligne par (employe, date) avec OT > 0.
+  // 2. Recharger les taux depuis la DB (jamais depuis le front).
+  const params = await loadParametres(supabase)
+
+  // 3. UPSERT heures_travaillees — une ligne par (employe, date) avec OT > 0.
   let nbUpsert = 0
   for (const ligne of lignes) {
     const rows = ligne.jours
@@ -437,8 +448,8 @@ export async function saveOvertimeMois(
         heures_ot_1_5: j.heures_ot_1_5,
         heures_ot_2: j.heures_ot_2,
         montant_ot: round2(
-          j.heures_ot_1_5 * ligne.taux_horaire_base * 1.5
-          + j.heures_ot_2 * ligne.taux_horaire_base * 2,
+          j.heures_ot_1_5 * ligne.taux_horaire_base * params.taux_normal
+          + j.heures_ot_2 * ligne.taux_horaire_base * params.taux_majore,
         ),
         taux_horaire_base: ligne.taux_horaire_base,
         statut_jour: j.statut_jour,
@@ -454,7 +465,7 @@ export async function saveOvertimeMois(
     nbUpsert += rows.length
   }
 
-  // 3. UPDATE bulletins_paie.heures_sup_montant (seulement non verrouillés
+  // 4. UPDATE bulletins_paie.heures_sup_montant (seulement non verrouillés
   //    + non validés). Le filtre côté requête garantit qu'on ne touche
   //    pas à un bulletin protégé même en cas de race condition.
   let nbBulletinsMaj = 0
@@ -478,10 +489,12 @@ export async function saveOvertimeMois(
     nbBulletinsMaj += Number(count) || 0
   }
 
-  // 4. Audit log (non bloquant).
+  // 5. Audit log — strictement non bloquant : un échec va dans `warnings`,
+  //    pas dans `erreurs`, pour ne pas masquer le succès des écritures
+  //    métier ci-dessus.
   try {
     const totalMontant = lignes.reduce((s, l) => s + l.total_ot_montant, 0)
-    await supabase.from('paie_audit_log').insert({
+    const { error: auditErr } = await supabase.from('paie_audit_log').insert({
       societe_id: societeId,
       periode: periodeDb,
       action: 'ot_save',
@@ -494,14 +507,19 @@ export async function saveOvertimeMois(
         nb_bulletins_maj: nbBulletinsMaj,
       },
     })
+    if (auditErr) {
+      warnings.push(`audit_log: ${auditErr.message}`)
+    }
   } catch (e) {
-    erreurs.push(`audit_log: ${e instanceof Error ? e.message : String(e)}`)
+    warnings.push(`audit_log: ${e instanceof Error ? e.message : String(e)}`)
   }
 
   return {
     success: erreurs.length === 0,
     nb_lignes_upsert: nbUpsert,
     nb_bulletins_maj: nbBulletinsMaj,
+    bulletins_bloques: [],
     erreurs,
+    warnings,
   }
 }
