@@ -6,6 +6,8 @@ import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } fro
 import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
 import { lastDayOfMonth } from '@/lib/rh/period'
 import { calculerPeriodePaie, type PeriodePaieCalculee } from '@/lib/rh/periode-paie'
+import { lireMontantOTDuMois } from '@/lib/rh/overtime'
+import { calculerUnpaidImplicite } from '@/lib/rh/unpaid'
 import { fetchPaiementsValidesPourBulletin, marquerPaiementPaye } from '@/lib/rh/cash-in-lieu'
 import { fetchGrossessePourAllocationBulletin, marquerAllocationPayee } from '@/lib/rh/protection-maternite'
 
@@ -660,6 +662,25 @@ export async function POST(request: Request) {
         total_heures_nuit_single += ot.heuresNuit || 0
       }
 
+      // Bug 6 — Override depuis heures_travaillees si saisie manuelle
+      // existante (cas DDS sans pointeuse + cas OCC où la saisie OT
+      // explicite remplace le calcul automatique). La saisie manuelle
+      // est l'expression d'une décision RH explicite et prime sur le
+      // calcul auto depuis pointages. Le night shift S.20 (ajouté plus
+      // bas) reste cumulé — c'est une allowance distincte de l'OT.
+      {
+        const otFromHeuresTravaillees = await lireMontantOTDuMois(
+          supabase, emp.id, periodeStartSingle, periodeEndSingle,
+        )
+        if (otFromHeuresTravaillees > 0) {
+          console.log(
+            `[paie/recalcul] OT-override employe=${emp.id} nom=${emp.nom} ` +
+            `montant=${otFromHeuresTravaillees} (source=heures_travaillees, ignore pointages)`,
+          )
+          total_ot_montant = otFromHeuresTravaillees
+        }
+      }
+
       // G9bis.4 — Night Shift Allowance WRA S.20 STRICT (harmonisé avec
       // le batch). Compte les shifts complets 21h→05h du mois et calcule
       // l'allocation = salaire_base × 15% × (shifts_nuit / jours_travailles).
@@ -675,31 +696,20 @@ export async function POST(request: Request) {
       )
       total_ot_montant += nightShiftResSingle.allowance
 
-      // INTÉGRATION 4 — Primes de la période : on ne compte QUE celles
-      // qui sont approuvées (approuve=true) ET pas encore intégrées
-      // à un bulletin (integre_paie=false). Ancienne version incluait
-      // les primes en attente de validation (sur-paie) et pouvait
-      // double-compter entre deux runs du calcul.
+      // Bug 7 — On lit toutes les primes approuvées de la période.
+      // integre_paie est audit-only (n'exclut PAS du recalcul). Le
+      // bulletin write est destructif (UPSERT pleine valeur), donc
+      // pas de double-comptage possible. Avant : un 2e recalcul après
+      // l'UPDATE integre_paie=true effaçait les primes du bulletin
+      // (SELECT ne les remontait plus, total_primes=0).
       let primesMois: any[] = []
       {
-        const { data, error } = await supabase.from('primes_variables_mois')
+        const { data } = await supabase.from('primes_variables_mois')
           .select('*')
           .eq('employe_id', employe_id)
           .eq('periode', periodeDate)
           .eq('approuve', true)
-          .eq('integre_paie', false)
-        if (error) {
-          // Fallback si la colonne integre_paie n'a pas encore été
-          // backfillée en env hors-prod : on retire le filtre et on se
-          // contente de approuve=true (risque de double-compter, mais
-          // moins pire que de ne rien compter).
-          console.warn('[paie calculer] primes fetch with integre_paie filter failed — fallback:', error.message)
-          const retry = await supabase.from('primes_variables_mois')
-            .select('*').eq('employe_id', employe_id).eq('periode', periodeDate).eq('approuve', true)
-          primesMois = retry.data || []
-        } else {
-          primesMois = data || []
-        }
+        primesMois = data || []
       }
       const total_primes = primesMois.reduce((s, p) => s + Number(p.montant || 0), 0)
 
@@ -751,6 +761,24 @@ export async function POST(request: Request) {
           joursUnpaidLeaveSingle += n
         }
       }
+      // Bug unpaid implicite — Excédent AL/SL pris au-delà du droit cycle
+      // est aussi de l'unpaid (cas Alicia OCC al_pris=22.5 > al_droit=22).
+      // Le helper retourne la part À DÉDUIRE CE MOIS (idempotent : exclut
+      // ce qui a déjà été pris en compte dans les bulletins antérieurs du
+      // cycle anniversaire). Cumulé avec les UL explicites ci-dessus.
+      {
+        const unpaidImplSingle = await calculerUnpaidImplicite(
+          supabase, emp.id, periodeStartSingle, periodeEndSingle,
+        )
+        if (unpaidImplSingle.jours > 0) {
+          console.log(
+            `[paie] UL implicite (single) — ${emp.prenom} ${emp.nom} ${periodeStr}: ` +
+            `+${unpaidImplSingle.jours}j (${unpaidImplSingle.motif})`,
+          )
+          joursUnpaidLeaveSingle += unpaidImplSingle.jours
+        }
+      }
+
       if (joursUnpaidLeaveSingle > 0) {
         console.log(`[paie] UL detected (single) — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeaveSingle}j`)
       }
@@ -1305,24 +1333,18 @@ export async function POST(request: Request) {
           )
         // Laisse total_heures_nuit inchangé pour les logs existants.
 
-        // INTÉGRATION 4 — Primes de la période : approuve=true ET
-        // integre_paie=false uniquement (cf. calculer pour rationale).
+        // Bug 7 — On lit toutes les primes approuvées de la période.
+        // integre_paie est audit-only (n'exclut PAS du recalcul). Le
+        // bulletin write est destructif (UPSERT pleine valeur), donc
+        // pas de double-comptage possible. Cohérent avec le mode single.
         let primesMois: any[] = []
         {
-          const { data, error } = await supabase.from('primes_variables_mois')
+          const { data } = await supabase.from('primes_variables_mois')
             .select('*')
             .eq('employe_id', emp.id)
             .eq('periode', periodeDate)
             .eq('approuve', true)
-            .eq('integre_paie', false)
-          if (error) {
-            console.warn('[paie batch] primes fetch with integre_paie filter failed — fallback:', error.message)
-            const retry = await supabase.from('primes_variables_mois')
-              .select('*').eq('employe_id', emp.id).eq('periode', periodeDate).eq('approuve', true)
-            primesMois = retry.data || []
-          } else {
-            primesMois = data || []
-          }
+          primesMois = data || []
         }
         let total_primes = primesMois.reduce((s, p) => s + Number(p.montant || 0), 0)
 
@@ -1458,6 +1480,25 @@ export async function POST(request: Request) {
           else if (tc === 'UL') joursUnpaidLeave += n
           else if (tc === 'MAT' || tc === 'PAT') joursMatPat += n
         }
+
+        // Bug unpaid implicite — Excédent AL/SL pris au-delà du droit cycle
+        // est aussi de l'unpaid (cas Alicia OCC al_pris=22.5 > al_droit=22).
+        // Le helper retourne la part À DÉDUIRE CE MOIS (idempotent : exclut
+        // ce qui a déjà été pris en compte dans les bulletins antérieurs du
+        // cycle anniversaire). Cumulé avec les UL explicites ci-dessus.
+        {
+          const unpaidImplBatch = await calculerUnpaidImplicite(
+            supabase, emp.id, periodeStart, periodeEnd,
+          )
+          if (unpaidImplBatch.jours > 0) {
+            console.log(
+              `[paie] UL implicite — ${emp.prenom} ${emp.nom} ${periodeStr}: ` +
+              `+${unpaidImplBatch.jours}j (${unpaidImplBatch.motif})`,
+            )
+            joursUnpaidLeave += unpaidImplBatch.jours
+          }
+        }
+
         if (joursUnpaidLeave > 0) {
           console.log(`[paie] UL detected — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeave}j (${(congesApprouves || []).filter(c => String(c.type_conge || '').trim().toUpperCase() === 'UL').map(c => `${c.date_debut}→${c.date_fin}`).join(', ')})`)
         }
@@ -1491,6 +1532,26 @@ export async function POST(request: Request) {
         const dailyOtSum = total_ot_montant / taux_horaire // approximate hours from daily calc
         const otScaleFactor = dailyOtSum > 0 && otMensuelBrut < dailyOtSum ? otMensuelBrut / dailyOtSum : 1
         total_ot_montant = Math.round(total_ot_montant * otScaleFactor)
+
+        // Bug 6 — Override depuis heures_travaillees si saisie manuelle
+        // existante (cas DDS sans pointeuse + cas OCC où la saisie OT
+        // explicite remplace le calcul auto). DOIT venir APRÈS le scaling
+        // cap (line ↑) qui sinon écraserait l'override à 0 quand
+        // totalHeuresTravaillees=0 (cas DDS sans pointages → cap=0). Le
+        // night shift S.20 (ajouté plus bas) reste cumulé — c'est une
+        // allowance distincte de l'OT.
+        {
+          const otFromHeuresTravaillees = await lireMontantOTDuMois(
+            supabase, emp.id, periodeStartBatch, periodeEndBatch,
+          )
+          if (otFromHeuresTravaillees > 0) {
+            console.log(
+              `[paie/recalcul] OT-override employe=${emp.id} nom=${emp.nom} ` +
+              `montant=${otFromHeuresTravaillees} (source=heures_travaillees, ignore pointages)`,
+            )
+            total_ot_montant = otFromHeuresTravaillees
+          }
+        }
 
         // INTÉGRATION 2 + Migration 135 — Absences injustifiées par
         // JOUR OUVRÉ. Conditionnel sur pointageActifBatch.

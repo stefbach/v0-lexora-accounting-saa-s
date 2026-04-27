@@ -178,7 +178,10 @@ export async function POST(request: Request) {
     }
     const empMap = new Map(employes.map((e: any) => [e.id, e]))
 
-    const date = new Date().toISOString().split('T')[0]
+    // La date passée aux générateurs de fichiers bancaires DOIT être le
+    // dernier jour de la période de paie (header BP-V1 + filename),
+    // pas la date d'exécution de l'export.
+    const date = lastDayOfMonth(periode)
 
     // --- 3. Construire les lignes de virement ---
     const lignes: LigneBulletin[] = allBulletins.map((b: any) => {
@@ -191,7 +194,7 @@ export async function POST(request: Request) {
         bank_iban: emp?.bank_iban || '',
         bank_swift: emp?.bank_swift || '',
         bank_branch: emp?.bank_branch || '',
-        bank_account_name: emp?.bank_account_name || `${emp?.prenom} ${emp?.nom}`,
+        bank_account_name: emp?.bank_account_name || '',
         bank_name: emp?.bank_name || emp?.bank_code || '',
         bank_code: emp?.bank_code || '',
         salaire_net: Number(b.salaire_net),
@@ -232,15 +235,14 @@ export async function POST(request: Request) {
     // MCB → utiliser le format officiel BP-V1 (default if no specific emitter configured)
     if (infoEmetteur.banque === 'MCB' || !compteEmetteur) {
       // Générer UN SEUL fichier BP-V1 qui contient lignes 1 (MCB interne) + lignes 2 (inter-bancaire)
+      const moisShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      const moisIdx = parseInt(periode.slice(5, 7), 10) - 1
+      const referenceLabel = `SALARY ${moisShort[moisIdx] ?? ''} ${periode.slice(0, 4)}`.trim()
       const { content, extension, filename_suggestion } = genererVirementMCB_BPV1(
         lignesMUR,
         infoEmetteur.numero_compte,
         date,
-        `SALARY ${periode.slice(0,4)}-${periode.slice(5,7)}`
-          .replace(/(\d{4})-(\d{2})/, (_, y, m) => {
-            const mois = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-            return `SALARY ${mois[parseInt(m)-1]} ${y}`
-          })
+        referenceLabel,
       )
       const total = lignesMUR.reduce((s, l) => s + l.salaire_net, 0)
       fichiersGeneres.push({

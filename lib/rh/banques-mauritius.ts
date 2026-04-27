@@ -24,6 +24,22 @@ export const MCB_BANK_CODES: Record<string, string> = {
   'AUTRE':   '99',
 }
 
+/** Format nom bénéficiaire BP-V1 : NOM en MAJUSCULES + Prénom en
+ *  Capitalize. Référence Payroll Mauritius. Tronqué à 30 caractères
+ *  selon la spec MCB.
+ *
+ *  Capitalize Unicode-aware : la regex `(^|\s|-)\p{L}` capture la
+ *  première lettre de chaque mot (séparateur début / espace / tiret),
+ *  flag `u` pour reconnaître les lettres accentuées (\p{L}). Sans cette
+ *  forme, `\b\w` traite `é` comme frontière de mot et casserait
+ *  "mélanie" en "MéLanie". */
+function formatNomBenefBP(nom: string | undefined, prenom: string | undefined): string {
+  const nomCaps = (nom || '').trim().toUpperCase()
+  const prenomCap = (prenom || '').trim().toLowerCase()
+    .replace(/(^|\s|-)\p{L}/gu, m => m.toUpperCase())
+  return `${nomCaps} ${prenomCap}`.trim().slice(0, 30)
+}
+
 /**
  * Générer le fichier MCB BP-V1 (format officiel Bulk Payment MCB)
  * Validé sur fichier réel BP-1920430.txt (OCC, mars 2026)
@@ -81,7 +97,12 @@ export function genererVirementMCB_BPV1(
   for (const l of lignesAutres) {
     const bankCode = l.bank_code || normaliserCodeBanque(l.bank_name)
     const mcbCode  = MCB_BANK_CODES[bankCode] || MCB_BANK_CODES['AUTRE']
-    const nomBenef = (l.bank_account_name || `${l.nom} ${l.prenom}`).toUpperCase().slice(0, 30)
+    // Si bank_account_name est rempli (HR a saisi la convention "NOM
+    // Prénom" du compte bancaire), on lui fait confiance sans casing.
+    // Sinon on construit depuis nom/prenom au format BP attendu.
+    const nomBenef = l.bank_account_name && l.bank_account_name.trim()
+      ? l.bank_account_name.trim().slice(0, 30)
+      : formatNomBenefBP(l.nom, l.prenom)
     content += `2|${l.salaire_net.toFixed(2)}|${mcbCode}|${l.bank_account}|${nomBenef}|${ref}|N\r\n`
   }
 

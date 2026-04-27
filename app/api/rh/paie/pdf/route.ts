@@ -48,35 +48,75 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
   const moisLabel = MOIS_FR[periodeDate.getMonth()] || ''
   const annee = periodeDate.getFullYear()
 
-  // TODO (B.4) — Le bulletin de paie liste encore les congés pris par année
-  // civile. Pour être aligné avec la logique période anniversaire (WRA 2019)
-  // introduite dans le Sprint "Années par anniversaire", il faudrait lire
-  // soldes_conges (where periode_debut <= bulletin.periode <= periode_fin).
-  // Refactor différé : impacte le layout PDF, à traiter dans un sprint dédié.
+  // TODO (B.4) — RÉSOLU pour AL/SL : on lit `soldes_conges` au cycle
+  // anniversaire (WRA 2019) ci-dessous. Le calcul ad-hoc année civile
+  // reste utilisé en fallback pour les employés non initialisés dans
+  // soldes_conges. VL reste à vérifier dans un STEP séparé (PDF-2).
   const { data: congesApprouves } = await supabase
     .from('demandes_conges').select('type_conge, nb_jours')
     .eq('employe_id', bulletin.employe_id).eq('statut', 'approuve')
     .gte('date_debut', `${annee}-01-01`).lte('date_debut', `${annee}-12-31`)
-  const alPris = (congesApprouves || []).filter((c: any) => c.type_conge === 'AL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
-  const slPris = (congesApprouves || []).filter((c: any) => c.type_conge === 'SL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+  // Fallback année civile (employé non migré vers cycle anniversaire).
+  const alPrisCivil = (congesApprouves || []).filter((c: any) => c.type_conge === 'AL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
+  const slPrisCivil = (congesApprouves || []).filter((c: any) => c.type_conge === 'SL').reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
 
   const hireDate = emp?.date_arrivee ? new Date(emp.date_arrivee + 'T00:00:00') : null
   const mos = hireDate ? (annee - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth()) : 999
-  const alDroit = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 22
-  const slDroit = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 15
+  const alDroitCivil = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 22
+  const slDroitCivil = mos < 6 ? 0 : mos < 12 ? Math.min(mos - 6, 6) : 15
 
   // G4 — VL (S.47) + FML (S.47A). VL vient de soldes_conges (cycle 5 ans),
   // FML est déductible donc pas de colonne dédiée : on compte les demandes
   // approuvées dans le cycle anniversaire courant.
-  const { data: soldeCourant } = await supabase
+  // Bug PDF — étendu aux colonnes AL/SL pour résoudre l'écart vs vérité DB.
+  // Note : `sl_acquis` n'existe PAS en DB. Sémantique WRA Mauritius : SL est
+  // crédité en bloc au début du cycle (pas proratisé mensuel comme AL).
+  // L'inclure dans le SELECT faisait échouer la requête (PostgREST renvoyait
+  // une erreur "column does not exist"), ce qui passait inaperçu sans capture
+  // explicite de `error` → fallback civil silencieux pour tous les employés.
+  const { data: soldeCourant, error: soldeErr } = await supabase
     .from('soldes_conges')
-    .select('periode_debut, periode_fin, vl_droit, vl_pris')
+    .select('periode_debut, periode_fin, al_droit, al_acquis, al_pris, al_solde, sl_droit, sl_pris, sl_solde, vl_droit, vl_pris')
     .eq('employe_id', bulletin.employe_id)
     .lte('periode_debut', bulletin.periode)
     .gte('periode_fin', bulletin.periode)
     .maybeSingle()
+  if (soldeErr) {
+    console.error(
+      `[bulletin pdf] soldes_conges SELECT failed for employe=${bulletin.employe_id} ` +
+      `periode=${bulletin.periode}: ${soldeErr.message}`,
+    )
+  }
   const vlDroit = Number(soldeCourant?.vl_droit) || 0
   const vlPris = Number(soldeCourant?.vl_pris) || 0
+
+  // Bug PDF — Si une ligne soldes_conges existe pour le cycle anniversaire
+  // qui contient bulletin.periode, c'est la source de vérité (al_solde
+  // notamment, qui inclut le report inter-cycles). Sinon fallback sur le
+  // calcul ad-hoc année civile + ancienneté (transition douce, ne casse
+  // pas les bulletins d'employés non encore migrés). Un warn est logué
+  // pour identifier en prod les employés à migrer.
+  let alDroit: number, alPris: number, alSolde: number
+  let slDroit: number, slPris: number, slSolde: number
+  if (soldeCourant) {
+    alDroit = Number(soldeCourant.al_droit) || 0
+    alPris  = Number(soldeCourant.al_pris)  || 0
+    alSolde = Number(soldeCourant.al_solde) || 0
+    slDroit = Number(soldeCourant.sl_droit) || 0
+    slPris  = Number(soldeCourant.sl_pris)  || 0
+    slSolde = Number(soldeCourant.sl_solde) || 0
+  } else {
+    console.warn(
+      `[bulletin pdf] soldes_conges manquant pour employe=${bulletin.employe_id} ` +
+      `periode=${bulletin.periode}, fallback année civile`,
+    )
+    alDroit = alDroitCivil
+    alPris  = alPrisCivil
+    alSolde = alDroitCivil - alPrisCivil
+    slDroit = slDroitCivil
+    slPris  = slPrisCivil
+    slSolde = slDroitCivil - slPrisCivil
+  }
 
   let fmlUtilisesTotal = 0
   const cycleDebut = soldeCourant?.periode_debut || `${annee}-01-01`
@@ -140,7 +180,8 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
   })()
 
   return {
-    emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit,
+    emp, soc, moisLabel, annee, periodeDate,
+    alPris, slPris, alDroit, slDroit, alSolde, slSolde,
     vlDroit, vlPris, fmlUtilisesTotal, primesMois: primesMois || [], totalFraisKm,
     anciennete, periodePaie, periodePaieLabel, datePaiementLabel,
   }
@@ -350,7 +391,7 @@ function BulletinEoyPDF({ bulletin, emp, soc }: any) {
   )
 }
 
-function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete, periodePaieLabel, datePaiementLabel }: any) {
+function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, alSolde, slSolde, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete, periodePaieLabel, datePaiementLabel }: any) {
   const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
   const hasOT = Number(bulletin.heures_sup_montant) > 0
 
@@ -616,12 +657,12 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         React.createElement(View, { style: s.leaveGrid },
           React.createElement(View, { style: s.leaveCard },
             React.createElement(Text, { style: s.leaveCardLabel }, 'Local Leave (AL)'),
-            React.createElement(Text, { style: [s.leaveCardValue, { color: '#059669' }] }, `${alDroit - alPris}j`),
+            React.createElement(Text, { style: [s.leaveCardValue, { color: '#059669' }] }, `${alSolde}j`),
             React.createElement(Text, { style: s.leaveCardSub }, `restants / ${alDroit}j (${alPris}j pris)`)
           ),
           React.createElement(View, { style: s.leaveCard },
             React.createElement(Text, { style: s.leaveCardLabel }, 'Sick Leave (SL)'),
-            React.createElement(Text, { style: [s.leaveCardValue, { color: '#ea580c' }] }, `${slDroit - slPris}j`),
+            React.createElement(Text, { style: [s.leaveCardValue, { color: '#ea580c' }] }, `${slSolde}j`),
             React.createElement(Text, { style: s.leaveCardSub }, `restants / ${slDroit}j (${slPris}j pris)`)
           ),
           (Number(vlDroit) > 0 || Number(vlPris) > 0)

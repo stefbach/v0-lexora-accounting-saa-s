@@ -11,6 +11,8 @@ import { Loader2, Plus, CheckCircle, Pencil, Trash2, Upload, FileSpreadsheet, Al
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import * as XLSX from "xlsx"
 import { Switch } from "@/components/ui/switch"
+import { SectionOvertime } from "./_components/section-overtime"
+import { ImportPrimesDialog } from "./_components/import-primes-dialog"
 
 const TYPE_PRIME_LABELS: Record<string, string> = {
   fixe: "Fixe",
@@ -406,9 +408,11 @@ export default function PrimesPage() {
                   Total approuvé : <strong className="text-green-700">{fmt(totalSaisies)}</strong>
                 </div>
               )}
-              <Button onClick={() => setImportDialog(true)} disabled={societe === "all"} variant="outline" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10">
-                <Upload className="w-4 h-4 mr-2" />Import Excel
-              </Button>
+              <ImportPrimesDialog
+                societeId={societe === "all" ? null : societe}
+                periode={`${periode}-01`}
+                onImportSuccess={loadSaisies}
+              />
               <Button onClick={() => setSaisieDialog(true)} disabled={societe === "all"} className="bg-[#0B0F2E] text-white">
                 <Plus className="w-4 h-4 mr-2" />Saisir une prime
               </Button>
@@ -463,6 +467,8 @@ export default function PrimesPage() {
                 )}
             </CardContent>
           </Card>
+
+          <SectionOvertime societeId={societe === "all" ? null : societe} />
         </div>
       )}
 
