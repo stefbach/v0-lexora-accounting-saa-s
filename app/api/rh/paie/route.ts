@@ -1305,24 +1305,6 @@ export async function POST(request: Request) {
           total_heures_nuit += ot.heuresNuit
         }
 
-        // Bug 6 — Override depuis heures_travaillees si saisie manuelle
-        // existante (cas DDS sans pointeuse + cas OCC où la saisie OT
-        // explicite remplace le calcul automatique). Cohérent avec le
-        // mode single. Le night shift S.20 (ajouté plus bas) reste
-        // cumulé — c'est une allowance distincte de l'OT.
-        {
-          const otFromHeuresTravaillees = await lireMontantOTDuMois(
-            supabase, emp.id, periodeStartBatch, periodeEndBatch,
-          )
-          if (otFromHeuresTravaillees > 0) {
-            console.log(
-              `[paie/recalcul] OT-override employe=${emp.id} nom=${emp.nom} ` +
-              `montant=${otFromHeuresTravaillees} (source=heures_travaillees, ignore pointages)`,
-            )
-            total_ot_montant = otFromHeuresTravaillees
-          }
-        }
-
         // G9bis.4 — Night Shift Allowance WRA S.20 STRICT.
         // Ancien calcul (prorata horaire heures 21h-6h) remplacé par :
         //   allowance = salaire_base × pct × (shifts_nuit_complets /
@@ -1529,6 +1511,26 @@ export async function POST(request: Request) {
         const dailyOtSum = total_ot_montant / taux_horaire // approximate hours from daily calc
         const otScaleFactor = dailyOtSum > 0 && otMensuelBrut < dailyOtSum ? otMensuelBrut / dailyOtSum : 1
         total_ot_montant = Math.round(total_ot_montant * otScaleFactor)
+
+        // Bug 6 — Override depuis heures_travaillees si saisie manuelle
+        // existante (cas DDS sans pointeuse + cas OCC où la saisie OT
+        // explicite remplace le calcul auto). DOIT venir APRÈS le scaling
+        // cap (line ↑) qui sinon écraserait l'override à 0 quand
+        // totalHeuresTravaillees=0 (cas DDS sans pointages → cap=0). Le
+        // night shift S.20 (ajouté plus bas) reste cumulé — c'est une
+        // allowance distincte de l'OT.
+        {
+          const otFromHeuresTravaillees = await lireMontantOTDuMois(
+            supabase, emp.id, periodeStartBatch, periodeEndBatch,
+          )
+          if (otFromHeuresTravaillees > 0) {
+            console.log(
+              `[paie/recalcul] OT-override employe=${emp.id} nom=${emp.nom} ` +
+              `montant=${otFromHeuresTravaillees} (source=heures_travaillees, ignore pointages)`,
+            )
+            total_ot_montant = otFromHeuresTravaillees
+          }
+        }
 
         // INTÉGRATION 2 + Migration 135 — Absences injustifiées par
         // JOUR OUVRÉ. Conditionnel sur pointageActifBatch.
