@@ -21,6 +21,7 @@
 
 import { firstDayOfMonth, lastDayOfMonth } from '@/lib/rh/period'
 import { tauxHoraireFromBasic } from '@/lib/rh/disturbance-allowance'
+import { calculerPeriodePaie } from '@/lib/rh/periode-paie'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any
@@ -351,19 +352,34 @@ function calculerOTEmploye(
 
 /**
  * Preview OT pour la société sur la période. Read-only, n'écrit rien.
- * `periode` accepte 'YYYY-MM' ou 'YYYY-MM-DD' (le jour est ignoré).
+ *
+ * `periode` accepte 'YYYY-MM' ou 'YYYY-MM-DD' (le jour est ignoré). Il
+ * identifie le bulletin paie cible (1er du mois logique), PAS la fenêtre
+ * physique des plannings : celle-ci est résolue via `calculerPeriodePaie`
+ * pour respecter la config société (mode calendaire ou cut_off_jour).
+ *   - mode calendaire (défaut) : 01/MM → dernier jour de MM
+ *   - mode cut_off_jour=24      : 25/MM-1 → 24/MM
+ *
+ * Cette fenêtre s'applique au filtrage planning_assignments ET
+ * jours_feries — sinon un férié de la période réelle mais hors mois
+ * calendaire serait raté (et inversement).
  */
 export async function previewOvertimeMois(
   supabase: SupabaseLike,
   societeId: string,
   periode: string,
 ): Promise<OvertimeLigneEmploye[]> {
-  const dateDebut = firstDayOfMonth(periode)
-  const dateFin = lastDayOfMonth(periode)
+  const dateRef = firstDayOfMonth(periode)
 
-  const [params, employes, assignments, feries] = await Promise.all([
+  const [params, employes, periodeInfo] = await Promise.all([
     loadParametres(supabase),
     loadEmployesActifs(supabase, societeId),
+    calculerPeriodePaie(supabase, societeId, dateRef),
+  ])
+  const dateDebut = periodeInfo.periode_debut
+  const dateFin = periodeInfo.periode_fin
+
+  const [assignments, feries] = await Promise.all([
     loadAssignments(supabase, societeId, dateDebut, dateFin),
     loadFeries(supabase, societeId, dateDebut, dateFin),
   ])
