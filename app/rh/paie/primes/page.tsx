@@ -11,6 +11,7 @@ import { Loader2, Plus, CheckCircle, Pencil, Trash2, Upload, FileSpreadsheet, Al
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import * as XLSX from "xlsx"
 import { Switch } from "@/components/ui/switch"
+import { SectionOvertime } from "./_components/section-overtime"
 
 const TYPE_PRIME_LABELS: Record<string, string> = {
   fixe: "Fixe",
@@ -463,6 +464,8 @@ export default function PrimesPage() {
                 )}
             </CardContent>
           </Card>
+
+          <SectionOvertime societeId={societe === "all" ? null : societe} />
         </div>
       )}
 
