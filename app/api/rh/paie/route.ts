@@ -6,6 +6,7 @@ import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } fro
 import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
 import { lastDayOfMonth } from '@/lib/rh/period'
 import { calculerPeriodePaie, type PeriodePaieCalculee } from '@/lib/rh/periode-paie'
+import { lireMontantOTDuMois } from '@/lib/rh/overtime'
 import { fetchPaiementsValidesPourBulletin, marquerPaiementPaye } from '@/lib/rh/cash-in-lieu'
 import { fetchGrossessePourAllocationBulletin, marquerAllocationPayee } from '@/lib/rh/protection-maternite'
 
@@ -660,6 +661,25 @@ export async function POST(request: Request) {
         total_heures_nuit_single += ot.heuresNuit || 0
       }
 
+      // Bug 6 — Override depuis heures_travaillees si saisie manuelle
+      // existante (cas DDS sans pointeuse + cas OCC où la saisie OT
+      // explicite remplace le calcul automatique). La saisie manuelle
+      // est l'expression d'une décision RH explicite et prime sur le
+      // calcul auto depuis pointages. Le night shift S.20 (ajouté plus
+      // bas) reste cumulé — c'est une allowance distincte de l'OT.
+      {
+        const otFromHeuresTravaillees = await lireMontantOTDuMois(
+          supabase, emp.id, periodeStartSingle, periodeEndSingle,
+        )
+        if (otFromHeuresTravaillees > 0) {
+          console.log(
+            `[paie/recalcul] OT-override employe=${emp.id} nom=${emp.nom} ` +
+            `montant=${otFromHeuresTravaillees} (source=heures_travaillees, ignore pointages)`,
+          )
+          total_ot_montant = otFromHeuresTravaillees
+        }
+      }
+
       // G9bis.4 — Night Shift Allowance WRA S.20 STRICT (harmonisé avec
       // le batch). Compte les shifts complets 21h→05h du mois et calcule
       // l'allocation = salaire_base × 15% × (shifts_nuit / jours_travailles).
@@ -1283,6 +1303,24 @@ export async function POST(request: Request) {
             + ot.ot2 * taux_horaire * 2
             + ot.ot3 * taux_horaire * 3
           total_heures_nuit += ot.heuresNuit
+        }
+
+        // Bug 6 — Override depuis heures_travaillees si saisie manuelle
+        // existante (cas DDS sans pointeuse + cas OCC où la saisie OT
+        // explicite remplace le calcul automatique). Cohérent avec le
+        // mode single. Le night shift S.20 (ajouté plus bas) reste
+        // cumulé — c'est une allowance distincte de l'OT.
+        {
+          const otFromHeuresTravaillees = await lireMontantOTDuMois(
+            supabase, emp.id, periodeStartBatch, periodeEndBatch,
+          )
+          if (otFromHeuresTravaillees > 0) {
+            console.log(
+              `[paie/recalcul] OT-override employe=${emp.id} nom=${emp.nom} ` +
+              `montant=${otFromHeuresTravaillees} (source=heures_travaillees, ignore pointages)`,
+            )
+            total_ot_montant = otFromHeuresTravaillees
+          }
         }
 
         // G9bis.4 — Night Shift Allowance WRA S.20 STRICT.
