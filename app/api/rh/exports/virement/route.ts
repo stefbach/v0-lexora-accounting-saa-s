@@ -232,15 +232,14 @@ export async function POST(request: Request) {
     // MCB → utiliser le format officiel BP-V1 (default if no specific emitter configured)
     if (infoEmetteur.banque === 'MCB' || !compteEmetteur) {
       // Générer UN SEUL fichier BP-V1 qui contient lignes 1 (MCB interne) + lignes 2 (inter-bancaire)
+      const moisShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      const moisIdx = parseInt(periode.slice(5, 7), 10) - 1
+      const referenceLabel = `SALARY ${moisShort[moisIdx] ?? ''} ${periode.slice(0, 4)}`.trim()
       const { content, extension, filename_suggestion } = genererVirementMCB_BPV1(
         lignesMUR,
         infoEmetteur.numero_compte,
         date,
-        `SALARY ${periode.slice(0,4)}-${periode.slice(5,7)}`
-          .replace(/(\d{4})-(\d{2})/, (_, y, m) => {
-            const mois = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-            return `SALARY ${mois[parseInt(m)-1]} ${y}`
-          })
+        referenceLabel,
       )
       const total = lignesMUR.reduce((s, l) => s + l.salaire_net, 0)
       fichiersGeneres.push({
