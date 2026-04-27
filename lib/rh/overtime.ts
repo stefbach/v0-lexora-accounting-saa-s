@@ -361,6 +361,41 @@ function calculerOTEmploye(
 }
 
 /**
+ * Lit le total montant_ot persisté en heures_travaillees pour un
+ * employé sur une période. Source de vérité pour le bulletin paie
+ * quand la saisie OT manuelle a été faite via la section
+ * /rh/paie/primes (lib saveOvertimeMois). Retourne 0 si aucune ligne.
+ *
+ * Utilisé par le moteur de recalcul (app/api/rh/paie/route.ts) pour
+ * que `bulletins_paie.heures_sup_montant` ne soit plus écrasé à 0
+ * après un click "Recalculer la paie" — la lib est l'unique source
+ * de vérité quand elle a écrit (priorité sur le calcul auto depuis
+ * pointages).
+ *
+ * `periodeDebut` / `periodeFin` : 'YYYY-MM-DD'. Le caller fournit la
+ * fenêtre déjà résolue selon le cycle paie société (calendaire vs
+ * cut_off — résolu par calculerPeriodePaie en amont).
+ */
+export async function lireMontantOTDuMois(
+  supabase: SupabaseLike,
+  employeId: string,
+  periodeDebut: string,
+  periodeFin: string,
+): Promise<number> {
+  const { data } = await supabase
+    .from('heures_travaillees')
+    .select('montant_ot')
+    .eq('employe_id', employeId)
+    .gte('date', periodeDebut)
+    .lte('date', periodeFin)
+  if (!data || data.length === 0) return 0
+  return (data as Array<{ montant_ot?: number | string | null }>).reduce(
+    (s, r) => s + (Number(r.montant_ot) || 0),
+    0,
+  )
+}
+
+/**
  * Preview OT pour la société sur la période. Read-only, n'écrit rien.
  *
  * `periode` accepte 'YYYY-MM' ou 'YYYY-MM-DD' (le jour est ignoré). Il
