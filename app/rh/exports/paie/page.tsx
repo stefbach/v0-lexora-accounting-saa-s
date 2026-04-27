@@ -22,7 +22,13 @@ function fmt(n: number) {
 }
 
 function downloadFile(content: string, filename: string) {
-  const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8" })
+  // BOM UTF-8 ajouté UNIQUEMENT aux .csv (Excel auto-détecte alors
+  // l'encodage). Les .txt sont des formats bruts bancaires (BP-V1 MCB)
+  // qui rejettent tout octet avant le magic-line — pas de BOM.
+  const isText = filename.toLowerCase().endsWith(".txt")
+  const prefix = isText ? "" : "\uFEFF"
+  const mime = isText ? "text/plain;charset=utf-8" : "text/csv;charset=utf-8"
+  const blob = new Blob([prefix + content], { type: mime })
   const a = document.createElement("a")
   a.href = URL.createObjectURL(blob)
   a.download = filename
