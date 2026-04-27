@@ -194,7 +194,7 @@ export async function POST(request: Request) {
         bank_iban: emp?.bank_iban || '',
         bank_swift: emp?.bank_swift || '',
         bank_branch: emp?.bank_branch || '',
-        bank_account_name: emp?.bank_account_name || `${emp?.prenom} ${emp?.nom}`,
+        bank_account_name: emp?.bank_account_name || '',
         bank_name: emp?.bank_name || emp?.bank_code || '',
         bank_code: emp?.bank_code || '',
         salaire_net: Number(b.salaire_net),
