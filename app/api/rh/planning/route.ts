@@ -266,10 +266,46 @@ export async function POST(request: Request) {
         }
       })
 
-      // Delete all existing assignments for this planning and reinsert
-      // This is safer than upsert (no UNIQUE constraint dependency)
+      // Bug critique — Le DELETE+INSERT global wipe TOUS les assignments
+      // du planning, ce qui combiné au filtre UI "Collaborateurs"
+      // (qui n'envoie au backend que les employés visibles) effaçait
+      // les assignments des employés non-filtrés. Cas Mégane : filtre
+      // sur Wendy → save → 407 assignments DDS Avril réduits à 27.
+      //
+      // Fix : DELETE ciblé sur les seuls employe_id présents dans le
+      // payload. Si l'utilisateur sauve avec 1 seul employé visible,
+      // on remplace UNIQUEMENT ses assignments, les autres restent
+      // intacts. Le filtre UI redevient un filtre d'affichage pur,
+      // sans side-effect destructif côté DB.
+      const employeIdsInPayload = [...new Set(rows.map((r: any) => r.employe_id))]
+      if (employeIdsInPayload.length === 0) {
+        // Garde-fou : payload vide → ne rien faire (avant ce patch,
+        // un payload vide aurait wipé tout le planning).
+        return NextResponse.json({
+          success: true,
+          inserted: 0,
+          message: 'Aucun assignment dans le payload — rien à sauvegarder.',
+        })
+      }
+      // Monitoring : warn si > 200 deletes en une seule opération.
+      // Permet de détecter une régression future qui réintroduirait un
+      // wipe massif (sans bloquer l'usage normal multi-employés).
+      const { count: nbAssignmentsToDelete } = await supabase
+        .from('planning_assignments')
+        .select('id', { count: 'exact', head: true })
+        .eq('planning_id', planningRecord.id)
+        .in('employe_id', employeIdsInPayload)
+      if ((nbAssignmentsToDelete || 0) > 200) {
+        console.warn(
+          `[planning POST] bulk delete ${nbAssignmentsToDelete} assignments `
+          + `for planning=${planningRecord.id} (${employeIdsInPayload.length} employés). `
+          + `Si inattendu, vérifier que le front n'envoie pas un wipe massif.`,
+        )
+      }
       const { error: delErr } = await supabase.from('planning_assignments')
-        .delete().eq('planning_id', planningRecord.id)
+        .delete()
+        .eq('planning_id', planningRecord.id)
+        .in('employe_id', employeIdsInPayload)
       if (delErr) {
         console.error('[planning POST] delete error:', delErr.message)
         return NextResponse.json({ error: `Erreur suppression: ${delErr.message}` }, { status: 500 })
