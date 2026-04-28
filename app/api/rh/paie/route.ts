@@ -803,7 +803,23 @@ export async function POST(request: Request) {
         // Mois passé : today > fin de mois → aucune exclusion (tous comptent).
         // Mois futur : today < début de mois → tous exclus (jours_absence=0).
         const today = new Date().toISOString().slice(0, 10)
+        // Bug DDS pointageActif + 7j/7 — un jour planning marqué
+        // est_repos=true n'est PAS une journée travaillée attendue ; ne
+        // pas le compter comme absence injustifiée. Sans ce skip, une
+        // société working_days=7j/7 + planning ~21 shifts compterait
+        // ~9 absences fausses/mois/employé. planMap est déjà chargé
+        // ligne 618-625.
+        let nbJoursSansPlanning = 0
+        const WARN_INDIVIDUAL_MAX = 5
         for (const day of workingDaysList) {
+          const planJour = planMap[day]
+          if (planJour?.est_repos) continue
+          if (!planJour) {
+            nbJoursSansPlanning++
+            if (nbJoursSansPlanning <= WARN_INDIVIDUAL_MAX) {
+              console.warn(`[paie] Employé ${emp.id} sans planning sur ${day}, working_days appliqué`)
+            }
+          }
           const pt = pointageByDate.get(day)
           // G-leaves-fix (debug+fix) : normaliser les bornes du congé
           //   en "YYYY-MM-DD". Supabase-js peut renvoyer les colonnes
@@ -832,6 +848,13 @@ export async function POST(request: Request) {
           } else if (pt.heure_entree && !pt.heure_sortie) {
             anomaliesPointage.push(`Oubli de pointage sortie le ${day}`)
           }
+        }
+        // Warn agrégé après la boucle si beaucoup de jours sans planning.
+        if (nbJoursSansPlanning > WARN_INDIVIDUAL_MAX) {
+          console.warn(
+            `[paie] Employé ${emp.id} (${emp.prenom} ${emp.nom}): ${nbJoursSansPlanning}j sans planning ce mois — `
+            + `${WARN_INDIVIDUAL_MAX} premiers logués individuellement, ${nbJoursSansPlanning - WARN_INDIVIDUAL_MAX} suivants tus pour ne pas inonder.`
+          )
         }
       } else {
         // Toggle OFF — saisie manuelle uniquement
@@ -1572,7 +1595,21 @@ export async function POST(request: Request) {
           // NI absents NI présents : ils n'existent pas encore. Même règle
           // que dans le chemin SINGLE (cf. action='calculer').
           const todayBatch = new Date().toISOString().slice(0, 10)
+          // Bug DDS pointageActif + 7j/7 — un jour planning marqué
+          // est_repos=true n'est PAS une journée travaillée attendue ; ne
+          // pas le compter comme absence injustifiée. planMap est déjà
+          // chargé ligne 1276-1283.
+          let nbJoursSansPlanningBatch = 0
+          const WARN_INDIVIDUAL_MAX_BATCH = 5
           for (const day of workingDaysListBatch) {
+            const planJourBatch = planMap[day]
+            if (planJourBatch?.est_repos) continue
+            if (!planJourBatch) {
+              nbJoursSansPlanningBatch++
+              if (nbJoursSansPlanningBatch <= WARN_INDIVIDUAL_MAX_BATCH) {
+                console.warn(`[paie batch] Employé ${emp.id} sans planning sur ${day}, working_days appliqué`)
+              }
+            }
             const pt = pointageByDateBatch.get(day)
             // G-leaves-fix (debug+fix) : normalisation défensive des
             //   bornes du congé (idem single path).
@@ -1598,6 +1635,13 @@ export async function POST(request: Request) {
             } else if (pt.heure_entree && !pt.heure_sortie) {
               anomaliesPointageBatch.push(`Oubli de pointage sortie le ${day}`)
             }
+          }
+          // Warn agrégé si beaucoup de jours sans planning.
+          if (nbJoursSansPlanningBatch > WARN_INDIVIDUAL_MAX_BATCH) {
+            console.warn(
+              `[paie batch] Employé ${emp.id} (${emp.prenom} ${emp.nom}): ${nbJoursSansPlanningBatch}j sans planning ce mois — `
+              + `${WARN_INDIVIDUAL_MAX_BATCH} premiers logués individuellement, ${nbJoursSansPlanningBatch - WARN_INDIVIDUAL_MAX_BATCH} suivants tus pour ne pas inonder.`
+            )
           }
         }
         // 4. Override with request variables if provided
