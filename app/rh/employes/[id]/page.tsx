@@ -13,11 +13,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { toast } from "sonner"
 import {
   ArrowLeft, Save, Loader2, User, FileText, CalendarDays, Clock,
   Briefcase, CreditCard, Gift, FolderOpen, History, Shield,
   CheckCircle2, XCircle, AlertCircle, Upload, Download, Camera,
-  Phone, MapPin, Building2, Hash, CircleDot
+  Phone, MapPin, Building2, Hash, CircleDot, KeyRound, Mail
 } from "lucide-react"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 import { createClient } from "@/lib/supabase/client"
@@ -88,6 +90,67 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   // Permet de choisir un shift par défaut pour cet employé (ETAPE 2).
   const [societeShifts, setSocieteShifts] = useState<Array<{ id: string; label: string; code?: string; debut?: string | null; fin?: string | null }>>([])
   const photoInputRef = useRef<HTMLInputElement>(null)
+
+  // ─── Compte utilisateur (Auth + envoi credentials) ─────────────────
+  const [accountDialogOpen, setAccountDialogOpen] = useState(false)
+  const [accountPwd, setAccountPwd] = useState("")
+  const [accountPwd2, setAccountPwd2] = useState("")
+  const [accountSubmitting, setAccountSubmitting] = useState(false)
+  const accountRoleAllowed = ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin']
+    .includes(String(userRole || '').toLowerCase())
+
+  const handleSubmitAccount = async () => {
+    if (!employe?.id) return
+    if (accountPwd.length < 8) {
+      toast.error("Mot de passe min 8 caractères")
+      return
+    }
+    if (accountPwd !== accountPwd2) {
+      toast.error("Mot de passe et confirmation ne correspondent pas")
+      return
+    }
+    setAccountSubmitting(true)
+    try {
+      const isReset = !!employe.auth_user_id
+      const url = isReset
+        ? `/api/rh/employes/${employe.id}/reset-credentials`
+        : `/api/rh/employes/${employe.id}/create-account`
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: accountPwd }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.error || "Erreur lors de l'opération")
+        return
+      }
+      if (data.email_sent === false) {
+        toast.warning(
+          isReset
+            ? `Mot de passe mis à jour, mais email NON envoyé : ${data.email_error || 'erreur SMTP'}. Communiquer le password manuellement.`
+            : `Compte créé, mais email NON envoyé : ${data.email_error || 'erreur SMTP'}. Communiquer le password manuellement.`,
+        )
+      } else {
+        toast.success(
+          isReset
+            ? `Mot de passe mis à jour. Email envoyé à ${employe.email}.`
+            : `Compte créé. Email envoyé à ${employe.email}.`,
+        )
+      }
+      setAccountDialogOpen(false)
+      setAccountPwd("")
+      setAccountPwd2("")
+      // Refresh employe pour récupérer auth_user_id si création.
+      if (!isReset && data.auth_user_id) {
+        setEmploye((prev: any) => prev ? { ...prev, auth_user_id: data.auth_user_id } : prev)
+      }
+    } catch (e) {
+      toast.error("Erreur réseau : " + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      setAccountSubmitting(false)
+    }
+  }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -461,6 +524,64 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </CardContent>
             </Card>
+
+            {accountRoleAllowed && (
+              <Card className="rounded-2xl shadow-sm border-l-4 border-l-indigo-500 bg-[#f8f9fc]">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                    <KeyRound className="w-4 h-4 text-indigo-500" />Compte utilisateur
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {employe?.auth_user_id ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        <span>Compte actif</span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        L'employé peut se connecter avec son email <span className="font-mono">{employe.email}</span>.
+                        Pour redéfinir son mot de passe et lui renvoyer ses identifiants par email.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setAccountPwd(""); setAccountPwd2(""); setAccountDialogOpen(true) }}
+                      >
+                        <Mail className="w-4 h-4 mr-2" />
+                        Renvoyer credentials
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                        <span>Aucun compte créé</span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        L'employé n'a pas encore d'accès à Lexora. Créez son compte et envoyez-lui ses identifiants par email.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => { setAccountPwd(""); setAccountPwd2(""); setAccountDialogOpen(true) }}
+                        disabled={!employe?.email}
+                        title={!employe?.email ? "Renseigner d'abord l'email de l'employé" : undefined}
+                      >
+                        <KeyRound className="w-4 h-4 mr-2" />
+                        Créer compte
+                      </Button>
+                      {!employe?.email && (
+                        <p className="text-xs text-amber-600">
+                          Email employé manquant — renseigner avant la création de compte.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="rounded-2xl shadow-sm border-l-4 border-l-green-500 bg-[#f8f9fc]">
               <CardHeader className="pb-3"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2" style={{ fontFamily: "'Poppins', sans-serif" }}><MapPin className="w-4 h-4 text-green-500" />Contact</CardTitle></CardHeader>
@@ -1086,6 +1207,62 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog création / reset compte utilisateur */}
+      <Dialog open={accountDialogOpen} onOpenChange={(v) => { if (!accountSubmitting) setAccountDialogOpen(v) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {employe?.auth_user_id ? "Renvoyer credentials" : "Créer un compte"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-gray-600">
+              {employe?.auth_user_id
+                ? <>Définissez un nouveau mot de passe pour <span className="font-mono">{employe.email}</span>. L'employé recevra un email avec ses nouveaux identifiants.</>
+                : <>Définissez un mot de passe pour <span className="font-mono">{employe.email}</span>. L'employé recevra un email avec ses identifiants et pourra se connecter immédiatement.</>}
+            </p>
+            <div>
+              <Label className="text-xs text-gray-500">Mot de passe (min 8 caractères)</Label>
+              <Input
+                type="password"
+                value={accountPwd}
+                onChange={(e) => setAccountPwd(e.target.value)}
+                autoComplete="new-password"
+                minLength={8}
+                placeholder="••••••••"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500">Confirmer le mot de passe</Label>
+              <Input
+                type="password"
+                value={accountPwd2}
+                onChange={(e) => setAccountPwd2(e.target.value)}
+                autoComplete="new-password"
+                minLength={8}
+                placeholder="••••••••"
+              />
+              {accountPwd2.length > 0 && accountPwd !== accountPwd2 && (
+                <p className="text-xs text-red-600 mt-1">Les mots de passe ne correspondent pas.</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setAccountDialogOpen(false)} disabled={accountSubmitting}>
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmitAccount}
+              disabled={accountSubmitting || accountPwd.length < 8 || accountPwd !== accountPwd2}
+            >
+              {accountSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
+              {employe?.auth_user_id ? "Mettre à jour et envoyer" : "Créer et envoyer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
