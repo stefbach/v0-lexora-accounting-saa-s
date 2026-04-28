@@ -37,9 +37,10 @@ export default function LoginPage() {
                 <input type="checkbox" className="rounded border-input" />
                 <span className="text-muted-foreground">Remember me</span>
               </label>
-              <Link href="#" className="text-sm text-primary hover:underline">
-                Forgot password?
-              </Link>
+              {/* Pas de self-service reset : contactez votre RH. */}
+              <span className="text-sm text-muted-foreground">
+                Forgot password? Contact your HR.
+              </span>
             </div>
             <Button className="mt-6 w-full" asChild>
               <Link href="/dashboard">Sign In</Link>

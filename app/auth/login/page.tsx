@@ -28,7 +28,7 @@ export default function AuthLoginPage() {
     subtitle: locale === "fr" ? "Entrez vos identifiants pour acceder a votre espace" : "Enter your credentials to access your workspace",
     email: locale === "fr" ? "Adresse e-mail" : "Email address",
     password: locale === "fr" ? "Mot de passe" : "Password",
-    forgot: locale === "fr" ? "Mot de passe oublie ?" : "Forgot password?",
+    forgot: locale === "fr" ? "Mot de passe oublie ? Contactez votre RH." : "Forgot password? Contact your HR.",
     login: locale === "fr" ? "Se connecter" : "Sign in",
     logging: locale === "fr" ? "Connexion en cours..." : "Signing in...",
     no_account: locale === "fr" ? "Vous n'avez pas de compte ?" : "Don't have an account?",
@@ -113,8 +113,12 @@ export default function AuthLoginPage() {
               </div>
             )}
 
+            {/* Décision produit : pas de self-service reset password.
+                L'employé qui oublie son mot de passe doit contacter son
+                RH, qui le redéfinit via la fiche employé (Renvoyer
+                credentials). Pas de lien actif → texte informatif seul. */}
             <div className="mt-4 flex justify-end">
-              <Link href="#" className="text-sm hover:underline" style={{ color: "#0B0F2E" }}>{txt.forgot}</Link>
+              <span className="text-sm text-gray-500">{txt.forgot}</span>
             </div>
 
             <Button type="submit" className="mt-6 w-full" size="lg" disabled={loading} style={{ backgroundColor: "#0B0F2E", color: "#ffffff" }}>
