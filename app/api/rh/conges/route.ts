@@ -373,6 +373,16 @@ export async function GET(request: Request) {
         .lte('date_debut', `${currentYear}-12-31`)
 
       // 4. Build balances — source de vérité = soldes_conges
+      // Index alternatif par employe_id qui retient TOUTES les rows soldesData
+      // matching today (dont la calendaire avec vl_droit=0 et l'anniversaire
+      // avec vl_droit=30). Sert de filet de sécurité pour récupérer les
+      // valeurs VL si la row primaire (soldesByEmp.get) est la mauvaise.
+      const allSoldesByEmp = new Map<string, any[]>()
+      for (const s of (soldesData || [])) {
+        const arr = allSoldesByEmp.get(s.employe_id) || []
+        arr.push(s)
+        allSoldesByEmp.set(s.employe_id, arr)
+      }
       const balances = employees.map((emp: any) => {
         const solde = soldesByEmp.get(emp.id) || null
         // Si après recompute la row est toujours absente (erreur DB), on
@@ -390,15 +400,27 @@ export async function GET(request: Request) {
         const slPris = solde ? Number(solde.sl_pris) : null
         const slSolde = solde ? Number(solde.sl_solde) : null
 
-        // G2 — Vacation Leave (WRA S.47). Null si row soldes_conges absent.
-        const vlDroit = solde ? Number(solde.vl_droit ?? 0) : null
-        const vlPris = solde ? Number(solde.vl_pris ?? 0) : null
-        const vlSolde = solde ? Number(solde.vl_solde ?? 0) : null
-        const vlCycleDebut = solde?.vl_cycle_debut
-          ? String(solde.vl_cycle_debut).slice(0, 10)
+        // G2 — Vacation Leave (WRA S.47).
+        // Bug VL fix-3 — filet de sécurité : si la row primaire a vl_droit=0
+        // mais qu'une AUTRE row matching today (cycle anniversaire) existe
+        // avec vl_droit>0, on prend cette dernière comme source des valeurs
+        // VL. Ça couvre le cas où le tri n'a pas pu trancher (al/sl
+        // identiques sur les 2 rows) ET le cas où la row primaire est
+        // pertinente pour AL/SL (calendaire) mais pas pour VL.
+        let vlSolde_row: any = solde
+        const candidates = allSoldesByEmp.get(emp.id) || []
+        if ((Number(solde?.vl_droit ?? 0) || 0) <= 0) {
+          const better = candidates.find((r: any) => (Number(r.vl_droit) || 0) > 0)
+          if (better) vlSolde_row = better
+        }
+        const vlDroit = vlSolde_row ? Number(vlSolde_row.vl_droit ?? 0) : null
+        const vlPris = vlSolde_row ? Number(vlSolde_row.vl_pris ?? 0) : null
+        const vlSolde = vlSolde_row ? Number(vlSolde_row.vl_solde ?? 0) : null
+        const vlCycleDebut = vlSolde_row?.vl_cycle_debut
+          ? String(vlSolde_row.vl_cycle_debut).slice(0, 10)
           : null
-        const vlCycleFin = solde?.vl_cycle_fin
-          ? String(solde.vl_cycle_fin).slice(0, 10)
+        const vlCycleFin = vlSolde_row?.vl_cycle_fin
+          ? String(vlSolde_row.vl_cycle_fin).slice(0, 10)
           : null
         // Déterminer le statut VL. G3 — on considère statut_wra + le
         // fait que vl_droit > 0 (déjà calculé par le helper via RPC en
