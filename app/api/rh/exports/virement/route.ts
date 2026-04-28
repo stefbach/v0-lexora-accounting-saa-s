@@ -178,6 +178,18 @@ export async function POST(request: Request) {
     }
     const empMap = new Map(employes.map((e: any) => [e.id, e]))
 
+    // Bug BP-V1 OCC — Filtre amont mode_paiement : un employé en
+    // 'especes' (cas Juliana HAGGOO DDS) ou 'individuel' n'a pas
+    // vocation à apparaître dans le fichier de virement bulk MCB. Ils
+    // sont payés hors-bulk. Cohérent avec ce que /rh/exports/paie fait
+    // déjà via exclude_employe_ids ; on l'applique ici par défaut côté
+    // route quand exclude_employe_ids n'est pas explicitement fourni.
+    allBulletins = allBulletins.filter((b: any) => {
+      const emp = empMap.get(b.employe_id)
+      const mode = String((emp as any)?.mode_paiement ?? 'bulk').trim().toLowerCase()
+      return mode !== 'especes' && mode !== 'individuel'
+    })
+
     // La date passée aux générateurs de fichiers bancaires DOIT être le
     // dernier jour de la période de paie (header BP-V1 + filename),
     // pas la date d'exécution de l'export.
@@ -232,8 +244,24 @@ export async function POST(request: Request) {
       nom_compte: compteEmetteur?.nom_compte || '',
     }
 
-    // MCB → utiliser le format officiel BP-V1 (default if no specific emitter configured)
-    if (infoEmetteur.banque === 'MCB' || !compteEmetteur) {
+    // Bug BP-V1 OCC — Test MCB normalisé. Auparavant `=== 'MCB'` strict
+    // ratait les sociétés dont comptes_bancaires.bank_code valait '02'
+    // (code numérique MCB officiel) ou la chaîne longue "Mauritius
+    // Commercial Bank". Conséquence : OCC tombait dans la branche else
+    // (CSV par banque destinataire) au lieu du BP-V1 attendu.
+    //
+    // Toutes les sociétés Lexora utilisent MCB en émission, donc
+    // pratiquement on tombe TOUJOURS dans la branche BP-V1. La branche
+    // else (genererVirementBanque) reste conservée pour le cas
+    // hypothétique futur d'une société non-MCB en émission.
+    const banqueEmetteurNorm = String(infoEmetteur.banque ?? '')
+      .toUpperCase().trim()
+    const isMCBEmetteur =
+      banqueEmetteurNorm === 'MCB'
+      || banqueEmetteurNorm === '02'                        // bank_code MCB officiel
+      || banqueEmetteurNorm.includes('MAURITIUS COMMERCIAL') // libellé long
+      || !compteEmetteur                                     // fallback aucun compte trouvé
+    if (isMCBEmetteur) {
       // Générer UN SEUL fichier BP-V1 qui contient lignes 1 (MCB interne) + lignes 2 (inter-bancaire)
       const moisShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
       const moisIdx = parseInt(periode.slice(5, 7), 10) - 1
