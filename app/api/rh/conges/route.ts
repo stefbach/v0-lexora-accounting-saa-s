@@ -306,20 +306,24 @@ export async function GET(request: Request) {
         .gte('periode_fin', today)
 
       // Bug VL — un employé peut avoir 2 rows qui chevauchent today
-      // (cycle anniversaire ex. 2025-10→2026-10 + ligne calendaire
-      // 2026-01→2026-12). On priorise la ligne porteuse de droits
-      // (vl_droit/al_droit/sl_droit > 0) puis la periode_debut la plus
-      // récente, et on ne garde que la première par employe_id.
+      // (cycle anniversaire ex. 2025-10→2026-10, vl_droit=30 + ligne
+      // calendaire 2026-01→2026-12, vl_droit=0). al_droit/sl_droit
+      // peuvent être identiques sur les 2 rows, donc on priorise
+      // vl_droit > 0 EN PREMIER pour discriminer correctement.
+      // Ordre :
+      //   1. vl_droit > 0 (pour récupérer l'éligibilité VL)
+      //   2. al_droit ou sl_droit > 0 (cas hors-VL, garde une row utile)
+      //   3. periode_debut la plus récente
+      // On ne garde que la PREMIÈRE occurrence par employe_id.
       const sortedSoldes = [...(soldesData || [])].sort((a: any, b: any) => {
-        const aHasDroits =
-          (Number(a.vl_droit) || 0) > 0
-          || (Number(a.al_droit) || 0) > 0
-          || (Number(a.sl_droit) || 0) > 0
-        const bHasDroits =
-          (Number(b.vl_droit) || 0) > 0
-          || (Number(b.al_droit) || 0) > 0
-          || (Number(b.sl_droit) || 0) > 0
-        if (aHasDroits !== bHasDroits) return aHasDroits ? -1 : 1
+        const aHasVl = (Number(a.vl_droit) || 0) > 0
+        const bHasVl = (Number(b.vl_droit) || 0) > 0
+        if (aHasVl !== bHasVl) return aHasVl ? -1 : 1
+        const aHasOther =
+          (Number(a.al_droit) || 0) > 0 || (Number(a.sl_droit) || 0) > 0
+        const bHasOther =
+          (Number(b.al_droit) || 0) > 0 || (Number(b.sl_droit) || 0) > 0
+        if (aHasOther !== bHasOther) return aHasOther ? -1 : 1
         return (b.periode_debut || '').localeCompare(a.periode_debut || '')
       })
       const soldesByEmp = new Map<string, any>()
@@ -341,15 +345,14 @@ export async function GET(request: Request) {
           .lte('periode_debut', today)
           .gte('periode_fin', today)
         const sortedNew = [...(newSoldes || [])].sort((a: any, b: any) => {
-          const aHasDroits =
-            (Number(a.vl_droit) || 0) > 0
-            || (Number(a.al_droit) || 0) > 0
-            || (Number(a.sl_droit) || 0) > 0
-          const bHasDroits =
-            (Number(b.vl_droit) || 0) > 0
-            || (Number(b.al_droit) || 0) > 0
-            || (Number(b.sl_droit) || 0) > 0
-          if (aHasDroits !== bHasDroits) return aHasDroits ? -1 : 1
+          const aHasVl = (Number(a.vl_droit) || 0) > 0
+          const bHasVl = (Number(b.vl_droit) || 0) > 0
+          if (aHasVl !== bHasVl) return aHasVl ? -1 : 1
+          const aHasOther =
+            (Number(a.al_droit) || 0) > 0 || (Number(a.sl_droit) || 0) > 0
+          const bHasOther =
+            (Number(b.al_droit) || 0) > 0 || (Number(b.sl_droit) || 0) > 0
+          if (aHasOther !== bHasOther) return aHasOther ? -1 : 1
           return (b.periode_debut || '').localeCompare(a.periode_debut || '')
         })
         for (const s of sortedNew) {
