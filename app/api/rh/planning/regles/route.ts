@@ -7,8 +7,25 @@ import { DEFAULT_CONFIG, DEFAULT_REGLES_WRA } from '@/types/planning'
 
 export const dynamic = 'force-dynamic'
 
-// Rôles autorisés — mêmes que le layout app/rh/planning/regles/layout.tsx.
-const ALLOWED_ROLES = [
+// Rôles autorisés.
+// READ : lecture des règles + shifts_planning. Manager (responsable
+// planning d'une société) doit pouvoir voir les shifts pour rendre
+// la grille /rh/planning correctement, mais ne doit pas modifier les
+// règles WRA structurelles (templates, horaires, jours fériés…) qui
+// restent sous contrôle RH/admin.
+// WRITE : édition des règles + shifts. Cohérent avec le layout
+// app/rh/planning/regles/layout.tsx qui bloque manager de la page
+// d'édition (Sprint 1 audit RH).
+const ALLOWED_ROLES_READ = [
+  'admin',
+  'super_admin',
+  'rh',
+  'rh_manager',
+  'manager',
+  'client_admin',
+  'direction',
+]
+const ALLOWED_ROLES_WRITE = [
   'admin',
   'super_admin',
   'rh',
@@ -104,7 +121,7 @@ export async function GET(request: Request) {
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const role = await getUserRole(user.id)
-    if (!ALLOWED_ROLES.includes(role)) {
+    if (!ALLOWED_ROLES_READ.includes(role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -167,7 +184,7 @@ export async function PUT(request: Request) {
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const role = await getUserRole(user.id)
-    if (!ALLOWED_ROLES.includes(role)) {
+    if (!ALLOWED_ROLES_WRITE.includes(role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -253,7 +270,7 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const role = await getUserRole(user.id)
-    if (!ALLOWED_ROLES.includes(role)) {
+    if (!ALLOWED_ROLES_WRITE.includes(role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
