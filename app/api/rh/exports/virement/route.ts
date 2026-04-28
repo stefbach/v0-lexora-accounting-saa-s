@@ -6,8 +6,10 @@ import {
   genererVirementMCB_BPV1,
   grouperParBanque,
   BANQUES_MAURITIUS,
+  BankCodeMissingError,
   type LigneBulletin
 } from '@/lib/rh/banques-mauritius'
+import { loadBankCodesMap } from '@/lib/rh/banques-mauritius-db'
 import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
@@ -266,12 +268,32 @@ export async function POST(request: Request) {
       const moisShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
       const moisIdx = parseInt(periode.slice(5, 7), 10) - 1
       const referenceLabel = `SALARY ${moisShort[moisIdx] ?? ''} ${periode.slice(0, 4)}`.trim()
-      const { content, extension, filename_suggestion } = genererVirementMCB_BPV1(
-        lignesMUR,
-        infoEmetteur.numero_compte,
-        date,
-        referenceLabel,
-      )
+
+      // Mig 211 — codes MCB BP lus depuis la DB (source de vérité)
+      const bankCodesMap = await loadBankCodesMap(supabase)
+      let content: string, extension: string, filename_suggestion: string
+      try {
+        const result = genererVirementMCB_BPV1(
+          lignesMUR,
+          infoEmetteur.numero_compte,
+          date,
+          bankCodesMap,
+          referenceLabel,
+        )
+        content = result.content
+        extension = result.extension
+        filename_suggestion = result.filename_suggestion
+      } catch (err) {
+        if (err instanceof BankCodeMissingError) {
+          return NextResponse.json({
+            error: err.message,
+            banque_manquante: err.banque,
+            employes_concernes: err.employes,
+            action: 'Renseignez code_mcb_bp dans la table banques_mauritius (admin) puis réessayez.',
+          }, { status: 422 })
+        }
+        throw err
+      }
       const total = lignesMUR.reduce((s, l) => s + l.salaire_net, 0)
       fichiersGeneres.push({
         banque: 'MCB',

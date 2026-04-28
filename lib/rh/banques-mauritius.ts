@@ -5,20 +5,27 @@
  */
 
 /**
- * Codes banques MCB pour les virements inter-bancaires (lignes type 2)
- * Source : format officiel MCB BP-V1 — validé sur fichier réel BP-1920430.txt
+ * @deprecated Mig 211 — utiliser la table `banques_mauritius` (DB) comme
+ * source de vérité. Les codes ci-dessous étaient incorrects et provoquaient
+ * des fichiers BP-V1 rejetés par MCB :
+ *   - SBM=03 → en fait 11 (vérifié BP-1920430.txt validé MRA mars 2026)
+ *   - ABSA=04 → en fait 03
+ *   - BANKONE=08 → en fait 05
+ * Le générateur MCB BP-V1 lit désormais la map DB. Cet objet est conservé
+ * pour rétrocompat mais ne doit plus être utilisé pour générer un BP-V1
+ * de production.
  */
 export const MCB_BANK_CODES: Record<string, string> = {
-  'MCB':     '01',  // MCB interne → ligne type 1 (pas de code)
-  'SBM':     '03',  // State Bank of Mauritius — confirmé fichier réel
-  'ABC':     '11',  // ABC Banking Corporation — confirmé fichier réel (compte 14 chiffres)
-  'AFRASIA': '05',  // AfrAsia Bank
-  'MAUBANK': '06',  // MauBank (ex-MPCB)
-  'BANKONE': '08',  // Bank One (CIEL)
-  'ABSA':    '04',  // ABSA / Barclays Mauritius
-  'SCB':     '07',  // Standard Chartered Mauritius
-  'HSBC':    '09',  // HSBC Mauritius
-  'BCP':     '10',  // BCP / Banque des Mascareignes
+  'MCB':     '01',
+  'SBM':     '11',  // Corrigé via mig 211
+  'ABC':     '11',
+  'AFRASIA': '05',
+  'MAUBANK': '06',
+  'BANKONE': '05',  // Corrigé via mig 211
+  'ABSA':    '03',  // Corrigé via mig 211
+  'SCB':     '07',
+  'HSBC':    '09',
+  'BCP':     '10',
   'BDM':     '10',
   'CIM':     '12',
   'AUTRE':   '99',
@@ -56,10 +63,30 @@ function formatNomBenefBP(nom: string | undefined, prenom: string | undefined): 
  *   1|24863.27|000183552032|SALARY Mar 2026
  *   2|36850.55|03|191079310|LALANE Melanie|SALARY Mar 2026|N
  */
+/**
+ * Map<code_banque, code_mcb_bp> chargée depuis la table banques_mauritius
+ * (mig 211). NULL si la banque n'a pas de code confirmé → le générateur
+ * refuse alors de produire la ligne correspondante.
+ */
+export type BankCodesMap = Map<string, string | null>
+
+/**
+ * Erreur thrownée si une banque utilisée dans les bulletins n'a pas de
+ * code_mcb_bp confirmé en DB. À catcher côté route pour renvoyer un 422
+ * explicite (« Code MCB BP manquant pour XXX, contactez admin »).
+ */
+export class BankCodeMissingError extends Error {
+  constructor(public banque: string, public employes: string[]) {
+    super(`Code MCB BP manquant pour la banque "${banque}" (${employes.length} employé(s) concerné(s)). Renseignez code_mcb_bp dans la table banques_mauritius.`)
+    this.name = 'BankCodeMissingError'
+  }
+}
+
 export function genererVirementMCB_BPV1(
   lignes: LigneBulletin[],
   compteDebiteur: string,     // Numéro compte MCB employeur (ex: 000447954555)
   dateValeur: string,          // YYYY-MM-DD
+  bankCodesMap: BankCodesMap,  // Map chargée depuis banques_mauritius (mig 211)
   referenceLabel?: string      // Ex: "SALARY Mar 2026"
 ): { content: string; extension: string; filename_suggestion: string } {
 
@@ -77,6 +104,25 @@ export function genererVirementMCB_BPV1(
   const lignesMCB    = lignes.filter(l => (l.bank_code || normaliserCodeBanque(l.bank_name)) === 'MCB')
   const lignesAutres = lignes.filter(l => (l.bank_code || normaliserCodeBanque(l.bank_name)) !== 'MCB')
 
+  // Validation amont : toutes les banques inter-bancaires doivent avoir
+  // un code_mcb_bp confirmé. On groupe les manquants par banque pour un
+  // message d'erreur lisible.
+  const manquants = new Map<string, string[]>()
+  for (const l of lignesAutres) {
+    const bankCode = (l.bank_code || normaliserCodeBanque(l.bank_name)).toUpperCase()
+    const mcbCode = bankCodesMap.get(bankCode)
+    if (!mcbCode) {
+      const nomEmp = `${l.prenom || ''} ${l.nom || ''}`.trim() || l.employe_code || '?'
+      const arr = manquants.get(bankCode) || []
+      arr.push(nomEmp)
+      manquants.set(bankCode, arr)
+    }
+  }
+  if (manquants.size > 0) {
+    const [premiereBanque, employes] = Array.from(manquants.entries())[0]
+    throw new BankCodeMissingError(premiereBanque, employes)
+  }
+
   const totalGeneral = lignes.reduce((s, l) => s + l.salaire_net, 0)
   const nbTransactions = lignes.length
 
@@ -93,10 +139,10 @@ export function genererVirementMCB_BPV1(
     content += `1|${l.salaire_net.toFixed(2)}|${l.bank_account}|${ref}\r\n`
   }
 
-  // LIGNES 2 — Virements MCB→Autre banque
+  // LIGNES 2 — Virements MCB→Autre banque (codes lus depuis banques_mauritius)
   for (const l of lignesAutres) {
-    const bankCode = l.bank_code || normaliserCodeBanque(l.bank_name)
-    const mcbCode  = MCB_BANK_CODES[bankCode] || MCB_BANK_CODES['AUTRE']
+    const bankCode = (l.bank_code || normaliserCodeBanque(l.bank_name)).toUpperCase()
+    const mcbCode = bankCodesMap.get(bankCode)!  // garanti non-null par la validation amont
     // Si bank_account_name est rempli (HR a saisi la convention "NOM
     // Prénom" du compte bancaire), on lui fait confiance sans casing.
     // Sinon on construit depuis nom/prenom au format BP attendu.
