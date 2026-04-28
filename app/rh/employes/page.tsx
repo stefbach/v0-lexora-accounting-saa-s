@@ -76,13 +76,25 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
   const updatePrimeFixe = (i: number, k: "libelle" | "montant", v: string) =>
     setPrimesFixes(p => p.map((row, idx) => idx === i ? { ...row, [k]: v } : row))
 
-  // Section "Accès Lexora" — création optionnelle du compte auth en même
-  // temps que la fiche employé. Si toggle ON, un second POST vers
-  // /api/admin/create-user-employee est enchaîné après la création réussie
-  // de l'employé.
+  // Section "Accès Lexora" — création optionnelle du compte auth en
+  // même temps que la fiche employé. Si toggle ON, un second POST vers
+  // /api/rh/employes/[id]/create-account est enchaîné après la création
+  // réussie de l'employé. La case s'auto-coche dès qu'un email est
+  // saisi (décision produit "auto-creation au create d'un employé :
+  // case cochée par défaut si email rempli"), sauf si l'admin a
+  // explicitement décoché — on respecte son choix une fois touché.
   const [createAccess, setCreateAccess] = useState(false)
+  const [createAccessTouched, setCreateAccessTouched] = useState(false)
   const [accessPwd, setAccessPwd] = useState(() => genPwd())
   const [pwdVisible, setPwdVisible] = useState(true)
+
+  // Auto-coche createAccess dès qu'un email est saisi (sauf si admin
+  // a explicitement touché le toggle).
+  useEffect(() => {
+    if (createAccessTouched) return
+    if (form.email && !createAccess) setCreateAccess(true)
+    if (!form.email && createAccess) setCreateAccess(false)
+  }, [form.email, createAccess, createAccessTouched])
 
   const validate = () => {
     const errs: Record<string, string> = {}
@@ -103,10 +115,11 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       const okMu = /^\+230\d{7,8}$/.test(cleaned) || /^\d{7,8}$/.test(cleaned)
       if (!okMu) errs.telephone = "Format invalide. Attendu : +230 XXXX XXXX ou XXXX XXXX"
     }
-    // Validation compte Lexora : si toggle ON → email + password ≥ 6 chars
+    // Validation compte Lexora : si toggle ON → email + password ≥ 8 chars
+    // (aligné avec /api/rh/employes/[id]/create-account côté serveur).
     if (createAccess) {
       if (!form.email) errs.email = errs.email || "Email requis pour créer un compte Lexora"
-      if (!accessPwd || accessPwd.length < 6) errs._access = "Mot de passe ≥ 6 caractères requis"
+      if (!accessPwd || accessPwd.length < 8) errs._access = "Mot de passe ≥ 8 caractères requis"
     }
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -162,16 +175,21 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       // peut recréer le compte plus tard via le bouton "Créer le compte Lexora".
       if (createAccess && employeId) {
         try {
-          const accessRes = await fetch("/api/admin/create-user-employee", {
+          // Endpoint qui crée le compte Auth + profile + lie
+          // employes.auth_user_id ET envoie l'email Gmail SMTP avec
+          // les credentials.
+          const accessRes = await fetch(`/api/rh/employes/${employeId}/create-account`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ employe_id: employeId, password: accessPwd }),
+            body: JSON.stringify({ password: accessPwd }),
           })
           const accessData = await accessRes.json().catch(() => ({}))
           if (!accessRes.ok || accessData.error) {
-            toast.warning(`Employé créé. ⚠️ Compte Lexora non créé : ${accessData.error || `HTTP ${accessRes.status}`}. Réessayez via le bouton "Créer le compte Lexora".`, { duration: 8000 })
+            toast.warning(`Employé créé. ⚠️ Compte Lexora non créé : ${accessData.error || `HTTP ${accessRes.status}`}. Réessayez via le bouton "Créer compte" sur la fiche employé.`, { duration: 8000 })
+          } else if (accessData.email_sent === false) {
+            toast.warning(`Employé créé + compte Lexora activé. ⚠️ Email NON envoyé : ${accessData.email_error || 'erreur SMTP'}. Communiquer le mot de passe manuellement à ${form.email}.`, { duration: 10000 })
           } else {
-            toast.success(`✅ Employé créé + compte Lexora activé (${form.email})`, { duration: 6000 })
+            toast.success(`✅ Employé créé + compte activé. Identifiants envoyés à ${form.email}`, { duration: 6000 })
           }
         } catch (e: any) {
           toast.warning(`Employé créé. ⚠️ Compte Lexora non créé : ${e?.message || 'erreur réseau'}. Réessayez plus tard.`, { duration: 8000 })
@@ -416,7 +434,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
               type="checkbox"
               className="mt-1 w-4 h-4 accent-purple-600 shrink-0"
               checked={createAccess}
-              onChange={e => setCreateAccess(e.target.checked)}
+              onChange={e => { setCreateAccessTouched(true); setCreateAccess(e.target.checked) }}
             />
             <div className="flex-1">
               <p className="text-sm font-medium text-[#0B0F2E]">
