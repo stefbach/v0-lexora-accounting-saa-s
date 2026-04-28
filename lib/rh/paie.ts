@@ -9,7 +9,7 @@
  * - CSG Employer    : 3% si base_csg_nsf ≤ 50K, 6% sinon (progressif)
  * - NSF Employee    : 1% plafonné à 28 600 MUR/mois (F9)
  * - NSF Employer    : 2.5% plafonné à 28 600 MUR/mois (F9)
- * - Training Levy   : 1% du salaire de base (HRDC)
+ * - Training Levy   : 1,5% du salaire de base (HRDC, effective 2021-07-01)
  * - PRGF            : max(4.5% emoluments, Rs 4.50/jour)
  * - PAYE            : cumul annuel sur × 13 → divisé par 13 (Math.floor) :
  *     * 0 → 500 000 MUR        : 0%
@@ -42,8 +42,8 @@ export const PARAMS_MRA_DEFAUT: ParametresPaieMRA = {
   csg_patronal_taux_reduit: 0.030,  // 3% employeur (si imposable <= 50K)
   nsf_salarie: 0.010,               // 1% NSF salarié (F9 Sprint bugs)
   nsf_patronal: 0.025,              // 2.5% NSF employeur
-  nsf_plafond_mensuel: 28600,       // Plafond insurable NSF (2025-2026)
-  training_levy: 0.010,             // 1% HRDC sur salaire de base
+  nsf_plafond_mensuel: 28570,       // Plafond insurable NSF (effective 2025-07-01)
+  training_levy: 0.015,             // 1.5% HRDC sur basic wage (effective 2021-07-01)
   prgf_patronal_par_jour: 4.50,     // PRGF par jour travaillé
   prgf_taux_emoluments: 0.045,      // 4.5% des emoluments totaux
   paye_seuil_exoneration: 500000,   // 0% jusqu'à 500K MUR/an (Budget 2025-2026)
@@ -203,7 +203,7 @@ export function calculerBulletin(
   const csg_bonus = eoy_bonus > 0 ? Math.round(eoy_bonus * csgTaux) : 0
 
   // F9 + F11 — NSF sur base_csg_nsf (basic salary), plafonné à
-  // nsf_plafond_mensuel (28 600 MUR en 2025-2026). Max mensuel = 286 MUR.
+  // nsf_plafond_mensuel (28 570 MUR effective 2025-07-01). Max mensuel = 285,70 MUR.
   const nsfPlafond = params.nsf_plafond_mensuel ?? Number.POSITIVE_INFINITY
   const nsf_base = Math.min(base_csg_nsf, nsfPlafond)
   const nsf_salarie = Math.round(nsf_base * params.nsf_salarie)
@@ -251,7 +251,8 @@ export function calculerBulletin(
   // F9 + F11 — NSF patronal même base (basic plafonné à nsf_plafond_mensuel).
   const nsf_patronal = Math.round(nsf_base * params.nsf_patronal)
 
-  // Training Levy (HRDC): 1% of basic salary only (not total emoluments)
+  // Training Levy (HRDC): 1.5% of basic salary only (effective 2021-07-01).
+  // Household workers have a 0% rate — handled at societe / employe level.
   const training_levy = Math.round(salaire_base * params.training_levy)
 
   // PRGF: higher of 4.5% of total emoluments OR Rs 4.50 per day worked

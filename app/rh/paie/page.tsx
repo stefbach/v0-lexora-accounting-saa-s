@@ -415,7 +415,7 @@ export default function PaiePage() {
     const csgRate = basic <= 50000 ? 0.015 : 0.03
     const csg = Math.round(basic * csgRate)
 
-    const NSF_PLAFOND = 28600
+    const NSF_PLAFOND = 28570
     const nsfBase = Math.min(basic, NSF_PLAFOND)
     const nsf = Math.round(nsfBase * 0.01)
 
@@ -434,7 +434,7 @@ export default function PaiePage() {
     const csgPRate = basic <= 50000 ? 0.03 : 0.06
     const csgP = Math.round(basic * csgPRate)
     const nsfP = Math.round(nsfBase * 0.025)
-    const tl = Math.round(basic * 0.01)
+    const tl = Math.round(basic * 0.015)
     const prgf = Math.round(4.5 * 26)
     const totalCharges = csgP + nsfP + tl + prgf
     setSimResult({

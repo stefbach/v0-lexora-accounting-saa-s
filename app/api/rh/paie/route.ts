@@ -511,8 +511,8 @@ export async function POST(request: Request) {
       csg_patronal_taux_reduit: Number(paramsDB.csg_patronal_taux_reduit ?? 0.030),
       nsf_salarie: Number(paramsDB.nsf_salarie),
       nsf_patronal: Number(paramsDB.nsf_patronal),
-      // F9 — Plafond insurable NSF (28 600 MUR en 2025-2026, mig 159).
-      nsf_plafond_mensuel: Number(paramsDB.nsf_plafond_mensuel ?? 28600),
+      // F9 — Plafond insurable NSF (28 570 MUR effective 2025-07-01, mig 212).
+      nsf_plafond_mensuel: Number(paramsDB.nsf_plafond_mensuel ?? 28570),
       training_levy: Number(paramsDB.training_levy),
       prgf_patronal_par_jour: Number(paramsDB.prgf_patronal_par_jour ?? 4.50),
       prgf_taux_emoluments: Number(paramsDB.prgf_taux_emoluments ?? 0.045),
