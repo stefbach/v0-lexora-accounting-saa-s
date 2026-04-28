@@ -138,7 +138,7 @@ export function mapToPacoContributionCode(
 /**
  * Convertit la période YYYY-MM en YYMM (Tax Period MRA).
  */
-function tauxPeriodMra(periode: string): string {
+export function tauxPeriodMra(periode: string): string {
   // periode = YYYY-MM
   const [yyyy, mm] = periode.split('-')
   return `${yyyy.slice(2)}${mm}`
@@ -147,7 +147,7 @@ function tauxPeriodMra(periode: string): string {
 /**
  * Dernier jour du mois → YYYYMMDD pour le filename paco<YYYYMMDD>.csv.
  */
-function lastDayYYYYMMDD(periode: string): string {
+export function lastDayYYYYMMDD(periode: string): string {
   const [yyyyStr, mmStr] = periode.split('-')
   const yyyy = parseInt(yyyyStr, 10)
   const mm = parseInt(mmStr, 10)
@@ -218,7 +218,7 @@ export function isFullTimeForPaco(emp: { contrat_type?: string | null; type_cont
  * CSV escape : guillemets seulement si la valeur contient virgule, "
  * ou retour à la ligne (RFC 4180 minimal).
  */
-function csvField(value: string | number | null | undefined): string {
+export function csvField(value: string | number | null | undefined): string {
   const s = value == null ? '' : String(value)
   if (s.includes(',') || s.includes('"') || s.includes('\n')) {
     return `"${s.replace(/"/g, '""')}"`
@@ -229,7 +229,7 @@ function csvField(value: string | number | null | undefined): string {
 /**
  * Tronque à n caractères max (PACO impose 80 chars sur Surname/Other Names/Name of Declarant).
  */
-function truncate(s: string | null | undefined, n: number): string {
+export function truncate(s: string | null | undefined, n: number): string {
   return (s || '').toString().slice(0, n)
 }
 

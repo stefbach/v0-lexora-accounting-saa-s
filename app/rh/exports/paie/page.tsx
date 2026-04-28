@@ -85,6 +85,7 @@ export default function ExportPaiePage() {
   const [csgStatus, setCsgStatus] = useState<ExportStatus>(initialStatus)
   const [payeStatus, setPayeStatus] = useState<ExportStatus>(initialStatus)
   const [pacoStatus, setPacoStatus] = useState<ExportStatus>(initialStatus)
+  const [prgfStatus, setPrgfStatus] = useState<ExportStatus>(initialStatus)
 
   // -- Alert/toast messages --
   const [alertMsg, setAlertMsg] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -431,6 +432,51 @@ export default function ExportPaiePage() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erreur PACO"
       setPacoStatus({ loading: false, done: false, error: msg, summary: null })
+      setAlertMsg({ type: "error", text: msg })
+    }
+  }
+
+  // PRGF Monthly Return — fichier séparé du PACO, à uploader sur le portail
+  // PRGF dédié (https://eservices14.mra.mu/prgfcontribution/login).
+  const exportPRGF = async () => {
+    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    setPrgfStatus({ loading: true, done: false, error: null, summary: null })
+    try {
+      const res = await fetch("/api/rh/exports/prgf-mra", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societe, periode }),
+      })
+      let data: any
+      const txt = await res.text()
+      try { data = JSON.parse(txt) } catch {
+        throw new Error(`Reponse non-JSON PRGF (${res.status}): ${txt.slice(0, 300)}`)
+      }
+      if (!res.ok || data.error) {
+        console.error('[exports/prgf-mra]', res.status, data?.error || data)
+        if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
+          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le PRGF.`)
+        }
+        throw new Error(data.error || `Erreur ${res.status} lors de la génération PRGF.`)
+      }
+
+      if (data.csv) downloadFile(data.csv, data.filename || `prgf_${periode}.csv`)
+
+      setPrgfStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
+      const warningCount = Array.isArray(data.warnings) ? data.warnings.length : 0
+      const ecartCount = data.ecart_potentiel?.employes?.length || 0
+      let msg = `PRGF MRA généré (${data.totaux?.employes_inclus || '?'} employés).`
+      if (ecartCount > 0) {
+        console.warn('[exports/prgf-mra] écart potentiel:', data.ecart_potentiel)
+        msg += ` ${ecartCount} sur-déclaration(s) potentielle(s) — voir console.`
+      }
+      if (warningCount > 0) {
+        console.warn('[exports/prgf-mra] warnings:', data.warnings)
+      }
+      setAlertMsg({ type: "success", text: msg })
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erreur PRGF"
+      setPrgfStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
   }
@@ -832,12 +878,67 @@ export default function ExportPaiePage() {
             </CardContent>
           </Card>
 
+          {/* PRGF Monthly Return — fichier officiel séparé du PACO */}
+          <Card className="rounded-2xl shadow-sm border-l-4" style={{ borderLeftColor: NAVY }}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
+                <Building2 className="w-4 h-4" />
+                PRGF Monthly Return — fichier officiel à uploader
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-700">
+                Génère le fichier <code>prgf&lt;YYYYMMDD&gt;.csv</code> au format MRA pour upload sur le portail PRGF (séparé du PACO). URL portail : <code>https://eservices14.mra.mu/prgfcontribution</code>.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button
+                  onClick={exportPRGF}
+                  disabled={prgfStatus.loading || !societe || bulletins.length === 0}
+                  className="text-white rounded-xl"
+                  style={{ backgroundColor: NAVY }}
+                >
+                  {prgfStatus.loading
+                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    : <Download className="h-4 w-4 mr-2" />
+                  }
+                  Télécharger PRGF MRA (.csv)
+                </Button>
+                <StatusBadge status={prgfStatus} />
+              </div>
+              {prgfStatus.summary && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
+                  <div>
+                    <span className="text-gray-500 block text-xs">Employés inclus</span>
+                    <strong>{prgfStatus.summary.employes_inclus || 0}</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">Total Basic</span>
+                    <strong>{fmt(prgfStatus.summary.total_basic || 0)} MUR</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">Total Allowances</span>
+                    <strong>{fmt(prgfStatus.summary.total_allowances || 0)} MUR</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">Total PRGF</span>
+                    <strong>{fmt(prgfStatus.summary.total_prgf || 0)} MUR</strong>
+                  </div>
+                  {Array.isArray(prgfStatus.summary.employes_exclus) && prgfStatus.summary.employes_exclus.length > 0 && (
+                    <div className="col-span-2 md:col-span-4 text-xs text-gray-500">
+                      Exclus : {prgfStatus.summary.employes_exclus.length} (voir console pour détail)
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Note legacy : les 2 cards CSG/NSF + PAYE ci-dessous restent pour
               les rapports internes (audit, vérification visuelle). Elles ne
               correspondent PAS au format MRA officiel et ne doivent PAS être
-              uploadées sur le portail. Utiliser la card PACO ci-dessus. */}
+              uploadées sur le portail. Utiliser PACO + PRGF ci-dessus. */}
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            ℹ️ Les 2 exports ci-dessous (CSG/NSF + PAYE) sont des <strong>rapports internes</strong> au format Lexora — utiles pour audit/contrôle visuel. Ils ne sont <strong>plus uploadés au MRA</strong>. Utilisez le PACO ci-dessus.
+            ℹ️ Les 2 exports ci-dessous (CSG/NSF + PAYE) sont des <strong>rapports internes</strong> au format Lexora — utiles pour audit/contrôle visuel. Ils ne sont <strong>plus uploadés au MRA</strong>. Utilisez PACO + PRGF ci-dessus.
           </div>
 
           {/* CSG / NSF Card */}
