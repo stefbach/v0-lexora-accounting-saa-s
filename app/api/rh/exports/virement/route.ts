@@ -322,8 +322,18 @@ export async function POST(request: Request) {
       })
     }
 
-    // Employés sans compte renseigné
-    const sansBanque = lignes.filter(l => !l.bank_account || !l.bank_code)
+    // Employés sans coordonnées bancaires — VRAIS cas d'erreur saisie.
+    // Bug compteur (post-fix BP-V1) : l'ancien filtre `!l.bank_account ||
+    // !l.bank_code` testait `bank_code` (NULL pour la majorité des
+    // employés OCC) avec un OR, ce qui classait des employés correctement
+    // saisis (bank_name + bank_account renseignés) en "sans coordonnées".
+    // Sémantique correcte : sans coordonnées SI ET SEULEMENT SI les 2
+    // colonnes utiles (bank_name + bank_account) sont vides simultanément.
+    const sansBanque = lignes.filter(l => {
+      const noBank = !l.bank_name || l.bank_name.trim() === ''
+      const noAccount = !l.bank_account || l.bank_account.trim() === ''
+      return noBank && noAccount
+    })
     if (sansBanque.length > 0) {
       fichiersGeneres.push({
         banque: 'SANS_BANQUE',
@@ -345,7 +355,16 @@ export async function POST(request: Request) {
       nb_bulletins_total: allBulletins.length,
       montant_total_mur: lignesMUR.reduce((s, l) => s + l.salaire_net, 0),
       montant_total_eur: lignesEUR.reduce((s, l) => s + l.salaire_net, 0),
-      nb_banques: fichiersGeneres.filter(f => f.banque !== 'SANS_BANQUE').length,
+      // Bug compteur — Avant : `fichiersGeneres.filter(f => f.banque !==
+      // 'SANS_BANQUE').length` retournait 1 en mode BP-V1 (1 seul fichier
+      // consolidé) même si les employés sont répartis sur N banques.
+      // Maintenant : nb de banques distinctes parmi les bulletins, basé
+      // sur `bank_name` (case-insensitive trim, ignore les vides).
+      nb_banques: new Set(
+        lignes
+          .map(l => (l.bank_name || '').trim().toLowerCase())
+          .filter(b => b.length > 0)
+      ).size,
       nb_employes_sans_banque: sansBanque.length,
       fichiers: fichiersGeneres.map(f => ({
         banque: f.banque,
