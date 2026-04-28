@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { MraDeadlineAlert } from "@/components/rh/MraDeadlineAlert"
+import * as XLSX from "xlsx"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -266,25 +267,85 @@ export default function ExportPaiePage() {
     setCsvExportStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const empMap = new Map(employes.map(e => [e.id, e]))
-      const lines = ["Nom;Prenom;Banque;Compte;Net a payer;Statut"]
-      for (const b of bulletins) {
-        const emp = empMap.get(b.employe_id)
-        lines.push([
+
+      // Tri : banque alpha (cash → 'zzz' à la fin), puis nom
+      const sortedBulletins = [...bulletins].sort((a, b) => {
+        const empA = empMap.get(a.employe_id)
+        const empB = empMap.get(b.employe_id)
+        const bankA = (empA?.bank_name || "zzz").toLowerCase()
+        const bankB = (empB?.bank_name || "zzz").toLowerCase()
+        if (bankA !== bankB) return bankA.localeCompare(bankB)
+        return (empA?.nom || "").localeCompare(empB?.nom || "")
+      })
+
+      const modeLabel = (m?: string) => {
+        const v = String(m ?? "bulk").trim().toLowerCase()
+        if (v === "especes") return "Espèces"
+        if (v === "individuel") return "Individuel"
+        return "Bulk MCB"
+      }
+
+      const headers = ["Code employé", "Nom", "Prénom", "Banque", "N° compte", "Mode paiement", "Net (MUR)"]
+      const dataRows = sortedBulletins.map(b => {
+        const emp = empMap.get(b.employe_id) as (Employe & { code?: string; mode_paiement?: string }) | undefined
+        const hasBank = !!(emp?.bank_name)
+        return [
+          emp?.code || "",
           emp?.nom || "",
           emp?.prenom || "",
-          emp?.bank_name || "",
-          emp?.bank_account || "",
-          b.salaire_net.toFixed(2),
-          b.statut,
-        ].join(";"))
+          hasBank ? emp.bank_name : "—",
+          hasBank ? (emp.bank_account || "—") : "—",
+          modeLabel(emp?.mode_paiement),
+          Number(b.salaire_net) || 0,
+        ]
+      })
+
+      const total = sortedBulletins.reduce((s, b) => s + (Number(b.salaire_net) || 0), 0)
+      const totalRow: (string | number)[] = ["TOTAL", "", "", "", "", "", total]
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows, totalRow])
+
+      // Largeur colonnes (caractères)
+      ws["!cols"] = [
+        { wch: 14 }, // Code employé
+        { wch: 22 }, // Nom
+        { wch: 18 }, // Prénom
+        { wch: 14 }, // Banque
+        { wch: 18 }, // N° compte
+        { wch: 14 }, // Mode paiement
+        { wch: 14 }, // Net (MUR)
+      ]
+
+      // Format nombre + bold sur header & ligne TOTAL.
+      // Note : `cell.s` est best-effort en SheetJS community version.
+      // Excel récent affiche le bold ; LibreOffice/anciens viewers
+      // peuvent l'ignorer. Le format `z` (number) est universellement
+      // supporté.
+      const range = XLSX.utils.decode_range(ws["!ref"] || "A1")
+      for (let row = range.s.r; row <= range.e.r; row++) {
+        const netCell = ws[XLSX.utils.encode_cell({ r: row, c: 6 })]
+        if (netCell && row > 0) {
+          netCell.t = "n"
+          netCell.z = "#,##0.00"
+        }
       }
-      const csv = lines.join("\n")
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const headerCell = ws[XLSX.utils.encode_cell({ r: 0, c: col })]
+        if (headerCell) headerCell.s = { font: { bold: true } }
+        const totalCell = ws[XLSX.utils.encode_cell({ r: range.e.r, c: col })]
+        if (totalCell) totalCell.s = { font: { bold: true } }
+      }
+
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, "Virements")
+
       const socName = societes.find(s => s.id === societe)?.nom?.replace(/\s+/g, "_") || "export"
-      downloadFile(csv, `virements_salaires_${socName}_${periode}.csv`)
+      XLSX.writeFile(wb, `virements_salaires_${socName}_${periode}.xlsx`)
+
       setCsvExportStatus({ loading: false, done: true, error: null, summary: null })
-      setAlertMsg({ type: "success", text: "CSV telecharge." })
+      setAlertMsg({ type: "success", text: "Excel téléchargé." })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur CSV"
+      const msg = e instanceof Error ? e.message : "Erreur Excel"
       setCsvExportStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -526,7 +587,7 @@ export default function ExportPaiePage() {
                 ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 : <Download className="h-4 w-4 mr-2" />
               }
-              Exporter CSV
+              Exporter Excel
             </Button>
 
             <div className="flex items-center gap-2 ml-2">
