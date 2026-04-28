@@ -162,10 +162,25 @@ export async function POST(request: Request) {
       prgf: Number(b.prgf) || 0,
     }))
 
+    // Patch PRGF — charger parametres_paie_mra (mig 212 : prgf_taux_emoluments)
+    // pour recalculer col 11 PRGF Amount à la volée depuis col 10 (Total),
+    // évite la sur-déclaration quand bulletin.prgf a été calculé sur le
+    // salaire_brut (incluant electricity allowance) au lieu du basic.
+    const { data: paramsRow } = await supabase
+      .from('parametres_paie_mra')
+      .select('prgf_taux_emoluments')
+      .order('annee', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const params = paramsRow ? {
+      prgf_taux_emoluments: Number(paramsRow.prgf_taux_emoluments ?? 0.045),
+    } : undefined
+
     // ── Génération ────────────────────────────────────────────
     let result
     try {
-      result = genererPrgfMra({ societe, employes, bulletins, periode })
+      result = genererPrgfMra({ societe, employes, bulletins, periode, params })
     } catch (e: any) {
       return NextResponse.json({
         error: e?.message || 'Erreur génération PRGF',

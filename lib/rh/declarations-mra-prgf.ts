@@ -90,6 +90,17 @@ export interface PrgfGenerationOptions {
   employes: PrgfEmploye[]
   bulletins: PrgfBulletin[]
   periode: string                      // YYYY-MM
+  /**
+   * Paramètres MRA depuis parametres_paie_mra (mig 212).
+   * Si fourni, on RECALCULE col 11 PRGF Amount à la volée à partir de
+   * col 10 Total (basic + allowances + commission), au lieu de lire la
+   * valeur stockée dans bulletin.prgf qui peut être calculée sur une
+   * mauvaise base (ex: salaire_brut incluant electricity allowance).
+   * Si non fourni, fallback sur bulletin.prgf (legacy comportement).
+   */
+  params?: {
+    prgf_taux_emoluments?: number      // 0.045 par défaut si null
+  }
 }
 
 export interface PrgfGenerationResult {
@@ -236,12 +247,23 @@ export function genererPrgfMra(opts: PrgfGenerationOptions): PrgfGenerationResul
     const commission = 0
     const total = basic + allowances + commission
 
-    // PRGF stocké tel quel (V1). Note d'écart potentiel si > 4.5% × basic
-    // (cas où l'electricity allowance a été inclus à tort dans la base).
-    const prgfStored = Math.round(Number(bulletin.prgf) || 0)
-    const prgfAttendu = Math.round(basicRaw * 0.045)
-    if (prgfStored > prgfAttendu) {
-      bulletinsAvecEcart.push(empLabel)
+    // Col 11 — PRGF Amount.
+    // Si params fourni : on RECALCULE depuis col 10 (Total) avec le taux
+    // courant prgf_taux_emoluments (mig 212 : 4.5%). Évite la
+    // sur-déclaration quand bulletin.prgf a été calculé à tort sur le
+    // salaire_brut (incluant electricity allowance) au lieu du basic.
+    // Sinon : fallback sur la valeur stockée + détection d'écart pour
+    // signaler que le recalcul serait pertinent.
+    let prgfAmount: number
+    if (opts.params) {
+      const rate = opts.params.prgf_taux_emoluments ?? 0.045
+      prgfAmount = Math.round(total * rate)
+    } else {
+      prgfAmount = Math.round(Number(bulletin.prgf) || 0)
+      const prgfAttendu = Math.round(basicRaw * 0.045)
+      if (prgfAmount > prgfAttendu) {
+        bulletinsAvecEcart.push(empLabel)
+      }
     }
 
     // Col 12 — Reason no remuneration
@@ -262,14 +284,14 @@ export function genererPrgfMra(opts: PrgfGenerationOptions): PrgfGenerationResul
       csvField(allowances),
       csvField(commission),
       csvField(total),
-      csvField(prgfStored),
+      csvField(prgfAmount),
       csvField(reasonNoRem),
     ].join(','))
 
     employesInclus++
     totalBasic += basic
     totalAllowances += allowances
-    totalPrgf += prgfStored
+    totalPrgf += prgfAmount
   }
 
   if (employesInclus === 0) {
