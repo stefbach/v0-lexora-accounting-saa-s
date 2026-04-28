@@ -49,7 +49,8 @@ export interface PacoEmploye {
   prenom: string                       // Other Names
   nic_number?: string | null
   contribution_code?: string | null    // Lexora interne ('S2', 'S2_STANDARD'...)
-  contrat_type?: string | null         // fulltime / parttime / contract / casual / intern
+  contrat_type?: string | null         // canonical Lexora (mig 047 CHECK)
+  type_contrat?: string | null         // legacy / variant Lexora ('CDI', 'CDD'…)
   exclure_mra?: boolean | null
 }
 
@@ -76,6 +77,23 @@ export interface PacoGenerationOptions {
   employes: PacoEmploye[]              // tous les employés actifs de la société
   bulletins: PacoBulletin[]            // bulletins de la période demandée
   periode: string                      // YYYY-MM (ex: 2026-04)
+  /**
+   * Paramètres MRA depuis parametres_paie_mra (mig 212).
+   * Utilisés pour RECALCULER CSG/NSF à la volée à l'export plutôt que de
+   * lire les valeurs des bulletins (qui peuvent dater d'avant la mise à
+   * jour des taux/plafonds — bug NSF 28600 vs 28570 sur OCC avril 2026).
+   * Si non fourni, on lit les bulletins (legacy comportement).
+   */
+  params?: {
+    csg_seuil_taux_reduit: number       // 50000
+    csg_salarie_taux_reduit: number     // 0.015
+    csg_salarie_taux_plein: number      // 0.030
+    csg_patronal: number                // 0.060
+    csg_patronal_taux_reduit?: number   // 0.030 (default si null)
+    nsf_salarie: number                 // 0.010
+    nsf_patronal: number                // 0.025
+    nsf_plafond_mensuel: number         // 28570
+  }
 }
 
 export interface PacoGenerationResult {
@@ -169,6 +187,31 @@ export function parseMauritiusTelephone(raw: string | null | undefined): string 
   if (phone.length !== 7) return ''
   if (phone.startsWith('5')) return ''  // Un mobile 8 chiffres tronqué — on ne prend pas
   return phone
+}
+
+/**
+ * Détermine la valeur PACO col 14 (Full Time Employment Y/N).
+ * Lexora stocke des valeurs hétérogènes selon la société :
+ *   - canonical (mig 047) : fulltime / parttime / contract / casual / intern
+ *   - legacy (DDS/OCC)    : CDI / CDD / INTERIM / TEMPS_PARTIEL / …
+ *
+ * Default = 'Y' (full time). Seul un signal explicite "temps partiel"
+ * (parttime, part_time, temps_partiel, half_time, contient "partiel"…)
+ * produit 'N'. Tous les autres CDI/CDD/contract/intern/etc. = Y.
+ */
+export function isFullTimeForPaco(emp: { contrat_type?: string | null; type_contrat?: string | null }): 'Y' | 'N' {
+  const raw = (emp.contrat_type || emp.type_contrat || '').toString().trim().toLowerCase()
+  if (!raw) return 'Y'
+  // Normaliser : tirets/underscores/espaces homogènes
+  const norm = raw.replace(/[-\s]+/g, '_')
+  if (
+    norm === 'parttime' || norm === 'part_time' || norm === 'temps_partiel'
+    || norm === 'half_time' || norm === 'mi_temps'
+    || norm.includes('partiel') || norm.includes('part_time')
+  ) {
+    return 'N'
+  }
+  return 'Y'
 }
 
 /**
@@ -296,16 +339,40 @@ export function genererPacoMra(opts: PacoGenerationOptions): PacoGenerationResul
     // Col 9 — Frequency (1 pour M)
     const frequency = '1'
 
-    // Col 10 — CSG total (salarié + patronal, entier)
-    const csgTotal = Math.round(
-      (Number(bulletin.csg_salarie) || 0)
-      + (Number(bulletin.csg_patronal) || 0),
-    )
-    // Col 11 — NSF total (salarié + patronal, entier)
-    const nsfTotal = Math.round(
-      (Number(bulletin.nsf_salarie) || 0)
-      + (Number(bulletin.nsf_patronal) || 0),
-    )
+    // Col 10 / Col 11 — CSG et NSF totaux.
+    // Bug PACO #B — On RECALCULE CSG/NSF à la volée à partir de
+    // base_csg_nsf et des paramètres MRA courants (params), au lieu de
+    // lire bulletin.csg_salarie + csg_patronal qui peuvent avoir été
+    // calculés AVANT la mise à jour des taux/plafonds (mig 212 :
+    // NSF 28600→28570). Évite de devoir recalculer toute la paie pour
+    // que le PACO soit aligné aux nouveaux barèmes.
+    //
+    // Si params absent (legacy fallback), on lit le bulletin tel quel.
+    let csgTotal: number
+    let nsfTotal: number
+    if (opts.params) {
+      const baseCsg = Math.max(0, wageBillRaw) // = base_csg_nsf ou fallback salaire_base-absence
+      const baseNsf = Math.min(baseCsg, opts.params.nsf_plafond_mensuel)
+      // Palier CSG : > 50 000 = taux plein, sinon réduit
+      const isReduit = baseCsg <= opts.params.csg_seuil_taux_reduit
+      const csgSalarieRate = isReduit
+        ? opts.params.csg_salarie_taux_reduit
+        : opts.params.csg_salarie_taux_plein
+      const csgPatronalRate = isReduit
+        ? (opts.params.csg_patronal_taux_reduit ?? 0.030)
+        : opts.params.csg_patronal
+      csgTotal = Math.round(baseCsg * (csgSalarieRate + csgPatronalRate))
+      nsfTotal = Math.round(baseNsf * (opts.params.nsf_salarie + opts.params.nsf_patronal))
+    } else {
+      csgTotal = Math.round(
+        (Number(bulletin.csg_salarie) || 0)
+        + (Number(bulletin.csg_patronal) || 0),
+      )
+      nsfTotal = Math.round(
+        (Number(bulletin.nsf_salarie) || 0)
+        + (Number(bulletin.nsf_patronal) || 0),
+      )
+    }
 
     // Col 12 — LEVY Applicable Y/N (Y pour Standard, N pour Exempt etc.)
     const levyApplicable = contributionCode === 'S' ? 'Y' : 'N'
@@ -314,8 +381,12 @@ export function genererPacoMra(opts: PacoGenerationOptions): PacoGenerationResul
     const emoluments = Math.round(Number(bulletin.salaire_brut) || 0)
     const emolumentsAdjusted = Math.max(emoluments, totalWageBillEmp)
 
-    // Col 14 — Full Time Y/N
-    const fullTime = (emp.contrat_type === 'fulltime' || !emp.contrat_type) ? 'Y' : 'N'
+    // Col 14 — Full Time Y/N.
+    // Bug PACO #A — Lexora stocke contrat_type/type_contrat avec des
+    // valeurs hétérogènes (CDI, CDD, fulltime, contract, casual,
+    // intern, parttime, TEMPS_PARTIEL, …). Default = 'Y' (full time).
+    // Seul un signal explicite "temps partiel" → 'N'.
+    const fullTime = isFullTimeForPaco(emp)
 
     // Col 15 — PAYE for Income Tax (entier)
     const paye = Math.round(Number(bulletin.paye) || 0)

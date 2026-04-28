@@ -148,8 +148,31 @@ export async function POST(request: Request) {
       nic_number: e.nic_number ?? null,
       contribution_code: e.contribution_code ?? null,
       contrat_type: e.contrat_type ?? null,
+      type_contrat: e.type_contrat ?? null,
       exclure_mra: e.exclure_mra ?? false,
     }))
+
+    // Bug PACO #B — Charger parametres_paie_mra (mig 212 : NSF 28570,
+    // Training 1.5%, etc.). Le générateur recalcule CSG/NSF à la volée
+    // avec ces taux/plafonds, plutôt que de lire les valeurs des
+    // bulletins (qui peuvent dater d'avant la mise à jour des taux).
+    const { data: paramsRow } = await supabase
+      .from('parametres_paie_mra')
+      .select('*')
+      .order('annee', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const params = paramsRow ? {
+      csg_seuil_taux_reduit: Number(paramsRow.csg_seuil_taux_reduit) || 50000,
+      csg_salarie_taux_reduit: Number(paramsRow.csg_salarie_taux_reduit) || 0.015,
+      csg_salarie_taux_plein: Number(paramsRow.csg_salarie_taux_plein) || 0.030,
+      csg_patronal: Number(paramsRow.csg_patronal) || 0.060,
+      csg_patronal_taux_reduit: Number(paramsRow.csg_patronal_taux_reduit ?? 0.030),
+      nsf_salarie: Number(paramsRow.nsf_salarie) || 0.010,
+      nsf_patronal: Number(paramsRow.nsf_patronal) || 0.025,
+      nsf_plafond_mensuel: Number(paramsRow.nsf_plafond_mensuel) || 28570,
+    } : undefined
 
     const bulletins: PacoBulletin[] = bulletinsRows.map((b: any) => ({
       employe_id: b.employe_id,
@@ -171,7 +194,7 @@ export async function POST(request: Request) {
     // ── Génération ────────────────────────────────────────────
     let result
     try {
-      result = genererPacoMra({ societe, employes, bulletins, periode })
+      result = genererPacoMra({ societe, employes, bulletins, periode, params })
     } catch (e: any) {
       return NextResponse.json({
         error: e?.message || 'Erreur génération PACO',
