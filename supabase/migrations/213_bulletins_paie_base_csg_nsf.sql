@@ -33,23 +33,34 @@
 --   PACO col 4  Wage Bill  = 41 805
 --   PACO col 13 Emoluments = 47 005
 --
--- BACKFILL
--- ────────
--- Pas de backfill automatique : les allowances non-cotisables ne sont pas
--- discriminables à 100 % au niveau SQL (special_allowance_* peut être
--- cotisable ou non selon la nature). Les bulletins existants ont
--- base_csg_nsf = NULL et seront recalculés via le bouton "Recalculer
--- cette période" (lib/rh/paie.ts) au prochain run.
+-- BACKFILL CONSERVATEUR
+-- ─────────────────────
+-- Les bulletins SANS special_allowance_* (cas le plus fréquent, ~90% des
+-- cas OCC mars-avril 2026) sont remplis avec :
+--   base_csg_nsf = salaire_base - montant_absence
 --
--- Côté générateur PACO : si base_csg_nsf IS NULL, fallback = salaire_base
--- avec un warning explicite dans la réponse API (l'utilisateur doit
--- recalculer la paie avant de générer un PACO de production).
+-- Les bulletins AVEC une special_allowance non-nulle restent à NULL : la
+-- nature (cotisable/non-cotisable) varie selon l'allowance et n'est pas
+-- discriminable au niveau SQL. Ces bulletins doivent être recalculés via
+-- le bouton "Recalculer cette période" (livrable séparé).
+--
+-- Côté générateur PACO : si base_csg_nsf IS NULL, fallback =
+-- salaire_base - montant_absence avec warning dans la réponse API listant
+-- les bulletins concernés.
 
 ALTER TABLE public.bulletins_paie
   ADD COLUMN IF NOT EXISTS base_csg_nsf NUMERIC(12,2);
 
 COMMENT ON COLUMN public.bulletins_paie.base_csg_nsf IS
-  'Base de calcul CSG/NSF (Wage Bill MRA col 4 PACO). = salaire_base - absences - allowances non-cotisables. Persistée par le moteur paie. NULL = bulletin pas encore recalculé après mig 213.';
+  'Base de calcul CSG/NSF (Wage Bill MRA col 4 PACO). = salaire_base - absences - allowances non-cotisables. Persistée par le moteur paie. NULL = bulletin avec special_allowance ambigu, à recalculer manuellement.';
+
+-- Backfill conservateur : seulement les bulletins sans special_allowance_*.
+UPDATE public.bulletins_paie
+SET base_csg_nsf = COALESCE(salaire_base, 0) - COALESCE(montant_absence, 0)
+WHERE base_csg_nsf IS NULL
+  AND COALESCE(special_allowance_1, 0) = 0
+  AND COALESCE(special_allowance_2, 0) = 0
+  AND COALESCE(special_allowance_3, 0) = 0;
 
 CREATE INDEX IF NOT EXISTS idx_bulletins_paie_base_csg_nsf
   ON public.bulletins_paie(societe_id, periode)
