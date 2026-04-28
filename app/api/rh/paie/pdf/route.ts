@@ -179,9 +179,55 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
     return `${dp.slice(8, 10)}/${dp.slice(5, 7)}/${dp.slice(0, 4)}`
   })()
 
+  // Jours AL/SL pris pendant la période bulletin courante (cycle paie).
+  // Distinct des `alPris`/`slPris` cumulés cycle anniversaire affichés
+  // en sublabel cumulé. Cas demande entièrement dans la période → trust
+  // nb_jours saisi (peut exclure WE/fériés selon UI saisie). Cas
+  // chevauchement partiel (rare) → fallback intersection jours civils.
+  const periodeBulletinDebut = periodePaie.periode_debut
+  const periodeBulletinFin = periodePaie.periode_fin
+  const { data: congesPeriode } = await supabase
+    .from('demandes_conges')
+    .select('type_conge, date_debut, date_fin, nb_jours')
+    .eq('employe_id', bulletin.employe_id)
+    .eq('statut', 'approuve')
+    .lte('date_debut', periodeBulletinFin)
+    .gte('date_fin', periodeBulletinDebut)
+
+  const joursDansPeriode = (c: { date_debut: string; date_fin: string; nb_jours: number | string | null }): number => {
+    const dDebut = String(c.date_debut ?? '').slice(0, 10)
+    const dFin = String(c.date_fin ?? '').slice(0, 10)
+    if (!dDebut || !dFin) return 0
+    if (dDebut >= periodeBulletinDebut && dFin <= periodeBulletinFin) {
+      return Number(c.nb_jours) || 0
+    }
+    const start = dDebut > periodeBulletinDebut ? dDebut : periodeBulletinDebut
+    const end = dFin < periodeBulletinFin ? dFin : periodeBulletinFin
+    if (start > end) return 0
+    const ms = new Date(end + 'T12:00:00').getTime() - new Date(start + 'T12:00:00').getTime()
+    return Math.round(ms / (1000 * 60 * 60 * 24)) + 1
+  }
+
+  let alJoursMois = 0
+  let slJoursMois = 0
+  for (const c of (congesPeriode ?? []) as Array<{
+    type_conge: string
+    date_debut: string
+    date_fin: string
+    nb_jours: number | string | null
+  }>) {
+    const tc = String(c.type_conge || '').trim().toUpperCase()
+    const n = joursDansPeriode(c)
+    if (tc === 'AL') alJoursMois += n
+    else if (tc === 'SL') slJoursMois += n
+  }
+  alJoursMois = Math.round(alJoursMois * 100) / 100
+  slJoursMois = Math.round(slJoursMois * 100) / 100
+
   return {
     emp, soc, moisLabel, annee, periodeDate,
     alPris, slPris, alDroit, slDroit, alSolde, slSolde,
+    alJoursMois, slJoursMois,
     vlDroit, vlPris, fmlUtilisesTotal, primesMois: primesMois || [], totalFraisKm,
     anciennete, periodePaie, periodePaieLabel, datePaiementLabel,
   }
@@ -391,7 +437,7 @@ function BulletinEoyPDF({ bulletin, emp, soc }: any) {
   )
 }
 
-function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, alSolde, slSolde, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete, periodePaieLabel, datePaiementLabel }: any) {
+function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris, slPris, alDroit, slDroit, alSolde, slSolde, alJoursMois, slJoursMois, vlDroit, vlPris, fmlUtilisesTotal, primesMois, totalFraisKm, anciennete, periodePaieLabel, datePaiementLabel }: any) {
   const csgPct = Number(bulletin.salaire_brut) > 50000 ? '3%' : '1.5%'
   const hasOT = Number(bulletin.heures_sup_montant) > 0
 
@@ -658,12 +704,14 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
           React.createElement(View, { style: s.leaveCard },
             React.createElement(Text, { style: s.leaveCardLabel }, 'Local Leave (AL)'),
             React.createElement(Text, { style: [s.leaveCardValue, { color: '#059669' }] }, `${alSolde}j`),
-            React.createElement(Text, { style: s.leaveCardSub }, `restants / ${alDroit}j (${alPris}j pris)`)
+            React.createElement(Text, { style: s.leaveCardSub }, `restants / ${alDroit}j`),
+            React.createElement(Text, { style: s.leaveCardSub }, `${Number(alJoursMois) || 0}j pris ce mois · ${alPris}j cumulé`)
           ),
           React.createElement(View, { style: s.leaveCard },
             React.createElement(Text, { style: s.leaveCardLabel }, 'Sick Leave (SL)'),
             React.createElement(Text, { style: [s.leaveCardValue, { color: '#ea580c' }] }, `${slSolde}j`),
-            React.createElement(Text, { style: s.leaveCardSub }, `restants / ${slDroit}j (${slPris}j pris)`)
+            React.createElement(Text, { style: s.leaveCardSub }, `restants / ${slDroit}j`),
+            React.createElement(Text, { style: s.leaveCardSub }, `${Number(slJoursMois) || 0}j pris ce mois · ${slPris}j cumulé`)
           ),
           (Number(vlDroit) > 0 || Number(vlPris) > 0)
             ? React.createElement(View, { style: s.leaveCard, key: 'vl' },
