@@ -305,7 +305,27 @@ export async function GET(request: Request) {
         .lte('periode_debut', today)
         .gte('periode_fin', today)
 
-      const soldesByEmp = new Map<string, any>((soldesData || []).map((s: any) => [s.employe_id, s]))
+      // Bug VL — un employé peut avoir 2 rows qui chevauchent today
+      // (cycle anniversaire ex. 2025-10→2026-10 + ligne calendaire
+      // 2026-01→2026-12). On priorise la ligne porteuse de droits
+      // (vl_droit/al_droit/sl_droit > 0) puis la periode_debut la plus
+      // récente, et on ne garde que la première par employe_id.
+      const sortedSoldes = [...(soldesData || [])].sort((a: any, b: any) => {
+        const aHasDroits =
+          (Number(a.vl_droit) || 0) > 0
+          || (Number(a.al_droit) || 0) > 0
+          || (Number(a.sl_droit) || 0) > 0
+        const bHasDroits =
+          (Number(b.vl_droit) || 0) > 0
+          || (Number(b.al_droit) || 0) > 0
+          || (Number(b.sl_droit) || 0) > 0
+        if (aHasDroits !== bHasDroits) return aHasDroits ? -1 : 1
+        return (b.periode_debut || '').localeCompare(a.periode_debut || '')
+      })
+      const soldesByEmp = new Map<string, any>()
+      for (const s of sortedSoldes) {
+        if (!soldesByEmp.has(s.employe_id)) soldesByEmp.set(s.employe_id, s)
+      }
 
       // 2. Employés sans row pour la période courante → recompute pour créer
       //    la row avec droits accrus (mig 157) + pris depuis demandes_conges.
@@ -320,7 +340,21 @@ export async function GET(request: Request) {
           .in('employe_id', missing)
           .lte('periode_debut', today)
           .gte('periode_fin', today)
-        for (const s of newSoldes || []) soldesByEmp.set(s.employe_id, s)
+        const sortedNew = [...(newSoldes || [])].sort((a: any, b: any) => {
+          const aHasDroits =
+            (Number(a.vl_droit) || 0) > 0
+            || (Number(a.al_droit) || 0) > 0
+            || (Number(a.sl_droit) || 0) > 0
+          const bHasDroits =
+            (Number(b.vl_droit) || 0) > 0
+            || (Number(b.al_droit) || 0) > 0
+            || (Number(b.sl_droit) || 0) > 0
+          if (aHasDroits !== bHasDroits) return aHasDroits ? -1 : 1
+          return (b.periode_debut || '').localeCompare(a.periode_debut || '')
+        })
+        for (const s of sortedNew) {
+          if (!soldesByEmp.has(s.employe_id)) soldesByEmp.set(s.employe_id, s)
+        }
       }
 
       // 3. Lire les SL approuvés de l'année civile (pour sick_cert_alert
