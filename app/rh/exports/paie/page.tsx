@@ -84,6 +84,7 @@ export default function ExportPaiePage() {
   const [csvExportStatus, setCsvExportStatus] = useState<ExportStatus>(initialStatus)
   const [csgStatus, setCsgStatus] = useState<ExportStatus>(initialStatus)
   const [payeStatus, setPayeStatus] = useState<ExportStatus>(initialStatus)
+  const [pacoStatus, setPacoStatus] = useState<ExportStatus>(initialStatus)
 
   // -- Alert/toast messages --
   const [alertMsg, setAlertMsg] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -387,6 +388,49 @@ export default function ExportPaiePage() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Erreur CSG/NSF"
       setCsgStatus({ loading: false, done: false, error: msg, summary: null })
+      setAlertMsg({ type: "error", text: msg })
+    }
+  }
+
+  // Mig 210-213 — nouveau format MRA officiel (PACO Joint Statement Dec 2024).
+  // Remplace l'upload manuel des 4 CSV legacy. Génère un fichier unique
+  // paco<YYYYMMDD>.csv conforme au format attendu par le portail MRA e-Services.
+  const exportPACO = async () => {
+    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    setPacoStatus({ loading: true, done: false, error: null, summary: null })
+    try {
+      const res = await fetch("/api/rh/exports/paco-mra", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societe, periode }),
+      })
+      let data: any
+      const textPaco = await res.text()
+      try { data = JSON.parse(textPaco) } catch {
+        throw new Error(`Reponse non-JSON PACO (${res.status}): ${textPaco.slice(0, 300)}`)
+      }
+      if (!res.ok || data.error) {
+        console.error('[exports/paco-mra]', res.status, data?.error || data)
+        if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
+          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le PACO MRA.`)
+        }
+        throw new Error(data.error || `Erreur ${res.status} lors de la génération PACO.`)
+      }
+
+      if (data.csv) downloadFile(data.csv, data.filename || `paco_${periode}.csv`)
+
+      setPacoStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
+      const warningCount = Array.isArray(data.warnings) ? data.warnings.length : 0
+      const baseMsg = `PACO MRA généré (${data.totaux?.employes_inclus || '?'} employés).`
+      if (warningCount > 0) {
+        console.warn('[exports/paco-mra] warnings:', data.warnings)
+        setAlertMsg({ type: "success", text: `${baseMsg} ${warningCount} warning(s) — voir console.` })
+      } else {
+        setAlertMsg({ type: "success", text: baseMsg })
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erreur PACO"
+      setPacoStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
   }
@@ -727,17 +771,86 @@ export default function ExportPaiePage() {
 
         {/* ==================== TAB 2: Exports MRA ==================== */}
         <TabsContent value="mra" className="space-y-6">
+
+          {/* PACO MRA Card — format officiel Joint Statement Dec 2024 */}
+          <Card className="rounded-2xl shadow-sm border-l-4" style={{ borderLeftColor: NAVY }}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
+                <Building2 className="w-4 h-4" />
+                PACO MRA — fichier officiel à uploader
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-700">
+                Génère le fichier <code>paco&lt;YYYYMMDD&gt;.csv</code> au format <strong>Joint PACO Dec 2024</strong> (CSG + NSF + PAYE consolidés). C'est le SEUL fichier à uploader sur le portail MRA e-Services.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button
+                  onClick={exportPACO}
+                  disabled={pacoStatus.loading || !societe || bulletins.length === 0}
+                  className="text-white rounded-xl"
+                  style={{ backgroundColor: NAVY }}
+                >
+                  {pacoStatus.loading
+                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    : <Download className="h-4 w-4 mr-2" />
+                  }
+                  Télécharger PACO MRA (.csv)
+                </Button>
+                <StatusBadge status={pacoStatus} />
+              </div>
+              {pacoStatus.summary && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
+                  <div>
+                    <span className="text-gray-500 block text-xs">Employés inclus</span>
+                    <strong>{pacoStatus.summary.employes_inclus || 0}</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">Total Wage Bill</span>
+                    <strong>{fmt(pacoStatus.summary.total_wage_bill || 0)} MUR</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">Total CSG</span>
+                    <strong>{fmt(pacoStatus.summary.total_csg || 0)} MUR</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">Total NSF</span>
+                    <strong>{fmt(pacoStatus.summary.total_nsf || 0)} MUR</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">Total PAYE</span>
+                    <strong>{fmt(pacoStatus.summary.total_paye || 0)} MUR</strong>
+                  </div>
+                  {pacoStatus.summary.employes_exclus_mra > 0 && (
+                    <div>
+                      <span className="text-gray-500 block text-xs">Exclus MRA</span>
+                      <strong>{pacoStatus.summary.employes_exclus_mra}</strong>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Note legacy : les 2 cards CSG/NSF + PAYE ci-dessous restent pour
+              les rapports internes (audit, vérification visuelle). Elles ne
+              correspondent PAS au format MRA officiel et ne doivent PAS être
+              uploadées sur le portail. Utiliser la card PACO ci-dessus. */}
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            ℹ️ Les 2 exports ci-dessous (CSG/NSF + PAYE) sont des <strong>rapports internes</strong> au format Lexora — utiles pour audit/contrôle visuel. Ils ne sont <strong>plus uploadés au MRA</strong>. Utilisez le PACO ci-dessus.
+          </div>
+
           {/* CSG / NSF Card */}
           <Card className="rounded-2xl shadow-sm border-l-4" style={{ borderLeftColor: BLUE }}>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <Building2 className="w-4 h-4" />
-                CSG / NSF
+                CSG / NSF (rapport interne)
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-500">
-                Genere la declaration CSG/NSF mensuelle avec recap et detail par employe (2 fichiers CSV).
+                Genere la declaration CSG/NSF mensuelle avec recap et detail par employe (2 fichiers CSV — format Lexora interne, pas MRA).
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <Button
@@ -796,12 +909,12 @@ export default function ExportPaiePage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <FileText className="w-4 h-4" />
-                PAYE Return
+                PAYE Return (rapport interne)
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-500">
-                Genere le PAYE Return mensuel avec recap et detail par employe (2 fichiers CSV).
+                Genere le PAYE Return mensuel avec recap et detail par employe (2 fichiers CSV — format Lexora interne, pas MRA).
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <Button
