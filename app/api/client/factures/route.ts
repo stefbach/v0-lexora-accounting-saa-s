@@ -104,6 +104,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'societe_id et date_facture requis' }, { status: 400 })
     }
 
+    // Garde-fou conversion devise : si la facture est en devise étrangère mais
+    // que le taux est ≈1, le montant_mur sera identique au TTC en devise — bug
+    // de saisie classique. On rejette pour forcer l'utilisateur à fournir un
+    // vrai taux (ou laisser l'auto-fetch côté UI le remplir depuis taux-change).
+    if (devise && devise !== 'MUR') {
+      const t = Number(taux_change) || 0
+      if (t <= 1.0001) {
+        return NextResponse.json({
+          error: `Taux de change invalide pour ${devise} (${t}). Renseignez le taux ${devise} → MUR — laissez le champ se remplir automatiquement ou saisissez la valeur réelle.`
+        }, { status: 400 })
+      }
+    }
+
     await assertSocieteAccess(supabase, user.id, societe_id)
 
     // For devis: force statut='devis' (not en_attente) — no GL entries

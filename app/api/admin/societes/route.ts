@@ -62,7 +62,13 @@ export async function POST(request: NextRequest) {
     const adminUser = await requireAdmin()
     if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    const { nom, brn, numero_tva_mra, statut_tva, comptable_id } = await request.json()
+    const {
+      nom, brn, numero_tva_mra, statut_tva, comptable_id,
+      ern, tan_societe, registered_office,
+      mra_declarant_name, mra_email, mra_telephone, mra_mobile,
+      date_incorporation, short_name, npf_number, nature_business,
+      adresse, ville, telephone, email,
+    } = await request.json()
 
     if (!nom) {
       return NextResponse.json({ error: 'Le nom de la société est requis' }, { status: 400 })
@@ -78,6 +84,21 @@ export async function POST(request: NextRequest) {
         numero_tva_mra: numero_tva_mra || null,
         statut_tva: statut_tva || false,
         comptable_id: comptable_id || null,
+        ern: ern || null,
+        tan_societe: tan_societe || null,
+        registered_office: registered_office || null,
+        mra_declarant_name: mra_declarant_name || null,
+        mra_email: mra_email || null,
+        mra_telephone: mra_telephone || null,
+        mra_mobile: mra_mobile || null,
+        date_incorporation: date_incorporation || null,
+        short_name: short_name || null,
+        npf_number: npf_number || null,
+        nature_business: nature_business || null,
+        adresse: adresse || null,
+        ville: ville || null,
+        telephone: telephone || null,
+        email: email || null,
       })
       .select()
       .single()
@@ -106,7 +127,10 @@ export async function PUT(request: NextRequest) {
     const updates: Record<string, unknown> = {}
     const allowedFields = [
       'nom', 'brn', 'numero_tva_mra', 'statut_tva', 'comptable_id',
-      'short_name', 'ern', 'npf_number', 'nature_business', 'date_incorporation', 'logo_url',
+      'short_name', 'ern', 'tan_societe', 'registered_office',
+      'mra_declarant_name', 'mra_email', 'mra_telephone', 'mra_mobile',
+      'mra_ebs_id', 'mra_api_key', 'mra_environment', 'mra_fiscalisation_active',
+      'npf_number', 'nature_business', 'date_incorporation', 'logo_url',
       'secteur_activite', 'contact_name', 'contact_position',
       'adresse', 'adresse2', 'ville', 'telephone', 'fax', 'email', 'email_dco',
       'latitude', 'longitude', 'distance_pointage',

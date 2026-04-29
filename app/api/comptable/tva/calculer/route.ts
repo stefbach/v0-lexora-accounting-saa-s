@@ -203,6 +203,50 @@ export async function POST(request: Request) {
       box3 = base_exonere
     }
 
+    // ----------------------------------------------------------------
+    // Reverse charge — factures fournisseurs en devise étrangère
+    // ----------------------------------------------------------------
+    // À Maurice, un achat de services à un fournisseur étranger relève du
+    // reverse charge : l'acheteur déclare la TVA à la fois en collectée
+    // (Box 4) et en déductible (Box 5) au taux standard 15%. La TVA n'est
+    // PAS facturée par le fournisseur, mais l'acheteur l'auto-liquide.
+    //
+    // Détection : type_facture='fournisseur' + devise≠MUR + montant_tva=0
+    // (sinon c'est du Reverse Charge déjà comptabilisé manuellement via 4452).
+    const { data: facturesFournisseurs } = await supabase
+      .from('factures')
+      .select('devise, taux_change, montant_ht, montant_tva, montant_mur, montant_ttc, capital_goods')
+      .eq('societe_id', societe_id)
+      .eq('type_facture', 'fournisseur')
+      .gte('date_facture', date_debut)
+      .lte('date_facture', date_fin)
+      .neq('statut', 'brouillon')
+
+    let base_reverse_charge_mur = 0
+    let nb_factures_rc = 0
+    for (const f of facturesFournisseurs || []) {
+      const isForeign = f.devise && f.devise !== 'MUR'
+      const tvaPaid = Number(f.montant_tva) || 0
+      // Reverse charge auto-liquidation : facture étrangère sans TVA payée
+      if (isForeign && tvaPaid === 0) {
+        const ttc = Number(f.montant_ttc) || 0
+        const ht = Number(f.montant_ht) || 0
+        const ttcMur = Number(f.montant_mur) || 0
+        const htMur = ttc > 0 ? (ht / ttc) * ttcMur : (ht * (Number(f.taux_change) || 1))
+        base_reverse_charge_mur += htMur
+        nb_factures_rc++
+      }
+    }
+    base_reverse_charge_mur = Math.round(base_reverse_charge_mur * 100) / 100
+
+    // TVA reverse charge (15% sur la base) : auto-add à Box 4 (output) et
+    // Box 5 (input) si non déjà présent dans les écritures.
+    if (base_reverse_charge_mur > 0) {
+      const tvaRc = Math.round(base_reverse_charge_mur * 0.15 * 100) / 100
+      if (box4 === 0) box4 = tvaRc
+      if (box5 === 0) box5 = tvaRc
+    }
+
     // TVA nette = (Box1 + Box4) - (Box9 + Box5 + Box7 + Box8) - Crédit reporté
     const { data: tvaPrec } = await supabase
       .from('tva_mensuelle')
@@ -317,6 +361,11 @@ export async function POST(request: Request) {
         ca_ht_total:            Math.round(ca_ht_total * 100) / 100,
         nb_factures:            nb_factures_periode,
         nb_avoirs:              nb_avoirs_periode,
+      },
+      reverse_charge: {
+        base_mur:    base_reverse_charge_mur,
+        tva_15pct:   Math.round(base_reverse_charge_mur * 0.15 * 100) / 100,
+        nb_factures: nb_factures_rc,
       },
       nb_ecritures: ecritures?.length || 0,
     })
