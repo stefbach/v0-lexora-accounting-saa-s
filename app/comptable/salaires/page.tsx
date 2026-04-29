@@ -26,7 +26,7 @@ export default function SalairesPage() {
   const [selectedSociete, setSelectedSociete] = useState("all")
   const [loading, setLoading] = useState(false)
   const [ecritures, setEcritures] = useState<any[]>([])
-  const [exercice, setExercice] = useState("2024-2025")
+  const [exercice, setExercice] = useState("2025-2026")
 
   useEffect(() => {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
@@ -36,22 +36,22 @@ export default function SalairesPage() {
     if (selectedSociete === "all") return
     setLoading(true)
     try {
-      const res = await fetch(`/api/comptable/grand-livre?societe_id=${selectedSociete}&classe=6`)
+      const res = await fetch(`/api/comptable/balance?societe_id=${selectedSociete}&exercice=${exercice}`)
       const data = await res.json()
-      const salaireComptes = (data.grand_livre || []).filter((c: any) =>
-        c.compte.startsWith("64") || c.compte.startsWith("641") || c.compte.startsWith("645")
+      const salaireComptes = (data.comptes || []).filter((c: any) =>
+        c.numero_compte?.startsWith("64")
       )
       setEcritures(salaireComptes)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
-  }, [selectedSociete])
+  }, [selectedSociete, exercice])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   // Calcul charges sociales estimées (taux légaux Maurice)
   const totalSalaires = ecritures
-    .filter(e => e.compte.startsWith("641"))
-    .reduce((s: number, e: any) => s + e.total_debit, 0)
+    .filter(e => e.numero_compte?.startsWith("641"))
+    .reduce((s: number, e: any) => s + (e.total_debit || 0), 0)
 
   const chargesSociales = {
     csg_patronal: totalSalaires > 0 ? totalSalaires * 0.045 : 0, // ~4.5% moyen (3% ou 6% selon seuil)
@@ -82,6 +82,7 @@ export default function SalairesPage() {
         <Select value={exercice} onValueChange={setExercice}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="2025-2026">2025–2026</SelectItem>
             <SelectItem value="2024-2025">2024–2025</SelectItem>
             <SelectItem value="2023-2024">2023–2024</SelectItem>
           </SelectContent>
@@ -163,12 +164,12 @@ export default function SalairesPage() {
                   </TableHeader>
                   <TableBody>
                     {ecritures.map(e => (
-                      <TableRow key={e.compte}>
-                        <TableCell className="font-mono text-sm font-bold">{e.compte}</TableCell>
-                        <TableCell className="text-sm">{e.libelle_compte}</TableCell>
-                        <TableCell className="text-right">{fmt(e.total_debit)}</TableCell>
-                        <TableCell className="text-right">{fmt(e.total_credit)}</TableCell>
-                        <TableCell className="text-right font-semibold">{fmt(e.solde)}</TableCell>
+                      <TableRow key={e.numero_compte}>
+                        <TableCell className="font-mono text-sm font-bold">{e.numero_compte}</TableCell>
+                        <TableCell className="text-sm">{e.libelle}</TableCell>
+                        <TableCell className="text-right">{fmt(e.total_debit || 0)}</TableCell>
+                        <TableCell className="text-right">{fmt(e.total_credit || 0)}</TableCell>
+                        <TableCell className="text-right font-semibold">{fmt(e.solde || 0)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
