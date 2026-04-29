@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTEM_PROMPT_GENERIC_EXTRACTION } from '@/lib/ai/prompts'
 import type { PromptId } from '@/lib/ai/prompts'
 import { isBankName, validateAndCleanExtraction, computeConfidence, repairBankJSON } from '@/lib/utils/bank-utils'
+import { extractBankStatement } from '@/lib/ai/bank-statement-extraction'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -178,21 +179,48 @@ export async function POST(
       const { default: Anthropic } = await import('@anthropic-ai/sdk')
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-      const stream = anthropic.messages.stream({
-        model: CLAUDE_CONFIG.model,
-        max_tokens: maxTokensOverride,
-        temperature: CLAUDE_CONFIG.temperature,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: messageContent }],
-      })
-      const aiResponse = await stream.finalMessage()
+      // Pour les relevés bancaires PDF : utilise l'extraction avec continuation
+      // (jusqu'à 5 appels) pour gérer les longs relevés (100+ transactions).
+      // Pour les autres types : appel simple comme avant.
+      if (typeForce === 'releve_bancaire' && isPdf) {
+        const result = await extractBankStatement(anthropic, {
+          base64,
+          systemPrompt,
+          model: CLAUDE_CONFIG.model,
+          maxTokens: maxTokensOverride,
+          temperature: CLAUDE_CONFIG.temperature,
+          initialUserPrompt: hint
+            ? `Analyse ce relevé bancaire. Contexte: ${hint}. Retourne UNIQUEMENT un JSON valide. Lis TOUTES les lignes sans exception.`
+            : 'Retourne UNIQUEMENT un JSON valide (pas de markdown). Lis TOUTES les lignes du releve sans exception.',
+          maxContinuations: 5,
+        })
 
-      const text = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+        parsed = result.parsed
+        if (!parsed || typeof parsed !== 'object') {
+          // Fallback to repairBankJSON on rawText if extractBankStatement couldn't parse
+          parsed = repairBankJSON(result.rawText)
+        }
+        if (!parsed || typeof parsed !== 'object') {
+          console.warn('[reanalyze] All JSON parse strategies failed for doc', id, '— continuations done:', result.nbContinuations)
+          parsed = { routing: { type_document: typeForce, societe: 'INCONNU', confiance_type: 30 }, extraction: {} }
+        }
+      } else {
+        const stream = anthropic.messages.stream({
+          model: CLAUDE_CONFIG.model,
+          max_tokens: maxTokensOverride,
+          temperature: CLAUDE_CONFIG.temperature,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: messageContent }],
+        })
+        const aiResponse = await stream.finalMessage()
 
-      parsed = repairBankJSON(text)
-      if (!parsed || typeof parsed !== 'object') {
-        console.warn('[reanalyze] All JSON parse strategies failed for doc', id)
-        parsed = { routing: { type_document: typeForce, societe: 'INCONNU', confiance_type: 30 }, extraction: {} }
+        const text = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+
+        parsed = repairBankJSON(text)
+        if (!parsed || typeof parsed !== 'object') {
+          console.warn('[reanalyze] All JSON parse strategies failed for doc', id)
+          parsed = { routing: { type_document: typeForce, societe: 'INCONNU', confiance_type: 30 }, extraction: {} }
+        }
       }
     }
 
