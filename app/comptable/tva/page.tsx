@@ -276,6 +276,33 @@ export default function TVAPage() {
                     ))}
                   </div>
                 </div>
+                {/* Bases HT (CA HT) lues depuis factures émises */}
+                {calcResult.bases_ht && (
+                  <div className="col-span-3 border-t pt-3">
+                    <p className="text-xs font-semibold uppercase text-gray-500 mb-2">
+                      Chiffre d'affaires HT — base déclaration MRA
+                      <span className="ml-2 text-[10px] font-normal text-gray-400">
+                        ({calcResult.bases_ht.nb_factures || 0} facture(s){calcResult.bases_ht.nb_avoirs > 0 ? `, ${calcResult.bases_ht.nb_avoirs} avoir(s)` : ''})
+                      </span>
+                    </p>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[
+                        { label: "Taxable 15% (HT)",      val: calcResult.bases_ht.taxable_standard_15pct, color: "text-blue-700" },
+                        { label: "Taxable autre taux",    val: calcResult.bases_ht.taxable_autre,           color: "text-blue-500" },
+                        { label: "Exports zero-rated",    val: calcResult.bases_ht.export_zero_rated,       color: "text-emerald-600" },
+                        { label: "Ventes exonérées",      val: calcResult.bases_ht.exonere,                 color: "text-amber-600" },
+                        { label: "Total CA HT",           val: calcResult.bases_ht.ca_ht_total,             color: "text-[#0B0F2E] font-extrabold" },
+                      ].map((b, i) => (
+                        <div key={i} className="bg-white border rounded p-2">
+                          <p className="text-[10px] text-gray-500">{b.label}</p>
+                          <p className={`text-sm font-bold ${b.color}`}>
+                            {fmt(b.val || 0)} MUR
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* Synthèse */}
                 <div className="col-span-3 border-t pt-3 grid grid-cols-4 gap-3">
                   <div>
