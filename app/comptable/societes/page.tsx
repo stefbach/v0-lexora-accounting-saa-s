@@ -68,6 +68,10 @@ export default function ComptableSocietesPage() {
   const [formErn, setFormErn] = useState("")
   const [formTanSociete, setFormTanSociete] = useState("")
   const [formDateIncorporation, setFormDateIncorporation] = useState("")
+  const [formRegisteredOffice, setFormRegisteredOffice] = useState("")
+  const [formMraDeclarant, setFormMraDeclarant] = useState("")
+  const [formMraEmail, setFormMraEmail] = useState("")
+  const [formMraTelephone, setFormMraTelephone] = useState("")
   const [formClients, setFormClients] = useState<Set<string>>(new Set())
 
   // Link client dialog
@@ -125,6 +129,7 @@ export default function ComptableSocietesPage() {
   const resetForm = () => {
     setFormNom(""); setFormBrn(""); setFormTva(""); setFormStatutTva("true")
     setFormErn(""); setFormTanSociete(""); setFormDateIncorporation("")
+    setFormRegisteredOffice(""); setFormMraDeclarant(""); setFormMraEmail(""); setFormMraTelephone("")
     setFormClients(new Set()); setError(null)
   }
 
@@ -154,7 +159,11 @@ export default function ComptableSocietesPage() {
           statut_tva: formStatutTva === "true",
           comptable_id: profile?.id || null,
           ern: formErn || null,
-          tan: formTanSociete || null,
+          tan_societe: formTanSociete || null,
+          registered_office: formRegisteredOffice || null,
+          mra_declarant_name: formMraDeclarant || null,
+          mra_email: formMraEmail || null,
+          mra_telephone: formMraTelephone || null,
           date_incorporation: formDateIncorporation || null,
         }),
       })
@@ -278,6 +287,27 @@ export default function ComptableSocietesPage() {
                 <div className="space-y-2">
                   <Label>Date d&apos;incorporation</Label>
                   <Input type="date" value={formDateIncorporation} onChange={(e) => setFormDateIncorporation(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Adresse du siège (Registered Office)</Label>
+                  <Input placeholder="Ex: Bourdet Road, Pointe aux Cannoniers, Mauritius" value={formRegisteredOffice} onChange={(e) => setFormRegisteredOffice(e.target.value)} />
+                </div>
+                <div className="border-t pt-3 mt-3">
+                  <p className="text-xs font-semibold uppercase text-gray-500 mb-2">Contact MRA (déclaration TVA)</p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Nom du déclarant</Label>
+                      <Input placeholder="Ex: John Doe" value={formMraDeclarant} onChange={(e) => setFormMraDeclarant(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email MRA</Label>
+                      <Input type="email" placeholder="contact@societe.com" value={formMraEmail} onChange={(e) => setFormMraEmail(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-2 mt-3">
+                    <Label>Téléphone MRA</Label>
+                    <Input placeholder="Ex: +230 1234 5678" value={formMraTelephone} onChange={(e) => setFormMraTelephone(e.target.value)} />
+                  </div>
                 </div>
                 {clients.length > 0 && (
                   <div className="space-y-2">

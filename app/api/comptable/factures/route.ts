@@ -101,6 +101,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'societe_id et date_facture requis' }, { status: 400 })
     }
 
+    // Garde-fou conversion devise (cf. /api/client/factures route)
+    if (devise && devise !== 'MUR') {
+      const t = Number(taux_change) || 0
+      if (t <= 1.0001) {
+        return NextResponse.json({
+          error: `Taux de change invalide pour ${devise} (${t}). Saisissez le taux réel ${devise} → MUR.`
+        }, { status: 400 })
+      }
+    }
+
     const ttc = montant_ttc ?? (montant_ht + montant_tva)
     const mur = devise === 'MUR' ? ttc : ttc * (taux_change || 1)
 
