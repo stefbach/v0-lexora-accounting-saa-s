@@ -158,7 +158,11 @@ export default function DocumentDetailPage() {
       const body: Record<string, any> = {}
       if (hintText) body.hint = hintText
       if (editTypeDoc) body.type_force = editTypeDoc
-      if (editTypeDoc === "releve_bancaire") body.max_tokens = 16384
+      // Pas de max_tokens override — l'API utilise par défaut
+      // CLAUDE_CONFIG.max_tokens_releve_bancaire (128k) pour les relevés
+      // bancaires, ce qui permet d'extraire 100+ transactions. La continuation
+      // multi-call (lib/ai/bank-statement-extraction.ts) prend le relais
+      // au-delà.
 
       const res = await fetch(`/api/documents/${docId}/reanalyze`, {
         method: "POST",
