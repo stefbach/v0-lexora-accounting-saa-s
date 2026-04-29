@@ -129,6 +129,80 @@ export async function POST(request: Request) {
     box6 = Math.max(0, box6)
     box3 = Math.max(0, box3)
 
+    // ----------------------------------------------------------------
+    // Bases HT par catégorie — lues directement depuis `factures`
+    // ----------------------------------------------------------------
+    // L'heuristique sur le libellé (« export » dans description) rate les
+    // factures EUR/USD à clients étrangers dont la description ne mentionne
+    // pas le mot. On lit donc directement la table factures pour catégoriser
+    // proprement le CA HT par : export zero-rated / exonéré / taxable.
+    //
+    // Les montants TVA collectée (Box 1, 4) restent calculés depuis les
+    // écritures comptables (4457, 4452) — la TVA réellement enregistrée fait
+    // foi vis-à-vis de la MRA.
+    const { data: facturesPeriode } = await supabase
+      .from('factures')
+      .select('id, devise, taux_change, montant_ht, montant_tva, montant_ttc, montant_mur, taux_tva, client_offshore, statut, type_facture, type_document')
+      .eq('societe_id', societe_id)
+      .eq('type_facture', 'client')
+      .gte('date_facture', date_debut)
+      .lte('date_facture', date_fin)
+      .neq('statut', 'brouillon')
+
+    let base_export_zero_rated = 0   // Box 6 — CA HT exports
+    let base_exonere           = 0   // Box 3 — CA HT exonéré (santé, éducation, finance)
+    let base_taxable_standard  = 0   // CA HT soumis à TVA standard (15%)
+    let base_taxable_other     = 0   // CA HT taxable autre taux
+    let nb_factures_periode    = 0
+    let nb_avoirs_periode      = 0
+
+    for (const f of facturesPeriode || []) {
+      // Convertir le HT en MUR : montant_ht est dans la devise d'origine,
+      // montant_mur est le TTC en MUR. Pour le HT en MUR : ratio préservé.
+      const ttc = Number(f.montant_ttc) || 0
+      const ht  = Number(f.montant_ht)  || 0
+      const ttcMur = Number(f.montant_mur) || 0
+      const htMur = ttc > 0 ? (ht / ttc) * ttcMur : (ht * (Number(f.taux_change) || 1))
+
+      // Avoirs : signe négatif (réduction du CA)
+      const isAvoir = f.type_document === 'avoir'
+      const sign = isAvoir ? -1 : 1
+      if (isAvoir) nb_avoirs_periode++
+      else nb_factures_periode++
+
+      const isForeign = f.devise && f.devise !== 'MUR'
+      const isOffshore = !!f.client_offshore
+      const isExport = isForeign || isOffshore
+      const tauxTva = Number(f.taux_tva) || 0
+
+      if (isExport) {
+        base_export_zero_rated += sign * htMur
+      } else if (tauxTva === 0) {
+        base_exonere += sign * htMur
+      } else if (tauxTva === 15) {
+        base_taxable_standard += sign * htMur
+      } else {
+        base_taxable_other += sign * htMur
+      }
+    }
+
+    base_export_zero_rated = Math.round(base_export_zero_rated * 100) / 100
+    base_exonere           = Math.round(base_exonere           * 100) / 100
+    base_taxable_standard  = Math.round(base_taxable_standard  * 100) / 100
+    base_taxable_other     = Math.round(base_taxable_other     * 100) / 100
+    const ca_ht_total = base_export_zero_rated + base_exonere + base_taxable_standard + base_taxable_other
+
+    // Si Box 6 (depuis écritures via heuristique « export ») était à 0 mais que
+    // les factures montrent du CA export, on aligne Box 6 sur la base factures.
+    // Idem pour Box 3 (exonéré). Les factures sont la source de vérité pour les
+    // BASES ; les écritures restent la source pour la TVA collectée (Box 1 / 4).
+    if (box6 === 0 && base_export_zero_rated > 0) {
+      box6 = base_export_zero_rated
+    }
+    if (box3 === 0 && base_exonere > 0) {
+      box3 = base_exonere
+    }
+
     // TVA nette = (Box1 + Box4) - (Box9 + Box5 + Box7 + Box8) - Crédit reporté
     const { data: tvaPrec } = await supabase
       .from('tva_mensuelle')
@@ -234,6 +308,15 @@ export async function POST(request: Request) {
         penalites,
         interets,
         total_a_payer:  Math.round((tvaData.tva_nette + penalites + interets) * 100) / 100,
+      },
+      bases_ht: {
+        taxable_standard_15pct: base_taxable_standard,
+        taxable_autre:          base_taxable_other,
+        export_zero_rated:      base_export_zero_rated,
+        exonere:                base_exonere,
+        ca_ht_total:            Math.round(ca_ht_total * 100) / 100,
+        nb_factures:            nb_factures_periode,
+        nb_avoirs:              nb_avoirs_periode,
       },
       nb_ecritures: ecritures?.length || 0,
     })
