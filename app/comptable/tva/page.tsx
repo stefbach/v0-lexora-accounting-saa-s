@@ -11,8 +11,11 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Loader2, Calculator, TrendingDown, TrendingUp, Download, RefreshCw,
-  CheckCircle, AlertTriangle, Clock, XCircle
+  CheckCircle, AlertTriangle, Clock, XCircle, FileText, FileSpreadsheet
 } from "lucide-react"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
 const NAVY = "#0B0F2E"
@@ -170,9 +173,43 @@ export default function TVAPage() {
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>TVA MRA — Déclarations</h1>
           <p className="text-sm text-gray-500 mt-1">9 boxes MRA — Calcul automatique depuis les écritures comptables</p>
         </div>
-        <Button variant="outline" className="gap-2">
-          <Download className="w-4 h-4" /> Exporter
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              className="gap-2"
+              disabled={!selectedSociete || selectedSociete === "all" || !selectedPeriode || !calcResult}
+            >
+              <Download className="w-4 h-4" /> Exporter
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => {
+                const url = `/api/comptable/tva/export?societe_id=${selectedSociete}&periode=${selectedPeriode}&format=pdf`
+                window.open(url, "_blank")
+              }}
+            >
+              <FileText className="w-4 h-4 mr-2" /> PDF — VAT Return MRA
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                const url = `/api/comptable/tva/export?societe_id=${selectedSociete}&periode=${selectedPeriode}&format=sales_csv`
+                window.open(url, "_blank")
+              }}
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" /> CSV — Schedule B (ventes)
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                const url = `/api/comptable/tva/export?societe_id=${selectedSociete}&periode=${selectedPeriode}&format=purchases_csv`
+                window.open(url, "_blank")
+              }}
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" /> CSV — Schedule A (achats)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* KPIs */}
