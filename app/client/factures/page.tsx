@@ -64,6 +64,17 @@ export default function ClientFacturesPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterStatut, setFilterStatut] = useState("all")
+  const [filterExercice, setFilterExercice] = useState<string>(() => {
+    // Exercice fiscal mauricien : juillet → juin. Par défaut, l'exercice
+    // contenant la date du jour. Aligne la page Factures sur le tableau de
+    // bord et le module TVA — évite l'écart visuel entre "Total CA" et
+    // "CA exercice" qu'avait l'ancien comportement (tout-en-un).
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = now.getMonth() + 1
+    const startYear = m >= 7 ? y : y - 1
+    return `${startYear}-${startYear + 1}`
+  })
   const [activeTab, setActiveTab] = useState("factures")
 
   // Recurring templates
@@ -143,7 +154,16 @@ export default function ClientFacturesPage() {
       (f.tiers || "").toLowerCase().includes(search.toLowerCase()) ||
       (f.numero_facture || "").toLowerCase().includes(search.toLowerCase())
     const matchStatut = filterStatut === "all" || f.statut === filterStatut
-    return matchSearch && matchStatut
+    let matchExercice = true
+    if (filterExercice !== "all" && f.date_facture) {
+      const m = filterExercice.match(/^(\d{4})-(\d{4})$/)
+      if (m) {
+        const start = `${m[1]}-07-01`
+        const end   = `${m[2]}-06-30`
+        matchExercice = f.date_facture >= start && f.date_facture <= end
+      }
+    }
+    return matchSearch && matchStatut && matchExercice
   })
 
   const totalMUR = filtered.reduce((s, f) => s + (Number(f.montant_mur) || 0), 0)
@@ -311,7 +331,7 @@ export default function ClientFacturesPage() {
           marginBottom: "22px",
         }}
       >
-        <ClientKpi label="Total CA" value={`${fmt(totalMUR)} MUR`} icon={Receipt} accent="blue" />
+        <ClientKpi label={filterExercice === "all" ? "Total CA (toutes périodes)" : `CA exercice ${filterExercice}`} value={`${fmt(totalMUR)} MUR`} icon={Receipt} accent="blue" />
         <ClientKpi label="Factures" value={filtered.length} icon={FileText} accent="green" />
         <ClientKpi label="En attente" value={nbEnAttente} icon={Clock} accent="orange" />
         <ClientKpi label="En retard" value={nbRetard} icon={AlertCircle} accent="red" />
@@ -331,6 +351,15 @@ export default function ClientFacturesPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input className="pl-9" placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
+            <Select value={filterExercice} onValueChange={setFilterExercice}>
+              <SelectTrigger className="w-44"><SelectValue placeholder="Exercice" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous exercices</SelectItem>
+                <SelectItem value="2025-2026">Exercice 2025-2026</SelectItem>
+                <SelectItem value="2024-2025">Exercice 2024-2025</SelectItem>
+                <SelectItem value="2023-2024">Exercice 2023-2024</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={filterStatut} onValueChange={setFilterStatut}>
               <SelectTrigger className="w-40"><SelectValue placeholder="Statut" /></SelectTrigger>
               <SelectContent>
