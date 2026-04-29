@@ -2250,7 +2250,7 @@ export async function POST(request: Request) {
       const sid = body.societe_id
       if (!sid) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
       const { data: buls } = await supabase.from('bulletins_paie')
-        .select('id, statut, verrouille')
+        .select('id, statut, verrouille, comptabilise')
         .eq('societe_id', sid)
         .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
       const nonValides = (buls || []).filter(b => b.statut !== 'valide' && !b.verrouille)
@@ -2276,7 +2276,40 @@ export async function POST(request: Request) {
         user_id: user.id, user_email: user.email,
         details: { nb_bulletins: toLock.length }
       })
-      return NextResponse.json({ success: true, nb: toLock.length })
+
+      // Auto-comptabilisation : pousser les écritures dès le verrouillage.
+      // Chaque appel RPC est idempotent (DELETE puis INSERT par bulletin).
+      // On ignore les bulletins déjà comptabilisés. Les erreurs sont collectées
+      // mais ne font pas échouer le verrouillage — la trace reste dans la
+      // réponse pour debug (`erreurs_compta`).
+      const toCompta = (buls || []).filter(b => !b.comptabilise)
+      let nb_ecritures = 0
+      let nb_bulletins_compta = 0
+      const erreurs_compta: { bulletin_id: string; message: string }[] = []
+      for (const b of toCompta) {
+        const { data: nb, error: rpcErr } = await supabase.rpc('generer_ecritures_paie', { p_bulletin_id: b.id })
+        if (rpcErr) {
+          erreurs_compta.push({ bulletin_id: b.id, message: rpcErr.message })
+          continue
+        }
+        nb_ecritures += Number(nb) || 0
+        nb_bulletins_compta++
+      }
+      if (nb_bulletins_compta > 0) {
+        await supabase.from('paie_audit_log').insert({
+          societe_id: sid, periode: `${periodeStr}-01`, action: 'comptabilisation',
+          user_id: user.id, user_email: user.email,
+          details: { nb_bulletins: nb_bulletins_compta, nb_ecritures, auto: true, erreurs: erreurs_compta.length }
+        })
+      }
+
+      return NextResponse.json({
+        success: true,
+        nb: toLock.length,
+        nb_bulletins_comptabilises: nb_bulletins_compta,
+        nb_ecritures,
+        erreurs_compta: erreurs_compta.length > 0 ? erreurs_compta : undefined,
+      })
     }
 
     // ══════════════════════════════════════════════════════════════

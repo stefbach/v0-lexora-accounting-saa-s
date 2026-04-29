@@ -277,9 +277,31 @@ export default function PaiePage() {
   }
 
   const validerTous = () => doAction("valider_tous")
-  const verrouiller = () => {
-    if (!confirm("Verrouiller la paie de cette periode ?\n\nAucune modification ne sera possible apres le verrouillage.\nLes exports banque, MRA et la comptabilisation seront alors accessibles.")) return
-    doAction("verrouiller")
+  const verrouiller = async () => {
+    if (!confirm("Verrouiller la paie de cette periode ?\n\nAucune modification ne sera possible apres le verrouillage.\nLes ecritures comptables seront genereees automatiquement.")) return
+    if (societe === "all") return alert("Selectionnez une societe")
+    setComptabilisationLoading(true)
+    setComptabilisationResult(null)
+    try {
+      const res = await fetch("/api/rh/paie", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verrouiller", societe_id: societe, periode })
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || "Erreur verrouillage"); return }
+      if (data.nb_bulletins_comptabilises > 0) {
+        setComptabilisationResult(`Verrouillage OK — ${data.nb_ecritures} ecritures generees pour ${data.nb_bulletins_comptabilises} bulletin(s)`)
+      } else {
+        setComptabilisationResult(`Verrouillage OK — aucun bulletin a comptabiliser (deja fait)`)
+      }
+      if (data.erreurs_compta?.length) {
+        console.warn("[verrouiller] erreurs comptabilisation:", data.erreurs_compta)
+        alert(`Attention : ${data.erreurs_compta.length} bulletin(s) n'ont pas pu etre comptabilises. Voir la console.`)
+      }
+      load(); loadWorkflow()
+    } catch (e: any) {
+      alert("Erreur reseau: " + (e.message || ""))
+    } finally { setComptabilisationLoading(false) }
   }
   const deverrouiller = () => {
     const motif = prompt("Motif du deverrouillage (obligatoire) :")
