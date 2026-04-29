@@ -481,32 +481,112 @@ Respond with ONLY the type word. Nothing else.`,
       let bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
       console.log('[upload] Raw Claude bank response length:', bankText.length, 'stop_reason:', aiResponse.stop_reason, 'first 500 chars:', bankText.substring(0, 500))
 
-      // Si la réponse a été tronquée par max_tokens, on fait un 2ème appel
-      // pour récupérer la suite (continuation du JSON).
-      if (aiResponse.stop_reason === 'max_tokens' || aiResponse.stop_reason === 'end_turn' && bankText.length > 60000) {
-        console.log('[upload] Bank response truncated — requesting continuation...')
+      // Boucle de continuation pour les longs relevés (jusqu'à 5 itérations).
+      // Chaque appel demande UNIQUEMENT les transactions manquantes en JSON
+      // array — on les fusionne avec celles déjà extraites au lieu de
+      // concaténer du texte brut (plus robuste, plus de doublons possibles).
+      const MAX_CONTINUATIONS = 5
+      let extraTransactions: any[] = []
+      let lastDate: string | null = null
+      let lastDescription: string | null = null
+      let stopReason = aiResponse.stop_reason
+
+      // Helper : extraire un tableau de transactions depuis du texte brut
+      const tryParseTransactionsArray = (text: string): any[] | null => {
+        // Essai 1 : JSON array direct
+        const trimmed = text.trim()
+        try {
+          const parsed = JSON.parse(trimmed)
+          if (Array.isArray(parsed)) return parsed
+          if (parsed.transactions && Array.isArray(parsed.transactions)) return parsed.transactions
+          if (parsed.lignes && Array.isArray(parsed.lignes)) return parsed.lignes
+        } catch {}
+        // Essai 2 : trouver le premier `[` et le dernier `]`
+        const first = trimmed.indexOf('[')
+        const last  = trimmed.lastIndexOf(']')
+        if (first !== -1 && last > first) {
+          try {
+            const arr = JSON.parse(trimmed.substring(first, last + 1))
+            if (Array.isArray(arr)) return arr
+          } catch {}
+        }
+        // Essai 3 : code fence
+        const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/)
+        if (fence) {
+          try {
+            const parsed = JSON.parse(fence[1].trim())
+            if (Array.isArray(parsed)) return parsed
+            if (parsed.transactions && Array.isArray(parsed.transactions)) return parsed.transactions
+          } catch {}
+        }
+        return null
+      }
+
+      // Compute landmark from existing parsed text (last 1000 chars likely contain
+      // last extracted transaction's date + description)
+      const computeLandmark = (sourceText: string): { date: string | null; desc: string | null } => {
+        // Try to JSON-parse what we have to find the last transaction
+        const tryParse = (txt: string): any => {
+          try { return JSON.parse(txt) } catch { return null }
+        }
+        let parsed = tryParse(sourceText.trim())
+        if (!parsed) {
+          const first = sourceText.indexOf('{')
+          const last  = sourceText.lastIndexOf('}')
+          if (first !== -1 && last > first) parsed = tryParse(sourceText.substring(first, last + 1))
+        }
+        const txs: any[] = parsed?.transactions || parsed?.lignes || []
+        if (txs.length === 0) return { date: null, desc: null }
+        const lastTx = txs[txs.length - 1]
+        return {
+          date: lastTx.date || lastTx.date_operation || null,
+          desc: lastTx.description || lastTx.libelle || null,
+        }
+      }
+
+      let cont = 0
+      while (cont < MAX_CONTINUATIONS &&
+             (stopReason === 'max_tokens' ||
+              (stopReason === 'end_turn' && bankText.length > 60000 && cont === 0))) {
+        cont++
+        const landmark = computeLandmark(bankText + (extraTransactions.length > 0 ? JSON.stringify({ transactions: extraTransactions }) : ''))
+        lastDate = landmark.date
+        lastDescription = landmark.desc
+
+        const landmarkHint = lastDate && lastDescription
+          ? `La dernière transaction extraite était : { date: "${lastDate}", description: "${lastDescription.slice(0, 80)}" }. Reprends les transactions APRÈS celle-ci uniquement.`
+          : `Tu as déjà extrait ${extraTransactions.length} transactions supplémentaires. Reprends APRÈS la dernière.`
+
+        console.log(`[upload] Bank continuation ${cont}/${MAX_CONTINUATIONS} — landmark: ${lastDate} / ${lastDescription?.slice(0, 50)}`)
+
         try {
           const contStream = anthropic.messages.stream({
             model: CLAUDE_CONFIG.model,
             max_tokens: CLAUDE_CONFIG.max_tokens_releve_bancaire,
             temperature: CLAUDE_CONFIG.temperature,
-            system: 'Tu continues à extraire les transactions du relevé bancaire. Retourne UNIQUEMENT la suite du JSON (le tableau transactions[]) sans répéter les métadonnées.',
+            system: 'Tu continues à extraire les transactions d\'un relevé bancaire. Retourne UNIQUEMENT un tableau JSON `[ {...}, {...} ]` avec les nouvelles transactions, sans aucune métadonnée, sans markdown, sans texte avant ou après. Si toutes les transactions sont déjà extraites, retourne `[]`.',
             messages: [
               { role: 'user', content: [
                 { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-                { type: 'text', text: `Tu as déjà extrait ${bankText.length} caractères. Voici la fin de ta réponse précédente:\n\n${bankText.slice(-500)}\n\nContinue le JSON depuis là où tu t'es arrêté. Ne répète PAS les transactions déjà extraites. Retourne UNIQUEMENT les transactions manquantes dans le même format JSON.` },
+                { type: 'text', text: `${landmarkHint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].` },
               ]},
             ],
           })
           const contResponse = await contStream.finalMessage()
           const contText = contResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
-          console.log('[upload] Continuation response length:', contText.length)
-          if (contText.length > 50) {
-            bankText = bankText + contText
-            console.log('[upload] Combined response length:', bankText.length)
+          console.log(`[upload] Continuation ${cont} response length: ${contText.length}, stop_reason: ${contResponse.stop_reason}`)
+
+          const newTxs = tryParseTransactionsArray(contText)
+          if (!newTxs || newTxs.length === 0) {
+            console.log(`[upload] Continuation ${cont}: 0 nouvelles transactions, arrêt boucle`)
+            break
           }
+          extraTransactions = extraTransactions.concat(newTxs)
+          stopReason = contResponse.stop_reason
+          console.log(`[upload] Continuation ${cont}: ${newTxs.length} nouvelles tx (total extra=${extraTransactions.length})`)
         } catch (contErr: any) {
-          console.warn('[upload] Continuation call failed:', contErr.message)
+          console.warn(`[upload] Continuation ${cont} failed:`, contErr.message)
+          break
         }
       }
 
@@ -570,6 +650,29 @@ Respond with ONLY the type word. Nothing else.`,
       }
 
       if (bankParsed && typeof bankParsed === 'object') {
+        // Fusion des continuations : ajouter les extraTransactions au tableau
+        // principal (transactions[] ou lignes[]). Dédup léger sur (date+description+montant).
+        if (extraTransactions.length > 0) {
+          const targetKey = Array.isArray(bankParsed.transactions)
+            ? 'transactions'
+            : (Array.isArray(bankParsed.lignes) ? 'lignes' : 'transactions')
+          const existing: any[] = bankParsed[targetKey] || []
+          const seen = new Set(existing.map((t: any) =>
+            `${t.date || ''}|${(t.description || t.libelle || '').slice(0, 30)}|${t.debit || 0}|${t.credit || 0}`
+          ))
+          let added = 0
+          for (const tx of extraTransactions) {
+            const key = `${tx.date || ''}|${(tx.description || tx.libelle || '').slice(0, 30)}|${tx.debit || 0}|${tx.credit || 0}`
+            if (!seen.has(key)) {
+              existing.push(tx)
+              seen.add(key)
+              added++
+            }
+          }
+          bankParsed[targetKey] = existing
+          console.log(`[upload] Merged ${added} extra transactions (skipped ${extraTransactions.length - added} doublons), total: ${existing.length}`)
+        }
+
         console.log('[upload] Bank JSON parsed OK. Keys:', Object.keys(bankParsed).join(', '),
           'lignes:', Array.isArray(bankParsed.lignes) ? bankParsed.lignes.length : 0,
           'transactions:', Array.isArray(bankParsed.transactions) ? bankParsed.transactions.length : 0)
