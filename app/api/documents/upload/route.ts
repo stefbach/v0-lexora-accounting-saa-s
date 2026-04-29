@@ -429,7 +429,23 @@ export async function POST(request: NextRequest) {
     // Pour les PDFs : détection rapide du type en 1 seul appel si possible
     // Si PDF → tenter détection rapide d'abord (512 tokens)
     let isLikelyBankStatement = false
-    if (isPdf && typeof messageContent !== 'string') {
+
+    // Pré-détection par nom de fichier (rapide, gratuit, déterministe).
+    // Si le nom contient un signal de relevé, on présume bank avant l'appel
+    // Claude — la classification confirme/infirme. Évite que des relevés
+    // mal lus par Claude (PDF scanné peu net) tombent en "autre".
+    const fnameLower = (file.name || '').toLowerCase()
+    const bankFilenamePatterns = [
+      /\brelev[eé]/i, /\bstatement\b/i, /\bbank\b/i, /\bmcb\b/, /\bsbm\b/,
+      /\bafrasia\b/, /\bmaubank\b/, /\bbarclays\b/, /\babsa\b/, /\bhsbc\b/,
+      /[_\-\s](mur|eur|usd|gbp)[_\-\s.]/i,
+    ]
+    if (isPdf && bankFilenamePatterns.some(p => p.test(fnameLower))) {
+      console.log(`[upload] Bank filename heuristic match: "${file.name}"`)
+      isLikelyBankStatement = true
+    }
+
+    if (isPdf && typeof messageContent !== 'string' && !isLikelyBankStatement) {
       try {
         const quickStream = anthropic.messages.stream({
           model: CLAUDE_CONFIG.model,
