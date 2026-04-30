@@ -240,6 +240,55 @@ export async function PATCH(request: Request) {
     const { data, error } = await admin.from('factures').update(updates).eq('id', id).select().single()
     if (error) throw error
 
+    // Régénération des écritures comptables si la facture sort de brouillon
+    // OU si un champ comptable change (montants, devise, taux, type, date).
+    // Sans ça, une facture créée en brouillon puis PATCHée en en_attente
+    // restait sans écritures (bug audit P0 #2 — visible sur OCC : 48 factures
+    // clients en_attente sans aucune ligne 411). Idempotent : la fonction
+    // supprime les écritures FAC-<id> existantes avant ré-INSERT.
+    {
+      const wasBrouillon = existing.statut === 'brouillon'
+      const finalStatut = updates.statut ?? existing.statut
+      const isFinalised = finalStatut !== 'brouillon' && finalStatut !== 'devis' && finalStatut !== 'annule'
+      const accountingFieldChanged =
+        updates.montant_ht !== undefined ||
+        updates.montant_tva !== undefined ||
+        updates.montant_ttc !== undefined ||
+        updates.montant_mur !== undefined ||
+        updates.devise !== undefined ||
+        updates.taux_change !== undefined ||
+        updates.type_facture !== undefined ||
+        updates.date_facture !== undefined ||
+        updates.tiers !== undefined
+
+      const shouldRegen = isFinalised && (wasBrouillon || accountingFieldChanged)
+
+      if (shouldRegen) {
+        const final = data || { ...existing, ...updates }
+        try {
+          const r = await createEcrituresForFacture(admin, {
+            id: final.id,
+            societe_id: final.societe_id,
+            numero_facture: final.numero_facture || '',
+            tiers: final.tiers || '',
+            date_facture: final.date_facture,
+            montant_ht: Number(final.montant_ht) || 0,
+            montant_tva: Number(final.montant_tva) || 0,
+            montant_ttc: Number(final.montant_ttc) || 0,
+            type_facture: (final.type_facture === 'fournisseur' ? 'fournisseur' : 'client'),
+            devise: final.devise || 'MUR',
+            taux_change: Number(final.taux_change) || 1,
+            montant_mur: Number(final.montant_mur) || undefined,
+          })
+          if (!r.ok) {
+            console.warn('[comptable/factures PATCH] Régen écritures échouée:', r.error)
+          }
+        } catch (e: any) {
+          console.warn('[comptable/factures PATCH] Régen écritures exception:', e?.message || e)
+        }
+      }
+    }
+
     // If societe_id changed, update linked document record too
     if (updates.societe_id && updates.societe_id !== existing.societe_id) {
       try {
