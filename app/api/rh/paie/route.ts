@@ -2319,11 +2319,33 @@ export async function POST(request: Request) {
       const sid = body.societe_id
       const motif = body.motif || 'Correction demandée'
       if (!sid) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+
+      // Reset également comptabilise=false : sans ça, après modification d'un
+      // bulletin et reverrouillage, le filtre auto-compta `!comptabilise`
+      // skipperait le bulletin → écritures OD-PAIE obsolètes (montants
+      // pré-modif) restent en compta. La RPC generer_ecritures_paie est
+      // idempotente (DELETE puis INSERT), donc safe à rejouer.
       const { error: uErr } = await supabase.from('bulletins_paie')
-        .update({ verrouille: false, date_verrouillage: null, verrouille_par: null, statut: 'brouillon' })
+        .update({
+          verrouille: false, date_verrouillage: null, verrouille_par: null,
+          statut: 'brouillon',
+          comptabilise: false, date_comptabilisation: null, nb_ecritures_generees: null,
+        })
         .eq('societe_id', sid)
         .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
       if (uErr) throw uErr
+
+      // Purger les écritures OD-PAIE de la période pour cette société pour
+      // éviter de garder en compta des écritures qui ne correspondent plus à
+      // un bulletin valide. Au reverrouillage, l'auto-compta les régénère
+      // proprement à partir des bulletins re-validés.
+      await supabase.from('ecritures_comptables_v2')
+        .delete()
+        .eq('societe_id', sid)
+        .eq('journal', 'OD-PAIE')
+        .gte('date_ecriture', `${periodeStr}-01`)
+        .lte('date_ecriture', lastDayOfMonth(periodeStr))
+
       await supabase.from('paie_periodes_lock').upsert({
         societe_id: sid, periode: `${periodeStr}-01`,
         verrouille: false, bulletins_valides: false,

@@ -95,6 +95,18 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
+    // Multi-tenant guard P0 — sinon un comptable peut wiper la compta d'un
+    // autre cabinet. Le check de rôle au-dessus n'est pas suffisant.
+    {
+      const { assertSocieteAccess, SocieteAccessError } = await import('@/lib/supabase/assert-societe-access')
+      try {
+        await assertSocieteAccess(supabase, user.id, societe_id as string)
+      } catch (e) {
+        if (e instanceof SocieteAccessError) return NextResponse.json({ error: e.message }, { status: 403 })
+        throw e
+      }
+    }
+
     // Vérifier le nom de la société pour éviter un reset sur la mauvaise cible
     const { data: societe } = await supabase
       .from('societes').select('id, nom').eq('id', societe_id).maybeSingle()

@@ -180,6 +180,10 @@ export async function extractBankStatement(
   if (!parsed) parsed = tryParseFullJson(rawText)
 
   // --- Merge extra transactions into parsed result with dedup ---
+  // Dedup utilise la description COMPLÈTE (pas slice 30) + solde si dispo
+  // pour ne pas fusionner deux frais bancaires identiques le même jour
+  // (ex. 2 commissions de 50 MUR avec libellés débutant pareil). Conserve
+  // tout sauf les vraies répétitions exactes de l'IA.
   let added = 0
   let skipped = 0
   if (parsed && typeof parsed === 'object' && extraTransactions.length > 0) {
@@ -187,11 +191,11 @@ export async function extractBankStatement(
       ? 'transactions'
       : (Array.isArray(parsed.lignes) ? 'lignes' : 'transactions')
     const existing: any[] = parsed[targetKey] || []
-    const seen = new Set(existing.map(t =>
-      `${t.date || ''}|${(t.description || t.libelle || '').slice(0, 30)}|${t.debit || 0}|${t.credit || 0}`
-    ))
+    const dedupKey = (t: any) =>
+      `${t.date || ''}|${t.description || t.libelle || ''}|${t.debit || 0}|${t.credit || 0}|${t.solde || ''}`
+    const seen = new Set(existing.map(dedupKey))
     for (const tx of extraTransactions) {
-      const key = `${tx.date || ''}|${(tx.description || tx.libelle || '').slice(0, 30)}|${tx.debit || 0}|${tx.credit || 0}`
+      const key = dedupKey(tx)
       if (seen.has(key)) { skipped++; continue }
       existing.push(tx)
       seen.add(key)
