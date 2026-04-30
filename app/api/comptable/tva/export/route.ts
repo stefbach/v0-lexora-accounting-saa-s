@@ -185,11 +185,17 @@ function buildSalesCsv(factures: any[]): string {
     const cat = isExport ? 'Export zero-rated'
       : (Number(f.taux_tva) === 0 ? 'Exonéré'
       : (Number(f.taux_tva) === 15 ? 'Standard 15%' : `Autre ${f.taux_tva}%`))
+    // Avoirs (credit notes) : montants signés négativement pour qu'à
+    // l'agrégation MRA Schedule B, le CA soit correct (facture - avoir).
+    const sign = f.type_document === 'avoir' ? -1 : 1
     return [
       f.date_facture, f.numero_facture, f.type_document || 'facture',
       f.tiers || '', f.devise || 'MUR', f.taux_change || 1,
-      f.montant_ht || 0, f.montant_tva || 0, f.montant_ttc || 0,
-      f.montant_mur || 0, f.taux_tva || 0, cat
+      sign * (Number(f.montant_ht)  || 0),
+      sign * (Number(f.montant_tva) || 0),
+      sign * (Number(f.montant_ttc) || 0),
+      sign * (Number(f.montant_mur) || 0),
+      f.taux_tva || 0, cat
     ].map(csvEscape).join(',')
   })
   return [header.join(','), ...rows].join('\n')

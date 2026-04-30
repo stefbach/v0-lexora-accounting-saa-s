@@ -96,14 +96,14 @@ export async function getUserSocieteIds(userId: string): Promise<string[]> {
     }
   }
 
-  // 8. Ultimate fallback: if still empty, get sociétés from employes the user might manage
-  if (ids.size === 0) {
-    const { data: allSocietes } = await supabase.from('societes').select('id')
-    // If user has any role that implies RH access, give them all sociétés
-    if (['client_admin', 'client_user', 'rh', 'rh_manager', 'comptable', 'comptable_dedie'].includes(profile.role)) {
-      for (const s of allSocietes || []) ids.add(s.id)
-    }
-  }
+  // 8. Pas de fallback "tout-accès" — un user sans aucun lien explicite
+  //    (profile.societe_id, user_societes, dossiers, comptable_societes,
+  //    societes.client_id/created_by/comptable_id) ne doit RIEN voir.
+  //    L'ancien fallback retournait toutes les sociétés pour les rôles
+  //    client_admin/rh/comptable si vide → faille P0 (privilege escalation
+  //    silencieuse à la création d'un compte avant assignation).
+  //    Si nécessaire, l'admin doit explicitement assigner via user_societes
+  //    ou via la fiche du dossier/société.
 
   return [...ids]
 }

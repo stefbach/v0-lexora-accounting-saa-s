@@ -349,6 +349,20 @@ export async function PATCH(request: Request) {
       }
     }
 
+    // Garde-fou conversion devise sur PATCH — sinon création MUR puis PATCH
+    // EUR/taux=1 contournait le check du POST. Lit la valeur effective après
+    // merge des updates pour cohérence.
+    const finalDevise = updates.devise ?? existing.devise
+    const finalTaux = updates.taux_change ?? existing.taux_change
+    if (finalDevise && finalDevise !== 'MUR') {
+      const t = Number(finalTaux) || 0
+      if (t <= 1.0001) {
+        return NextResponse.json({
+          error: `Taux de change invalide pour ${finalDevise} (${t}). Saisissez le taux réel ${finalDevise} → MUR.`
+        }, { status: 400 })
+      }
+    }
+
     // Recalculate MUR if needed
     if (updates.montant_ttc !== undefined && updates.devise) {
       updates.montant_mur = updates.devise === 'MUR'

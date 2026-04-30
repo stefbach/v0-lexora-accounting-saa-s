@@ -101,6 +101,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'societe_id et date_facture requis' }, { status: 400 })
     }
 
+    // Multi-tenant guard — sinon tout user authentifié peut créer une
+    // facture sur n'importe quelle société (audit P0).
+    {
+      const { assertSocieteAccess, SocieteAccessError } = await import('@/lib/supabase/assert-societe-access')
+      const { createClient: createAdminClient } = await import('@supabase/supabase-js')
+      const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } })
+      try {
+        await assertSocieteAccess(admin, user.id, societe_id as string)
+      } catch (e) {
+        if (e instanceof SocieteAccessError) return NextResponse.json({ error: e.message }, { status: 403 })
+        throw e
+      }
+    }
+
     // Garde-fou conversion devise (cf. /api/client/factures route)
     if (devise && devise !== 'MUR') {
       const t = Number(taux_change) || 0
@@ -195,6 +210,32 @@ export async function PATCH(request: Request) {
     const { data: existing } = await admin.from('factures').select('*').eq('id', id).single()
     if (!existing) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
 
+    // Multi-tenant guard: l'utilisateur doit avoir accès à la société source
+    // de la facture, ET à la société cible si réassignation.
+    const { assertSocieteAccess, SocieteAccessError } = await import('@/lib/supabase/assert-societe-access')
+    try {
+      await assertSocieteAccess(admin, user.id, existing.societe_id as string)
+      if (updates.societe_id && updates.societe_id !== existing.societe_id) {
+        await assertSocieteAccess(admin, user.id, updates.societe_id as string)
+      }
+    } catch (e) {
+      if (e instanceof SocieteAccessError) return NextResponse.json({ error: e.message }, { status: 403 })
+      throw e
+    }
+
+    // Garde-fou conversion devise sur PATCH (cf. POST). Lit la valeur effective
+    // après merge des updates pour bloquer EUR + taux=1.
+    const finalDevise = updates.devise ?? existing.devise
+    const finalTaux = updates.taux_change ?? existing.taux_change
+    if (finalDevise && finalDevise !== 'MUR') {
+      const t = Number(finalTaux) || 0
+      if (t <= 1.0001) {
+        return NextResponse.json({
+          error: `Taux de change invalide pour ${finalDevise} (${t}). Saisissez le taux réel ${finalDevise} → MUR.`
+        }, { status: 400 })
+      }
+    }
+
     updates.updated_at = new Date().toISOString()
     const { data, error } = await admin.from('factures').update(updates).eq('id', id).select().single()
     if (error) throw error
@@ -237,6 +278,16 @@ export async function DELETE(request: Request) {
 
     const { data: existing } = await admin.from('factures').select('*').eq('id', id).single()
     if (!existing) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
+
+    // Multi-tenant guard sur DELETE — sinon n'importe quel comptable peut
+    // supprimer des factures cross-tenant + cascade leurs écritures.
+    const { assertSocieteAccess, SocieteAccessError } = await import('@/lib/supabase/assert-societe-access')
+    try {
+      await assertSocieteAccess(admin, user.id, existing.societe_id as string)
+    } catch (e) {
+      if (e instanceof SocieteAccessError) return NextResponse.json({ error: e.message }, { status: 403 })
+      throw e
+    }
 
     // Cascade: delete linked document
     try {

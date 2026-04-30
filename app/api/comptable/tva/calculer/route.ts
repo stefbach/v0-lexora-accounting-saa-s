@@ -240,11 +240,20 @@ export async function POST(request: Request) {
     base_reverse_charge_mur = Math.round(base_reverse_charge_mur * 100) / 100
 
     // TVA reverse charge (15% sur la base) : auto-add à Box 4 (output) et
-    // Box 5 (input) si non déjà présent dans les écritures.
+    // Box 5 (input) UNIQUEMENT si AUCUNE des deux box n'est déjà alimentée.
+    // Si l'une des deux est non-nulle, c'est qu'au moins une partie du RC est
+    // déjà comptabilisée manuellement via 4452x — on n'ajoute rien pour ne
+    // pas doublonner. La déclaration sera incomplète et il faudra la
+    // compléter manuellement (signal explicite via reverse_charge.warning).
+    let rcWarning: string | null = null
     if (base_reverse_charge_mur > 0) {
       const tvaRc = Math.round(base_reverse_charge_mur * 0.15 * 100) / 100
-      if (box4 === 0) box4 = tvaRc
-      if (box5 === 0) box5 = tvaRc
+      if (box4 === 0 && box5 === 0) {
+        box4 = tvaRc
+        box5 = tvaRc
+      } else {
+        rcWarning = `Reverse charge détecté (${base_reverse_charge_mur} MUR HT) mais Box 4 ou 5 déjà alimentée par les écritures — non auto-rempli pour éviter doublon. Vérifier manuellement.`
+      }
     }
 
     // TVA nette = (Box1 + Box4) - (Box9 + Box5 + Box7 + Box8) - Crédit reporté
@@ -366,6 +375,7 @@ export async function POST(request: Request) {
         base_mur:    base_reverse_charge_mur,
         tva_15pct:   Math.round(base_reverse_charge_mur * 0.15 * 100) / 100,
         nb_factures: nb_factures_rc,
+        warning:     rcWarning,
       },
       nb_ecritures: ecritures?.length || 0,
     })

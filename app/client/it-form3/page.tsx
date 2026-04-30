@@ -151,7 +151,7 @@ export default function ITForm3Page() {
         if (soc) {
           setCompanyName(soc.nom || soc.name || "")
           setBrn(soc.brn || "")
-          setTan(soc.numero_tva_mra || soc.tan || "")
+          setTan(soc.tan_societe || soc.numero_tva_mra || "")
           setEmail(soc.email || "")
           setPhone(soc.telephone || soc.phone || "")
         }
