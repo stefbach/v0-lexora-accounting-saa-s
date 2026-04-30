@@ -147,7 +147,7 @@ export default function ITForm3Page() {
 
         if (controller.signal.aborted) return
 
-        const soc = societe as (typeof societe & { name?: string; tan?: string; phone?: string }) | null
+        const soc = societe as (typeof societe & { name?: string; tan?: string; tan_societe?: string; phone?: string }) | null
         if (soc) {
           setCompanyName(soc.nom || soc.name || "")
           setBrn(soc.brn || "")
