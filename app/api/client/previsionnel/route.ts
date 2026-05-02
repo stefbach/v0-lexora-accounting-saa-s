@@ -60,8 +60,11 @@ export async function GET(request: Request) {
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
     const sinceDate = ninetyDaysAgo.toISOString().split('T')[0]
 
+    // ⚠️ V2 ONLY (mig 230) : ecritures_comptables (V1) est une vue sur V2,
+    // on lit V2 directement. Aliases V1→V2 appliqués après pour rester
+    // compatibles avec le code aval qui consomme `compte`, `debit`, `credit`.
     const [ecrituresRes, comptesRes, documentsRes] = await Promise.all([
-      supabase.from('ecritures_comptables').select('*').in('dossier_id', dossierIds)
+      supabase.from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
         .gte('date_ecriture', sinceDate)
         .order('date_ecriture', { ascending: false }),
       supabase.from('comptes_bancaires').select('*').in('societe_id', societeIds).eq('actif', true),
@@ -70,7 +73,12 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: false }).limit(50),
     ])
 
-    const ecritures = ecrituresRes.data || []
+    const ecritures = (ecrituresRes.data || []).map((e: any) => ({
+      ...e,
+      compte: e.numero_compte,
+      debit: e.debit_mur,
+      credit: e.credit_mur,
+    }))
     const comptes = comptesRes.data || []
     const documents = documentsRes.data || []
 

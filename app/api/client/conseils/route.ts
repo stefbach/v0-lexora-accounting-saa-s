@@ -56,8 +56,11 @@ export async function GET(request: Request) {
     const societeIds = [...new Set(dossiers.map(d => d.societe_id))]
 
     // Fetch financial data in parallel
+    // ⚠️ V2 ONLY (mig 230) : ecritures_comptables (V1) est une vue sur V2,
+    // on lit V2 directement. Aliases V1→V2 appliqués après pour rester
+    // compatibles avec le code aval qui consomme `compte`, `debit`, `credit`.
     const [ecrituresRes, documentsRes, comptesRes, tvaRes] = await Promise.all([
-      supabase.from('ecritures_comptables').select('*').in('dossier_id', dossierIds)
+      supabase.from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
         .order('date_ecriture', { ascending: false }),
       supabase.from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at')
         .in('dossier_id', dossierIds).eq('statut', 'traite')
@@ -67,7 +70,12 @@ export async function GET(request: Request) {
         .order('periode', { ascending: false }).limit(6),
     ])
 
-    const ecritures = ecrituresRes.data || []
+    const ecritures = (ecrituresRes.data || []).map((e: any) => ({
+      ...e,
+      compte: e.numero_compte,
+      debit: e.debit_mur,
+      credit: e.credit_mur,
+    }))
     const documents = documentsRes.data || []
     const comptes = comptesRes.data || []
     const tvaRecords = tvaRes.data || []
