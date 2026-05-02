@@ -422,6 +422,75 @@ export async function createEcrituresForPayment(
     }
     const inserted = insRes.data || []
 
+    // ── Écart de change réalisé (IAS 21 §28) ─────────────────────────────
+    // Pour facture en devise étrangère : le 411/401 est figé au taux de la
+    // facture (taux T0), mais le paiement BNQ est au taux du jour (T1).
+    // Différence = écart de change RÉALISÉ → 666 (perte) ou 766 (gain).
+    // Sans cette logique, le compte 411/401 reste avec un solde non-zéro
+    // après paiement complet → lettrage incomplet, balance déséquilibrée.
+    if (payment.facture_id && tauxFinal !== null && deviseFinale && deviseFinale !== 'MUR') {
+      try {
+        const { data: facture } = await supabase
+          .from('factures')
+          .select('montant_mur, montant_ttc, taux_change, devise')
+          .eq('id', payment.facture_id)
+          .maybeSingle()
+
+        if (facture) {
+          const factureMurAmount = Number((facture as any).montant_mur) || 0
+          const ecart = Math.round((payment.amount_mur - factureMurAmount) * 100) / 100
+
+          if (Math.abs(ecart) >= 0.02) {
+            // Détermine le sens selon type de tx :
+            //   • Client : 411 figé à factureMur, payé amount_mur sur 512.
+            //     Après les 2 lignes BNQ ci-dessus (411 crédit amount_mur,
+            //     512 débit amount_mur), 411 reste à factureMur - amount_mur
+            //     non réglé. On régularise : si amount_mur < factureMur (le
+            //     client a payé moins en MUR car taux baissé) → perte 666.
+            //   • Fournisseur : 401 figé à factureMur, on paie amount_mur.
+            //     Si amount_mur < factureMur (on paie moins) → gain 766.
+            const exerciceY = exercice
+            const refEcart = `${payment.ref_folio}-FX`
+            const isGain = (isSupplier && ecart < 0) || (!isSupplier && ecart > 0)
+            const compteFx = isGain ? '766' : '666'
+            const nomFx = isGain ? 'Gains de change réalisés' : 'Pertes de change réalisés'
+            const absEcart = Math.abs(ecart)
+
+            // Régularise le 411/401 + contrepartie 666/766
+            const tierFxLine = {
+              ...base,
+              ref_folio: refEcart,
+              numero_compte: isSupplier ? '401' : '411',
+              nom_compte: isSupplier ? 'Fournisseurs (écart change)' : 'Clients (écart change)',
+              debit_mur:  (!isSupplier && ecart < 0) || (isSupplier && ecart > 0) ? absEcart : 0,
+              credit_mur: (!isSupplier && ecart > 0) || (isSupplier && ecart < 0) ? absEcart : 0,
+              libelle: `Écart de change ${facture.devise} — ${payment.tiers}`,
+              description: `Écart change réalisé au paiement (taux fact ${facture.taux_change} → taux paiement ${tauxFinal})`,
+            }
+            const fxLine = {
+              ...base,
+              ref_folio: refEcart,
+              numero_compte: compteFx,
+              nom_compte: nomFx,
+              debit_mur:  isGain ? 0 : absEcart,
+              credit_mur: isGain ? absEcart : 0,
+              libelle: `${nomFx} — ${payment.tiers}`,
+              description: `Écart de change réalisé sur paiement ${facture.devise}`,
+            }
+
+            const fxRes = await safeInsertBnq(supabase, [tierFxLine, fxLine])
+            if (fxRes.error) {
+              console.warn('[createEcrituresForPayment] Écart change non comptabilisé:', fxRes.error.message)
+            } else {
+              console.log(`[createEcrituresForPayment] Écart change ${isGain ? 'gain' : 'perte'} ${absEcart} MUR → ${compteFx}`)
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn('[createEcrituresForPayment] Calcul écart change exception:', e?.message)
+      }
+    }
+
     // FIX 1 — si une lettre est posée, rattacher l'ACH/VTE 401|411 de
     // la facture au même groupe de lettrage. Tentative par facture_id
     // (le plus fiable), fallback par ref_folio FAC-<id>.
