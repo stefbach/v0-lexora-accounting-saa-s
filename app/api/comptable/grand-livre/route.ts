@@ -137,14 +137,19 @@ export async function GET(request: Request) {
           journal: e.journal || '', ref_folio: e.numero_piece || '',
           lettre: e.lettre ?? null, date_lettrage: e.date_lettrage ?? null,
         }))
-        // Merge V1 entries with V2 (deduplicate by id)
-        const existingIds = new Set(allEntries.map(e => e.id))
+        // Merge V1+V2 avec dedup composite (les ids diffèrent souvent entre
+        // V1 et V2 même pour les mêmes lignes — bug masse salariale 7,6M
+        // au lieu de 6,7M observé en prod).
+        const fp = (e: any) =>
+          `${e.date_ecriture}|${e.numero_compte}|${Number(e.debit_mur)||0}|${Number(e.credit_mur)||0}|${e.ref_folio||''}|${(e.description||'').slice(0,40)}`
+        const seen = new Set<string>(allEntries.map(fp))
         for (const entry of v1Entries) {
-          if (!existingIds.has(entry.id)) {
-            allEntries.push(entry)
-          }
+          const k = fp(entry)
+          if (seen.has(k)) continue
+          seen.add(k)
+          allEntries.push(entry)
         }
-        console.log(`[grand-livre] v1 loaded: ${v1Entries.length} entries from ${dossierIds.length} dossier(s), total: ${allEntries.length}`)
+        console.log(`[grand-livre] v1 loaded: ${v1Entries.length} entries from ${dossierIds.length} dossier(s), total apres dedup: ${allEntries.length}`)
       }
     }
 

@@ -191,13 +191,31 @@ export async function GET(request: Request) {
         .in('societe_id', societeIds).order('date_fin', { ascending: false }),
     ])
 
-    // Since migration 120, ecritures_comptables is now a VIEW on ecritures_comptables_v2.
-    // All entries live in v2 as single source of truth. Both reads return the same rows.
-    // We keep reading both for backward compat during rollout, but dedupe by id.
+    // ── ANTI-DOUBLE-COMPTAGE V1/V2 ────────────────────────────────────
+    // ecritures_comptables (V1) et ecritures_comptables_v2 contiennent
+    // souvent les MÊMES lignes (mig 120 maps V1 → V2 ; OCR legacy écrit
+    // dans V1 + nouveau code écrit dans V2). Les ids sont DIFFÉRENTS donc
+    // la dedup par id NE MARCHE PAS — bug en prod : masse salariale 7,6M
+    // affichée au lieu de 6,7M, fournisseurs 1,597M au lieu de 1,4M.
+    //
+    // Dedup robuste : composite key (societe, date, compte, debit, credit,
+    // ref_folio, libelle truncated). Si une ligne V1 a la même empreinte
+    // qu'une V2, on garde V2 et on skip V1.
     const ecrituresV1 = ecrituresV1Result?.data || []
-    const byId = new Map<string, any>()
+    const fingerprint = (e: any, isV2: boolean) => {
+      const compte = isV2 ? e.numero_compte : e.compte
+      const debit = isV2 ? e.debit_mur : e.debit
+      const credit = isV2 ? e.credit_mur : e.credit
+      const ref = e.ref_folio || ''
+      const lib = (e.libelle || e.description || '').slice(0, 40)
+      return `${e.societe_id || ''}|${e.date_ecriture}|${compte}|${Number(debit) || 0}|${Number(credit) || 0}|${ref}|${lib}`
+    }
+    const seen = new Set<string>()
+    const byKey = new Map<string, any>()
     for (const e of (ecrituresV2 || [])) {
-      byId.set(e.id, {
+      const k = fingerprint(e, true)
+      seen.add(k)
+      byKey.set(e.id, {
         ...e,
         compte: e.numero_compte,
         debit: e.debit_mur,
@@ -205,16 +223,17 @@ export async function GET(request: Request) {
       })
     }
     for (const e of ecrituresV1) {
-      if (byId.has(e.id)) continue
-      // v1 row with different id (pre-migration leftover) — normalize
-      byId.set(e.id, {
+      const k = fingerprint(e, false)
+      if (seen.has(k)) continue  // Déjà compté en V2 — skip
+      seen.add(k)
+      byKey.set(e.id || `v1-${k}`, {
         ...e,
         numero_compte: e.compte,
         debit_mur: e.debit,
         credit_mur: e.credit,
       })
     }
-    const ecritures = Array.from(byId.values())
+    const ecritures = Array.from(byKey.values())
 
     let facturesFromTable: any[] = []
     if (!facturesErr) facturesFromTable = facturesData || []

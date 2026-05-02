@@ -54,16 +54,23 @@ export async function GET(request: Request) {
       if (page.length < PAGE) break
     }
 
-    // Charger aussi la table V1 (legacy) — certaines sociétés ont des
-    // écritures SAL paie historiques qui n'ont jamais été migrées en V2.
+    // Charger aussi la table V1 (legacy) avec dedup composite contre V2.
+    // V1 et V2 ont souvent les MÊMES lignes (mig 120) avec des ids
+    // différents — sans dedup composite, masse salariale + fournisseurs
+    // sont DOUBLÉS dans la balance.
     {
       const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
       const dIds = (dossiers || []).map((d: any) => d.id)
       if (dIds.length > 0) {
+        const fp = (numero_compte: string, date_ecriture: string, debit: number, credit: number, libelle: string) =>
+          `${date_ecriture}|${numero_compte}|${debit}|${credit}|${(libelle || '').slice(0, 40)}`
+        const seenV2 = new Set(ecritures.map(e =>
+          fp(e.numero_compte, (e as any).date_ecriture || '', Number(e.debit_mur)||0, Number(e.credit_mur)||0, (e.nom_compte || ''))
+        ))
         for (let from = 0; ; from += PAGE) {
           let q = supabase
             .from('ecritures_comptables')
-            .select('compte, debit, credit, libelle')
+            .select('compte, debit, credit, libelle, date_ecriture')
             .in('dossier_id', dIds)
             .range(from, from + PAGE - 1)
             .order('id')
@@ -73,11 +80,18 @@ export async function GET(request: Request) {
           if (error) break
           if (!page || page.length === 0) break
           for (const e of page) {
+            const numero = (e as any).compte
+            const debit = Number((e as any).debit) || 0
+            const credit = Number((e as any).credit) || 0
+            const libelle = (e as any).libelle || null
+            const k = fp(numero, (e as any).date_ecriture || '', debit, credit, libelle || '')
+            if (seenV2.has(k)) continue   // Déjà compté en V2
+            seenV2.add(k)
             ecritures.push({
-              numero_compte: (e as any).compte,
-              debit_mur: Number((e as any).debit) || 0,
-              credit_mur: Number((e as any).credit) || 0,
-              nom_compte: (e as any).libelle || null,
+              numero_compte: numero,
+              debit_mur: debit,
+              credit_mur: credit,
+              nom_compte: libelle,
             })
           }
           if (page.length < PAGE) break
