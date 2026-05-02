@@ -3553,6 +3553,66 @@ export async function POST(request: Request) {
       const oldFactureIds: string[] = Array.isArray(prevTx.facture_ids) && prevTx.facture_ids.length > 0
         ? prevTx.facture_ids
         : (prevTx.facture_id ? [prevTx.facture_id] : [])
+
+      // Garde-fou anti-doublon : si cette transaction a DÉJÀ été classifiée
+      // (statut='rapproche'), on refuse une 2e classification — même
+      // classification ou nouvelle. Le user doit explicitement déclasser
+      // d'abord. Bug observé en prod : compte courant déjà comptabilisé
+      // via la page CCA → la tx réapparaissait dans rapprochement → user
+      // re-classifiait → écritures comptabilisées 2 fois.
+      if (prevTx.statut === 'rapproche' || prevTx.statut === 'interne') {
+        return NextResponse.json({
+          error: 'Cette transaction est déjà rapprochée — déclassez-la d\'abord pour la reclassifier.',
+          duplicate: true,
+          previous_classification: prevTx.matched_type || prevTx.classification || null,
+        }, { status: 409 })
+      }
+      // Garde-fou spécifique CCA : si un mouvement_compte_courant existe
+      // déjà pour ce (releve_id, txIdx), on bloque (cas où la classif a
+      // été faite via la page /client/compte-courant et que la tx n'a
+      // pas été marquée correctement à l'époque).
+      if (classification === 'compte_courant_associe' || classification === 'remboursement_associe') {
+        // 1. Match exact via source_releve_id + source_transaction_idx
+        const { data: existingCcaMvt } = await supabase
+          .from('mouvements_compte_courant')
+          .select('id, type, montant')
+          .eq('source_releve_id', releve_id)
+          .eq('source_transaction_idx', txIdx)
+          .limit(1).maybeSingle()
+        if (existingCcaMvt) {
+          return NextResponse.json({
+            error: `Cette transaction a déjà été enregistrée en CCA (mouvement ${existingCcaMvt.type}, ${existingCcaMvt.montant} MUR) — pas de double-comptabilisation.`,
+            duplicate: true,
+            mouvement_id: existingCcaMvt.id,
+          }, { status: 409 })
+        }
+        // 2. Match heuristique date+montant pour les mouvements legacy créés
+        // via la page CCA SANS source_releve_id. Évite le double-comptage
+        // typique : avance saisie manuellement le 15/04 puis tx bancaire
+        // du même montant le 15/04 reclassifiée en rapprochement.
+        const txAmtMUR = Math.max(Number(prevTx.debit) || 0, Number(prevTx.credit) || 0)
+        const txDateForMatch = prevTx.date || null
+        if (txDateForMatch && txAmtMUR > 0) {
+          const { data: ccaList } = await supabase
+            .from('mouvements_compte_courant')
+            .select('id, type, montant, date_mouvement, source_releve_id, comptes_courants_associes!inner(societe_id)')
+            .is('source_releve_id', null)
+            .eq('comptes_courants_associes.societe_id', societe_id)
+            .eq('date_mouvement', txDateForMatch)
+          const tolerance = Math.max(1, txAmtMUR * 0.001) // 0.1% ou 1 MUR
+          const heuristicMatch = (ccaList || []).find((m: any) =>
+            Math.abs(Math.abs(Number(m.montant)) - txAmtMUR) < tolerance,
+          )
+          if (heuristicMatch) {
+            return NextResponse.json({
+              error: `Un mouvement CCA non rapproché existe le ${txDateForMatch} pour ${heuristicMatch.montant} MUR — il s'agit probablement de la même opération. Liez-le manuellement avant de classifier (ou supprimez le doublon).`,
+              duplicate: true,
+              mouvement_id: heuristicMatch.id,
+              heuristic: true,
+            }, { status: 409 })
+          }
+        }
+      }
       txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
       const { error: updRelErr, data: updRelData } = await supabase
         .from('releves_bancaires')
