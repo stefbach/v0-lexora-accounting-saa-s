@@ -120,26 +120,7 @@ export async function GET(request: Request) {
           debit_mur: Number(e.debit_mur) || 0, credit_mur: Number(e.credit_mur) || 0,
         }))
 
-      const { data: priorDossiers } = await supabase
-        .from('dossiers').select('id').eq('societe_id', societe_id)
-      const priorDossierIds = (priorDossiers || []).map((d: any) => d.id)
-      if (priorDossierIds.length > 0) {
-        let priorV1Query = supabase.from('ecritures_comptables')
-          .select('id, compte, debit, credit')
-          .in('dossier_id', priorDossierIds)
-          .lt('date_ecriture', effectiveDateDebut)
-        if (compte_debut) priorV1Query = priorV1Query.gte('compte', compte_debut)
-        if (compte_fin) priorV1Query = priorV1Query.lte('compte', compte_fin)
-        const { data: priorV1Data } = await priorV1Query
-        const existingPriorIds = new Set(priorEntries.map(e => e.id).filter(Boolean))
-        for (const e of (priorV1Data || []) as any[]) {
-          if (e.id && existingPriorIds.has(e.id)) continue
-          priorEntries.push({
-            id: e.id, numero_compte: e.compte,
-            debit_mur: Number(e.debit) || 0, credit_mur: Number(e.credit) || 0,
-          })
-        }
-      }
+      // ⚠️ V2 ONLY (mig 230) — V1 supprimée du calcul des soldes prior.
 
       // Aggregate opening balances per account (only balance sheet accounts: classes 1-5)
       for (const e of priorEntries) {
