@@ -120,14 +120,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // Normaliser : éviter négatifs
-    box1 = Math.max(0, box1)
-    box4 = Math.max(0, box4)
-    box5 = Math.max(0, box5)
-    box7 = Math.max(0, box7)
-    box9 = Math.max(0, box9)
-    box6 = Math.max(0, box6)
-    box3 = Math.max(0, box3)
+    // NB : ne PAS forcer Math.max(0, …). Si avoirs > facturations sur la
+    // période, la TVA collectée est légitimement négative et doit s'imputer
+    // en crédit reporté au mois suivant (VAT Act §24A). Les masquer cache
+    // le crédit dû par la MRA.
 
     // ----------------------------------------------------------------
     // Bases HT par catégorie — lues directement depuis `factures`
@@ -281,8 +277,11 @@ export async function POST(request: Request) {
       const mois_retard = Math.ceil(
         (aujourd_hui.getTime() - date_limite_d.getTime()) / (1000 * 60 * 60 * 24 * 30)
       )
-      penalites = Math.round(tva_nette * 0.02 * mois_retard * 100) / 100
-      interets  = Math.round(tva_nette * 0.01 * mois_retard * 100) / 100
+      // VAT Act Maurice — Section 24 :
+      //   • Pénalité 5% du montant dû — ONE-SHOT (pas mensuelle)
+      //   • Intérêt 0,5% par mois de retard
+      penalites = Math.round(tva_nette * 0.05 * 100) / 100
+      interets  = Math.round(tva_nette * 0.005 * mois_retard * 100) / 100
     }
 
     // ----------------------------------------------------------------

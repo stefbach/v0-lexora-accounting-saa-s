@@ -33,19 +33,59 @@ export async function GET(request: Request) {
       if (ex) { dDebut = ex.date_debut; dFin = ex.date_fin }
     }
 
-    // Récupérer toutes les écritures
-    let query = supabase
-      .from('ecritures_comptables_v2')
-      .select('numero_compte, debit_mur, credit_mur, nom_compte')
-      .eq('societe_id', societe_id)
+    // Récupérer toutes les écritures — boucle pagination 1000 (cap PostgREST
+    // par défaut). Sans cette boucle, une société avec >1000 lignes voit sa
+    // balance silencieusement tronquée → débit ≠ crédit.
+    const ecritures: any[] = []
+    const PAGE = 1000
+    for (let from = 0; ; from += PAGE) {
+      let q = supabase
+        .from('ecritures_comptables_v2')
+        .select('numero_compte, debit_mur, credit_mur, nom_compte')
+        .eq('societe_id', societe_id)
+        .range(from, from + PAGE - 1)
+        .order('id')
+      if (dDebut) q = q.gte('date_ecriture', dDebut)
+      if (dFin)   q = q.lte('date_ecriture', dFin)
+      const { data: page, error } = await q
+      if (error) throw error
+      if (!page || page.length === 0) break
+      ecritures.push(...page)
+      if (page.length < PAGE) break
+    }
 
-    if (dDebut) query = query.gte('date_ecriture', dDebut)
-    if (dFin)   query = query.lte('date_ecriture', dFin)
+    // Charger aussi la table V1 (legacy) — certaines sociétés ont des
+    // écritures SAL paie historiques qui n'ont jamais été migrées en V2.
+    {
+      const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
+      const dIds = (dossiers || []).map((d: any) => d.id)
+      if (dIds.length > 0) {
+        for (let from = 0; ; from += PAGE) {
+          let q = supabase
+            .from('ecritures_comptables')
+            .select('compte, debit, credit, libelle')
+            .in('dossier_id', dIds)
+            .range(from, from + PAGE - 1)
+            .order('id')
+          if (dDebut) q = q.gte('date_ecriture', dDebut)
+          if (dFin)   q = q.lte('date_ecriture', dFin)
+          const { data: page, error } = await q
+          if (error) break
+          if (!page || page.length === 0) break
+          for (const e of page) {
+            ecritures.push({
+              numero_compte: (e as any).compte,
+              debit_mur: Number((e as any).debit) || 0,
+              credit_mur: Number((e as any).credit) || 0,
+              nom_compte: (e as any).libelle || null,
+            })
+          }
+          if (page.length < PAGE) break
+        }
+      }
+    }
 
-    const { data: ecritures, error } = await query
-    if (error) throw error
-
-    if (!ecritures || ecritures.length === 0) {
+    if (ecritures.length === 0) {
       return NextResponse.json({
         comptes: [], par_classe: {}, total_debit: 0, total_credit: 0,
         equilibre: true, message: 'Aucune écriture comptabilisée',
