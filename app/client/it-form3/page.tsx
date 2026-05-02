@@ -109,6 +109,9 @@ export default function ITForm3Page() {
   // Tax calculation
   const [tauxIS, setTauxIS] = useState(15)
   const [apsPayé, setApsPayé] = useState(0)
+  // TDS (Tax Deducted at Source) retenu par les clients sur les honoraires,
+  // loyers, services pro etc. Déductible en crédit d'impôt sur l'IT Form 3.
+  const [tdsPaye, setTdsPaye] = useState(0)
 
   // Computed
   const [totalRevenus, setTotalRevenus] = useState(0)
@@ -260,10 +263,16 @@ export default function ITForm3Page() {
     const totDed = annualAllowance + autresDeductions
     const revImp = Math.max(0, totRev - totDed)
     const impot = revImp * (tauxIS / 100)
-    const isAps = revenuAffaires > 10_000_000
+    // APS (Advance Payment System) — ITA Section 111A : si tax_payable
+    // de l'année N-1 > 50 000 MUR, l'entité doit payer APS trimestriel.
+    // L'usage de revenuAffaires > 10M est un proxy ; le bon critère est
+    // basé sur l'IT Form 3 N-1.
+    const isAps = revenuAffaires > 10_000_000 || (priorYearData?.impotCalcule || 0) > 50_000
     const quarterly = isAps ? impot / 4 : 0
     const csr = revImp > 10_000_000 ? revImp * 0.02 : 0
-    const solde = impot - apsPayé + csr
+    // Solde = impôt + CSR − APS payé d'avance − TDS retenu à la source
+    // par les clients (sur honoraires, loyers, etc. — ITA s.111A et 124)
+    const solde = impot + csr - apsPayé - tdsPaye
 
     setTotalRevenus(totRev)
     setTotalDeductions(totDed)
