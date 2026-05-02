@@ -107,8 +107,16 @@ export async function GET(request: Request) {
     }))
     const totalBankMUR = bankAccounts.reduce((s, a) => s + a.solde_mur, 0)
 
+    // Masse salariale = charges de paie (compte 641) — PAS le compte 421 qui
+    // est une dette de paie (passif). Mêmes exclusions que /api/client/financial :
+    //  - 6418 (ajustements techniques `FAC-... écart`, hors masse réelle)
+    //  - journal ACH (un 641 en ACH = doublon avec une facture fournisseur)
     const salaires = ecritures
-      .filter(e => e.compte?.startsWith('421') || e.compte?.startsWith('42'))
+      .filter(e =>
+        e.compte?.startsWith('641')
+        && !e.compte?.startsWith('6418')
+        && e.journal !== 'ACH'
+      )
       .reduce((sum: number, e: any) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     // Expense breakdown by category (top charges)
