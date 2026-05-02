@@ -312,17 +312,19 @@ export async function GET(request: Request) {
     let expensesByAccount: Record<string, number> = {}
 
     if (facturesFromTable.length > 0) {
-      // Build revenue breakdown from factures (amounts already in MUR)
+      // Build revenue breakdown from factures — EN HT.
+      // ⚠️ On utilise computeHtMur (et NON f.montant_mur) parce que `montant_mur`
+      // est souvent peuplé avec le TTC en MUR par les imports/OCR. Sans ça la
+      // ventilation par compte est en TTC alors que le total `caFromFactures`
+      // est en HT → P&L incohérente.
       facturesFromTable.filter(f => f.type_facture === 'client' && f.statut !== 'annule').forEach(f => {
         const prefix = '706' // Default: prestations de services
-        const mur = Number(f.montant_mur) || convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates)
-        revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + mur
+        revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + computeHtMur(f)
       })
-      // Supplier invoices → 628 (services diverses)
+      // Supplier invoices → 628 (services diverses) — même logique HT.
       facturesFromTable.filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule').forEach(f => {
         const prefix = '628' // Default: charges diverses
-        const mur = Number(f.montant_mur) || convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates)
-        expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + mur
+        expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + computeHtMur(f)
       })
       // ALSO add all non-fournisseur expenses from écritures:
       // salaires (641), charges sociales (645), impôts/taxes (63x), charges financières (66x), etc.

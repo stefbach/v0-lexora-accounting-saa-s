@@ -58,7 +58,10 @@ const EXPENSE_GROUPS: { label: string; range: string; match: (p: string) => bool
   { label: "Services exterieurs", range: "611-619", match: (p) => { const n = parseInt(p); return n >= 611 && n <= 619 } },
   { label: "Autres services exterieurs", range: "621-629", match: (p) => { const n = parseInt(p); return n >= 621 && n <= 629 } },
   { label: "Impots et taxes", range: "631-639", match: (p) => { const n = parseInt(p); return n >= 631 && n <= 639 } },
-  { label: "Charges de personnel", range: "641-649", match: (p) => { const n = parseInt(p); return n >= 641 && n <= 649 } },
+  // Salaires (641, 644) séparés des charges patronales (645-649) pour
+  // que la ligne "masse salariale brute" soit lisible dans la P&L.
+  { label: "Salaires et traitements", range: "641, 644", match: (p) => p === "641" || p === "644" },
+  { label: "Charges sociales et patronales", range: "645-649", match: (p) => { const n = parseInt(p); return n >= 645 && n <= 649 } },
   { label: "Autres charges de gestion", range: "651-659", match: (p) => { const n = parseInt(p); return n >= 651 && n <= 659 } },
   { label: "Charges financieres", range: "661-669", match: (p) => { const n = parseInt(p); return n >= 661 && n <= 669 } },
 ]
