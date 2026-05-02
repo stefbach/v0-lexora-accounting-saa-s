@@ -97,16 +97,19 @@ export async function POST(request: Request) {
       .limit(1)
       .single()
 
+    // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
+    // V2 exige societe_id (NOT NULL) → on l'inclut explicitement et on renomme compte/debit/credit.
     // Écriture dans la société émettrice : 451 (interco) Débit / Banque ou Fournisseur Crédit
     if (dossierEmetteur) {
       ecritures.push({
         dossier_id: dossierEmetteur.id,
+        societe_id: societe_emettrice_id,
         date_ecriture: date_flux,
         libelle: `INTERCO - ${description}`,
-        compte: compte_debit || '451',
+        numero_compte: compte_debit || '451',
         compte_contrepartie: '512',
-        debit: montant_mur,
-        credit: 0,
+        debit_mur: montant_mur,
+        credit_mur: 0,
         devise: devise || 'MUR',
         source: 'interco',
         reference: flux.id
@@ -117,12 +120,13 @@ export async function POST(request: Request) {
     if (dossierRecepteur) {
       ecritures.push({
         dossier_id: dossierRecepteur.id,
+        societe_id: societe_receptrice_id,
         date_ecriture: date_flux,
         libelle: `INTERCO - ${description}`,
-        compte: '512',
+        numero_compte: '512',
         compte_contrepartie: compte_credit || '451',
-        debit: montant_mur,
-        credit: 0,
+        debit_mur: montant_mur,
+        credit_mur: 0,
         devise: devise || 'MUR',
         source: 'interco',
         reference: flux.id
@@ -132,7 +136,7 @@ export async function POST(request: Request) {
     // Insérer les écritures si les dossiers existent
     if (ecritures.length > 0) {
       const { error: ecrError } = await supabase
-        .from('ecritures_comptables')
+        .from('ecritures_comptables_v2')
         .insert(ecritures)
 
       if (ecrError) {

@@ -457,12 +457,13 @@ export async function DELETE(request: Request) {
     }
 
     // Cascade: delete accounting entries
+    // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on supprime direct dans V2.
+    // V2 expose societe_id directement → plus besoin de lookup dossier (et plus besoin de filtrer par dossier_id, ce qui ratait les écritures rattachées à d'autres dossiers de la même société).
     try {
       const libellePrefix = `Facture ${existing.numero_facture || ''}`
-      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', existing.societe_id).limit(1).maybeSingle()
-      if (dossier?.id) {
-        await supabase.from('ecritures_comptables')
-          .delete().eq('dossier_id', dossier.id).like('libelle', `${libellePrefix}%`)
+      if (existing.societe_id) {
+        await supabase.from('ecritures_comptables_v2')
+          .delete().eq('societe_id', existing.societe_id).like('libelle', `${libellePrefix}%`)
       }
     } catch (e: any) {
       console.warn('[factures DELETE] Failed to remove ecritures:', e.message)

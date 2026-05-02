@@ -181,7 +181,7 @@ export async function dedupeBnqEntries(
 export async function safeInsertBnq(
   supabase: SupabaseClient,
   candidates: EcritureCandidate[],
-  table: 'ecritures_comptables' | 'ecritures_comptables_v2' = 'ecritures_comptables_v2',
+  table: 'ecritures_comptables_v2' = 'ecritures_comptables_v2',
 ): Promise<{
   data: any[] | null
   error: any
@@ -192,7 +192,24 @@ export async function safeInsertBnq(
   if (dedup.toInsert.length === 0) {
     return { data: [], error: null, skipped: dedup.skipped, skipReasons: dedup.skipReasons }
   }
-  const res = await supabase.from(table).insert(dedup.toInsert).select()
+  // Normalisation V1→V2 avant INSERT : si l'appelant a passé `compte` /
+  // `debit` / `credit` / `piece_justificative` (anciens noms V1), on les
+  // convertit en `numero_compte` / `debit_mur` / `credit_mur` / `ref_folio`
+  // pour que l'INSERT sur ecritures_comptables_v2 accepte le payload.
+  // Les colonnes V1 ne sont supprimées que si la version V2 est définie.
+  const payload = dedup.toInsert.map((e) => {
+    const out: any = { ...e }
+    if (out.numero_compte == null && out.compte != null) out.numero_compte = out.compte
+    if (out.debit_mur == null && out.debit != null) out.debit_mur = out.debit
+    if (out.credit_mur == null && out.credit != null) out.credit_mur = out.credit
+    if (out.ref_folio == null && out.piece_justificative != null) out.ref_folio = out.piece_justificative
+    delete out.compte
+    delete out.debit
+    delete out.credit
+    delete out.piece_justificative
+    return out
+  })
+  const res = await supabase.from(table).insert(payload).select()
   return {
     data: res.data || null,
     error: res.error,

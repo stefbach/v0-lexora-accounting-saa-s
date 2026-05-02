@@ -1160,8 +1160,19 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     if (updateError) console.error('[upload] DB UPDATE FAILED:', updateError.message)
 
     // Auto-create accounting entries (use the matched dossier)
+    // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
+    // V2 exige societe_id (NOT NULL) → on le résout via le dossier final si pas déjà connu.
+    // Renommage : compte → numero_compte, debit → debit_mur, credit → credit_mur.
     const ecritures = extraction.ecritures_comptables
     if (Array.isArray(ecritures) && ecritures.length > 0) {
+      // Resolve societe_id for V2 (NOT NULL).
+      let ecrituresSocieteId: string | null = societeId || null
+      if (!ecrituresSocieteId && finalDossierId) {
+        const { data: dossierEcr } = await supabase
+          .from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
+        ecrituresSocieteId = dossierEcr?.societe_id || null
+      }
+
       const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ', fiche_paie: 'OD', charges_sociales: 'OD' }
       // Use affectation journal override if available
       const effectiveJournal = extraction._affectation_journal || journalMap[typeDocument] || 'OD'
@@ -1184,12 +1195,13 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           })
           .map((e: any) => ({
             dossier_id: finalDossierId,
+            societe_id: ecrituresSocieteId,
             // Use transaction-level date if available, otherwise document-level date
             date_ecriture: e.date || dateEcriture,
             journal: effectiveJournal,
             numero_piece: e.reference || extraction.numero_reference || null,
-            compte: String(e.compte), libelle: e.libelle || file.name,
-            debit: parseAmount(e.debit), credit: parseAmount(e.credit), piece_justificative: doc.id,
+            numero_compte: String(e.compte), libelle: e.libelle || file.name,
+            debit_mur: parseAmount(e.debit), credit_mur: parseAmount(e.credit), piece_justificative: doc.id,
             // Mark as auto-lettrée if affectation says so
             ...(extraction._auto_lettrage ? { lettrage: 'AUTO' } : {}),
           }))
@@ -1209,7 +1221,11 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           { status: 400 },
         )
       }
-      if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
+      if (entries.length > 0 && ecrituresSocieteId) {
+        await supabase.from('ecritures_comptables_v2').insert(entries)
+      } else if (entries.length > 0 && !ecrituresSocieteId) {
+        console.warn(`[upload] Skipping ecritures insert: cannot resolve societe_id (dossier ${finalDossierId})`)
+      }
     }
 
     // ──── AUTO-FEED RH from PAYROLL REPORT (Excel multi-employés) ────
@@ -1654,8 +1670,9 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           // Migration 133 — link ecritures to this facture via facture_id so
           // auto-letterage can find the pair reliably. Ecritures were just
           // inserted above with piece_justificative = doc.id.
+          // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on update direct V2.
           if (insertedFacture?.id && finalDossierId) {
-            await supabase.from('ecritures_comptables')
+            await supabase.from('ecritures_comptables_v2')
               .update({ facture_id: insertedFacture.id })
               .eq('dossier_id', finalDossierId)
               .eq('piece_justificative', doc.id)

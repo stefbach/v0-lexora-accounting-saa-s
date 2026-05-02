@@ -32,10 +32,12 @@ function getAdminClient() {
   )
 }
 
+// ⚠️ V2 ONLY (mig 230). Legacy : `piece_justificative` était l'ancien nom V1 de
+// `ref_folio` ; certaines écritures historiques ont leur ref_folio = document.id.
 const CHILD_TABLES: Array<{ table: string; field: string }> = [
   { table: 'releves_bancaires',      field: 'document_id' },
   { table: 'factures',               field: 'document_id' },
-  { table: 'ecritures_comptables',   field: 'piece_justificative' },
+  { table: 'ecritures_comptables_v2', field: 'ref_folio' },
   { table: 'ecritures_comptables_v2', field: 'document_id' },
   { table: 'transactions_bancaires', field: 'document_lie_id' },
   { table: 'messages_document',      field: 'document_id' },

@@ -63,9 +63,10 @@ export async function GET(request: Request) {
     const dossierIds = dossiers.map(d => d.id)
     const societeIds = [...new Set(dossiers.map(d => d.societe_id))]
 
-    // Fetch data in parallel
+    // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on lit V2 directement.
+    // V2 a societe_id directement → on filtre par societe_id (évite la duplication LEFT JOIN dossiers pour sociétés multi-dossiers).
     const [ecrituresRes, documentsRes, comptesRes] = await Promise.all([
-      supabase.from('ecritures_comptables').select('*').in('dossier_id', dossierIds)
+      supabase.from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
         .order('date_ecriture', { ascending: false }),
       supabase.from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at, societe_detectee')
         .in('dossier_id', dossierIds)
@@ -73,7 +74,13 @@ export async function GET(request: Request) {
       supabase.from('comptes_bancaires').select('*').in('societe_id', societeIds).eq('actif', true),
     ])
 
-    const ecritures = ecrituresRes.data || []
+    // Aliase V2 (numero_compte/debit_mur/credit_mur) → noms V1 utilisés ci-dessous (compte/debit/credit).
+    const ecritures = (ecrituresRes.data || []).map((e: any) => ({
+      ...e,
+      compte: e.numero_compte,
+      debit: e.debit_mur,
+      credit: e.credit_mur,
+    }))
     const documents = documentsRes.data || []
     const comptes = comptesRes.data || []
 

@@ -28,7 +28,9 @@ export async function GET(request: Request) {
       supabase.from('societes').select('*').eq('id', societe_id).single(),
       supabase.from('factures').select('*').eq('societe_id', societe_id).eq('type_facture', 'client').gte('date_facture', dateDebut).lte('date_facture', dateFin),
       supabase.from('factures').select('*').eq('societe_id', societe_id).eq('type_facture', 'fournisseur').gte('date_facture', dateDebut).lte('date_facture', dateFin),
-      supabase.from('ecritures_comptables').select('*, dossier:dossiers(societe_id)').gte('date_ecriture', dateDebut).lte('date_ecriture', dateFin),
+      // V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on lit V2 directement.
+      // V2 expose societe_id directement → plus besoin de LEFT JOIN dossiers (qui dupliquait les lignes pour sociétés multi-dossiers).
+      supabase.from('ecritures_comptables_v2').select('*').eq('societe_id', societe_id).gte('date_ecriture', dateDebut).lte('date_ecriture', dateFin),
       supabase.from('immobilisations').select('*, amortissements(*)').eq('societe_id', societe_id),
       supabase.from('bulletins_paie').select('*, employe:employes(nom,prenom,code)').eq('societe_id', societe_id).gte('periode', dateDebut).lte('periode', dateFin),
     ])
@@ -36,7 +38,13 @@ export async function GET(request: Request) {
     const soc = societeRes.data
     const facCl = facClRes.data || []
     const facFou = facFouRes.data || []
-    const ecritures = (ecrituresRes.data || []).filter((e: any) => e.dossier?.societe_id === societe_id)
+    // Aliase V2 (numero_compte/debit_mur/credit_mur) → noms V1 utilisés ci-dessous (compte/debit/credit).
+    const ecritures = (ecrituresRes.data || []).map((e: any) => ({
+      ...e,
+      compte: e.numero_compte,
+      debit: e.debit_mur,
+      credit: e.credit_mur,
+    }))
     const immos = immoRes.data || []
     const bulletins = bulletinsRes.data || []
 

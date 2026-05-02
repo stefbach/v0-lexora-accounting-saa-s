@@ -31,54 +31,31 @@ export async function GET(request: Request) {
     const societe_id = searchParams.get('societe_id')
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
-    // Get dossiers for this société
-    const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
-    const dossierIds = (dossiers || []).map((d: any) => d.id)
-
-    let ecritures: any[] = []
-
-    // Try v1 (ecritures_comptables) which has lettrage support
-    if (dossierIds.length > 0) {
-      const { data } = await supabase
-        .from('ecritures_comptables')
-        .select('id, compte, libelle, date_ecriture, debit, credit, lettre, date_lettrage, lettrage_auto, piece_justificative')
-        .in('dossier_id', dossierIds)
-        .is('lettre', null)
-        .order('compte').order('date_ecriture')
-        .limit(500)
-      ecritures = (data || []).map(e => ({
-        ...e,
-        numero_compte: e.compte,
-        debit_mur: Number(e.debit) || 0,
-        credit_mur: Number(e.credit) || 0,
-        source: 'v1',
-      }))
-    }
-
-    // Also try v2
+    // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on lit
+    // V2 directement. Avant cette migration le code lisait V1 PUIS V2 puis
+    // mergeait : ça doublait les écritures pour les sociétés multi-dossiers.
     const { data: v2Data } = await supabase
       .from('ecritures_comptables_v2')
-      .select('id, numero_compte, nom_compte, description, debit_mur, credit_mur, date_ecriture, journal, lettre, date_lettrage')
+      .select('id, numero_compte, nom_compte, description, libelle, debit_mur, credit_mur, date_ecriture, journal, lettre, date_lettrage, lettrage_auto, ref_folio')
       .eq('societe_id', societe_id)
       .is('lettre', null)
       .order('numero_compte').order('date_ecriture')
       .limit(500)
 
-    if (v2Data && v2Data.length > 0) {
-      ecritures = [...ecritures, ...(v2Data || []).map(e => ({
-        ...e,
-        compte: e.numero_compte,
-        libelle: e.description || e.nom_compte,
-        debit: Number(e.debit_mur) || 0,
-        credit: Number(e.credit_mur) || 0,
-        source: 'v2',
-      }))]
-    }
+    // Aliases V1→V2 pour compat avec le code aval qui lit `compte`/`debit`/`credit`
+    const ecritures = (v2Data || []).map(e => ({
+      ...e,
+      compte: e.numero_compte,
+      libelle: e.libelle || e.description || e.nom_compte,
+      debit: Number(e.debit_mur) || 0,
+      credit: Number(e.credit_mur) || 0,
+      piece_justificative: e.ref_folio,
+    }))
 
     // Group by account for display
     const byCompte: Record<string, any[]> = {}
     ecritures.forEach(e => {
-      const c = e.numero_compte || e.compte || '?'
+      const c = e.numero_compte || '?'
       if (!byCompte[c]) byCompte[c] = []
       byCompte[c].push(e)
     })
@@ -102,19 +79,15 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { action, societe_id, ecriture_ids, lettre } = body
 
+    // ⚠️ V2 ONLY (mig 230) — toutes les opérations ci-dessous lisent/écrivent V2 directement.
     if (action === 'auto') {
       // Auto-lettrage: match debits ↔ credits on same account with same amount
-      const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
-      const dossierIds = (dossiers || []).map((d: any) => d.id)
-      if (!dossierIds.length) return NextResponse.json({ nb_lettres: 0, message: 'Aucun dossier trouvé' })
-
-      // Get non-lettered entries
       const { data: entries } = await supabase
-        .from('ecritures_comptables')
-        .select('id, compte, debit, credit')
-        .in('dossier_id', dossierIds)
+        .from('ecritures_comptables_v2')
+        .select('id, numero_compte, debit_mur, credit_mur')
+        .eq('societe_id', societe_id)
         .is('lettre', null)
-        .order('compte').order('date_ecriture')
+        .order('numero_compte').order('date_ecriture')
 
       if (!entries || entries.length === 0) {
         return NextResponse.json({ nb_lettres: 0, message: 'Aucune écriture non lettrée' })
@@ -123,8 +96,9 @@ export async function POST(request: Request) {
       // Group by account
       const byCompte: Record<string, any[]> = {}
       entries.forEach(e => {
-        if (!byCompte[e.compte]) byCompte[e.compte] = []
-        byCompte[e.compte].push(e)
+        const c = e.numero_compte
+        if (!byCompte[c]) byCompte[c] = []
+        byCompte[c].push(e)
       })
 
       let matchCount = 0
@@ -137,22 +111,22 @@ export async function POST(request: Request) {
         return alphabet[Math.floor(idx / 26) - 1] + alphabet[idx % 26]
       }
 
-      for (const [compte, items] of Object.entries(byCompte)) {
-        const debits = items.filter(e => (Number(e.debit) || 0) > 0)
-        const credits = items.filter(e => (Number(e.credit) || 0) > 0)
+      for (const [, items] of Object.entries(byCompte)) {
+        const debits = items.filter(e => (Number(e.debit_mur) || 0) > 0)
+        const credits = items.filter(e => (Number(e.credit_mur) || 0) > 0)
         const usedCredits = new Set<string>()
 
         for (const d of debits) {
-          const dAmount = Number(d.debit) || 0
+          const dAmount = Number(d.debit_mur) || 0
           const matchingCredit = credits.find(c => {
             if (usedCredits.has(c.id)) return false
-            const cAmount = Number(c.credit) || 0
+            const cAmount = Number(c.credit_mur) || 0
             return Math.abs(dAmount - cAmount) < 0.01
           })
           if (matchingCredit) {
             const code = genLettre()
             const today = new Date().toISOString().split('T')[0]
-            await supabase.from('ecritures_comptables')
+            await supabase.from('ecritures_comptables_v2')
               .update({ lettre: code, date_lettrage: today, lettrage_auto: true })
               .in('id', [d.id, matchingCredit.id])
             usedCredits.add(matchingCredit.id)
@@ -167,7 +141,7 @@ export async function POST(request: Request) {
     if (action === 'manuel') {
       if (!ecriture_ids?.length || !lettre) return NextResponse.json({ error: 'ecriture_ids et lettre requis' }, { status: 400 })
       const today = new Date().toISOString().split('T')[0]
-      await supabase.from('ecritures_comptables')
+      await supabase.from('ecritures_comptables_v2')
         .update({ lettre, date_lettrage: today, lettrage_auto: false })
         .in('id', ecriture_ids)
       return NextResponse.json({ message: `${ecriture_ids.length} écritures lettrées avec ${lettre}` })
@@ -175,7 +149,7 @@ export async function POST(request: Request) {
 
     if (action === 'delettrer') {
       if (!ecriture_ids?.length) return NextResponse.json({ error: 'ecriture_ids requis' }, { status: 400 })
-      await supabase.from('ecritures_comptables')
+      await supabase.from('ecritures_comptables_v2')
         .update({ lettre: null, date_lettrage: null, lettrage_auto: false })
         .in('id', ecriture_ids)
       return NextResponse.json({ message: 'Lettrage supprimé' })

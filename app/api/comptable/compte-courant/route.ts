@@ -164,23 +164,25 @@ export async function POST(request: Request) {
         .update({ solde: newSolde, updated_at: new Date().toISOString() })
         .eq('id', compte_courant_id)
 
+      // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
+      // V2 exige societe_id (NOT NULL) → on l'inclut explicitement (déjà disponible via le payload).
       // Create ecriture comptable: debit 6xx (expense) / credit 455 or 467
       const creditCompte = compte.type === 'associe' ? '455' : '467'
       const { data: dossiers } = await supabase
         .from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
 
       if (dossiers) {
-        await supabase.from('ecritures_comptables').insert([
+        await supabase.from('ecritures_comptables_v2').insert([
           {
-            dossier_id: dossiers.id, date_ecriture: dateMvt,
-            journal: 'OD', compte: '6', libelle: `Avance ${compte.nom} — ${description || ''}`,
-            debit: montantNum, credit: 0,
+            dossier_id: dossiers.id, societe_id, date_ecriture: dateMvt,
+            journal: 'OD', numero_compte: '6', libelle: `Avance ${compte.nom} — ${description || ''}`,
+            debit_mur: montantNum, credit_mur: 0,
           },
           {
-            dossier_id: dossiers.id, date_ecriture: dateMvt,
-            journal: 'OD', compte: creditCompte,
+            dossier_id: dossiers.id, societe_id, date_ecriture: dateMvt,
+            journal: 'OD', numero_compte: creditCompte,
             libelle: `Compte courant ${compte.nom} — ${description || ''}`,
-            debit: 0, credit: montantNum,
+            debit_mur: 0, credit_mur: montantNum,
           },
         ])
       }
@@ -234,24 +236,26 @@ export async function POST(request: Request) {
         .update({ solde: newSolde, updated_at: new Date().toISOString() })
         .eq('id', compte_courant_id)
 
+      // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
+      // V2 exige societe_id (NOT NULL) → on l'inclut explicitement.
       // Create ecriture: debit 455/467 / credit 512 (bank)
       const debitCompte = compte.type === 'associe' ? '455' : '467'
       const { data: dossiers } = await supabase
         .from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
 
       if (dossiers) {
-        await supabase.from('ecritures_comptables').insert([
+        await supabase.from('ecritures_comptables_v2').insert([
           {
-            dossier_id: dossiers.id, date_ecriture: dateMvt,
-            journal: 'BQ', compte: debitCompte,
+            dossier_id: dossiers.id, societe_id, date_ecriture: dateMvt,
+            journal: 'BQ', numero_compte: debitCompte,
             libelle: `Remboursement ${compte.nom} — ${description || ''}`,
-            debit: montantNum, credit: 0,
+            debit_mur: montantNum, credit_mur: 0,
           },
           {
-            dossier_id: dossiers.id, date_ecriture: dateMvt,
-            journal: 'BQ', compte: '512',
+            dossier_id: dossiers.id, societe_id, date_ecriture: dateMvt,
+            journal: 'BQ', numero_compte: '512',
             libelle: `Remboursement ${compte.nom} — ${description || ''}`,
-            debit: 0, credit: montantNum,
+            debit_mur: 0, credit_mur: montantNum,
           },
         ])
       }

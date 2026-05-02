@@ -282,8 +282,8 @@ export async function GET(request: Request) {
     let ecritures: any[] = []
     if (dossierIds.length > 0) {
       const { data } = await supabase
-        .from('ecritures_comptables')
-        .select('id, compte, libelle, debit, credit, date_ecriture, journal, lettre, piece_justificative')
+        .from('ecritures_comptables_v2')
+        .select('id, compte:numero_compte, libelle, debit:debit_mur, credit:credit_mur, date_ecriture, journal, lettre, piece_justificative:ref_folio')
         .in('dossier_id', dossierIds)
         .order('date_ecriture', { ascending: false })
       ecritures = data || []
@@ -480,9 +480,9 @@ export async function POST(request: Request) {
           dossierIds.length > 0
             ? (async () => {
                 // Essayer avec facture_id + journal (migration 133 appliquée) → fallback sur select minimal sinon
-                const full = await supabase.from('ecritures_comptables').select('id, compte, libelle, debit, credit, date_ecriture, lettre, facture_id, journal').in('dossier_id', dossierIds).is('lettre', null)
+                const full = await supabase.from('ecritures_comptables_v2').select('id, compte:numero_compte, libelle, debit:debit_mur, credit:credit_mur, date_ecriture, lettre, facture_id, journal').in('dossier_id', dossierIds).is('lettre', null)
                 if (!full.error) return full
-                return supabase.from('ecritures_comptables').select('id, compte, libelle, debit, credit, date_ecriture, lettre').in('dossier_id', dossierIds).is('lettre', null)
+                return supabase.from('ecritures_comptables_v2').select('id, compte:numero_compte, libelle, debit:debit_mur, credit:credit_mur, date_ecriture, lettre').in('dossier_id', dossierIds).is('lettre', null)
               })()
             : Promise.resolve({ data: [] as any[] }),
           clientId
@@ -610,7 +610,7 @@ export async function POST(request: Request) {
           if (!classified && BANK_FEE_PATTERNS.some(p => txLib.includes(p))) {
             const feeEcriture = ecritures.find(e => e.compte?.startsWith('627') && Math.abs((Number(e.debit) || 0) - txDebit) / Math.max(txDebit, 1) < 0.15)
             updatedTxs[i] = { ...tx, statut: 'rapproche', matched_type: 'frais_bancaires', note: 'Frais bancaires', ecriture_id: feeEcriture?.id || null }
-            if (feeEcriture) { ecritures = ecritures.filter(e => e.id !== feeEcriture.id); await supabase.from('ecritures_comptables').update({ lettre: `FEE${i}`, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', feeEcriture.id) }
+            if (feeEcriture) { ecritures = ecritures.filter(e => e.id !== feeEcriture.id); await supabase.from('ecritures_comptables_v2').update({ lettre: `FEE${i}`, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', feeEcriture.id) }
             counts.frais_bancaires++; counts.matched++; changed = true; classified = true
           }
 
@@ -651,7 +651,7 @@ export async function POST(request: Request) {
             })
             if (mraEcriture) {
               updatedTxs[i] = { ...tx, statut: 'rapproche', ecriture_id: mraEcriture.id, matched_type: 'paiement_mra', note: `Paiement MRA — ${mraEcriture.compte}` }
-              await supabase.from('ecritures_comptables').update({ lettre: `MRA${i}`, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', mraEcriture.id)
+              await supabase.from('ecritures_comptables_v2').update({ lettre: `MRA${i}`, date_lettrage: new Date().toISOString().split('T')[0] }).eq('id', mraEcriture.id)
               ecritures = ecritures.filter(e => e.id !== mraEcriture.id)
             } else {
               updatedTxs[i] = { ...tx, statut: 'a_verifier', matched_type: 'paiement_mra_non_verifie', note: 'Paiement MRA — écriture non trouvée' }
@@ -1115,7 +1115,7 @@ export async function POST(request: Request) {
 
           // Letter the ecriture if found
           if (cls.ecritureId) {
-            await supabase.from('ecritures_comptables').update({
+            await supabase.from('ecritures_comptables_v2').update({
               lettre: code,
               date_lettrage: new Date().toISOString().split('T')[0],
             }).eq('id', cls.ecritureId)
@@ -1252,7 +1252,7 @@ export async function POST(request: Request) {
             if (tx.ecriture_id) {
               try {
                 const { data: ecr } = await supabase
-                  .from('ecritures_comptables')
+                  .from('ecritures_comptables_v2')
                   .select('facture_id')
                   .eq('id', tx.ecriture_id)
                   .maybeSingle()
@@ -1264,7 +1264,7 @@ export async function POST(request: Request) {
             if (!foundFactureId && tx.lettre) {
               try {
                 const { data: lettred } = await supabase
-                  .from('ecritures_comptables')
+                  .from('ecritures_comptables_v2')
                   .select('facture_id')
                   .eq('lettre', tx.lettre)
                   .not('facture_id', 'is', null)
@@ -1326,8 +1326,8 @@ export async function POST(request: Request) {
         if (dossier) {
           // Charger TOUTES les écritures 401/411 du dossier (y compris lettrées)
           const { data: allEcr401 } = await supabase
-            .from('ecritures_comptables')
-            .select('id, compte, libelle, debit, credit, journal, lettre, ref_folio')
+            .from('ecritures_comptables_v2')
+            .select('id, compte:numero_compte, libelle, debit:debit_mur, credit:credit_mur, journal, lettre, ref_folio')
             .eq('dossier_id', dossier.id)
             .or('compte.like.401%,compte.like.411%')
 
@@ -1968,8 +1968,8 @@ export async function POST(request: Request) {
         // Step 3: update ecriture if provided (bidirectional link)
         if (ecriture_id) {
           const { data: prevEcriture } = await supabase
-            .from('ecritures_comptables').select('lettre, date_lettrage, rapproche_releve_id, rapproche_transaction_idx, rapproche_at').eq('id', ecriture_id).single()
-          const { error: updEcrErr } = await supabase.from('ecritures_comptables').update({
+            .from('ecritures_comptables_v2').select('lettre, date_lettrage, rapproche_releve_id, rapproche_transaction_idx, rapproche_at').eq('id', ecriture_id).single()
+          const { error: updEcrErr } = await supabase.from('ecritures_comptables_v2').update({
             lettre: lettreCode,
             date_lettrage: new Date().toISOString().split('T')[0],
             rapproche_releve_id: releve_id,
@@ -1979,7 +1979,7 @@ export async function POST(request: Request) {
           if (updEcrErr) throw new Error(`Ecriture update failed: ${updEcrErr.message}`)
           rollback.unshift(async () => {
             if (prevEcriture) {
-              await supabase.from('ecritures_comptables').update(prevEcriture).eq('id', ecriture_id)
+              await supabase.from('ecritures_comptables_v2').update(prevEcriture).eq('id', ecriture_id)
             }
           })
         }
@@ -2081,7 +2081,7 @@ export async function POST(request: Request) {
         }
 
         if (ecriture_id) {
-          const { error } = await supabase.from('ecritures_comptables').update({
+          const { error } = await supabase.from('ecritures_comptables_v2').update({
             lettre: null,
             date_lettrage: null,
             rapproche_releve_id: null,
@@ -2150,7 +2150,7 @@ export async function POST(request: Request) {
       let solde_comptable = 0
       if (dossierIds.length > 0) {
         const { data: ecritures } = await supabase
-          .from('ecritures_comptables').select('debit, credit')
+          .from('ecritures_comptables_v2').select('debit:debit_mur, credit:credit_mur')
           .in('dossier_id', dossierIds).like('compte', '51%')
           .gte('date_ecriture', body.periode_debut).lte('date_ecriture', body.periode_fin)
         solde_comptable = (ecritures || []).reduce((s: number, e: any) => s + Number(e.debit || 0) - Number(e.credit || 0), 0)
@@ -2363,14 +2363,15 @@ export async function POST(request: Request) {
             if (ecartSigne > 0) creditOd = ecartAbs
             else debitOd = ecartAbs
           }
-          await supabase.from('ecritures_comptables').insert({
+          await supabase.from('ecritures_comptables_v2').insert({
+            societe_id,
             dossier_id: dossier.id,
             date_ecriture: new Date().toISOString().split('T')[0],
             journal: 'OD',
-            compte: compteEcart,
+            numero_compte: compteEcart,
             libelle: libelleEcart,
-            debit: debitOd,
-            credit: creditOd,
+            debit_mur: debitOd,
+            credit_mur: creditOd,
             // Règle R7 : pas de lettrage sur 6xxx/7xxx. Sur 471 (4xxx) le
             // lettrage est autorisé mais on l'omet ici — la régularisation
             // future créera l'écriture miroir et lettrera les deux à ce
@@ -2429,7 +2430,7 @@ export async function POST(request: Request) {
 
           // --- Internal transfers → 581 both sides ---
           if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') {
-            const { data: existing581 } = await supabase.from('ecritures_comptables')
+            const { data: existing581 } = await supabase.from('ecritures_comptables_v2')
               .select('id').eq('dossier_id', dossier.id).eq('journal', 'BNQ')
               .eq('compte', '581').eq('date_ecriture', txDate)
               .or(`debit.eq.${txAmountMUR},credit.eq.${txAmountMUR}`)
@@ -2446,7 +2447,7 @@ export async function POST(request: Request) {
                 libelle, debit_mur: isOutgoing ? 0 : txAmountMUR, credit_mur: isOutgoing ? txAmountMUR : 0, lettre: lettre581 },
               { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', numero_compte: '581',
                 libelle, debit_mur: isOutgoing ? txAmountMUR : 0, credit_mur: isOutgoing ? 0 : txAmountMUR, lettre: lettre581 },
-            ], 'ecritures_comptables')
+            ], 'ecritures_comptables_v2')
             if (insTransit.skipped > 0) console.log(`[auto_rapprocher transit BNQ] skipped:`, insTransit.skipReasons)
             created++
             continue
@@ -2456,7 +2457,7 @@ export async function POST(request: Request) {
           if (tx.statut !== 'rapproche' || !tx.facture_id) continue
 
           // Check if BNQ écriture already exists
-          const { data: existing } = await supabase.from('ecritures_comptables')
+          const { data: existing } = await supabase.from('ecritures_comptables_v2')
             .select('id').eq('dossier_id', dossier.id).eq('journal', 'BNQ')
             .eq('date_ecriture', txDate)
             .or(`debit.eq.${txAmountMUR},credit.eq.${txAmountMUR}`)
@@ -2481,13 +2482,13 @@ export async function POST(request: Request) {
             { dossier_id: dossier.id, date_ecriture: txDate, journal: 'BNQ', numero_compte: '512',
               libelle: `Virement ${(facture.tiers || '').substring(0, 30)}`,
               debit_mur: isPayment ? 0 : txAmountMUR, credit_mur: isPayment ? txAmountMUR : 0, lettre },
-          ], 'ecritures_comptables')
+          ], 'ecritures_comptables_v2')
           if (insRegular.skipped > 0) console.log(`[auto_rapprocher regular BNQ] skipped:`, insRegular.skipReasons)
 
           // Letter existing 401/411 facture entry with same code
           const factureMUR = Math.round(Number(facture.montant_mur || 0) * 100) / 100
           if (factureMUR > 0) {
-            await supabase.from('ecritures_comptables')
+            await supabase.from('ecritures_comptables_v2')
               .update({ lettre })
               .eq('dossier_id', dossier.id).eq('compte', compte401).is('lettre', null)
               .eq('credit', factureMUR).limit(1)
@@ -2510,8 +2511,8 @@ export async function POST(request: Request) {
 
       // Get BNQ entries WITH lettre codes on 401/411
       const { data: bnqEntries } = await supabase
-        .from('ecritures_comptables')
-        .select('id, compte, debit, credit, lettre, date_ecriture, libelle')
+        .from('ecritures_comptables_v2')
+        .select('id, compte:numero_compte, debit:debit_mur, credit:credit_mur, lettre, date_ecriture, libelle')
         .eq('dossier_id', dossier.id)
         .eq('journal', 'BNQ')
         .not('lettre', 'is', null)
@@ -2530,8 +2531,8 @@ export async function POST(request: Request) {
         const maxAmt = Math.round(bnqAmount * 1.02 * 100) / 100
 
         const { data: achEntries } = await supabase
-          .from('ecritures_comptables')
-          .select('id, credit, debit, date_ecriture, libelle')
+          .from('ecritures_comptables_v2')
+          .select('id, credit:credit_mur, debit:debit_mur, date_ecriture, libelle')
           .eq('dossier_id', dossier.id)
           .eq('compte', bnq.compte)
           .is('lettre', null)
@@ -2550,7 +2551,7 @@ export async function POST(request: Request) {
         })
 
         // Apply same lettre to ACH entry
-        await supabase.from('ecritures_comptables')
+        await supabase.from('ecritures_comptables_v2')
           .update({ lettre: bnq.lettre, date_lettrage: new Date().toISOString().split('T')[0] })
           .eq('id', closest.id)
 
@@ -2656,7 +2657,7 @@ export async function POST(request: Request) {
       // reconcile manually until the migration is applied.
       let hasFactureIdColumn = true
       {
-        const probe = await supabase.from('ecritures_comptables').select('facture_id').limit(1)
+        const probe = await supabase.from('ecritures_comptables_v2').select('facture_id').limit(1)
         if (probe.error) {
           const msg = String(probe.error.message || '')
           if (/facture_id/i.test(msg) && /(does not exist|column)/i.test(msg)) {
@@ -2675,7 +2676,7 @@ export async function POST(request: Request) {
 
       // Find the highest existing "R###" code so we generate non-colliding ones.
       const { data: existingLettres } = await supabase
-        .from('ecritures_comptables')
+        .from('ecritures_comptables_v2')
         .select('lettre')
         .eq('dossier_id', dossierId)
         .not('lettre', 'is', null)
@@ -2695,16 +2696,16 @@ export async function POST(request: Request) {
           // 1. Find ACH/VTE ecriture — by facture_id first, fallback to numero_piece.
           let achRow: any = null
           {
-            const { data } = await supabase.from('ecritures_comptables')
-              .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+            const { data } = await supabase.from('ecritures_comptables_v2')
+              .select('id, compte:numero_compte, debit:debit_mur, credit:credit_mur, date_ecriture, libelle, lettre')
               .eq('dossier_id', dossierId).eq('facture_id', f.id)
               .or('compte.like.401%,compte.like.411%')
               .limit(1).maybeSingle()
             if (data) achRow = data
           }
           if (!achRow && f.numero_facture) {
-            const { data } = await supabase.from('ecritures_comptables')
-              .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+            const { data } = await supabase.from('ecritures_comptables_v2')
+              .select('id, compte:numero_compte, debit:debit_mur, credit:credit_mur, date_ecriture, libelle, lettre')
               .eq('dossier_id', dossierId)
               .eq('numero_piece', f.numero_facture)
               .or('compte.like.401%,compte.like.411%')
@@ -2743,8 +2744,8 @@ export async function POST(request: Request) {
             }
             console.log(`[sync_lettrage] ACH/VTE recréée pour facture ${f.id} (${f.numero_facture}) — ${gen.nb_entries} lignes`)
             // Re-query the ACH row that was just inserted.
-            const { data: reAch } = await supabase.from('ecritures_comptables')
-              .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+            const { data: reAch } = await supabase.from('ecritures_comptables_v2')
+              .select('id, compte:numero_compte, debit:debit_mur, credit:credit_mur, date_ecriture, libelle, lettre')
               .eq('dossier_id', dossierId)
               .eq('facture_id', f.id)
               .or('compte.like.401%,compte.like.411%')
@@ -2753,8 +2754,8 @@ export async function POST(request: Request) {
               achRow = reAch
             } else {
               // Fallback lookup via numero_piece
-              const { data: reAch2 } = await supabase.from('ecritures_comptables')
-                .select('id, compte, debit, credit, date_ecriture, libelle, lettre')
+              const { data: reAch2 } = await supabase.from('ecritures_comptables_v2')
+                .select('id, compte:numero_compte, debit:debit_mur, credit:credit_mur, date_ecriture, libelle, lettre')
                 .eq('dossier_id', dossierId)
                 .eq('numero_piece', f.numero_facture || '')
                 .or('compte.like.401%,compte.like.411%')
@@ -2799,8 +2800,8 @@ export async function POST(request: Request) {
           let bnqRow: any = null
           // Primary lookup: BNQ journal, same 401/411 account, opposite direction.
           {
-            const { data } = await supabase.from('ecritures_comptables')
-              .select('id, lettre, debit, credit, date_ecriture, libelle, facture_id')
+            const { data } = await supabase.from('ecritures_comptables_v2')
+              .select('id, lettre, debit:debit_mur, credit:credit_mur, date_ecriture, libelle, facture_id')
               .eq('dossier_id', dossierId)
               .eq('journal', 'BNQ')
               .eq('compte', achRow.compte)
@@ -2967,17 +2968,17 @@ export async function POST(request: Request) {
           const lettrageIds: string[] = [achRow.id, bnqRow.id]
           if (bnqBanqueRow?.id) lettrageIds.push(bnqBanqueRow.id)
 
-          await supabase.from('ecritures_comptables')
+          await supabase.from('ecritures_comptables_v2')
             .update({ lettre: code, date_lettrage: now })
             .in('id', lettrageIds)
             .is('lettre', null)
           // If one was already lettered, ensure all share the code.
-          await supabase.from('ecritures_comptables')
+          await supabase.from('ecritures_comptables_v2')
             .update({ lettre: code, date_lettrage: now })
             .in('id', lettrageIds)
             .neq('lettre', code)
           // Backfill facture_id on the BNQ if it wasn't set.
-          await supabase.from('ecritures_comptables')
+          await supabase.from('ecritures_comptables_v2')
             .update({ facture_id: f.id })
             .eq('id', bnqRow.id)
             .is('facture_id', null)
@@ -3002,7 +3003,7 @@ export async function POST(request: Request) {
             }
             if (avoirLinks.length > 0 && hasFactureIdColumn) {
               // Lettrer toutes les écritures 401/411 liées aux factures du groupe
-              await supabase.from('ecritures_comptables')
+              await supabase.from('ecritures_comptables_v2')
                 .update({ lettre: code, date_lettrage: now })
                 .in('facture_id', avoirLinks)
                 .or('compte.like.401%,compte.like.411%')
@@ -3045,8 +3046,8 @@ export async function POST(request: Request) {
 
       // Charger les écritures pour valider les règles AVANT toute mutation
       const { data: ecrituresToLetter } = await supabase
-        .from('ecritures_comptables')
-        .select('id, compte, debit, credit, date_ecriture, lettre, journal')
+        .from('ecritures_comptables_v2')
+        .select('id, compte:numero_compte, debit:debit_mur, credit:credit_mur, date_ecriture, lettre, journal')
         .in('id', ecriture_ids)
       if (!ecrituresToLetter || ecrituresToLetter.length !== ecriture_ids.length) {
         return NextResponse.json({ error: 'Certaines écritures sont introuvables' }, { status: 404 })
@@ -3064,7 +3065,7 @@ export async function POST(request: Request) {
       }
 
       for (const eid of ecriture_ids) {
-        await supabase.from('ecritures_comptables')
+        await supabase.from('ecritures_comptables_v2')
           .update({ lettre: lettreCode, date_lettrage: now })
           .eq('id', eid)
       }
@@ -3137,9 +3138,9 @@ export async function POST(request: Request) {
       if (dossier) {
         // Débit charges/fournisseur, Crédit 455 (CCA)
         for (const f of factures || []) {
-          await supabase.from('ecritures_comptables').insert([
-            { dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'OD', compte: '401', libelle: `Fournisseur ${f.tiers || ''} — payé par ${associe_nom}`, debit: Number(f.montant_ttc), credit: 0 },
-            { dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'OD', compte: '455', libelle: `CCA ${associe_nom} — ${f.numero_facture || ''}`, debit: 0, credit: Number(f.montant_ttc) },
+          await supabase.from('ecritures_comptables_v2').insert([
+            { societe_id, dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'OD', numero_compte: '401', libelle: `Fournisseur ${f.tiers || ''} — payé par ${associe_nom}`, debit_mur: Number(f.montant_ttc), credit_mur: 0 },
+            { societe_id, dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'OD', numero_compte: '455', libelle: `CCA ${associe_nom} — ${f.numero_facture || ''}`, debit_mur: 0, credit_mur: Number(f.montant_ttc) },
           ])
         }
       }
@@ -3205,9 +3206,9 @@ export async function POST(request: Request) {
       // Écritures comptables: Débit 455 (CCA) / Crédit 512 (Banque)
       const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
       if (dossier) {
-        await supabase.from('ecritures_comptables').insert([
-          { dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'BNQ', compte: '455', libelle: `Remboursement CCA ${cca.nom}`, debit: remboursementMontant, credit: 0 },
-          { dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'BNQ', compte: '512', libelle: `Virement remboursement ${cca.nom}`, debit: 0, credit: remboursementMontant },
+        await supabase.from('ecritures_comptables_v2').insert([
+          { societe_id, dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'BNQ', numero_compte: '455', libelle: `Remboursement CCA ${cca.nom}`, debit_mur: remboursementMontant, credit_mur: 0 },
+          { societe_id, dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'BNQ', numero_compte: '512', libelle: `Virement remboursement ${cca.nom}`, debit_mur: 0, credit_mur: remboursementMontant },
         ])
       }
 
@@ -3286,9 +3287,9 @@ export async function POST(request: Request) {
       const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
       if (dossier) {
         const dateEcriture = new Date().toISOString().split('T')[0]
-        await supabase.from('ecritures_comptables').insert([
-          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '4210', libelle: `Virement salaire ${nomComplet}`, debit: Math.round(montantNet), credit: 0, lettre: lettreCode },
-          { dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', compte: '512', libelle: `Virement salaire ${nomComplet}`, debit: 0, credit: Math.round(montantNet), lettre: lettreCode },
+        await supabase.from('ecritures_comptables_v2').insert([
+          { societe_id, dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', numero_compte: '4210', libelle: `Virement salaire ${nomComplet}`, debit_mur: Math.round(montantNet), credit_mur: 0, lettre: lettreCode },
+          { societe_id, dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', numero_compte: '512', libelle: `Virement salaire ${nomComplet}`, debit_mur: 0, credit_mur: Math.round(montantNet), lettre: lettreCode },
         ])
       }
 
@@ -3505,7 +3506,7 @@ export async function POST(request: Request) {
       // Si un compte_custom est fourni (via le picker plan comptable), on valide
       // qu'il correspond à un compte réel avant d'accepter la classification.
       if (compte_custom) {
-        const { data: pc } = await supabase.from('plan_comptable').select('compte').eq('compte', compte_custom).maybeSingle()
+        const { data: pc } = await supabase.from('plan_comptable').select('compte:numero_compte').eq('compte', compte_custom).maybeSingle()
         if (!pc) {
           return NextResponse.json({ error: `Compte "${compte_custom}" absent du plan comptable` }, { status: 400 })
         }

@@ -363,22 +363,19 @@ export async function GET() {
         .in('societe_id', societeIds)
 
       if (comptaDossiers && comptaDossiers.length > 0) {
-        const dossierToSociete = new Map<string, string>()
-        for (const d of comptaDossiers) {
-          dossierToSociete.set(d.id, d.societe_id)
-        }
-
+        // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on lit V2 directement.
+        // V2 a societe_id directement → on filtre par societe_id (évite la duplication LEFT JOIN dossiers).
         const { data: unlettered } = await supabase
-          .from('ecritures_comptables')
-          .select('id, dossier_id, date_ecriture, lettrage')
-          .in('dossier_id', comptaDossiers.map(d => d.id))
+          .from('ecritures_comptables_v2')
+          .select('id, societe_id, date_ecriture, lettrage')
+          .in('societe_id', societeIds)
           .lt('date_ecriture', thirtyDaysAgo)
           .is('lettrage', null)
 
         // Group by societe
         const unletteredBySociete = new Map<string, number>()
         for (const e of unlettered || []) {
-          const sId = dossierToSociete.get(e.dossier_id)
+          const sId = e.societe_id
           if (sId) unletteredBySociete.set(sId, (unletteredBySociete.get(sId) || 0) + 1)
         }
 
@@ -439,27 +436,30 @@ export async function GET() {
         .in('societe_id', societeIds)
 
       if (comptaDossiers && comptaDossiers.length > 0) {
-        for (const dossier of comptaDossiers) {
+        // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on lit V2 directement.
+        // On itère par société (V2 a societe_id) plutôt que par dossier pour éviter de compter plusieurs fois sur une société multi-dossiers.
+        const societesUniques = Array.from(new Set(comptaDossiers.map(d => d.societe_id)))
+        for (const sIdLoop of societesUniques) {
           const { data: ecritures } = await supabase
-            .from('ecritures_comptables')
-            .select('debit, credit')
-            .eq('dossier_id', dossier.id)
+            .from('ecritures_comptables_v2')
+            .select('debit_mur, credit_mur')
+            .eq('societe_id', sIdLoop)
 
           if (ecritures && ecritures.length > 0) {
             let totalDebit = 0
             let totalCredit = 0
             for (const e of ecritures) {
-              totalDebit += Number(e.debit) || 0
-              totalCredit += Number(e.credit) || 0
+              totalDebit += Number(e.debit_mur) || 0
+              totalCredit += Number(e.credit_mur) || 0
             }
             const ecart = Math.abs(totalDebit - totalCredit)
             if (ecart > 0.01) {
-              const societe = societesMap.get(dossier.societe_id)
+              const societe = societesMap.get(sIdLoop)
               if (!societe) continue
               alertes.push({
                 id: nextId(), type: 'comptable', severity: 'critical',
                 client_name: clientMap.get(societe.client_id) || 'Client',
-                societe_name: societe.nom, societe_id: dossier.societe_id,
+                societe_name: societe.nom, societe_id: sIdLoop,
                 title: `Balance desequilibree`,
                 message: `Ecart de ${ecart.toFixed(2)} MUR entre debits et credits pour ${societe.nom}. Total debit: ${totalDebit.toFixed(2)}, total credit: ${totalCredit.toFixed(2)}.`,
                 deadline: null,

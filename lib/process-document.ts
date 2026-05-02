@@ -98,26 +98,36 @@ export async function processDocument(params: {
   await supabase.from('documents').update(updateData).eq('id', document_id)
 
   // Auto-create accounting entries
+  // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
+  // V2 exige societe_id (NOT NULL) → on le récupère via le dossier du document.
+  // Renommage : compte → numero_compte, debit → debit_mur, credit → credit_mur.
   const ecritures = extraction.ecritures_comptables
   if (Array.isArray(ecritures) && ecritures.length > 0) {
     const { data: doc } = await supabase.from('documents').select('dossier_id').eq('id', document_id).single()
     if (doc?.dossier_id) {
+      const { data: dossierRow } = await supabase
+        .from('dossiers').select('societe_id').eq('id', doc.dossier_id).maybeSingle()
+      const societeId = dossierRow?.societe_id || null
+
       const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ' }
       const entries = ecritures
         .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
         .map((e: any) => ({
           dossier_id: doc.dossier_id,
+          societe_id: societeId,
           date_ecriture: extraction.date_document || new Date().toISOString().split('T')[0],
           journal: journalMap[typeDoc] || 'OD',
           numero_piece: extraction.numero_reference || null,
-          compte: String(e.compte),
+          numero_compte: String(e.compte),
           libelle: e.libelle || nom_fichier,
-          debit: Number(e.debit) || 0,
-          credit: Number(e.credit) || 0,
+          debit_mur: Number(e.debit) || 0,
+          credit_mur: Number(e.credit) || 0,
           piece_justificative: document_id,
         }))
-      if (entries.length > 0) {
-        await supabase.from('ecritures_comptables').insert(entries)
+      if (entries.length > 0 && societeId) {
+        await supabase.from('ecritures_comptables_v2').insert(entries)
+      } else if (entries.length > 0 && !societeId) {
+        console.warn(`[processDocument] Skipping ecritures insert: dossier ${doc.dossier_id} has no societe_id`)
       }
     }
   }
