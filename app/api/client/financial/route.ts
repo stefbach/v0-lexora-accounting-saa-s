@@ -347,12 +347,24 @@ export async function GET(request: Request) {
         expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
       })
     } else {
-      // Fallback: from écritures (may be in foreign currency — not ideal)
+      // Fallback: pas de factures importées (société neuve, ou import direct
+      // d'écritures SAGE/Excel sans passer par la table factures).
+      // On agrège directement les écritures classe 6 et 7.
+      // Filtres minimaux pour rester cohérent avec le path principal :
+      //  - 6418 (ajustements techniques) → toujours exclu
+      //  - mois courant payroll incomplet → exclu
+      // En revanche on GARDE le journal ACH ici, car en l'absence de factures
+      // c'est la seule source des charges fournisseurs (le TTC éventuel est
+      // un problème de qualité d'ingestion, pas d'agrégation).
       allEcritures.filter(e => e.compte?.startsWith('7')).forEach(e => {
         const prefix = (e.compte || '7').substring(0, 3)
         revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + (Number(e.credit) || 0) - (Number(e.debit) || 0)
       })
-      allEcritures.filter(e => e.compte?.startsWith('6')).forEach(e => {
+      allEcritures.filter(e =>
+        e.compte?.startsWith('6')
+        && !e.compte?.startsWith('6418')
+        && !isPayrollCurrentMonth(e)
+      ).forEach(e => {
         const prefix = (e.compte || '6').substring(0, 3)
         expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
       })
