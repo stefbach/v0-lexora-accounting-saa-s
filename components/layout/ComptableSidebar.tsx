@@ -46,6 +46,7 @@ const documentsNavItems: NavItem[] = [
 const mraNavItems: NavItem[] = [
   { href: "/comptable/tva",             label: "TVA MRA",             icon: FileSpreadsheet, section: "Déclarations MRA" },
   { href: "/comptable/charges-sociales", label: "Charges sociales",   icon: Receipt,         section: "Déclarations MRA" },
+  { href: "/comptable/cloture",         label: "Clôtures (IAS/IFRS)", icon: FileSpreadsheet, section: "Déclarations MRA" },
 ]
 
 // ── SECTION "Consolidation" ──────────────────────────────────────────────────
