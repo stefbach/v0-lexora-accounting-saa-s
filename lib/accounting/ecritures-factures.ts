@@ -142,10 +142,33 @@ export async function createEcrituresForFacture(
     }
     const exercice = new Date(facture.date_facture).getFullYear().toString()
 
+    // ── Sous-comptes auxiliaires par tiers (PCM Maurice) ─────────────────
+    // Si la société a `comptes_auxiliaires_actif=true` (mig 226), on génère
+    // 411<HASH6> ou 401<HASH6> spécifique au tiers via la RPC. Sinon on
+    // garde le compte global (comportement par défaut).
+    let compteTier: string = isClient ? '411' : '401'
+    let nomCompteTier: string = isClient ? 'Clients' : 'Fournisseurs'
+    if (facture.tiers && facture.tiers.trim().length > 0) {
+      try {
+        const { data: aux } = await supabase.rpc('get_or_create_compte_auxiliaire', {
+          p_societe_id: facture.societe_id,
+          p_tiers: facture.tiers,
+          p_type_facture: isClient ? 'client' : 'fournisseur',
+        })
+        if (aux && typeof aux === 'string' && aux.length > 0) {
+          compteTier = aux
+          nomCompteTier = (isClient ? 'Client ' : 'Fournisseur ') + facture.tiers
+        }
+      } catch (e: any) {
+        // RPC absente sur env legacy → fallback compte global, OK
+        console.warn('[createEcritures] sous-compte aux non dispo, fallback', e?.message)
+      }
+    }
+
     const entries: Array<Record<string, unknown>> = []
 
     if (isClient) {
-      // Debit 411 Clients (TTC en MUR)
+      // Debit 411 (ou 411<HASH6> si auxiliaires actifs) — TTC en MUR
       entries.push({
         societe_id: facture.societe_id,
         dossier_id,
@@ -153,8 +176,8 @@ export async function createEcrituresForFacture(
         journal,
         ref_folio: refFolio,
         numero_piece: facture.numero_facture || null,
-        numero_compte: '411',
-        nom_compte: 'Clients',
+        numero_compte: compteTier,
+        nom_compte: nomCompteTier,
         libelle,
         description: libelle,
         debit_mur: ttcMur,
@@ -240,7 +263,15 @@ export async function createEcrituresForFacture(
           facture_id: facture.id,
         })
       }
-      // Credit 401 Fournisseurs (TTC en MUR)
+      // TDS Maurice — Section 111A : si facture fournisseur a tds_montant > 0,
+      // on retient ce montant à la source. Le crédit fournisseur est diminué
+      // de ce montant et on crédite 4471 (TDS retenu à reverser à la MRA).
+      // Lecture défensive : ces colonnes peuvent ne pas exister sur env legacy
+      // pré-mig 226 → fallback à 0.
+      const tdsMontant = Number((facture as any).tds_montant) || 0
+      const ttcAprèsTds = ttcMur - tdsMontant
+
+      // Credit 401/401<HASH> Fournisseurs — TTC NET du TDS retenu
       entries.push({
         societe_id: facture.societe_id,
         dossier_id,
@@ -248,15 +279,35 @@ export async function createEcrituresForFacture(
         journal,
         ref_folio: refFolio,
         numero_piece: facture.numero_facture || null,
-        numero_compte: '401',
-        nom_compte: 'Fournisseurs',
+        numero_compte: compteTier,
+        nom_compte: nomCompteTier,
         libelle,
         description: libelle,
         debit_mur: 0,
-        credit_mur: ttcMur,
+        credit_mur: ttcAprèsTds,
         exercice,
         facture_id: facture.id,
       })
+
+      // Crédit 4471 TDS retenu à reverser à la MRA (si TDS > 0)
+      if (tdsMontant > 0.01) {
+        entries.push({
+          societe_id: facture.societe_id,
+          dossier_id,
+          date_ecriture: facture.date_facture,
+          journal,
+          ref_folio: refFolio,
+          numero_piece: facture.numero_facture || null,
+          numero_compte: '4471',
+          nom_compte: 'TDS retenu à reverser à la MRA',
+          libelle: `TDS retenu — ${facture.tiers || ''}`,
+          description: `TDS retenu (cat. ${(facture as any).tds_categorie || '?'}, taux ${(facture as any).tds_taux_pct || '?'}%)`,
+          debit_mur: 0,
+          credit_mur: tdsMontant,
+          exercice,
+          facture_id: facture.id,
+        })
+      }
     }
 
     if (entries.length === 0) {
