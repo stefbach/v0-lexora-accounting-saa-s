@@ -1458,14 +1458,36 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           extraction.currency ||
           (parseAmountSafe(totaux.total_ttc_eur, 'totaux.total_ttc_eur') > 0 ? 'EUR' : null) ||
           'MUR'
-        // Prefer explicit taux_change from totaux when available
-        const fxRate =
-          devise !== 'MUR'
-            ? (parseAmountSafe(totaux.taux_change?.EUR_to_MUR, 'taux_change.EUR_to_MUR') ||
-               parseAmountSafe(totaux.taux_change?.[`${devise}_to_MUR`], `taux_change.${devise}_to_MUR`) ||
-               tauxChange[devise] ||
-               1)
-            : 1
+        // Taux historique : on essaye d'abord le taux à la date de la facture
+        // (taux_change_historique), puis taux du jour, puis fallback hardcodé.
+        // Critique pour les factures rétroactives où le taux a changé entre
+        // la date d'émission et l'upload.
+        let fxRate: number = 1
+        if (devise !== 'MUR') {
+          // 1. Taux explicite dans l'extraction (best)
+          const explicit =
+            parseAmountSafe(totaux.taux_change?.EUR_to_MUR, 'taux_change.EUR_to_MUR') ||
+            parseAmountSafe(totaux.taux_change?.[`${devise}_to_MUR`], `taux_change.${devise}_to_MUR`)
+          if (explicit > 1) {
+            fxRate = explicit
+          } else {
+            // 2. Taux historique à la date de la facture
+            try {
+              const dateFact = extraction.date_facture || extraction.date || new Date().toISOString().slice(0, 10)
+              const { getHistoricalRate } = await import('@/lib/accounting/historical-rates')
+              const histRate = await getHistoricalRate(supabase, dateFact, devise)
+              if (histRate && histRate > 1.0001) {
+                fxRate = histRate
+              }
+            } catch (e: any) {
+              console.warn('[upload] historical rate lookup failed:', e?.message)
+            }
+            // 3. Taux du jour (fallback)
+            if (fxRate <= 1.0001 && tauxChange[devise] && tauxChange[devise] > 1.0001) {
+              fxRate = tauxChange[devise]
+            }
+          }
+        }
         const montantHT = devise === 'EUR'
           ? (parseAmountSafe(totaux.montant_ht_eur, 'totaux.montant_ht_eur') ||
              parseAmountSafe(extraction.montant_ht, 'montant_ht') ||
@@ -1609,6 +1631,19 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           }
         }
 
+        // Garde-fou conversion devise — bloque l'insertion si devise≠MUR mais
+        // taux_change ≤ 1 (= taux indisponible). Sans ce check, montant_mur
+        // est égal au TTC en EUR/USD/GBP, créant des écritures avec valeurs
+        // dans la mauvaise devise (cas OCC mai 2025 = 364k MUR au lieu de
+        // ~750k MUR). Le user devra réuploader après que le taux historique
+        // soit disponible OU saisir manuellement la facture en mode comptable.
+        if (!factureCreateError && devise !== 'MUR' && fxRate <= 1.0001) {
+          factureCreateError = `Taux ${devise}→MUR introuvable pour ${extraction.date_facture || 'cette date'}. ` +
+            `Taux historique non disponible. La facture n'a pas été créée pour éviter de stocker un montant_mur en devise étrangère. ` +
+            `Saisir manuellement via /comptable/factures avec le taux du jour.`
+          console.warn(`[upload] Bloqué : ${factureCreateError}`)
+        }
+
         if (!factureCreateError) {
         const { data: insertedFacture, error: factureError } = await supabase.from('factures').insert(factureData).select('id').maybeSingle()
         if (factureError) {
@@ -1626,6 +1661,34 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               .eq('piece_justificative', doc.id)
               .is('facture_id', null)
           }
+
+          // CRITIQUE — générer les écritures dans ecritures_comptables_v2 (la
+          // table consommée par grand-livre/balance/rapprochement v2).
+          // Sans ça, une facture créée par OCR n'a JAMAIS d'écritures 411/706/4457
+          // ou 401/607/4456 en v2 → grand-livre incomplet, lettrage impossible.
+          if (insertedFacture?.id) {
+            try {
+              const { createEcrituresForFacture } = await import('@/lib/accounting/ecritures-factures')
+              const r = await createEcrituresForFacture(supabase, {
+                id: insertedFacture.id,
+                societe_id: factureData.societe_id as string,
+                numero_facture: (factureData.numero_facture as string) || '',
+                tiers: (factureData.tiers as string) || '',
+                date_facture: factureData.date_facture as string,
+                montant_ht: Number(factureData.montant_ht) || 0,
+                montant_tva: Number(factureData.montant_tva) || 0,
+                montant_ttc: Number(factureData.montant_ttc) || 0,
+                type_facture: (factureData.type_facture === 'fournisseur' ? 'fournisseur' : 'client'),
+                devise: (factureData.devise as string) || 'MUR',
+                taux_change: Number(factureData.taux_change) || 1,
+                montant_mur: Number(factureData.montant_mur) || undefined,
+              })
+              if (!r.ok) console.warn('[upload] Écritures v2 non générées:', r.error)
+            } catch (e: any) {
+              console.warn('[upload] createEcrituresForFacture exception:', e?.message)
+            }
+          }
+
           console.log(`[upload] Facture ${typeDocument} created: ${extraction.numero_reference || 'sans numéro'} — ${montantTTC} ${devise}`)
         }
         } // close if (!factureCreateError)

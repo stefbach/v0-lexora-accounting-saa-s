@@ -168,15 +168,20 @@ export async function GET(request: Request) {
     // ----------------------------------------------------------------
     if (type === 'bilan') {
       // ACTIF NON COURANT
-      const immo_corp     = sumRange('210', '218', 'D')
-      const immo_incorp   = sumRange('200', '209', 'D')
-      const amortissements = Math.abs(sumRange('280', '289', 'D'))
+      // sumPrefix au lieu de sumRange : '218' lex < '2181' donc sumRange('210','218')
+      // exclut les sous-comptes 4-chars (2181, 2183, 2815…) — les amortissements
+      // étaient invisibles. sumPrefix('21') englobe correctement tous les 21xx.
+      const immo_corp     = sumPrefix('21', 'D')
+      const immo_incorp   = sumPrefix('20', 'D')
+      const amortissements = Math.abs(sumPrefix('28', 'D'))
       const immo_fin      = sumPrefix('26', 'D') + sumPrefix('27', 'D')
       const actif_nc      = immo_corp + immo_incorp - amortissements + immo_fin
 
-      // ACTIF COURANT
+      // ACTIF COURANT — clients NETs des provisions IFRS 9 (491)
       const stocks        = sumPrefix('3', 'D')
-      const clients       = sumPrefix('41', 'D')
+      const clients_brut  = sumPrefix('41', 'D')
+      const provision_clients = sumPrefix('491', 'C')
+      const clients       = clients_brut - provision_clients
       const autres_creances = sumPrefix('42', 'D') + sumPrefix('43', 'D') +
                               sumPrefix('44', 'D') + sumPrefix('46', 'D') + sumPrefix('47', 'D')
       const tresorerie    = sumPrefix('5', 'D')
@@ -185,11 +190,18 @@ export async function GET(request: Request) {
       const total_actif   = actif_nc + actif_c
 
       // PASSIF — CAPITAUX PROPRES
+      // Séparer capital, réserves, report à nouveau, résultat de l'exercice.
+      // L'erreur précédente : `reserves` mélangeait 11+12 ET `resultat_ex`
+      // était variable morte → résultat absent du total → bilan déséquilibré.
       const capital       = sumPrefix('101', 'C') + sumPrefix('102', 'C')
-      const reserves      = sumPrefix('11', 'C') + sumPrefix('12', 'C')
-      const report_nvx    = sumPrefix('13', 'C')
-      const resultat_ex   = sumPrefix('12', 'C') // approx
-      const total_cp      = capital + reserves + report_nvx
+      const reserves      = sumPrefix('11', 'C')          // Réserves seules
+      const report_nvx    = sumPrefix('119', 'C') + sumPrefix('13', 'C')
+      // Résultat de l'exercice = Σ produits classe 7 − Σ charges classe 6
+      // (calculé dynamiquement quand le compte 1200 n'est pas alimenté)
+      const compte_1200   = sumPrefix('120', 'C')
+      const resultat_calc = sumPrefix('7', 'C') - sumPrefix('6', 'D')
+      const resultat_ex   = compte_1200 !== 0 ? compte_1200 : resultat_calc
+      const total_cp      = capital + reserves + report_nvx + resultat_ex
 
       // PASSIF — DETTES LT
       const emprunts_lt   = sumPrefix('16', 'C') + sumPrefix('17', 'C') + sumPrefix('18', 'C')
@@ -207,11 +219,11 @@ export async function GET(request: Request) {
         periode: { date_debut: dDebut, date_fin: dFin, exercice },
         actif: {
           non_courant: { immo_corp, immo_incorp, amortissements, immo_fin, total: actif_nc },
-          courant: { stocks, clients, autres_creances, tresorerie, total: actif_c },
+          courant: { stocks, clients_brut, provision_clients, clients, autres_creances, tresorerie, total: actif_c },
           total: total_actif,
         },
         passif: {
-          capitaux_propres: { capital, reserves, report_nvx, total: total_cp },
+          capitaux_propres: { capital, reserves, report_nvx, resultat_exercice: resultat_ex, total: total_cp },
           dettes_lt: { emprunts_lt, total: emprunts_lt },
           dettes_ct: { fournisseurs, dettes_fisc, autres_dettes, total: total_dc },
           total: total_passif,
