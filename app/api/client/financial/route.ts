@@ -199,16 +199,33 @@ export async function GET(request: Request) {
     let facturesFromTable: any[] = []
     if (!facturesErr) facturesFromTable = facturesData || []
 
-    // Compute CA and dépenses from factures table — EN HT (hors taxe)
+    // Compute CA et dépenses from factures table — EN HT (hors taxe).
     // En comptabilité, le résultat = CA HT - Charges HT. La TVA est séparée.
+    //
+    // Bug fréquent en prod : le `montant_ht` saisi/extrait est en réalité
+    // égal au TTC quand la TVA n'a pas été ventilée (saisie manuelle, OCR
+    // approximatif, factures legacy). Si on détecte cette situation
+    // (montant_ht == montant_ttc avec taux_tva > 0), on RECALCULE le vrai
+    // HT = TTC / (1 + taux_tva/100).
+    const computeHtMur = (f: any): number => {
+      const ht = Number(f.montant_ht) || 0
+      const ttc = Number(f.montant_ttc) || 0
+      const tauxTva = Number(f.taux_tva) || 0
+      // Si HT = TTC alors que taux_tva > 0, le HT en base est en fait le TTC
+      if (tauxTva > 0 && ht > 0 && Math.abs(ht - ttc) < 0.01) {
+        return convertToMUR(ttc / (1 + tauxTva / 100), f.devise || 'MUR', rates)
+      }
+      return convertToMUR(ht, f.devise || 'MUR', rates)
+    }
+
     const caFromFactures = facturesFromTable
       .filter(f => f.type_facture === 'client' && f.statut !== 'annule')
-      .reduce((s, f) => s + convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates), 0)
+      .reduce((s, f) => s + computeHtMur(f), 0)
 
     // Fournisseur invoices total HT (from factures table — MUR)
     const depensesFournisseursFactures = facturesFromTable
       .filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule')
-      .reduce((s, f) => s + convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates), 0)
+      .reduce((s, f) => s + computeHtMur(f), 0)
     // depensesFromFactures will be augmented with payroll (641, 645) from écritures below
     // (computed after allEcritures is built)
     let depensesFromFactures = depensesFournisseursFactures
@@ -355,9 +372,18 @@ export async function GET(request: Request) {
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     // Payroll — P&L accounts (641 = salaires, 645 = charges patronales)
-    // Exclude incomplete current month payroll
+    // Exclude incomplete current month payroll AND 6418 (indemnités
+    // compensatrices + ajustements de balance — écritures techniques,
+    // pas de la masse salariale réelle).
+    // Bug observé : 7,6M affichés au lieu de 6,7M car 6418 (~883k
+    // d'ajustements `FAC-... écart`) gonflait artificiellement les
+    // salaires.
     const salaires = allEcritures
-      .filter(e => e.compte?.startsWith('641') && !isPayrollCurrentMonth(e))
+      .filter(e =>
+        e.compte?.startsWith('641')
+        && !e.compte?.startsWith('6418')   // exclut indemnités/ajustements
+        && !isPayrollCurrentMonth(e)
+      )
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     const chargesSociales = allEcritures
