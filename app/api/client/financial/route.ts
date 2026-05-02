@@ -150,18 +150,14 @@ export async function GET(request: Request) {
       .map((s: any) => ({ id: s.id, nom: s.nom }))
 
     // === PARALLEL FETCH: all independent queries at once ===
+    // ⚠️ V2 ONLY (mig 230) — ecritures_comptables (V1) est désormais une VUE
+    // sur V2. Lire V1 + V2 = double-comptage garanti (bug récurrent : masse
+    // salariale 7,6M au lieu de 6,7M, fournisseurs 1,597M au lieu de 1,4M).
     let ecrituresV2Query = supabase
       .from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
       .order('date_ecriture', { ascending: false })
     if (dateFilter) {
       ecrituresV2Query = ecrituresV2Query.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
-    }
-
-    let v1Query = allDossierIds.length > 0
-      ? supabase.from('ecritures_comptables').select('*').in('dossier_id', allDossierIds).order('date_ecriture', { ascending: false })
-      : null
-    if (v1Query && dateFilter) {
-      v1Query = v1Query.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
     }
 
     let facturesQuery = supabase
@@ -173,7 +169,6 @@ export async function GET(request: Request) {
 
     const [
       { data: ecrituresV2 },
-      ecrituresV1Result,
       { data: documents },
       { data: comptesBank },
       { data: tvaRecords },
@@ -181,7 +176,6 @@ export async function GET(request: Request) {
       { data: relevesDB },
     ] = await Promise.all([
       ecrituresV2Query,
-      v1Query ? v1Query : Promise.resolve({ data: [] as any[] }),
       supabase.from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at, societe_detectee')
         .in('dossier_id', dossierIds).eq('statut', 'traite').order('created_at', { ascending: false }),
       supabase.from('comptes_bancaires').select('*').in('societe_id', societeIds).eq('actif', true),
@@ -191,30 +185,15 @@ export async function GET(request: Request) {
         .in('societe_id', societeIds).order('date_fin', { ascending: false }),
     ])
 
-    // Since migration 120, ecritures_comptables is now a VIEW on ecritures_comptables_v2.
-    // All entries live in v2 as single source of truth. Both reads return the same rows.
-    // We keep reading both for backward compat during rollout, but dedupe by id.
-    const ecrituresV1 = ecrituresV1Result?.data || []
-    const byId = new Map<string, any>()
-    for (const e of (ecrituresV2 || [])) {
-      byId.set(e.id, {
-        ...e,
-        compte: e.numero_compte,
-        debit: e.debit_mur,
-        credit: e.credit_mur,
-      })
-    }
-    for (const e of ecrituresV1) {
-      if (byId.has(e.id)) continue
-      // v1 row with different id (pre-migration leftover) — normalize
-      byId.set(e.id, {
-        ...e,
-        numero_compte: e.compte,
-        debit_mur: e.debit,
-        credit_mur: e.credit,
-      })
-    }
-    const ecritures = Array.from(byId.values())
+    // V2 = source unique. Normalisation des noms de colonnes pour le code aval
+    // qui consomme `compte/debit/credit` (legacy) en plus de `numero_compte/
+    // debit_mur/credit_mur`.
+    const ecritures = (ecrituresV2 || []).map((e: any) => ({
+      ...e,
+      compte: e.numero_compte,
+      debit: e.debit_mur,
+      credit: e.credit_mur,
+    }))
 
     let facturesFromTable: any[] = []
     if (!facturesErr) facturesFromTable = facturesData || []

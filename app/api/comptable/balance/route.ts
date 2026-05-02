@@ -54,36 +54,8 @@ export async function GET(request: Request) {
       if (page.length < PAGE) break
     }
 
-    // Charger aussi la table V1 (legacy) — certaines sociétés ont des
-    // écritures SAL paie historiques qui n'ont jamais été migrées en V2.
-    {
-      const { data: dossiers } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id)
-      const dIds = (dossiers || []).map((d: any) => d.id)
-      if (dIds.length > 0) {
-        for (let from = 0; ; from += PAGE) {
-          let q = supabase
-            .from('ecritures_comptables')
-            .select('compte, debit, credit, libelle')
-            .in('dossier_id', dIds)
-            .range(from, from + PAGE - 1)
-            .order('id')
-          if (dDebut) q = q.gte('date_ecriture', dDebut)
-          if (dFin)   q = q.lte('date_ecriture', dFin)
-          const { data: page, error } = await q
-          if (error) break
-          if (!page || page.length === 0) break
-          for (const e of page) {
-            ecritures.push({
-              numero_compte: (e as any).compte,
-              debit_mur: Number((e as any).debit) || 0,
-              credit_mur: Number((e as any).credit) || 0,
-              nom_compte: (e as any).libelle || null,
-            })
-          }
-          if (page.length < PAGE) break
-        }
-      }
-    }
+    // ⚠️ V2 ONLY (mig 230) — V1 supprimée. ecritures_comptables est une vue
+    // sur V2 depuis mig 230, lire les 2 = doublons garantis.
 
     if (ecritures.length === 0) {
       return NextResponse.json({

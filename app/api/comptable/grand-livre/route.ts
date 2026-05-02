@@ -87,66 +87,8 @@ export async function GET(request: Request) {
       useV2 = true
     }
 
-    // --- V1: ALWAYS load (contains SAL entries from import-paie) ---
-    // V1 uses dossier_id, V2 uses societe_id directly — both may have data
-    {
-      const { data: dossiers } = await supabase
-        .from('dossiers').select('id').eq('societe_id', societe_id)
-      const dossierIds = (dossiers || []).map((d: any) => d.id)
-
-      if (dossierIds.length > 0) {
-        // Try with lettrage columns first, fallback without them
-        let v1Query = supabase
-          .from('ecritures_comptables')
-          .select('id, compte, libelle, debit, credit, date_ecriture, journal, numero_piece, lettre, date_lettrage')
-          .in('dossier_id', dossierIds)
-          .order('compte').order('date_ecriture').order('id')
-
-        if (compte_debut) v1Query = v1Query.gte('compte', compte_debut)
-        if (compte_fin)   v1Query = v1Query.lte('compte', compte_fin)
-        if (effectiveDateDebut) v1Query = v1Query.gte('date_ecriture', effectiveDateDebut)
-        if (effectiveDateFin)   v1Query = v1Query.lte('date_ecriture', effectiveDateFin)
-        if (journal)      v1Query = v1Query.eq('journal', journal)
-
-        let { data: v1Data, error: v1Err } = await v1Query
-
-        // If query failed (probably missing columns), retry without lettrage columns
-        if (v1Err) {
-          console.error('[grand-livre] v1 with lettrage columns failed:', v1Err.message, '— retrying without')
-          let v1FallbackQuery = supabase
-            .from('ecritures_comptables')
-            .select('id, compte, libelle, debit, credit, date_ecriture, journal, numero_piece')
-            .in('dossier_id', dossierIds)
-            .order('compte').order('date_ecriture').order('id')
-
-          if (compte_debut) v1FallbackQuery = v1FallbackQuery.gte('compte', compte_debut)
-          if (compte_fin)   v1FallbackQuery = v1FallbackQuery.lte('compte', compte_fin)
-          if (effectiveDateDebut) v1FallbackQuery = v1FallbackQuery.gte('date_ecriture', effectiveDateDebut)
-          if (effectiveDateFin)   v1FallbackQuery = v1FallbackQuery.lte('date_ecriture', effectiveDateFin)
-          if (journal)      v1FallbackQuery = v1FallbackQuery.eq('journal', journal)
-
-          const fallback = await v1FallbackQuery
-          v1Data = fallback.data as any[]
-          if (fallback.error) console.error('[grand-livre] v1 fallback also failed:', fallback.error.message)
-        }
-
-        const v1Entries = (v1Data || []).map((e: any) => ({
-          id: e.id, numero_compte: e.compte || '', nom_compte: '',
-          description: e.libelle || '', debit_mur: Number(e.debit) || 0,
-          credit_mur: Number(e.credit) || 0, date_ecriture: e.date_ecriture,
-          journal: e.journal || '', ref_folio: e.numero_piece || '',
-          lettre: e.lettre ?? null, date_lettrage: e.date_lettrage ?? null,
-        }))
-        // Merge V1 entries with V2 (deduplicate by id)
-        const existingIds = new Set(allEntries.map(e => e.id))
-        for (const entry of v1Entries) {
-          if (!existingIds.has(entry.id)) {
-            allEntries.push(entry)
-          }
-        }
-        console.log(`[grand-livre] v1 loaded: ${v1Entries.length} entries from ${dossierIds.length} dossier(s), total: ${allEntries.length}`)
-      }
-    }
+    // ⚠️ V2 ONLY (mig 230) — V1 lectures supprimées pour éviter le double-
+    // comptage récurrent. ecritures_comptables est désormais une vue sur V2.
 
     // Re-sort after merging V1+V2
     allEntries.sort((a, b) => {
@@ -178,26 +120,7 @@ export async function GET(request: Request) {
           debit_mur: Number(e.debit_mur) || 0, credit_mur: Number(e.credit_mur) || 0,
         }))
 
-      const { data: priorDossiers } = await supabase
-        .from('dossiers').select('id').eq('societe_id', societe_id)
-      const priorDossierIds = (priorDossiers || []).map((d: any) => d.id)
-      if (priorDossierIds.length > 0) {
-        let priorV1Query = supabase.from('ecritures_comptables')
-          .select('id, compte, debit, credit')
-          .in('dossier_id', priorDossierIds)
-          .lt('date_ecriture', effectiveDateDebut)
-        if (compte_debut) priorV1Query = priorV1Query.gte('compte', compte_debut)
-        if (compte_fin) priorV1Query = priorV1Query.lte('compte', compte_fin)
-        const { data: priorV1Data } = await priorV1Query
-        const existingPriorIds = new Set(priorEntries.map(e => e.id).filter(Boolean))
-        for (const e of (priorV1Data || []) as any[]) {
-          if (e.id && existingPriorIds.has(e.id)) continue
-          priorEntries.push({
-            id: e.id, numero_compte: e.compte,
-            debit_mur: Number(e.debit) || 0, credit_mur: Number(e.credit) || 0,
-          })
-        }
-      }
+      // ⚠️ V2 ONLY (mig 230) — pas de lecture V1 sur les écritures prior.
 
       // Aggregate opening balances per account (only balance sheet accounts: classes 1-5)
       for (const e of priorEntries) {
