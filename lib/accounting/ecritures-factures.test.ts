@@ -390,4 +390,309 @@ describe('createEcrituresForPayment', () => {
     expect(rows.find(r => r.id === 'old-1')).toBeUndefined()
     expect(rows).toHaveLength(2)
   })
+
+  // ── Sprint 10 — écart de change réalisé sur paiement (IAS 21 §28) ───────
+  it('cree une ecriture de PERTE de change (666) si client paie moins en MUR que la facture', async () => {
+    // Facture client EUR : montant_mur figé à 5600 (taux T0=46×120ttc)
+    // Paiement : amount_mur=5400 (taux T1<T0). Écart = -200 (perte).
+    const supabase = createMockSupabase({
+      tables: {
+        dossiers: [{ id: 'doss-1', societe_id: 'soc-1' }],
+        factures: [
+          {
+            id: 'fac-eur-1',
+            montant_mur: 5600,
+            montant_ttc: 120,
+            taux_change: 46,
+            devise: 'EUR',
+          },
+        ],
+      },
+    })
+
+    const res = await createEcrituresForPayment(supabase, {
+      societe_id: 'soc-1',
+      date_payment: '2026-05-10',
+      amount_mur: 5400,
+      type: 'client',
+      tiers: 'EU Co',
+      ref_folio: 'BANK-rfx-1',
+      compte_banque: '512200',
+      facture_id: 'fac-eur-1',
+      devise_origine: 'EUR',
+      montant_origine: 120,
+      taux_change_applique: 45,
+    })
+    expect(res.ok).toBe(true)
+
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    const fxLines = rows.filter(r => r.ref_folio === 'BANK-rfx-1-FX')
+    expect(fxLines.length).toBe(2)
+    const compteFx = fxLines.find(r => ['666', '766'].includes(r.numero_compte))!
+    expect(compteFx.numero_compte).toBe('666')
+    expect(compteFx.debit_mur).toBeCloseTo(200, 2)
+    expect(compteFx.credit_mur).toBe(0)
+
+    // Côté tier 411 : sens dépend de l'implémentation actuelle. On vérifie
+    // simplement qu'une ligne de régularisation au montant abs(écart) existe.
+    const ligne411Fx = fxLines.find(r => r.numero_compte === '411')!
+    const total411 = (ligne411Fx.debit_mur || 0) + (ligne411Fx.credit_mur || 0)
+    expect(total411).toBeCloseTo(200, 2)
+  })
+
+  it('cree une ecriture de GAIN de change (766) si on paie un fournisseur EUR moins cher', async () => {
+    const supabase = createMockSupabase({
+      tables: {
+        dossiers: [{ id: 'doss-1', societe_id: 'soc-1' }],
+        factures: [
+          {
+            id: 'fac-eur-2',
+            montant_mur: 4600,
+            montant_ttc: 100,
+            taux_change: 46,
+            devise: 'EUR',
+          },
+        ],
+      },
+    })
+    const res = await createEcrituresForPayment(supabase, {
+      societe_id: 'soc-1',
+      date_payment: '2026-05-12',
+      amount_mur: 4500,
+      type: 'supplier',
+      tiers: 'EU Vendor',
+      ref_folio: 'BANK-rfx-2',
+      compte_banque: '512200',
+      facture_id: 'fac-eur-2',
+      devise_origine: 'EUR',
+      montant_origine: 100,
+      taux_change_applique: 45,
+    })
+    expect(res.ok).toBe(true)
+
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    const fxLines = rows.filter(r => r.ref_folio === 'BANK-rfx-2-FX')
+    expect(fxLines.length).toBe(2)
+    const compteFx = fxLines.find(r => ['666', '766'].includes(r.numero_compte))!
+    expect(compteFx.numero_compte).toBe('766')
+    expect(compteFx.credit_mur).toBeCloseTo(100, 2)
+    expect(compteFx.debit_mur).toBe(0)
+  })
+
+  it('ne cree PAS d\'ecart de change si paiement en MUR natif', async () => {
+    const supabase = makeClient()
+    supabase._seed('factures', [
+      { id: 'fac-mur-1', montant_mur: 1150, montant_ttc: 1150, devise: 'MUR' },
+    ])
+    const res = await createEcrituresForPayment(supabase, {
+      societe_id: 'soc-1',
+      date_payment: '2026-04-20',
+      amount_mur: 1100,
+      type: 'client',
+      tiers: 'Cli',
+      ref_folio: 'BANK-mur-1',
+      facture_id: 'fac-mur-1',
+    })
+    expect(res.ok).toBe(true)
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    expect(rows.some(r => r.ref_folio === 'BANK-mur-1-FX')).toBe(false)
+  })
+
+  it('ne cree PAS d\'ecart de change si l\'ecart est negligeable (< 0.02 MUR)', async () => {
+    const supabase = createMockSupabase({
+      tables: {
+        dossiers: [{ id: 'doss-1', societe_id: 'soc-1' }],
+        factures: [
+          {
+            id: 'fac-eur-3',
+            montant_mur: 4600.005,
+            montant_ttc: 100,
+            taux_change: 46,
+            devise: 'EUR',
+          },
+        ],
+      },
+    })
+    const res = await createEcrituresForPayment(supabase, {
+      societe_id: 'soc-1',
+      date_payment: '2026-05-12',
+      amount_mur: 4600.01,
+      type: 'supplier',
+      tiers: 'EU',
+      ref_folio: 'BANK-tiny-1',
+      facture_id: 'fac-eur-3',
+      devise_origine: 'EUR',
+      montant_origine: 100,
+      taux_change_applique: 46,
+    })
+    expect(res.ok).toBe(true)
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    expect(rows.some(r => r.ref_folio === 'BANK-tiny-1-FX')).toBe(false)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint 10 — Sous-comptes auxiliaires par tiers (mig 226)
+// ─────────────────────────────────────────────────────────────────────────
+describe('createEcrituresForFacture — sous-comptes auxiliaires par tiers', () => {
+  it('utilise un sous-compte 411<HASH> quand la RPC retourne une chaine', async () => {
+    const supabase = createMockSupabase({
+      tables: { dossiers: [{ id: 'doss-1', societe_id: 'soc-1' }] },
+      rpcs: {
+        get_or_create_compte_auxiliaire: ({ p_type_facture }) => {
+          const prefix = p_type_facture === 'client' ? '411' : '401'
+          return `${prefix}AB12CD`
+        },
+      },
+    })
+    const res = await createEcrituresForFacture(
+      supabase,
+      makeFacture({ tiers: 'ACME Ltd' }),
+    )
+    expect(res.ok).toBe(true)
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    expect(rows.some(r => r.numero_compte === '411')).toBe(false)
+    expect(rows.some(r => r.numero_compte === '411AB12CD')).toBe(true)
+    const aux = rows.find(r => r.numero_compte === '411AB12CD')!
+    expect(aux.nom_compte).toMatch(/ACME Ltd/)
+  })
+
+  it('utilise un sous-compte 401<HASH> pour facture fournisseur', async () => {
+    const supabase = createMockSupabase({
+      tables: { dossiers: [{ id: 'doss-1', societe_id: 'soc-1' }] },
+      rpcs: { get_or_create_compte_auxiliaire: () => '401XY9876' },
+    })
+    const res = await createEcrituresForFacture(
+      supabase,
+      makeFacture({ id: 'ff-aux', type_facture: 'fournisseur', tiers: 'Vendor SA' }),
+    )
+    expect(res.ok).toBe(true)
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    expect(rows.some(r => r.numero_compte === '401XY9876')).toBe(true)
+    expect(rows.some(r => r.numero_compte === '401')).toBe(false)
+  })
+
+  it('fallback sur compte global quand la RPC est absente (env legacy)', async () => {
+    const supabase = createMockSupabase({
+      tables: { dossiers: [{ id: 'doss-1', societe_id: 'soc-1' }] },
+    })
+    const res = await createEcrituresForFacture(supabase, makeFacture({ tiers: 'X' }))
+    expect(res.ok).toBe(true)
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    expect(rows.some(r => r.numero_compte === '411')).toBe(true)
+  })
+
+  it('fallback sur compte global quand le tiers est vide', async () => {
+    const calls: any[] = []
+    const supabase = createMockSupabase({
+      tables: { dossiers: [{ id: 'doss-1', societe_id: 'soc-1' }] },
+      rpcs: {
+        get_or_create_compte_auxiliaire: (args) => {
+          calls.push(args)
+          return '411NEVERUSED'
+        },
+      },
+    })
+    await createEcrituresForFacture(supabase, makeFacture({ tiers: '' }))
+    expect(calls.length).toBe(0)
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    expect(rows.some(r => r.numero_compte === '411')).toBe(true)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint 10 — TDS Maurice sur facture fournisseur (Section 111A)
+// ─────────────────────────────────────────────────────────────────────────
+describe('createEcrituresForFacture — TDS sur facture fournisseur', () => {
+  it('cree une ligne 4471 et reduit le credit 401 du montant TDS', async () => {
+    const supabase = makeClient()
+    const res = await createEcrituresForFacture(
+      supabase,
+      makeFacture({
+        id: 'fac-tds-1',
+        type_facture: 'fournisseur',
+        tiers: 'Consultant Co',
+        montant_ht: 10000,
+        montant_tva: 1500,
+        montant_ttc: 11500,
+        ...({
+          tds_montant: 500,
+          tds_categorie: 'services_professionnels',
+          tds_taux_pct: 5,
+        } as any),
+      }),
+    )
+    expect(res.ok).toBe(true)
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    const comptes = rows.map(r => r.numero_compte).sort()
+    expect(comptes).toContain('4471')
+    expect(comptes).toContain('607')
+    expect(comptes).toContain('4456')
+
+    const ligne401 = rows.find(r => r.numero_compte === '401')!
+    expect(ligne401.credit_mur).toBeCloseTo(11000, 2)
+
+    const ligne4471 = rows.find(r => r.numero_compte === '4471')!
+    expect(ligne4471.credit_mur).toBeCloseTo(500, 2)
+    expect(ligne4471.debit_mur).toBe(0)
+
+    const totals = rows.reduce(
+      (a, r) => ({
+        d: a.d + Number(r.debit_mur || 0),
+        c: a.c + Number(r.credit_mur || 0),
+      }),
+      { d: 0, c: 0 },
+    )
+    expect(totals.d).toBeCloseTo(totals.c, 2)
+    expect(totals.d).toBeCloseTo(11500, 2)
+  })
+
+  it('n\'ajoute PAS de ligne 4471 si tds_montant est 0 ou absent', async () => {
+    const supabase = makeClient()
+    await createEcrituresForFacture(
+      supabase,
+      makeFacture({ id: 'fac-no-tds', type_facture: 'fournisseur' }),
+    )
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    expect(rows.some(r => r.numero_compte === '4471')).toBe(false)
+  })
+
+  it('ignore un tds_montant negligeable (< 0.01)', async () => {
+    const supabase = makeClient()
+    await createEcrituresForFacture(
+      supabase,
+      makeFacture({
+        id: 'fac-tds-0',
+        type_facture: 'fournisseur',
+        ...({ tds_montant: 0.005 } as any),
+      }),
+    )
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    expect(rows.some(r => r.numero_compte === '4471')).toBe(false)
+  })
+
+  it('porte la categorie et le taux TDS dans la description de la ligne 4471', async () => {
+    const supabase = makeClient()
+    await createEcrituresForFacture(
+      supabase,
+      makeFacture({
+        id: 'fac-tds-desc',
+        type_facture: 'fournisseur',
+        tiers: 'Architect Ltd',
+        montant_ht: 5000,
+        montant_tva: 0,
+        montant_ttc: 5000,
+        ...({
+          tds_montant: 250,
+          tds_categorie: 'services_professionnels',
+          tds_taux_pct: 5,
+        } as any),
+      }),
+    )
+    const rows = supabase._state.tables['ecritures_comptables_v2']
+    const tds = rows.find(r => r.numero_compte === '4471')!
+    expect(String(tds.description)).toMatch(/services_professionnels/)
+    expect(String(tds.description)).toMatch(/5/)
+    expect(String(tds.libelle)).toMatch(/Architect Ltd/)
+  })
 })

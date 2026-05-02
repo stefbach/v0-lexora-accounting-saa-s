@@ -35,6 +35,13 @@ export interface MockSupabaseOptions {
    * Use for "simulate DB error" tests.
    */
   errorOn?: (ctx: { table: string; kind: 'select' | 'insert' | 'update' | 'delete' }) => { message: string } | null
+  /**
+   * Optional `rpc(name, args)` handler. If a key matches the RPC name, the
+   * function is called and its return value is wrapped as `{ data, error }`.
+   * Throwing inside the handler turns into an `{ data:null, error:{message} }`
+   * shape, mirroring supabase-js behaviour.
+   */
+  rpcs?: Record<string, (args: any) => any>
 }
 
 type Filter =
@@ -70,6 +77,8 @@ interface SelectCall {
 export interface MockSupabaseClient {
   /** Supabase-like surface. */
   from: (table: string) => QueryBuilder
+  /** RPC stub — resolves via `MockSupabaseOptions.rpcs[name]` when defined. */
+  rpc: (name: string, args?: any) => Promise<{ data: any; error: any }>
   /** Captured state for assertions. */
   _state: {
     tables: Record<TableName, any[]>
@@ -272,6 +281,16 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
 
   return {
     from: makeBuilder,
+    async rpc(name: string, args?: any) {
+      const handler = options.rpcs?.[name]
+      if (!handler) return { data: null, error: { message: `rpc ${name} not stubbed` } }
+      try {
+        const data = await handler(args)
+        return { data, error: null }
+      } catch (e: any) {
+        return { data: null, error: { message: e?.message || 'rpc threw' } }
+      }
+    },
     _state: state,
     _seed(table, rows) {
       state.tables[table] = [...(state.tables[table] || []), ...rows]
