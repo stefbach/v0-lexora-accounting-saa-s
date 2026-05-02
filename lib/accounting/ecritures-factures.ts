@@ -63,37 +63,61 @@ export async function createEcrituresForFacture(
 
     const dossier_id = dossier?.id || null
 
-    // Delete any existing UNlettered entries for this facture (idempotent)
-    // IMPORTANT : ne PAS supprimer les écritures déjà lettrées (rapprochées)
-    // sinon le backfill casse le lettrage existant.
+    // Suppression des écritures préexistantes pour cette facture (idempotence).
+    //
+    // ⚠️ IMPORTANT : on supprime AUSSI les lettrées, car le bug observé en
+    // prod était : une 1re écriture créée à un taux historique (ex. 51 EUR/MUR)
+    // a été lettrée, puis le user ré-importait la facture au taux courant
+    // (54.58) → ancienne écriture conservée car lettrée + nouvelle écriture =
+    // DOUBLON sur 411/401 pour la même facture (cf. migration 232).
+    //
+    // Pour ne pas perdre le lettrage : on capture la lettre AVANT suppression
+    // et on la pose sur la nouvelle écriture du tiers (411 ou 401) dans
+    // l'INSERT plus bas. Idem pour les BNQ qui pointent vers facture_id (le
+    // lettrage par facture_id reste valide après recréation).
     const refFolio = `FAC-${facture.id}`
+    const isClient = facture.type_facture === 'client'
+    const tierAccountPrefix = isClient ? '411' : '401'
+
+    // Capturer la lettre existante sur la ligne tier (si elle existe et est lettrée)
+    const { data: existingLetteredTier } = await supabase
+      .from('ecritures_comptables_v2')
+      .select('lettre, date_lettrage')
+      .eq('societe_id', facture.societe_id)
+      .eq('facture_id', facture.id)
+      .in('journal', ['VTE', 'ACH'])
+      .like('numero_compte', `${tierAccountPrefix}%`)
+      .not('lettre', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const preservedLettre: string | null = existingLetteredTier?.lettre || null
+    const preservedDateLettrage: string | null = existingLetteredTier?.date_lettrage || null
+
+    // Supprimer TOUTES les écritures VTE/ACH pour cette facture (lettrées ou non)
+    await supabase
+      .from('ecritures_comptables_v2')
+      .delete()
+      .eq('societe_id', facture.societe_id)
+      .eq('facture_id', facture.id)
+      .in('journal', ['VTE', 'ACH'])
+
+    // Cleanup legacy par ref_folio (cas où facture_id n'aurait pas été propagé)
     await supabase
       .from('ecritures_comptables_v2')
       .delete()
       .eq('societe_id', facture.societe_id)
       .eq('ref_folio', refFolio)
-      .is('lettre', null)
+      .in('journal', ['VTE', 'ACH'])
 
-    // Clean legacy duplicates (non lettrées uniquement)
     await supabase
       .from('ecritures_comptables_v2')
       .delete()
       .eq('societe_id', facture.societe_id)
       .eq('ref_folio', facture.id)
-      .is('lettre', null)
-
-    if (dossier_id) {
-      await supabase
-        .from('ecritures_comptables_v2')
-        .delete()
-        .eq('dossier_id', dossier_id)
-        .eq('facture_id', facture.id)
-        .in('journal', ['ACH', 'VTE'])
-        .is('lettre', null)
-    }
+      .in('journal', ['VTE', 'ACH'])
 
     const libelle = `Facture ${facture.numero_facture || ''} — ${facture.tiers || ''}`.trim()
-    const isClient = facture.type_facture === 'client'
     const journal = isClient ? 'VTE' : 'ACH'
 
     // ── Conversion MUR ─────────────────────────────────────────────────
@@ -169,6 +193,9 @@ export async function createEcrituresForFacture(
 
     if (isClient) {
       // Debit 411 (ou 411<HASH6> si auxiliaires actifs) — TTC en MUR
+      // Si une lettre était posée sur l'ancienne écriture tier (avant
+      // suppression), on la repose ici pour ne pas casser le lettrage avec
+      // les BNQ de paiement existants.
       entries.push({
         societe_id: facture.societe_id,
         dossier_id,
@@ -184,6 +211,8 @@ export async function createEcrituresForFacture(
         credit_mur: 0,
         exercice,
         facture_id: facture.id,
+        lettre: preservedLettre,
+        date_lettrage: preservedDateLettrage,
       })
       // Credit 706 Prestations (HT en MUR)
       if (htMur > 0) {
@@ -272,6 +301,7 @@ export async function createEcrituresForFacture(
       const ttcAprèsTds = ttcMur - tdsMontant
 
       // Credit 401/401<HASH> Fournisseurs — TTC NET du TDS retenu
+      // Préservation lettrage : cf. note dans le bloc isClient.
       entries.push({
         societe_id: facture.societe_id,
         dossier_id,
@@ -287,6 +317,8 @@ export async function createEcrituresForFacture(
         credit_mur: ttcAprèsTds,
         exercice,
         facture_id: facture.id,
+        lettre: preservedLettre,
+        date_lettrage: preservedDateLettrage,
       })
 
       // Crédit 4471 TDS retenu à reverser à la MRA (si TDS > 0)

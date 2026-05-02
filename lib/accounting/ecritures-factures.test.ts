@@ -179,22 +179,42 @@ describe('createEcrituresForFacture', () => {
     expect(debit).toBeCloseTo(credit, 2)
   })
 
-  it('est idempotent sur une facture deja lettree : 2e appel = nb_entries=0', async () => {
+  it('régénère tout sur 2e appel et préserve la lettre de l\'écriture tier', async () => {
     const supabase = makeClient()
     const res1 = await createEcrituresForFacture(supabase, makeFacture())
     expect(res1.ok).toBe(true)
     expect(res1.nb_entries).toBe(3)
 
     // On simule un lettrage posterieur (par ex. par rapprochement bancaire).
-    // Le code protege explicitement les ecritures lettrees contre la suppression,
-    // donc le 2e appel doit detecter l'existant via byRef et renvoyer nb_entries=0.
+    // Comportement nouveau (post-mig 232) : le 2e appel SUPPRIME l'ancienne
+    // écriture tier MÊME LETTRÉE puis la recrée en repropageant la lettre.
+    // C'est nécessaire pour qu'un re-import à un nouveau taux de change
+    // remplace l'ancien montant au lieu de créer un doublon (bug observé en
+    // prod : 411 SKYCALL avait 2 lignes — taux 51 lettrée + taux 54.58 non
+    // lettrée = doublon).
     for (const row of supabase._state.tables['ecritures_comptables_v2']) {
       row.lettre = 'A'
     }
 
     const res2 = await createEcrituresForFacture(supabase, makeFacture())
     expect(res2.ok).toBe(true)
-    expect(res2.nb_entries).toBe(0)
+    // Recréées entièrement → 3 entries (411, 706, 4457)
+    expect(res2.nb_entries).toBe(3)
+
+    // Vérifier qu'on n'a PAS de doublon (3 lignes au total, pas 6)
+    const allRows = supabase._state.tables['ecritures_comptables_v2'] as any[]
+    expect(allRows.length).toBe(3)
+
+    // L'écriture tier (411 ou 401) doit avoir la lettre préservée
+    const tierRow = allRows.find(r => r.numero_compte === '411' || r.numero_compte === '401')
+    expect(tierRow).toBeDefined()
+    expect(tierRow.lettre).toBe('A')
+
+    // Les autres écritures (706, 4457) ne portent pas la lettre du tier
+    const non706 = allRows.filter(r => r.numero_compte !== '411' && r.numero_compte !== '401')
+    for (const row of non706) {
+      expect(row.lettre).toBeNull()
+    }
   })
 
   it('log un warning pour une devise etrangere sans taux_change ni montant_mur', async () => {
