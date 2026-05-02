@@ -94,7 +94,9 @@ export async function POST(request: Request) {
       devise = 'MUR', taux_change = 1,
       montant_ht = 0, montant_tva = 0, montant_ttc, taux_tva = 0,
       statut = 'en_attente', document_id, notes,
-      mode_paiement = 'banque', paye_par = null
+      mode_paiement = 'banque', paye_par = null,
+      // TDS Maurice (mig 226) — pour factures fournisseurs uniquement
+      tds_categorie = null, tds_taux_pct = null, tds_montant = null,
     } = body
 
     if (!societe_id || !date_facture) {
@@ -153,16 +155,44 @@ export async function POST(request: Request) {
       }
     }
 
+    // TDS calc auto si catégorie fournie sans montant explicite (Maurice ITA)
+    let finalTdsTaux = tds_taux_pct
+    let finalTdsMontant = tds_montant
+    if (type_facture === 'fournisseur' && tds_categorie && (!finalTdsTaux || !finalTdsMontant)) {
+      try {
+        const { data: cat } = await supabase
+          .from('tds_taux_par_categorie')
+          .select('taux_pct')
+          .eq('code', tds_categorie)
+          .maybeSingle()
+        if (cat?.taux_pct) {
+          finalTdsTaux = finalTdsTaux ?? Number(cat.taux_pct)
+          if (!finalTdsMontant) {
+            // TDS s'applique sur le HT en MUR (Section 111A Maurice)
+            const htMur = devise === 'MUR' ? montant_ht : montant_ht * (taux_change || 1)
+            finalTdsMontant = Math.round(htMur * Number(cat.taux_pct) / 100 * 100) / 100
+          }
+        }
+      } catch (e) {
+        // Catégorie inconnue, on continue sans TDS
+      }
+    }
+
+    const insertData: Record<string, unknown> = {
+      societe_id, dossier_id, numero_facture, type_facture,
+      tiers, description, date_facture, date_echeance,
+      devise, taux_change, montant_ht, montant_tva,
+      montant_ttc: ttc, taux_tva, montant_mur: mur,
+      statut, document_id, notes,
+      mode_paiement, paye_par,
+    }
+    if (tds_categorie) insertData.tds_categorie = tds_categorie
+    if (finalTdsTaux != null) insertData.tds_taux_pct = finalTdsTaux
+    if (finalTdsMontant != null) insertData.tds_montant = finalTdsMontant
+
     const { data, error } = await supabase
       .from('factures')
-      .insert({
-        societe_id, dossier_id, numero_facture, type_facture,
-        tiers, description, date_facture, date_echeance,
-        devise, taux_change, montant_ht, montant_tva,
-        montant_ttc: ttc, taux_tva, montant_mur: mur,
-        statut, document_id, notes,
-        mode_paiement, paye_par
-      })
+      .insert(insertData)
       .select()
       .single()
 
