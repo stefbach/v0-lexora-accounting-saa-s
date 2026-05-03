@@ -1984,6 +1984,61 @@ export async function POST(request: Request) {
           })
         }
 
+        // Step 3.5: créer les écritures BNQ qui SOLDENT le compte tiers
+        // ⚠️ FIX (2026-05-03) — Avant ce fix, lettrer_manuel marquait la
+        // facture 'paye' et la tx 'rapproche' mais ne créait PAS les
+        // écritures BNQ (411 cr / 512 dr ou 401 dr / 512 cr). Résultat : le
+        // compte tiers restait débiteur/créditeur dans la balance, le user
+        // voyait l'incohérence dans "l'espace banque" et tentait de
+        // re-classifier la tx → DOUBLON via classer_transaction.
+        if (facture_id) {
+          try {
+            const { data: facture } = await supabase
+              .from('factures')
+              .select('id, numero_facture, tiers, type_facture, montant_ttc, montant_mur, devise')
+              .eq('id', facture_id).single()
+            if (facture) {
+              const { data: releveBanque } = await supabase
+                .from('releves_bancaires')
+                .select('compte_bancaire_id')
+                .eq('id', releve_id).single()
+              let compteBanque = '512'
+              if (releveBanque?.compte_bancaire_id) {
+                const { data: cb } = await supabase
+                  .from('comptes_bancaires')
+                  .select('compte_comptable')
+                  .eq('id', releveBanque.compte_bancaire_id).maybeSingle()
+                if (cb?.compte_comptable) compteBanque = String(cb.compte_comptable)
+              }
+              const payType: 'supplier' | 'client' =
+                facture.type_facture === 'fournisseur' ? 'supplier' : 'client'
+              const amount_mur = Number((facture as any).montant_mur) || Number(facture.montant_ttc) || 0
+              const datePayment = (prevTx as any).date || new Date().toISOString().split('T')[0]
+              if (amount_mur > 0) {
+                const { error: payErr } = await createEcrituresForPayment(supabase, {
+                  societe_id: societe_id as string,
+                  date_payment: datePayment,
+                  amount_mur,
+                  type: payType,
+                  tiers: String(facture.tiers || '').trim(),
+                  ref_folio: `BANK-${releve_id}-${txIdx}-${facture.id}`,
+                  description: `Règlement ${facture.numero_facture || ''} — ${facture.tiers || ''}`.trim(),
+                  compte_banque: compteBanque,
+                  facture_id: facture.id,
+                  lettre_code: lettreCode,
+                  numero_piece: (prevTx as any).libelle || '',
+                  devise_origine: (prevTx as any).devise || facture.devise || null,
+                })
+                if (payErr) {
+                  console.warn(`[lettrer_manuel] BNQ insert failed for facture ${facture.id}:`, payErr)
+                }
+              }
+            }
+          } catch (bnqErr: any) {
+            console.warn('[lettrer_manuel] BNQ generation failed (non-blocking):', bnqErr?.message)
+          }
+        }
+
         // Step 4: audit log (best-effort — failure doesn't rollback business data)
         try {
           await supabase.from('rapprochement_audit_log').insert({
@@ -2276,6 +2331,74 @@ export async function POST(request: Request) {
         rapproche_at: reconcileDate,
       }
       await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+
+      // ⚠️ FIX (2026-05-03) — Génération des écritures BNQ.
+      // Avant ce fix, lettrer_multi ne créait QUE les marquages
+      // (facture.statut='paye', tx.statut='rapproche') mais PAS les écritures
+      // BNQ qui soldent les comptes tiers. Conséquence :
+      //   • 411/401 restait débiteur/créditeur après le rapprochement
+      //   • La balance comptable ne reflétait pas le règlement
+      //   • Le user voyait l'incohérence dans "l'espace banque" et essayait
+      //     de re-classifier la tx → CRÉAIT LES ÉCRITURES BNQ EN DOUBLE
+      //     via classer_transaction
+      //
+      // Maintenant on appelle createEcrituresForPayment EXACTEMENT comme
+      // auto_rapprocher le fait (ligne 994) → cohérence parfaite.
+      // Prorata par facture sur le montant_mur de chaque facture (les
+      // factures peuvent être dans des devises différentes, mais
+      // montant_mur est déjà converti).
+      try {
+        // Résoudre le compte_comptable de la banque (ex: 512100, 512200)
+        const { data: releveBanque } = await supabase
+          .from('releves_bancaires')
+          .select('compte_bancaire_id')
+          .eq('id', releve_id)
+          .single()
+        let compteBanque = '512'
+        if (releveBanque?.compte_bancaire_id) {
+          const { data: cb } = await supabase
+            .from('comptes_bancaires')
+            .select('compte_comptable, devise')
+            .eq('id', releveBanque.compte_bancaire_id)
+            .maybeSingle()
+          if (cb?.compte_comptable) compteBanque = String(cb.compte_comptable)
+        }
+
+        const factureRows = facturesData || []
+        // Type unique : tous les factures ont le même type_facture (mix interdit
+        // par l'UI). On déduit du premier élément.
+        const firstType = factureRows[0]?.type_facture as string | undefined
+        const payType: 'supplier' | 'client' =
+          firstType === 'fournisseur' ? 'supplier' : 'client'
+        const datePayment = (tx as any).date || new Date().toISOString().split('T')[0]
+        const txLibelle = (tx as any).libelle || ''
+        const txDevise = (tx as any).devise || null
+
+        for (const fac of factureRows) {
+          const amount_mur = Number((fac as any).montant_mur) || Number(fac.montant_ttc) || 0
+          if (amount_mur <= 0) continue
+          const tiers = String(fac.tiers || '').trim()
+          const { error: payErr } = await createEcrituresForPayment(supabase, {
+            societe_id: societe_id as string,
+            date_payment: datePayment,
+            amount_mur,
+            type: payType,
+            tiers,
+            ref_folio: `BANK-${releve_id}-${txIdx}-${fac.id}`,
+            description: `Règlement ${fac.numero_facture || ''} — ${tiers}`.trim(),
+            compte_banque: compteBanque,
+            facture_id: fac.id,
+            lettre_code: lettreCode,
+            numero_piece: txLibelle,
+            devise_origine: txDevise,
+          })
+          if (payErr) {
+            console.warn(`[lettrer_multi] BNQ insert failed for facture ${fac.id}:`, payErr)
+          }
+        }
+      } catch (bnqErr: any) {
+        console.warn('[lettrer_multi] BNQ generation failed (non-blocking):', bnqErr?.message)
+      }
 
       // Audit log (best-effort)
       try {
