@@ -1900,6 +1900,79 @@ export async function POST(request: Request) {
               debit_mur: isOut ? 0 : amountMurMC, credit_mur: isOut ? amountMurMC : 0, lettre: code, ref_folio: `MC-${releve_id}-${txIdx}`,
               ...freezeMC },
           ])
+
+          // ⚠️ LETTRAGE CROISÉ (fix 2026-05-03)
+          // Pour les classifications qui ont une CONTREPARTIE COMPTABLE
+          // pré-existante (paye, MRA, cotisations), on cherche l'écriture
+          // SAL/OD non-lettrée correspondante et on lui pose la même lettre
+          // que la BNQ → balance du compte tiers (4210/421/444/431) soldée.
+          //
+          // Sans ce lettrage croisé : la BNQ existe (côté banque OK) mais la
+          // dette d'origine reste non lettrée → balance gonflée → user voit
+          // l'incohérence et tente de re-classifier → DOUBLON.
+          //
+          // Stratégie de matching :
+          //   1. Récupérer toutes les écritures non-lettrées sur le compte
+          //      tier dans les ±60 jours autour de la date du paiement
+          //   2. Filtrer celles dont le crédit (dette) ≈ montant BNQ (±0.5%
+          //      pour tolérer les arrondis de change)
+          //   3. Si UNE seule trouvée → poser la lettre dessus
+          //   4. Si plusieurs candidats → tentative match exact, sinon log
+          //      sans rien faire (l'opérateur fera un lettrage manuel)
+          //   5. Si aucune trouvée → log (cas normal pour 1ère paye, etc.)
+          const CLASSIFICATIONS_AVEC_LETTRAGE_CROISE = new Set([
+            'salaire', 'salaire_bulk', 'paiement_mra',
+            'charge_sociale', 'remboursement_personnel',
+          ])
+          if (CLASSIFICATIONS_AVEC_LETTRAGE_CROISE.has(classification) && isOut) {
+            try {
+              // Fenêtre date : ±60 jours pour gérer les paiements tardifs
+              const DATE_WINDOW_DAYS = 60
+              const dateRef = new Date(dateEcr)
+              const dateMin = new Date(dateRef.getTime() - DATE_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
+              const dateMax = new Date(dateRef.getTime() + DATE_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
+
+              const { data: candidates } = await supabase
+                .from('ecritures_comptables_v2')
+                .select('id, date_ecriture, debit_mur, credit_mur, libelle, journal')
+                .eq('societe_id', societe_id)
+                .eq('numero_compte', compteCharge)
+                .is('lettre', null)
+                .neq('journal', 'BNQ')   // exclure les BNQ qu'on vient de créer
+                .gte('date_ecriture', dateMin)
+                .lte('date_ecriture', dateMax)
+
+              // Tolérance 0.5% pour absorber arrondis de change/centimes
+              const tolerance = Math.max(0.5, amountMurMC * 0.005)
+              const exactMatches = (candidates || []).filter((c: any) => {
+                const credit = Number(c.credit_mur) || 0
+                return credit > 0 && Math.abs(credit - amountMurMC) <= tolerance
+              })
+
+              if (exactMatches.length === 1) {
+                const matchId = exactMatches[0].id
+                await supabase.from('ecritures_comptables_v2')
+                  .update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0] })
+                  .eq('id', matchId)
+                console.log(`[lettrer_manuel/${classification}] lettrage croisé OK : écriture ${matchId} lettrée avec ${code}`)
+              } else if (exactMatches.length === 0) {
+                console.log(`[lettrer_manuel/${classification}] aucun match pour ${amountMurMC} MUR sur compte ${compteCharge} (±${DATE_WINDOW_DAYS}j) — BNQ créée mais pas de lettrage croisé`)
+              } else {
+                // Plusieurs candidats : on tente le match le plus proche en date
+                const closestByDate = exactMatches.reduce((best, c) => {
+                  const cDelta = Math.abs(new Date(c.date_ecriture).getTime() - dateRef.getTime())
+                  const bestDelta = Math.abs(new Date(best.date_ecriture).getTime() - dateRef.getTime())
+                  return cDelta < bestDelta ? c : best
+                })
+                await supabase.from('ecritures_comptables_v2')
+                  .update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0] })
+                  .eq('id', closestByDate.id)
+                console.log(`[lettrer_manuel/${classification}] ${exactMatches.length} candidats — lettré le plus proche en date (${closestByDate.id})`)
+              }
+            } catch (lettrageErr: any) {
+              console.warn(`[lettrer_manuel/${classification}] lettrage croisé échoué (non-bloquant):`, lettrageErr?.message)
+            }
+          }
         }
 
         return NextResponse.json({ success: true, lettre: code, classification })
