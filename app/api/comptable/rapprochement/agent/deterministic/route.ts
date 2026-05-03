@@ -431,7 +431,9 @@ export async function POST(request: Request) {
             }
             releveModified = true
 
-            // BNQ entry for MRA: Débit 444/431 / Crédit 512
+            // BNQ entry for MRA: Débit 4471 (compte d'attente MRA) / Crédit 512
+            // Compte 4471 = "MRA - impôts et taxes divers". Le comptable peut
+            // reclasser ensuite vers 4330 (PAYE) ou 4457 (TVA) si besoin.
             await createMraEntry(supabase, {
               societe_id,
               date_payment: txDate,
@@ -447,7 +449,7 @@ export async function POST(request: Request) {
             tiers: tx.tiers_detecte || tx.tiers || '',
             action: 'mra',
             status: 'ok',
-            reason: `Paiement MRA ${txAmtEur.toFixed(2)} EUR → ${amtMur.toFixed(2)} MUR. Débit 444 Impôts / Crédit 512 Banque.`,
+            reason: `Paiement MRA ${txAmtEur.toFixed(2)} EUR → ${amtMur.toFixed(2)} MUR. Débit 4471 (MRA - impôts divers) / Crédit 512 Banque. À reclasser vers 4330 (PAYE) ou 4457 (TVA) si applicable.`,
             amount: txAmtEur,
           })
           matched++
@@ -782,8 +784,22 @@ async function createMraEntry(
       date_ecriture: opts.date_payment,
       journal: 'BNQ',
       ref_folio: opts.ref_folio,
-      numero_compte: '444',
-      nom_compte: 'Etat — impôts et taxes',
+      // ⚠️ FIX (2026-05-03) — bug observé en prod (DDS) : compte 4330 (PAYE)
+      // gonflé à 13M au lieu de ~19K (vraie dette PAYE).
+      //
+      // CAUSE : ce code écrivait '444' (Etat — impôts génériques). Mais le
+      // trigger BEFORE INSERT `tr_00_legacy_3digit_warn` (mig 201 ligne 65)
+      // remappe SILENCIEUSEMENT 444 → 4330 (PAYE). Donc tous les paiements
+      // MRA (PAYE + TVA + Income Tax + TDS + autres) atterrissaient sur 4330.
+      //
+      // FIX : utiliser directement 4471 "MRA — impôts et taxes divers"
+      // (compte 4-digits PCM, non remappé par le trigger). C'est le bon
+      // compte d'attente pour des paiements MRA dont le sous-type
+      // (PAYE / TVA / IT / TDS) n'est pas distingué par l'agent
+      // déterministe — le comptable peut reclassifier manuellement vers
+      // 4330 (si PAYE), 4457 (si TVA collectée à reverser), etc.
+      numero_compte: '4471',
+      nom_compte: 'MRA — impôts et taxes divers',
       libelle,
       description: libelle,
       debit_mur: opts.amount_mur,
@@ -876,7 +892,7 @@ function buildSummary(details: DetailItem[], matched: number, unmatched: number,
 
   if (byAction['frais_bancaires']) lines.push(`🏦 ${byAction['frais_bancaires']} frais bancaires (MCB) → Débit 627`)
   if (byAction['facture']) lines.push(`📄 ${byAction['facture']} facture(s) matchée(s) (fournisseurs + clients)`)
-  if (byAction['mra']) lines.push(`🏛️ ${byAction['mra']} paiement(s) MRA → Débit 444`)
+  if (byAction['mra']) lines.push(`🏛️ ${byAction['mra']} paiement(s) MRA → Débit 4471 (à reclasser si PAYE/TVA spécifique)`)
   if (byAction['salaire']) lines.push(`👤 ${byAction['salaire']} salaire(s) individuel(s) → Débit 4210`)
 
   if (unmatched > 0) {
