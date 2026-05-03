@@ -105,17 +105,36 @@ export async function POST(request: Request) {
     }
 
     // Normalize transactions (same logic as upload + reanalyze routes).
+    // ⚠️ FIX (2026-05-03) — bug observé en prod (OCC MUR.pdf) :
+    // Avant ce fix le mapping ne supportait que l'ancien format
+    // `{sens, montant}` du prompt OCR legacy. Le nouveau prompt
+    // SYSTEM_PROMPT_RELEVE_BANCAIRE renvoie directement `{debit, credit}`
+    // → `l.sens` était undefined → debit=0/credit=0 sur TOUTES les lignes
+    // → transactions_json avec montants à zéro → impossible de rapprocher.
+    //
+    // Le fix : prendre debit/credit DIRECTEMENT s'ils sont fournis, sinon
+    // fallback sur sens+montant pour rétrocompat avec l'ancien format.
     const rawTransactions: any[] = extraction.transactions || []
     const rawLignes: any[] = extraction.lignes || []
-    const lignesAsTransactions = rawLignes.map((l: any) => ({
-      date: l.date || '', libelle: l.libelle || '',
-      debit: l.sens === 'debit' ? (Number(l.montant) || 0) : 0,
-      credit: l.sens === 'credit' ? (Number(l.montant) || 0) : 0,
-      solde_apres: l.solde_apres ?? null,
-      tiers_detecte: l.tiers_detecte || null,
-      compte_comptable: l.sens === 'debit' ? (l.compte_debit || null) : (l.compte_credit || null),
-      statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
-    }))
+    const lignesAsTransactions = rawLignes.map((l: any) => {
+      let debit = Number(l.debit) || 0
+      let credit = Number(l.credit) || 0
+      if (debit === 0 && credit === 0 && l.montant) {
+        const montant = Number(l.montant) || 0
+        if (l.sens === 'debit') debit = montant
+        else if (l.sens === 'credit') credit = montant
+      }
+      return {
+        date: l.date || '',
+        libelle: l.libelle || '',
+        debit,
+        credit,
+        solde_apres: l.solde_apres ?? null,
+        tiers_detecte: l.tiers_detecte || null,
+        compte_comptable: l.compte_debit || l.compte_credit || null,
+        statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
+      }
+    })
     const normalizedTransactions = rawTransactions.length > 0 ? rawTransactions : lignesAsTransactions
 
     if (normalizedTransactions.length === 0) {
