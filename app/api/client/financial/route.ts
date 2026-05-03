@@ -1,5 +1,6 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
 
@@ -154,12 +155,8 @@ export async function GET(request: Request) {
     // sur V2. On ne lit JAMAIS V1 pour éviter le double-comptage qui
     // causait masse salariale 7,6M au lieu de 6,7M, fournisseurs 1,597M
     // au lieu de 1,4M.
-    let ecrituresV2Query = supabase
-      .from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
-      .order('date_ecriture', { ascending: false })
-    if (dateFilter) {
-      ecrituresV2Query = ecrituresV2Query.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
-    }
+    // (La requête écritures V2 est paginée plus bas via fetchAllEcrituresV2
+    // pour contourner la limite par défaut Supabase de 1000 rows.)
 
     let facturesQuery = supabase
       .from('factures').select('*').in('societe_id', societeIds)
@@ -168,15 +165,31 @@ export async function GET(request: Request) {
       facturesQuery = facturesQuery.gte('date_facture', dateFilter.debut).lte('date_facture', dateFilter.fin)
     }
 
+    // ⚠️ FIX (2026-05-03) — pagination pour contourner la limite par défaut
+    // de Supabase/PostgREST (1000 rows). Sans pagination, les clients avec
+    // > 1000 écritures voyaient leur P&L sous-estimée parce que les
+    // écritures plus anciennes étaient silencieusement tronquées.
+    // Cas concret Obesity Care Clinic : 1352 écritures → P&L Salaires
+    // affichait 2,75M au lieu de 3,79M (perte ~1M sur les bulletins juillet).
+    const ecrituresFactory = () => {
+      let q = supabase
+        .from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
+        .order('date_ecriture', { ascending: false })
+      if (dateFilter) {
+        q = q.gte('date_ecriture', dateFilter.debut).lte('date_ecriture', dateFilter.fin)
+      }
+      return q
+    }
+
     const [
-      { data: ecrituresV2 },
+      ecrituresV2,
       { data: documents },
       { data: comptesBank },
       { data: tvaRecords },
       { data: facturesData, error: facturesErr },
       { data: relevesDB },
     ] = await Promise.all([
-      ecrituresV2Query,
+      fetchAllPaginated<any>(ecrituresFactory),
       supabase.from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at, societe_detectee')
         .in('dossier_id', dossierIds).eq('statut', 'traite').order('created_at', { ascending: false }),
       supabase.from('comptes_bancaires').select('*').in('societe_id', societeIds).eq('actif', true),

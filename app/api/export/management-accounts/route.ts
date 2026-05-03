@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import * as XLSX from 'xlsx'
 
 export const dynamic = 'force-dynamic'
@@ -24,13 +25,15 @@ export async function GET(request: Request) {
     const dateFin = `${anneeDebut + 1}-06-30`
 
     // Charger toutes les données
-    const [societeRes, facClRes, facFouRes, ecrituresRes, immoRes, bulletinsRes] = await Promise.all([
+    const [societeRes, facClRes, facFouRes, ecrituresAll, immoRes, bulletinsRes] = await Promise.all([
       supabase.from('societes').select('*').eq('id', societe_id).single(),
       supabase.from('factures').select('*').eq('societe_id', societe_id).eq('type_facture', 'client').gte('date_facture', dateDebut).lte('date_facture', dateFin),
       supabase.from('factures').select('*').eq('societe_id', societe_id).eq('type_facture', 'fournisseur').gte('date_facture', dateDebut).lte('date_facture', dateFin),
       // V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on lit V2 directement.
       // V2 expose societe_id directement → plus besoin de LEFT JOIN dossiers (qui dupliquait les lignes pour sociétés multi-dossiers).
-      supabase.from('ecritures_comptables_v2').select('*').eq('societe_id', societe_id).gte('date_ecriture', dateDebut).lte('date_ecriture', dateFin),
+      fetchAllPaginated<any>(() =>
+        supabase.from('ecritures_comptables_v2').select('*').eq('societe_id', societe_id).gte('date_ecriture', dateDebut).lte('date_ecriture', dateFin)
+      ),
       supabase.from('immobilisations').select('*, amortissements(*)').eq('societe_id', societe_id),
       supabase.from('bulletins_paie').select('*, employe:employes(nom,prenom,code)').eq('societe_id', societe_id).gte('periode', dateDebut).lte('periode', dateFin),
     ])
@@ -39,7 +42,7 @@ export async function GET(request: Request) {
     const facCl = facClRes.data || []
     const facFou = facFouRes.data || []
     // Aliase V2 (numero_compte/debit_mur/credit_mur) → noms V1 utilisés ci-dessous (compte/debit/credit).
-    const ecritures = (ecrituresRes.data || []).map((e: any) => ({
+    const ecritures = (ecrituresAll || []).map((e: any) => ({
       ...e,
       compte: e.numero_compte,
       debit: e.debit_mur,

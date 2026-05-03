@@ -1,5 +1,6 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
 import { SYSTEM_PROMPT_TRESORERIE_J90, injectTauxChange } from '@/lib/ai/prompts'
@@ -63,17 +64,18 @@ export async function GET(request: Request) {
     // ⚠️ V2 ONLY (mig 230) : ecritures_comptables (V1) est une vue sur V2,
     // on lit V2 directement. Aliases V1→V2 appliqués après pour rester
     // compatibles avec le code aval qui consomme `compte`, `debit`, `credit`.
-    const [ecrituresRes, comptesRes, documentsRes] = await Promise.all([
-      supabase.from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
+    // Pagination ecritures (anti-troncage > 1000 rows — fix 2026-05-03)
+    const [ecrituresAll, comptesRes, documentsRes] = await Promise.all([
+      fetchAllPaginated<any>(() => supabase.from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
         .gte('date_ecriture', sinceDate)
-        .order('date_ecriture', { ascending: false }),
+        .order('date_ecriture', { ascending: false })),
       supabase.from('comptes_bancaires').select('*').in('societe_id', societeIds).eq('actif', true),
       supabase.from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at')
         .in('dossier_id', dossierIds).eq('statut', 'traite')
         .order('created_at', { ascending: false }).limit(50),
     ])
 
-    const ecritures = (ecrituresRes.data || []).map((e: any) => ({
+    const ecritures = (ecrituresAll || []).map((e: any) => ({
       ...e,
       compte: e.numero_compte,
       debit: e.debit_mur,
