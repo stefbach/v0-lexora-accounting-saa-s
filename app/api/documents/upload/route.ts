@@ -12,6 +12,7 @@ import {
   type Currency,
 } from '@/lib/accounting/validate-bank-currency'
 import { parseAmount, parseAmountSafe, ParseAmountError } from '@/lib/utils/bank-amount'
+import { getCompteComptable } from '@/lib/accounting/comptes-bancaires'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -2045,6 +2046,19 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             if (deviseCmp === 'no_existing') {
               bankUpdate.devise = bankDevise
             }
+            // ⚠️ AUTO-BACKFILL compte_comptable (fix 2026-05-03) :
+            // Si le compte existant n'a pas encore de compte_comptable (cas
+            // legacy avant que cet auto-fill soit en place), on le génère
+            // depuis banque + devise. Ne touche jamais un compte_comptable
+            // déjà fixé manuellement par le comptable.
+            const { data: cbExtra } = await supabase.from('comptes_bancaires')
+              .select('compte_comptable, banque').eq('id', existingBank.id).single()
+            if (!cbExtra?.compte_comptable) {
+              bankUpdate.compte_comptable = getCompteComptable(
+                cbExtra?.banque || finalBankName,
+                bankDevise || (guardCheck?.devise as string | undefined),
+              )
+            }
             if (Object.keys(bankUpdate).length > 0) {
               await supabase.from('comptes_bancaires').update(bankUpdate).eq('id', existingBank.id)
             }
@@ -2071,6 +2085,13 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           console.log(
             `[upload] Creating bank account (fallback${currencyConflict ? ', currency conflict' : ''}): ${finalBankName} for societe=${bankSocieteId} (devise=${bankDevise})`,
           )
+          // ⚠️ AUTO-COMPTE-COMPTABLE (fix 2026-05-03) — onboarding scalable :
+          // chaque compte bancaire reçoit automatiquement son compte 512xxx
+          // selon la banque + la devise (cf lib/accounting/comptes-bancaires.ts).
+          // Plus besoin de configuration manuelle du compte_comptable lors de
+          // l'ajout d'un nouveau client SaaS — l'OCR détecte la banque, le
+          // helper en déduit le compte canonique 6 digits du PCM Maurice.
+          const generatedCompteComptable = getCompteComptable(finalBankName, bankDevise)
           const { error: bankInsertError } = await supabase.from('comptes_bancaires').insert({
             societe_id: bankSocieteId,
             banque: finalBankName,
@@ -2078,6 +2099,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             numero_compte: suffixedNumero,
             iban: suffixedIban,
             devise: bankDevise,
+            compte_comptable: generatedCompteComptable,
             solde_actuel: solde,
             solde_dernier_releve: solde,
             date_dernier_releve: normPeriodeFin,
