@@ -476,7 +476,8 @@ export async function POST(request: Request) {
             }
             releveModified = true
 
-            // BNQ entry for salary: Débit 641 Salaires / Crédit 512
+            // BNQ entry for salary: Débit 4210 (solde dette paie) / Crédit 512 (banque)
+            // PAS Débit 641 — la charge est déjà créée à la génération paie via OD-PAIE.
             await createSalaryEntry(supabase, {
               societe_id,
               date_payment: txDate,
@@ -826,8 +827,16 @@ async function createSalaryEntry(
       date_ecriture: opts.date_payment,
       journal: 'BNQ',
       ref_folio: opts.ref_folio,
-      numero_compte: '641',
-      nom_compte: 'Rémunérations du personnel',
+      // ⚠️ FIX (2026-05-03) — bug majeur observé en prod (DDS) :
+      // Avant ce fix, on débitait 641 (CHARGE) ce qui créait un DOUBLE-
+      // COMPTAGE (la charge est déjà créée par la paie via OD-PAIE 6411
+      // dr / 4210 cr). Compte 641 atteignait 200M+ MUR au lieu de ~6,7M.
+      //
+      // Bonne logique comptable : à la paie, le bulletin crée la dette
+      // (4210 cr). Le paiement bancaire SOLDE cette dette : 4210 dr / 512 cr.
+      // Aucune nouvelle charge à débiter (déjà fait à la génération paie).
+      numero_compte: '4210',
+      nom_compte: 'Personnel — Rémunérations dues',
       libelle,
       description: libelle,
       debit_mur: opts.amount_mur,
@@ -868,7 +877,7 @@ function buildSummary(details: DetailItem[], matched: number, unmatched: number,
   if (byAction['frais_bancaires']) lines.push(`🏦 ${byAction['frais_bancaires']} frais bancaires (MCB) → Débit 627`)
   if (byAction['facture']) lines.push(`📄 ${byAction['facture']} facture(s) matchée(s) (fournisseurs + clients)`)
   if (byAction['mra']) lines.push(`🏛️ ${byAction['mra']} paiement(s) MRA → Débit 444`)
-  if (byAction['salaire']) lines.push(`👤 ${byAction['salaire']} salaire(s) individuel(s) → Débit 641`)
+  if (byAction['salaire']) lines.push(`👤 ${byAction['salaire']} salaire(s) individuel(s) → Débit 4210`)
 
   if (unmatched > 0) {
     lines.push('')
