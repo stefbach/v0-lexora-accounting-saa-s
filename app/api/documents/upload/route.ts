@@ -2055,7 +2055,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               .select('compte_comptable, banque').eq('id', existingBank.id).single()
             if (!cbExtra?.compte_comptable) {
               bankUpdate.compte_comptable = getCompteComptable(
-                cbExtra?.banque || finalBankName,
+                cbExtra?.banque || bankName,
                 bankDevise || (guardCheck?.devise as string | undefined),
               )
             }
