@@ -38,34 +38,26 @@ export async function GET(request: Request) {
     let tableauxMisAJour = 0
 
     for (const societe of societes || []) {
-      // Get dossiers for this société
-      const { data: dossiers } = await supabase
-        .from('dossiers')
-        .select('id')
+      // Get ecritures comptables for the week via société
+      // ⚠️ V2 ONLY (mig 230). Schéma : numero_compte, debit_mur, credit_mur.
+      // (Avant : lecture de V1 avec colonnes fantômes `montant`, `compte_debit`,
+      // `compte_credit` qui n'existent pas → tout retournait 0 silencieusement.)
+      const { data: ecrituresData } = await supabase
+        .from('ecritures_comptables_v2')
+        .select('numero_compte, debit_mur, credit_mur')
         .eq('societe_id', societe.id)
-
-      const dossierIds = (dossiers || []).map((d: any) => d.id)
-
-      // Get ecritures comptables for the week via dossiers
-      let ecritures: any[] = []
-      if (dossierIds.length > 0) {
-        const { data: ecrituresData } = await supabase
-          .from('ecritures_comptables')
-          .select('montant, compte_debit, compte_credit')
-          .in('dossier_id', dossierIds)
-          .gte('date_ecriture', debutSemaineStr)
-          .lte('date_ecriture', finSemaineStr)
-        ecritures = ecrituresData || []
-      }
+        .gte('date_ecriture', debutSemaineStr)
+        .lte('date_ecriture', finSemaineStr)
+      const ecritures = ecrituresData || []
 
       // Revenue (credit on class 7) and expenses (debit on class 6)
       const revenuSemaine = ecritures
-        .filter(e => e.compte_credit?.startsWith('7'))
-        .reduce((sum, e) => sum + (e.montant || 0), 0)
+        .filter(e => e.numero_compte?.startsWith('7'))
+        .reduce((sum, e) => sum + ((Number(e.credit_mur) || 0) - (Number(e.debit_mur) || 0)), 0)
 
       const depensesSemaine = ecritures
-        .filter(e => e.compte_debit?.startsWith('6'))
-        .reduce((sum, e) => sum + (e.montant || 0), 0)
+        .filter(e => e.numero_compte?.startsWith('6'))
+        .reduce((sum, e) => sum + ((Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0)), 0)
 
       // Current bank balances
       const { data: comptes } = await supabase

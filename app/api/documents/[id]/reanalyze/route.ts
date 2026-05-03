@@ -285,8 +285,9 @@ export async function POST(
     console.log(`[reanalyze] Confidence score: ${extractionConfidence}/100`)
 
     // Delete old accounting entries for this document
+    // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on supprime direct dans V2.
     if (doc.dossier_id) {
-      await supabase.from('ecritures_comptables')
+      await supabase.from('ecritures_comptables_v2')
         .delete()
         .eq('dossier_id', doc.dossier_id)
         .eq('piece_justificative', id)
@@ -334,9 +335,16 @@ export async function POST(
     if (docUpdateErr) console.error('[reanalyze] document update FAILED:', docUpdateErr.message)
 
     // Re-create accounting entries
+    // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
+    // V2 exige societe_id (NOT NULL) → on le récupère via le dossier final.
+    // Renommage : compte → numero_compte, debit → debit_mur, credit → credit_mur.
     const ecritures = finalExtraction.ecritures_comptables || finalExtraction.lignes
     const finalDossierId = updateFields.dossier_id || doc.dossier_id
     if (Array.isArray(ecritures) && ecritures.length > 0 && finalDossierId) {
+      const { data: dossierForEcritures } = await supabase
+        .from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
+      const ecrituresSocieteId = dossierForEcritures?.societe_id || null
+
       const journalMap: Record<string, string> = {
         facture_fournisseur: 'ACH', facture_client: 'VTE',
         releve_bancaire: 'BNQ', fiche_paie: 'OD', charges_sociales: 'OD',
@@ -345,18 +353,21 @@ export async function POST(
         .filter((e: any) => e.compte && (e.debit > 0 || e.credit > 0))
         .map((e: any) => ({
           dossier_id: finalDossierId,
+          societe_id: ecrituresSocieteId,
           date_ecriture: finalExtraction.date_document || finalExtraction.periode_debut || new Date().toISOString().split('T')[0],
           journal: journalMap[finalTypeDocument] || 'OD',
           numero_piece: finalExtraction.numero_reference || null,
-          compte: String(e.compte),
+          numero_compte: String(e.compte),
           libelle: e.libelle || doc.nom_fichier,
-          debit: Number(e.debit) || 0,
-          credit: Number(e.credit) || 0,
+          debit_mur: Number(e.debit) || 0,
+          credit_mur: Number(e.credit) || 0,
           piece_justificative: id,
         }))
-      if (entries.length > 0) {
-        const { error: insertErr } = await supabase.from('ecritures_comptables').insert(entries)
+      if (entries.length > 0 && ecrituresSocieteId) {
+        const { error: insertErr } = await supabase.from('ecritures_comptables_v2').insert(entries)
         if (insertErr) console.error('[reanalyze] ecritures insert error:', insertErr.message)
+      } else if (entries.length > 0 && !ecrituresSocieteId) {
+        console.warn(`[reanalyze] Skipping ecritures insert: dossier ${finalDossierId} has no societe_id`)
       }
     }
 
@@ -489,8 +500,9 @@ export async function POST(
           // Migration 133 link: stamp ecritures just (re)created for this
           // document with facture_id so auto-letterage finds them without
           // having to parse libelle text.
+          // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on update direct V2.
           if (factureIdForLink && finalDossierId) {
-            await supabase.from('ecritures_comptables')
+            await supabase.from('ecritures_comptables_v2')
               .update({ facture_id: factureIdForLink })
               .eq('dossier_id', finalDossierId)
               .eq('piece_justificative', id)

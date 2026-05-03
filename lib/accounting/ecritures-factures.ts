@@ -389,7 +389,54 @@ export async function createEcrituresForPayment(
       .limit(1)
       .maybeSingle()
 
-    // Delete existing payment entries with this ref_folio
+    // ⚠️ GARDE-FOU IDEMPOTENT (fix 2026-05-03)
+    // Avant de créer les BNQ, on vérifie qu'il n'existe PAS déjà des écritures
+    // BNQ pour ce facture_id. Si oui, on SKIP la création (on évite ainsi un
+    // doublon qui ferait passer la balance 411/401 en négatif).
+    //
+    // Cas concrets où ça arrive :
+    //   • Facture déjà rapprochée par auto_intelligent → BNQ existent
+    //   • User re-rapproche manuellement la même facture via lettrer_multi
+    //     → sans ce garde-fou, 2 jeux de BNQ créés → balance fausse
+    //   • Backfill SQL antérieur (ex. SKYCALL) puis user rapproche via UI
+    //
+    // On garde l'opportunité de POSER LA LETTRE manquante sur les BNQ et
+    // ACH/VTE existants, pour que le lettrage soit complet même en mode
+    // skip. Idempotent : même appel = même état final.
+    if (payment.facture_id) {
+      const { data: existingBnq } = await supabase
+        .from('ecritures_comptables_v2')
+        .select('id, lettre')
+        .eq('societe_id', payment.societe_id)
+        .eq('facture_id', payment.facture_id)
+        .eq('journal', 'BNQ')
+        .limit(1)
+      if (existingBnq && existingBnq.length > 0) {
+        console.log(`[createEcrituresForPayment] BNQ déjà existante pour facture ${payment.facture_id} — skip création (garde-fou anti-doublon)`)
+        // Si une lettre est fournie et que les BNQ existantes n'en ont pas,
+        // on la pose pour préserver le lettrage croisé avec la facture VTE/ACH.
+        if (payment.lettre_code && existingBnq.some((e: any) => !e.lettre)) {
+          await supabase.from('ecritures_comptables_v2')
+            .update({ lettre: payment.lettre_code, date_lettrage: payment.date_payment })
+            .eq('societe_id', payment.societe_id)
+            .eq('facture_id', payment.facture_id)
+            .eq('journal', 'BNQ')
+            .is('lettre', null)
+          // Et sur la facture VTE/ACH si pas déjà lettrée
+          const tierAccountPrefix = payment.type === 'supplier' ? '401%' : '411%'
+          await supabase.from('ecritures_comptables_v2')
+            .update({ lettre: payment.lettre_code, date_lettrage: payment.date_payment })
+            .eq('societe_id', payment.societe_id)
+            .eq('facture_id', payment.facture_id)
+            .in('journal', ['VTE', 'ACH'])
+            .like('numero_compte', tierAccountPrefix)
+            .is('lettre', null)
+        }
+        return { ok: true, bnq_ids: [] }
+      }
+    }
+
+    // Delete existing payment entries with this ref_folio (re-création même rapprochement)
     await supabase
       .from('ecritures_comptables_v2')
       .delete()

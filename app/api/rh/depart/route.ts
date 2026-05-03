@@ -403,7 +403,9 @@ export async function POST(request: Request) {
       // 3. Create accounting entries (journal SAL)
       if (bulletin && totalBrut > 0) {
         try {
-          // Look up the dossier for this société (required FK on ecritures_comptables)
+          // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
+          // V2 exige societe_id (NOT NULL) et expose dossier_id ; on garde dossier_id pour la traçabilité.
+          // Renommage des clés : compte → numero_compte, debit → debit_mur, credit → credit_mur.
           const { data: dossier } = await supabase
             .from('dossiers')
             .select('id')
@@ -424,10 +426,10 @@ export async function POST(request: Request) {
                 societe_id: emp.societe_id,
                 date_ecriture: date_depart,
                 journal: 'SAL',
-                compte: '641', // PCM canonique : parent « Rémunérations du personnel »
+                numero_compte: '641', // PCM canonique : parent « Rémunérations du personnel »
                 libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
-                debit: salaireSansIndemnite,
-                credit: 0,
+                debit_mur: salaireSansIndemnite,
+                credit_mur: 0,
                 numero_piece: pieceRef,
               },
               {
@@ -435,10 +437,10 @@ export async function POST(request: Request) {
                 societe_id: emp.societe_id,
                 date_ecriture: date_depart,
                 journal: 'SAL',
-                compte: '4210', // PCM canonique : « Salaires nets à payer »
+                numero_compte: '4210', // PCM canonique : « Salaires nets à payer »
                 libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
-                debit: 0,
-                credit: totalBrut,
+                debit_mur: 0,
+                credit_mur: totalBrut,
                 numero_piece: pieceRef,
               },
             ]
@@ -450,15 +452,15 @@ export async function POST(request: Request) {
                 societe_id: emp.societe_id,
                 date_ecriture: date_depart,
                 journal: 'SAL',
-                compte: '6417', // PCM canonique : « 13ème mois / Indemnités »
+                numero_compte: '6417', // PCM canonique : « 13ème mois / Indemnités »
                 libelle: `Indemnité licenciement — ${emp.prenom} ${emp.nom}`,
-                debit: severanceMontant,
-                credit: 0,
+                debit_mur: severanceMontant,
+                credit_mur: 0,
                 numero_piece: pieceRef,
               })
             }
 
-            await supabase.from('ecritures_comptables').insert(entries)
+            await supabase.from('ecritures_comptables_v2').insert(entries)
           }
         } catch (err) {
           console.error('Erreur écritures comptables:', err)

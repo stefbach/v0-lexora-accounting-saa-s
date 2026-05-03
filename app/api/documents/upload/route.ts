@@ -1160,8 +1160,35 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     if (updateError) console.error('[upload] DB UPDATE FAILED:', updateError.message)
 
     // Auto-create accounting entries (use the matched dossier)
+    // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
+    // V2 exige societe_id (NOT NULL) → on le résout via le dossier final si pas déjà connu.
+    // Renommage : compte → numero_compte, debit → debit_mur, credit → credit_mur.
+    //
+    // ⚠️ FIX (2026-05-03) — Bug racine d'écritures orphelines :
+    // Avant ce fix, ce bloc créait les écritures depuis `extraction.ecritures_comptables`
+    // AVANT l'INSERT facture (plus bas). Si l'INSERT facture échouait (collision
+    // UNIQUE sur numero_facture, cf cas SKYCALL juillet/août), les écritures
+    // restaient ORPHELINES (facture_id = NULL) → CA P&L incohérent.
+    //
+    // Solution : pour les factures (`facture_client`, `facture_fournisseur`), on
+    // SAUTE ce bloc. Les écritures seront générées par `createEcrituresForFacture`
+    // PLUS BAS, et SEULEMENT après que la facture soit effectivement insérée
+    // dans `factures` — donc plus jamais d'orphelines en cas de collision.
+    //
+    // Pour les autres types (releve_bancaire, fiche_paie, charges_sociales,
+    // payroll_report…), il n'y a pas de table dédiée → on garde la création
+    // depuis l'extraction OCR.
     const ecritures = extraction.ecritures_comptables
-    if (Array.isArray(ecritures) && ecritures.length > 0) {
+    const isFactureType = typeDocument === 'facture_client' || typeDocument === 'facture_fournisseur'
+    if (Array.isArray(ecritures) && ecritures.length > 0 && !isFactureType) {
+      // Resolve societe_id for V2 (NOT NULL).
+      let ecrituresSocieteId: string | null = societeId || null
+      if (!ecrituresSocieteId && finalDossierId) {
+        const { data: dossierEcr } = await supabase
+          .from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
+        ecrituresSocieteId = dossierEcr?.societe_id || null
+      }
+
       const journalMap: Record<string, string> = { facture_fournisseur: 'ACH', facture_client: 'VTE', releve_bancaire: 'BNQ', fiche_paie: 'OD', charges_sociales: 'OD' }
       // Use affectation journal override if available
       const effectiveJournal = extraction._affectation_journal || journalMap[typeDocument] || 'OD'
@@ -1184,12 +1211,13 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           })
           .map((e: any) => ({
             dossier_id: finalDossierId,
+            societe_id: ecrituresSocieteId,
             // Use transaction-level date if available, otherwise document-level date
             date_ecriture: e.date || dateEcriture,
             journal: effectiveJournal,
             numero_piece: e.reference || extraction.numero_reference || null,
-            compte: String(e.compte), libelle: e.libelle || file.name,
-            debit: parseAmount(e.debit), credit: parseAmount(e.credit), piece_justificative: doc.id,
+            numero_compte: String(e.compte), libelle: e.libelle || file.name,
+            debit_mur: parseAmount(e.debit), credit_mur: parseAmount(e.credit), piece_justificative: doc.id,
             // Mark as auto-lettrée if affectation says so
             ...(extraction._auto_lettrage ? { lettrage: 'AUTO' } : {}),
           }))
@@ -1209,7 +1237,11 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           { status: 400 },
         )
       }
-      if (entries.length > 0) await supabase.from('ecritures_comptables').insert(entries)
+      if (entries.length > 0 && ecrituresSocieteId) {
+        await supabase.from('ecritures_comptables_v2').insert(entries)
+      } else if (entries.length > 0 && !ecrituresSocieteId) {
+        console.warn(`[upload] Skipping ecritures insert: cannot resolve societe_id (dossier ${finalDossierId})`)
+      }
     }
 
     // ──── AUTO-FEED RH from PAYROLL REPORT (Excel multi-employés) ────
@@ -1440,6 +1472,10 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     let factureSkipReason: string | null = null
     let factureCreated = false
     let factureCreateError: string | null = null
+    // Variables pour la traçabilité du suffixage anti-collision UNIQUE (fix 2026-05-03)
+    let originalNumero: string = ''
+    let appliedNumeroFacture: string = ''
+    let numeroWasRenamed = false
     if ((typeDocument === 'facture_client' || typeDocument === 'facture_fournisseur') && finalDossierId) {
       const { data: dossierForFacture } = await supabase
         .from('dossiers').select('societe_id').eq('id', finalDossierId).maybeSingle()
@@ -1645,17 +1681,67 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         }
 
         if (!factureCreateError) {
-        const { data: insertedFacture, error: factureError } = await supabase.from('factures').insert(factureData).select('id').maybeSingle()
+        // ⚠️ FIX collision UNIQUE (2026-05-03) :
+        // La contrainte UNIQUE (societe_id, numero_facture, type_facture) ajoutée
+        // par mig 217 bloque l'INSERT quand 2 PDFs OCR ont le même numero_facture
+        // (cas observé en prod SKYCALL : facturier copie son template Excel sans
+        // changer la date, 2 mois consécutifs ont la même date sur le PDF →
+        // l'OCR extrait le même numéro pour les 2).
+        //
+        // Avant ce fix : INSERT échouait silencieusement, écritures (créées plus
+        // haut) restaient orphelines, P&L sous-évaluée.
+        //
+        // Maintenant : si on détecte la collision UNIQUE (Postgres SQLSTATE 23505),
+        // on suffixe le numéro avec -2, -3… et on retente. Le user voit un message
+        // dans la liste des factures pour qu'il sache qu'un renommage a eu lieu.
+        let insertedFacture: { id: string } | null = null
+        let factureError: any = null
+        originalNumero = factureData.numero_facture as string
+        appliedNumeroFacture = originalNumero
+        const MAX_RETRY_SUFFIX = 9
+        for (let attempt = 0; attempt <= MAX_RETRY_SUFFIX; attempt++) {
+          const candidateNumero = attempt === 0
+            ? originalNumero
+            : `${originalNumero}-${attempt + 1}`
+          const payload = { ...factureData, numero_facture: candidateNumero }
+          const res = await supabase.from('factures').insert(payload).select('id').maybeSingle()
+          if (!res.error) {
+            insertedFacture = res.data as any
+            appliedNumeroFacture = candidateNumero
+            numeroWasRenamed = attempt > 0
+            // Mettre à jour factureData pour que createEcrituresForFacture utilise
+            // le bon numéro dans les libellés des écritures.
+            ;(factureData as any).numero_facture = candidateNumero
+            break
+          }
+          // Code 23505 = unique_violation. On retry uniquement sur cette erreur.
+          const isUniqueViolation = res.error.code === '23505'
+          if (!isUniqueViolation) {
+            factureError = res.error
+            break
+          }
+          if (attempt === MAX_RETRY_SUFFIX) {
+            factureError = res.error
+            console.error(`[upload] facture insert: ${MAX_RETRY_SUFFIX + 1} suffixes essayés, abandon`)
+            break
+          }
+          console.warn(`[upload] facture insert: collision UNIQUE sur "${candidateNumero}" — retry avec suffixe ${attempt + 2}`)
+        }
         if (factureError) {
           factureCreateError = factureError.message
           console.error('[upload] facture insert error:', factureError.message)
         } else {
           factureCreated = true
-          // Migration 133 — link ecritures to this facture via facture_id so
-          // auto-letterage can find the pair reliably. Ecritures were just
-          // inserted above with piece_justificative = doc.id.
+          if (numeroWasRenamed) {
+            console.log(`[upload] facture inserée avec numéro suffixé "${appliedNumeroFacture}" (original "${originalNumero}" en collision)`)
+          }
+          // ⚠️ FIX (2026-05-03) — voir commentaire ligne 1163+ : pour les
+          // factures, le bloc d'insertion d'écritures depuis extraction.ecritures_comptables
+          // est SAUTÉ. Donc le UPDATE ci-dessous n'a plus rien à lier — on le
+          // garde malgré tout pour rattraper d'éventuelles écritures legacy
+          // (créées avant ce fix) qui auraient piece_justificative = doc.id.
           if (insertedFacture?.id && finalDossierId) {
-            await supabase.from('ecritures_comptables')
+            await supabase.from('ecritures_comptables_v2')
               .update({ facture_id: insertedFacture.id })
               .eq('dossier_id', finalDossierId)
               .eq('piece_justificative', doc.id)
@@ -1701,14 +1787,27 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
     // BUG 1 FIX — surface facture creation status into document.n8n_result so the user
     // can see WHY a facture was not created even though the document is marked traite.
+    // Plus : si le numéro a été renommé suite à une collision UNIQUE (cf fix
+    // ci-dessus), on stocke l'original ET le numéro appliqué pour que le user
+    // soit informé et puisse éventuellement corriger le PDF source.
     if (factureCreateError || factureSkipReason || factureCreated) {
       try {
+        const facturePatch: Record<string, any> = {
+          facture_status: factureCreated ? 'created' : (factureCreateError ? 'error' : 'skipped'),
+          facture_error: factureCreateError,
+          facture_skip_reason: factureSkipReason,
+        }
+        if (factureCreated && numeroWasRenamed) {
+          facturePatch.numero_facture_renamed = {
+            original: originalNumero,
+            applied: appliedNumeroFacture,
+            reason: `Collision UNIQUE sur (societe_id, numero_facture, type_facture). Probable cas où plusieurs PDFs ont la même date/numéro (template du facturier). Vérifier le PDF source.`,
+          }
+        }
         await supabase.from('documents').update({
           n8n_result: {
             ...(updateData.n8n_result || {}),
-            facture_status: factureCreated ? 'created' : (factureCreateError ? 'error' : 'skipped'),
-            facture_error: factureCreateError,
-            facture_skip_reason: factureSkipReason,
+            ...facturePatch,
           },
         }).eq('id', docId)
       } catch (e) {

@@ -456,14 +456,19 @@ export async function DELETE(request: Request) {
       console.warn('[factures DELETE] Failed to remove linked documents:', e.message)
     }
 
-    // Cascade: delete accounting entries
+    // Cascade: delete accounting entries linked to this specific facture.
+    // ⚠️ V2 ONLY (mig 230) + filtre par facture_id (FK depuis mig 133) UNIQUEMENT.
+    //
+    // ⚠️ FIX (2026-05-03) : avant ce fix le DELETE filtrait par
+    // `libelle LIKE 'Facture <numero>%'`. C'était dangereux car si 2 factures
+    // partagent le même numero (collision OCR rare mais possible avant le fix
+    // de suffixage anti-collision), supprimer une facture aurait supprimé les
+    // écritures de l'autre. On utilise maintenant `facture_id = id` qui est
+    // strictement spécifique à cette facture.
     try {
-      const libellePrefix = `Facture ${existing.numero_facture || ''}`
-      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', existing.societe_id).limit(1).maybeSingle()
-      if (dossier?.id) {
-        await supabase.from('ecritures_comptables')
-          .delete().eq('dossier_id', dossier.id).like('libelle', `${libellePrefix}%`)
-      }
+      await supabase.from('ecritures_comptables_v2')
+        .delete()
+        .eq('facture_id', id)
     } catch (e: any) {
       console.warn('[factures DELETE] Failed to remove ecritures:', e.message)
     }

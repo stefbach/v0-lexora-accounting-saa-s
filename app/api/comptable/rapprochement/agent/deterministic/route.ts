@@ -413,46 +413,30 @@ export async function POST(request: Request) {
         }
 
         // ────────────────────────────────────────────────────────────────────
-        // RULE 4: MRA — MAURITIUS REVENUE AUTHORITY
+        // RULE 4: MRA — DÉSACTIVÉE (2026-05-03)
         // ────────────────────────────────────────────────────────────────────
-        const isMra = containsAny(tiers, ['mauritius revenue', 'mra', 'mauritius revenue authority']) ||
-                      containsAny(libelle, ['mra', 'mauritius revenue', 'tax payment', 'income tax', 'vat payment'])
-        if (isDebit && isMra) {
-          const amtMur = Math.round(convertToMUR(txAmtEur, 'EUR', rates) * 100) / 100
-
-          if (!dry_run) {
-            txs[idx] = {
-              ...tx,
-              statut: 'rapproche',
-              matched_type: 'paiement_mra',
-              match_confidence: 'deterministic',
-              rapproche_at: new Date().toISOString(),
-              note: 'Paiement MRA — agent déterministe',
-            }
-            releveModified = true
-
-            // BNQ entry for MRA: Débit 444/431 / Crédit 512
-            await createMraEntry(supabase, {
-              societe_id,
-              date_payment: txDate,
-              amount_mur: amtMur,
-              ref_folio: refFolio,
-              tiers: tx.tiers_detecte || tx.tiers || 'MRA',
-              libelle: tx.libelle || 'Paiement MRA',
-            })
-          }
-
-          details.push({
-            libelle: tx.libelle || '',
-            tiers: tx.tiers_detecte || tx.tiers || '',
-            action: 'mra',
-            status: 'ok',
-            reason: `Paiement MRA ${txAmtEur.toFixed(2)} EUR → ${amtMur.toFixed(2)} MUR. Débit 444 Impôts / Crédit 512 Banque.`,
-            amount: txAmtEur,
-          })
-          matched++
-          continue
-        }
+        // L'auto-classification des paiements MRA est INTRINSÈQUEMENT FAUSSE :
+        // un même libellé "Mauritius Revenue Authority" peut couvrir plusieurs
+        // sous-types qui vont sur des comptes différents :
+        //   • PAYE (retenue salaires)        → 4330
+        //   • TVA collectée à reverser       → 4457
+        //   • Income Tax société             → autre compte
+        //   • TDS (retenue à la source)      → 4471
+        //
+        // Sans le détail du justificatif MRA, l'agent ne peut PAS deviner.
+        // Tout choix par défaut (4471 / 4330 / 444) sera FAUX dans la majorité
+        // des cas → balance comptable polluée + obligation de tout
+        // reclassifier après coup. Mieux vaut laisser ces transactions à
+        // "non_identifie" et que le user les classifie une par une via l'UI
+        // au BON sous-compte avec le justificatif en main.
+        //
+        // Bug observé sur DDS : 19 paiements MRA totalisant 13M MUR finissaient
+        // tous sur 4330 (via remap trigger 444→4330) ou 4471 → balance
+        // aberrante.
+        //
+        // Si tu veux RÉACTIVER cette règle, ajoute un sélecteur de sous-type
+        // dans la UI (PAYE / TVA / IT / TDS) qui pilote le compte de
+        // destination, au lieu d'un mapping aveugle.
 
         // ────────────────────────────────────────────────────────────────────
         // RULE 5: Salaires individuels
@@ -476,7 +460,8 @@ export async function POST(request: Request) {
             }
             releveModified = true
 
-            // BNQ entry for salary: Débit 641 Salaires / Crédit 512
+            // BNQ entry for salary: Débit 4210 (solde dette paie) / Crédit 512 (banque)
+            // PAS Débit 641 — la charge est déjà créée à la génération paie via OD-PAIE.
             await createSalaryEntry(supabase, {
               societe_id,
               date_payment: txDate,
@@ -781,8 +766,22 @@ async function createMraEntry(
       date_ecriture: opts.date_payment,
       journal: 'BNQ',
       ref_folio: opts.ref_folio,
-      numero_compte: '444',
-      nom_compte: 'Etat — impôts et taxes',
+      // ⚠️ FIX (2026-05-03) — bug observé en prod (DDS) : compte 4330 (PAYE)
+      // gonflé à 13M au lieu de ~19K (vraie dette PAYE).
+      //
+      // CAUSE : ce code écrivait '444' (Etat — impôts génériques). Mais le
+      // trigger BEFORE INSERT `tr_00_legacy_3digit_warn` (mig 201 ligne 65)
+      // remappe SILENCIEUSEMENT 444 → 4330 (PAYE). Donc tous les paiements
+      // MRA (PAYE + TVA + Income Tax + TDS + autres) atterrissaient sur 4330.
+      //
+      // FIX : utiliser directement 4471 "MRA — impôts et taxes divers"
+      // (compte 4-digits PCM, non remappé par le trigger). C'est le bon
+      // compte d'attente pour des paiements MRA dont le sous-type
+      // (PAYE / TVA / IT / TDS) n'est pas distingué par l'agent
+      // déterministe — le comptable peut reclassifier manuellement vers
+      // 4330 (si PAYE), 4457 (si TVA collectée à reverser), etc.
+      numero_compte: '4471',
+      nom_compte: 'MRA — impôts et taxes divers',
       libelle,
       description: libelle,
       debit_mur: opts.amount_mur,
@@ -826,8 +825,16 @@ async function createSalaryEntry(
       date_ecriture: opts.date_payment,
       journal: 'BNQ',
       ref_folio: opts.ref_folio,
-      numero_compte: '641',
-      nom_compte: 'Rémunérations du personnel',
+      // ⚠️ FIX (2026-05-03) — bug majeur observé en prod (DDS) :
+      // Avant ce fix, on débitait 641 (CHARGE) ce qui créait un DOUBLE-
+      // COMPTAGE (la charge est déjà créée par la paie via OD-PAIE 6411
+      // dr / 4210 cr). Compte 641 atteignait 200M+ MUR au lieu de ~6,7M.
+      //
+      // Bonne logique comptable : à la paie, le bulletin crée la dette
+      // (4210 cr). Le paiement bancaire SOLDE cette dette : 4210 dr / 512 cr.
+      // Aucune nouvelle charge à débiter (déjà fait à la génération paie).
+      numero_compte: '4210',
+      nom_compte: 'Personnel — Rémunérations dues',
       libelle,
       description: libelle,
       debit_mur: opts.amount_mur,
@@ -867,8 +874,8 @@ function buildSummary(details: DetailItem[], matched: number, unmatched: number,
 
   if (byAction['frais_bancaires']) lines.push(`🏦 ${byAction['frais_bancaires']} frais bancaires (MCB) → Débit 627`)
   if (byAction['facture']) lines.push(`📄 ${byAction['facture']} facture(s) matchée(s) (fournisseurs + clients)`)
-  if (byAction['mra']) lines.push(`🏛️ ${byAction['mra']} paiement(s) MRA → Débit 444`)
-  if (byAction['salaire']) lines.push(`👤 ${byAction['salaire']} salaire(s) individuel(s) → Débit 641`)
+  if (byAction['mra']) lines.push(`🏛️ ${byAction['mra']} paiement(s) MRA → Débit 4471 (à reclasser si PAYE/TVA spécifique)`)
+  if (byAction['salaire']) lines.push(`👤 ${byAction['salaire']} salaire(s) individuel(s) → Débit 4210`)
 
   if (unmatched > 0) {
     lines.push('')

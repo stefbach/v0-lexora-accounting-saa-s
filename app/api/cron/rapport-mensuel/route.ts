@@ -39,42 +39,33 @@ export async function GET(request: Request) {
     let rapportsGeneres = 0
 
     for (const societe of societes || []) {
-      // Get dossiers for this société
-      const { data: dossiers } = await supabase
-        .from('dossiers')
-        .select('id')
+      // ⚠️ V2 ONLY (mig 230). Schéma : numero_compte, debit_mur, credit_mur.
+      // (Avant : lecture V1 avec colonnes fantômes `montant`, `compte_debit`,
+      // `compte_credit` qui n'existent pas → tout retournait 0.)
+      const { data: ecrituresData } = await supabase
+        .from('ecritures_comptables_v2')
+        .select('numero_compte, debit_mur, credit_mur, journal, libelle')
         .eq('societe_id', societe.id)
+        .gte('date_ecriture', debutMois)
+        .lte('date_ecriture', finMois)
+      const ecritures = ecrituresData || []
 
-      const dossierIds = (dossiers || []).map((d: any) => d.id)
-
-      // Get ecritures comptables for the period via dossiers
-      let ecritures: any[] = []
-      if (dossierIds.length > 0) {
-        const { data: ecrituresData } = await supabase
-          .from('ecritures_comptables')
-          .select('montant, compte_debit, compte_credit, journal, libelle')
-          .in('dossier_id', dossierIds)
-          .gte('date_ecriture', debutMois)
-          .lte('date_ecriture', finMois)
-        ecritures = ecrituresData || []
-      }
-
-      // Classify revenue (credit on class 7 accounts) and expenses (debit on class 6 accounts)
+      // Classify revenue (class 7 = credit-debit) and expenses (class 6 = debit-credit)
       const totalRevenus = ecritures
-        .filter(e => e.compte_credit?.startsWith('7'))
-        .reduce((sum, e) => sum + (e.montant || 0), 0)
+        .filter(e => e.numero_compte?.startsWith('7'))
+        .reduce((sum, e) => sum + ((Number(e.credit_mur) || 0) - (Number(e.debit_mur) || 0)), 0)
 
       const totalDepenses = ecritures
-        .filter(e => e.compte_debit?.startsWith('6'))
-        .reduce((sum, e) => sum + (e.montant || 0), 0)
+        .filter(e => e.numero_compte?.startsWith('6'))
+        .reduce((sum, e) => sum + ((Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0)), 0)
 
       const resultatNet = totalRevenus - totalDepenses
 
       // Group expenses by journal
       const depensesParJournal: Record<string, number> = {}
-      for (const e of ecritures.filter(e => e.compte_debit?.startsWith('6'))) {
+      for (const e of ecritures.filter(e => e.numero_compte?.startsWith('6'))) {
         const cat = e.journal || 'Autres'
-        depensesParJournal[cat] = (depensesParJournal[cat] || 0) + (e.montant || 0)
+        depensesParJournal[cat] = (depensesParJournal[cat] || 0) + ((Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0))
       }
 
       // Insert rapport using actual schema (periode + data JSONB)

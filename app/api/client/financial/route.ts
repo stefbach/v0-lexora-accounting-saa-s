@@ -240,10 +240,14 @@ export async function GET(request: Request) {
     // Bug observé en prod : +1.3M MUR de dépenses fictives sur une société (607 ACH
     // + factures fournisseurs HT comptés 2 fois). Fix : filter journal IN (SAL,OD-PAIE,BNQ,OD)
     // mais PAS ACH.
+    // EXCLUSION 6418 : compte "indemnités/avantages divers" qui contient des
+    // ajustements de balance techniques (FAC-... écart) qui ne sont pas de
+    // la masse salariale réelle. Cohérent avec le calcul `salaires` plus bas.
     const depensesNonFournisseursEcritures = allEcritures
       .filter((e: any) =>
         e.compte?.startsWith('6')
         && !e.compte?.startsWith('628')
+        && !e.compte?.startsWith('6418') // exclut indemnités/ajustements techniques
         && e.journal !== 'ACH'      // exclut factures fournisseurs (déjà dans depensesFournisseursFactures)
         && e.journal !== 'VTE'      // exclut ventes (journal client, au cas où)
       )
@@ -308,32 +312,59 @@ export async function GET(request: Request) {
     let expensesByAccount: Record<string, number> = {}
 
     if (facturesFromTable.length > 0) {
-      // Build revenue breakdown from factures (amounts already in MUR)
+      // Build revenue breakdown from factures — EN HT.
+      // ⚠️ On utilise computeHtMur (et NON f.montant_mur) parce que `montant_mur`
+      // est souvent peuplé avec le TTC en MUR par les imports/OCR. Sans ça la
+      // ventilation par compte est en TTC alors que le total `caFromFactures`
+      // est en HT → P&L incohérente.
       facturesFromTable.filter(f => f.type_facture === 'client' && f.statut !== 'annule').forEach(f => {
         const prefix = '706' // Default: prestations de services
-        const mur = Number(f.montant_mur) || convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates)
-        revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + mur
+        revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + computeHtMur(f)
       })
-      // Supplier invoices → 628 (services diverses)
+      // Supplier invoices → 628 (services diverses) — même logique HT.
       facturesFromTable.filter(f => f.type_facture === 'fournisseur' && f.statut !== 'annule').forEach(f => {
         const prefix = '628' // Default: charges diverses
-        const mur = Number(f.montant_mur) || convertToMUR(Number(f.montant_ht) || 0, f.devise || 'MUR', rates)
-        expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + mur
+        expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + computeHtMur(f)
       })
       // ALSO add all non-fournisseur expenses from écritures:
       // salaires (641), charges sociales (645), impôts/taxes (63x), charges financières (66x), etc.
-      // NOT 628 (avoid double-counting with fournisseur factures above)
-      allEcritures.filter(e => e.compte?.startsWith('6') && !e.compte?.startsWith('628') && !isPayrollCurrentMonth(e)).forEach(e => {
+      // - NOT 628 (déjà compté via factures fournisseurs ci-dessus, en HT)
+      // - NOT journal ACH (sinon double-comptage avec factures fournisseurs ;
+      //   en plus les écritures ACH peuvent être TTC quand la TVA n'a pas été
+      //   ventilée à l'import → c'est ce qui fait apparaître les charges en TTC).
+      // - NOT 6418 (indemnités/ajustements techniques, hors masse salariale réelle —
+      //   cohérent avec le calcul `salaires` ci-dessous : sinon la P&L affiche
+      //   par ex. 7,6M Rs au lieu de 6,7M de masse salariale).
+      allEcritures.filter(e =>
+        e.compte?.startsWith('6')
+        && !e.compte?.startsWith('628')
+        && !e.compte?.startsWith('6418')
+        && e.journal !== 'ACH'
+        && e.journal !== 'VTE'
+        && !isPayrollCurrentMonth(e)
+      ).forEach(e => {
         const prefix = (e.compte || '6').substring(0, 3)
         expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
       })
     } else {
-      // Fallback: from écritures (may be in foreign currency — not ideal)
+      // Fallback: pas de factures importées (société neuve, ou import direct
+      // d'écritures SAGE/Excel sans passer par la table factures).
+      // On agrège directement les écritures classe 6 et 7.
+      // Filtres minimaux pour rester cohérent avec le path principal :
+      //  - 6418 (ajustements techniques) → toujours exclu
+      //  - mois courant payroll incomplet → exclu
+      // En revanche on GARDE le journal ACH ici, car en l'absence de factures
+      // c'est la seule source des charges fournisseurs (le TTC éventuel est
+      // un problème de qualité d'ingestion, pas d'agrégation).
       allEcritures.filter(e => e.compte?.startsWith('7')).forEach(e => {
         const prefix = (e.compte || '7').substring(0, 3)
         revenueByAccount[prefix] = (revenueByAccount[prefix] || 0) + (Number(e.credit) || 0) - (Number(e.debit) || 0)
       })
-      allEcritures.filter(e => e.compte?.startsWith('6')).forEach(e => {
+      allEcritures.filter(e =>
+        e.compte?.startsWith('6')
+        && !e.compte?.startsWith('6418')
+        && !isPayrollCurrentMonth(e)
+      ).forEach(e => {
         const prefix = (e.compte || '6').substring(0, 3)
         expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
       })
@@ -372,22 +403,32 @@ export async function GET(request: Request) {
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     // Payroll — P&L accounts (641 = salaires, 645 = charges patronales)
-    // Exclude incomplete current month payroll AND 6418 (indemnités
-    // compensatrices + ajustements de balance — écritures techniques,
-    // pas de la masse salariale réelle).
-    // Bug observé : 7,6M affichés au lieu de 6,7M car 6418 (~883k
-    // d'ajustements `FAC-... écart`) gonflait artificiellement les
-    // salaires.
+    // Exclusions :
+    //  - Mois courant (paie incomplète) → géré par isPayrollCurrentMonth
+    //  - 6418 (indemnités compensatrices + ajustements `FAC-... écart` —
+    //    écritures techniques, pas de la masse salariale réelle).
+    //  - Journal ACH (factures fournisseurs : si une charge 641 a été passée
+    //    à tort par ACH alors qu'elle existe aussi en SAL, double-comptage).
+    // Bug observé : 7,6M Rs affichés au lieu de 6,7M car 6418 (~883k
+    // d'ajustements `FAC-... écart`) gonflait artificiellement les salaires.
     const salaires = allEcritures
       .filter(e =>
         e.compte?.startsWith('641')
         && !e.compte?.startsWith('6418')   // exclut indemnités/ajustements
+        && e.journal !== 'ACH'             // évite double-comptage avec factures fournisseurs
         && !isPayrollCurrentMonth(e)
       )
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
+    // Charges sociales : 645 (cotisations patronales) — pas d'ACH (paie passe par SAL/OD-PAIE).
+    // On garde aussi le solde du compte 43 (organismes sociaux) pour visibilité,
+    // mais en passif il devrait s'annuler si toutes les cotisations sont payées.
     const chargesSociales = allEcritures
-      .filter(e => (e.compte?.startsWith('645') || e.compte?.startsWith('43')) && !isPayrollCurrentMonth(e))
+      .filter(e =>
+        (e.compte?.startsWith('645') || e.compte?.startsWith('43'))
+        && e.journal !== 'ACH'
+        && !isPayrollCurrentMonth(e)
+      )
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     // Balance sheet items (from écritures — these are less impacted by currency)

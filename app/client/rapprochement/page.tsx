@@ -170,12 +170,16 @@ export default function ClientRapprochementPage() {
     inconnus: AutoBucket
   }>(null)
 
-  // Pagination + filtres — Factures fournisseurs table
+  // Pagination + filtres — Factures à rapprocher (clients + fournisseurs)
   const [facturesPage, setFacturesPage] = useState(1)
   const FACTURES_PAGE_SIZE = 20
   const [facturesStatusFilter, setFacturesStatusFilter] = useState<'all' | 'en_retard' | 'en_attente' | 'releve_manquant' | 'paye'>('all')
   const [facturesFournisseurFilter, setFacturesFournisseurFilter] = useState<string | null>(null)
   const [facturesChecked, setFacturesChecked] = useState<Set<string>>(new Set())
+  // ⚠️ FIX (2026-05-03) : ajout du toggle type facture pour rapprocher AUSSI
+  // les factures clients (avant ce fix la section ne montrait que les
+  // fournisseurs → impossible de rapprocher manuellement les clients).
+  const [facturesTypeFilter, setFacturesTypeFilter] = useState<'fournisseur' | 'client' | 'all'>('fournisseur')
 
   // Part 2: Transactions section is split in 3 tabs.
   //   'aclasser' → unmatched (à traiter)
@@ -1669,10 +1673,11 @@ Voulez-vous vraiment continuer ?`
           </CardContent>
         </Card>
       )}
-      {/* ── Section "💳 Factures fournisseurs" ─────────────────────────────
-          Statut calculé par facture, tenant compte de la présence d'un
-          relevé pour le mois de paiement. Ne montre JAMAIS "En retard"
-          quand le relevé du mois n'est pas disponible. */}
+      {/* ── Section "💳 Factures à rapprocher" ─────────────────────────────
+          Toggle type [Fournisseurs / Clients / Toutes] depuis le fix
+          2026-05-03. Statut calculé par facture, tenant compte de la
+          présence d'un relevé pour le mois de paiement. Ne montre JAMAIS
+          "En retard" quand le relevé du mois n'est pas disponible. */}
       {(() => {
         const allFactures = (data?.factures || []) as any[]
         const releves = (data?.releves || []) as any[]
@@ -1695,11 +1700,25 @@ Voulez-vous vraiment continuer ?`
         // Fallbacks: keep 'paye' and 'en_attente'/'partiel'/'retard'.
         const factureMois = (f: any): string | null =>
           f.date_facture ? String(f.date_facture).slice(0, 7) : null
+        // Filtre par type sélectionné (Fournisseurs / Clients / Toutes)
+        const matchesType = (f: any): boolean => {
+          if (facturesTypeFilter === 'all') return true
+          if (facturesTypeFilter === 'client') return f.type_facture === 'client'
+          // 'fournisseur' par défaut : tout sauf client (gère les NULL/vides legacy)
+          return f.type_facture !== 'client'
+        }
         const fournFactures = allFactures
-          .filter((f: any) => f.type_facture !== 'client') // suppliers only
+          .filter(matchesType)
           .filter((f: any) => !selectedMois || factureMois(f) === selectedMois)
 
-        if (fournFactures.length === 0) return null
+        // Compter les disponibles par type pour les badges du toggle
+        const countByType = {
+          fournisseur: allFactures.filter((f: any) => f.type_facture !== 'client' && (!selectedMois || factureMois(f) === selectedMois)).length,
+          client: allFactures.filter((f: any) => f.type_facture === 'client' && (!selectedMois || factureMois(f) === selectedMois)).length,
+        }
+        const countAll = countByType.fournisseur + countByType.client
+
+        if (fournFactures.length === 0 && countAll === 0) return null
 
         // Compute display status per facture.
         type FactureRow = {
@@ -1765,12 +1784,16 @@ Voulez-vous vraiment continuer ?`
         // ── Build unique fournisseur list ──
         const fournisseurList = Array.from(new Set(rows.map(r => r.f.tiers).filter(Boolean))).sort() as string[]
 
+        const typeLabel = facturesTypeFilter === 'client' ? 'clients'
+                        : facturesTypeFilter === 'all'    ? '(clients + fournisseurs)'
+                        : 'fournisseurs'
+
         return (
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 space-y-3">
               <CardTitle className="text-[#0B0F2E] flex items-center gap-2 flex-wrap">
                 <span>💳</span>
-                <span>Factures fournisseurs</span>
+                <span>Factures à rapprocher — {typeLabel}</span>
                 {selectedMois ? (() => {
                   const MOIS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
                   const [yy, mm] = selectedMois.split('-').map(Number)
@@ -1797,6 +1820,26 @@ Voulez-vous vraiment continuer ?`
                   )
                 })()}
               </CardTitle>
+              {/* ── TOGGLE TYPE FACTURE (Fournisseurs / Clients / Toutes) ── */}
+              <div className="flex flex-wrap gap-1 pt-1">
+                {([
+                  { id: 'fournisseur' as const, label: 'Fournisseurs', count: countByType.fournisseur, color: 'bg-blue-100 text-blue-700 border-blue-300', activeColor: 'bg-blue-600 text-white border-blue-600' },
+                  { id: 'client' as const, label: 'Clients', count: countByType.client, color: 'bg-green-100 text-green-700 border-green-300', activeColor: 'bg-green-600 text-white border-green-600' },
+                  { id: 'all' as const, label: 'Toutes', count: countAll, color: 'bg-gray-100 text-gray-700 border-gray-300', activeColor: 'bg-[#0B0F2E] text-white border-[#0B0F2E]' },
+                ]).map(tab => {
+                  const isActive = facturesTypeFilter === tab.id
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => { setFacturesTypeFilter(tab.id); setFacturesPage(1) }}
+                      className={`text-xs px-3 py-1 rounded-md border font-medium transition-colors ${isActive ? tab.activeColor : tab.color + ' hover:opacity-80'}`}
+                    >
+                      {tab.label} ({tab.count})
+                    </button>
+                  )
+                })}
+              </div>
               {selectedFacturesForAnnulation.size > 0 && (
                 <div className="flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-3 py-2 mt-2">
                   <span className="text-sm">
@@ -1998,7 +2041,7 @@ Voulez-vous vraiment continuer ?`
                         }}
                       />
                     </TableHead>
-                    <TableHead>Fournisseur</TableHead>
+                    <TableHead>{facturesTypeFilter === 'client' ? 'Client' : facturesTypeFilter === 'all' ? 'Tiers' : 'Fournisseur'}</TableHead>
                     <TableHead>N° Facture</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead className="text-right">Montant</TableHead>
@@ -2022,6 +2065,12 @@ Voulez-vous vraiment continuer ?`
                               setFacturesChecked(next)
                             }}
                           />
+                        )}
+                        {/* Badge type quand on regarde "Toutes" : permet de distinguer client / fournisseur en un coup d'œil */}
+                        {facturesTypeFilter === 'all' && (
+                          <span className={`ml-1 inline-block text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${f.type_facture === 'client' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {f.type_facture === 'client' ? 'CLI' : 'FOUR'}
+                          </span>
                         )}
                       </TableCell>
                       <TableCell className="text-sm font-medium">

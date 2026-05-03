@@ -40,31 +40,24 @@ export async function GET(request: Request) {
       const sixMoisAvant = new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString().slice(0, 10)
       const finMoisPrecedent = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10)
 
-      const { data: dossiers } = await supabase
-        .from('dossiers')
-        .select('id')
+      // ⚠️ V2 ONLY (mig 230). Schéma : numero_compte, debit_mur, credit_mur.
+      // (Avant : lecture V1 avec colonnes fantômes `montant`, `compte_debit`,
+      // `compte_credit` qui n'existent pas → tout retournait 0.)
+      const { data: ecrituresData } = await supabase
+        .from('ecritures_comptables_v2')
+        .select('numero_compte, debit_mur, credit_mur, date_ecriture')
         .eq('societe_id', societe.id)
+        .gte('date_ecriture', sixMoisAvant)
+        .lte('date_ecriture', finMoisPrecedent)
+      const ecritures = ecrituresData || []
 
-      const dossierIds = (dossiers || []).map((d: any) => d.id)
-
-      let ecritures: any[] = []
-      if (dossierIds.length > 0) {
-        const { data: ecrituresData } = await supabase
-          .from('ecritures_comptables')
-          .select('montant, compte_debit, compte_credit, date_ecriture')
-          .in('dossier_id', dossierIds)
-          .gte('date_ecriture', sixMoisAvant)
-          .lte('date_ecriture', finMoisPrecedent)
-        ecritures = ecrituresData || []
-      }
-
-      // Calculate monthly averages from ecritures
+      // Calculate monthly averages from ecritures (class 7 = revenue, class 6 = expenses)
       const totalRevenus = ecritures
-        .filter(e => e.compte_credit?.startsWith('7'))
-        .reduce((sum, e) => sum + (e.montant || 0), 0)
+        .filter(e => e.numero_compte?.startsWith('7'))
+        .reduce((sum, e) => sum + ((Number(e.credit_mur) || 0) - (Number(e.debit_mur) || 0)), 0)
       const totalDepenses = ecritures
-        .filter(e => e.compte_debit?.startsWith('6'))
-        .reduce((sum, e) => sum + (e.montant || 0), 0)
+        .filter(e => e.numero_compte?.startsWith('6'))
+        .reduce((sum, e) => sum + ((Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0)), 0)
       const nbMoisDonnees = Math.max(1, Math.min(6, new Set(ecritures.map(e => e.date_ecriture?.slice(0, 7))).size || 1))
 
       const revenuMoyenMensuel = totalRevenus / nbMoisDonnees
