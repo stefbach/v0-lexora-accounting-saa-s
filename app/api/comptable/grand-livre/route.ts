@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { fetchAllPaginated } from '@/lib/supabase/paginate'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,29 +53,37 @@ export async function GET(request: Request) {
     let useV2 = false
 
     // --- Try V2 first ---
-    // Try v2 with lettrage columns, fallback without
-    let v2Select = 'id, numero_compte, nom_compte, description, debit_mur, credit_mur, date_ecriture, journal, ref_folio, lettre, date_lettrage'
-    let v2Query = supabase.from('ecritures_comptables_v2').select(v2Select)
-      .eq('societe_id', societe_id).order('numero_compte').order('date_ecriture').order('id')
-    if (compte_debut) v2Query = v2Query.gte('numero_compte', compte_debut)
-    if (compte_fin)   v2Query = v2Query.lte('numero_compte', compte_fin)
-    if (effectiveDateDebut) v2Query = v2Query.gte('date_ecriture', effectiveDateDebut)
-    if (effectiveDateFin)   v2Query = v2Query.lte('date_ecriture', effectiveDateFin)
-    if (journal)      v2Query = v2Query.eq('journal', journal)
+    // ⚠️ FIX (2026-05-03) — pagination pour contourner la limite par défaut
+    // Supabase de 1000 rows. Sans ça, le grand livre tronquait silencieusement
+    // les écritures les plus anciennes pour les sociétés > 1000 écritures.
+    const v2Select = 'id, numero_compte, nom_compte, description, debit_mur, credit_mur, date_ecriture, journal, ref_folio, lettre, date_lettrage'
+    const v2SelectFallback = 'id, numero_compte, nom_compte, description, debit_mur, credit_mur, date_ecriture, journal, ref_folio'
 
-    let { data: v2Data, error: v2Err } = await v2Query as { data: any[] | null, error: any }
-    if (v2Err) {
-      // Retry without lettrage columns
-      let v2Fallback = supabase.from('ecritures_comptables_v2')
-        .select('id, numero_compte, nom_compte, description, debit_mur, credit_mur, date_ecriture, journal, ref_folio')
+    const buildV2Query = (selectStr: string) => {
+      let q = supabase.from('ecritures_comptables_v2').select(selectStr)
         .eq('societe_id', societe_id).order('numero_compte').order('date_ecriture').order('id')
-      if (compte_debut) v2Fallback = v2Fallback.gte('numero_compte', compte_debut)
-      if (compte_fin)   v2Fallback = v2Fallback.lte('numero_compte', compte_fin)
-      if (effectiveDateDebut) v2Fallback = v2Fallback.gte('date_ecriture', effectiveDateDebut)
-      if (effectiveDateFin)   v2Fallback = v2Fallback.lte('date_ecriture', effectiveDateFin)
-      if (journal)      v2Fallback = v2Fallback.eq('journal', journal)
-      const fb = await v2Fallback
-      v2Data = fb.data as any[]
+      if (compte_debut) q = q.gte('numero_compte', compte_debut)
+      if (compte_fin)   q = q.lte('numero_compte', compte_fin)
+      if (effectiveDateDebut) q = q.gte('date_ecriture', effectiveDateDebut)
+      if (effectiveDateFin)   q = q.lte('date_ecriture', effectiveDateFin)
+      if (journal)      q = q.eq('journal', journal)
+      return q
+    }
+
+    let v2Data: any[] | null = null
+    let v2Err: any = null
+    try {
+      v2Data = await fetchAllPaginated<any>(() => buildV2Query(v2Select))
+    } catch (e: any) {
+      v2Err = e
+    }
+    if (v2Err || (v2Data === null)) {
+      // Retry without lettrage columns
+      try {
+        v2Data = await fetchAllPaginated<any>(() => buildV2Query(v2SelectFallback))
+      } catch {
+        v2Data = []
+      }
     }
     if (v2Data && v2Data.length > 0) {
       allEntries = v2Data.map(e => ({

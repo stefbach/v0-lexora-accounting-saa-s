@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { fetchAllPaginated } from '@/lib/supabase/paginate'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -46,7 +47,9 @@ export async function GET(request: Request) {
       safeQuery(supabase.from('releves_bancaires').select('id, transactions_json').eq('societe_id', societe_id)),
       safeQuery(supabase.from('factures').select('id, statut, montant_ttc, date_facture, solde_non_paye').eq('societe_id', societe_id)),
       dossier
-        ? safeQuery(supabase.from('ecritures_comptables_v2').select('numero_compte, debit_mur, credit_mur, lettre, date_ecriture').eq('dossier_id', dossier.id))
+        ? fetchAllPaginated<any>(() =>
+            supabase.from('ecritures_comptables_v2').select('numero_compte, debit_mur, credit_mur, lettre, date_ecriture').eq('dossier_id', dossier.id)
+          ).then((data) => ({ data })).catch(() => ({ data: [] as any[] }))
         : Promise.resolve({ data: [] as any[] }),
       safeQuery(supabase.from('bank_reconciliations').select('period_end, status').eq('societe_id', societe_id)),
     ])

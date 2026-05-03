@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
+import { fetchAllPaginated } from '@/lib/supabase/paginate'
 
 function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {
   if (!devise || devise === 'MUR') return amount
@@ -65,9 +66,11 @@ export async function GET(request: Request) {
 
     // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on lit V2 directement.
     // V2 a societe_id directement → on filtre par societe_id (évite la duplication LEFT JOIN dossiers pour sociétés multi-dossiers).
-    const [ecrituresRes, documentsRes, comptesRes] = await Promise.all([
-      supabase.from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
-        .order('date_ecriture', { ascending: false }),
+    const [ecrituresAll, documentsRes, comptesRes] = await Promise.all([
+      fetchAllPaginated<any>(() =>
+        supabase.from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
+          .order('date_ecriture', { ascending: false })
+      ),
       supabase.from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at, societe_detectee')
         .in('dossier_id', dossierIds)
         .order('created_at', { ascending: false }),
@@ -75,7 +78,7 @@ export async function GET(request: Request) {
     ])
 
     // Aliase V2 (numero_compte/debit_mur/credit_mur) → noms V1 utilisés ci-dessous (compte/debit/credit).
-    const ecritures = (ecrituresRes.data || []).map((e: any) => ({
+    const ecritures = (ecrituresAll || []).map((e: any) => ({
       ...e,
       compte: e.numero_compte,
       debit: e.debit_mur,

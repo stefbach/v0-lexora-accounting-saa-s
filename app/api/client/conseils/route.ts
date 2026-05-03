@@ -1,5 +1,6 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
 import { SYSTEM_PROMPT_RECOMMANDATIONS_CFO } from '@/lib/ai/prompts'
@@ -59,9 +60,10 @@ export async function GET(request: Request) {
     // ⚠️ V2 ONLY (mig 230) : ecritures_comptables (V1) est une vue sur V2,
     // on lit V2 directement. Aliases V1→V2 appliqués après pour rester
     // compatibles avec le code aval qui consomme `compte`, `debit`, `credit`.
-    const [ecrituresRes, documentsRes, comptesRes, tvaRes] = await Promise.all([
-      supabase.from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
-        .order('date_ecriture', { ascending: false }),
+    // Pagination pour ecritures (anti-troncage > 1000 rows — fix 2026-05-03)
+    const [ecrituresAll, documentsRes, comptesRes, tvaRes] = await Promise.all([
+      fetchAllPaginated<any>(() => supabase.from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
+        .order('date_ecriture', { ascending: false })),
       supabase.from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at')
         .in('dossier_id', dossierIds).eq('statut', 'traite')
         .order('created_at', { ascending: false }),
@@ -70,7 +72,7 @@ export async function GET(request: Request) {
         .order('periode', { ascending: false }).limit(6),
     ])
 
-    const ecritures = (ecrituresRes.data || []).map((e: any) => ({
+    const ecritures = (ecrituresAll || []).map((e: any) => ({
       ...e,
       compte: e.numero_compte,
       debit: e.debit_mur,
