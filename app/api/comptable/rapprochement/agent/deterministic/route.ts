@@ -413,48 +413,30 @@ export async function POST(request: Request) {
         }
 
         // ────────────────────────────────────────────────────────────────────
-        // RULE 4: MRA — MAURITIUS REVENUE AUTHORITY
+        // RULE 4: MRA — DÉSACTIVÉE (2026-05-03)
         // ────────────────────────────────────────────────────────────────────
-        const isMra = containsAny(tiers, ['mauritius revenue', 'mra', 'mauritius revenue authority']) ||
-                      containsAny(libelle, ['mra', 'mauritius revenue', 'tax payment', 'income tax', 'vat payment'])
-        if (isDebit && isMra) {
-          const amtMur = Math.round(convertToMUR(txAmtEur, 'EUR', rates) * 100) / 100
-
-          if (!dry_run) {
-            txs[idx] = {
-              ...tx,
-              statut: 'rapproche',
-              matched_type: 'paiement_mra',
-              match_confidence: 'deterministic',
-              rapproche_at: new Date().toISOString(),
-              note: 'Paiement MRA — agent déterministe',
-            }
-            releveModified = true
-
-            // BNQ entry for MRA: Débit 4471 (compte d'attente MRA) / Crédit 512
-            // Compte 4471 = "MRA - impôts et taxes divers". Le comptable peut
-            // reclasser ensuite vers 4330 (PAYE) ou 4457 (TVA) si besoin.
-            await createMraEntry(supabase, {
-              societe_id,
-              date_payment: txDate,
-              amount_mur: amtMur,
-              ref_folio: refFolio,
-              tiers: tx.tiers_detecte || tx.tiers || 'MRA',
-              libelle: tx.libelle || 'Paiement MRA',
-            })
-          }
-
-          details.push({
-            libelle: tx.libelle || '',
-            tiers: tx.tiers_detecte || tx.tiers || '',
-            action: 'mra',
-            status: 'ok',
-            reason: `Paiement MRA ${txAmtEur.toFixed(2)} EUR → ${amtMur.toFixed(2)} MUR. Débit 4471 (MRA - impôts divers) / Crédit 512 Banque. À reclasser vers 4330 (PAYE) ou 4457 (TVA) si applicable.`,
-            amount: txAmtEur,
-          })
-          matched++
-          continue
-        }
+        // L'auto-classification des paiements MRA est INTRINSÈQUEMENT FAUSSE :
+        // un même libellé "Mauritius Revenue Authority" peut couvrir plusieurs
+        // sous-types qui vont sur des comptes différents :
+        //   • PAYE (retenue salaires)        → 4330
+        //   • TVA collectée à reverser       → 4457
+        //   • Income Tax société             → autre compte
+        //   • TDS (retenue à la source)      → 4471
+        //
+        // Sans le détail du justificatif MRA, l'agent ne peut PAS deviner.
+        // Tout choix par défaut (4471 / 4330 / 444) sera FAUX dans la majorité
+        // des cas → balance comptable polluée + obligation de tout
+        // reclassifier après coup. Mieux vaut laisser ces transactions à
+        // "non_identifie" et que le user les classifie une par une via l'UI
+        // au BON sous-compte avec le justificatif en main.
+        //
+        // Bug observé sur DDS : 19 paiements MRA totalisant 13M MUR finissaient
+        // tous sur 4330 (via remap trigger 444→4330) ou 4471 → balance
+        // aberrante.
+        //
+        // Si tu veux RÉACTIVER cette règle, ajoute un sélecteur de sous-type
+        // dans la UI (PAYE / TVA / IT / TDS) qui pilote le compte de
+        // destination, au lieu d'un mapping aveugle.
 
         // ────────────────────────────────────────────────────────────────────
         // RULE 5: Salaires individuels
