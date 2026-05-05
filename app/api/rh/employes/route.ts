@@ -80,7 +80,12 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     step('body parsed', { keys: Object.keys(body), societe_id: body.societe_id, nom: body.nom })
-    if (!body.societe_id || !body.nom || !body.prenom || !body.salaire_base)
+    // Manager (role RH) = encadrant — peut être enregistré sans salaire ni
+    // date d'arrivée (cas d'un dirigeant rattaché pour valider congés/notes
+    // de frais sans passer par la paie). Pour les autres rôles le salaire
+    // reste requis.
+    const isManager = body.role_rh === 'manager' || body.role === 'manager'
+    if (!body.societe_id || !body.nom || !body.prenom || (!body.salaire_base && !isManager))
       return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
     // Renommer body.role → body.role_rh (colonne réelle employes.role_rh en

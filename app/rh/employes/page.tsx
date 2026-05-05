@@ -96,13 +96,18 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
     if (!form.email && createAccess) setCreateAccess(false)
   }, [form.email, createAccess, createAccessTouched])
 
+  // Manager (role RH) = encadrant — souvent enregistré sans salaire ni date
+  // d'arrivée Lexora (ex. dirigeant de société rattaché pour validation
+  // congés/notes de frais sans être payé via la paie). On lève donc le
+  // required côté formulaire pour ce rôle uniquement.
+  const isManagerRole = form.role_rh === 'manager'
   const validate = () => {
     const errs: Record<string, string> = {}
     if (!form.societe_id) errs.societe_id = "Societe requise"
     if (!form.nom) errs.nom = "Nom requis"
     if (!form.prenom) errs.prenom = "Prenom requis"
-    if (!form.salaire_base) errs.salaire_base = "Salaire requis"
-    if (!form.date_arrivee) errs.date_arrivee = "Date requise"
+    if (!form.salaire_base && !isManagerRole) errs.salaire_base = "Salaire requis"
+    if (!form.date_arrivee && !isManagerRole) errs.date_arrivee = "Date requise"
     // Sprint 2 — validation email + téléphone (Maurice). Champs optionnels :
     // on ne valide QUE s'ils sont renseignés.
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
@@ -139,19 +144,33 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
         primesPayload[`prime_fixe_${n}`] = m
         primesPayload[`prime_fixe_${n}_libelle`] = row ? (row.libelle || "").trim() : ""
       }
+      // Pour un manager sans salaire/date renseignés, on envoie 0 / null
+      // explicites (l'API tolère ces valeurs pour role_rh='manager').
+      const salaireParsed = parseFloat(form.salaire_base)
+      const payload: Record<string, unknown> = {
+        ...form,
+        salaire_base: Number.isFinite(salaireParsed) ? salaireParsed : 0,
+        date_arrivee: form.date_arrivee || null,
+        transport_allowance: parseFloat(form.transport_allowance) || 0,
+        petrol_allowance: parseFloat(form.petrol_allowance) || 0,
+        phone_allowance: parseFloat(form.phone_allowance) || 0,
+        daily_bus_fare: parseFloat(form.daily_bus_fare) || 0,
+        ...primesPayload,
+      }
       const res = await fetch("/api/rh/employes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          salaire_base: parseFloat(form.salaire_base),
-          transport_allowance: parseFloat(form.transport_allowance) || 0,
-          petrol_allowance: parseFloat(form.petrol_allowance) || 0,
-          phone_allowance: parseFloat(form.phone_allowance) || 0,
-          daily_bus_fare: parseFloat(form.daily_bus_fare) || 0,
-          ...primesPayload,
-        }),
+        body: JSON.stringify(payload),
       })
+      // 401 = session expirée côté navigateur (le middleware bloque les
+      // requêtes /api/* sans user). On redirige vers /auth/login pour que
+      // l'admin se reconnecte plutôt que d'afficher un message générique.
+      if (res.status === 401) {
+        toast.error("Session expirée — reconnexion requise")
+        const next = typeof window !== "undefined" ? window.location.pathname : "/rh/employes"
+        window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
+        return
+      }
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
       // Sprint 4 TÂCHE 6 — feedback selon contrat_status renvoyé par l'API
       const body = await res.json().catch(() => ({}))
@@ -261,7 +280,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
         <FormField label="Departement">
           <Input className={inputClass} value={form.departement} onChange={e=>u("departement",e.target.value)} placeholder="Finance"/>
         </FormField>
-        <FormField label="Date d'arrivee" required>
+        <FormField label="Date d'arrivee" required={!isManagerRole}>
           <Input className={inputClass} type="date" value={form.date_arrivee} onChange={e=>u("date_arrivee",e.target.value)}/>
           {fieldErr("date_arrivee")}
         </FormField>
@@ -275,8 +294,8 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
 
       {/* Rémunération — salaire de base */}
       <FormSection icon={<Banknote className="w-4 h-4 text-green-600" />} title="Rémunération" color="#22c55e">
-        <FormField label="Salaire de base" required>
-          <Input className={inputClass} type="number" value={form.salaire_base} onChange={e=>u("salaire_base",e.target.value)} placeholder="35 000"/>
+        <FormField label="Salaire de base" required={!isManagerRole}>
+          <Input className={inputClass} type="number" value={form.salaire_base} onChange={e=>u("salaire_base",e.target.value)} placeholder={isManagerRole ? "Optionnel pour un manager" : "35 000"}/>
           {fieldErr("salaire_base")}
           {form.salaire_base && parseFloat(form.salaire_base) > 0 && parseFloat(form.salaire_base) < 16500 && (
             <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
