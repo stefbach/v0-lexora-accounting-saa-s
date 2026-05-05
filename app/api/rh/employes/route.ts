@@ -88,6 +88,13 @@ export async function POST(request: Request) {
     if (!body.societe_id || !body.nom || !body.prenom || (!body.salaire_base && !isManager))
       return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 })
 
+    // employes.date_arrivee est NOT NULL côté DB. Si pas fournie (cas
+    // manager qui peut omettre la date côté formulaire), on défaut à
+    // aujourd'hui — l'admin peut éditer plus tard via la fiche.
+    if (!body.date_arrivee) {
+      body.date_arrivee = new Date().toISOString().slice(0, 10)
+    }
+
     // Renommer body.role → body.role_rh (colonne réelle employes.role_rh en
     // prod, cf. mig 017_pointage_conges_chat). La colonne "role" existe dans
     // certains envs (mig 015/017_pointeuse) mais pas partout — le renommage
