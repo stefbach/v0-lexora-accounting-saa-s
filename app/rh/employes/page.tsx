@@ -146,16 +146,26 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       }
       // Pour un manager sans salaire/date renseignés, on envoie 0 / null
       // explicites (l'API tolère ces valeurs pour role_rh='manager').
+      // Postgres refuse les chaînes vides "" pour les colonnes DATE
+      // (« invalid input syntax for type date: "" ») — on normalise tous
+      // les champs date du form en null si vides.
       const salaireParsed = parseFloat(form.salaire_base)
       const payload: Record<string, unknown> = {
         ...form,
         salaire_base: Number.isFinite(salaireParsed) ? salaireParsed : 0,
         date_arrivee: form.date_arrivee || null,
+        date_naissance: form.date_naissance || null,
         transport_allowance: parseFloat(form.transport_allowance) || 0,
         petrol_allowance: parseFloat(form.petrol_allowance) || 0,
         phone_allowance: parseFloat(form.phone_allowance) || 0,
         daily_bus_fare: parseFloat(form.daily_bus_fare) || 0,
         ...primesPayload,
+      }
+      // Filet de sécurité générique : tout champ string vide → null pour
+      // éviter qu'une autre colonne DATE/UUID/numérique côté DB reçoive ""
+      // (tolérable pour TEXT mais pas pour les autres types).
+      for (const k of Object.keys(payload)) {
+        if (payload[k] === "") payload[k] = null
       }
       const res = await fetch("/api/rh/employes", {
         method: "POST",
