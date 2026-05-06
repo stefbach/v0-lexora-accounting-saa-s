@@ -219,7 +219,13 @@ export async function runSemanticRapprochement(args: {
     model: DEFAULT_MODEL,
     max_tokens: 4096,
     system: SYSTEM_PROMPT,
-    messages: [{ role: "user" as const, content: userText }],
+    // Prefill assistant response with `{` pour forcer Claude/Haiku à démarrer
+    // par du JSON sans préambule explicatif. La réponse complète sera donc
+    // `{ "matches": [...], "classifications": [...] }`.
+    messages: [
+      { role: "user" as const, content: userText },
+      { role: "assistant" as const, content: "{" },
+    ],
   }
 
   let response: Response
@@ -266,9 +272,15 @@ export async function runSemanticRapprochement(args: {
       ? (json.content[0].text as string)
       : ""
 
-  // Extract JSON from the response (Claude returns it inside text — sometimes
-  // wrapped in ```json fences, sometimes raw)
-  const cleaned = text.replace(/```json|```/g, "").trim()
+  // Extract JSON from response. Avec le prefill `{`, Claude continue
+  // directement le JSON ; on doit donc le re-préfixer par `{`.
+  let cleaned = text.trim()
+  if (!cleaned.startsWith("{")) cleaned = "{" + cleaned
+  cleaned = cleaned.replace(/```json|```/g, "").trim()
+  // Retire tout ce qui suit la dernière `}` au cas où Claude continue
+  // après le JSON (rare mais possible).
+  const lastBrace = cleaned.lastIndexOf("}")
+  if (lastBrace > 0) cleaned = cleaned.slice(0, lastBrace + 1)
   let parsed: any
   try {
     parsed = JSON.parse(cleaned)
