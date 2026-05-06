@@ -1,23 +1,19 @@
 "use client"
 
 /**
- * Page /client/grand-livre — refonte avec audit Lex Livre + navigation classes.
+ * Page /client/grand-livre — refonte structurée par classe (collapsibles).
  *
- * Sections :
- * 1. Header avec bouton "Lancer Lex Livre" (audit complet)
- * 2. Score d'audit + anomalies critiques (R1 balance, comptes hors PCM, etc.)
- * 3. Navigation par classe 1-7 (cards visuelles avec totaux)
- * 4. Liste détaillée des comptes filtrée par classe
+ * Mise en page comme un état comptable réel :
+ * - Header avec actions clés (Lancer Lex Livre, Plan Comptable)
+ * - Audit panel (si audit lancé)
+ * - Balance générale (Actif / Passif / Résultat)
+ * - 7 sections collapsibles, une par classe (1-7)
+ *   Chaque section : titre + total + liste comptes avec lien vers écritures
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -26,16 +22,17 @@ import {
   RefreshCw,
   BookCopy,
   Search,
-  ArrowRight,
   Sparkles,
-  TrendingUp,
-  TrendingDown,
   Bot,
   AlertTriangle,
   CheckCircle2,
   Info,
   XCircle,
   BookOpen,
+  ChevronDown,
+  ChevronRight,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -49,22 +46,75 @@ interface CompteSolde {
   nb_ecritures: number
 }
 
-interface AuditIssue {
-  severity: "critical" | "warning" | "info"
-  code: string
-  message: string
-  count?: number
+interface PCMEntry {
+  compte: string
+  libelle: string | null
+  classe: number
+  type_compte: string | null
+  sens_normal: "D" | "C" | null
 }
 
 const CLASSES = [
-  { num: 1, label: "Capitaux", color: "bg-blue-100 text-blue-700 border-blue-300", icon: "💰" },
-  { num: 2, label: "Immobilisations", color: "bg-cyan-100 text-cyan-700 border-cyan-300", icon: "🏢" },
-  { num: 3, label: "Stocks", color: "bg-teal-100 text-teal-700 border-teal-300", icon: "📦" },
-  { num: 4, label: "Tiers", color: "bg-amber-100 text-amber-700 border-amber-300", icon: "🤝" },
-  { num: 5, label: "Trésorerie", color: "bg-purple-100 text-purple-700 border-purple-300", icon: "🏦" },
-  { num: 6, label: "Charges", color: "bg-rose-100 text-rose-700 border-rose-300", icon: "📤" },
-  { num: 7, label: "Produits", color: "bg-green-100 text-green-700 border-green-300", icon: "📥" },
+  {
+    num: 1,
+    label: "Capitaux",
+    desc: "Capital, réserves, emprunts long terme",
+    color: "blue",
+    icon: "💰",
+  },
+  {
+    num: 2,
+    label: "Immobilisations",
+    desc: "Actifs corporels, incorporels, financiers",
+    color: "cyan",
+    icon: "🏢",
+  },
+  {
+    num: 3,
+    label: "Stocks",
+    desc: "Marchandises, matières premières, produits finis",
+    color: "teal",
+    icon: "📦",
+  },
+  {
+    num: 4,
+    label: "Tiers",
+    desc: "Clients, fournisseurs, État, personnel, associés",
+    color: "amber",
+    icon: "🤝",
+  },
+  {
+    num: 5,
+    label: "Trésorerie",
+    desc: "Banque, caisse, virements internes",
+    color: "purple",
+    icon: "🏦",
+  },
+  {
+    num: 6,
+    label: "Charges",
+    desc: "Achats, services extérieurs, salaires, impôts",
+    color: "rose",
+    icon: "📤",
+  },
+  {
+    num: 7,
+    label: "Produits",
+    desc: "Ventes, prestations, produits financiers",
+    color: "green",
+    icon: "📥",
+  },
 ]
+
+const colorMap: Record<string, { bg: string; border: string; text: string; bgLight: string }> = {
+  blue: { bg: "bg-blue-50", border: "border-blue-300", text: "text-blue-900", bgLight: "bg-blue-100" },
+  cyan: { bg: "bg-cyan-50", border: "border-cyan-300", text: "text-cyan-900", bgLight: "bg-cyan-100" },
+  teal: { bg: "bg-teal-50", border: "border-teal-300", text: "text-teal-900", bgLight: "bg-teal-100" },
+  amber: { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-900", bgLight: "bg-amber-100" },
+  purple: { bg: "bg-purple-50", border: "border-purple-300", text: "text-purple-900", bgLight: "bg-purple-100" },
+  rose: { bg: "bg-rose-50", border: "border-rose-300", text: "text-rose-900", bgLight: "bg-rose-100" },
+  green: { bg: "bg-green-50", border: "border-green-300", text: "text-green-900", bgLight: "bg-green-100" },
+}
 
 function fmt(n: number): string {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -73,10 +123,11 @@ function fmt(n: number): string {
 export default function ClientGrandLivrePage() {
   const { societeId } = useSocieteActive()
   const [comptes, setComptes] = useState<CompteSolde[]>([])
+  const [pcm, setPcm] = useState<PCMEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [auditing, setAuditing] = useState(false)
   const [audit, setAudit] = useState<any>(null)
-  const [classeFilter, setClasseFilter] = useState<number | "all">("all")
+  const [openClasses, setOpenClasses] = useState<Set<number>>(new Set([4, 5, 6, 7]))
   const [search, setSearch] = useState("")
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
 
@@ -89,10 +140,15 @@ export default function ClientGrandLivrePage() {
     if (!societeId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/client/financial?societe_id=${societeId}`)
-      const d = await res.json()
-      const fin = d?.financial || {}
+      const [finRes, pcmRes] = await Promise.all([
+        fetch(`/api/client/financial?societe_id=${societeId}`).then((r) => r.json()),
+        fetch(`/api/client/plan-comptable?societe_id=${societeId}`).then((r) => r.json()),
+      ])
+      const fin = finRes?.financial || {}
       const ecr: any[] = fin.ecritures || []
+      const pcmList: PCMEntry[] = pcmRes?.comptes || []
+      const pcmMap = new Map<string, PCMEntry>()
+      for (const p of pcmList) pcmMap.set(p.compte, p)
       const map = new Map<string, CompteSolde>()
       for (const e of ecr) {
         const num = e.numero_compte || e.compte || "?"
@@ -100,7 +156,7 @@ export default function ClientGrandLivrePage() {
         const credit = Number(e.credit_mur) || Number(e.credit) || 0
         const cur = map.get(num) || {
           numero_compte: num,
-          libelle: e.libelle || null,
+          libelle: pcmMap.get(num)?.libelle || e.libelle || null,
           total_debit: 0,
           total_credit: 0,
           solde: 0,
@@ -113,6 +169,7 @@ export default function ClientGrandLivrePage() {
         map.set(num, cur)
       }
       setComptes(Array.from(map.values()))
+      setPcm(pcmList)
     } catch {}
     finally {
       setLoading(false)
@@ -137,48 +194,72 @@ export default function ClientGrandLivrePage() {
         return
       }
       setAudit(d)
-      showToast(`Lex Livre : score ${d.score}/100 — ${d.issues?.length || 0} alerte(s)`)
+      showToast(`Lex Livre : score ${d.score}/100`)
     } catch (e: any) {
-      showToast(e?.message || "Erreur Lex Livre", "error")
+      showToast(e?.message || "Erreur", "error")
     } finally {
       setAuditing(false)
     }
   }
 
-  // Stats par classe
-  const statsByClasse = useMemo(() => {
-    const map = new Map<number, { nb: number; debit: number; credit: number }>()
+  // Group comptes by class
+  const comptesByClass = useMemo(() => {
+    const map = new Map<number, CompteSolde[]>()
     for (const c of comptes) {
       const cl = parseInt(c.numero_compte[0]) || 0
       if (cl < 1 || cl > 7) continue
-      const cur = map.get(cl) || { nb: 0, debit: 0, credit: 0 }
-      cur.nb++
-      cur.debit += c.total_debit
-      cur.credit += c.total_credit
-      map.set(cl, cur)
+      const arr = map.get(cl) || []
+      arr.push(c)
+      map.set(cl, arr)
     }
+    for (const [k, v] of map) v.sort((a, b) => a.numero_compte.localeCompare(b.numero_compte))
     return map
   }, [comptes])
 
-  const filtered = useMemo(() => {
-    let list = comptes
-    if (classeFilter !== "all") {
-      list = list.filter((c) => parseInt(c.numero_compte[0]) === classeFilter)
+  const filteredByClass = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const result = new Map<number, CompteSolde[]>()
+    for (const [cl, arr] of comptesByClass) {
+      const filtered = q
+        ? arr.filter(
+            (c) =>
+              c.numero_compte.toLowerCase().includes(q) ||
+              (c.libelle || "").toLowerCase().includes(q)
+          )
+        : arr
+      if (filtered.length > 0 || !q) result.set(cl, filtered)
     }
+    return result
+  }, [comptesByClass, search])
+
+  // Auto-open classes with matches when searching
+  useEffect(() => {
     if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      list = list.filter(
-        (c) =>
-          c.numero_compte.toLowerCase().includes(q) ||
-          (c.libelle || "").toLowerCase().includes(q)
-      )
+      const next = new Set<number>()
+      for (const [cl, arr] of filteredByClass) {
+        if (arr.length > 0) next.add(cl)
+      }
+      setOpenClasses(next)
     }
-    return list.slice().sort((a, b) => a.numero_compte.localeCompare(b.numero_compte))
-  }, [comptes, classeFilter, search])
+  }, [search, filteredByClass])
+
+  const toggleClass = (cl: number) => {
+    setOpenClasses((prev) => {
+      const next = new Set(prev)
+      if (next.has(cl)) next.delete(cl)
+      else next.add(cl)
+      return next
+    })
+  }
 
   const totalDebit = comptes.reduce((s, c) => s + c.total_debit, 0)
   const totalCredit = comptes.reduce((s, c) => s + c.total_credit, 0)
   const ecart = totalDebit - totalCredit
+
+  // Synthèse comptable : Actif - Passif - Résultat
+  const totalCharges = (comptesByClass.get(6) || []).reduce((s, c) => s + c.solde, 0)
+  const totalProduits = (comptesByClass.get(7) || []).reduce((s, c) => s + Math.abs(c.solde), 0)
+  const resultat = totalProduits - totalCharges
 
   return (
     <ClientPageShell hideHero disableParticles>
@@ -203,7 +284,7 @@ export default function ClientGrandLivrePage() {
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">Grand livre</h1>
                 <p className="text-sm text-slate-700/80 mt-0.5">
-                  Soldes par compte PCM 4-digits — audit & navigation par classe
+                  État comptable structuré par classe PCM mauricien
                 </p>
               </div>
             </div>
@@ -213,9 +294,9 @@ export default function ClientGrandLivrePage() {
                 Actualiser
               </Button>
               <Link href="/client/plan-comptable">
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="border-slate-400">
                   <BookOpen className="h-4 w-4 mr-1.5" />
-                  Plan comptable
+                  Plan Comptable
                 </Button>
               </Link>
               <Button
@@ -246,143 +327,153 @@ export default function ClientGrandLivrePage() {
           </div>
         ) : (
           <>
-            {/* Audit Lex Livre */}
             {audit && <AuditPanel audit={audit} />}
 
-            {/* KPIs globaux */}
+            {/* Synthèse comptable */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard label="Comptes mouvementés" value={comptes.length} />
               <KpiCard label="Total débit" value={fmt(totalDebit)} tone="green" />
               <KpiCard label="Total crédit" value={fmt(totalCredit)} tone="rose" />
               <KpiCard
-                label="Balance R1"
+                label="Balance R1 (D - C)"
                 value={fmt(ecart)}
                 tone={Math.abs(ecart) < 0.01 ? "green" : "rose"}
                 accent={Math.abs(ecart) >= 0.01}
               />
+              <KpiCard
+                label="Résultat (P - C)"
+                value={fmt(resultat)}
+                tone={resultat >= 0 ? "green" : "rose"}
+              />
             </div>
 
-            {/* Navigation par classe */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
-              <button
-                onClick={() => setClasseFilter("all")}
-                className={`rounded-lg border-2 p-3 text-center transition-all ${
-                  classeFilter === "all"
-                    ? "border-slate-900 bg-slate-100"
-                    : "border-muted bg-card hover:border-slate-300"
-                }`}
-              >
-                <div className="text-2xl">📚</div>
-                <div className="text-xs font-medium mt-1">Toutes</div>
-                <div className="text-[10px] text-muted-foreground">
-                  {comptes.length} comptes
+            {/* Recherche */}
+            <Card>
+              <CardContent className="p-3">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Rechercher un compte (numéro ou libellé)…"
+                    className="pl-8 h-9"
+                  />
                 </div>
-              </button>
-              {CLASSES.map((c) => {
-                const stats = statsByClasse.get(c.num) || { nb: 0, debit: 0, credit: 0 }
-                const active = classeFilter === c.num
+              </CardContent>
+            </Card>
+
+            {/* Sections par classe */}
+            <div className="space-y-3">
+              {CLASSES.map((cl) => {
+                const arr = filteredByClass.get(cl.num) || []
+                const open = openClasses.has(cl.num)
+                const cls = colorMap[cl.color]
+                const debit = arr.reduce((s, c) => s + c.total_debit, 0)
+                const credit = arr.reduce((s, c) => s + c.total_credit, 0)
+                const solde = debit - credit
                 return (
-                  <button
-                    key={c.num}
-                    onClick={() => setClasseFilter(c.num)}
-                    className={`rounded-lg border-2 p-3 text-center transition-all ${
-                      active ? "border-slate-900" : "border-muted hover:border-slate-300"
-                    } ${c.color.split(" ").filter((x) => x.startsWith("bg-")).join(" ")}`}
-                  >
-                    <div className="text-2xl">{c.icon}</div>
-                    <div className="text-xs font-bold mt-1">Classe {c.num}</div>
-                    <div className="text-[10px]">{c.label}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {stats.nb} comptes
-                    </div>
-                  </button>
+                  <Card key={cl.num} className={`${cls.border} border-2`}>
+                    <button
+                      onClick={() => toggleClass(cl.num)}
+                      className={`w-full ${cls.bg} hover:${cls.bgLight} transition-colors p-4 flex items-center justify-between gap-3 text-left`}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="text-3xl">{cl.icon}</div>
+                        <div className="min-w-0">
+                          <h3 className={`font-bold ${cls.text}`}>
+                            Classe {cl.num} — {cl.label}
+                          </h3>
+                          <p className="text-xs text-muted-foreground">{cl.desc}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm font-mono flex-shrink-0">
+                        <div className="text-right">
+                          <div className="text-[10px] text-muted-foreground uppercase">Comptes</div>
+                          <div className={`font-bold ${cls.text}`}>{arr.length}</div>
+                        </div>
+                        <div className="text-right hidden md:block">
+                          <div className="text-[10px] text-muted-foreground uppercase">Débit</div>
+                          <div className="text-green-700">{fmt(debit)}</div>
+                        </div>
+                        <div className="text-right hidden md:block">
+                          <div className="text-[10px] text-muted-foreground uppercase">Crédit</div>
+                          <div className="text-rose-700">{fmt(credit)}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] text-muted-foreground uppercase">Solde</div>
+                          <div
+                            className={`font-bold ${
+                              solde >= 0 ? "text-green-700" : "text-rose-700"
+                            }`}
+                          >
+                            {fmt(solde)}
+                          </div>
+                        </div>
+                        {open ? (
+                          <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </div>
+                    </button>
+                    {open && (
+                      <div className="border-t bg-white">
+                        {arr.length === 0 ? (
+                          <p className="py-4 text-center text-xs text-muted-foreground italic">
+                            {search.trim()
+                              ? "Aucun compte ne correspond à la recherche dans cette classe"
+                              : "Aucun compte mouvementé dans cette classe"}
+                          </p>
+                        ) : (
+                          <div className="divide-y">
+                            {arr.map((c) => (
+                              <Link
+                                key={c.numero_compte}
+                                href={`/client/ecritures?search=${encodeURIComponent(c.numero_compte)}`}
+                                className="flex items-start justify-between gap-3 p-3 hover:bg-muted/30"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[11px] font-mono ${cls.bgLight} ${cls.text}`}
+                                    >
+                                      {c.numero_compte}
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">
+                                      {c.nb_ecritures} écriture{c.nb_ecritures > 1 ? "s" : ""}
+                                    </span>
+                                  </div>
+                                  {c.libelle && (
+                                    <p className="text-sm mt-1 break-words">{c.libelle}</p>
+                                  )}
+                                </div>
+                                <div className="text-right flex-shrink-0 font-mono text-sm space-y-0.5">
+                                  <p className="text-[11px] text-muted-foreground">
+                                    D {fmt(c.total_debit)} · C {fmt(c.total_credit)}
+                                  </p>
+                                  <p
+                                    className={`text-base font-medium ${
+                                      c.solde >= 0 ? "text-green-700" : "text-rose-700"
+                                    }`}
+                                  >
+                                    {c.solde >= 0 ? (
+                                      <TrendingUp className="inline h-3 w-3 mr-0.5" />
+                                    ) : (
+                                      <TrendingDown className="inline h-3 w-3 mr-0.5" />
+                                    )}
+                                    {fmt(c.solde)} MUR
+                                  </p>
+                                </div>
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </Card>
                 )
               })}
             </div>
-
-            {/* Liste comptes */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <BookCopy className="h-5 w-5 text-slate-700" />
-                    {classeFilter === "all"
-                      ? `Tous les comptes mouvementés (${filtered.length})`
-                      : `Classe ${classeFilter} — ${CLASSES.find((c) => c.num === classeFilter)?.label} (${filtered.length})`}
-                  </CardTitle>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="N° ou libellé…"
-                      className="pl-8 h-9 w-72"
-                    />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {filtered.length === 0 ? (
-                  <p className="py-10 text-center text-sm text-muted-foreground">
-                    Aucun compte pour ce filtre.
-                  </p>
-                ) : (
-                  <div className="rounded border bg-card divide-y">
-                    {filtered.map((c) => {
-                      const cl = CLASSES.find(
-                        (x) => x.num === parseInt(c.numero_compte[0])
-                      )
-                      return (
-                        <Link
-                          key={c.numero_compte}
-                          href={`/client/ecritures?search=${encodeURIComponent(c.numero_compte)}`}
-                          className="flex items-start justify-between gap-3 p-3 hover:bg-muted/30"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className={`text-[11px] font-mono ${cl?.color}`}
-                              >
-                                {c.numero_compte}
-                              </Badge>
-                              {cl && (
-                                <Badge variant="outline" className="text-[10px]">
-                                  {cl.label}
-                                </Badge>
-                              )}
-                              <span className="text-xs text-muted-foreground">
-                                {c.nb_ecritures} écriture{c.nb_ecritures > 1 ? "s" : ""}
-                              </span>
-                            </div>
-                            {c.libelle && (
-                              <p className="text-sm mt-1 break-words">{c.libelle}</p>
-                            )}
-                          </div>
-                          <div className="text-right flex-shrink-0 font-mono text-sm space-y-0.5">
-                            <p className="text-[11px] text-muted-foreground">
-                              D {fmt(c.total_debit)} · C {fmt(c.total_credit)}
-                            </p>
-                            <p
-                              className={`text-base font-medium ${
-                                c.solde >= 0 ? "text-green-700" : "text-rose-700"
-                              }`}
-                            >
-                              {c.solde >= 0 ? (
-                                <TrendingUp className="inline h-3 w-3 mr-0.5" />
-                              ) : (
-                                <TrendingDown className="inline h-3 w-3 mr-0.5" />
-                              )}
-                              {fmt(c.solde)} MUR
-                            </p>
-                          </div>
-                        </Link>
-                      )
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </>
         )}
       </div>
@@ -391,7 +482,7 @@ export default function ClientGrandLivrePage() {
 }
 
 function AuditPanel({ audit }: { audit: any }) {
-  const issues: AuditIssue[] = audit.issues || []
+  const issues = audit.issues || []
   const score = audit.score || 0
   const severity = audit.severity || "ok"
   const summary = audit.summary || {}
@@ -402,7 +493,6 @@ function AuditPanel({ audit }: { audit: any }) {
       : severity === "warning"
         ? "border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50"
         : "border-green-300 bg-gradient-to-br from-green-50 to-emerald-50"
-
   const scoreColor =
     score >= 80 ? "text-green-700" : score >= 50 ? "text-amber-700" : "text-red-700"
 
@@ -438,7 +528,6 @@ function AuditPanel({ audit }: { audit: any }) {
           <div className="text-xs text-muted-foreground">/100 santé</div>
         </div>
       </div>
-
       {issues.length === 0 ? (
         <div className="mt-3 flex items-center gap-2 text-sm text-green-800">
           <CheckCircle2 className="h-4 w-4" />
@@ -446,7 +535,7 @@ function AuditPanel({ audit }: { audit: any }) {
         </div>
       ) : (
         <div className="mt-3 space-y-1.5">
-          {issues.map((issue, i) => {
+          {issues.map((issue: any, i: number) => {
             const Icon =
               issue.severity === "critical"
                 ? XCircle
@@ -468,7 +557,6 @@ function AuditPanel({ audit }: { audit: any }) {
           })}
         </div>
       )}
-
       {audit.comptes_hors_pcm?.length > 0 && (
         <details className="mt-3 text-xs">
           <summary className="cursor-pointer font-medium text-amber-700">

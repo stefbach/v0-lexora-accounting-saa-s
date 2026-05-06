@@ -111,6 +111,8 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/banque", label: "Banque", labelKey: "acc.bank", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
+      { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
+      { href: "/client/plan-comptable", label: "Plan Comptable", icon: BookOpen },
       { href: "/client/salaires-compta", label: "Salaires", icon: CreditCard },
       { href: "/client/compte-courant", label: "Comptes Courants Associés", labelKey: "acc.current_accounts", icon: Users },
     ]
@@ -120,8 +122,6 @@ const MENU: MenuSection[] = [
     requiredModule: "etats_financiers",
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
-      { href: "/client/grand-livre", label: "Grand Livre", labelKey: "fin.general_ledger", icon: BookOpen },
-      { href: "/client/plan-comptable", label: "Plan Comptable", icon: BookOpen },
       { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
     ]
   },
