@@ -726,6 +726,7 @@ export default function ClientRapprochementPage() {
         <AffectDialog
           tx={affectTx}
           factures={factures}
+          allTransactions={transactions}
           onClose={() => setAffectTx(null)}
           onAffect={handleAffectManual}
           showToast={showToast}
@@ -1618,6 +1619,7 @@ const PCM_PRESETS: Array<{ value: string; label: string; classification: string 
 function AffectDialog({
   tx,
   factures,
+  allTransactions,
   onClose,
   onAffect,
   showToast,
@@ -1625,6 +1627,7 @@ function AffectDialog({
 }: {
   tx: BankTx | null
   factures: Facture[]
+  allTransactions: BankTx[]
   onClose: () => void
   onAffect: (
     tx: BankTx,
@@ -1634,7 +1637,7 @@ function AffectDialog({
   showToast: (msg: string, type?: "success" | "error") => void
   onReload: () => void
 }) {
-  const [tab, setTab] = useState<"facture" | "pcm">("facture")
+  const [tab, setTab] = useState<"facture" | "pcm" | "interne">("facture")
   const [search, setSearch] = useState("")
   const [pcmCustom, setPcmCustom] = useState("")
   const [pcmPreset, setPcmPreset] = useState<string>("")
@@ -1725,7 +1728,11 @@ function AffectDialog({
             </TabsTrigger>
             <TabsTrigger value="pcm" className="flex-1">
               <Wrench className="h-3.5 w-3.5 mr-1.5" />
-              Imputer sur un compte PCM
+              Compte PCM
+            </TabsTrigger>
+            <TabsTrigger value="interne" className="flex-1">
+              <Landmark className="h-3.5 w-3.5 mr-1.5" />
+              Compte à compte
             </TabsTrigger>
           </TabsList>
 
@@ -1847,8 +1854,178 @@ function AffectDialog({
               L'écriture comptable BNQ correspondante sera créée automatiquement.
             </p>
           </TabsContent>
+
+          <TabsContent value="interne" className="mt-3 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Cherche la transaction miroir sur tes autres comptes (sens inverse, montant proche, ±10 jours). Imputation au compte PCM <span className="font-mono">5811 — Virements internes en cours</span>.
+            </p>
+            <InterneCompteSection
+              tx={tx}
+              allTransactions={allTransactions}
+              busy={busy}
+              onApplyMirror={async (mirrorTx) => {
+                setBusy(true)
+                // Lettre les 2 tx (la courante + la miroir) sur 5811
+                const r1 = await onAffect(tx, "pcm", {
+                  classification: "virement_interne",
+                  compte_charge: "5811",
+                })
+                if (!r1.ok) {
+                  setBusy(false)
+                  return showToast(`Échec côté ${tx.libelle.slice(0, 30)} : ${r1.error}`, "error")
+                }
+                const r2 = await onAffect(mirrorTx, "pcm", {
+                  classification: "virement_interne",
+                  compte_charge: "5811",
+                })
+                setBusy(false)
+                if (!r2.ok) {
+                  return showToast(
+                    `Côté A imputé, mais échec côté B : ${r2.error}`,
+                    "error"
+                  )
+                }
+                showToast("Virement interne lettré sur les 2 comptes")
+                onClose()
+                onReload()
+              }}
+              onApplyAlone={async () => {
+                setBusy(true)
+                const r = await onAffect(tx, "pcm", {
+                  classification: "virement_interne",
+                  compte_charge: "5811",
+                })
+                setBusy(false)
+                if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
+                showToast("Imputée 5811 (virement interne)")
+                onClose()
+                onReload()
+              }}
+            />
+          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function InterneCompteSection({
+  tx,
+  allTransactions,
+  busy,
+  onApplyMirror,
+  onApplyAlone,
+}: {
+  tx: BankTx
+  allTransactions: BankTx[]
+  busy: boolean
+  onApplyMirror: (mirror: BankTx) => Promise<void>
+  onApplyAlone: () => Promise<void>
+}) {
+  const targetAmt = Math.max(tx.debit, tx.credit)
+  const txDate = tx.date ? new Date(tx.date).getTime() : 0
+  const txCompte = (tx as any).banque || ""
+
+  // Cherche les tx miroirs : autre compte (banque différente OU même banque
+  // mais devise différente), sens INVERSE, montant proche (±5%), date ±10 jours.
+  const candidates = useMemo(() => {
+    return allTransactions
+      .filter((t) => t.id !== tx.id)
+      .filter((t) => {
+        const otherCompte = (t as any).banque || ""
+        // Autre tx (peu importe le compte, on prend tout sauf la même tx)
+        if (!t.date) return false
+        const dt = Math.abs(new Date(t.date).getTime() - txDate) / 86400000
+        if (dt > 10) return false
+        // Sens inverse : si tx est sortie (debit), miroir est entrée (credit) et inverse
+        const sameSide =
+          (tx.debit > 0 && t.debit > 0) || (tx.credit > 0 && t.credit > 0)
+        if (sameSide) return false
+        const tAmt = Math.max(t.debit, t.credit)
+        const ratio = targetAmt > 0 ? Math.abs(tAmt - targetAmt) / targetAmt : 999
+        if (ratio > 0.05) return false
+        return true
+      })
+      .sort((a, b) => {
+        const da = Math.abs(new Date(a.date).getTime() - txDate)
+        const db = Math.abs(new Date(b.date).getTime() - txDate)
+        return da - db
+      })
+      .slice(0, 10)
+  }, [tx, allTransactions, targetAmt, txDate])
+
+  return (
+    <div className="space-y-3">
+      {candidates.length === 0 ? (
+        <p className="py-4 text-sm text-muted-foreground italic">
+          Aucune tx miroir détectée automatiquement.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs font-medium">
+            Transactions miroirs candidates ({candidates.length})
+          </p>
+          <div className="rounded border bg-card divide-y max-h-72 overflow-y-auto">
+            {candidates.map((m) => {
+              const mAmt = Math.max(m.debit, m.credit)
+              const mSens = m.debit > 0 ? "-" : "+"
+              const mCompte = (m as any).banque || "?"
+              const ratio = targetAmt > 0 ? Math.abs(mAmt - targetAmt) / targetAmt : 0
+              return (
+                <button
+                  key={m.id}
+                  disabled={busy}
+                  onClick={() => onApplyMirror(m)}
+                  className="w-full flex items-start justify-between gap-3 p-3 hover:bg-blue-50 text-left disabled:opacity-50"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-[10px] font-mono">
+                        {mCompte} ({m.devise || "MUR"})
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(m.date)}
+                      </span>
+                    </div>
+                    <p className="text-xs mt-0.5 break-words">{m.libelle}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p
+                      className={`font-mono text-sm ${mSens === "+" ? "text-green-700" : "text-rose-700"}`}
+                    >
+                      {mSens}
+                      {fmt(mAmt)}
+                    </p>
+                    {ratio > 0.005 && (
+                      <p className="text-[10px] font-mono text-amber-700">
+                        écart {(ratio * 100).toFixed(2)}%
+                      </p>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-[11px] text-muted-foreground italic">
+            Cliquer sur une miroir lettre les 2 tx via PCM 5811 (virements internes).
+          </p>
+        </>
+      )}
+      <div className="border-t pt-3">
+        <Button
+          onClick={onApplyAlone}
+          disabled={busy}
+          variant="outline"
+          className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
+        >
+          {busy ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Wrench className="h-4 w-4 mr-2" />
+          )}
+          Imputer cette tx seule sur 5811 (sans miroir)
+        </Button>
+      </div>
+    </div>
   )
 }
