@@ -2145,6 +2145,71 @@ export async function POST(request: Request) {
     }
 
     // === DELETTRER ===
+    // ─────────────────────────────────────────────────────────────────
+    // rejeter_suggestion — Annule une suggestion d'agent (statut "propose"
+    // ou "a_verifier") sans toucher aux écritures comptables (aucune BNQ
+    // n'a encore été créée). La transaction redevient orpheline et peut
+    // être ré-évaluée au prochain run de l'agent.
+    // ─────────────────────────────────────────────────────────────────
+    if (action === 'rejeter_suggestion') {
+      const { transaction_id, releve_id } = body
+      if (!releve_id) return NextResponse.json({ error: 'releve_id requis' }, { status: 400 })
+      if (!transaction_id) return NextResponse.json({ error: 'transaction_id requis' }, { status: 400 })
+
+      const { data: releve, error: relErr } = await supabase
+        .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
+      if (relErr || !releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+
+      const txIdx = parseInt(String(transaction_id).split('-').pop() || '0')
+      const txs = [...(releve.transactions_json || [])]
+      if (txIdx < 0 || txIdx >= txs.length) {
+        return NextResponse.json({ error: 'Index transaction invalide' }, { status: 400 })
+      }
+      const prevTx = txs[txIdx] || {}
+
+      // Sécurité : ne rejeter QUE les suggestions d'agent (statut propose|a_verifier)
+      // Pour ne pas casser un rapprochement humain validé.
+      const currentStatut = prevTx.statut
+      if (currentStatut === 'rapproche') {
+        return NextResponse.json({
+          error: 'Cette transaction est déjà rapprochée — utiliser delettrer pour l\'annuler',
+        }, { status: 400 })
+      }
+      if (currentStatut !== 'propose' && currentStatut !== 'a_verifier') {
+        return NextResponse.json({
+          error: `Aucune suggestion à rejeter (statut actuel: ${currentStatut || 'aucun'})`,
+        }, { status: 400 })
+      }
+
+      // Reset des champs agent
+      const cleaned: any = { ...prevTx }
+      cleaned.statut = 'non_identifie'
+      delete cleaned.facture_id
+      delete cleaned.facture_ids
+      delete cleaned.matched_type
+      delete cleaned.matched_strategy
+      delete cleaned.matched_confidence
+      delete cleaned.match_confidence
+      delete cleaned.classification
+      delete cleaned.classification_suggestion
+      delete cleaned.compte_comptable
+      delete cleaned.lettre
+      delete cleaned.rapproche_at
+      delete cleaned.rapprochement_multi
+      delete cleaned.nb_factures
+      delete cleaned.suggestion_source
+      cleaned.note = 'Suggestion agent rejetée — à imputer manuellement'
+
+      txs[txIdx] = cleaned
+      const { error: updErr } = await supabase
+        .from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
+      if (updErr) {
+        return NextResponse.json({ error: `Update relevé échoué: ${updErr.message}` }, { status: 500 })
+      }
+
+      return NextResponse.json({ ok: true, reset: true })
+    }
+
     if (action === 'delettrer') {
       const { transaction_id, releve_id, facture_id, ecriture_id, societe_id } = body
       if (!releve_id) return NextResponse.json({ error: 'releve_id requis' }, { status: 400 })
