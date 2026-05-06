@@ -56,11 +56,33 @@ export default function ClientRevenusDepensesPage() {
     if (!societeId) return
     setLoading(true)
     try {
-      const res = await fetch(
-        `/api/comptable/grand-livre?societe_id=${societeId}&annee=${annee}`
-      )
+      const res = await fetch(`/api/client/financial?societe_id=${societeId}`)
       const d = await res.json()
-      setComptes(d?.comptes || d?.balance || [])
+      const fin = d?.financial || {}
+      const ecr: any[] = (fin.ecritures || []).filter((e: any) => {
+        const date: string = e.date_ecriture || ""
+        return date.startsWith(annee)
+      })
+      const map = new Map<string, CompteSolde>()
+      for (const e of ecr) {
+        const num = e.numero_compte || e.compte || "?"
+        const debit = Number(e.debit_mur) || Number(e.debit) || 0
+        const credit = Number(e.credit_mur) || Number(e.credit) || 0
+        const cur = map.get(num) || {
+          numero_compte: num,
+          libelle: e.libelle || null,
+          total_debit: 0,
+          total_credit: 0,
+          solde: 0,
+          nb_ecritures: 0,
+        }
+        cur.total_debit += debit
+        cur.total_credit += credit
+        cur.solde = cur.total_debit - cur.total_credit
+        cur.nb_ecritures++
+        map.set(num, cur)
+      }
+      setComptes(Array.from(map.values()))
     } catch {}
     finally {
       setLoading(false)
