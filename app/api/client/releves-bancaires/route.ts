@@ -37,7 +37,14 @@ export async function GET(request: Request) {
     try {
       await assertSocieteAccess(supabase, user.id, societe_id)
     } catch (e) {
-      return mapSocieteAccessError(e)
+      const mapped = mapSocieteAccessError(e)
+      if (mapped) {
+        return NextResponse.json(mapped.body, { status: mapped.status })
+      }
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "Erreur d'accès" },
+        { status: 500 }
+      )
     }
 
     const [{ data: comptes }, { data: releves }] = await Promise.all([
