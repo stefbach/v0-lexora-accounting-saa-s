@@ -1049,21 +1049,31 @@ function matchByAmountFallback(
     usedTxKeys.add(txKey(tx))
   }
 
-  // ── Passe 3 : 1 tx → N factures (greedy cross-supplier) ──────
+  // ── Passe 3 : 1 tx → N factures DU MÊME TIERS (greedy) ──────
+  // ⚠ On ne fait PLUS de cross-supplier (combiner des factures de tiers
+  // différents pour atteindre le montant). C'est trop risqué — un paiement
+  // de 300 000 MUR à DIGITAL DATA matchait artificiellement 7 factures
+  // sans rapport (Sampol, Bastid…). Désormais on exige que toutes les
+  // factures candidates partagent le tiers du libellé bancaire (similarité
+  // floue >= 0.4 avec tx.tiers_detecte ou tx.libelle).
   for (const tx of unmatchedTxs) {
     if (usedTxKeys.has(txKey(tx))) continue
     const txRaw = Math.max(tx.debit, tx.credit)
     if (txRaw === 0) continue
+    const txTiersHint = (tx.tiers_detecte || tx.libelle || "").trim()
+    if (txTiersHint.length < 3) continue
     const txDevise = (tx.devise || 'MUR').toUpperCase()
     const txAmtMUR = toMUR(txRaw, tx.devise, rates)
 
-    const available = unpaidFactures.filter(f => !usedFactureIds.has(f.id))
+    // Ne garder que les factures dont le tiers ressemble au libellé tx
+    const available = unpaidFactures.filter((f) => {
+      if (usedFactureIds.has(f.id)) return false
+      if (!f.tiers) return false
+      const sim = advancedTiersScore(txTiersHint, f.tiers)
+      return sim >= 0.40
+    })
     if (available.length < 2) continue
 
-    // Stratégie greedy : on accumule les factures les plus proches en montant
-    // jusqu'à atteindre le montant de la tx (±8%), trié par montant décroissant.
-    // Plus rapide que le bruteforce combinatoire, et plus réaliste : un comptable
-    // regroupe naturellement les grosses factures d'abord.
     const sortedByAmount = [...available]
       .map(f => {
         const fDevise = (f.devise || 'MUR').toUpperCase()
@@ -1072,7 +1082,7 @@ function matchByAmountFallback(
           : (Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates))
         return { f, amt: fAmt }
       })
-      .filter(({ amt }) => amt > 0 && amt <= txRaw * 1.02) // exclure les factures > tx
+      .filter(({ amt }) => amt > 0 && amt <= txRaw * 1.02)
       .sort((a, b) => b.amt - a.amt)
 
     const compareAmt = sortedByAmount[0]?.f.devise?.toUpperCase() === txDevise ? txRaw : txAmtMUR
@@ -1080,29 +1090,28 @@ function matchByAmountFallback(
     const combo: MatchingFacture[] = []
 
     for (const { f, amt } of sortedByAmount) {
-      if (combo.length >= 10) break // max 10 factures
-      if (runningSum + amt > compareAmt * 1.08) continue // dépasse le tx
+      if (combo.length >= 10) break
+      if (runningSum + amt > compareAmt * 1.08) continue
       combo.push(f)
       runningSum += amt
       const diff = Math.abs(compareAmt - runningSum) / compareAmt
       if (diff < 0.08) {
-        // Match trouvé
         const isExact = diff < 0.005
         let confidence = combo.length <= 3 ? 0.80 : 0.70
         if (isExact) confidence += 0.10
         if (combo.length > 5) confidence -= 0.10
 
-        const tiersTx = (tx.tiers_detecte || tx.libelle || '').substring(0, 40)
+        const tiersName = combo[0]?.tiers || txTiersHint.substring(0, 40)
         matches.push({
-          supplierKey: `__fallback_multi_${tiersTx}`,
-          supplierName: tiersTx,
+          supplierKey: `__fallback_multi_${tiersName.substring(0, 30)}`,
+          supplierName: tiersName,
           transactionKey: txKey(tx),
           transaction: tx,
           factureIds: combo.map(f2 => f2.id),
           factures: [...combo],
           strategy: 'amount_multi_facture',
           confidence: Math.min(0.92, Math.max(0.40, confidence)),
-          reasoning: `${combo.length} factures → total ${isExact ? 'exact' : `écart ${(diff * 100).toFixed(1)}%`}`,
+          reasoning: `${combo.length} factures de "${tiersName}" → total ${isExact ? 'exact' : `écart ${(diff * 100).toFixed(1)}%`}`,
           amountDiff: diff * compareAmt,
           phase: 'supplier_match',
         })
