@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -86,7 +87,13 @@ export default function ClientFacturesPage() {
   const { societeId } = useSocieteActive()
   const [factures, setFactures] = useState<Facture[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<"toutes" | "client" | "fournisseur">("toutes")
+  const searchParams = useSearchParams()
+  const initialTab = (() => {
+    const t = searchParams.get("type")
+    if (t === "client" || t === "fournisseur" || t === "toutes") return t
+    return "toutes" as const
+  })()
+  const [activeTab, setActiveTab] = useState<"toutes" | "client" | "fournisseur">(initialTab)
   const [statutFilter, setStatutFilter] = useState<string>("all")
   const [tiersFilter, setTiersFilter] = useState<string>("all")
   const [rapprochementFilter, setRapprochementFilter] = useState<string>("all")
@@ -232,9 +239,9 @@ export default function ClientFacturesPage() {
                 <FileText className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-emerald-900">Factures</h1>
+                <h1 className="text-2xl font-bold text-emerald-900">Mes factures</h1>
                 <p className="text-sm text-emerald-700/80 mt-0.5">
-                  Clients & fournisseurs · sources de vérité pour Lex Banque
+                  Toutes les factures de la société — vente (clients) + achat (fournisseurs)
                 </p>
               </div>
             </div>
@@ -272,6 +279,30 @@ export default function ClientFacturesPage() {
           </div>
         ) : (
           <>
+            {/* Encadré explicatif */}
+            <Card className="border-emerald-200 bg-emerald-50/50">
+              <CardContent className="p-4 text-sm text-emerald-900/90 space-y-1.5">
+                <p>
+                  <span className="font-medium">Comment lire cette page&nbsp;:</span> chaque ligne représente une facture, qu'elle soit
+                  émise par toi (vente, badge <span className="inline-block px-1.5 py-0 text-[10px] rounded border border-green-300 bg-green-50 text-green-700 font-medium">Client</span>)
+                  ou reçue d'un fournisseur (achat, badge <span className="inline-block px-1.5 py-0 text-[10px] rounded border border-rose-300 bg-rose-50 text-rose-700 font-medium">Fournisseur</span>).
+                </p>
+                <p>
+                  <span className="font-medium">Statuts&nbsp;:</span>{" "}
+                  <span className="font-medium text-amber-700">En attente</span> = pas encore payée ·{" "}
+                  <span className="font-medium text-blue-700">Partiel</span> = paiement partiel reçu ·{" "}
+                  <span className="font-medium text-red-700">En retard</span> = échue impayée ·{" "}
+                  <span className="font-medium text-green-700">Payée</span> = soldée.
+                </p>
+                <p>
+                  <span className="font-medium">Rapprochement bancaire&nbsp;:</span> badge <span className="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] rounded border border-purple-300 bg-purple-50 text-purple-700"><Bot className="h-3 w-3" />Rapprochée</span> si la facture est liée à une transaction bancaire (validée par toi ou par <span className="font-medium">Lex Banque</span>). Sinon, elle apparaît comme "pas encore rapprochée".
+                </p>
+                <p>
+                  <span className="font-medium">Filtres ci-dessous&nbsp;:</span> isole un client/fournisseur, une période, un statut, l'état de rapprochement → les KPIs se recalculent automatiquement (ex&nbsp;: <em>"Combien me doit ce client ?"</em>).
+                </p>
+              </CardContent>
+            </Card>
+
             {/* KPIs (sur le périmètre filtré) */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <KpiCard

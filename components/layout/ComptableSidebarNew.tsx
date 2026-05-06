@@ -93,8 +93,7 @@ const CLIENT_SECTIONS: NavSection[] = [
   {
     title: "Facturation",
     items: [
-      { href: "/client/factures", label: "Factures clients", icon: FileSpreadsheet },
-      { href: "/client/fournisseurs", label: "Fournisseurs", icon: Banknote },
+      { href: "/client/factures", label: "Factures (clients & fournisseurs)", icon: FileSpreadsheet },
     ],
   },
   {
