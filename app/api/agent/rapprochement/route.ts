@@ -69,8 +69,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "societe_id requis" }, { status: 400 })
   }
 
-  const date_debut: string = body?.date_debut || ninetyDaysAgo()
-  const date_fin: string = body?.date_fin || new Date().toISOString().slice(0, 10)
+  const date_debut: string | null = body?.date_debut || null
+  const date_fin: string | null = body?.date_fin || null
   const releve_ids: string[] | null = Array.isArray(body?.releve_ids)
     ? body.releve_ids
     : null
@@ -97,16 +97,17 @@ export async function POST(request: Request) {
   const compteDeviseMap = new Map<string, string>()
   for (const c of comptes || []) compteDeviseMap.set(c.id, c.devise || "MUR")
 
-  // 2. Relevés sur la période
+  // 2. Relevés (toute la profondeur disponible si aucune date n'est donnée —
+  //    on ne veut PAS rater le gros relevé semestriel)
   let relQuery = sb
     .from("releves_bancaires")
     .select(
       "id, societe_id, compte_bancaire_id, date_debut, date_fin, transactions_json, statut_rapprochement"
     )
     .eq("societe_id", societe_id)
-    .gte("date_fin", date_debut)
-    .lte("date_debut", date_fin)
     .order("date_debut", { ascending: true })
+  if (date_debut) relQuery = relQuery.gte("date_fin", date_debut)
+  if (date_fin) relQuery = relQuery.lte("date_debut", date_fin)
   if (releve_ids && releve_ids.length > 0) {
     relQuery = relQuery.in("id", releve_ids)
   }
@@ -156,15 +157,15 @@ export async function POST(request: Request) {
     }
   }
 
-  // 4. Factures non payées de la société
+  // 4. Factures non payées (toutes statuts sauf paye/annule, pas de filtre date —
+  //    une facture émise il y a 6 mois peut être payée aujourd'hui).
   const { data: facturesRaw = [] } = await sb
     .from("factures")
     .select(
       "id, numero_facture, tiers, montant_ttc, montant_mur, devise, date_facture, date_echeance, conditions_paiement, type_facture, statut"
     )
     .eq("societe_id", societe_id)
-    .neq("statut", "paye")
-    .neq("statut", "annule")
+    .not("statut", "in", '("paye","annule")')
   const matchingFactures: MatchingFacture[] = (facturesRaw || []).map((f: any) => ({
     id: f.id,
     numero_facture: f.numero_facture || null,
@@ -179,27 +180,29 @@ export async function POST(request: Request) {
     statut: f.statut || null,
   }))
 
-  // 5. Bulletins de paie (pour Phase 3 du moteur intelligent)
+  // 5. Bulletins de paie (Phase 3 du moteur intelligent — détection de paie)
+  const minPeriode = date_debut ? date_debut.slice(0, 7) : "2020-01"
   const { data: bulletinsRaw = [] } = await sb
     .from("bulletins_paie")
     .select("periode, salaire_net")
     .eq("societe_id", societe_id)
-    .gte("periode", date_debut.slice(0, 7))
+    .gte("periode", minPeriode)
   const bulletins =
     (bulletinsRaw || []).map((b: any) => ({
       periode: b.periode,
       salaire_net: Number(b.salaire_net) || 0,
     })) || []
 
-  // 6. Écritures non lettrées (compte 411x/401x) — pour ECRITURE_MATCH fallback
-  const { data: ecrituresRaw = [] } = await sb
+  // 6. Écritures non lettrées (compte 411x/401x) — fallback ECRITURE_MATCH
+  let ecrQuery = sb
     .from("ecritures_comptables_v2")
     .select("id, numero_compte, libelle, debit_mur, credit_mur, date_ecriture, journal")
     .eq("societe_id", societe_id)
     .is("lettre", null)
     .or("numero_compte.like.411%,numero_compte.like.401%")
-    .gte("date_ecriture", date_debut)
     .limit(2000)
+  if (date_debut) ecrQuery = ecrQuery.gte("date_ecriture", date_debut)
+  const { data: ecrituresRaw = [] } = await ecrQuery
   const ecritures = (ecrituresRaw || []).map((e: any) => ({
     id: e.id,
     compte: e.numero_compte,
@@ -327,10 +330,25 @@ export async function POST(request: Request) {
     }
   }
 
+  // Calcule la couverture date réelle des relevés chargés
+  const allDates = (releves || []).flatMap((r) => [r.date_debut, r.date_fin]).filter(Boolean)
+  const coverage = {
+    earliest: allDates.length ? allDates.reduce((a, b) => (a < b ? a : b)) : null,
+    latest: allDates.length ? allDates.reduce((a, b) => (a > b ? a : b)) : null,
+  }
+
   return NextResponse.json({
     ok: true,
     societe_id,
     period: { date_debut, date_fin },
+    inputs: {
+      releves_charges: (releves || []).length,
+      transactions_a_traiter: matchingTx.length,
+      factures_impayees: matchingFactures.length,
+      ecritures_non_lettrees: ecritures.length,
+      bulletins_paie: bulletins.length,
+      coverage,
+    },
     stats: result.stats,
     matches: result.matches.map((m) => ({
       transactionKey: m.transactionKey,

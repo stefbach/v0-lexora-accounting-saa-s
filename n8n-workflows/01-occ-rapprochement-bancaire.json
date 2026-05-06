@@ -65,18 +65,13 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
+            { "name": "Content-Type", "value": "application/json" }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"societe_id\": \"{{ $json.societe_id }}\"\n}",
-        "options": {
-          "timeout": 60000
-        }
+        "jsonBody": "={{ JSON.stringify({ societe_id: $json.societe_id }) }}",
+        "options": { "timeout": 60000 }
       },
       "id": "node-audit-pre",
       "name": "Audit (pré-rapprochement)",
@@ -84,9 +79,7 @@
       "typeVersion": 4.2,
       "position": [500, 200],
       "credentials": {
-        "httpHeaderAuth": {
-          "name": "Lexora Agent (bearer)"
-        }
+        "httpHeaderAuth": { "name": "Lexora Agent (bearer)" }
       }
     },
     {
@@ -98,18 +91,13 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
+            { "name": "Content-Type", "value": "application/json" }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"societe_id\": \"{{ $('Paramètres OCC').item.json.societe_id }}\",\n  \"min_confidence\": {{ $('Paramètres OCC').item.json.min_confidence }},\n  \"dry_run\": {{ $('Paramètres OCC').item.json.dry_run }}\n}",
-        "options": {
-          "timeout": 120000
-        }
+        "jsonBody": "={{ JSON.stringify({ societe_id: $('Paramètres OCC').item.json.societe_id, min_confidence: $('Paramètres OCC').item.json.min_confidence, dry_run: $('Paramètres OCC').item.json.dry_run }) }}",
+        "options": { "timeout": 120000 }
       },
       "id": "node-rapprocher",
       "name": "Rapprocher (intelligent)",
@@ -117,9 +105,7 @@
       "typeVersion": 4.2,
       "position": [720, 300],
       "credentials": {
-        "httpHeaderAuth": {
-          "name": "Lexora Agent (bearer)"
-        }
+        "httpHeaderAuth": { "name": "Lexora Agent (bearer)" }
       }
     },
     {
@@ -131,18 +117,13 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
+            { "name": "Content-Type", "value": "application/json" }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"societe_id\": \"{{ $('Paramètres OCC').item.json.societe_id }}\"\n}",
-        "options": {
-          "timeout": 60000
-        }
+        "jsonBody": "={{ JSON.stringify({ societe_id: $('Paramètres OCC').item.json.societe_id }) }}",
+        "options": { "timeout": 60000 }
       },
       "id": "node-audit-post",
       "name": "Audit (post-rapprochement)",
@@ -150,14 +131,12 @@
       "typeVersion": 4.2,
       "position": [940, 300],
       "credentials": {
-        "httpHeaderAuth": {
-          "name": "Lexora Agent (bearer)"
-        }
+        "httpHeaderAuth": { "name": "Lexora Agent (bearer)" }
       }
     },
     {
       "parameters": {
-        "jsCode": "// Construit un brief structuré pour Claude à partir des 3 appels précédents.\n// L'objectif : un payload concis (<8 KB) qui décrit avant/après + le détail\n// du rapprochement, prêt à être envoyé à Claude pour produire un rapport FR.\n\nconst params = $('Paramètres OCC').first().json;\nconst pre = $('Audit (pré-rapprochement)').first().json;\nconst rap = $('Rapprocher (intelligent)').first().json;\nconst post = $('Audit (post-rapprochement)').first().json;\n\nfunction trimAudit(a) {\n  if (!a) return null;\n  return {\n    societe: a.societe,\n    comptes_bancaires: (a.comptes_bancaires || []).map(c => ({\n      banque: c.banque,\n      numero_compte: c.numero_compte,\n      devise: c.devise,\n      compte_comptable: c.compte_comptable,\n      solde_actuel: c.solde_actuel,\n      solde_dernier_releve: c.solde_dernier_releve,\n      date_dernier_releve: c.date_dernier_releve,\n    })),\n    releves: a.releves,\n    transactions: {\n      total: a.transactions?.total,\n      rapprochees: a.transactions?.rapprochees,\n      classifiees_seulement: a.transactions?.classifiees_seulement,\n      orphelines: a.transactions?.orphelines,\n      taux_rapprochement_pct: a.transactions?.taux_rapprochement_pct,\n      // Garde un échantillon pour Claude\n      orphelines_echantillon: (a.transactions?.orphelines_echantillon || []).slice(0, 15),\n    },\n    factures: {\n      total: a.factures?.total,\n      par_statut: a.factures?.par_statut,\n      impayees: a.factures?.impayees,\n      impayees_montant_mur: a.factures?.impayees_montant_mur,\n      impayees_echantillon: (a.factures?.impayees_echantillon || []).slice(0, 15),\n    },\n    plan_comptable_top: (a.plan_comptable_utilisation || []).slice(0, 10),\n  };\n}\n\nconst diff = {\n  taux_rapprochement_pre_pct: pre?.transactions?.taux_rapprochement_pct ?? null,\n  taux_rapprochement_post_pct: post?.transactions?.taux_rapprochement_pct ?? null,\n  delta_rapprochees: (post?.transactions?.rapprochees ?? 0) - (pre?.transactions?.rapprochees ?? 0),\n  delta_orphelines: (post?.transactions?.orphelines ?? 0) - (pre?.transactions?.orphelines ?? 0),\n};\n\nconst brief = {\n  societe: { id: params.societe_id, nom: params.societe_nom },\n  generated_at: new Date().toISOString(),\n  pre: trimAudit(pre),\n  post: trimAudit(post),\n  diff,\n  rapprochement: {\n    stats: rap?.stats,\n    period: rap?.period,\n    fx_rates_used: rap?.fx_rates_used,\n    writes: rap?.writes,\n    matches: (rap?.matches || []).slice(0, 30).map(m => ({\n      tx: m.transactionKey,\n      libelle: m.transaction?.libelle,\n      debit: m.transaction?.debit,\n      credit: m.transaction?.credit,\n      devise: m.transaction?.devise,\n      strategy: m.strategy,\n      confidence: m.confidence,\n      reasoning: m.reasoning,\n      facture_ids: m.factureIds,\n      amount_diff: m.amountDiff,\n    })),\n    classifications: (rap?.classifications || []).slice(0, 30),\n  },\n};\n\nreturn { json: brief };"
+        "jsCode": "// Construit le brief structuré + le payload Anthropic complet, prêt à être envoyé.\n\nconst params = $('Paramètres OCC').first().json;\nconst pre = $('Audit (pré-rapprochement)').first().json;\nconst rap = $('Rapprocher (intelligent)').first().json;\nconst post = $('Audit (post-rapprochement)').first().json;\n\nfunction trimAudit(a) {\n  if (!a) return null;\n  return {\n    societe: a.societe,\n    comptes_bancaires: (a.comptes_bancaires || []).map(c => ({\n      banque: c.banque,\n      numero_compte: c.numero_compte,\n      devise: c.devise,\n      compte_comptable: c.compte_comptable,\n      solde_actuel: c.solde_actuel,\n      solde_dernier_releve: c.solde_dernier_releve,\n      date_dernier_releve: c.date_dernier_releve,\n    })),\n    releves: a.releves,\n    transactions: {\n      total: a.transactions?.total,\n      rapprochees: a.transactions?.rapprochees,\n      classifiees_seulement: a.transactions?.classifiees_seulement,\n      orphelines: a.transactions?.orphelines,\n      taux_rapprochement_pct: a.transactions?.taux_rapprochement_pct,\n      orphelines_echantillon: (a.transactions?.orphelines_echantillon || []).slice(0, 15),\n    },\n    factures: {\n      total: a.factures?.total,\n      par_statut: a.factures?.par_statut,\n      impayees: a.factures?.impayees,\n      impayees_montant_mur: a.factures?.impayees_montant_mur,\n      impayees_echantillon: (a.factures?.impayees_echantillon || []).slice(0, 15),\n    },\n    plan_comptable_top: (a.plan_comptable_utilisation || []).slice(0, 10),\n  };\n}\n\nconst diff = {\n  taux_rapprochement_pre_pct: pre?.transactions?.taux_rapprochement_pct ?? null,\n  taux_rapprochement_post_pct: post?.transactions?.taux_rapprochement_pct ?? null,\n  delta_rapprochees: (post?.transactions?.rapprochees ?? 0) - (pre?.transactions?.rapprochees ?? 0),\n  delta_orphelines: (post?.transactions?.orphelines ?? 0) - (pre?.transactions?.orphelines ?? 0),\n};\n\nconst brief = {\n  societe: { id: params.societe_id, nom: params.societe_nom },\n  generated_at: new Date().toISOString(),\n  pre: trimAudit(pre),\n  post: trimAudit(post),\n  diff,\n  rapprochement: {\n    stats: rap?.stats,\n    period: rap?.period,\n    fx_rates_used: rap?.fx_rates_used,\n    writes: rap?.writes,\n    matches: (rap?.matches || []).slice(0, 30).map(m => ({\n      tx: m.transactionKey,\n      libelle: m.transaction?.libelle,\n      debit: m.transaction?.debit,\n      credit: m.transaction?.credit,\n      devise: m.transaction?.devise,\n      strategy: m.strategy,\n      confidence: m.confidence,\n      reasoning: m.reasoning,\n      facture_ids: m.factureIds,\n      amount_diff: m.amountDiff,\n    })),\n    classifications: (rap?.classifications || []).slice(0, 30),\n  },\n};\n\nconst systemPrompt = [\n  \"Tu es un expert-comptable mauricien spécialisé en IFRS et plan comptable mauricien (PCM).\",\n  \"Tu reçois un brief JSON décrivant un cycle de rapprochement bancaire qui vient d'être exécuté pour une société.\",\n  \"Produis un RAPPORT en français, structuré et exploitable, à destination du comptable en charge.\",\n  \"\",\n  \"Format strict (markdown) :\",\n  \"\",\n  \"# Rapport de rapprochement — <nom société>\",\n  \"\",\n  \"## 1. Résumé exécutif\",\n  \"3 phrases max : santé du rapprochement, gain de cette exécution, prochaine action prioritaire.\",\n  \"\",\n  \"## 2. Comptes bancaires\",\n  \"Table : banque | n° | devise | compte PCM | dernier solde | date.\",\n  \"\",\n  \"## 3. Avant / après\",\n  \"Table comparative : tx totales / rapprochées / orphelines / taux %.\",\n  \"\",\n  \"## 4. Matches détectés\",\n  \"Pour chaque match (limite 10 plus pertinents) : libellé tx, montant + devise, stratégie, confiance, factures rapprochées, justification courte.\",\n  \"\",\n  \"## 5. Tx orphelines à examiner\",\n  \"Pour les 5 plus gros montants non rapprochés : libellé, montant, devise, hypothèses (frais bancaire ? virement interne ? acompte ?), proposition de classement PCM (compte 4-digits).\",\n  \"\",\n  \"## 6. Risques détectés\",\n  \"Écarts de change suspects, factures impayées de plus de 60 jours, comptes 411x/401x non lettrés inhabituels, anomalies de devise/montant.\",\n  \"\",\n  \"## 7. Actions recommandées\",\n  \"Liste numérotée et priorisée (5 max), chaque action concrète et actionnable dans la semaine.\",\n  \"\",\n  \"Ne JAMAIS inventer de chiffres : si une donnée manque, écris '— donnée non disponible'. Sois concis, factuel, professionnel. Pas d'emoji.\",\n].join('\\n');\n\nconst userText = 'Voici le brief JSON du cycle de rapprochement à analyser :\\n\\n```json\\n' + JSON.stringify(brief, null, 2) + '\\n```';\n\nconst anthropic_payload = {\n  model: 'claude-sonnet-4-6',\n  max_tokens: 4096,\n  system: systemPrompt,\n  messages: [\n    { role: 'user', content: userText }\n  ],\n};\n\nreturn { json: { brief, diff, anthropic_payload } };"
       },
       "id": "node-build-brief",
       "name": "Construire brief pour Claude",
@@ -174,22 +153,14 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
-            },
-            {
-              "name": "content-type",
-              "value": "application/json"
-            }
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 4096,\n  \"system\": \"Tu es un expert-comptable mauricien spécialisé en IFRS et plan comptable mauricien (PCM). Tu reçois un brief JSON décrivant un cycle de rapprochement bancaire qui vient d'être exécuté pour une société. Produis un RAPPORT en français, structuré et exploitable, à destination du comptable en charge.\\n\\nFormat strict (markdown) :\\n\\n# Rapport de rapprochement — {{ nom société }}\\n\\n## 1. Résumé exécutif\\n3 phrases max : santé du rapprochement, gain de cette exécution, prochaine action prioritaire.\\n\\n## 2. Comptes bancaires\\nTable : banque | n° | devise | compte PCM | dernier solde | date.\\n\\n## 3. Avant / après\\nTable comparative : tx totales / rapprochées / orphelines / taux %.\\n\\n## 4. Matches détectés (≥ confiance min)\\nPour chaque match (limite 10 plus pertinents) : libellé tx, montant + devise, stratégie, confiance, factures rapprochées, justification courte.\\n\\n## 5. Tx orphelines à examiner\\nPour les 5 plus gros montants non rapprochés : libellé, montant, devise, hypothèses (frais bancaire ? virement interne ? acompte ?), proposition de classement PCM (compte 4-digits).\\n\\n## 6. Risques détectés\\nÉcarts de change suspects, factures impayées de plus de 60 jours, comptes 411x/401x non lettrés inhabituels, anomalies de devise/montant.\\n\\n## 7. Actions recommandées\\nListe numérotée et priorisée (5 max), chaque action concrète et actionnable dans la semaine.\\n\\nNe JAMAIS inventer de chiffres : si une donnée manque, écris '— donnée non disponible'. Sois concis, factuel, professionnel. Pas d'emoji.\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [{ \"type\": \"text\", \"text\": {{ JSON.stringify('Voici le brief JSON du cycle de rapprochement à analyser :\\n\\n```json\\n' + JSON.stringify($json) + '\\n```') }} }]\n    }\n  ]\n}",
-        "options": {
-          "timeout": 120000
-        }
+        "jsonBody": "={{ JSON.stringify($json.anthropic_payload) }}",
+        "options": { "timeout": 120000 }
       },
       "id": "node-claude",
       "name": "Claude — Génère le rapport",
@@ -197,9 +168,7 @@
       "typeVersion": 4.2,
       "position": [1380, 300],
       "credentials": {
-        "httpHeaderAuth": {
-          "name": "Anthropic Lexora (x-api-key)"
-        }
+        "httpHeaderAuth": { "name": "Anthropic Lexora (x-api-key)" }
       }
     },
     {
@@ -209,13 +178,13 @@
             {
               "id": "out1",
               "name": "report_markdown",
-              "value": "={{ $json.content?.[0]?.text || $json.content || '— pas de réponse Claude —' }}",
+              "value": "={{ $json.content?.[0]?.text || '— pas de réponse Claude —' }}",
               "type": "string"
             },
             {
               "id": "out2",
               "name": "stats",
-              "value": "={{ $('Construire brief pour Claude').item.json.rapprochement.stats }}",
+              "value": "={{ $('Construire brief pour Claude').item.json.brief.rapprochement.stats }}",
               "type": "object"
             },
             {
@@ -227,7 +196,7 @@
             {
               "id": "out4",
               "name": "writes",
-              "value": "={{ $('Construire brief pour Claude').item.json.rapprochement.writes }}",
+              "value": "={{ $('Construire brief pour Claude').item.json.brief.rapprochement.writes }}",
               "type": "object"
             },
             {

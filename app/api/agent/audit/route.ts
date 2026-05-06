@@ -105,7 +105,8 @@ export async function POST(request: Request) {
     .order("date_ecriture", { ascending: false })
     .limit(500)
 
-  // Métriques tx (parcours du JSONB)
+  // Métriques tx (parcours du JSONB — la colonne nb_transactions est stale,
+  // on recompte toujours depuis le JSONB qui est la source de vérité).
   const allTx: AuditTx[] = []
   let txMatched = 0
   let txClassified = 0
@@ -116,11 +117,13 @@ export async function POST(request: Request) {
       const tx = arr[i]
       const fids: string[] = Array.isArray(tx.facture_ids) ? tx.facture_ids : []
       const cmp: string | null = tx.compte_comptable || null
+      const cls: string | null = tx.classification || null
       const isMatched = fids.length > 0
-      const isClassified = !!cmp && cmp !== ""
+      const isClassified = !isMatched && (!!cmp || !!cls)
+      const isOrphan = !isMatched && !isClassified
       if (isMatched) txMatched++
       else if (isClassified) txClassified++
-      else txOrphan++
+      if (isOrphan) txOrphan++
       allTx.push({
         releve_id: r.id,
         transaction_idx: i,
@@ -198,8 +201,10 @@ export async function POST(request: Request) {
       orphelines: txOrphan,
       taux_rapprochement_pct:
         allTx.length > 0 ? Math.round((txMatched / allTx.length) * 1000) / 10 : 0,
+      // Échantillon des plus gros montants orphelins, triés DESC (plus actionnable)
       orphelines_echantillon: allTx
-        .filter((t) => !t.facture_ids?.length && !t.statut)
+        .filter((t) => !t.facture_ids?.length)
+        .sort((a, b) => Math.max(b.debit, b.credit) - Math.max(a.debit, a.credit))
         .slice(0, 25),
     },
     factures: {
