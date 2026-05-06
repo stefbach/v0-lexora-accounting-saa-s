@@ -154,10 +154,10 @@ export async function runSemanticRapprochement(args: {
 }): Promise<SemanticResult> {
   const t0 = Date.now()
   const minConfidence = args.minConfidence ?? 0.7
-  // Capping serré pour rester sous le timeout Vercel (60s). Avec Haiku 4.5 +
-  // 30 tx + 50 factures, l'appel Claude prend ~10-15s, total endpoint < 30s.
-  const maxTx = args.maxTransactions ?? 30
-  const maxFact = args.maxFactures ?? 50
+  // Capping serré : Haiku 4.5 + 15 tx + 30 factures = appel Claude ~5-8s,
+  // total endpoint < 15s. Largement sous le timeout Vercel.
+  const maxTx = args.maxTransactions ?? 15
+  const maxFact = args.maxFactures ?? 30
 
   const empty: SemanticResult = {
     matches: [],
