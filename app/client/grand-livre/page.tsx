@@ -33,6 +33,13 @@ import {
   ChevronRight,
   TrendingUp,
   TrendingDown,
+  Wallet,
+  Building2,
+  Package,
+  Users,
+  Landmark,
+  ArrowDownCircle,
+  ArrowUpCircle,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -54,56 +61,20 @@ interface PCMEntry {
   sens_normal: "D" | "C" | null
 }
 
-const CLASSES = [
-  {
-    num: 1,
-    label: "Capitaux",
-    desc: "Capital, réserves, emprunts long terme",
-    color: "blue",
-    icon: "💰",
-  },
-  {
-    num: 2,
-    label: "Immobilisations",
-    desc: "Actifs corporels, incorporels, financiers",
-    color: "cyan",
-    icon: "🏢",
-  },
-  {
-    num: 3,
-    label: "Stocks",
-    desc: "Marchandises, matières premières, produits finis",
-    color: "teal",
-    icon: "📦",
-  },
-  {
-    num: 4,
-    label: "Tiers",
-    desc: "Clients, fournisseurs, État, personnel, associés",
-    color: "amber",
-    icon: "🤝",
-  },
-  {
-    num: 5,
-    label: "Trésorerie",
-    desc: "Banque, caisse, virements internes",
-    color: "purple",
-    icon: "🏦",
-  },
-  {
-    num: 6,
-    label: "Charges",
-    desc: "Achats, services extérieurs, salaires, impôts",
-    color: "rose",
-    icon: "📤",
-  },
-  {
-    num: 7,
-    label: "Produits",
-    desc: "Ventes, prestations, produits financiers",
-    color: "green",
-    icon: "📥",
-  },
+const CLASSES: Array<{
+  num: number
+  label: string
+  desc: string
+  color: string
+  Icon: any
+}> = [
+  { num: 1, label: "Capitaux", desc: "Capital, réserves, emprunts long terme", color: "blue", Icon: Wallet },
+  { num: 2, label: "Immobilisations", desc: "Actifs corporels, incorporels, financiers", color: "cyan", Icon: Building2 },
+  { num: 3, label: "Stocks", desc: "Marchandises, matières premières, produits finis", color: "teal", Icon: Package },
+  { num: 4, label: "Tiers", desc: "Clients, fournisseurs, État, personnel, associés", color: "amber", Icon: Users },
+  { num: 5, label: "Trésorerie", desc: "Banque, caisse, virements internes", color: "purple", Icon: Landmark },
+  { num: 6, label: "Charges", desc: "Achats, services extérieurs, salaires, impôts", color: "rose", Icon: ArrowDownCircle },
+  { num: 7, label: "Produits", desc: "Ventes, prestations, produits financiers", color: "green", Icon: ArrowUpCircle },
 ]
 
 const colorMap: Record<string, { bg: string; border: string; text: string; bgLight: string }> = {
@@ -126,6 +97,7 @@ export default function ClientGrandLivrePage() {
   const [pcm, setPcm] = useState<PCMEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [auditing, setAuditing] = useState(false)
+  const [lettering, setLettering] = useState(false)
   const [audit, setAudit] = useState<any>(null)
   const [openClasses, setOpenClasses] = useState<Set<number>>(new Set([4, 5, 6, 7]))
   const [search, setSearch] = useState("")
@@ -186,7 +158,7 @@ export default function ClientGrandLivrePage() {
       const res = await fetch("/api/agent/grand-livre", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: societeId }),
+        body: JSON.stringify({ societe_id: societeId, action: "audit" }),
       })
       const d = await res.json()
       if (!res.ok) {
@@ -199,6 +171,33 @@ export default function ClientGrandLivrePage() {
       showToast(e?.message || "Erreur", "error")
     } finally {
       setAuditing(false)
+    }
+  }
+
+  const handleLettrage = async () => {
+    if (!societeId) return
+    setLettering(true)
+    try {
+      const res = await fetch("/api/agent/grand-livre", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societeId, action: "lettrer" }),
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        showToast(d?.error || "Erreur lettrage", "error")
+        return
+      }
+      showToast(
+        `Lettrage : ${d.pairs_created} paire(s), ${d.ecritures_lettrees} écriture(s) lettrée(s)`
+      )
+      load()
+      // Re-audit pour refléter
+      handleAudit()
+    } catch (e: any) {
+      showToast(e?.message || "Erreur lettrage", "error")
+    } finally {
+      setLettering(false)
     }
   }
 
@@ -300,6 +299,21 @@ export default function ClientGrandLivrePage() {
                 </Button>
               </Link>
               <Button
+                onClick={handleLettrage}
+                disabled={lettering || !societeId}
+                variant="outline"
+                size="sm"
+                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                title="Apparie les écritures 411x/401x du même tiers et même montant"
+              >
+                {lettering ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                )}
+                Lettrer auto
+              </Button>
+              <Button
                 onClick={handleAudit}
                 disabled={auditing || !societeId}
                 className="bg-purple-600 hover:bg-purple-700 text-white shadow-md"
@@ -377,7 +391,9 @@ export default function ClientGrandLivrePage() {
                       className={`w-full ${cls.bg} hover:${cls.bgLight} transition-colors p-4 flex items-center justify-between gap-3 text-left`}
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="text-3xl">{cl.icon}</div>
+                        <div className={`rounded-lg ${cls.bgLight} p-2.5 ${cls.text}`}>
+                          <cl.Icon className="h-5 w-5" />
+                        </div>
                         <div className="min-w-0">
                           <h3 className={`font-bold ${cls.text}`}>
                             Classe {cl.num} — {cl.label}

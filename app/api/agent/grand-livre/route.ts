@@ -1,16 +1,19 @@
 /**
  * POST /api/agent/grand-livre
  *
- * "Lex Livre" — agent comptable qui audite le Grand Livre :
- * - R1 (balance) : débit total = crédit total par société
- * - Comptes hors PCM (codes inconnus du plan comptable mauricien)
- * - Écritures non lettrées vieilles (411x/401x > 90j)
- * - Compte 580 / 5811 (virements internes) non soldé
- * - Écritures sans ref_folio (legacy ou orphelines)
- * - Doublons potentiels (même date + montant + libellé)
+ * "Lex Livre" — agent comptable Grand Livre. Deux modes selon `action` :
+ *
+ * - action="audit" (default) : audite le Grand Livre — R1, comptes hors PCM,
+ *   tiers anciens non lettrés, compte 5811, doublons, écritures sans ref.
+ *
+ * - action="lettrer" : passe lettreur sur les comptes 411x/401x — pour
+ *   chaque compte, regroupe les écritures par tiers (libellé normalisé),
+ *   apparie débits et crédits qui s'équilibrent (montant ±0.01) et leur
+ *   assigne une même lettre. Insère les liens dans la colonne `lettre` +
+ *   `date_lettrage`. Idempotent (re-cours uniquement les non lettrées).
  *
  * Auth : bearer LEXORA_AGENT_SECRET OU session navigateur (avec accès société)
- * Body : { societe_id: string, exercice?: string }
+ * Body : { societe_id: string, action?: "audit" | "lettrer", exercice?: string }
  */
 import { NextResponse } from "next/server"
 import { authenticateAgentRequest } from "@/lib/agent-auth"
@@ -18,9 +21,31 @@ import { getAdminClient } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-export const maxDuration = 60
+export const maxDuration = 120
 
 const AGENT_NAME = "Lex Livre"
+
+function normalizeTiers(libelle: string | null): string {
+  if (!libelle) return ""
+  return libelle
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 5) // 5 premiers mots du libellé pour normalisation tiers
+    .join(" ")
+}
+
+function genLettreCode(): string {
+  // Lettre courte type AAA-NNN (3 lettres + 3 chiffres) — plus lisible que UUID
+  const a = String.fromCharCode(65 + Math.floor(Math.random() * 26))
+  const b = String.fromCharCode(65 + Math.floor(Math.random() * 26))
+  const c = String.fromCharCode(65 + Math.floor(Math.random() * 26))
+  const n = Math.floor(Math.random() * 1000).toString().padStart(3, "0")
+  return `${a}${b}${c}${n}`
+}
 
 export async function POST(request: Request) {
   let body: any
@@ -36,6 +61,148 @@ export async function POST(request: Request) {
   const auth = await authenticateAgentRequest(request, societe_id)
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
+  const action: "audit" | "lettrer" = body?.action === "lettrer" ? "lettrer" : "audit"
+
+  if (action === "lettrer") {
+    return handleLettrage(societe_id)
+  }
+  return handleAudit(societe_id, body)
+}
+
+// ── ACTION : LETTRAGE TIERS ──────────────────────────────────────────
+// Apparie débits et crédits sur les comptes 411x/401x quand le tiers
+// (libellé normalisé) est identique et que les montants s'équilibrent.
+async function handleLettrage(societe_id: string) {
+  const sb = getAdminClient()
+  const { data: ecritures, error } = await sb
+    .from("ecritures_comptables_v2")
+    .select("id, date_ecriture, numero_compte, libelle, debit_mur, credit_mur, lettre, ref_folio")
+    .eq("societe_id", societe_id)
+    .is("lettre", null)
+    .or("numero_compte.like.411%,numero_compte.like.401%")
+    .limit(5000)
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Group par (compte, tiers normalisé)
+  type Ecr = {
+    id: string
+    date: string
+    compte: string
+    libelle: string
+    debit: number
+    credit: number
+  }
+  const groups = new Map<string, Ecr[]>()
+  for (const e of ecritures || []) {
+    const compte = e.numero_compte || ""
+    const tiers = normalizeTiers(e.libelle || "")
+    if (!tiers) continue // sans tiers identifiable, on ne lettre pas
+    const key = `${compte}|${tiers}`
+    const arr = groups.get(key) || []
+    arr.push({
+      id: e.id,
+      date: e.date_ecriture || "",
+      compte,
+      libelle: e.libelle || "",
+      debit: Number(e.debit_mur) || 0,
+      credit: Number(e.credit_mur) || 0,
+    })
+    groups.set(key, arr)
+  }
+
+  // Pour chaque groupe, tente d'apparier les débits avec les crédits qui
+  // s'annulent (sum debits ≈ sum credits ±0.01). On commence par les paires
+  // exactes (1 débit = 1 crédit même montant), puis on tente le multi.
+  type Pairing = { lettre: string; ecriture_ids: string[]; total_debit: number; total_credit: number }
+  const newPairings: Pairing[] = []
+
+  for (const [key, arr] of groups) {
+    if (arr.length < 2) continue
+    const debits = arr.filter((e) => e.debit > 0)
+    const credits = arr.filter((e) => e.credit > 0)
+    if (debits.length === 0 || credits.length === 0) continue
+
+    const usedIds = new Set<string>()
+
+    // Étape 1 : paires exactes (1 débit = 1 crédit même montant)
+    for (const d of debits) {
+      if (usedIds.has(d.id)) continue
+      const match = credits.find((c) => !usedIds.has(c.id) && Math.abs(c.credit - d.debit) < 0.01)
+      if (match) {
+        const lettre = genLettreCode()
+        usedIds.add(d.id)
+        usedIds.add(match.id)
+        newPairings.push({
+          lettre,
+          ecriture_ids: [d.id, match.id],
+          total_debit: d.debit,
+          total_credit: match.credit,
+        })
+      }
+    }
+
+    // Étape 2 : 1 débit groupé = N crédits (acomptes) — somme des crédits
+    // disponibles ≈ débit
+    for (const d of debits) {
+      if (usedIds.has(d.id)) continue
+      const available = credits.filter((c) => !usedIds.has(c.id))
+      if (available.length < 2) continue
+      // Greedy : trier par montant desc et accumuler jusqu'à atteindre d.debit
+      const sorted = [...available].sort((a, b) => b.credit - a.credit)
+      const combo: Ecr[] = []
+      let sum = 0
+      for (const c of sorted) {
+        if (sum + c.credit > d.debit + 0.01) continue
+        combo.push(c)
+        sum += c.credit
+        if (Math.abs(sum - d.debit) < 0.01) break
+      }
+      if (combo.length >= 2 && Math.abs(sum - d.debit) < 0.01) {
+        const lettre = genLettreCode()
+        usedIds.add(d.id)
+        for (const c of combo) usedIds.add(c.id)
+        newPairings.push({
+          lettre,
+          ecriture_ids: [d.id, ...combo.map((c) => c.id)],
+          total_debit: d.debit,
+          total_credit: sum,
+        })
+      }
+    }
+  }
+
+  // Persist : update lettre + date_lettrage en batch
+  let updated = 0
+  const errors: string[] = []
+  const now = new Date().toISOString()
+  for (const p of newPairings) {
+    const { error: upErr } = await sb
+      .from("ecritures_comptables_v2")
+      .update({ lettre: p.lettre, date_lettrage: now })
+      .in("id", p.ecriture_ids)
+    if (upErr) {
+      errors.push(`lettre ${p.lettre} : ${upErr.message}`)
+    } else {
+      updated += p.ecriture_ids.length
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    agent: AGENT_NAME,
+    action: "lettrer",
+    societe_id,
+    pairs_created: newPairings.length,
+    ecritures_lettrees: updated,
+    errors: errors.slice(0, 10),
+    sample: newPairings.slice(0, 10),
+  })
+}
+
+// ── ACTION : AUDIT ───────────────────────────────────────────────────
+async function handleAudit(societe_id: string, body: any) {
   const exercice: string | null = body?.exercice || null
   const sb = getAdminClient()
 

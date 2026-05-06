@@ -26,6 +26,13 @@ import {
   ChevronDown,
   ChevronRight,
   Layers,
+  Wallet,
+  Building2,
+  Package,
+  Users,
+  Landmark,
+  ArrowDownCircle,
+  ArrowUpCircle,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -45,14 +52,14 @@ interface ComptePCM {
   societe_id: string | null
 }
 
-const CLASSES = [
-  { num: 1, label: "Capitaux", desc: "Capital, réserves, emprunts long terme", color: "blue", icon: "💰" },
-  { num: 2, label: "Immobilisations", desc: "Actifs corporels, incorporels, financiers", color: "cyan", icon: "🏢" },
-  { num: 3, label: "Stocks", desc: "Marchandises, matières premières, produits finis", color: "teal", icon: "📦" },
-  { num: 4, label: "Tiers", desc: "Clients, fournisseurs, État, personnel, associés", color: "amber", icon: "🤝" },
-  { num: 5, label: "Trésorerie", desc: "Banque, caisse, virements internes", color: "purple", icon: "🏦" },
-  { num: 6, label: "Charges", desc: "Achats, services extérieurs, salaires, impôts", color: "rose", icon: "📤" },
-  { num: 7, label: "Produits", desc: "Ventes, prestations, produits financiers", color: "green", icon: "📥" },
+const CLASSES: Array<{ num: number; label: string; desc: string; color: string; Icon: any }> = [
+  { num: 1, label: "Capitaux", desc: "Capital, réserves, emprunts long terme", color: "blue", Icon: Wallet },
+  { num: 2, label: "Immobilisations", desc: "Actifs corporels, incorporels, financiers", color: "cyan", Icon: Building2 },
+  { num: 3, label: "Stocks", desc: "Marchandises, matières premières, produits finis", color: "teal", Icon: Package },
+  { num: 4, label: "Tiers", desc: "Clients, fournisseurs, État, personnel, associés", color: "amber", Icon: Users },
+  { num: 5, label: "Trésorerie", desc: "Banque, caisse, virements internes", color: "purple", Icon: Landmark },
+  { num: 6, label: "Charges", desc: "Achats, services extérieurs, salaires, impôts", color: "rose", Icon: ArrowDownCircle },
+  { num: 7, label: "Produits", desc: "Ventes, prestations, produits financiers", color: "green", Icon: ArrowUpCircle },
 ]
 const colorMap: Record<string, { bg: string; border: string; text: string; bgLight: string }> = {
   blue: { bg: "bg-blue-50", border: "border-blue-300", text: "text-blue-900", bgLight: "bg-blue-100" },
@@ -213,7 +220,9 @@ export default function PlanComptablePage() {
                       className={`w-full ${cls.bg} hover:${cls.bgLight} transition-colors p-4 flex items-center justify-between gap-3 text-left`}
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="text-3xl">{cl.icon}</div>
+                        <div className={`rounded-lg ${cls.bgLight} p-2.5 ${cls.text}`}>
+                          <cl.Icon className="h-5 w-5" />
+                        </div>
                         <div className="min-w-0">
                           <h3 className={`font-bold ${cls.text}`}>
                             Classe {cl.num} — {cl.label}
