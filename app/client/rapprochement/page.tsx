@@ -16,6 +16,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -324,58 +325,135 @@ export default function ClientRapprochementPage() {
     setFiltreTiers("all")
   }
 
+  // Catégorise une suggestion en mode "comptable" plutôt que par source algo/IA :
+  //   - encaissements_client : match avec une facture client (entrée banque)
+  //   - paiements_fournisseur : match avec une facture fournisseur (sortie)
+  //   - frais_bancaires       : classification frais bancaires/agios/intérêts
+  //   - salaires              : classification salaire bulk ou individuel
+  //   - mra                   : paiement MRA / charges sociales
+  //   - virements_internes    : virement interne / transfert interne
+  //   - autres                : tout le reste (typiquement matches IA cross)
+  function classifyBucket(
+    t: BankTx
+  ):
+    | "encaissements_client"
+    | "paiements_fournisseur"
+    | "frais_bancaires"
+    | "salaires"
+    | "mra"
+    | "virements_internes"
+    | "autres" {
+    const cls = (t.classification || t.classification_suggestion?.type || "").toLowerCase()
+    if (cls === "frais_bancaires" || cls === "interets" || cls === "agios") return "frais_bancaires"
+    if (cls === "salaire_bulk" || cls === "salaire_individuel" || cls === "reversal_salaire") return "salaires"
+    if (cls === "paiement_mra" || cls === "charges_sociales") return "mra"
+    if (cls === "virement_interne" || cls === "transfert_interne") return "virements_internes"
+    const fids =
+      Array.isArray(t.facture_ids) && t.facture_ids.length > 0
+        ? t.facture_ids
+        : t.facture_id
+          ? [t.facture_id]
+          : []
+    if (fids.length > 0) {
+      const linked = fids.map((id) => factures.find((f) => f.id === id)).filter(Boolean) as Facture[]
+      if (linked.some((f) => f.type_facture === "client")) return "encaissements_client"
+      if (linked.some((f) => f.type_facture === "fournisseur")) return "paiements_fournisseur"
+      // Fallback sur le sens du montant
+      if (t.credit > 0) return "encaissements_client"
+      if (t.debit > 0) return "paiements_fournisseur"
+    }
+    return "autres"
+  }
+
   const groups = useMemo(() => {
     type Grp = {
       key: string
       title: string
       desc: string
+      icon: string
+      color: string
       items: BankTx[]
-      type: "match" | "classification"
-      isAi: boolean
+    }
+    const all = [...proposes, ...aVerifier]
+    const buckets = {
+      encaissements_client: [] as BankTx[],
+      paiements_fournisseur: [] as BankTx[],
+      frais_bancaires: [] as BankTx[],
+      salaires: [] as BankTx[],
+      mra: [] as BankTx[],
+      virements_internes: [] as BankTx[],
+      autres: [] as BankTx[],
+    }
+    for (const t of all) {
+      const b = classifyBucket(t)
+      buckets[b].push(t)
     }
     const g: Grp[] = []
-    const matchAlgo = proposes.filter((t) => t.suggestion_source !== "agent_ai")
-    const matchAi = proposes.filter((t) => t.suggestion_source === "agent_ai")
-    const classAlgo = aVerifier.filter((t) => t.suggestion_source !== "agent_ai")
-    const classAi = aVerifier.filter((t) => t.suggestion_source === "agent_ai")
-    if (matchAlgo.length)
+    if (buckets.encaissements_client.length)
       g.push({
-        key: "ma",
-        title: `Rapprochements algorithme (${matchAlgo.length})`,
-        desc: "Tx ↔ facture proposés par le moteur de matching pur. Confiance élevée.",
-        items: matchAlgo,
-        type: "match",
-        isAi: false,
+        key: "encaissements_client",
+        title: `Encaissements clients`,
+        desc: "Paiements reçus de tes clients à rapprocher avec leurs factures.",
+        icon: "📥",
+        color: "border-green-300 bg-green-50",
+        items: buckets.encaissements_client,
       })
-    if (matchAi.length)
+    if (buckets.paiements_fournisseur.length)
       g.push({
-        key: "mai",
-        title: `Rapprochements IA Claude (${matchAi.length})`,
-        desc: "Cas ambigus rattrapés par l'IA. À vérifier au cas par cas.",
-        items: matchAi,
-        type: "match",
-        isAi: true,
+        key: "paiements_fournisseur",
+        title: `Paiements fournisseurs`,
+        desc: "Sorties bancaires à rapprocher avec les factures fournisseurs.",
+        icon: "📤",
+        color: "border-rose-300 bg-rose-50",
+        items: buckets.paiements_fournisseur,
       })
-    if (classAlgo.length)
+    if (buckets.mra.length)
       g.push({
-        key: "ca",
-        title: `Classifications algorithme (${classAlgo.length})`,
-        desc: "Frais bancaires, salaires, MRA, virements internes. Compte PCM pré-rempli.",
-        items: classAlgo,
-        type: "classification",
-        isAi: false,
+        key: "mra",
+        title: `MRA & charges sociales`,
+        desc: "Paiements PAYE, NSF, CSG, NPF — à imputer sur les comptes 433x/444x.",
+        icon: "🏛️",
+        color: "border-red-300 bg-red-50",
+        items: buckets.mra,
       })
-    if (classAi.length)
+    if (buckets.frais_bancaires.length)
       g.push({
-        key: "cai",
-        title: `Classifications IA Claude (${classAi.length})`,
-        desc: "Cas atypiques classés par l'IA. Vérifier le compte PCM.",
-        items: classAi,
-        type: "classification",
-        isAi: true,
+        key: "frais_bancaires",
+        title: `Frais bancaires`,
+        desc: "Commissions, agios, intérêts, frais de tenue de compte (PCM 6270/6611).",
+        icon: "💳",
+        color: "border-orange-300 bg-orange-50",
+        items: buckets.frais_bancaires,
+      })
+    if (buckets.salaires.length)
+      g.push({
+        key: "salaires",
+        title: `Salaires`,
+        desc: "Bulk Payment SALARY ou virements salaire individuels (PCM 4210).",
+        icon: "💸",
+        color: "border-purple-300 bg-purple-50",
+        items: buckets.salaires,
+      })
+    if (buckets.virements_internes.length)
+      g.push({
+        key: "virements_internes",
+        title: `Virements internes`,
+        desc: "Mouvements entre tes propres comptes (PCM 5811).",
+        icon: "🔄",
+        color: "border-blue-300 bg-blue-50",
+        items: buckets.virements_internes,
+      })
+    if (buckets.autres.length)
+      g.push({
+        key: "autres",
+        title: `Autres`,
+        desc: "Cas particuliers — vérifier au cas par cas.",
+        icon: "❓",
+        color: "border-slate-300 bg-slate-50",
+        items: buckets.autres,
       })
     return g
-  }, [proposes, aVerifier])
+  }, [proposes, aVerifier, factures])
 
   // Lettrage automatique sans IA — appelle la pipeline native
   // /api/comptable/rapprochement?action=auto_rapprocher (matching algo pur).
@@ -872,23 +950,26 @@ export default function ClientRapprochementPage() {
                       const selectedCount = g.items.filter((t) => selectedTxIds.has(t.id)).length
                       const allChecked =
                         selectedCount === g.items.length && g.items.length > 0
+                      // Total montant du groupe (en devise principale, agrégé en valeur absolue)
+                      const totalGroupAmount = g.items.reduce(
+                        (s, t) => s + Math.max(t.debit || 0, t.credit || 0),
+                        0
+                      )
                       return (
-                        <div key={g.key} className="rounded border bg-card">
-                          <div className="flex items-center justify-between gap-2 p-3 border-b bg-muted/30 flex-wrap">
+                        <div key={g.key} className={`rounded border-2 ${g.color}`}>
+                          <div className="flex items-center justify-between gap-2 p-3 border-b bg-white/60 flex-wrap">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
                               <Checkbox
                                 checked={allChecked}
                                 onCheckedChange={() => toggleAllInGroup(g.items)}
                               />
+                              <div className="text-2xl">{g.icon}</div>
                               <div className="min-w-0">
-                                <h3 className="font-medium text-sm flex items-center gap-2">
+                                <h3 className="font-semibold text-sm flex items-center gap-2">
                                   {g.title}
-                                  {g.isAi && (
-                                    <Badge className="bg-purple-100 text-purple-700 text-[10px] border border-purple-300">
-                                      <Bot className="h-3 w-3 mr-0.5" />
-                                      IA
-                                    </Badge>
-                                  )}
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {g.items.length} tx · {fmt(totalGroupAmount)}
+                                  </Badge>
                                 </h3>
                                 <p className="text-[11px] text-muted-foreground">{g.desc}</p>
                               </div>
@@ -925,12 +1006,12 @@ export default function ClientRapprochementPage() {
                               )}
                             </div>
                           </div>
-                          <div>
+                          <div className="bg-white">
                             {g.items.map((tx) => (
                               <SuggestionRow
                                 key={tx.id}
                                 tx={tx}
-                                type={g.type}
+                                type={tx.facture_id || (Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0) ? "match" : "classification"}
                                 checked={selectedTxIds.has(tx.id)}
                                 onToggle={() => toggleTx(tx.id)}
                                 onValidate={() => handleValidateOne(tx)}
@@ -1078,6 +1159,7 @@ function SuggestionRow({
   onReject: () => void
   facturesById: Map<string, Facture>
 }) {
+  const [expanded, setExpanded] = useState(false)
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
   const fids =
     Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0
@@ -1086,96 +1168,288 @@ function SuggestionRow({
         ? [tx.facture_id]
         : []
   const factures = fids.map((id) => facturesById.get(id)).filter(Boolean) as Facture[]
+  // Calcul écart match (en MUR équivalent si fournis, sinon devise origine)
+  const factureTotal = factures.reduce(
+    (s, f) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0),
+    0
+  )
+  const txMontantMur = (tx as any).debit_mur ?? (tx as any).credit_mur ?? Math.abs(montant)
+  const ecart = Math.abs(Math.abs(txMontantMur) - factureTotal)
+  const ecartPct = factureTotal > 0 ? (ecart / factureTotal) * 100 : 0
+
   return (
-    <div className="flex items-start gap-3 p-3 border-b last:border-b-0 hover:bg-muted/20">
-      <Checkbox checked={checked} onCheckedChange={onToggle} className="mt-1" />
-      <div className="flex-1 min-w-0 space-y-1.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
-            <p className="font-medium text-sm break-words">{tx.libelle}</p>
+    <div className="border-b last:border-b-0">
+      <div className="flex items-start gap-3 p-3 hover:bg-muted/20">
+        <Checkbox checked={checked} onCheckedChange={onToggle} className="mt-1" />
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex-1 min-w-0 space-y-1.5 text-left cursor-pointer"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
+              <p className="font-medium text-sm break-words">{tx.libelle}</p>
+            </div>
+            <p
+              className={`font-mono text-sm flex-shrink-0 ${
+                montant >= 0 ? "text-green-700" : "text-rose-700"
+              }`}
+            >
+              {montant >= 0 ? "+" : ""}
+              {fmt(montant)} {tx.devise || "MUR"}
+            </p>
           </div>
-          <p
-            className={`font-mono text-sm flex-shrink-0 ${
-              montant >= 0 ? "text-green-700" : "text-rose-700"
-            }`}
-          >
-            {montant >= 0 ? "+" : ""}
-            {fmt(montant)} {tx.devise || "MUR"}
-          </p>
-        </div>
-        {type === "match" ? (
-          <p className="text-xs">
-            <span className="text-muted-foreground">→ </span>
-            {factures.length > 0 ? (
-              factures.map((f, i) => (
-                <span key={f.id}>
-                  Facture <span className="font-mono">{f.numero_facture || f.id.slice(0, 8)}</span>
-                  {f.tiers && (
-                    <span className="text-muted-foreground"> · {f.tiers.slice(0, 50)}</span>
-                  )}
-                  <span className="text-muted-foreground">
-                    {" "}
-                    ({fmt(f.montant_ttc)} {f.devise || "MUR"})
+          {type === "match" ? (
+            <p className="text-xs">
+              <span className="text-muted-foreground">→ </span>
+              {factures.length > 0 ? (
+                factures.map((f, i) => (
+                  <span key={f.id}>
+                    Facture <span className="font-mono">{f.numero_facture || f.id.slice(0, 8)}</span>
+                    {f.tiers && (
+                      <span className="text-muted-foreground"> · {f.tiers.slice(0, 50)}</span>
+                    )}
+                    <span className="text-muted-foreground">
+                      {" "}
+                      ({fmt(f.montant_ttc)} {f.devise || "MUR"})
+                    </span>
+                    {i < factures.length - 1 ? (
+                      <span className="text-muted-foreground"> + </span>
+                    ) : null}
                   </span>
-                  {i < factures.length - 1 ? (
-                    <span className="text-muted-foreground"> + </span>
-                  ) : null}
-                </span>
-              ))
-            ) : (
-              <span className="italic text-muted-foreground">facture introuvable</span>
+                ))
+              ) : (
+                <span className="italic text-muted-foreground">facture introuvable</span>
+              )}
+            </p>
+          ) : (
+            <p className="text-xs">
+              <span className="text-muted-foreground">→ Compte PCM </span>
+              <Badge variant="outline" className="font-mono text-[10px]">
+                {tx.compte_comptable || "?"}
+              </Badge>
+              <span className="text-muted-foreground"> ({tx.classification})</span>
+            </p>
+          )}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <ConfidenceBadge confidence={tx.matched_confidence} />
+            <SourceBadge source={tx.suggestion_source} />
+            {tx.matched_strategy && (
+              <Badge variant="outline" className="text-[10px] font-mono">
+                {tx.matched_strategy}
+              </Badge>
             )}
-          </p>
-        ) : (
-          <p className="text-xs">
-            <span className="text-muted-foreground">→ Compte PCM </span>
-            <Badge variant="outline" className="font-mono text-[10px]">
-              {tx.compte_comptable || "?"}
-            </Badge>
-            <span className="text-muted-foreground"> ({tx.classification})</span>
-          </p>
-        )}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <ConfidenceBadge confidence={tx.matched_confidence} />
-          <SourceBadge source={tx.suggestion_source} />
-          {tx.matched_strategy && (
-            <Badge variant="outline" className="text-[10px] font-mono">
-              {tx.matched_strategy}
-            </Badge>
-          )}
-          {tx.tiers_detecte && (
-            <Badge variant="outline" className="text-[10px]">
-              {tx.tiers_detecte.slice(0, 30)}
-            </Badge>
-          )}
-          {tx.rapprochement_multi && (
-            <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-300">
-              {tx.nb_factures}× factures
-            </Badge>
-          )}
+            {tx.tiers_detecte && (
+              <Badge variant="outline" className="text-[10px]">
+                {tx.tiers_detecte.slice(0, 30)}
+              </Badge>
+            )}
+            {tx.rapprochement_multi && (
+              <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-300">
+                {tx.nb_factures}× factures
+              </Badge>
+            )}
+            {type === "match" && ecart > 0.01 && (
+              <Badge
+                className={`text-[10px] ${
+                  ecartPct > 5
+                    ? "bg-red-100 text-red-700 border-red-300"
+                    : "bg-amber-100 text-amber-700 border-amber-300"
+                }`}
+              >
+                écart {fmt(ecart)} ({ecartPct.toFixed(1)}%)
+              </Badge>
+            )}
+            <span className="ml-auto text-[10px] text-muted-foreground italic">
+              {expanded ? "▼ détail" : "▶ détail"}
+            </span>
+          </div>
+        </button>
+        <div className="flex flex-col gap-1.5 flex-shrink-0">
+          <Button
+            size="sm"
+            onClick={onValidate}
+            className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+            Valider
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onReject}
+            className="h-7 text-xs text-muted-foreground hover:text-rose-700 hover:bg-rose-50"
+          >
+            <XCircle className="h-3.5 w-3.5 mr-1" />
+            Rejeter
+          </Button>
         </div>
-        {tx.note && <p className="text-[11px] italic text-muted-foreground">{tx.note}</p>}
       </div>
-      <div className="flex flex-col gap-1.5 flex-shrink-0">
-        <Button
-          size="sm"
-          onClick={onValidate}
-          className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
-        >
-          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-          Valider
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onReject}
-          className="h-7 text-xs text-muted-foreground hover:text-rose-700 hover:bg-rose-50"
-        >
-          <XCircle className="h-3.5 w-3.5 mr-1" />
-          Rejeter
-        </Button>
-      </div>
+
+      {/* Panneau détail expandable */}
+      {expanded && (
+        <div className="px-4 pb-4 pt-1 bg-blue-50/30 text-xs space-y-2 border-t">
+          {/* Pièce bancaire */}
+          <div className="rounded border bg-white p-3">
+            <p className="font-medium text-blue-900 mb-1.5">📑 Écriture bancaire (raw)</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 font-mono">
+              <Detail label="Date" value={formatDate(tx.date)} />
+              <Detail label="Devise" value={tx.devise || "MUR"} />
+              <Detail
+                label="Débit"
+                value={tx.debit > 0 ? fmt(tx.debit) : "—"}
+                tone={tx.debit > 0 ? "rose" : undefined}
+              />
+              <Detail
+                label="Crédit"
+                value={tx.credit > 0 ? fmt(tx.credit) : "—"}
+                tone={tx.credit > 0 ? "green" : undefined}
+              />
+            </div>
+            <div className="mt-2 break-words">
+              <span className="text-muted-foreground">Libellé complet : </span>
+              <span className="font-mono">{tx.libelle}</span>
+            </div>
+            {tx.tiers_detecte && (
+              <p className="mt-1">
+                <span className="text-muted-foreground">Tiers détecté : </span>
+                <span className="font-medium">{tx.tiers_detecte}</span>
+              </p>
+            )}
+            {tx.note && (
+              <p className="mt-1 italic text-muted-foreground">Raisonnement : {tx.note}</p>
+            )}
+          </div>
+
+          {/* Pièce comptable */}
+          {type === "match" && factures.length > 0 && (
+            <div className="rounded border bg-white p-3">
+              <p className="font-medium text-emerald-900 mb-1.5">
+                📄 Facture{factures.length > 1 ? "s" : ""} liée{factures.length > 1 ? "s" : ""} ({factures.length})
+              </p>
+              <div className="space-y-1.5">
+                {factures.map((f) => (
+                  <div
+                    key={f.id}
+                    className="flex items-start justify-between gap-2 border-l-2 border-emerald-300 pl-2"
+                  >
+                    <div className="min-w-0">
+                      <p>
+                        <span className="font-mono font-medium">
+                          {f.numero_facture || f.id.slice(0, 8)}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={`ml-2 text-[10px] ${
+                            f.type_facture === "client"
+                              ? "bg-green-50 text-green-700 border-green-300"
+                              : "bg-rose-50 text-rose-700 border-rose-300"
+                          }`}
+                        >
+                          {f.type_facture === "client" ? "Client" : "Fournisseur"}
+                        </Badge>
+                      </p>
+                      {f.tiers && <p className="text-muted-foreground">{f.tiers}</p>}
+                      <p className="text-[11px] text-muted-foreground">
+                        {f.date_facture && `Émise ${formatDate(f.date_facture)}`}
+                        {f.date_echeance && ` · Échéance ${formatDate(f.date_echeance)}`}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="font-mono">
+                        {fmt(f.montant_ttc)} {f.devise || "MUR"}
+                      </p>
+                      {f.devise && f.devise !== "MUR" && f.montant_mur && (
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          ≈ {fmt(f.montant_mur)} MUR
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {ecart > 0.01 && (
+                  <p className="pt-1 border-t mt-1 text-[11px]">
+                    <span className="text-muted-foreground">Total factures : </span>
+                    <span className="font-mono font-medium">{fmt(factureTotal)} MUR</span>
+                    <span className="text-muted-foreground"> · Écart : </span>
+                    <span
+                      className={`font-mono font-medium ${
+                        ecartPct > 5 ? "text-red-700" : "text-amber-700"
+                      }`}
+                    >
+                      {fmt(ecart)} MUR ({ecartPct.toFixed(2)}%)
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Classification PCM */}
+          {type === "classification" && tx.compte_comptable && (
+            <div className="rounded border bg-white p-3">
+              <p className="font-medium text-purple-900 mb-1.5">📚 Classification proposée</p>
+              <p>
+                Compte PCM :{" "}
+                <Badge variant="outline" className="font-mono">
+                  {tx.compte_comptable}
+                </Badge>
+                {tx.classification && (
+                  <span className="ml-2 text-muted-foreground">
+                    catégorie : <span className="font-medium">{tx.classification}</span>
+                  </span>
+                )}
+              </p>
+              {tx.classification_suggestion?.note && (
+                <p className="mt-1 italic text-muted-foreground">
+                  {tx.classification_suggestion.note}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Lien vers les écritures */}
+          <div className="flex gap-2">
+            <Link
+              href={`/client/ecritures?search=${encodeURIComponent(tx.libelle.slice(0, 30))}`}
+              className="text-[11px] text-blue-700 hover:underline"
+            >
+              → Voir les écritures liées
+            </Link>
+            {factures[0] && (
+              <Link
+                href={`/client/factures?search=${encodeURIComponent(factures[0].numero_facture || factures[0].id.slice(0, 8))}`}
+                className="text-[11px] text-blue-700 hover:underline"
+              >
+                → Voir la facture
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Detail({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: string
+  tone?: "green" | "rose"
+}) {
+  const cls =
+    tone === "green"
+      ? "text-green-700 font-medium"
+      : tone === "rose"
+        ? "text-rose-700 font-medium"
+        : "text-foreground"
+  return (
+    <div>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className={cls}>{value}</p>
     </div>
   )
 }
