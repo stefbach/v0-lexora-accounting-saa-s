@@ -1,749 +1,972 @@
 "use client"
 
+/**
+ * Page Rapprochement bancaire — réécrite agent-first.
+ *
+ * Toute la logique est inline dans cette page (plus de panel externe).
+ * Pas de mode legacy : la page est dédiée à l'agent IA "Lex Banque".
+ *
+ * Workflow :
+ *   1. Sélectionne société + période (par défaut "Toutes")
+ *   2. Clique "Lancer Lex Banque" → /api/agent/rapprochement
+ *   3. Vois les suggestions dans l'onglet "À valider"
+ *   4. Coche + "Valider" → /api/comptable/rapprochement?action=lettrer_manuel
+ *      crée immédiatement l'écriture BNQ
+ */
+
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, History, BrainCircuit, RotateCcw, CalendarDays, ChevronDown, ChevronUp } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import {
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  HelpCircle,
+  Bot,
+  RefreshCw,
+  CalendarDays,
+} from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
-import { LexBanquePanel } from "@/components/comptable/lex-banque-panel"
 
-function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
-function formatDateTime(d: string) {
-  if (!d) return "—"
-  const dt = new Date(d)
-  return dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })
-    + " " + dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-}
+const AGENT_NAME = "Lex Banque"
 
 const MOIS = [
-  { val: "01", label: "Janvier" }, { val: "02", label: "Février" },
-  { val: "03", label: "Mars" }, { val: "04", label: "Avril" },
-  { val: "05", label: "Mai" }, { val: "06", label: "Juin" },
-  { val: "07", label: "Juillet" }, { val: "08", label: "Août" },
-  { val: "09", label: "Septembre" }, { val: "10", label: "Octobre" },
-  { val: "11", label: "Novembre" }, { val: "12", label: "Décembre" },
+  { val: "01", label: "Janvier" },
+  { val: "02", label: "Février" },
+  { val: "03", label: "Mars" },
+  { val: "04", label: "Avril" },
+  { val: "05", label: "Mai" },
+  { val: "06", label: "Juin" },
+  { val: "07", label: "Juillet" },
+  { val: "08", label: "Août" },
+  { val: "09", label: "Septembre" },
+  { val: "10", label: "Octobre" },
+  { val: "11", label: "Novembre" },
+  { val: "12", label: "Décembre" },
 ]
+const ANNEES = ["2024", "2025", "2026", "2027"]
 
-const currentYear = new Date().getFullYear()
-const ANNEES = Array.from({ length: 4 }, (_, i) => String(currentYear - 2 + i))
+function fmt(n: number): string {
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+function formatDate(d: string): string {
+  if (!d) return "—"
+  return new Date(d).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
 
-interface Societe { id: string; nom: string }
+interface Societe {
+  id: string
+  nom: string
+}
+
+interface BankTx {
+  id: string
+  releve_id: string
+  date: string
+  libelle: string
+  debit: number
+  credit: number
+  devise?: string
+  banque?: string
+  statut?: string
+  facture_id?: string | null
+  facture_ids?: string[]
+  matched_type?: string | null
+  matched_strategy?: string | null
+  matched_confidence?: number | null
+  match_confidence?: string | null
+  classification?: string | null
+  classification_suggestion?: any
+  compte_comptable?: string | null
+  tiers_detecte?: string | null
+  suggestion_source?: string | null
+  note?: string | null
+  rapprochement_multi?: boolean
+  nb_factures?: number
+  lettre?: string | null
+}
+
+interface Facture {
+  id: string
+  numero_facture: string | null
+  tiers: string | null
+  montant_ttc: number
+  montant_mur: number | null
+  devise: string | null
+  type_facture: string | null
+  statut: string | null
+  date_facture: string | null
+  date_echeance: string | null
+}
 
 export default function RapprochementPage() {
+  // ── État principal ─────────────────────────────────────────────────
   const [societes, setSocietes] = useState<Societe[]>([])
   const [selectedSociete, setSelectedSociete] = useState("all")
-
-  // ── Période mois par mois ──────────────────────────────────────
+  const [modeToutes, setModeToutes] = useState(true) // ⚡ par défaut = TOUTES périodes
   const nowMois = String(new Date().getMonth() + 1).padStart(2, "0")
-  const nowAnnee = String(currentYear)
   const [selectedMois, setSelectedMois] = useState(nowMois)
-  const [selectedAnnee, setSelectedAnnee] = useState(nowAnnee)
-
-  // "all" = toutes périodes (pas de filtre date), sinon mois sélectionné
-  const [modeToutes, setModeToutes] = useState(false)
-
-  const periodeDebut = modeToutes ? null : `${selectedAnnee}-${selectedMois}-01`
-  const periodeFin = modeToutes ? null : (() => {
-    const lastDay = new Date(Number(selectedAnnee), Number(selectedMois), 0).getDate()
-    return `${selectedAnnee}-${selectedMois}-${String(lastDay).padStart(2, "0")}`
-  })()
-  const periodeLabel = modeToutes ? "Toutes périodes" : `${MOIS.find(m => m.val === selectedMois)?.label} ${selectedAnnee}`
+  const [selectedAnnee, setSelectedAnnee] = useState(String(new Date().getFullYear()))
 
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [autoMatching, setAutoMatching] = useState(false)
-  const [applyingPatterns, setApplyingPatterns] = useState(false)
-  const [linkDialog, setLinkDialog] = useState<any>(null)
-  const [auditDialog, setAuditDialog] = useState(false)
-  const [auditEntries, setAuditEntries] = useState<any[]>([])
-  const [auditLoading, setAuditLoading] = useState(false)
-  const [resetDialog, setResetDialog] = useState(false)
-  const [resetting, setResetting] = useState(false)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [runningAgent, setRunningAgent] = useState(false)
+  const [validating, setValidating] = useState(false)
+  const [activeTab, setActiveTab] = useState("a-valider")
+  const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set())
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
-  // Multi-facture selection state (resets when dialog closes)
-  const [selectedFactureIds, setSelectedFactureIds] = useState<Set<string>>(new Set())
-  const [selectedEcritureId, setSelectedEcritureId] = useState<string | null>(null)
+  const periodeDebut = modeToutes ? null : `${selectedAnnee}-${selectedMois}-01`
+  const periodeFin = modeToutes
+    ? null
+    : (() => {
+        const last = new Date(Number(selectedAnnee), Number(selectedMois), 0).getDate()
+        return `${selectedAnnee}-${selectedMois}-${String(last).padStart(2, "0")}`
+      })()
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 4000)
-  }
-
-  useEffect(() => {
-    fetch("/api/comptable/societes").then(r => r.json()).then(d => {
-      const s = d.societes || []
-      setSocietes(s)
-      if (s.length === 1) setSelectedSociete(s[0].id)
-    })
   }, [])
 
-  // Charge les transactions — filtrées par période ou toutes si modeToutes
+  // ── Chargement société ────────────────────────────────────────────
+  useEffect(() => {
+    fetch("/api/comptable/societes")
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Societe[] = d.societes || []
+        setSocietes(list)
+        if (list.length === 1) setSelectedSociete(list[0].id)
+      })
+      .catch(() => {})
+  }, [])
+
+  // ── Chargement données rapprochement ──────────────────────────────
   const load = useCallback(async () => {
-    if (selectedSociete === "all") { setData(null); return }
+    if (selectedSociete === "all") {
+      setData(null)
+      return
+    }
     setLoading(true)
     try {
       const params = new URLSearchParams({ societe_id: selectedSociete })
       if (periodeDebut) params.set("date_debut", periodeDebut)
-      if (periodeFin)   params.set("date_fin",   periodeFin)
+      if (periodeFin) params.set("date_fin", periodeFin)
       const res = await fetch(`/api/comptable/rapprochement?${params}`)
-      setData(await res.json())
-    } catch { setData(null) }
-    finally { setLoading(false) }
-  }, [selectedSociete, periodeDebut, periodeFin])
-
-  useEffect(() => { load() }, [load])
-
-  // Reset selection when dialog opens on a new transaction
+      const d = await res.json()
+      setData(d)
+    } catch (e) {
+      showToast("Erreur chargement", "error")
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedSociete, periodeDebut, periodeFin, showToast])
   useEffect(() => {
-    setSelectedFactureIds(new Set())
-    setSelectedEcritureId(null)
-  }, [linkDialog?.id])
+    load()
+  }, [load])
 
-  const handleAutoMatch = async () => {
-    if (!selectedSociete || selectedSociete === "all") return
-    setAutoMatching(true)
+  // ── Reset selection on data change ─────────────────────────────────
+  useEffect(() => {
+    setSelectedTxIds(new Set())
+  }, [data])
+
+  const transactions: BankTx[] = useMemo(() => data?.bankTransactions || [], [data])
+  const factures: Facture[] = useMemo(() => data?.factures || [], [data])
+  const facturesById = useMemo(() => {
+    const m = new Map<string, Facture>()
+    for (const f of factures) m.set(f.id, f)
+    return m
+  }, [factures])
+
+  // ── Buckets par statut ────────────────────────────────────────────
+  const proposes = useMemo(
+    () => transactions.filter((t) => t.statut === "propose"),
+    [transactions]
+  )
+  const aVerifier = useMemo(
+    () => transactions.filter((t) => t.statut === "a_verifier"),
+    [transactions]
+  )
+  const rapprochees = useMemo(
+    () =>
+      transactions.filter(
+        (t) =>
+          t.statut === "rapproche" ||
+          (!t.statut &&
+            (t.facture_id || (Array.isArray(t.facture_ids) && t.facture_ids.length > 0)))
+      ),
+    [transactions]
+  )
+  const orphelines = useMemo(
+    () =>
+      transactions.filter(
+        (t) =>
+          (t.statut === "non_identifie" || !t.statut) &&
+          !t.facture_id &&
+          !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0) &&
+          !t.compte_comptable
+      ),
+    [transactions]
+  )
+  const totalSuggestions = proposes.length + aVerifier.length
+
+  // ── Groupes pour le tab "À valider" ───────────────────────────────
+  const groups = useMemo(() => {
+    type Grp = {
+      key: string
+      title: string
+      desc: string
+      items: BankTx[]
+      type: "match" | "classification"
+      isAi: boolean
+    }
+    const g: Grp[] = []
+    const matchAlgo = proposes.filter((t) => t.suggestion_source !== "agent_ai")
+    const matchAi = proposes.filter((t) => t.suggestion_source === "agent_ai")
+    const classAlgo = aVerifier.filter((t) => t.suggestion_source !== "agent_ai")
+    const classAi = aVerifier.filter((t) => t.suggestion_source === "agent_ai")
+    if (matchAlgo.length)
+      g.push({
+        key: "ma",
+        title: `Rapprochements algorithme (${matchAlgo.length})`,
+        desc: "Tx ↔ facture proposés par le moteur de matching pur. Confiance élevée.",
+        items: matchAlgo,
+        type: "match",
+        isAi: false,
+      })
+    if (matchAi.length)
+      g.push({
+        key: "mai",
+        title: `Rapprochements IA Claude (${matchAi.length})`,
+        desc: "Cas ambigus rattrapés par l'IA. À vérifier au cas par cas.",
+        items: matchAi,
+        type: "match",
+        isAi: true,
+      })
+    if (classAlgo.length)
+      g.push({
+        key: "ca",
+        title: `Classifications algorithme (${classAlgo.length})`,
+        desc: "Frais bancaires, salaires, MRA, virements internes. Compte PCM pré-rempli.",
+        items: classAlgo,
+        type: "classification",
+        isAi: false,
+      })
+    if (classAi.length)
+      g.push({
+        key: "cai",
+        title: `Classifications IA Claude (${classAi.length})`,
+        desc: "Cas atypiques classés par l'IA. Vérifier le compte PCM.",
+        items: classAi,
+        type: "classification",
+        isAi: true,
+      })
+    return g
+  }, [proposes, aVerifier])
+
+  // ── Lancer Lex Banque (agent IA) ──────────────────────────────────
+  const handleRunAgent = useCallback(async () => {
+    if (selectedSociete === "all") return
+    setRunningAgent(true)
     try {
-      const res = await fetch("/api/comptable/rapprochement", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "auto_rapprocher",
-          societe_id: selectedSociete,
-          ...(periodeDebut ? { date_debut: periodeDebut } : {}),
-          ...(periodeFin   ? { date_fin:   periodeFin   } : {}),
-        }),
+      const body: any = { societe_id: selectedSociete, dry_run: false, min_confidence: 0.7 }
+      if (periodeDebut) body.date_debut = periodeDebut
+      if (periodeFin) body.date_fin = periodeFin
+      const res = await fetch("/api/agent/rapprochement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       })
       const d = await res.json()
-      showToast(`${d.matched || 0} transaction(s) rapprochée(s) automatiquement sur ${periodeLabel}`)
-      load()
-    } catch { showToast("Erreur rapprochement auto", 'error') }
-    finally { setAutoMatching(false) }
-  }
-
-  const handleApplyPatterns = async () => {
-    if (!selectedSociete || selectedSociete === "all") return
-    setApplyingPatterns(true)
-    try {
-      const res = await fetch("/api/comptable/rapprochement/patterns", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "apply",
-          societe_id: selectedSociete,
-          ...(periodeDebut ? { date_debut: periodeDebut } : {}),
-          ...(periodeFin   ? { date_fin:   periodeFin   } : {}),
-        }),
-      })
-      const d = await res.json()
-      if (!res.ok) { showToast(d.error || "Erreur application patterns", 'error'); return }
-      showToast(`${d.matched || 0} transaction(s) rapprochée(s) via patterns mémorisés`)
-      load()
-    } catch (e: any) { showToast("Erreur patterns: " + (e?.message || ""), 'error') }
-    finally { setApplyingPatterns(false) }
-  }
-
-  const handleOpenAudit = async () => {
-    if (!selectedSociete || selectedSociete === "all") return
-    setAuditDialog(true)
-    setAuditLoading(true)
-    try {
-      const res = await fetch(`/api/comptable/rapprochement/audit?societe_id=${selectedSociete}&limit=200`)
-      const d = await res.json()
-      setAuditEntries(d.entries || [])
-      if (d.migrated === false) {
-        showToast("Historique non disponible — migration 126 à appliquer", 'error')
+      if (!res.ok) {
+        showToast(d?.error || `Erreur ${AGENT_NAME}`, "error")
+        return
       }
-    } catch { setAuditEntries([]) }
-    finally { setAuditLoading(false) }
-  }
-
-  // ── Reset complet ──────────────────────────────────────────────
-  const handleReset = async () => {
-    if (!selectedSociete || selectedSociete === "all") return
-    setResetting(true)
-    try {
-      const res = await fetch("/api/comptable/rapprochement/reset", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: selectedSociete, confirm: "RESET" }),
-      })
-      const d = await res.json()
-      if (!res.ok) { showToast(d.error || "Erreur reset", 'error'); return }
-      setResetDialog(false)
+      const total =
+        (d.stats?.matched || 0) +
+        (d.stats?.classified || 0) +
+        (d.stats?.semantic_matches || 0) +
+        (d.stats?.semantic_classifications || 0)
       showToast(
-        `Reset effectué — ${d.stats?.transactions_reset || 0} transactions, ` +
-        `${d.stats?.factures_reset || 0} factures, ` +
-        `${d.stats?.ecritures_paiements_supprimees || 0} écritures BNQ supprimées`
+        `${AGENT_NAME} : ${total} suggestion(s), ${d.writes?.transactions_modifiees || 0} écrites`
       )
       load()
-    } catch (e: any) { showToast("Erreur reset: " + (e?.message || ""), 'error') }
-    finally { setResetting(false) }
-  }
-
-  // Single-facture manual lettrage (legacy single-click flow)
-  const handleSingleLink = async (tx: any, target: any, type: 'facture' | 'ecriture') => {
-    try {
-      const res = await fetch("/api/comptable/rapprochement", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "lettrer_manuel",
-          transaction_id: tx.id,
-          releve_id: tx.releve_id,
-          facture_id: type === 'facture' ? target.id : undefined,
-          ecriture_id: type === 'ecriture' ? target.id : undefined,
-          societe_id: selectedSociete,
-        }),
-      })
-      const d = await res.json()
-      if (!res.ok) { showToast(d.error || "Erreur lettrage", 'error'); return }
-      setLinkDialog(null)
-      showToast(`Lettrage effectué (${d.lettre})`)
-      load()
-    } catch (e: any) { showToast("Erreur lettrage: " + (e?.message || ""), 'error') }
-  }
-
-  // Confirm the multi-facture selection from the dialog
-  const handleConfirmMulti = async () => {
-    if (!linkDialog || selectedFactureIds.size === 0) return
-    if (selectedFactureIds.size === 1 && !selectedEcritureId) {
-      const fId = Array.from(selectedFactureIds)[0]
-      const f = factures.find((x: any) => x.id === fId)
-      if (f) return handleSingleLink(linkDialog, f, 'facture')
+    } catch (e: any) {
+      showToast(`Erreur ${AGENT_NAME} : ${e?.message || "réseau"}`, "error")
+    } finally {
+      setRunningAgent(false)
     }
-    try {
-      const res = await fetch("/api/comptable/rapprochement", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "lettrer_multi",
-          transaction_id: linkDialog.id,
-          releve_id: linkDialog.releve_id,
-          facture_ids: Array.from(selectedFactureIds),
-          societe_id: selectedSociete,
-        }),
-      })
-      const d = await res.json()
-      if (!res.ok) { showToast(d.error || "Erreur lettrage multi", 'error'); return }
-      setLinkDialog(null)
-      showToast(`${selectedFactureIds.size} facture(s) lettrée(s) — écart ${d.ecart?.toFixed(2) || 0}`)
-      load()
-    } catch (e: any) { showToast("Erreur lettrage: " + (e?.message || ""), 'error') }
+  }, [selectedSociete, periodeDebut, periodeFin, load, showToast])
+
+  // ── Valider une tx (crée écriture BNQ) ────────────────────────────
+  const validateOne = useCallback(
+    async (tx: BankTx): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
+      const body: any = {
+        societe_id: selectedSociete,
+        transaction_id: tx.id,
+        releve_id: tx.releve_id,
+      }
+      const fids = (Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0
+        ? tx.facture_ids
+        : tx.facture_id
+          ? [tx.facture_id]
+          : []
+      ).filter(Boolean)
+      if (fids.length > 0) {
+        if (fids.length > 1) {
+          body.action = "lettrer_multi"
+          body.facture_ids = fids
+        } else {
+          body.action = "lettrer_manuel"
+          body.facture_id = fids[0]
+        }
+      } else if (tx.compte_comptable && tx.classification) {
+        body.action = "lettrer_manuel"
+        body.classification = tx.classification
+        body.compte_charge = tx.compte_comptable
+      } else {
+        return { ok: false, error: "Suggestion incomplète" }
+      }
+      try {
+        const res = await fetch("/api/comptable/rapprochement", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        const d = await res.json()
+        if (!res.ok) return { ok: false, error: d?.error || `HTTP ${res.status}` }
+        return { ok: true, lettre: d?.lettre }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || "Erreur réseau" }
+      }
+    },
+    [selectedSociete]
+  )
+
+  const handleValidateOne = async (tx: BankTx) => {
+    const r = await validateOne(tx)
+    if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
+    showToast(`Validé (${r.lettre || "—"}) — écriture BNQ créée`)
+    load()
   }
 
-  const handleUnlink = async (tx: any) => {
+  const handleRejectOne = async (tx: BankTx) => {
     try {
       const res = await fetch("/api/comptable/rapprochement", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "delettrer",
+          action: "rejeter_suggestion",
+          societe_id: selectedSociete,
           transaction_id: tx.id,
           releve_id: tx.releve_id,
-          facture_id: tx.facture_id,
-          ecriture_id: tx.ecriture_id,
-          societe_id: selectedSociete,
         }),
       })
       const d = await res.json()
-      if (!res.ok) { showToast(d.error || "Erreur délettrage", 'error'); return }
-      showToast("Délettrage effectué")
+      if (!res.ok) return showToast(d?.error || "Rejet impossible", "error")
+      showToast("Suggestion rejetée")
       load()
-    } catch (e: any) { showToast("Erreur délettrage: " + (e?.message || ""), 'error') }
+    } catch (e: any) {
+      showToast(e?.message || "Erreur rejet", "error")
+    }
   }
 
-  const transactions = data?.bankTransactions || []
-  const factures = data?.factures || []
-  const ecritures = (data?.ecritures || []).filter((e: any) => !e.lettre)
-  const matched = transactions.filter((t: any) => t.facture_id || (Array.isArray(t.facture_ids) && t.facture_ids.length > 0))
-  const unmatched = transactions.filter((t: any) => !(t.facture_id || (Array.isArray(t.facture_ids) && t.facture_ids.length > 0)))
+  const handleValidateBatch = async (items: BankTx[]) => {
+    if (items.length === 0) return showToast("Rien de coché", "error")
+    setValidating(true)
+    let ok = 0
+    const errors: string[] = []
+    for (const tx of items) {
+      const r = await validateOne(tx)
+      if (r.ok) ok++
+      else errors.push(`${tx.libelle.slice(0, 40)} : ${r.error}`)
+    }
+    setValidating(false)
+    setSelectedTxIds(new Set())
+    if (errors.length === 0) showToast(`${ok} validation(s) — écritures BNQ créées`)
+    else showToast(`${ok} OK / ${errors.length} échec — ${errors[0]}`, "error")
+    load()
+  }
 
-  const selectedTotal = useMemo(() => {
-    return factures
-      .filter((f: any) => selectedFactureIds.has(f.id))
-      .reduce((s: number, f: any) => s + (Number(f.montant_ttc) || 0), 0)
-  }, [selectedFactureIds, factures])
-
-  const txAmount = linkDialog ? (Number(linkDialog.debit) > 0 ? Number(linkDialog.debit) : Number(linkDialog.credit)) : 0
-  const ecart = Math.abs(txAmount - selectedTotal)
-  const ecartPct = txAmount > 0 ? ecart / txAmount : 0
+  const toggleTx = (id: string) =>
+    setSelectedTxIds((prev) => {
+      const n = new Set(prev)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  const toggleAllInGroup = (items: BankTx[]) =>
+    setSelectedTxIds((prev) => {
+      const n = new Set(prev)
+      const all = items.every((t) => n.has(t.id))
+      for (const t of items) (all ? n.delete : n.add).call(n, t.id)
+      return n
+    })
 
   const canAct = selectedSociete !== "all"
+  const total = transactions.length
+  const tauxRapproche = total > 0 ? Math.round((rapprochees.length / total) * 100) : 0
 
   return (
     <ClientPageShell hideHero disableParticles>
-    <div className="space-y-6">
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}>
-          {toast.message}
-        </div>
-      )}
-
-      {/* En-tête */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Rapprochement bancaire</h1>
-          <p className="text-sm text-gray-500">Travaillez mois par mois pour un rapprochement fiable</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" onClick={load} disabled={loading || !canAct}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />Actualiser
-          </Button>
-          <Button variant="outline" onClick={handleOpenAudit} disabled={!canAct}>
-            <History className="w-4 h-4 mr-2" />Historique
-          </Button>
-          <Button variant="outline" onClick={handleApplyPatterns} disabled={applyingPatterns || !canAct}>
-            <BrainCircuit className={`w-4 h-4 mr-2 ${applyingPatterns ? "animate-spin" : ""}`} style={{ color: "#D4AF37" }} />
-            {applyingPatterns ? "Application..." : "Appliquer patterns"}
-          </Button>
-          <Button onClick={handleAutoMatch} disabled={autoMatching || !canAct} className="bg-[#0B0F2E]">
-            <Zap className={`w-4 h-4 mr-2 ${autoMatching ? "animate-spin" : ""}`} />
-            {autoMatching ? "Analyse..." : "Rapprochement auto"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setResetDialog(true)}
-            disabled={!canAct}
-            className="border-red-300 text-red-600 hover:bg-red-50"
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />Remise à zéro
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Sélecteurs : Société + Période ─────────────────────── */}
-      <div className="flex gap-3 items-center flex-wrap">
-        {/* Société */}
-        <div className="w-64">
-          <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-            <SelectTrigger><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">-- Choisir une société --</SelectItem>
-              {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Période */}
-        <div className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${modeToutes ? "bg-amber-50 border-amber-300" : "bg-blue-50 border-blue-200"}`}>
-          <CalendarDays className={`w-4 h-4 shrink-0 ${modeToutes ? "text-amber-600" : "text-blue-600"}`} />
-          <span className={`text-sm font-medium ${modeToutes ? "text-amber-700" : "text-blue-700"}`}>Période :</span>
-
-          {/* Bascule Toutes périodes */}
-          <button
-            onClick={() => setModeToutes(v => !v)}
-            className={`text-xs px-2 py-0.5 rounded-full border font-medium transition-colors ${
-              modeToutes
-                ? "bg-amber-500 text-white border-amber-500"
-                : "bg-white text-gray-500 border-gray-300 hover:border-blue-400"
+      <div className="space-y-6 max-w-7xl">
+        {/* Toast */}
+        {toast && (
+          <div
+            className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white ${
+              toast.type === "success" ? "bg-emerald-600" : "bg-red-600"
             }`}
           >
-            Toutes
-          </button>
-
-          {/* Sélecteurs mois/année — masqués en mode "toutes" */}
-          {!modeToutes && (
-            <>
-              <Select value={selectedMois} onValueChange={setSelectedMois}>
-                <SelectTrigger className="w-36 h-8 border-0 bg-transparent focus:ring-0 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MOIS.map(m => <SelectItem key={m.val} value={m.val}>{m.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={selectedAnnee} onValueChange={setSelectedAnnee}>
-                <SelectTrigger className="w-24 h-8 border-0 bg-transparent focus:ring-0 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ANNEES.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </>
-          )}
-
-          {modeToutes && (
-            <span className="text-sm text-amber-700 font-medium">Toutes périodes — rapprochement global</span>
-          )}
-        </div>
-
-        {canAct && !modeToutes && (
-          <Badge className="bg-blue-100 text-blue-700 text-sm px-3 py-1">
-            {periodeDebut} → {periodeFin}
-          </Badge>
-        )}
-        {canAct && modeToutes && (
-          <Badge className="bg-amber-100 text-amber-700 text-sm px-3 py-1">
-            ⚠️ Mode bulk — préférez mois par mois pour +3 mois de données
-          </Badge>
-        )}
-      </div>
-
-      {/* Contenu principal */}
-      {!canAct ? (
-        <Card><CardContent className="py-16 text-center text-gray-400">Sélectionnez une société</CardContent></Card>
-      ) : loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
-      ) : (
-        <>
-          {/* ─── Lex Banque (agent IA) — interface principale ─── */}
-          <LexBanquePanel
-            societeId={selectedSociete}
-            societeName={societes.find((s) => s.id === selectedSociete)?.nom || ""}
-            periodeDebut={periodeDebut}
-            periodeFin={periodeFin}
-            data={data}
-            loading={loading}
-            onReload={load}
-            showToast={showToast}
-          />
-
-          {/* ─── Mode avancé (legacy : tables manuelles + outils) ─── */}
-          <details className="rounded-lg border bg-card mt-6">
-            <summary className="cursor-pointer select-none p-4 text-sm font-medium text-muted-foreground flex items-center gap-2 hover:bg-muted/30">
-              <ChevronDown className="w-4 h-4" />
-              Mode avancé — outils manuels (auto-rapprochement legacy, lettrage manuel, patterns, audit)
-            </summary>
-            <div className="p-4 space-y-4 border-t">
-          {/* KPIs */}
-          <div className="grid grid-cols-4 gap-4">
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions ({periodeLabel})</p><p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p></CardContent></Card>
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Rapprochées</p><p className="text-2xl font-bold text-green-600">{matched.length}</p></CardContent></Card>
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Non rapprochées</p><p className="text-2xl font-bold text-red-600">{unmatched.length}</p></CardContent></Card>
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Factures en attente</p><p className="text-2xl font-bold text-orange-600">{factures.length}</p></CardContent></Card>
+            {toast.message}
           </div>
+        )}
 
-          {/* Progression */}
-          {transactions.length > 0 && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="font-medium text-gray-700">Progression du rapprochement — {periodeLabel}</span>
-                  <span className="font-bold text-[#0B0F2E]">{matched.length}/{transactions.length} ({transactions.length > 0 ? Math.round(matched.length / transactions.length * 100) : 0}%)</span>
-                </div>
-                <div className="w-full bg-gray-100 rounded-full h-3">
-                  <div
-                    className="bg-emerald-500 h-3 rounded-full transition-all duration-500"
-                    style={{ width: transactions.length > 0 ? `${(matched.length / transactions.length) * 100}%` : "0%" }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {transactions.length === 0 && (
-            <Card>
-              <CardContent className="py-12 text-center text-gray-400">
-                <CalendarDays className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-                <p className="font-medium">Aucune transaction pour {periodeLabel}</p>
-                <p className="text-sm mt-1">Changez de période ou vérifiez que le relevé a été importé.</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Rapprochées */}
-          {matched.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-green-600" />Rapprochées ({matched.length})</CardTitle></CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Montant</TableHead><TableHead>Tiers</TableHead><TableHead>Lettre</TableHead><TableHead>Compte</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {matched.map((tx: any) => {
-                      const debitNum = Number(tx.debit) || 0
-                      const creditNum = Number(tx.credit) || 0
-                      const isRefund = debitNum < 0 || creditNum < 0
-
-                      // Badge compte contrepartie selon matched_type
-                      const compteBadge = (() => {
-                        const mt = tx.matched_type
-                        if (mt === "frais_bancaires")
-                          return <Badge className="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0 hover:bg-orange-100">627 Frais</Badge>
-                        if (mt === "paiement_mra")
-                          return <Badge className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0 hover:bg-red-100">444 MRA</Badge>
-                        if (["salaire_bulk", "salaire_individuel", "salaire_bulk_non_verifie"].includes(mt))
-                          return <Badge className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0 hover:bg-purple-100">641 Salaires</Badge>
-                        if (mt === "reversal_salaire")
-                          return <Badge className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0 hover:bg-purple-100">421 Pers.</Badge>
-                        if (mt === "transfert_interne")
-                          return <Badge className="bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0 hover:bg-gray-100">580 Transit</Badge>
-                        if (["facture_unique", "facture_groupee", "partiel"].includes(mt))
-                          return creditNum > 0
-                            ? <Badge className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0 hover:bg-blue-100">411 Client</Badge>
-                            : <Badge className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0 hover:bg-indigo-100">401 Fourn.</Badge>
-                        if (mt === "associe")
-                          return <Badge className="bg-teal-100 text-teal-700 text-[10px] px-1.5 py-0 hover:bg-teal-100">455 Associé</Badge>
-                        return <span className="text-gray-400 text-xs">—</span>
-                      })()
-
-                      return (
-                        <TableRow key={tx.id} className="bg-green-50/50">
-                          <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                          <TableCell className="text-sm max-w-[200px] truncate">{tx.libelle}</TableCell>
-                          <TableCell className="text-right font-medium">
-                            {debitNum > 0 ? <span className="text-red-600">-{fmt(debitNum)} {tx.devise}</span>
-                              : creditNum > 0 ? <span className="text-green-600">+{fmt(creditNum)} {tx.devise}</span>
-                              : isRefund ? <span className="text-blue-600">{debitNum < 0 ? "+" : "-"}{fmt(Math.abs(debitNum || creditNum))} {tx.devise}</span>
-                              : <span className="text-gray-400">0</span>
-                            }
-                          </TableCell>
-                          <TableCell className="text-sm">{tx.tiers_detecte || "—"}</TableCell>
-                          <TableCell>
-                            <Badge className="bg-green-100 text-green-700">{tx.lettre}</Badge>
-                            {tx.rapprochement_multi && <Badge className="ml-1 bg-blue-100 text-blue-700">{tx.nb_factures}×</Badge>}
-                          </TableCell>
-                          <TableCell>{compteBadge}</TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="sm" onClick={() => handleUnlink(tx)} title="Délettrer">
-                              <Unlink className="w-4 h-4 text-red-500" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Non rapprochées */}
-          {unmatched.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><AlertCircle className="w-5 h-5 text-orange-500" />Non rapprochées ({unmatched.length})</CardTitle></CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Banque</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead><TableHead>Tiers</TableHead><TableHead>Compte</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {unmatched.map((tx: any) => {
-                      const debitNum = Number(tx.debit) || 0
-                      const creditNum = Number(tx.credit) || 0
-                      const isRefund = debitNum < 0 || creditNum < 0
-                      return (
-                        <TableRow key={tx.id}>
-                          <TableCell className="text-sm">{formatDate(tx.date)}</TableCell>
-                          <TableCell><Badge variant="outline" style={{ borderColor: "#D4AF37" }}>{tx.banque}</Badge></TableCell>
-                          <TableCell className="text-sm max-w-[200px] truncate">
-                            {tx.libelle}
-                            {isRefund && <Badge className="ml-2 bg-blue-100 text-blue-700 text-[10px]">Remboursement</Badge>}
-                          </TableCell>
-                          <TableCell className="text-right text-sm text-red-600 font-medium">{debitNum > 0 ? fmt(debitNum) : debitNum < 0 ? fmt(debitNum) : "—"}</TableCell>
-                          <TableCell className="text-right text-sm text-green-600 font-medium">{creditNum > 0 ? fmt(creditNum) : creditNum < 0 ? fmt(creditNum) : "—"}</TableCell>
-                          <TableCell className="text-sm">{tx.tiers_detecte || <span className="text-gray-400 italic">—</span>}</TableCell>
-                          <TableCell className="font-mono text-sm text-gray-500">{tx.compte_comptable || "—"}</TableCell>
-                          <TableCell><Button variant="outline" size="sm" onClick={() => setLinkDialog(tx)} className="gap-1"><Link2 className="w-3 h-3" />Lettrer</Button></TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Factures en attente */}
-          {factures.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2"><ArrowRightLeft className="w-5 h-5" style={{ color: "#D4AF37" }} />Factures en attente ({factures.length})</CardTitle></CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <Table>
-                  <TableHeader><TableRow><TableHead>N° Facture</TableHead><TableHead>Type</TableHead><TableHead>Tiers</TableHead><TableHead>Date</TableHead><TableHead>Échéance</TableHead><TableHead className="text-right">Montant TTC</TableHead><TableHead>Statut</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {factures.map((f: any) => (
-                      <TableRow key={f.id}>
-                        <TableCell className="font-medium">{f.numero_facture || "—"}</TableCell>
-                        <TableCell><Badge className={f.type_facture === "client" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}>{f.type_facture === "client" ? "Client" : "Fournisseur"}</Badge></TableCell>
-                        <TableCell className="text-sm">{f.tiers || "—"}</TableCell>
-                        <TableCell className="text-sm">{formatDate(f.date_facture)}</TableCell>
-                        <TableCell className="text-sm">{formatDate(f.date_echeance)}</TableCell>
-                        <TableCell className="text-right font-bold">{fmt(Number(f.montant_ttc) || 0)} {f.devise || "MUR"}</TableCell>
-                        <TableCell><Badge className={f.statut === "retard" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}>{f.statut === "retard" ? "En retard" : "En attente"}</Badge></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-            </div>
-          </details>
-        </>
-      )}
-
-      {/* ── Dialog lettrage manuel ─────────────────────────────── */}
-      <Dialog open={!!linkDialog} onOpenChange={(o) => { if (!o) setLinkDialog(null) }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Lettrer manuellement (multi-facture supporté)</DialogTitle></DialogHeader>
-          {linkDialog && (
-            <div className="space-y-4">
-              <div className="p-3 bg-gray-50 rounded-lg text-sm">
-                <p className="font-medium">{linkDialog.libelle}</p>
-                <p className="text-gray-500">
-                  {formatDate(linkDialog.date)} — {Number(linkDialog.debit) > 0 ? `-${fmt(Number(linkDialog.debit))}` : `+${fmt(Number(linkDialog.credit))}`} {linkDialog.devise}
+        {/* HEADER agent */}
+        <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 via-indigo-50 to-blue-50 p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 p-3 text-white shadow-md">
+                <Bot className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-purple-900 flex items-center gap-2">
+                  {AGENT_NAME}
+                  <Badge className="bg-purple-600 text-white text-[10px] uppercase">
+                    Agent IA
+                  </Badge>
+                </h1>
+                <p className="text-sm text-purple-700/80 mt-0.5">
+                  Rapprochement bancaire intelligent · matching automatique des factures + classifications PCM
                 </p>
-                {linkDialog.tiers_detecte && <p className="text-gray-500">Tiers: {linkDialog.tiers_detecte}</p>}
-              </div>
-
-              {factures.length > 0 ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">Factures en attente (cochez pour sélectionner plusieurs) :</p>
-                    <Badge variant="outline" className="text-xs">{selectedFactureIds.size} sélectionnée(s)</Badge>
-                  </div>
-                  <div className="space-y-2 max-h-[280px] overflow-y-auto border rounded-lg p-2">
-                    {factures.map((f: any) => {
-                      const fAmount = Number(f.montant_ttc) || 0
-                      const isChecked = selectedFactureIds.has(f.id)
-                      const isClose = !isChecked && Math.abs(txAmount - fAmount) <= Math.max(fAmount * 0.02, 1)
-                      return (
-                        <label key={f.id} className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${isChecked ? "bg-blue-50 border-blue-400" : isClose ? "border-green-300 bg-green-50" : "border-gray-200 hover:bg-gray-50"}`}>
-                          <Checkbox
-                            checked={isChecked}
-                            onCheckedChange={(checked) => {
-                              setSelectedFactureIds(prev => {
-                                const next = new Set(prev)
-                                if (checked) next.add(f.id)
-                                else next.delete(f.id)
-                                return next
-                              })
-                            }}
-                          />
-                          <div className="flex-1 flex justify-between items-center">
-                            <div>
-                              <p className="font-medium text-sm">{f.numero_facture || "Sans numéro"}<Badge className="bg-blue-100 text-blue-700 text-xs ml-1">{f.type_facture}</Badge></p>
-                              <p className="text-xs text-gray-500">{f.tiers || "—"} — {formatDate(f.date_facture)}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-bold text-sm">{fmt(fAmount)} {f.devise || "MUR"}</p>
-                              {isClose && <Badge className="bg-green-100 text-green-700 text-xs">Montant proche</Badge>}
-                            </div>
-                          </div>
-                        </label>
-                      )
-                    })}
-                  </div>
-
-                  {selectedFactureIds.size > 0 && (
-                    <div className={`p-3 rounded-lg border ${ecartPct < 0.02 ? "bg-emerald-50 border-emerald-300" : ecartPct < 0.08 ? "bg-yellow-50 border-yellow-300" : "bg-red-50 border-red-300"}`}>
-                      <div className="flex justify-between text-sm"><span>Montant transaction :</span><span className="font-mono font-bold">{fmt(txAmount)} {linkDialog.devise}</span></div>
-                      <div className="flex justify-between text-sm"><span>Somme factures sélectionnées :</span><span className="font-mono font-bold">{fmt(selectedTotal)}</span></div>
-                      <div className="flex justify-between text-sm pt-1 border-t mt-1">
-                        <span>Écart :</span>
-                        <span className="font-mono font-bold">{fmt(ecart)} ({(ecartPct * 100).toFixed(1)}%){ecartPct >= 0.02 && ecartPct <= 0.06 && <span className="ml-2 text-xs text-amber-700">(probable TDS/retenue)</span>}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => setLinkDialog(null)}>Annuler</Button>
-                    <Button className="bg-[#0B0F2E]" disabled={selectedFactureIds.size === 0} onClick={handleConfirmMulti}>
-                      Lettrer {selectedFactureIds.size > 1 ? `${selectedFactureIds.size} factures` : "la facture"}
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-gray-400">Aucune facture en attente</p>
-              )}
-
-              <div className="pt-4 border-t">
-                <p className="text-sm font-medium mb-2">Ou lettrer sur une écriture comptable non lettrée :</p>
-                {ecritures.length === 0 ? (
-                  <p className="text-sm text-gray-400">Aucune écriture non lettrée</p>
-                ) : (
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {ecritures.map((e: any) => {
-                      const eAmount = Number(e.debit) > 0 ? Number(e.debit) : Number(e.credit)
-                      const isClose = Math.abs(txAmount - eAmount) <= Math.max(eAmount * 0.02, 1)
-                      return (
-                        <div key={e.id} onClick={() => handleSingleLink(linkDialog, e, 'ecriture')} className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-purple-50 ${isClose ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="font-medium text-sm">{e.compte} — {e.libelle || "—"}</p>
-                              <p className="text-xs text-gray-500">{formatDate(e.date_ecriture)} — {e.journal || "—"}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-bold text-sm">{Number(e.debit) > 0 ? fmt(Number(e.debit)) + " D" : fmt(Number(e.credit)) + " C"}</p>
-                              {isClose && <Badge className="bg-green-100 text-green-700 text-xs">Montant proche</Badge>}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
               </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Dialog Reset ───────────────────────────────────────── */}
-      <Dialog open={resetDialog} onOpenChange={setResetDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="flex items-center gap-2 text-red-600"><RotateCcw className="w-5 h-5" />Remise à zéro du rapprochement</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              <p className="font-semibold mb-1">⚠️ Cette action va :</p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>Remettre toutes les transactions en statut "non rapproché"</li>
-                <li>Supprimer toutes les écritures BNQ générées automatiquement</li>
-                <li>Remettre toutes les factures en statut "en attente"</li>
-                <li><strong>Conserver</strong> les écritures de paie, OD manuelles et données RH</li>
-              </ul>
-            </div>
-            <p className="text-sm text-gray-600">
-              Après le reset, utilisez le sélecteur de période pour travailler <strong>mois par mois</strong>, en commençant par le plus ancien.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setResetDialog(false)} disabled={resetting}>Annuler</Button>
+            <div className="flex gap-2 flex-wrap">
               <Button
-                onClick={handleReset}
-                disabled={resetting}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                variant="outline"
+                onClick={load}
+                disabled={loading || !canAct}
+                size="sm"
               >
-                {resetting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Reset en cours...</> : "Confirmer la remise à zéro"}
+                <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+              <Button
+                onClick={handleRunAgent}
+                disabled={runningAgent || !canAct}
+                className="bg-purple-600 hover:bg-purple-700 text-white shadow-md"
+              >
+                {runningAgent ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    En cours…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Lancer {AGENT_NAME}
+                  </>
+                )}
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
 
-      {/* ── Dialog Audit ───────────────────────────────────────── */}
-      <Dialog open={auditDialog} onOpenChange={setAuditDialog}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Historique des rapprochements</DialogTitle></DialogHeader>
-          {auditLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
-          ) : auditEntries.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">Aucun historique disponible</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead><TableHead>Action</TableHead><TableHead>Lettre</TableHead>
-                  <TableHead className="text-right">Montant</TableHead><TableHead>Raison</TableHead><TableHead>Utilisateur</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {auditEntries.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell className="text-xs whitespace-nowrap">{formatDateTime(entry.created_at)}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{entry.action}</Badge></TableCell>
-                    <TableCell><span className="font-mono text-xs">{entry.lettre_code || "—"}</span></TableCell>
-                    <TableCell className="text-right font-mono text-sm">{entry.montant ? fmt(Number(entry.montant)) : "—"}</TableCell>
-                    <TableCell className="text-xs max-w-[200px] truncate" title={entry.reason || ""}>{entry.reason || "—"}</TableCell>
-                    <TableCell className="text-xs">{entry.user_email || "—"}</TableCell>
-                  </TableRow>
+        {/* Sélecteurs */}
+        <div className="flex gap-3 items-center flex-wrap">
+          <div className="w-64">
+            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choisir une société..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">-- Choisir une société --</SelectItem>
+                {societes.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.nom}
+                  </SelectItem>
                 ))}
-              </TableBody>
-            </Table>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
+              </SelectContent>
+            </Select>
+          </div>
+          <div
+            className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${
+              modeToutes ? "bg-amber-50 border-amber-300" : "bg-blue-50 border-blue-200"
+            }`}
+          >
+            <CalendarDays
+              className={`w-4 h-4 ${modeToutes ? "text-amber-600" : "text-blue-600"}`}
+            />
+            <span className="text-sm font-medium">Période :</span>
+            <button
+              onClick={() => setModeToutes((v) => !v)}
+              className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
+                modeToutes
+                  ? "bg-amber-500 text-white border-amber-500"
+                  : "bg-white text-gray-500 border-gray-300 hover:border-blue-400"
+              }`}
+            >
+              Toutes
+            </button>
+            {!modeToutes && (
+              <>
+                <Select value={selectedMois} onValueChange={setSelectedMois}>
+                  <SelectTrigger className="w-32 h-8 border-0 bg-transparent text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MOIS.map((m) => (
+                      <SelectItem key={m.val} value={m.val}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={selectedAnnee} onValueChange={setSelectedAnnee}>
+                  <SelectTrigger className="w-20 h-8 border-0 bg-transparent text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ANNEES.map((a) => (
+                      <SelectItem key={a} value={a}>
+                        {a}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+          </div>
+        </div>
+
+        {!canAct ? (
+          <Card>
+            <CardContent className="py-16 text-center text-gray-400">
+              Sélectionne une société pour activer {AGENT_NAME}.
+            </CardContent>
+          </Card>
+        ) : loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+          </div>
+        ) : (
+          <>
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <KpiCard label="Total tx" value={total} />
+              <KpiCard
+                label="À valider"
+                value={totalSuggestions}
+                tone="amber"
+                accent={totalSuggestions > 0}
+              />
+              <KpiCard label="Rapprochées" value={rapprochees.length} tone="green" />
+              <KpiCard label="Orphelines" value={orphelines.length} tone="rose" />
+              <KpiCard label="Taux" value={`${tauxRapproche}%`} tone="blue" />
+            </div>
+
+            {/* Tabs */}
+            <Card>
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="px-4 pt-2 bg-transparent border-b rounded-none w-full justify-start gap-1 h-auto">
+                  <TabsTrigger
+                    value="a-valider"
+                    className="data-[state=active]:bg-amber-100 px-3 py-2"
+                  >
+                    <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-600" />À valider (
+                    {totalSuggestions})
+                  </TabsTrigger>
+                  <TabsTrigger value="rapprochees" className="px-3 py-2">
+                    <CheckCircle2 className="h-4 w-4 mr-1.5 text-green-600" />
+                    Rapprochées ({rapprochees.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="orphelines" className="px-3 py-2">
+                    <HelpCircle className="h-4 w-4 mr-1.5 text-rose-600" />
+                    Orphelines ({orphelines.length})
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* À valider */}
+                <TabsContent value="a-valider" className="p-4 space-y-5 mt-0">
+                  {totalSuggestions === 0 ? (
+                    <EmptyState
+                      title="Aucune suggestion en attente"
+                      hint={`Clique sur "Lancer ${AGENT_NAME}" en haut de la page pour générer des suggestions.`}
+                    />
+                  ) : (
+                    groups.map((g) => {
+                      const selectedCount = g.items.filter((t) => selectedTxIds.has(t.id)).length
+                      const allChecked =
+                        selectedCount === g.items.length && g.items.length > 0
+                      return (
+                        <div key={g.key} className="rounded border bg-card">
+                          <div className="flex items-center justify-between gap-2 p-3 border-b bg-muted/30 flex-wrap">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <Checkbox
+                                checked={allChecked}
+                                onCheckedChange={() => toggleAllInGroup(g.items)}
+                              />
+                              <div className="min-w-0">
+                                <h3 className="font-medium text-sm flex items-center gap-2">
+                                  {g.title}
+                                  {g.isAi && (
+                                    <Badge className="bg-purple-100 text-purple-700 text-[10px] border border-purple-300">
+                                      <Bot className="h-3 w-3 mr-0.5" />
+                                      IA
+                                    </Badge>
+                                  )}
+                                </h3>
+                                <p className="text-[11px] text-muted-foreground">{g.desc}</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              {selectedCount > 0 ? (
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    handleValidateBatch(
+                                      g.items.filter((t) => selectedTxIds.has(t.id))
+                                    )
+                                  }
+                                  disabled={validating}
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  {validating ? (
+                                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                                  )}
+                                  Valider {selectedCount}
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleValidateBatch(g.items)}
+                                  disabled={validating}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                                  Tout valider ({g.items.length})
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            {g.items.map((tx) => (
+                              <SuggestionRow
+                                key={tx.id}
+                                tx={tx}
+                                type={g.type}
+                                checked={selectedTxIds.has(tx.id)}
+                                onToggle={() => toggleTx(tx.id)}
+                                onValidate={() => handleValidateOne(tx)}
+                                onReject={() => handleRejectOne(tx)}
+                                facturesById={facturesById}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </TabsContent>
+
+                {/* Rapprochées */}
+                <TabsContent value="rapprochees" className="p-4 mt-0">
+                  {rapprochees.length === 0 ? (
+                    <EmptyState
+                      title="Aucune transaction rapprochée"
+                      hint="Valide des suggestions pour qu'elles apparaissent ici (avec écriture BNQ associée)."
+                    />
+                  ) : (
+                    <div className="rounded border bg-card divide-y">
+                      {rapprochees.map((tx) => (
+                        <TxRow key={tx.id} tx={tx} facturesById={facturesById} />
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* Orphelines */}
+                <TabsContent value="orphelines" className="p-4 mt-0">
+                  {orphelines.length === 0 ? (
+                    <EmptyState
+                      title="Aucune transaction orpheline"
+                      hint="Toutes les transactions ont reçu une suggestion."
+                    />
+                  ) : (
+                    <div className="rounded border bg-card divide-y">
+                      {orphelines.map((tx) => (
+                        <TxRow key={tx.id} tx={tx} facturesById={facturesById} />
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </Card>
+          </>
+        )}
+      </div>
     </ClientPageShell>
+  )
+}
+
+// ── Composants helpers (inline, pas d'import externe) ─────────────────
+
+function KpiCard({
+  label,
+  value,
+  tone,
+  accent,
+}: {
+  label: string
+  value: number | string
+  tone?: "amber" | "green" | "rose" | "blue"
+  accent?: boolean
+}) {
+  const cls =
+    tone === "amber"
+      ? "border-amber-200 bg-amber-50"
+      : tone === "green"
+        ? "border-green-200 bg-green-50"
+        : tone === "rose"
+          ? "border-rose-200 bg-rose-50"
+          : tone === "blue"
+            ? "border-blue-200 bg-blue-50"
+            : "border-muted bg-card"
+  return (
+    <Card className={`${cls} ${accent ? "ring-2 ring-amber-400" : ""}`}>
+      <CardContent className="p-3">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-2xl font-semibold mt-1">{value}</div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function EmptyState({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="py-10 text-center space-y-2">
+      <p className="font-medium text-sm">{title}</p>
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  )
+}
+
+function ConfidenceBadge({ confidence }: { confidence: number | null | undefined }) {
+  if (confidence == null) return null
+  const pct = Math.round(confidence * 100)
+  const color =
+    pct >= 90
+      ? "bg-green-100 text-green-800 border-green-300"
+      : pct >= 80
+        ? "bg-blue-100 text-blue-800 border-blue-300"
+        : "bg-amber-100 text-amber-800 border-amber-300"
+  return <Badge className={`text-[10px] font-mono ${color}`}>{pct}%</Badge>
+}
+
+function SourceBadge({ source }: { source: string | null | undefined }) {
+  if (!source) return null
+  const ai = source === "agent_ai"
+  return (
+    <Badge
+      variant="outline"
+      className={`text-[10px] ${
+        ai
+          ? "bg-purple-100 text-purple-800 border-purple-300"
+          : "bg-slate-100 text-slate-700 border-slate-300"
+      }`}
+    >
+      {ai ? (
+        <>
+          <Bot className="h-3 w-3 mr-0.5" />
+          IA
+        </>
+      ) : (
+        "Algo"
+      )}
+    </Badge>
+  )
+}
+
+function SuggestionRow({
+  tx,
+  type,
+  checked,
+  onToggle,
+  onValidate,
+  onReject,
+  facturesById,
+}: {
+  tx: BankTx
+  type: "match" | "classification"
+  checked: boolean
+  onToggle: () => void
+  onValidate: () => void
+  onReject: () => void
+  facturesById: Map<string, Facture>
+}) {
+  const montant = tx.debit > 0 ? -tx.debit : tx.credit
+  const fids =
+    Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0
+      ? tx.facture_ids
+      : tx.facture_id
+        ? [tx.facture_id]
+        : []
+  const factures = fids.map((id) => facturesById.get(id)).filter(Boolean) as Facture[]
+  return (
+    <div className="flex items-start gap-3 p-3 border-b last:border-b-0 hover:bg-muted/20">
+      <Checkbox checked={checked} onCheckedChange={onToggle} className="mt-1" />
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
+            <p className="font-medium text-sm break-words">{tx.libelle}</p>
+          </div>
+          <p
+            className={`font-mono text-sm flex-shrink-0 ${
+              montant >= 0 ? "text-green-700" : "text-rose-700"
+            }`}
+          >
+            {montant >= 0 ? "+" : ""}
+            {fmt(montant)} {tx.devise || "MUR"}
+          </p>
+        </div>
+        {type === "match" ? (
+          <p className="text-xs">
+            <span className="text-muted-foreground">→ </span>
+            {factures.length > 0 ? (
+              factures.map((f, i) => (
+                <span key={f.id}>
+                  Facture <span className="font-mono">{f.numero_facture || f.id.slice(0, 8)}</span>
+                  {f.tiers && (
+                    <span className="text-muted-foreground"> · {f.tiers.slice(0, 50)}</span>
+                  )}
+                  <span className="text-muted-foreground">
+                    {" "}
+                    ({fmt(f.montant_ttc)} {f.devise || "MUR"})
+                  </span>
+                  {i < factures.length - 1 ? (
+                    <span className="text-muted-foreground"> + </span>
+                  ) : null}
+                </span>
+              ))
+            ) : (
+              <span className="italic text-muted-foreground">facture introuvable</span>
+            )}
+          </p>
+        ) : (
+          <p className="text-xs">
+            <span className="text-muted-foreground">→ Compte PCM </span>
+            <Badge variant="outline" className="font-mono text-[10px]">
+              {tx.compte_comptable || "?"}
+            </Badge>
+            <span className="text-muted-foreground"> ({tx.classification})</span>
+          </p>
+        )}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <ConfidenceBadge confidence={tx.matched_confidence} />
+          <SourceBadge source={tx.suggestion_source} />
+          {tx.matched_strategy && (
+            <Badge variant="outline" className="text-[10px] font-mono">
+              {tx.matched_strategy}
+            </Badge>
+          )}
+          {tx.tiers_detecte && (
+            <Badge variant="outline" className="text-[10px]">
+              {tx.tiers_detecte.slice(0, 30)}
+            </Badge>
+          )}
+          {tx.rapprochement_multi && (
+            <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-300">
+              {tx.nb_factures}× factures
+            </Badge>
+          )}
+        </div>
+        {tx.note && <p className="text-[11px] italic text-muted-foreground">{tx.note}</p>}
+      </div>
+      <div className="flex flex-col gap-1.5 flex-shrink-0">
+        <Button
+          size="sm"
+          onClick={onValidate}
+          className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+          Valider
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onReject}
+          className="h-7 text-xs text-muted-foreground hover:text-rose-700 hover:bg-rose-50"
+        >
+          <XCircle className="h-3.5 w-3.5 mr-1" />
+          Rejeter
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function TxRow({
+  tx,
+  facturesById,
+}: {
+  tx: BankTx
+  facturesById: Map<string, Facture>
+}) {
+  const montant = tx.debit > 0 ? -tx.debit : tx.credit
+  return (
+    <div className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20">
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
+        <p className="font-medium text-sm break-words">{tx.libelle}</p>
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+          {tx.lettre && (
+            <Badge variant="outline" className="text-[10px] font-mono bg-green-50">
+              {tx.lettre}
+            </Badge>
+          )}
+          {tx.compte_comptable && (
+            <Badge variant="outline" className="text-[10px] font-mono">
+              PCM {tx.compte_comptable}
+            </Badge>
+          )}
+          {tx.facture_id && (
+            <Badge variant="outline" className="text-[10px]">
+              Facture {facturesById.get(tx.facture_id)?.numero_facture || tx.facture_id.slice(0, 8)}
+            </Badge>
+          )}
+          {tx.matched_strategy && (
+            <Badge variant="outline" className="text-[10px] font-mono opacity-70">
+              {tx.matched_strategy}
+            </Badge>
+          )}
+        </div>
+      </div>
+      <p
+        className={`font-mono text-sm flex-shrink-0 ${
+          montant >= 0 ? "text-green-700" : "text-rose-700"
+        }`}
+      >
+        {montant >= 0 ? "+" : ""}
+        {fmt(montant)} {tx.devise || "MUR"}
+      </p>
+    </div>
   )
 }
