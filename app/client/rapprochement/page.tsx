@@ -31,6 +31,13 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import {
   Loader2,
   Sparkles,
   CheckCircle2,
@@ -44,6 +51,8 @@ import {
   Wand2,
   Wrench,
   Landmark,
+  Edit3,
+  Link2,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -142,6 +151,8 @@ export default function ClientRapprochementPage() {
   const [filtreSens, setFiltreSens] = useState<"all" | "client" | "fournisseur">("all")
   const [filtreCompte, setFiltreCompte] = useState<string>("all")
   const [filtreTiers, setFiltreTiers] = useState<string>("all")
+  // Affect dialog : tx ciblée pour imputation manuelle
+  const [affectTx, setAffectTx] = useState<BankTx | null>(null)
 
   const periodeDebut = modeToutes ? null : `${selectedAnnee}-${selectedMois}-01`
   const periodeFin = modeToutes
@@ -611,6 +622,45 @@ export default function ClientRapprochementPage() {
     load()
   }
 
+  // Imputation manuelle d'une tx : soit liée à une facture, soit imputée
+  // sur un compte PCM de la classe choisie (CCA, salaires, frais, etc.).
+  const handleAffectManual = useCallback(
+    async (
+      tx: BankTx,
+      mode: "facture" | "pcm",
+      payload: { facture_id?: string; classification?: string; compte_charge?: string }
+    ): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
+      if (!societeId) return { ok: false, error: "société manquante" }
+      const body: any = {
+        societe_id: societeId,
+        transaction_id: tx.id,
+        releve_id: tx.releve_id,
+        action: "lettrer_manuel",
+      }
+      if (mode === "facture" && payload.facture_id) {
+        body.facture_id = payload.facture_id
+      } else if (mode === "pcm" && payload.compte_charge) {
+        body.classification = payload.classification || "manuel"
+        body.compte_charge = payload.compte_charge
+      } else {
+        return { ok: false, error: "paramètres invalides" }
+      }
+      try {
+        const res = await fetch("/api/comptable/rapprochement", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        const d = await res.json()
+        if (!res.ok) return { ok: false, error: d?.error || `HTTP ${res.status}` }
+        return { ok: true, lettre: d?.lettre }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || "Erreur réseau" }
+      }
+    },
+    [societeId]
+  )
+
   const handleRejectOne = async (tx: BankTx) => {
     if (!societeId) return
     try {
@@ -673,6 +723,14 @@ export default function ClientRapprochementPage() {
   return (
     <ClientPageShell hideHero disableParticles>
       <div className="space-y-6 max-w-7xl">
+        <AffectDialog
+          tx={affectTx}
+          factures={factures}
+          onClose={() => setAffectTx(null)}
+          onAffect={handleAffectManual}
+          showToast={showToast}
+          onReload={load}
+        />
         {toast && (
           <div
             className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white ${
@@ -1071,7 +1129,7 @@ export default function ClientRapprochementPage() {
                   ) : (
                     <div className="rounded border bg-card divide-y">
                       {orphelines.map((tx) => (
-                        <TxRow key={tx.id} tx={tx} facturesById={facturesById} />
+                        <TxRow key={tx.id} tx={tx} facturesById={facturesById} onImputer={() => setAffectTx(tx)} />
                       ))}
                     </div>
                   )}
@@ -1478,9 +1536,11 @@ function Detail({
 function TxRow({
   tx,
   facturesById,
+  onImputer,
 }: {
   tx: BankTx
   facturesById: Map<string, Facture>
+  onImputer?: () => void
 }) {
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
   return (
@@ -1511,14 +1571,281 @@ function TxRow({
           )}
         </div>
       </div>
-      <p
-        className={`font-mono text-sm flex-shrink-0 ${
-          montant >= 0 ? "text-green-700" : "text-rose-700"
-        }`}
-      >
-        {montant >= 0 ? "+" : ""}
-        {fmt(montant)} {tx.devise || "MUR"}
-      </p>
+      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+        <p
+          className={`font-mono text-sm ${
+            montant >= 0 ? "text-green-700" : "text-rose-700"
+          }`}
+        >
+          {montant >= 0 ? "+" : ""}
+          {fmt(montant)} {tx.devise || "MUR"}
+        </p>
+        {onImputer && (
+          <Button size="sm" variant="outline" onClick={onImputer} className="h-7 text-xs">
+            <Edit3 className="h-3.5 w-3.5 mr-1" />
+            Imputer
+          </Button>
+        )}
+      </div>
     </div>
+  )
+}
+
+// ── AffectDialog : imputation manuelle d'une tx orpheline ────────────
+// Deux modes : (a) lier à une facture existante, (b) imputer sur un compte PCM.
+
+const PCM_PRESETS: Array<{ value: string; label: string; classification: string }> = [
+  { value: "6270", label: "6270 — Frais bancaires", classification: "frais_bancaires" },
+  { value: "6611", label: "6611 — Intérêts emprunts / agios", classification: "interets" },
+  { value: "5811", label: "5811 — Virements internes en cours", classification: "virement_interne" },
+  { value: "4210", label: "4210 — Rémunérations dues (salaires)", classification: "salaire_individuel" },
+  { value: "4310", label: "4310 — Sécurité sociale", classification: "charges_sociales" },
+  { value: "4330", label: "4330 — MRA / PAYE", classification: "paiement_mra" },
+  { value: "4455", label: "4455 — TVA à décaisser", classification: "tva" },
+  { value: "4671", label: "4671 — Compte courant associé (associé)", classification: "cca" },
+  { value: "4672", label: "4672 — Compte courant associé (groupe)", classification: "cca" },
+  { value: "411", label: "411 — Clients (créance)", classification: "client_divers" },
+  { value: "401", label: "401 — Fournisseurs (dette)", classification: "fournisseur_divers" },
+  { value: "1641", label: "1641 — Emprunts (remboursement)", classification: "remboursement_pret" },
+  { value: "627", label: "627 — Services bancaires (autre)", classification: "services_bancaires" },
+  { value: "658", label: "658 — Charges diverses gestion courante", classification: "autre_charge" },
+  { value: "758", label: "758 — Produits divers gestion courante", classification: "autre_produit" },
+]
+
+function AffectDialog({
+  tx,
+  factures,
+  onClose,
+  onAffect,
+  showToast,
+  onReload,
+}: {
+  tx: BankTx | null
+  factures: Facture[]
+  onClose: () => void
+  onAffect: (
+    tx: BankTx,
+    mode: "facture" | "pcm",
+    payload: { facture_id?: string; classification?: string; compte_charge?: string }
+  ) => Promise<{ ok: boolean; error?: string; lettre?: string }>
+  showToast: (msg: string, type?: "success" | "error") => void
+  onReload: () => void
+}) {
+  const [tab, setTab] = useState<"facture" | "pcm">("facture")
+  const [search, setSearch] = useState("")
+  const [pcmCustom, setPcmCustom] = useState("")
+  const [pcmPreset, setPcmPreset] = useState<string>("")
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (tx) {
+      setTab("facture")
+      setSearch("")
+      setPcmCustom("")
+      setPcmPreset("")
+    }
+  }, [tx?.id])
+
+  if (!tx) return null
+
+  const montant = tx.debit > 0 ? -tx.debit : tx.credit
+
+  // Tri des factures par pertinence : montant proche d'abord, puis date
+  const targetAmount = Math.abs(montant)
+  const filteredFactures = (() => {
+    const q = search.trim().toLowerCase()
+    let list = factures.filter((f) => f.statut !== "paye" && f.statut !== "annule")
+    if (q) {
+      list = list.filter(
+        (f) =>
+          f.numero_facture?.toLowerCase().includes(q) ||
+          f.tiers?.toLowerCase().includes(q)
+      )
+    }
+    return list
+      .slice()
+      .sort((a, b) => {
+        const da = Math.abs((Number(a.montant_mur) || Number(a.montant_ttc) || 0) - targetAmount)
+        const db = Math.abs((Number(b.montant_mur) || Number(b.montant_ttc) || 0) - targetAmount)
+        return da - db
+      })
+      .slice(0, 30)
+  })()
+
+  const handleApplyFacture = async (factureId: string) => {
+    setBusy(true)
+    const r = await onAffect(tx, "facture", { facture_id: factureId })
+    setBusy(false)
+    if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
+    showToast(`Imputée sur facture (${r.lettre || "—"})`)
+    onClose()
+    onReload()
+  }
+
+  const handleApplyPcm = async () => {
+    const compte = pcmCustom.trim() || pcmPreset
+    if (!compte) return showToast("Choisis un compte PCM", "error")
+    const preset = PCM_PRESETS.find((p) => p.value === pcmPreset)
+    setBusy(true)
+    const r = await onAffect(tx, "pcm", {
+      compte_charge: compte,
+      classification: preset?.classification || "manuel",
+    })
+    setBusy(false)
+    if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
+    showToast(`Imputée sur PCM ${compte} (${r.lettre || "—"})`)
+    onClose()
+    onReload()
+  }
+
+  return (
+    <Dialog open={!!tx} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Imputer cette transaction</DialogTitle>
+          <DialogDescription>
+            <span className="font-mono">{formatDate(tx.date)}</span> ·{" "}
+            <span className="font-mono">{tx.libelle}</span>
+            <br />
+            <span className="font-mono font-medium">
+              {montant >= 0 ? "+" : ""}
+              {fmt(montant)} {tx.devise || "MUR"}
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs value={tab} onValueChange={(v: any) => setTab(v)}>
+          <TabsList className="w-full">
+            <TabsTrigger value="facture" className="flex-1">
+              <Link2 className="h-3.5 w-3.5 mr-1.5" />
+              Lier à une facture
+            </TabsTrigger>
+            <TabsTrigger value="pcm" className="flex-1">
+              <Wrench className="h-3.5 w-3.5 mr-1.5" />
+              Imputer sur un compte PCM
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="facture" className="mt-3 space-y-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Recherche facture (n°, tiers…)"
+                className="pl-8 h-9"
+              />
+            </div>
+            {filteredFactures.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Aucune facture trouvée.
+              </p>
+            ) : (
+              <div className="rounded border bg-card divide-y max-h-80 overflow-y-auto">
+                {filteredFactures.map((f) => {
+                  const fAmt = Number(f.montant_mur) || Number(f.montant_ttc) || 0
+                  const ecart = Math.abs(fAmt - targetAmount)
+                  const ecartPct = targetAmount > 0 ? (ecart / targetAmount) * 100 : 0
+                  return (
+                    <button
+                      key={f.id}
+                      disabled={busy}
+                      onClick={() => handleApplyFacture(f.id)}
+                      className="w-full flex items-start justify-between gap-3 p-3 hover:bg-muted/30 text-left disabled:opacity-50"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-sm">
+                            {f.numero_facture || f.id.slice(0, 8)}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] ${
+                              f.type_facture === "client"
+                                ? "bg-green-50 text-green-700 border-green-300"
+                                : "bg-rose-50 text-rose-700 border-rose-300"
+                            }`}
+                          >
+                            {f.type_facture === "client" ? "Client" : "Fournisseur"}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px]">
+                            {f.statut}
+                          </Badge>
+                        </div>
+                        <p className="text-xs mt-0.5 break-words">{f.tiers || "—"}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Émise {formatDate(f.date_facture)} · Échéance{" "}
+                          {formatDate(f.date_echeance)}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="font-mono text-sm">
+                          {fmt(f.montant_ttc)} {f.devise || "MUR"}
+                        </p>
+                        {ecartPct > 0.5 && (
+                          <p
+                            className={`text-[10px] font-mono ${
+                              ecartPct > 5 ? "text-red-700" : "text-amber-700"
+                            }`}
+                          >
+                            écart {ecartPct.toFixed(1)}%
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="pcm" className="mt-3 space-y-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">
+                Compte PCM courant
+              </label>
+              <Select value={pcmPreset} onValueChange={setPcmPreset}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Choisir un compte PCM courant…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PCM_PRESETS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">
+                Ou saisir un autre compte PCM (4-digits)
+              </label>
+              <Input
+                value={pcmCustom}
+                onChange={(e) => setPcmCustom(e.target.value)}
+                placeholder="Ex: 6125"
+                className="mt-1 h-9 font-mono"
+              />
+            </div>
+            <Button
+              onClick={handleApplyPcm}
+              disabled={busy || (!pcmPreset && !pcmCustom.trim())}
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
+            >
+              {busy ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+              )}
+              Imputer sur {pcmCustom.trim() || pcmPreset || "…"}
+            </Button>
+            <p className="text-[11px] text-muted-foreground italic">
+              L'écriture comptable BNQ correspondante sera créée automatiquement.
+            </p>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   )
 }
