@@ -526,7 +526,7 @@ export default function ClientRapprochementPage() {
         const body: any = {
           societe_id: societeId,
           dry_run: false,
-          min_confidence: 0.7,
+          min_confidence: 0.8, // strict — préfère rater un match plutôt que d'en proposer un faux
           use_semantic: withAi,
         }
         if (periodeDebut) body.date_debut = periodeDebut

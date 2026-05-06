@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     : null
   const dry_run: boolean = !!body?.dry_run
   const min_confidence: number =
-    typeof body?.min_confidence === "number" ? body.min_confidence : 0.7
+    typeof body?.min_confidence === "number" ? body.min_confidence : 0.8
   const use_semantic: boolean = body?.use_semantic !== false // default true
 
   const sb = getAdminClient()
