@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, History, BrainCircuit, RotateCcw, CalendarDays } from "lucide-react"
+import { Loader2, RefreshCw, Link2, Unlink, Zap, CheckCircle2, AlertCircle, ArrowRightLeft, History, BrainCircuit, RotateCcw, CalendarDays, ChevronDown, ChevronUp } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { LexBanquePanel } from "@/components/comptable/lex-banque-panel"
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
@@ -388,6 +389,25 @@ export default function RapprochementPage() {
         <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
       ) : (
         <>
+          {/* ─── Lex Banque (agent IA) — interface principale ─── */}
+          <LexBanquePanel
+            societeId={selectedSociete}
+            societeName={societes.find((s) => s.id === selectedSociete)?.nom || ""}
+            periodeDebut={periodeDebut}
+            periodeFin={periodeFin}
+            data={data}
+            loading={loading}
+            onReload={load}
+            showToast={showToast}
+          />
+
+          {/* ─── Mode avancé (legacy : tables manuelles + outils) ─── */}
+          <details className="rounded-lg border bg-card mt-6">
+            <summary className="cursor-pointer select-none p-4 text-sm font-medium text-muted-foreground flex items-center gap-2 hover:bg-muted/30">
+              <ChevronDown className="w-4 h-4" />
+              Mode avancé — outils manuels (auto-rapprochement legacy, lettrage manuel, patterns, audit)
+            </summary>
+            <div className="p-4 space-y-4 border-t">
           {/* KPIs */}
           <div className="grid grid-cols-4 gap-4">
             <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Transactions ({periodeLabel})</p><p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p></CardContent></Card>
@@ -548,6 +568,8 @@ export default function RapprochementPage() {
               </CardContent>
             </Card>
           )}
+            </div>
+          </details>
         </>
       )}
 

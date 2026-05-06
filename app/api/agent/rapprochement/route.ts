@@ -136,9 +136,13 @@ export async function POST(request: Request) {
     const compteDevise = compteDeviseMap.get(r.compte_bancaire_id) || "MUR"
     for (let i = 0; i < arr.length; i++) {
       const tx = arr[i]
-      // On skip les tx déjà rapprochées (facture_ids non vide) ou déjà
-      // classifiées avec un compte_comptable manuel — on ne refait pas le
-      // travail déjà validé.
+      // On skip les tx :
+      //   - déjà confirmées (statut "rapproche") — l'humain a validé
+      //   - déjà suggérées (statut "propose" / "a_verifier") — sauf re-run forcé
+      //   - classifiées manuellement avec un compte_comptable
+      const statut = tx.statut
+      if (statut === "rapproche") continue
+      if (statut === "propose" || statut === "a_verifier") continue
       const fids = Array.isArray(tx.facture_ids) ? tx.facture_ids : []
       if (fids.length > 0) continue
       const debit = Number(tx.debit) || 0
@@ -323,12 +327,14 @@ export async function POST(request: Request) {
     semantic = semResult
   }
 
-  // 11. Persister au format Lexora (compatible avec le front /comptable/rapprochement) :
-  //   - Match → statut "rapproche", facture_id (singulier), facture_ids (array),
-  //             matched_type, lettre, rapproche_at
-  //   - Classification → statut "non_identifie" + compte_comptable défini
-  //                      (le front filtre déjà les tx avec compte_comptable de "non identifié")
-  // Référence par tx : "<releve_id>:<idx>"
+  // 11. Persister au format "suggestion" (statuts intermédiaires reconnus par
+  // le front Lexora) :
+  //   - Match agent → statut "propose" (rapprochement non encore confirmé)
+  //   - Classification agent → statut "a_verifier" + compte_comptable suggéré
+  // Le front /comptable/rapprochement liste ces tx dans l'onglet "À valider".
+  // La validation humaine appelle /api/comptable/rapprochement avec
+  // action="lettrer_manuel" qui fait passer en "rapproche" + crée l'écriture
+  // BNQ correspondante.
   type Patch = {
     statut?: string
     facture_id?: string
@@ -345,6 +351,8 @@ export async function POST(request: Request) {
     classification_suggestion?: any
     compte_comptable?: string | null
     note?: string
+    /** "agent_algo" | "agent_ai" — source de la suggestion pour le front */
+    suggestion_source?: string
   }
   const patchByTx = new Map<string, Patch>()
 
@@ -367,11 +375,11 @@ export async function POST(request: Request) {
     return `${prefix}-${key.replace(/[:-]/g, "").slice(0, 18)}`
   }
 
-  // Matches algorithmiques
+  // Matches algorithmiques → statut "propose" (en attente validation humaine)
   for (const m of result.matches) {
     if (m.confidence < min_confidence) continue
     const patch: Patch = {
-      statut: "rapproche",
+      statut: "propose",
       facture_id: m.factureIds[0],
       facture_ids: m.factureIds,
       matched_type: m.strategy,
@@ -380,7 +388,8 @@ export async function POST(request: Request) {
       match_confidence: `agent_${Math.round(m.confidence * 100)}`,
       lettre: genLettre("agent", m.transactionKey),
       rapproche_at: new Date().toISOString(),
-      note: "Rapprochement automatique (agent)",
+      suggestion_source: "agent_algo",
+      note: "Suggestion agent (algo) — à valider",
     }
     if (m.factureIds.length > 1) {
       patch.rapprochement_multi = true
@@ -389,23 +398,27 @@ export async function POST(request: Request) {
     patchByTx.set(m.transactionKey, patch)
   }
 
-  // Classifications algorithmiques
+  // Classifications algorithmiques → statut "a_verifier" (PCM suggéré)
   for (const c of result.classifications) {
     if (c.confidence < min_confidence) continue
-    if (patchByTx.has(c.transactionKey)) continue // un match prévaut sur une classif
+    if (patchByTx.has(c.transactionKey)) continue
     const pcm = PCM_BY_CLASSIFICATION[c.type] || null
     patchByTx.set(c.transactionKey, {
-      statut: "non_identifie",
+      statut: "a_verifier",
       compte_comptable: pcm,
       classification: c.type,
       matched_strategy: "classification_agent",
+      matched_confidence: c.confidence,
+      match_confidence: `agent_${Math.round(c.confidence * 100)}`,
+      suggestion_source: "agent_algo",
       classification_suggestion: {
         type: c.type,
         note: c.note,
         ecritureId: c.ecritureId,
         confidence: c.confidence,
+        compte_pcm: pcm,
       },
-      note: c.note || `Classification automatique (${c.type})`,
+      note: c.note || `Classification suggérée (${c.type}) — à valider`,
     })
   }
 
@@ -414,7 +427,7 @@ export async function POST(request: Request) {
     if (patchByTx.has(m.transactionKey)) continue
     if (m.confidence < min_confidence) continue
     patchByTx.set(m.transactionKey, {
-      statut: "rapproche",
+      statut: "propose",
       facture_id: m.factureIds[0],
       facture_ids: m.factureIds,
       matched_type: "claude_semantic",
@@ -425,7 +438,8 @@ export async function POST(request: Request) {
       rapproche_at: new Date().toISOString(),
       rapprochement_multi: m.factureIds.length > 1,
       nb_factures: m.factureIds.length,
-      note: `Rapprochement IA Claude — ${m.reasoning}`.slice(0, 200),
+      suggestion_source: "agent_ai",
+      note: `Suggestion IA Claude — ${m.reasoning}`.slice(0, 200),
     })
   }
 
@@ -435,10 +449,13 @@ export async function POST(request: Request) {
     if (c.confidence < min_confidence) continue
     const pcm = c.compte_pcm || PCM_BY_CLASSIFICATION[c.type] || null
     patchByTx.set(c.transactionKey, {
-      statut: "non_identifie",
+      statut: "a_verifier",
       compte_comptable: pcm,
       classification: c.type,
       matched_strategy: "claude_semantic",
+      matched_confidence: c.confidence,
+      match_confidence: `ai_${Math.round(c.confidence * 100)}`,
+      suggestion_source: "agent_ai",
       classification_suggestion: {
         type: c.type,
         note: c.reasoning,
