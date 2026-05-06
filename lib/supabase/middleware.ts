@@ -61,12 +61,14 @@ export async function updateSession(request: NextRequest) {
   // API routes explicitly whitelisted as public (no auth required).
   // All other /api/* routes require an authenticated user (see below).
   //   /api/cron/*    → protégé par verifyCronSecret (header secret)
+  //   /api/agent/*   → protégé par verifyAgentSecret (LEXORA_AGENT_SECRET)
   //   /api/public/*  → endpoints publics (ex: signer-contrat flow)
   //   /api/contact   → formulaire de support (lead-capture)
   //   /api/auth/*    → callbacks / endpoints Supabase auth
   //   /api/health    → probes infrastructure (liveness / readiness)
   const publicApiPrefixes = [
     '/api/cron/',
+    '/api/agent/',
     '/api/public/',
     '/api/auth/',
   ]
