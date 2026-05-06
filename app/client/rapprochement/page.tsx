@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -38,6 +39,10 @@ import {
   Bot,
   RefreshCw,
   CalendarDays,
+  Search,
+  Wand2,
+  Wrench,
+  Landmark,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -125,10 +130,17 @@ export default function ClientRapprochementPage() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [runningAgent, setRunningAgent] = useState(false)
+  const [autoLettrage, setAutoLettrage] = useState(false)
+  const [reclassifying, setReclassifying] = useState(false)
   const [validating, setValidating] = useState(false)
   const [activeTab, setActiveTab] = useState("a-valider")
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
+  // Filtres
+  const [search, setSearch] = useState("")
+  const [filtreSens, setFiltreSens] = useState<"all" | "client" | "fournisseur">("all")
+  const [filtreCompte, setFiltreCompte] = useState<string>("all")
+  const [filtreTiers, setFiltreTiers] = useState<string>("all")
 
   const periodeDebut = modeToutes ? null : `${selectedAnnee}-${selectedMois}-01`
   const periodeFin = modeToutes
@@ -179,36 +191,138 @@ export default function ClientRapprochementPage() {
     return m
   }, [factures])
 
+  // Liste des comptes bancaires uniques (pour filtre)
+  const comptesUniques = useMemo(() => {
+    const map = new Map<string, { id: string; label: string; devise: string }>()
+    for (const t of transactions) {
+      const id = (t as any).releve_id || ""
+      const banque = (t as any).banque || ""
+      const devise = (t as any).devise || "MUR"
+      if (!map.has(banque + "|" + devise) && banque) {
+        map.set(banque + "|" + devise, {
+          id: banque + "|" + devise,
+          label: `${banque} (${devise})`,
+          devise,
+        })
+      }
+    }
+    return Array.from(map.values())
+  }, [transactions])
+
+  // Liste des tiers détectés (pour filtre)
+  const tiersList = useMemo(() => {
+    const set = new Set<string>()
+    for (const t of transactions) {
+      if (t.tiers_detecte) set.add(t.tiers_detecte)
+    }
+    for (const f of factures) {
+      if (f.tiers) set.add(f.tiers)
+    }
+    return Array.from(set).sort()
+  }, [transactions, factures])
+
+  // Applique les filtres communs (search + sens + compte + tiers)
+  function applyFilters(list: BankTx[]): BankTx[] {
+    let out = list
+    if (filtreSens !== "all") {
+      out = out.filter((t) => {
+        const fids =
+          Array.isArray(t.facture_ids) && t.facture_ids.length > 0
+            ? t.facture_ids
+            : t.facture_id
+              ? [t.facture_id]
+              : []
+        if (fids.length === 0) {
+          // Pour les classifications ou orphelines, sens = signe du montant
+          if (filtreSens === "client") return t.credit > 0 // entrée
+          if (filtreSens === "fournisseur") return t.debit > 0 // sortie
+          return true
+        }
+        // Sinon on vérifie le type des factures liées
+        const linked = fids.map((id) => factures.find((f) => f.id === id)).filter(Boolean) as Facture[]
+        return linked.some((f) => f.type_facture === filtreSens)
+      })
+    }
+    if (filtreCompte !== "all") {
+      out = out.filter((t) => {
+        const banque = (t as any).banque || ""
+        const devise = (t as any).devise || "MUR"
+        return banque + "|" + devise === filtreCompte
+      })
+    }
+    if (filtreTiers !== "all") {
+      out = out.filter((t) => {
+        if (t.tiers_detecte === filtreTiers) return true
+        const fids =
+          Array.isArray(t.facture_ids) && t.facture_ids.length > 0
+            ? t.facture_ids
+            : t.facture_id
+              ? [t.facture_id]
+              : []
+        const linked = fids.map((id) => factures.find((f) => f.id === id)).filter(Boolean) as Facture[]
+        return linked.some((f) => f.tiers === filtreTiers)
+      })
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      out = out.filter(
+        (t) =>
+          t.libelle.toLowerCase().includes(q) ||
+          t.tiers_detecte?.toLowerCase().includes(q) ||
+          t.compte_comptable?.includes(q) ||
+          t.lettre?.toLowerCase().includes(q) ||
+          String(t.debit).includes(q) ||
+          String(t.credit).includes(q)
+      )
+    }
+    return out
+  }
+
   const proposes = useMemo(
-    () => transactions.filter((t) => t.statut === "propose"),
-    [transactions]
+    () => applyFilters(transactions.filter((t) => t.statut === "propose")),
+    [transactions, search, filtreSens, filtreCompte, filtreTiers, factures]
   )
   const aVerifier = useMemo(
-    () => transactions.filter((t) => t.statut === "a_verifier"),
-    [transactions]
+    () => applyFilters(transactions.filter((t) => t.statut === "a_verifier")),
+    [transactions, search, filtreSens, filtreCompte, filtreTiers, factures]
   )
   const rapprochees = useMemo(
     () =>
-      transactions.filter(
-        (t) =>
-          t.statut === "rapproche" ||
-          (!t.statut &&
-            (t.facture_id || (Array.isArray(t.facture_ids) && t.facture_ids.length > 0)))
+      applyFilters(
+        transactions.filter(
+          (t) =>
+            t.statut === "rapproche" ||
+            (!t.statut &&
+              (t.facture_id || (Array.isArray(t.facture_ids) && t.facture_ids.length > 0)))
+        )
       ),
-    [transactions]
+    [transactions, search, filtreSens, filtreCompte, filtreTiers, factures]
   )
   const orphelines = useMemo(
     () =>
-      transactions.filter(
-        (t) =>
-          (t.statut === "non_identifie" || !t.statut) &&
-          !t.facture_id &&
-          !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0) &&
-          !t.compte_comptable
+      applyFilters(
+        transactions.filter(
+          (t) =>
+            (t.statut === "non_identifie" || !t.statut) &&
+            !t.facture_id &&
+            !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0) &&
+            !t.compte_comptable
+        )
       ),
-    [transactions]
+    [transactions, search, filtreSens, filtreCompte, filtreTiers, factures]
   )
   const totalSuggestions = proposes.length + aVerifier.length
+  const hasFilter =
+    !!search.trim() ||
+    filtreSens !== "all" ||
+    filtreCompte !== "all" ||
+    filtreTiers !== "all"
+  const resetFilters = () => {
+    setSearch("")
+    setFiltreSens("all")
+    setFiltreCompte("all")
+    setFiltreTiers("all")
+  }
 
   const groups = useMemo(() => {
     type Grp = {
@@ -262,6 +376,67 @@ export default function ClientRapprochementPage() {
       })
     return g
   }, [proposes, aVerifier])
+
+  // Lettrage automatique sans IA — appelle la pipeline native
+  // /api/comptable/rapprochement?action=auto_rapprocher (matching algo pur).
+  const handleAutoLettrage = useCallback(async () => {
+    if (!societeId) return
+    setAutoLettrage(true)
+    try {
+      const body: any = { action: "auto_rapprocher", societe_id: societeId }
+      if (periodeDebut) body.date_debut = periodeDebut
+      if (periodeFin) body.date_fin = periodeFin
+      const res = await fetch("/api/comptable/rapprochement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        showToast(d?.error || "Erreur lettrage automatique", "error")
+        return
+      }
+      showToast(
+        `Lettrage automatique : ${d.matched || 0} transaction(s) rapprochée(s)`
+      )
+      load()
+    } catch (e: any) {
+      showToast(`Erreur : ${e?.message || "réseau"}`, "error")
+    } finally {
+      setAutoLettrage(false)
+    }
+  }, [societeId, periodeDebut, periodeFin, load, showToast])
+
+  // Classification comptable automatique (R01-R06) sur les tx orphelines —
+  // applique les règles déterministes (frais bancaires, salaires, MRA, etc.)
+  // sans matcher de facture.
+  const handleReclassify = useCallback(async () => {
+    if (!societeId) return
+    setReclassifying(true)
+    try {
+      const body: any = { societe_id: societeId }
+      if (periodeDebut) body.date_debut = periodeDebut
+      if (periodeFin) body.date_fin = periodeFin
+      const res = await fetch("/api/comptable/rapprochement/reclassify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        showToast(d?.error || "Erreur classification", "error")
+        return
+      }
+      showToast(
+        `Classification : ${d.classified || d.matched || 0} transaction(s) classée(s)`
+      )
+      load()
+    } catch (e: any) {
+      showToast(`Erreur : ${e?.message || "réseau"}`, "error")
+    } finally {
+      setReclassifying(false)
+    }
+  }, [societeId, periodeDebut, periodeFin, load, showToast])
 
   const handleRunAgent = useCallback(async () => {
     if (!societeId) return
@@ -521,6 +696,125 @@ export default function ClientRapprochementPage() {
             )}
           </div>
         </div>
+
+        {/* Encadré explicatif + actions manuelles */}
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="p-4 space-y-3">
+            <div className="text-sm text-amber-900/90 space-y-1.5">
+              <p>
+                <span className="font-medium">Comment fonctionne cette page&nbsp;:</span> les transactions de tes relevés bancaires sont rapprochées avec tes factures (clients & fournisseurs) ou classées dans le bon compte PCM (frais bancaires, salaires, etc.).
+              </p>
+              <p>
+                <span className="font-medium">3 façons d'agir&nbsp;:</span>
+              </p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                <li>
+                  <span className="font-medium text-purple-700">Lex Banque (IA)</span> — l'agent rapproche tout en un clic, gère les libellés ambigus et les multi-devises.
+                </li>
+                <li>
+                  <span className="font-medium text-blue-700">Lettrage automatique</span> — moteur d'algorithmes (8 stratégies cascadées) sans IA, plus rapide pour les volumes simples.
+                </li>
+                <li>
+                  <span className="font-medium text-green-700">Classification</span> — applique les règles R01-R06 (frais bancaires, salaires bulk, MRA…) sur les transactions orphelines sans matcher de facture.
+                </li>
+              </ul>
+              <p>
+                Les suggestions apparaissent dans l'onglet <span className="font-medium">À valider</span>. Tu peux ensuite tout valider en lot ou cas par cas. Filtre par tiers / banque / période ci-dessous pour zoomer.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={handleAutoLettrage}
+                disabled={autoLettrage || loading || !societeId}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {autoLettrage ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Wand2 className="h-4 w-4 mr-1.5" />
+                )}
+                Lettrage automatique
+              </Button>
+              <Button
+                onClick={handleReclassify}
+                disabled={reclassifying || loading || !societeId}
+                size="sm"
+                variant="outline"
+                className="border-green-300 text-green-700 hover:bg-green-50"
+              >
+                {reclassifying ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Wrench className="h-4 w-4 mr-1.5" />
+                )}
+                Classification (R01-R06)
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Barre de filtres */}
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Libellé, tiers, montant, lettre, PCM…"
+                  className="pl-8 h-9 w-72"
+                />
+              </div>
+              <Select
+                value={filtreSens}
+                onValueChange={(v: any) => setFiltreSens(v)}
+              >
+                <SelectTrigger className="h-9 w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous (clients & fournisseurs)</SelectItem>
+                  <SelectItem value="client">Clients (entrées)</SelectItem>
+                  <SelectItem value="fournisseur">Fournisseurs (sorties)</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filtreCompte} onValueChange={setFiltreCompte}>
+                <SelectTrigger className="h-9 w-52">
+                  <Landmark className="h-3.5 w-3.5 mr-1.5" />
+                  <SelectValue placeholder="Compte bancaire" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les banques</SelectItem>
+                  {comptesUniques.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filtreTiers} onValueChange={setFiltreTiers}>
+                <SelectTrigger className="h-9 w-56">
+                  <SelectValue placeholder="Tiers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les tiers</SelectItem>
+                  {tiersList.slice(0, 100).map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t.length > 50 ? t.slice(0, 47) + "…" : t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {hasFilter && (
+                <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs">
+                  Réinitialiser
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {!societeId ? (
           <Card>
