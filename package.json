@@ -9,7 +9,10 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "n8n:setup": "node scripts/setup-n8n-creds.mjs",
+    "n8n:list": "node scripts/sync-n8n.mjs list",
+    "n8n:push": "node scripts/sync-n8n.mjs push-all"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
