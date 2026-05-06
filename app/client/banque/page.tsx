@@ -104,12 +104,12 @@ export default function ClientBanquePage() {
     if (!societeId) return
     setLoading(true)
     try {
-      // /api/client/financial expose les comptes_bancaires + transactions agrégées
-      // dans `financial.bankAccounts` et `financial.bankTransactions`.
-      const res = await fetch(`/api/client/financial?societe_id=${societeId}`)
+      // Nouveau endpoint dédié qui retourne comptes + relevés bruts
+      const res = await fetch(
+        `/api/client/releves-bancaires?societe_id=${societeId}`
+      )
       const d = await res.json()
-      const fin = d?.financial || {}
-      const accounts: CompteBancaire[] = (fin.bankAccounts || []).map((a: any) => ({
+      const accounts: CompteBancaire[] = (d.comptes || []).map((a: any) => ({
         id: a.id,
         banque: a.banque || "—",
         nom_compte: a.nom_compte || a.numero_compte,
@@ -117,44 +117,14 @@ export default function ClientBanquePage() {
         iban: a.iban || null,
         devise: a.devise || "MUR",
         compte_comptable: a.compte_comptable || "—",
-        solde_actuel: Number(a.solde_actuel) || Number(a.solde_mur) || 0,
+        solde_actuel: Number(a.solde_actuel) || 0,
         solde_dernier_releve: Number(a.solde_dernier_releve) || 0,
         date_dernier_releve: a.date_dernier_releve || null,
         compte_principal: !!a.compte_principal,
         actif: a.actif !== false,
       }))
       setComptes(accounts)
-      // Reconstruire les relevés depuis les bankTransactions plates
-      const txs: any[] = fin.bankTransactions || []
-      const releveMap = new Map<string, ReleveBancaire>()
-      for (const t of txs) {
-        const rid: string = t.releve_id || t.releveId
-        if (!rid) continue
-        const cur = releveMap.get(rid) || {
-          id: rid,
-          compte_bancaire_id: t.compte_bancaire_id || t.account_id || "",
-          periode: t.periode || "",
-          date_debut: t.date,
-          date_fin: t.date,
-          solde_ouverture: 0,
-          solde_cloture: 0,
-          total_debits: 0,
-          total_credits: 0,
-          statut_rapprochement: t.statut_rapprochement || "en_attente",
-          transactions_json: [],
-          created_at: t.created_at || t.date,
-        }
-        cur.transactions_json = cur.transactions_json || []
-        cur.transactions_json.push(t)
-        if (t.date) {
-          if (!cur.date_debut || t.date < cur.date_debut) cur.date_debut = t.date
-          if (!cur.date_fin || t.date > cur.date_fin) cur.date_fin = t.date
-        }
-        cur.total_debits += Number(t.debit) || 0
-        cur.total_credits += Number(t.credit) || 0
-        releveMap.set(rid, cur)
-      }
-      setReleves(Array.from(releveMap.values()))
+      setReleves(d.releves || [])
     } catch {
       showToast("Erreur chargement", "error")
     } finally {
