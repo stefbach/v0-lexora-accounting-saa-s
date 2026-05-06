@@ -18,6 +18,14 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Loader2,
   Landmark,
@@ -30,6 +38,8 @@ import {
   FileText,
   Bot,
   ArrowRight,
+  Search,
+  ListFilter,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -94,6 +104,10 @@ export default function ClientBanquePage() {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [search, setSearch] = useState("")
+  const [filtreCompte, setFiltreCompte] = useState<string>("all")
+  const [filtreStatut, setFiltreStatut] = useState<string>("all")
+  const [maxRows, setMaxRows] = useState(100)
 
   const showToast = useCallback((msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
@@ -454,6 +468,20 @@ export default function ClientBanquePage() {
               </CardContent>
             </Card>
 
+            {/* Toutes les écritures bancaires (recherche + filtres) */}
+            <TransactionsList
+              comptes={comptes}
+              releves={releves}
+              search={search}
+              setSearch={setSearch}
+              filtreCompte={filtreCompte}
+              setFiltreCompte={setFiltreCompte}
+              filtreStatut={filtreStatut}
+              setFiltreStatut={setFiltreStatut}
+              maxRows={maxRows}
+              setMaxRows={setMaxRows}
+            />
+
             {/* CTA Lex Banque */}
             {(comptes.length > 0 || releves.length > 0) && (
               <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-5">
@@ -484,6 +512,273 @@ export default function ClientBanquePage() {
         )}
       </div>
     </ClientPageShell>
+  )
+}
+
+function TransactionsList({
+  comptes,
+  releves,
+  search,
+  setSearch,
+  filtreCompte,
+  setFiltreCompte,
+  filtreStatut,
+  setFiltreStatut,
+  maxRows,
+  setMaxRows,
+}: {
+  comptes: CompteBancaire[]
+  releves: ReleveBancaire[]
+  search: string
+  setSearch: (v: string) => void
+  filtreCompte: string
+  setFiltreCompte: (v: string) => void
+  filtreStatut: string
+  setFiltreStatut: (v: string) => void
+  maxRows: number
+  setMaxRows: (n: number) => void
+}) {
+  // Aplatit toutes les transactions de tous les relevés
+  const allTx = useMemo(() => {
+    const out: Array<{
+      releve_id: string
+      compte_bancaire_id: string
+      idx: number
+      date: string
+      libelle: string
+      debit: number
+      credit: number
+      devise: string
+      statut: string
+      tiers_detecte: string | null
+      compte_comptable: string | null
+      facture_ids: string[]
+      matched_strategy: string | null
+      matched_confidence: number | null
+      lettre: string | null
+    }> = []
+    for (const r of releves) {
+      const compte = comptes.find((c) => c.id === r.compte_bancaire_id)
+      const arr: any[] = Array.isArray(r.transactions_json) ? r.transactions_json : []
+      for (let i = 0; i < arr.length; i++) {
+        const tx = arr[i] || {}
+        out.push({
+          releve_id: r.id,
+          compte_bancaire_id: r.compte_bancaire_id,
+          idx: i,
+          date: tx.date || "",
+          libelle: tx.libelle || "",
+          debit: Number(tx.debit) || 0,
+          credit: Number(tx.credit) || 0,
+          devise: tx.devise || compte?.devise || "MUR",
+          statut: tx.statut || "non_identifie",
+          tiers_detecte: tx.tiers_detecte || null,
+          compte_comptable: tx.compte_comptable || null,
+          facture_ids: Array.isArray(tx.facture_ids)
+            ? tx.facture_ids
+            : tx.facture_id
+              ? [tx.facture_id]
+              : [],
+          matched_strategy: tx.matched_strategy || null,
+          matched_confidence: tx.matched_confidence || null,
+          lettre: tx.lettre || null,
+        })
+      }
+    }
+    return out
+  }, [releves, comptes])
+
+  const compteById = useMemo(() => {
+    const m = new Map<string, CompteBancaire>()
+    for (const c of comptes) m.set(c.id, c)
+    return m
+  }, [comptes])
+
+  const filtered = useMemo(() => {
+    let list = allTx
+    if (filtreCompte !== "all") {
+      list = list.filter((t) => t.compte_bancaire_id === filtreCompte)
+    }
+    if (filtreStatut !== "all") {
+      list = list.filter((t) => t.statut === filtreStatut)
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(
+        (t) =>
+          t.libelle.toLowerCase().includes(q) ||
+          t.tiers_detecte?.toLowerCase().includes(q) ||
+          t.compte_comptable?.includes(q) ||
+          t.lettre?.toLowerCase().includes(q) ||
+          String(t.debit).includes(q) ||
+          String(t.credit).includes(q)
+      )
+    }
+    return list.slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+  }, [allTx, filtreCompte, filtreStatut, search])
+
+  const visible = filtered.slice(0, maxRows)
+  const totalDebit = filtered.reduce((s, t) => s + t.debit, 0)
+  const totalCredit = filtered.reduce((s, t) => s + t.credit, 0)
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ListFilter className="h-5 w-5 text-blue-600" />
+            Toutes les écritures bancaires ({filtered.length})
+          </CardTitle>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Libellé, tiers, montant…"
+                className="pl-8 h-9 w-64"
+              />
+            </div>
+            <Select value={filtreCompte} onValueChange={setFiltreCompte}>
+              <SelectTrigger className="h-9 w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les comptes</SelectItem>
+                {comptes.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.banque} {c.numero_compte} ({c.devise})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filtreStatut} onValueChange={setFiltreStatut}>
+              <SelectTrigger className="h-9 w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous statuts</SelectItem>
+                <SelectItem value="non_identifie">Non identifiée</SelectItem>
+                <SelectItem value="propose">Proposée (agent)</SelectItem>
+                <SelectItem value="a_verifier">À vérifier</SelectItem>
+                <SelectItem value="rapproche">Rapprochée</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {filtered.length > 0 && (
+          <div className="flex gap-4 mt-2 text-xs text-muted-foreground font-mono">
+            <span>
+              D{" "}
+              <span className="text-green-700">
+                {totalDebit.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </span>
+            <span>
+              C{" "}
+              <span className="text-rose-700">
+                {totalCredit.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </span>
+            <span>
+              Solde net{" "}
+              <span className={totalDebit - totalCredit >= 0 ? "text-green-700" : "text-rose-700"}>
+                {(totalDebit - totalCredit).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </span>
+          </div>
+        )}
+      </CardHeader>
+      <CardContent>
+        {filtered.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            Aucune écriture pour ce filtre.
+          </p>
+        ) : (
+          <>
+            <div className="rounded border bg-card divide-y">
+              {visible.map((t) => {
+                const compte = compteById.get(t.compte_bancaire_id)
+                const isMatched = t.statut === "rapproche"
+                const isPropose = t.statut === "propose" || t.statut === "a_verifier"
+                const montant = t.debit > 0 ? -t.debit : t.credit
+                return (
+                  <div
+                    key={`${t.releve_id}:${t.idx}`}
+                    className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {formatDate(t.date)}
+                        </span>
+                        {compte && (
+                          <Badge variant="outline" className="text-[10px] font-mono">
+                            {compte.banque} {compte.numero_compte} ({compte.devise})
+                          </Badge>
+                        )}
+                        {isMatched && (
+                          <Badge className="text-[10px] bg-green-100 text-green-700 border-green-300">
+                            <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                            Rapprochée
+                          </Badge>
+                        )}
+                        {isPropose && (
+                          <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
+                            <Bot className="h-3 w-3 mr-0.5" />
+                            {t.statut === "propose" ? "Proposée" : "À vérifier"}
+                          </Badge>
+                        )}
+                        {t.compte_comptable && (
+                          <Badge variant="outline" className="text-[10px] font-mono">
+                            PCM {t.compte_comptable}
+                          </Badge>
+                        )}
+                        {t.lettre && (
+                          <Badge variant="outline" className="text-[10px] font-mono bg-green-50">
+                            {t.lettre}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm mt-1 break-words">{t.libelle || "—"}</p>
+                      {t.tiers_detecte && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Tiers : {t.tiers_detecte}
+                        </p>
+                      )}
+                    </div>
+                    <p
+                      className={`font-mono text-sm flex-shrink-0 ${
+                        montant >= 0 ? "text-green-700" : "text-rose-700"
+                      }`}
+                    >
+                      {montant >= 0 ? "+" : ""}
+                      {montant.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+                      {t.devise}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+            {filtered.length > maxRows && (
+              <div className="text-center mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMaxRows(maxRows + 100)}
+                >
+                  Charger {Math.min(100, filtered.length - maxRows)} de plus
+                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {visible.length} sur {filtered.length}
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
