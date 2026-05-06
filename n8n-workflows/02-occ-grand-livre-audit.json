@@ -1,0 +1,178 @@
+{
+  "name": "[Lexora] OCC — Lex Livre (audit Grand Livre)",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-trigger",
+      "name": "Run manuel",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [80, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "societe_id",
+              "value": "b010d75c-62a2-4aae-a52b-8c18261047f7",
+              "type": "string"
+            },
+            {
+              "id": "p2",
+              "name": "societe_nom",
+              "value": "Obesity Care Clinic Ltd",
+              "type": "string"
+            },
+            {
+              "id": "p3",
+              "name": "lexora_base_url",
+              "value": "https://www.lexora.finance",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-params",
+      "name": "Paramètres OCC",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [280, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.lexora_base_url }}/api/agent/grand-livre",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ societe_id: $json.societe_id }) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "node-audit",
+      "name": "Lex Livre — Audit Grand Livre",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300],
+      "credentials": {
+        "httpHeaderAuth": { "name": "Lexora Agent (bearer)" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construit un brief Claude à partir de l'audit Lex Livre.\n// Inclut les anomalies, les classes, et les comptes hors PCM pour\n// produire un rapport markdown FR exploitable par le comptable.\n\nconst params = $('Paramètres OCC').first().json;\nconst audit = $('Lex Livre — Audit Grand Livre').first().json;\n\nconst brief = {\n  societe: { id: params.societe_id, nom: params.societe_nom },\n  generated_at: new Date().toISOString(),\n  score: audit.score,\n  severity: audit.severity,\n  summary: audit.summary,\n  issues: audit.issues || [],\n  classes: audit.classes || [],\n  comptes_hors_pcm: (audit.comptes_hors_pcm || []).slice(0, 15),\n  tiers_non_lettres_vieux: (audit.tiers_non_lettres_vieux || []).slice(0, 15),\n  doublons_count: audit.doublons_count,\n  ecritures_sans_ref: audit.ecritures_sans_ref,\n};\n\nconst systemPrompt = [\n  \"Tu es un expert-comptable mauricien spécialisé en IFRS et plan comptable mauricien (PCM).\",\n  \"Tu reçois le résultat d'un audit automatique du Grand Livre (agent Lex Livre).\",\n  \"Produis un RAPPORT en français, structuré et exploitable, pour un comptable senior.\",\n  \"\",\n  \"Format strict (markdown) :\",\n  \"\",\n  \"# Audit Grand Livre — <nom société>\",\n  \"\",\n  \"## 1. Résumé exécutif\",\n  \"3 phrases max : score de santé, niveau de gravité, action prioritaire.\",\n  \"\",\n  \"## 2. État de la balance R1\",\n  \"Total débit, total crédit, écart. Si écart > 0.01 → ALERTE et causes probables.\",\n  \"\",\n  \"## 3. Ventilation par classe\",\n  \"Table : classe, label, comptes mouvementés/PCM total, débit, crédit. Identifier les classes vides ou suspectes.\",\n  \"\",\n  \"## 4. Anomalies détectées\",\n  \"Pour chaque issue de l'audit : sévérité, message, recommandation comptable concrète (ex: lancer /admin/repair, lettrer manuellement les anciennes 411x, etc.).\",\n  \"\",\n  \"## 5. Comptes hors PCM\",\n  \"Si présents : lister les codes inconnus avec leur volume, et proposer le compte PCM 4-digits canonique de remplacement (basé sur la nature probable).\",\n  \"\",\n  \"## 6. Tiers anciens non lettrés\",\n  \"Si présents : nombre + montant cumulé + nom des tiers les plus exposés. Recommandation : relance / lettrage manuel.\",\n  \"\",\n  \"## 7. Plan d'action priorisé\",\n  \"Liste numérotée et priorisée (5 max), chaque action concrète et actionnable cette semaine.\",\n  \"\",\n  \"Ne JAMAIS inventer de chiffres : si une donnée manque, écris '— donnée non disponible'. Sois concis, factuel, professionnel. Pas d'emoji.\",\n].join('\\n');\n\nconst userText = 'Voici le brief JSON de l\\'audit à analyser :\\n\\n```json\\n' + JSON.stringify(brief, null, 2) + '\\n```';\n\nconst anthropic_payload = {\n  model: 'claude-haiku-4-5-20251001',\n  max_tokens: 4096,\n  system: systemPrompt,\n  messages: [{ role: 'user', content: userText }],\n};\n\nreturn { json: { brief, anthropic_payload } };"
+      },
+      "id": "node-build-brief",
+      "name": "Construire brief pour Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.anthropic_payload) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "node-claude",
+      "name": "Claude — Génère le rapport",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 300],
+      "credentials": {
+        "httpHeaderAuth": { "name": "Anthropic Lexora (x-api-key)" }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "out1",
+              "name": "report_markdown",
+              "value": "={{ $json.content?.[0]?.text || '— pas de réponse Claude —' }}",
+              "type": "string"
+            },
+            {
+              "id": "out2",
+              "name": "score",
+              "value": "={{ $('Construire brief pour Claude').item.json.brief.score }}",
+              "type": "number"
+            },
+            {
+              "id": "out3",
+              "name": "severity",
+              "value": "={{ $('Construire brief pour Claude').item.json.brief.severity }}",
+              "type": "string"
+            },
+            {
+              "id": "out4",
+              "name": "issues",
+              "value": "={{ $('Construire brief pour Claude').item.json.brief.issues }}",
+              "type": "array"
+            },
+            {
+              "id": "out5",
+              "name": "summary",
+              "value": "={{ $('Construire brief pour Claude').item.json.brief.summary }}",
+              "type": "object"
+            },
+            {
+              "id": "out6",
+              "name": "generated_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-output",
+      "name": "Sortie finale",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1160, 300]
+    }
+  ],
+  "connections": {
+    "Run manuel": {
+      "main": [[{ "node": "Paramètres OCC", "type": "main", "index": 0 }]]
+    },
+    "Paramètres OCC": {
+      "main": [[{ "node": "Lex Livre — Audit Grand Livre", "type": "main", "index": 0 }]]
+    },
+    "Lex Livre — Audit Grand Livre": {
+      "main": [[{ "node": "Construire brief pour Claude", "type": "main", "index": 0 }]]
+    },
+    "Construire brief pour Claude": {
+      "main": [[{ "node": "Claude — Génère le rapport", "type": "main", "index": 0 }]]
+    },
+    "Claude — Génère le rapport": {
+      "main": [[{ "node": "Sortie finale", "type": "main", "index": 0 }]]
+    }
+  }
+}
