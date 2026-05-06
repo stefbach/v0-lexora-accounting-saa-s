@@ -397,7 +397,10 @@ export default function ClientRapprochementPage() {
     setSelectedTxIds((prev) => {
       const n = new Set(prev)
       const all = items.every((t) => n.has(t.id))
-      for (const t of items) (all ? n.delete : n.add).call(n, t.id)
+      for (const t of items) {
+        if (all) n.delete(t.id)
+        else n.add(t.id)
+      }
       return n
     })
 
