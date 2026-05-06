@@ -73,11 +73,10 @@ export default function ClientFournisseursPage() {
     if (!societeId) return
     setLoading(true)
     try {
-      const res = await fetch(
-        `/api/comptable/factures?societe_id=${societeId}&type=fournisseur&limit=1000`
-      )
+      const res = await fetch(`/api/client/financial?societe_id=${societeId}`)
       const d = await res.json()
-      setFactures(d?.factures || d?.data || [])
+      const fin = d?.financial || {}
+      setFactures((fin.factures || []).filter((f: any) => f.type_facture === "fournisseur"))
     } catch {}
     finally {
       setLoading(false)

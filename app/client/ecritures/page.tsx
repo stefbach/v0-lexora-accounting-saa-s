@@ -81,11 +81,28 @@ export default function ClientEcrituresPage() {
     if (!societeId) return
     setLoading(true)
     try {
-      const res = await fetch(
-        `/api/comptable/ecritures?societe_id=${societeId}&limit=500`
-      )
+      // Utilise /api/client/financial qui expose financial.ecritures (V2).
+      // Le format retourné a déjà les aliases `compte`, `debit`, `credit`.
+      const res = await fetch(`/api/client/financial?societe_id=${societeId}`)
       const d = await res.json()
-      setEcritures(d?.ecritures || d?.data || [])
+      const fin = d?.financial || {}
+      const arr = (fin.ecritures || []).map((e: any) => ({
+        id: e.id,
+        date_ecriture: e.date_ecriture,
+        journal: e.journal || "",
+        numero_compte: e.numero_compte || e.compte || "",
+        libelle: e.libelle || null,
+        debit_mur: Number(e.debit_mur) || Number(e.debit) || 0,
+        credit_mur: Number(e.credit_mur) || Number(e.credit) || 0,
+        devise_origine: e.devise_origine || null,
+        montant_origine: e.montant_origine || null,
+        taux_change_applique: e.taux_change_applique || null,
+        ref_folio: e.ref_folio || null,
+        lettre: e.lettre || null,
+        date_lettrage: e.date_lettrage || null,
+        facture_id: e.facture_id || null,
+      }))
+      setEcritures(arr)
     } catch {}
     finally {
       setLoading(false)

@@ -100,9 +100,13 @@ export default function ClientFacturesPage() {
     if (!societeId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/client/factures?societe_id=${societeId}`)
+      // /api/client/factures retourne uniquement les factures clients.
+      // Pour avoir aussi les fournisseurs on utilise /api/client/financial
+      // qui retourne `financial.factures` (tous types).
+      const res = await fetch(`/api/client/financial?societe_id=${societeId}`)
       const d = await res.json()
-      setFactures(d?.factures || d?.data || [])
+      const fin = d?.financial || {}
+      setFactures(fin.factures || [])
     } catch {
       showToast("Erreur chargement", "error")
     } finally {
