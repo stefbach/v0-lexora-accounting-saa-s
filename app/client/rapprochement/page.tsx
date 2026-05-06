@@ -78,7 +78,7 @@ const ANNEES = ["2024", "2025", "2026", "2027"]
 function fmt(n: number): string {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
-function formatDate(d: string): string {
+function formatDate(d: string | null | undefined): string {
   if (!d) return "—"
   return new Date(d).toLocaleDateString("fr-FR", {
     day: "2-digit",
