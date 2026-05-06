@@ -88,6 +88,10 @@ export default function ClientFacturesPage() {
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<"toutes" | "client" | "fournisseur">("toutes")
   const [statutFilter, setStatutFilter] = useState<string>("all")
+  const [tiersFilter, setTiersFilter] = useState<string>("all")
+  const [rapprochementFilter, setRapprochementFilter] = useState<string>("all")
+  const [dateDebut, setDateDebut] = useState<string>("")
+  const [dateFin, setDateFin] = useState<string>("")
   const [search, setSearch] = useState("")
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
 
@@ -117,10 +121,23 @@ export default function ClientFacturesPage() {
     load()
   }, [load])
 
+  // Liste unique des tiers (pour le dropdown filtre tiers)
+  const tiersList = useMemo(() => {
+    const set = new Set<string>()
+    const inScope = activeTab === "toutes" ? factures : factures.filter((f) => f.type_facture === activeTab)
+    for (const f of inScope) if (f.tiers) set.add(f.tiers)
+    return Array.from(set).sort()
+  }, [factures, activeTab])
+
   const filtered = useMemo(() => {
     let list = factures
     if (activeTab !== "toutes") list = list.filter((f) => f.type_facture === activeTab)
     if (statutFilter !== "all") list = list.filter((f) => f.statut === statutFilter)
+    if (tiersFilter !== "all") list = list.filter((f) => f.tiers === tiersFilter)
+    if (rapprochementFilter === "rapproche") list = list.filter((f) => !!f.rapproche_releve_id)
+    if (rapprochementFilter === "non_rapproche") list = list.filter((f) => !f.rapproche_releve_id)
+    if (dateDebut) list = list.filter((f) => (f.date_facture || "") >= dateDebut)
+    if (dateFin) list = list.filter((f) => (f.date_facture || "") <= dateFin)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(
@@ -132,15 +149,21 @@ export default function ClientFacturesPage() {
     return list.slice().sort((a, b) =>
       (b.date_facture || "").localeCompare(a.date_facture || "")
     )
-  }, [factures, activeTab, statutFilter, search])
+  }, [factures, activeTab, statutFilter, tiersFilter, rapprochementFilter, dateDebut, dateFin, search])
 
+  // Stats sur le périmètre filtré (pas seulement par tab) — donne le bon
+  // total quand l'utilisateur isole un client ou une période
   const stats = useMemo(() => {
-    const inScope = activeTab === "toutes" ? factures : factures.filter((f) => f.type_facture === activeTab)
-    const paye = inScope.filter((f) => f.statut === "paye")
-    const enAttente = inScope.filter(
+    const paye = filtered.filter((f) => f.statut === "paye")
+    const enAttente = filtered.filter(
       (f) => f.statut === "en_attente" || f.statut === "partiel"
     )
-    const retard = inScope.filter((f) => f.statut === "retard")
+    const retard = filtered.filter((f) => f.statut === "retard")
+    const rapproche = filtered.filter((f) => !!f.rapproche_releve_id)
+    const totalAll = filtered.reduce(
+      (s, f) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0),
+      0
+    )
     const totalImpaye = enAttente.concat(retard).reduce(
       (s, f) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0),
       0
@@ -149,8 +172,35 @@ export default function ClientFacturesPage() {
       (s, f) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0),
       0
     )
-    return { total: inScope.length, paye: paye.length, enAttente: enAttente.length, retard: retard.length, totalImpaye, totalPaye }
-  }, [factures, activeTab])
+    return {
+      total: filtered.length,
+      paye: paye.length,
+      enAttente: enAttente.length,
+      retard: retard.length,
+      rapproche: rapproche.length,
+      totalAll,
+      totalImpaye,
+      totalPaye,
+    }
+  }, [filtered])
+
+  const hasActiveFilter =
+    activeTab !== "toutes" ||
+    statutFilter !== "all" ||
+    tiersFilter !== "all" ||
+    rapprochementFilter !== "all" ||
+    !!dateDebut ||
+    !!dateFin ||
+    !!search.trim()
+  const resetFilters = () => {
+    setActiveTab("toutes")
+    setStatutFilter("all")
+    setTiersFilter("all")
+    setRapprochementFilter("all")
+    setDateDebut("")
+    setDateFin("")
+    setSearch("")
+  }
 
   const counts = useMemo(
     () => ({
@@ -222,36 +272,47 @@ export default function ClientFacturesPage() {
           </div>
         ) : (
           <>
-            {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard label="Total factures" value={stats.total} />
+            {/* KPIs (sur le périmètre filtré) */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <KpiCard
-                label="Impayées"
-                value={stats.enAttente + stats.retard}
-                tone={stats.retard > 0 ? "rose" : "amber"}
-                accent={stats.enAttente + stats.retard > 0}
+                label={hasActiveFilter ? "Filtrées" : "Total factures"}
+                value={stats.total}
+                accent={hasActiveFilter}
               />
-              <KpiCard label="Montant impayé" value={fmt(stats.totalImpaye)} tone="amber" />
-              <KpiCard label="Montant payé" value={fmt(stats.totalPaye)} tone="green" />
+              <KpiCard label="Total filtré" value={fmt(stats.totalAll)} tone="blue" />
+              <KpiCard label="Impayées" value={`${stats.enAttente + stats.retard} · ${fmt(stats.totalImpaye)}`} tone={stats.retard > 0 ? "rose" : "amber"} accent={stats.enAttente + stats.retard > 0} />
+              <KpiCard label="Payées" value={`${stats.paye} · ${fmt(stats.totalPaye)}`} tone="green" />
+              <KpiCard
+                label="Rapprochées banque"
+                value={`${stats.rapproche} / ${stats.total}`}
+                tone={stats.rapproche === stats.total && stats.total > 0 ? "green" : "amber"}
+              />
             </div>
 
             {/* Filtres */}
             <Card>
               <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)}>
-                <div className="flex items-center justify-between gap-3 p-3 border-b flex-wrap">
-                  <TabsList className="bg-transparent gap-1">
-                    <TabsTrigger value="toutes" className="px-3 py-1.5">
-                      Toutes ({counts.toutes})
-                    </TabsTrigger>
-                    <TabsTrigger value="client" className="px-3 py-1.5">
-                      <TrendingUp className="h-3.5 w-3.5 mr-1 text-green-600" />
-                      Clients ({counts.client})
-                    </TabsTrigger>
-                    <TabsTrigger value="fournisseur" className="px-3 py-1.5">
-                      <TrendingDown className="h-3.5 w-3.5 mr-1 text-rose-600" />
-                      Fournisseurs ({counts.fournisseur})
-                    </TabsTrigger>
-                  </TabsList>
+                <div className="p-3 border-b space-y-2">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <TabsList className="bg-transparent gap-1">
+                      <TabsTrigger value="toutes" className="px-3 py-1.5">
+                        Toutes ({counts.toutes})
+                      </TabsTrigger>
+                      <TabsTrigger value="client" className="px-3 py-1.5">
+                        <TrendingUp className="h-3.5 w-3.5 mr-1 text-green-600" />
+                        Clients ({counts.client})
+                      </TabsTrigger>
+                      <TabsTrigger value="fournisseur" className="px-3 py-1.5">
+                        <TrendingDown className="h-3.5 w-3.5 mr-1 text-rose-600" />
+                        Fournisseurs ({counts.fournisseur})
+                      </TabsTrigger>
+                    </TabsList>
+                    {hasActiveFilter && (
+                      <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs">
+                        Réinitialiser les filtres
+                      </Button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative">
                       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -262,6 +323,19 @@ export default function ClientFacturesPage() {
                         className="pl-8 h-9 w-56"
                       />
                     </div>
+                    <Select value={tiersFilter} onValueChange={setTiersFilter}>
+                      <SelectTrigger className="h-9 w-56">
+                        <SelectValue placeholder="Tiers" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les tiers</SelectItem>
+                        {tiersList.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t.length > 50 ? t.slice(0, 47) + "…" : t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Select value={statutFilter} onValueChange={setStatutFilter}>
                       <SelectTrigger className="h-9 w-44">
                         <SelectValue />
@@ -275,6 +349,33 @@ export default function ClientFacturesPage() {
                         <SelectItem value="annule">Annulée</SelectItem>
                       </SelectContent>
                     </Select>
+                    <Select value={rapprochementFilter} onValueChange={setRapprochementFilter}>
+                      <SelectTrigger className="h-9 w-52">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous rapprochements</SelectItem>
+                        <SelectItem value="rapproche">Rapprochée banque</SelectItem>
+                        <SelectItem value="non_rapproche">Pas encore rapprochée</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Input
+                        type="date"
+                        value={dateDebut}
+                        onChange={(e) => setDateDebut(e.target.value)}
+                        className="h-9 w-36"
+                        title="Date début"
+                      />
+                      <span>→</span>
+                      <Input
+                        type="date"
+                        value={dateFin}
+                        onChange={(e) => setDateFin(e.target.value)}
+                        className="h-9 w-36"
+                        title="Date fin"
+                      />
+                    </div>
                   </div>
                 </div>
 
