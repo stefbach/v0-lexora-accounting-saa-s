@@ -31,6 +31,7 @@ import type {
   MatchingFacture,
   MatchingTransaction,
 } from "@/lib/accounting/matching-engine"
+import { runSemanticRapprochement } from "@/lib/accounting/semantic-rapprochement"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -77,6 +78,7 @@ export async function POST(request: Request) {
   const dry_run: boolean = !!body?.dry_run
   const min_confidence: number =
     typeof body?.min_confidence === "number" ? body.min_confidence : 0.7
+  const use_semantic: boolean = body?.use_semantic !== false // default true
 
   const sb = getAdminClient()
 
@@ -180,8 +182,12 @@ export async function POST(request: Request) {
     statut: f.statut || null,
   }))
 
-  // 5. Bulletins de paie (Phase 3 du moteur intelligent — détection de paie)
-  const minPeriode = date_debut ? date_debut.slice(0, 7) : "2020-01"
+  // 5. Bulletins de paie (Phase 3 du moteur intelligent — détection de paie).
+  // periode est de type DATE en DB (ex 2025-07-01), il FAUT comparer avec un
+  // format DATE valide sinon Postgres rejette silencieusement et renvoie [].
+  const minPeriode = date_debut
+    ? date_debut.slice(0, 7) + "-01"
+    : "2020-01-01"
   const { data: bulletinsRaw = [] } = await sb
     .from("bulletins_paie")
     .select("periode, salaire_net")
@@ -260,6 +266,63 @@ export async function POST(request: Request) {
     aliasMap,
   })
 
+  // 10.bis. Couche IA Claude pour rattraper les orphelines restantes
+  let semantic = {
+    matches: [] as Array<{
+      transactionKey: string
+      factureIds: string[]
+      confidence: number
+      reasoning: string
+      source: "claude_semantic"
+    }>,
+    classifications: [] as Array<{
+      transactionKey: string
+      type: string
+      compte_pcm: string | null
+      confidence: number
+      reasoning: string
+      source: "claude_semantic"
+    }>,
+    meta: {} as Record<string, any>,
+  }
+  if (use_semantic) {
+    const matchedTxKeys = new Set(result.matches.map((m) => m.transactionKey))
+    const classifiedTxKeys = new Set(
+      result.classifications.map((c) => c.transactionKey)
+    )
+    const matchedFactureIds = new Set(
+      result.matches.flatMap((m) => m.factureIds)
+    )
+    const orphanTransactions = matchingTx.filter(
+      (t) =>
+        !matchedTxKeys.has(`${t.releve_id}:${t.transaction_idx}`) &&
+        !classifiedTxKeys.has(`${t.releve_id}:${t.transaction_idx}`)
+    )
+    const unmatchedFactures = matchingFactures.filter(
+      (f) => !matchedFactureIds.has(f.id)
+    )
+
+    const semResult = await runSemanticRapprochement({
+      orphanTransactions,
+      unmatchedFactures,
+      context: {
+        societe_nom: societe.nom as string,
+        societe_id: societe.id as string,
+        devise_principale: (societe.devise_principale as string) || "MUR",
+        comptes_bancaires: (comptes || []).map((c: any) => ({
+          id: c.id,
+          devise: c.devise,
+          compte_comptable: c.compte_comptable,
+          banque: c.banque,
+        })),
+        fx_rates: rates,
+      },
+      apiKey: process.env.ANTHROPIC_API_KEY || "",
+      minConfidence: min_confidence,
+    })
+    semantic = semResult
+  }
+
   // 11. Persister les matches qui dépassent min_confidence dans les JSONB
   // Format ref unique par tx : "<releve_id>:<idx>"
   type Patch = { facture_ids?: string[]; statut?: string; lettre?: string; rapproche_at?: string; classification_suggestion?: any; matched_strategy?: string; matched_confidence?: number; classification?: string; compte_comptable_suggestion?: string }
@@ -286,6 +349,37 @@ export async function POST(request: Request) {
       note: c.note,
       ecritureId: c.ecritureId,
       confidence: c.confidence,
+    }
+    patchByTx.set(c.transactionKey, patch)
+  }
+
+  // Suggestions Claude (couche sémantique) — n'écrasent pas les résultats algo
+  for (const m of semantic.matches) {
+    if (patchByTx.has(m.transactionKey)) continue // l'algo a déjà décidé
+    if (m.confidence < min_confidence) continue
+    const patch: Patch = {
+      facture_ids: m.factureIds,
+      statut: "suggested",
+      lettre: "ai-" + m.transactionKey.replace(/[:-]/g, "").slice(0, 18),
+      rapproche_at: new Date().toISOString(),
+      matched_strategy: "claude_semantic",
+      matched_confidence: m.confidence,
+    }
+    patchByTx.set(m.transactionKey, patch)
+  }
+  for (const c of semantic.classifications) {
+    if (patchByTx.has(c.transactionKey)) continue
+    if (c.confidence < min_confidence) continue
+    const patch: Patch = {
+      classification: c.type,
+      statut: "suggested",
+      classification_suggestion: {
+        type: c.type,
+        note: c.reasoning,
+        compte_pcm: c.compte_pcm,
+        confidence: c.confidence,
+        source: "claude_semantic",
+      } as any,
     }
     patchByTx.set(c.transactionKey, patch)
   }
@@ -349,7 +443,27 @@ export async function POST(request: Request) {
       bulletins_paie: bulletins.length,
       coverage,
     },
-    stats: result.stats,
+    stats: {
+      ...result.stats,
+      semantic_matches: semantic.matches.length,
+      semantic_classifications: semantic.classifications.length,
+    },
+    semantic: {
+      meta: semantic.meta,
+      matches: semantic.matches.map((m) => ({
+        transactionKey: m.transactionKey,
+        factureIds: m.factureIds,
+        confidence: m.confidence,
+        reasoning: m.reasoning,
+      })),
+      classifications: semantic.classifications.map((c) => ({
+        transactionKey: c.transactionKey,
+        type: c.type,
+        compte_pcm: c.compte_pcm,
+        confidence: c.confidence,
+        reasoning: c.reasoning,
+      })),
+    },
     matches: result.matches.map((m) => ({
       transactionKey: m.transactionKey,
       supplierName: m.supplierName,
