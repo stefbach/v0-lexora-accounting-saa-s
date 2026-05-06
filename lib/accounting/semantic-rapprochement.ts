@@ -16,7 +16,13 @@
 import type { MatchingFacture, MatchingTransaction } from "./matching-engine"
 
 const CLAUDE_API = "https://api.anthropic.com/v1/messages"
-const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6"
+// Modèle par défaut : Haiku 4.5 (~3-5x plus rapide que Sonnet, suffisant pour
+// le matching sémantique vu le prompt très structuré). Override possible via
+// ANTHROPIC_AGENT_MODEL.
+const DEFAULT_MODEL =
+  process.env.ANTHROPIC_AGENT_MODEL ||
+  process.env.ANTHROPIC_MODEL ||
+  "claude-haiku-4-5-20251001"
 
 /** Identifiant de tx (cohérent avec le moteur algorithmique). */
 function txKey(tx: MatchingTransaction): string {
@@ -148,8 +154,10 @@ export async function runSemanticRapprochement(args: {
 }): Promise<SemanticResult> {
   const t0 = Date.now()
   const minConfidence = args.minConfidence ?? 0.7
-  const maxTx = args.maxTransactions ?? 80
-  const maxFact = args.maxFactures ?? 100
+  // Capping serré pour rester sous le timeout Vercel (60s). Avec Haiku 4.5 +
+  // 30 tx + 50 factures, l'appel Claude prend ~10-15s, total endpoint < 30s.
+  const maxTx = args.maxTransactions ?? 30
+  const maxFact = args.maxFactures ?? 50
 
   const empty: SemanticResult = {
     matches: [],
@@ -209,7 +217,7 @@ export async function runSemanticRapprochement(args: {
 
   const body = {
     model: DEFAULT_MODEL,
-    max_tokens: 8192,
+    max_tokens: 4096,
     system: SYSTEM_PROMPT,
     messages: [{ role: "user" as const, content: userText }],
   }
