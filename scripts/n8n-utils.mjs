@@ -11,6 +11,9 @@ const repoRoot = path.resolve(__dirname, "..")
 
 export const SUPABASE_CRED_NAME = "Lexora Supabase (service_role)"
 export const SUPABASE_API_CRED_NAME = "Lexora Supabase API"
+export const LEXORA_AGENT_CRED_NAME = "Lexora Agent (bearer)"
+export const ANTHROPIC_CRED_NAME = "Anthropic Lexora"
+export const ANTHROPIC_HTTP_CRED_NAME = "Anthropic Lexora (x-api-key)"
 
 function loadDotEnv(file) {
   if (!fs.existsSync(file)) return
@@ -44,11 +47,18 @@ function required(name) {
   return v
 }
 
+function optional(name) {
+  return process.env[name] || ""
+}
+
 export const env = {
   n8nBaseUrl: required("N8N_BASE_URL").replace(/\/$/, ""),
   n8nApiKey: required("N8N_API_KEY"),
   supabaseUrl: required("NEXT_PUBLIC_SUPABASE_URL").replace(/\/$/, ""),
   supabaseServiceRole: required("SUPABASE_SERVICE_ROLE_KEY"),
+  lexoraBaseUrl: (optional("LEXORA_BASE_URL") || "").replace(/\/$/, ""),
+  lexoraAgentSecret: optional("LEXORA_AGENT_SECRET"),
+  anthropicApiKey: optional("ANTHROPIC_API_KEY"),
 }
 
 export const repoPaths = {

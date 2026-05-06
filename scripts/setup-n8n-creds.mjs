@@ -13,6 +13,9 @@ import {
   writeCredentialCache,
   SUPABASE_CRED_NAME,
   SUPABASE_API_CRED_NAME,
+  LEXORA_AGENT_CRED_NAME,
+  ANTHROPIC_CRED_NAME,
+  ANTHROPIC_HTTP_CRED_NAME,
 } from "./n8n-utils.mjs"
 
 async function upsertCredential(name, type, data) {
@@ -57,6 +60,36 @@ async function main() {
     serviceRole: env.supabaseServiceRole,
     allowedHttpRequestDomains: "all",
   })
+
+  // 3) Lexora Agent — Header Auth (bearer LEXORA_AGENT_SECRET) pour
+  //    appeler /api/agent/audit, /api/agent/rapprochement, etc.
+  if (env.lexoraAgentSecret) {
+    await upsertCredential(LEXORA_AGENT_CRED_NAME, "httpHeaderAuth", {
+      name: "Authorization",
+      value: `Bearer ${env.lexoraAgentSecret}`,
+      allowedHttpRequestDomains: "all",
+    })
+  } else {
+    console.log(`  • skipped ${LEXORA_AGENT_CRED_NAME} (LEXORA_AGENT_SECRET non défini)`)
+  }
+
+  // 4) Anthropic — pour les nœuds AI Agent / LangChain (type natif n8n)
+  if (env.anthropicApiKey) {
+    await upsertCredential(ANTHROPIC_CRED_NAME, "anthropicApi", {
+      apiKey: env.anthropicApiKey,
+      url: "https://api.anthropic.com",
+      header: false,
+      allowedHttpRequestDomains: "all",
+    })
+    // 5) Anthropic — pour les nœuds HTTP Request directs (x-api-key header)
+    await upsertCredential(ANTHROPIC_HTTP_CRED_NAME, "httpHeaderAuth", {
+      name: "x-api-key",
+      value: env.anthropicApiKey,
+      allowedHttpRequestDomains: "all",
+    })
+  } else {
+    console.log(`  • skipped ${ANTHROPIC_CRED_NAME} (ANTHROPIC_API_KEY non défini)`)
+  }
 
   console.log("\nDone. Credentials are saved in n8n-workflows/.credentials.json")
 }
