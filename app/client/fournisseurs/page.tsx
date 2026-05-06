@@ -1,504 +1,283 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+/**
+ * Page /client/fournisseurs — agent-friendly.
+ *
+ * Liste agrégée des fournisseurs (issus des factures de type "fournisseur").
+ * Lex Banque utilise les noms de tiers pour identifier les paiements bancaires.
+ */
+
+import { useState, useEffect, useCallback, useMemo } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Search, Loader2, FileText, AlertTriangle, Download, User, Trash2, Building2, AlertCircle, RefreshCw, Wrench, CheckCircle2, Globe, MapPin } from "lucide-react"
-import { toast } from "sonner"
+  Loader2,
+  RefreshCw,
+  Building2,
+  Search,
+  ArrowRight,
+  Sparkles,
+  AlertTriangle,
+  TrendingDown,
+} from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
-import * as XLSX from "xlsx"
-import { MonthPicker } from "@/components/ui/MonthPicker"
 
-const NAVY = "#0B0F2E"
-function formatMUR(amount: number) {
-  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(amount) + " MUR"
-}
-function fmt2(n: number) {
-  return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+interface Facture {
+  id: string
+  tiers: string | null
+  type_facture: string | null
+  montant_ttc: number
+  montant_mur: number | null
+  devise: string | null
+  statut: string | null
+  date_facture: string | null
+  date_echeance: string | null
 }
 
-function getStatutBadge(statut: string) {
-  switch (statut) {
-    case "paye": case "payé":
-      return <Badge className="bg-green-100 text-green-700 border-green-200">Payé</Badge>
-    case "en_attente":
-      return <Badge className="bg-orange-100 text-orange-700 border-orange-200">En attente</Badge>
-    case "retard": case "en_retard":
-      return <Badge className="bg-red-100 text-red-700 border-red-200">En retard</Badge>
-    case "partiel":
-      return <Badge className="bg-blue-100 text-blue-700 border-blue-200">Partiel</Badge>
-    default:
-      return <Badge variant="secondary">{statut || "—"}</Badge>
-  }
+interface FournisseurAgrege {
+  nom: string
+  nb_factures: number
+  total_mur: number
+  impaye_mur: number
+  derniere_facture: string | null
+  retard: number
+}
+
+function fmt(n: number, dev = "MUR"): string {
+  return (
+    n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
+    " " +
+    dev
+  )
+}
+function formatDate(d: string | null): string {
+  if (!d) return "—"
+  return new Date(d).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
 }
 
 export default function ClientFournisseursPage() {
   const { societeId } = useSocieteActive()
+  const [factures, setFactures] = useState<Facture[]>([])
+  const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [factures, setFactures] = useState<any[]>([])
-  const [totaux, setTotaux] = useState<any>({})
-  const [selectedFournisseur, setSelectedFournisseur] = useState<string>("all")
-  const [selectedMois, setSelectedMois] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!societeId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/comptable/factures?societe_id=${societeId}&type=fournisseur&limit=1000`)
-      const data = await res.json()
-      setFactures(data.factures || [])
-      setTotaux(data.totaux || {})
-    } catch {
-      setFactures([])
-      setTotaux({})
+      const res = await fetch(
+        `/api/comptable/factures?societe_id=${societeId}&type=fournisseur&limit=1000`
+      )
+      const d = await res.json()
+      setFactures(d?.factures || d?.data || [])
+    } catch {}
+    finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [societeId])
+  useEffect(() => {
+    load()
+  }, [load])
 
-  useEffect(() => { load() }, [load])
-
-  // Delete
-  const handleDelete = async (f: any) => {
-    if (!confirm(`Supprimer la facture ${f.numero_facture || ""} de ${f.tiers || ""} ?\n\nLes ecritures comptables associees seront aussi supprimees.`)) return
-    try {
-      const res = await fetch(`/api/comptable/factures?id=${f.id}`, { method: "DELETE" })
-      if (res.ok) load()
-      else { const d = await res.json().catch(() => ({})); alert(d.error || "Erreur") }
-    } catch (e: any) { alert("Erreur: " + (e.message || "")) }
-  }
-
-  // Toggle client_offshore for all invoices of this tiers + societe_id
-  const [togglingOffshore, setTogglingOffshore] = useState<string | null>(null)
-  const handleToggleOffshore = async (f: any) => {
-    if (!f.tiers || !f.societe_id) return
-    const newValue = !f.client_offshore
-    const label = newValue ? 'fournisseur étranger (reverse charge)' : 'fournisseur local (Maurice)'
-    if (!confirm(`Marquer "${f.tiers}" comme ${label} ?\n\nToutes les factures de ce fournisseur seront mises à jour.`)) return
-    setTogglingOffshore(f.id)
-    try {
-      const res = await fetch('/api/client/tiers-offshore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tiers: f.tiers,
-          societe_id: f.societe_id,
-          est_offshore: newValue,
-          type_tiers: 'fournisseur',
-        }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        toast.success(`${data.factures_updated || 0} facture(s) mise(s) à jour — "${f.tiers}" est maintenant ${label}`)
-        load()
-      } else {
-        toast.error(data.error || 'Erreur')
+  const fournisseurs: FournisseurAgrege[] = useMemo(() => {
+    const map = new Map<string, FournisseurAgrege>()
+    for (const f of factures) {
+      const nom = (f.tiers || "Sans nom").trim()
+      const cur = map.get(nom) || {
+        nom,
+        nb_factures: 0,
+        total_mur: 0,
+        impaye_mur: 0,
+        derniere_facture: null,
+        retard: 0,
       }
-    } catch (e: any) {
-      toast.error('Erreur: ' + (e.message || ''))
-    } finally {
-      setTogglingOffshore(null)
-    }
-  }
-
-  // NOTE: Réassignation de facture entre sociétés retirée en Phase 0.5.
-
-  // Consistency check
-  const [consistency, setConsistency] = useState<any>(null)
-  const [consistencyLoading, setConsistencyLoading] = useState(false)
-  const [consistencyFixing, setConsistencyFixing] = useState<string | null>(null)
-  const [showIncoherences, setShowIncoherences] = useState(false)
-
-  const loadConsistency = useCallback(async (openList = false) => {
-    if (!societeId) return
-    setConsistencyLoading(true)
-    try {
-      const res = await fetch(`/api/comptable/rapprochement/consistency?societe_id=${societeId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setConsistency(data)
-        if (openList && (data?.inconsistencies?.length || 0) > 0) {
-          setShowIncoherences(true)
-        }
+      cur.nb_factures++
+      const mur = Number(f.montant_mur) || Number(f.montant_ttc) || 0
+      cur.total_mur += mur
+      if (f.statut !== "paye" && f.statut !== "annule") {
+        cur.impaye_mur += mur
+        if (f.date_echeance && new Date(f.date_echeance) < new Date()) cur.retard++
       }
-    } catch {} finally { setConsistencyLoading(false) }
-  }, [societeId])
-
-  useEffect(() => { loadConsistency() }, [loadConsistency])
-
-  const runFix = async (action: 'link_existing_matches' | 'unmark_orphans') => {
-    if (!societeId) return
-    setConsistencyFixing(action)
-    try {
-      const res = await fetch("/api/comptable/rapprochement/consistency", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: societeId, action }),
-      })
-      const data = await res.json()
-      if (!res.ok) { alert(data.error || "Erreur"); return }
-      alert(`${data.fixed || 0} facture(s) corrigee(s)`)
-      await loadConsistency()
-      await load()
-    } catch (e: any) {
-      alert("Erreur: " + (e.message || ""))
-    } finally { setConsistencyFixing(null) }
-  }
-
-  // Backfill journal entries for existing invoices (phase 1 + phase 3 fix)
-  const runBackfillEcritures = async () => {
-    if (!societeId) return
-    if (!confirm("Generer les ecritures comptables (401, 411, 607, 706, 4456, 4457) pour toutes les factures existantes ?\n\nCette operation est idempotente (peut etre relancee sans doublons).")) return
-    setConsistencyFixing('backfill_ecritures')
-    try {
-      const res = await fetch("/api/comptable/factures/backfill-ecritures", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: societeId }),
-      })
-      const data = await res.json()
-      if (!res.ok) { alert(data.error || "Erreur"); return }
-      const s = data.stats || {}
-      alert(`Ecritures generees : ${s.ecritures_generees || 0} factures + ${s.paiements_generes || 0} paiements\nErreurs : ${(s.errors || []).length}`)
-      await loadConsistency()
-      await load()
-    } catch (e: any) {
-      alert("Erreur: " + (e.message || ""))
-    } finally { setConsistencyFixing(null) }
-  }
-
-  // Build unique fournisseur list
-  const fournisseurs = Array.from(new Set(factures.map(f => f.tiers).filter(Boolean))).sort()
-
-  const filtered = factures.filter((row) => {
-    // Apply month filter
-    if (selectedMois !== null && row.date_facture) {
-      if (row.date_facture.substring(0, 7) !== selectedMois) return false
+      if (!cur.derniere_facture || (f.date_facture || "") > cur.derniere_facture)
+        cur.derniere_facture = f.date_facture
+      map.set(nom, cur)
     }
-    // Apply fournisseur filter
-    if (selectedFournisseur !== "all" && row.tiers !== selectedFournisseur) return false
-    // Apply search
-    return (
-      (row.tiers || "").toLowerCase().includes(search.toLowerCase()) ||
-      (row.numero_facture || "").toLowerCase().includes(search.toLowerCase()) ||
-      (row.description || "").toLowerCase().includes(search.toLowerCase())
-    )
-  })
+    return Array.from(map.values()).sort((a, b) => b.total_mur - a.total_mur)
+  }, [factures])
 
-  // Compute fournisseur-specific totals when one is selected
-  const fournisseurTotaux = selectedFournisseur !== "all" ? {
-    total_ht: filtered.reduce((s, f) => s + (f.montant_ht || 0), 0),
-    total_tva: filtered.reduce((s, f) => s + (f.montant_tva || 0), 0),
-    total_ttc: filtered.reduce((s, f) => s + (f.montant_ttc || 0), 0),
-    total_mur: filtered.reduce((s, f) => s + (f.montant_mur || f.montant_ttc || 0), 0),
-    nb_factures: filtered.length,
-    nb_en_attente: filtered.filter(f => f.statut === "en_attente").length,
-  } : null
+  const filtered = useMemo(() => {
+    if (!search.trim()) return fournisseurs
+    const q = search.trim().toLowerCase()
+    return fournisseurs.filter((f) => f.nom.toLowerCase().includes(q))
+  }, [fournisseurs, search])
 
-  const handleExport = () => {
-    const data = filtered.map(f => ({
-      "N° Facture": f.numero_facture || "—",
-      "Fournisseur": f.tiers || "—",
-      "Date": f.date_facture ? new Date(f.date_facture).toLocaleDateString("fr-FR") : "—",
-      "Montant HT": fmt2(f.montant_ht || 0),
-      "TVA": fmt2(f.montant_tva || 0),
-      "Montant TTC": fmt2(f.montant_ttc || 0),
-      "Devise": f.devise || "MUR",
-      "Statut": f.statut || "—",
-      "Échéance": f.date_echeance ? new Date(f.date_echeance).toLocaleDateString("fr-FR") : "—",
-    }))
-    const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.json_to_sheet(data)
-    XLSX.utils.book_append_sheet(wb, ws, "Factures fournisseurs")
-    const dateStr = new Date().toISOString().split("T")[0]
-    XLSX.writeFile(wb, `fournisseurs_${dateStr}.xlsx`)
-  }
+  const totalImpaye = fournisseurs.reduce((s, f) => s + f.impaye_mur, 0)
+  const totalRetard = fournisseurs.reduce((s, f) => s + f.retard, 0)
 
   return (
-    <ClientPageShell
-      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Fournisseurs" }]}
-      kicker="Comptabilité"
-      title="Factures fournisseurs"
-      subtitle="Suivi des factures fournisseurs, paiements, lettrage automatique et rapprochement 401."
-      actions={
-        <>
-          <Button variant="outline" onClick={handleExport} disabled={filtered.length === 0}>
-            <Download className="w-4 h-4 mr-2" />Exporter
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-6">
-        <div className="hidden">{/* placeholder — original header moved into shell */}
-      </div>
-
-      {/* Month navigator */}
-      <MonthPicker value={selectedMois} onChange={setSelectedMois} />
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4 text-center">
-          <FileText className="h-5 w-5 mx-auto mb-1" style={{ color: NAVY }} />
-          <p className="text-2xl font-bold" style={{ color: NAVY }}>{totaux.nb_factures || 0}</p>
-          <p className="text-xs text-gray-500">Factures</p>
-        </CardContent></Card>
-        <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
-          <p className="text-xs text-gray-400">Total HT</p>
-          <p className="text-xl font-bold text-blue-600">{formatMUR(totaux.total_ht || 0)}</p>
-        </CardContent></Card>
-        <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-4">
-          <p className="text-xs text-gray-400">Total TTC</p>
-          <p className="text-xl font-bold text-emerald-600">{formatMUR(totaux.total_ttc || 0)}</p>
-          <p className="text-xs text-gray-400 mt-1">TVA: {formatMUR(totaux.total_tva || 0)}</p>
-        </CardContent></Card>
-        <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
-          <AlertTriangle className="h-4 w-4 text-orange-500 mb-1" />
-          <p className="text-xl font-bold text-orange-600">{totaux.nb_en_attente || 0}</p>
-          <p className="text-xs text-gray-400">En attente / {totaux.nb_retard || 0} en retard</p>
-        </CardContent></Card>
-      </div>
-
-      {/* Consistency check banner */}
-      {consistency?.stats && (
-        <Card className={`border-l-4 ${(consistency.inconsistencies?.length || 0) > 0 ? 'border-l-red-500 bg-red-50' : 'border-l-green-500 bg-green-50'}`}>
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  {(consistency.inconsistencies?.length || 0) > 0 ? (
-                    <AlertTriangle className="h-5 w-5 text-red-500" />
-                  ) : (
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  )}
-                  <p className="text-sm font-bold" style={{ color: NAVY }}>
-                    Coherence factures / rapprochement bancaire
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs mt-2">
-                  <div>
-                    <p className="text-gray-500">Total factures</p>
-                    <p className="font-bold text-base">{consistency.stats.total_factures}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Payees</p>
-                    <p className="font-bold text-base text-green-600">{consistency.stats.paye_count}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Dont rapprochees bancaire</p>
-                    <p className="font-bold text-base text-blue-600">{consistency.stats.paye_avec_rapprochement}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Payees sans lien bancaire</p>
-                    <p className={`font-bold text-base ${consistency.stats.paye_sans_rapprochement > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
-                      {consistency.stats.paye_sans_rapprochement}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Incoherences</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowIncoherences(v => !v)}
-                      disabled={(consistency.inconsistencies?.length || 0) === 0}
-                      className={`font-bold text-base text-left ${(consistency.inconsistencies?.length || 0) > 0 ? 'text-red-600 hover:underline cursor-pointer' : 'text-gray-400'}`}
-                    >
-                      {consistency.inconsistencies?.length || 0} {(consistency.inconsistencies?.length || 0) > 0 && (showIncoherences ? '▲' : '▼')}
-                    </button>
-                  </div>
-                </div>
-                {(consistency.stats.paye_sans_rapprochement > 0 || (consistency.inconsistencies?.length || 0) > 0) && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    {consistency.stats.paye_sans_rapprochement > 0 && (
-                      <>{consistency.stats.paye_sans_rapprochement} facture(s) payee(s) sans rapprochement bancaire. </>
-                    )}
-                    Cliquez &quot;Reparer automatiquement&quot; pour lier les paiements aux transactions existantes.
-                  </p>
-                )}
+    <ClientPageShell hideHero disableParticles>
+      <div className="space-y-6 max-w-7xl">
+        {/* HEADER */}
+        <div className="rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 via-orange-50 to-amber-50 p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-rose-600 to-orange-600 p-3 text-white shadow-md">
+                <Building2 className="h-7 w-7" />
               </div>
-              <div className="flex gap-2 shrink-0 flex-wrap">
-                <Button variant="outline" size="sm" onClick={() => loadConsistency(true)} disabled={consistencyLoading}>
-                  {consistencyLoading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-                  Verifier
-                </Button>
-                <Button
-                  size="sm"
-                  className="bg-purple-600 text-white hover:bg-purple-700"
-                  onClick={runBackfillEcritures}
-                  disabled={!!consistencyFixing}
-                  title="Genere 401/411/607/706/4456/4457 pour toutes les factures existantes"
-                >
-                  {consistencyFixing === 'backfill_ecritures' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <FileText className="w-3 h-3 mr-1" />}
-                  Generer ecritures comptables
-                </Button>
-                {(consistency.stats.paye_sans_rapprochement > 0 || (consistency.inconsistencies?.length || 0) > 0) && (
-                  <Button
-                    size="sm"
-                    className="bg-[#0B0F2E] text-white"
-                    onClick={() => runFix('link_existing_matches')}
-                    disabled={!!consistencyFixing}
-                  >
-                    {consistencyFixing === 'link_existing_matches' ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Wrench className="w-3 h-3 mr-1" />}
-                    Reparer liens
-                  </Button>
-                )}
+              <div>
+                <h1 className="text-2xl font-bold text-rose-900">Fournisseurs</h1>
+                <p className="text-sm text-rose-700/80 mt-0.5">
+                  Tiers fournisseurs · identifiés par Lex Banque dans les paiements
+                </p>
               </div>
             </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
+                <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+              <Link href="/client/rapprochement">
+                <Button className="bg-purple-600 hover:bg-purple-700 text-white">
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                  Lex Banque
+                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
 
-            {/* Expandable list of inconsistencies */}
-            {showIncoherences && (consistency.inconsistencies?.length || 0) > 0 && (
-              <div className="mt-4 border-t pt-3">
-                <p className="text-sm font-semibold text-red-700 mb-2">
-                  {consistency.inconsistencies.length} incohérence(s) détectée(s) :
-                </p>
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {consistency.inconsistencies.map((inc: any, i: number) => (
-                    <div key={i} className="bg-white border border-red-200 rounded p-2 text-xs">
-                      <div className="flex items-start justify-between gap-2">
+        {!societeId ? (
+          <Card>
+            <CardContent className="py-16 text-center text-gray-400">
+              Société non disponible.
+            </CardContent>
+          </Card>
+        ) : loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-rose-600" />
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard label="Fournisseurs" value={fournisseurs.length} />
+              <KpiCard label="Factures" value={factures.length} />
+              <KpiCard
+                label="Impayé total"
+                value={fmt(totalImpaye)}
+                tone="amber"
+                accent={totalImpaye > 0}
+              />
+              <KpiCard
+                label="Factures en retard"
+                value={totalRetard}
+                tone={totalRetard > 0 ? "rose" : "green"}
+              />
+            </div>
+
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-rose-600" />
+                    Liste des fournisseurs ({filtered.length})
+                  </CardTitle>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Rechercher…"
+                      className="pl-8 h-9 w-56"
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {filtered.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    Aucun fournisseur.
+                  </p>
+                ) : (
+                  <div className="rounded border bg-card divide-y">
+                    {filtered.map((f) => (
+                      <div
+                        key={f.nom}
+                        className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20"
+                      >
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-red-700">
-                            <Badge variant="outline" className="text-[10px] mr-1">{inc.type || '—'}</Badge>
-                            {inc.facture?.numero || inc.facture?.id?.substring(0, 8) || '—'}
-                            {inc.facture?.tiers ? ` · ${inc.facture.tiers}` : ''}
+                          <h4 className="font-medium text-sm break-words">{f.nom}</h4>
+                          <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-muted-foreground">
+                            <span>
+                              {f.nb_factures} facture{f.nb_factures > 1 ? "s" : ""}
+                            </span>
+                            <span>Dernière : {formatDate(f.derniere_facture)}</span>
+                            {f.retard > 0 && (
+                              <Badge className="text-[10px] bg-red-100 text-red-700 border-red-300">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                {f.retard} en retard
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="font-mono text-sm text-rose-700">
+                            -{fmt(f.total_mur)}
                           </p>
-                          <p className="text-gray-600 mt-1">{inc.message || '—'}</p>
-                          {Array.isArray(inc.claims) && inc.claims.length > 0 && (
-                            <ul className="text-gray-500 mt-1 list-disc list-inside">
-                              {inc.claims.slice(0, 3).map((c: any, j: number) => (
-                                <li key={j} className="truncate">{c.libelle || c.releve_id?.substring(0, 8)}</li>
-                              ))}
-                            </ul>
+                          {f.impaye_mur > 0 && (
+                            <p className="text-[11px] text-amber-700 font-mono">
+                              Impayé {fmt(f.impaye_mur)}
+                            </p>
                           )}
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Fournisseur-specific summary card */}
-      {fournisseurTotaux && (
-        <Card className="border-l-4 border-l-[#0B0F2E] bg-[#0B0F2E]/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <User className="w-5 h-5 text-[#0B0F2E]" />
-              <p className="font-bold text-[#0B0F2E]">{selectedFournisseur}</p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-              <div><p className="text-gray-500">Total HT</p><p className="font-bold text-blue-600">{formatMUR(fournisseurTotaux.total_ht)}</p></div>
-              <div><p className="text-gray-500">Total TVA</p><p className="font-bold text-orange-600">{formatMUR(fournisseurTotaux.total_tva)}</p></div>
-              <div><p className="text-gray-500">Total TTC (MUR)</p><p className="font-bold text-emerald-600">{formatMUR(fournisseurTotaux.total_mur)}</p></div>
-              <div><p className="text-gray-500">Factures</p><p className="font-bold text-[#0B0F2E]">{fournisseurTotaux.nb_factures}</p></div>
-              <div><p className="text-gray-500">En attente</p><p className={`font-bold ${fournisseurTotaux.nb_en_attente > 0 ? "text-orange-600" : "text-green-600"}`}>{fournisseurTotaux.nb_en_attente}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="flex gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Rechercher fournisseur, n° facture..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Select value={selectedFournisseur} onValueChange={setSelectedFournisseur}>
-          <SelectTrigger className="w-[220px]"><SelectValue placeholder="Fournisseur" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les fournisseurs</SelectItem>
-            {fournisseurs.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin" /></div>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle style={{ color: NAVY }}>
-              Factures fournisseurs ({filtered.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fournisseur</TableHead>
-                  <TableHead>N° Facture</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Montant HT</TableHead>
-                  <TableHead className="text-right">TVA</TableHead>
-                  <TableHead className="text-right">TTC</TableHead>
-                  <TableHead>Échéance</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Devise</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.tiers || "—"}</TableCell>
-                    <TableCell className="font-mono text-sm">{row.numero_facture || "—"}</TableCell>
-                    <TableCell>{row.date_facture ? new Date(row.date_facture).toLocaleDateString("fr-FR") : "—"}</TableCell>
-                    <TableCell className="text-right font-mono">{formatMUR(row.montant_ht || 0)}</TableCell>
-                    <TableCell className="text-right font-mono">{formatMUR(row.montant_tva || 0)}</TableCell>
-                    <TableCell className="text-right font-mono font-semibold">{formatMUR(row.montant_ttc || 0)}</TableCell>
-                    <TableCell>{row.date_echeance ? new Date(row.date_echeance).toLocaleDateString("fr-FR") : "—"}</TableCell>
-                    <TableCell>{getStatutBadge(row.statut)}</TableCell>
-                    <TableCell>{row.devise || "MUR"}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleOffshore(row)}
-                          disabled={togglingOffshore === row.id}
-                          title={row.client_offshore ? "Fournisseur étranger (reverse charge) — cliquer pour marquer local" : "Fournisseur local (Maurice) — cliquer pour marquer étranger"}
-                          className={`h-7 w-7 p-0 ${row.client_offshore ? 'text-purple-600' : 'text-emerald-600'}`}
-                        >
-                          {togglingOffshore === row.id
-                            ? <Loader2 className="w-4 h-4 animate-spin" />
-                            : (row.client_offshore ? <Globe className="w-4 h-4" /> : <MapPin className="w-4 h-4" />)}
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(row)} title="Supprimer" className="h-7 w-7 p-0 text-red-500">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                      {search || selectedFournisseur !== "all"
-                        ? "Aucune facture fournisseur trouvée pour cette recherche."
-                        : "Aucune facture fournisseur disponible. Les factures apparaîtront ici une fois traitées par OCR."}
-                    </TableCell>
-                  </TableRow>
+                    ))}
+                  </div>
                 )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </ClientPageShell>
+  )
+}
+
+function KpiCard({
+  label,
+  value,
+  tone,
+  accent,
+}: {
+  label: string
+  value: number | string
+  tone?: "amber" | "green" | "rose" | "blue"
+  accent?: boolean
+}) {
+  const cls =
+    tone === "amber"
+      ? "border-amber-200 bg-amber-50"
+      : tone === "green"
+        ? "border-green-200 bg-green-50"
+        : tone === "rose"
+          ? "border-rose-200 bg-rose-50"
+          : tone === "blue"
+            ? "border-blue-200 bg-blue-50"
+            : "border-muted bg-card"
+  return (
+    <Card className={`${cls} ${accent ? "ring-2 ring-amber-400" : ""}`}>
+      <CardContent className="p-3">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-xl font-semibold mt-1">{value}</div>
+      </CardContent>
+    </Card>
   )
 }
