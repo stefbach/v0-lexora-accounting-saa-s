@@ -9,7 +9,7 @@
  * Body : { societe_id: string, date_debut?: string, date_fin?: string }
  */
 import { NextResponse } from "next/server"
-import { verifyAgentSecret } from "@/lib/agent-auth"
+import { authenticateAgentRequest } from "@/lib/agent-auth"
 import { getAdminClient } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
@@ -29,10 +29,6 @@ interface AuditTx {
 }
 
 export async function POST(request: Request) {
-  if (!verifyAgentSecret(request)) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
-  }
-
   let body: any
   try {
     body = await request.json()
@@ -43,6 +39,11 @@ export async function POST(request: Request) {
   const societe_id: string | undefined = body?.societe_id
   if (!societe_id) {
     return NextResponse.json({ error: "societe_id requis" }, { status: 400 })
+  }
+
+  const auth = await authenticateAgentRequest(request, societe_id)
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status })
   }
   const date_debut: string | null = body?.date_debut || null
   const date_fin: string | null = body?.date_fin || null
