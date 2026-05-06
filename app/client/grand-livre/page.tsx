@@ -1,379 +1,301 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+/**
+ * Page /client/grand-livre — agent-friendly.
+ *
+ * Synthèse par compte du plan comptable mauricien (PCM 4-digits).
+ * Lex Banque alimente les comptes 411x/401x/4210/512x/etc.
+ */
+
+import { useState, useEffect, useCallback, useMemo } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, BookOpen, ChevronLeft, ChevronRight, Download, RefreshCw, FileDown } from "lucide-react"
+import {
+  Loader2,
+  RefreshCw,
+  BookCopy,
+  Search,
+  ArrowRight,
+  Sparkles,
+  TrendingUp,
+  TrendingDown,
+} from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
-function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-function fmtDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR") : "—" }
-
-const COMPTE_NAMES: Record<string, string> = {
-  '401': 'Fournisseurs', '411': 'Clients', '421': 'Personnel',
-  '431': 'CSG/NSF', '432': 'Training Levy', '444': 'PAYE',
-  '4456': 'TVA déductible', '4457': 'TVA collectée',
-  '455': 'Comptes courants associés', '467': 'Collaborateurs',
-  '512': 'Banque', '581': 'Virements internes',
-  '601': 'Achats', '606': 'Fournitures', '611': 'Sous-traitance',
-  '612': 'Loyers', '616': 'Assurances', '622': 'Honoraires',
-  '623': 'Publicité', '624': 'Transport', '626': 'Télécom',
-  '627': 'Frais bancaires', '628': 'Charges diverses',
-  '641': 'Salaires', '641100': 'Salaires bruts',
-  '645': 'Charges patronales', '645100': 'Cotisations patronales',
-  '651': 'Redevances SaaS', '666': 'Pertes de change',
-  '706': "Chiffre d'affaires", '753': 'Commissions',
-  '766': 'Gains de change',
+interface CompteSolde {
+  numero_compte: string
+  libelle?: string | null
+  total_debit: number
+  total_credit: number
+  solde: number
+  nb_ecritures: number
 }
 
-function getCompteName(compte: string): string {
-  if (COMPTE_NAMES[compte]) return COMPTE_NAMES[compte]
-  // Try prefix match
-  for (let len = compte.length; len >= 2; len--) {
-    const prefix = compte.substring(0, len)
-    if (COMPTE_NAMES[prefix]) return COMPTE_NAMES[prefix]
-  }
-  return ''
+function fmt(n: number): string {
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
-
-function getLetterColor(lettre: string): string {
-  if (!lettre) return 'transparent'
-  if (lettre.startsWith('MRA')) return '#fee2e2'
-  if (lettre.startsWith('M')) return '#dbeafe'
-  if (lettre.startsWith('RG')) return '#d1fae5'
-  if (lettre.startsWith('R')) return '#dcfce7'
-  if (lettre.startsWith('S')) return '#f3e8ff'
-  if (lettre.startsWith('L')) return '#ffedd5'
-  if (lettre.startsWith('FEE')) return '#fef3c7'
-  if (lettre.startsWith('BNQ')) return '#e0f2fe'
-  return '#f3f4f6'
+function classeColor(numero: string): string {
+  const c = numero[0]
+  if (c === "1") return "bg-blue-100 text-blue-700 border-blue-300"
+  if (c === "2") return "bg-cyan-100 text-cyan-700 border-cyan-300"
+  if (c === "3") return "bg-teal-100 text-teal-700 border-teal-300"
+  if (c === "4") return "bg-amber-100 text-amber-700 border-amber-300"
+  if (c === "5") return "bg-purple-100 text-purple-700 border-purple-300"
+  if (c === "6") return "bg-rose-100 text-rose-700 border-rose-300"
+  if (c === "7") return "bg-green-100 text-green-700 border-green-300"
+  return "bg-slate-100 text-slate-700 border-slate-300"
 }
-
-interface Societe { id: string; nom: string }
+function classeLabel(numero: string): string {
+  const c = numero[0]
+  return (
+    {
+      "1": "Capitaux",
+      "2": "Immo.",
+      "3": "Stocks",
+      "4": "Tiers",
+      "5": "Trésorerie",
+      "6": "Charges",
+      "7": "Produits",
+    }[c] || "—"
+  )
+}
 
 export default function ClientGrandLivrePage() {
-  const { societeId, societe } = useSocieteActive()
-  const [data, setData] = useState<any>(null)
+  const { societeId } = useSocieteActive()
+  const [comptes, setComptes] = useState<CompteSolde[]>([])
   const [loading, setLoading] = useState(false)
-  const [page, setPage] = useState(1)
-  const [compteDebut, setCompteDebut] = useState("")
-  const [compteFin, setCompteFin] = useState("")
-  const [dateDebut, setDateDebut] = useState("")
-  const [dateFin, setDateFin] = useState("")
-  const [journal, setJournal] = useState("all")
-  const [exercice, setExercice] = useState("")
-  const [lettreFilter, setLettreFilter] = useState<'all' | 'lettered' | 'unlettered'>('all')
-  const [highlightedLettre, setHighlightedLettre] = useState<string | null>(null)
-  const [pdfLoading, setPdfLoading] = useState(false)
-
-  // Available exercices (Mauritius fiscal year July-June)
-  const currentYear = new Date().getFullYear()
-  const currentMonth = new Date().getMonth() + 1
-  const currentExStart = currentMonth >= 7 ? currentYear : currentYear - 1
-  const availableExercices = Array.from({ length: 5 }, (_, i) => {
-    const s = currentExStart - i
-    return `${s}-${s + 1}`
-  })
+  const [classeFilter, setClasseFilter] = useState("all")
+  const [search, setSearch] = useState("")
 
   const load = useCallback(async () => {
-    if (!societeId) { setData(null); return }
+    if (!societeId) return
     setLoading(true)
     try {
-      const params = new URLSearchParams({ societe_id: societeId, page: String(page), limit: "50" })
-      if (compteDebut) params.set("compte_debut", compteDebut)
-      if (compteFin) params.set("compte_fin", compteFin)
-      if (dateDebut) params.set("date_debut", dateDebut)
-      if (dateFin) params.set("date_fin", dateFin)
-      if (journal && journal !== "all") params.set("journal", journal)
-      if (exercice) params.set("exercice", exercice)
-      const res = await fetch(`/api/comptable/grand-livre?${params}`)
-      setData(await res.json())
-    } catch { setData(null) }
-    finally { setLoading(false) }
-  }, [societeId, page, compteDebut, compteFin, dateDebut, dateFin, journal, exercice])
-
-  useEffect(() => { load() }, [load])
-
-  const allEcritures = data?.ecritures || []
-  const ecritures = allEcritures.filter((e: any) => {
-    if (lettreFilter === 'lettered') return e.lettre
-    if (lettreFilter === 'unlettered') return !e.lettre
-    return true
-  })
-  const lettrage = data?.lettrage || { lettrees: 0, non_lettrees: 0, total: 0 }
-  const soldeOuvertureParCompte: Record<string, number> = data?.solde_ouverture_par_compte || {}
-  const hasSoldeOuverture = Object.keys(soldeOuvertureParCompte).length > 0
-
-  const exportCSV = () => {
-    if (!ecritures.length) return
-    const header = "Date;Journal;N° Piece;Compte;Libelle;Debit;Credit;Solde;Lettre\n"
-    const rows = ecritures.map((e: any) =>
-      `${e.date_ecriture};${e.journal};${e.ref_folio || ""};${e.numero_compte};${(e.description || e.nom_compte || "").replace(/;/g, ",")};${e.debit_mur};${e.credit_mur};${e.solde_progressif};${e.lettre || ""}`
-    ).join("\n")
-    const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a"); a.href = url; a.download = "grand-livre.csv"; a.click()
-  }
-
-  const exportPDF = async () => {
-    if (!societeId || pdfLoading) return
-    setPdfLoading(true)
-    try {
-      // Fetch ALL entries (no pagination) for the PDF
-      const params = new URLSearchParams({ societe_id: societeId, limit: "0" })
-      if (compteDebut) params.set("compte_debut", compteDebut)
-      if (compteFin) params.set("compte_fin", compteFin)
-      if (dateDebut) params.set("date_debut", dateDebut)
-      if (dateFin) params.set("date_fin", dateFin)
-      if (journal && journal !== "all") params.set("journal", journal)
-      if (exercice) params.set("exercice", exercice)
-      const res = await fetch(`/api/comptable/grand-livre?${params}`)
-      const pdfData = await res.json()
-      const allPdfEcritures = pdfData?.ecritures || []
-
-      if (allPdfEcritures.length === 0) {
-        setPdfLoading(false)
-        return
-      }
-
-      const { pdf } = await import('@react-pdf/renderer')
-      const { GrandLivrePDF } = await import('@/components/pdf/GrandLivrePDF')
-      const socData = societe
-      const exerciceYears: [string, string] | null = pdfData?.exercice
-        ? (pdfData.exercice.match(/^(\d{4})-(\d{4})$/) ? [pdfData.exercice.split('-')[0], pdfData.exercice.split('-')[1]] : null)
-        : null
-      const pdfDateDebut = dateDebut || (exerciceYears ? `${exerciceYears[0]}-07-01` : '')
-      const pdfDateFin = dateFin || (exerciceYears ? `${exerciceYears[1]}-06-30` : '')
-      const blob = await pdf(
-        <GrandLivrePDF
-          societe={socData}
-          dateDebut={pdfDateDebut}
-          dateFin={pdfDateFin}
-          ecritures={allPdfEcritures}
-          compteNames={COMPTE_NAMES}
-        />
-      ).toBlob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `grand-livre_${socData?.nom || 'export'}_${new Date().toISOString().split('T')[0]}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      console.error('[grand-livre] PDF export error:', e)
-    } finally {
-      setPdfLoading(false)
+      const res = await fetch(`/api/comptable/grand-livre?societe_id=${societeId}`)
+      const d = await res.json()
+      setComptes(d?.comptes || d?.balance || [])
+    } catch {}
+    finally {
+      setLoading(false)
     }
-  }
+  }, [societeId])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const filtered = useMemo(() => {
+    let list = comptes
+    if (classeFilter !== "all") list = list.filter((c) => c.numero_compte.startsWith(classeFilter))
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(
+        (c) =>
+          c.numero_compte.toLowerCase().includes(q) ||
+          (c.libelle || "").toLowerCase().includes(q)
+      )
+    }
+    return list.slice().sort((a, b) => a.numero_compte.localeCompare(b.numero_compte))
+  }, [comptes, classeFilter, search])
+
+  const totalActif = comptes
+    .filter((c) => /^[1-5]/.test(c.numero_compte))
+    .reduce((s, c) => s + c.solde, 0)
+  const totalCharges = comptes
+    .filter((c) => c.numero_compte.startsWith("6"))
+    .reduce((s, c) => s + c.solde, 0)
+  const totalProduits = comptes
+    .filter((c) => c.numero_compte.startsWith("7"))
+    .reduce((s, c) => s + Math.abs(c.solde), 0)
 
   return (
-    <ClientPageShell
-      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Grand Livre" }]}
-      kicker="Comptabilité"
-      title="Grand Livre"
-      subtitle="Écritures comptables avec solde progressif, lettrage et export CSV / PDF."
-      actions={
-        <>
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />Actualiser
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCSV} disabled={!ecritures.length}>
-            <Download className="w-4 h-4 mr-2" />CSV
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportPDF} disabled={!societeId || pdfLoading}>
-            {pdfLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileDown className="w-4 h-4 mr-2" />}PDF
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-6">
-
-      {/* Filtres */}
-      <Card>
-        <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          <div>
-            <Label className="text-xs">Exercice</Label>
-            <Select value={exercice || "all"} onValueChange={v => { setExercice(v === "all" ? "" : v); setPage(1) }}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous</SelectItem>
-                {availableExercices.map(ex => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
-              </SelectContent>
-            </Select>
+    <ClientPageShell hideHero disableParticles>
+      <div className="space-y-6 max-w-7xl">
+        <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 via-zinc-50 to-stone-50 p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 p-3 text-white shadow-md">
+                <BookCopy className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900">Grand livre</h1>
+                <p className="text-sm text-slate-700/80 mt-0.5">
+                  Soldes par compte PCM mauricien
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
+                <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+              <Link href="/client/ecritures">
+                <Button variant="outline" size="sm">
+                  Détail écritures
+                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              </Link>
+              <Link href="/client/rapprochement">
+                <Button className="bg-purple-600 hover:bg-purple-700 text-white">
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                  Lex Banque
+                </Button>
+              </Link>
+            </div>
           </div>
-          <div><Label className="text-xs">Compte debut</Label><Input className="h-9" placeholder="ex: 401" value={compteDebut} onChange={e => setCompteDebut(e.target.value)} /></div>
-          <div><Label className="text-xs">Compte fin</Label><Input className="h-9" placeholder="ex: 706" value={compteFin} onChange={e => setCompteFin(e.target.value)} /></div>
-          <div><Label className="text-xs">Date debut</Label><Input className="h-9" type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} /></div>
-          <div><Label className="text-xs">Date fin</Label><Input className="h-9" type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} /></div>
-          <div>
-            <Label className="text-xs">Journal</Label>
-            <Select value={journal} onValueChange={v => { setJournal(v); setPage(1) }}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous</SelectItem>
-                <SelectItem value="ACH">ACH (Achats)</SelectItem>
-                <SelectItem value="VTE">VTE (Ventes)</SelectItem>
-                <SelectItem value="BNQ">BNQ (Banque)</SelectItem>
-                <SelectItem value="OD">OD (Operations)</SelectItem>
-                <SelectItem value="SAL">SAL (Salaires)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Lettrage filter + highlight */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-gray-500">Lettrage :</span>
-        <div className="flex rounded-lg border overflow-hidden">
-          {([['all', 'Toutes'], ['lettered', 'Lettrées'], ['unlettered', 'Non lettrées']] as const).map(([val, label]) => (
-            <button key={val} onClick={() => setLettreFilter(val)} className={`px-3 py-1 text-xs font-medium ${lettreFilter === val ? 'bg-[#0B0F2E] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{label}</button>
-          ))}
         </div>
-        {highlightedLettre && (
-          <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 border border-yellow-300 rounded text-xs">
-            <span>Lettrage <strong>{highlightedLettre}</strong> : {ecritures.filter((e: any) => e.lettre === highlightedLettre).length} écritures liées</span>
-            <button onClick={() => setHighlightedLettre(null)} className="text-gray-500 hover:text-gray-800">✕</button>
-          </div>
-        )}
-      </div>
 
-      {!societeId ? (
-        <Card><CardContent className="py-16 text-center text-gray-400">Selectionnez une societe</CardContent></Card>
-      ) : loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" /></div>
-      ) : !data ? (
-        <Card><CardContent className="py-16 text-center text-gray-400">Erreur de chargement</CardContent></Card>
-      ) : (
-        <>
-          {/* KPIs */}
-          <div className="grid grid-cols-5 gap-4">
-            {hasSoldeOuverture && (
-              <Card className="border-l-4 border-l-[#D4AF37]">
-                <CardContent className="p-4">
-                  <p className="text-xs text-gray-500">Report a nouveau</p>
-                  <p className={`text-xl font-bold ${data.solde_ouverture >= 0 ? "text-[#D4AF37]" : "text-red-600"}`}>{fmt(data.solde_ouverture)} MUR</p>
-                  <p className="text-xs text-gray-400">{Object.keys(soldeOuvertureParCompte).length} comptes</p>
-                </CardContent>
-              </Card>
-            )}
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Total Debit</p><p className="text-xl font-bold text-blue-700">{fmt(data.total_debit)} MUR</p></CardContent></Card>
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Total Credit</p><p className="text-xl font-bold text-purple-700">{fmt(data.total_credit)} MUR</p></CardContent></Card>
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Solde Cloture</p><p className={`text-xl font-bold ${data.solde_cloture >= 0 ? "text-green-700" : "text-red-600"}`}>{fmt(Math.abs(data.solde_cloture))} MUR</p></CardContent></Card>
-            <Card><CardContent className="p-4"><p className="text-xs text-gray-500">Lettrage</p><p className="text-xl font-bold text-[#0B0F2E]">{lettrage.lettrees} / {lettrage.total}</p><p className="text-xs text-gray-400">{lettrage.non_lettrees} non lettrees</p></CardContent></Card>
-          </div>
-
-          {/* Tableau */}
+        {!societeId ? (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="text-[#0B0F2E]">
-                Ecritures <span className="ml-2 text-sm font-normal text-gray-500">({data.total} lignes — source: {data.source})</span>
-              </CardTitle>
-              {data.pages > 1 && (
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft className="w-4 h-4" /></Button>
-                  <span className="text-sm text-gray-600">Page {page} / {data.pages}</span>
-                  <Button variant="outline" size="sm" disabled={page >= data.pages} onClick={() => setPage(p => p + 1)}><ChevronRight className="w-4 h-4" /></Button>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent className="p-0">
-              {ecritures.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p className="font-medium">Aucune ecriture comptabilisee</p>
-                  <p className="text-sm mt-1">Uploadez des documents pour alimenter le grand livre</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50">
-                        <TableHead className="text-xs">Date</TableHead>
-                        <TableHead className="text-xs">Journal</TableHead>
-                        <TableHead className="text-xs">N° Piece</TableHead>
-                        <TableHead className="text-xs">Compte</TableHead>
-                        <TableHead className="text-xs">Libelle</TableHead>
-                        <TableHead className="text-xs text-right">Debit</TableHead>
-                        <TableHead className="text-xs text-right">Credit</TableHead>
-                        <TableHead className="text-xs text-right">Solde progressif</TableHead>
-                        <TableHead className="text-xs">Lettre</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {/* Opening balance rows when exercice is selected */}
-                      {hasSoldeOuverture && page === 1 && (() => {
-                        // Find unique accounts in current page ecritures that have opening balances
-                        const accountsShown = new Set<string>()
-                        const openingRows: { compte: string; solde: number }[] = []
-                        for (const e of ecritures) {
-                          if (!accountsShown.has(e.numero_compte) && soldeOuvertureParCompte[e.numero_compte] !== undefined) {
-                            accountsShown.add(e.numero_compte)
-                            openingRows.push({ compte: e.numero_compte, solde: soldeOuvertureParCompte[e.numero_compte] })
-                          }
-                        }
-                        // Also add accounts that have opening balances but no entries in this period
-                        for (const [compte, solde] of Object.entries(soldeOuvertureParCompte)) {
-                          if (!accountsShown.has(compte) && solde !== 0) {
-                            openingRows.push({ compte, solde })
-                          }
-                        }
-                        openingRows.sort((a, b) => a.compte.localeCompare(b.compte))
-                        if (openingRows.length === 0) return null
-                        return (
-                          <>
-                            <TableRow className="bg-[#D4AF37]/10 border-b-2 border-[#D4AF37]/30">
-                              <TableCell colSpan={9} className="text-xs font-bold text-[#0B0F2E] py-2">
-                                Report a nouveau (soldes d&apos;ouverture)
-                              </TableCell>
-                            </TableRow>
-                            {openingRows.map(row => (
-                              <TableRow key={`opening-${row.compte}`} className="bg-[#D4AF37]/5">
-                                <TableCell className="text-xs font-mono whitespace-nowrap text-gray-400">Ouverture</TableCell>
-                                <TableCell><Badge variant="outline" className="text-[10px] px-1 py-0 border-[#D4AF37] text-[#D4AF37]">RAN</Badge></TableCell>
-                                <TableCell className="text-xs font-mono text-gray-400">--</TableCell>
-                                <TableCell className="text-xs font-mono font-semibold text-[#0B0F2E]">{row.compte}</TableCell>
-                                <TableCell className="text-xs text-gray-500 italic">Solde d&apos;ouverture (report a nouveau)</TableCell>
-                                <TableCell className="text-xs text-right font-mono">{row.solde > 0 ? <span className="text-blue-700">{fmt(row.solde)}</span> : "—"}</TableCell>
-                                <TableCell className="text-xs text-right font-mono">{row.solde < 0 ? <span className="text-purple-700">{fmt(Math.abs(row.solde))}</span> : "—"}</TableCell>
-                                <TableCell className={`text-xs text-right font-mono ${row.solde >= 0 ? "text-green-700" : "text-red-600"}`}>{fmt(row.solde)}</TableCell>
-                                <TableCell><span className="text-gray-300">—</span></TableCell>
-                              </TableRow>
-                            ))}
-                            <TableRow className="border-b-2 border-[#0B0F2E]/20">
-                              <TableCell colSpan={9} className="py-0.5" />
-                            </TableRow>
-                          </>
-                        )
-                      })()}
-                      {ecritures.map((e: any, idx: number) => (
-                        <TableRow key={e.id} className={`${highlightedLettre && e.lettre === highlightedLettre ? 'bg-yellow-50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                          <TableCell className="text-xs font-mono whitespace-nowrap">{fmtDate(e.date_ecriture)}</TableCell>
-                          <TableCell><Badge variant="outline" className="text-[10px] px-1 py-0">{e.journal || "—"}</Badge></TableCell>
-                          <TableCell className="text-xs font-mono text-gray-500">{e.ref_folio || "—"}</TableCell>
-                          <TableCell className="text-xs font-mono font-semibold text-[#0B0F2E]">{e.numero_compte}{getCompteName(e.numero_compte) ? <span className="ml-1 text-gray-400 font-normal">{getCompteName(e.numero_compte)}</span> : ''}</TableCell>
-                          <TableCell className="text-xs max-w-[200px] truncate text-gray-700">{e.description || e.nom_compte || "—"}</TableCell>
-                          <TableCell className="text-xs text-right font-mono">{e.debit_mur > 0 ? <span className="text-blue-700">{fmt(e.debit_mur)}</span> : "—"}</TableCell>
-                          <TableCell className="text-xs text-right font-mono">{e.credit_mur > 0 ? <span className="text-purple-700">{fmt(e.credit_mur)}</span> : "—"}</TableCell>
-                          <TableCell className={`text-xs text-right font-mono ${e.solde_progressif >= 0 ? "text-green-700" : "text-red-600"}`}>{fmt(e.solde_progressif)}</TableCell>
-                          <TableCell>{e.lettre ? <span onClick={() => setHighlightedLettre(e.lettre === highlightedLettre ? null : e.lettre)} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold cursor-pointer" style={{ backgroundColor: getLetterColor(e.lettre) }}>{e.lettre}</span> : <span className="text-gray-300">—</span>}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+            <CardContent className="py-16 text-center text-gray-400">
+              Société non disponible.
             </CardContent>
           </Card>
-        </>
-      )}
+        ) : loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-slate-700" />
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard label="Comptes mouvementés" value={comptes.length} />
+              <KpiCard label="Total actif net (1-5)" value={fmt(totalActif)} tone="blue" />
+              <KpiCard
+                label="Total charges (6)"
+                value={fmt(totalCharges)}
+                tone="rose"
+              />
+              <KpiCard
+                label="Total produits (7)"
+                value={fmt(totalProduits)}
+                tone="green"
+              />
+            </div>
+
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BookCopy className="h-5 w-5 text-slate-700" />
+                    Soldes ({filtered.length})
+                  </CardTitle>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="N° ou libellé…"
+                        className="pl-8 h-9 w-56"
+                      />
+                    </div>
+                    <div className="flex gap-1 border rounded p-1 bg-card">
+                      {["all", "1", "2", "3", "4", "5", "6", "7"].map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => setClasseFilter(c)}
+                          className={`px-2 py-0.5 text-xs rounded ${
+                            classeFilter === c
+                              ? "bg-slate-900 text-white"
+                              : "hover:bg-muted"
+                          }`}
+                        >
+                          {c === "all" ? "Tous" : `Cl ${c}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {filtered.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    Aucun compte pour ce filtre.
+                  </p>
+                ) : (
+                  <div className="rounded border bg-card divide-y">
+                    {filtered.map((c) => (
+                      <div
+                        key={c.numero_compte}
+                        className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] font-mono ${classeColor(c.numero_compte)}`}
+                            >
+                              {c.numero_compte}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px]">
+                              {classeLabel(c.numero_compte)}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {c.nb_ecritures} écriture{c.nb_ecritures > 1 ? "s" : ""}
+                            </span>
+                          </div>
+                          {c.libelle && (
+                            <p className="text-sm mt-1 break-words">{c.libelle}</p>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0 font-mono text-sm space-y-0.5">
+                          <p className="text-[11px] text-muted-foreground">
+                            D {fmt(c.total_debit)} · C {fmt(c.total_credit)}
+                          </p>
+                          <p
+                            className={`text-base font-medium ${
+                              c.solde >= 0 ? "text-green-700" : "text-rose-700"
+                            }`}
+                          >
+                            {c.solde >= 0 ? (
+                              <TrendingUp className="inline h-3 w-3 mr-0.5" />
+                            ) : (
+                              <TrendingDown className="inline h-3 w-3 mr-0.5" />
+                            )}
+                            {fmt(c.solde)} MUR
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </ClientPageShell>
+  )
+}
+
+function KpiCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number | string
+  tone?: "amber" | "green" | "rose" | "blue"
+}) {
+  const cls =
+    tone === "amber"
+      ? "border-amber-200 bg-amber-50"
+      : tone === "green"
+        ? "border-green-200 bg-green-50"
+        : tone === "rose"
+          ? "border-rose-200 bg-rose-50"
+          : tone === "blue"
+            ? "border-blue-200 bg-blue-50"
+            : "border-muted bg-card"
+  return (
+    <Card className={cls}>
+      <CardContent className="p-3">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-xl font-semibold mt-1">{value}</div>
+      </CardContent>
+    </Card>
   )
 }

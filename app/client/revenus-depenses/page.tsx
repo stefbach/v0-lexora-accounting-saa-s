@@ -1,416 +1,296 @@
 "use client"
 
-import { useState } from "react"
+/**
+ * Page /client/revenus-depenses — agent-friendly.
+ *
+ * Synthèse mensuelle/annuelle des revenus (classe 7) et dépenses (classe 6).
+ * Données issues du grand livre alimenté entre autres par Lex Banque.
+ */
+
+import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { TrendingUp, TrendingDown, DollarSign, Calculator, Plus } from "lucide-react"
-import { useProfile } from "@/hooks/use-profile"
-import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
+  Loader2,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  ArrowRight,
+  Sparkles,
+  Wallet,
+} from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
-function formatMUR(amount: number) {
-  return amount.toLocaleString("fr-FR") + " MUR"
+interface CompteSolde {
+  numero_compte: string
+  libelle?: string | null
+  total_debit: number
+  total_credit: number
+  solde: number
+  nb_ecritures: number
 }
 
-interface RevenueItem {
-  id: string
-  date: string
-  client: string
-  description: string
-  montant: number
+const ANNEES = ["2023", "2024", "2025", "2026", "2027"]
+
+function fmt(n: number): string {
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-interface ExpenseItem {
-  id: string
-  date: string
-  fournisseur: string
-  description: string
-  montant: number
-}
+export default function ClientRevenusDepensesPage() {
+  const { societeId } = useSocieteActive()
+  const [comptes, setComptes] = useState<CompteSolde[]>([])
+  const [loading, setLoading] = useState(false)
+  const [annee, setAnnee] = useState(String(new Date().getFullYear()))
 
-const initialRevenus: RevenueItem[] = []
+  const load = useCallback(async () => {
+    if (!societeId) return
+    setLoading(true)
+    try {
+      const res = await fetch(
+        `/api/comptable/grand-livre?societe_id=${societeId}&annee=${annee}`
+      )
+      const d = await res.json()
+      setComptes(d?.comptes || d?.balance || [])
+    } catch {}
+    finally {
+      setLoading(false)
+    }
+  }, [societeId, annee])
+  useEffect(() => {
+    load()
+  }, [load])
 
-const initialDepenses: ExpenseItem[] = []
+  const revenus = useMemo(
+    () =>
+      comptes
+        .filter((c) => c.numero_compte.startsWith("7"))
+        .map((c) => ({ ...c, montant: Math.abs(c.solde) }))
+        .sort((a, b) => b.montant - a.montant),
+    [comptes]
+  )
+  const depenses = useMemo(
+    () =>
+      comptes
+        .filter((c) => c.numero_compte.startsWith("6"))
+        .map((c) => ({ ...c, montant: c.solde }))
+        .sort((a, b) => b.montant - a.montant),
+    [comptes]
+  )
 
-export default function RevenusDepensesPage() {
-  const { profile } = useProfile()
-  const [revenus, setRevenus] = useState(initialRevenus)
-  const [depenses, setDepenses] = useState(initialDepenses)
-
-  const [revDialogOpen, setRevDialogOpen] = useState(false)
-  const [depDialogOpen, setDepDialogOpen] = useState(false)
-
-  const [newRevDate, setNewRevDate] = useState("")
-  const [newRevClient, setNewRevClient] = useState("")
-  const [newRevDesc, setNewRevDesc] = useState("")
-  const [newRevMontant, setNewRevMontant] = useState("")
-
-  const [newDepDate, setNewDepDate] = useState("")
-  const [newDepFournisseur, setNewDepFournisseur] = useState("")
-  const [newDepDesc, setNewDepDesc] = useState("")
-  const [newDepMontant, setNewDepMontant] = useState("")
-
-  if (profile?.role === "client_user") {
-    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
-  }
-
-  const totalRevenus = revenus.reduce((sum, r) => sum + r.montant, 0)
-  const totalDepenses = depenses.reduce((sum, d) => sum + d.montant, 0)
-  const revenuNet = totalRevenus - totalDepenses
-  const impotEstime = Math.round(revenuNet * 0.15)
-
-  function handleAddRevenu() {
-    if (!newRevDate || !newRevClient || !newRevMontant) return
-    setRevenus([
-      {
-        id: String(revenus.length + 1),
-        date: newRevDate,
-        client: newRevClient,
-        description: newRevDesc || "Non précisé",
-        montant: Number(newRevMontant),
-      },
-      ...revenus,
-    ])
-    setNewRevDate("")
-    setNewRevClient("")
-    setNewRevDesc("")
-    setNewRevMontant("")
-    setRevDialogOpen(false)
-  }
-
-  function handleAddDepense() {
-    if (!newDepDate || !newDepFournisseur || !newDepMontant) return
-    setDepenses([
-      {
-        id: String(depenses.length + 1),
-        date: newDepDate,
-        fournisseur: newDepFournisseur,
-        description: newDepDesc || "Non précisé",
-        montant: Number(newDepMontant),
-      },
-      ...depenses,
-    ])
-    setNewDepDate("")
-    setNewDepFournisseur("")
-    setNewDepDesc("")
-    setNewDepMontant("")
-    setDepDialogOpen(false)
-  }
+  const totalRevenus = revenus.reduce((s, c) => s + c.montant, 0)
+  const totalDepenses = depenses.reduce((s, c) => s + c.montant, 0)
+  const resultat = totalRevenus - totalDepenses
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-          Revenus &amp; Dépenses
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Suivez ce que vous gagnez et ce que vous dépensez pour votre activité.
-        </p>
-      </div>
-
-      {/* Revenus */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+    <ClientPageShell hideHero disableParticles>
+      <div className="space-y-6 max-w-7xl">
+        <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 via-fuchsia-50 to-pink-50 p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <TrendingUp className="h-5 w-5 text-green-500" />
-              <CardTitle style={{ color: "#0B0F2E" }}>Revenus</CardTitle>
+              <div className="rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 p-3 text-white shadow-md">
+                <Wallet className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-violet-900">Revenus & Dépenses</h1>
+                <p className="text-sm text-violet-700/80 mt-0.5">
+                  P&amp;L par compte — exercice {annee}
+                </p>
+              </div>
             </div>
-            <Dialog open={revDialogOpen} onOpenChange={setRevDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" style={{ backgroundColor: "#22C55E", color: "white" }}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ajouter
+            <div className="flex gap-2 flex-wrap items-center">
+              <Select value={annee} onValueChange={setAnnee}>
+                <SelectTrigger className="h-9 w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ANNEES.map((a) => (
+                    <SelectItem key={a} value={a}>
+                      {a}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
+                <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+              <Link href="/client/rapprochement">
+                <Button className="bg-purple-600 hover:bg-purple-700 text-white">
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                  Lex Banque
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle style={{ color: "#0B0F2E" }}>Ajouter un revenu</DialogTitle>
-                  <DialogDescription>
-                    Enregistrez un paiement que vous avez reçu.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="revDate">Date</Label>
-                    <Input
-                      id="revDate"
-                      placeholder="Ex: 20/03/2026"
-                      value={newRevDate}
-                      onChange={(e) => setNewRevDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="revClient">Client</Label>
-                    <Input
-                      id="revClient"
-                      placeholder="Nom du client"
-                      value={newRevClient}
-                      onChange={(e) => setNewRevClient(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="revDesc">Description</Label>
-                    <Input
-                      id="revDesc"
-                      placeholder="Ex: Développement site web"
-                      value={newRevDesc}
-                      onChange={(e) => setNewRevDesc(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="revMontant">Montant (MUR)</Label>
-                    <Input
-                      id="revMontant"
-                      type="number"
-                      placeholder="Ex: 50000"
-                      value={newRevMontant}
-                      onChange={(e) => setNewRevMontant(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setRevDialogOpen(false)}>
-                    Annuler
-                  </Button>
-                  <Button onClick={handleAddRevenu} style={{ backgroundColor: "#22C55E", color: "white" }}>
-                    Ajouter
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+              </Link>
+            </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead className="text-right">Montant</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {revenus.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    Aucun revenu enregistré. Cliquez sur &quot;Ajouter&quot; pour commencer.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                revenus.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-sm">{row.date}</TableCell>
-                    <TableCell className="font-medium">{row.client}</TableCell>
-                    <TableCell className="text-muted-foreground">{row.description}</TableCell>
-                    <TableCell className="text-right text-green-600 font-semibold">
-                      {formatMUR(row.montant)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Dépenses */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <TrendingDown className="h-5 w-5 text-red-500" />
-              <CardTitle style={{ color: "#0B0F2E" }}>Dépenses</CardTitle>
-            </div>
-            <Dialog open={depDialogOpen} onOpenChange={setDepDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline" style={{ borderColor: "#EF4444", color: "#EF4444" }}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ajouter
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle style={{ color: "#0B0F2E" }}>Ajouter une dépense</DialogTitle>
-                  <DialogDescription>
-                    Enregistrez un achat ou un paiement que vous avez effectué.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="depDate">Date</Label>
-                    <Input
-                      id="depDate"
-                      placeholder="Ex: 20/03/2026"
-                      value={newDepDate}
-                      onChange={(e) => setNewDepDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="depFournisseur">Fournisseur</Label>
-                    <Input
-                      id="depFournisseur"
-                      placeholder="Nom du fournisseur"
-                      value={newDepFournisseur}
-                      onChange={(e) => setNewDepFournisseur(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="depDesc">Description</Label>
-                    <Input
-                      id="depDesc"
-                      placeholder="Ex: Achat de matériel"
-                      value={newDepDesc}
-                      onChange={(e) => setNewDepDesc(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="depMontant">Montant (MUR)</Label>
-                    <Input
-                      id="depMontant"
-                      type="number"
-                      placeholder="Ex: 10000"
-                      value={newDepMontant}
-                      onChange={(e) => setNewDepMontant(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setDepDialogOpen(false)}>
-                    Annuler
-                  </Button>
-                  <Button onClick={handleAddDepense} style={{ backgroundColor: "#EF4444", color: "white" }}>
-                    Ajouter
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+        {!societeId ? (
+          <Card>
+            <CardContent className="py-16 text-center text-gray-400">
+              Société non disponible.
+            </CardContent>
+          </Card>
+        ) : loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
           </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Fournisseur</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead className="text-right">Montant</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {depenses.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    Aucune dépense enregistrée. Cliquez sur &quot;Ajouter&quot; pour commencer.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                depenses.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-sm">{row.date}</TableCell>
-                    <TableCell className="font-medium">{row.fournisseur}</TableCell>
-                    <TableCell className="text-muted-foreground">{row.description}</TableCell>
-                    <TableCell className="text-right text-red-600 font-semibold">
-                      {formatMUR(row.montant)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              <KpiCard
+                label="Revenus totaux"
+                value={fmt(totalRevenus)}
+                tone="green"
+                icon={<TrendingUp className="h-4 w-4" />}
+              />
+              <KpiCard
+                label="Dépenses totales"
+                value={fmt(totalDepenses)}
+                tone="rose"
+                icon={<TrendingDown className="h-4 w-4" />}
+              />
+              <KpiCard
+                label="Résultat"
+                value={fmt(resultat)}
+                tone={resultat >= 0 ? "green" : "rose"}
+                accent
+              />
+            </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total revenus
-            </CardTitle>
-            <TrendingUp className="h-5 w-5 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatMUR(totalRevenus)}
+            <div className="grid md:grid-cols-2 gap-4">
+              <Card className="border-green-200">
+                <CardHeader className="bg-green-50/50 border-b">
+                  <CardTitle className="text-base flex items-center gap-2 text-green-900">
+                    <TrendingUp className="h-5 w-5 text-green-600" />
+                    Revenus (classe 7) — {fmt(totalRevenus)}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {revenus.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      Aucun revenu sur l'exercice.
+                    </p>
+                  ) : (
+                    <div className="divide-y">
+                      {revenus.map((c) => (
+                        <div
+                          key={c.numero_compte}
+                          className="flex items-start justify-between gap-3 p-3 hover:bg-green-50/30"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px] font-mono">
+                                {c.numero_compte}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {c.nb_ecritures} écr.
+                              </span>
+                            </div>
+                            <p className="text-sm mt-0.5 break-words">
+                              {c.libelle || "—"}
+                            </p>
+                          </div>
+                          <p className="font-mono text-sm text-green-700 flex-shrink-0">
+                            +{fmt(c.montant)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-rose-200">
+                <CardHeader className="bg-rose-50/50 border-b">
+                  <CardTitle className="text-base flex items-center gap-2 text-rose-900">
+                    <TrendingDown className="h-5 w-5 text-rose-600" />
+                    Dépenses (classe 6) — {fmt(totalDepenses)}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {depenses.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      Aucune dépense sur l'exercice.
+                    </p>
+                  ) : (
+                    <div className="divide-y">
+                      {depenses.map((c) => (
+                        <div
+                          key={c.numero_compte}
+                          className="flex items-start justify-between gap-3 p-3 hover:bg-rose-50/30"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px] font-mono">
+                                {c.numero_compte}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {c.nb_ecritures} écr.
+                              </span>
+                            </div>
+                            <p className="text-sm mt-0.5 break-words">
+                              {c.libelle || "—"}
+                            </p>
+                          </div>
+                          <p className="font-mono text-sm text-rose-700 flex-shrink-0">
+                            -{fmt(c.montant)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total dépenses
-            </CardTitle>
-            <TrendingDown className="h-5 w-5 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {formatMUR(totalDepenses)}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Revenu net
-            </CardTitle>
-            <DollarSign className="h-5 w-5" style={{ color: "#D4AF37" }} />
-          </CardHeader>
-          <CardContent>
-            <div
-              className="text-2xl font-bold"
-              style={{ color: revenuNet >= 0 ? "#22C55E" : "#EF4444" }}
-            >
-              {formatMUR(revenuNet)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Ce qu&apos;il vous reste après les dépenses
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Impôt estimé (15%)
-            </CardTitle>
-            <Calculator className="h-5 w-5" style={{ color: "#0B0F2E" }} />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-              {formatMUR(impotEstime)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Estimation indicative
-            </p>
-          </CardContent>
-        </Card>
+          </>
+        )}
       </div>
-    </div>
+    </ClientPageShell>
+  )
+}
+
+function KpiCard({
+  label,
+  value,
+  tone,
+  accent,
+  icon,
+}: {
+  label: string
+  value: number | string
+  tone?: "amber" | "green" | "rose" | "blue"
+  accent?: boolean
+  icon?: React.ReactNode
+}) {
+  const cls =
+    tone === "amber"
+      ? "border-amber-200 bg-amber-50"
+      : tone === "green"
+        ? "border-green-200 bg-green-50"
+        : tone === "rose"
+          ? "border-rose-200 bg-rose-50"
+          : tone === "blue"
+            ? "border-blue-200 bg-blue-50"
+            : "border-muted bg-card"
+  return (
+    <Card className={`${cls} ${accent ? "ring-2 ring-violet-400" : ""}`}>
+      <CardContent className="p-3">
+        <div className="text-xs text-muted-foreground flex items-center gap-1">
+          {icon}
+          {label}
+        </div>
+        <div className="text-xl font-semibold mt-1">{value}</div>
+      </CardContent>
+    </Card>
   )
 }

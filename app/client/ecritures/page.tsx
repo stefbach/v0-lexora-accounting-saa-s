@@ -1,521 +1,310 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
+/**
+ * Page /client/ecritures — agent-friendly.
+ *
+ * Vue des écritures comptables (grand livre détaillé) de la société.
+ * Lex Banque produit les écritures BNQ qui apparaîtront ici.
+ */
+
+import { useState, useEffect, useCallback, useMemo } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, Plus, Save, Trash2, Pencil, X, Download, BookOpen, AlertCircle, CheckCircle2, Search, Filter } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Loader2,
+  RefreshCw,
+  BookOpen,
+  Search,
+  ArrowRight,
+  Sparkles,
+  Bot,
+} from "lucide-react"
+import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 interface Ecriture {
   id: string
-  numero_compte: string
-  libelle: string
-  debit_mur: number
-  credit_mur: number
-  lettre: string | null
   date_ecriture: string
   journal: string
+  numero_compte: string
+  libelle: string | null
+  debit_mur: number
+  credit_mur: number
+  devise_origine: string | null
+  montant_origine: number | null
+  taux_change_applique: number | null
   ref_folio: string | null
+  lettre: string | null
+  date_lettrage: string | null
   facture_id: string | null
 }
 
-function fmt(n: number) {
+const JOURNAL_LABELS: Record<string, { label: string; color: string }> = {
+  VTE: { label: "Ventes", color: "bg-green-100 text-green-700 border-green-300" },
+  ACH: { label: "Achats", color: "bg-rose-100 text-rose-700 border-rose-300" },
+  BNQ: { label: "Banque", color: "bg-blue-100 text-blue-700 border-blue-300" },
+  SAL: { label: "Salaires", color: "bg-purple-100 text-purple-700 border-purple-300" },
+  OD: { label: "Diverses", color: "bg-amber-100 text-amber-700 border-amber-300" },
+  CLS: { label: "Clôture", color: "bg-slate-100 text-slate-700 border-slate-300" },
+}
+
+function fmt(n: number): string {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
-
-function formatDate(d: string | null) {
+function formatDate(d: string | null): string {
   if (!d) return "—"
-  try {
-    return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "2-digit" })
-  } catch { return d }
+  return new Date(d).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
 }
 
-export default function EcrituresPage() {
-  const searchParams = useSearchParams()
+export default function ClientEcrituresPage() {
   const { societeId } = useSocieteActive()
   const [ecritures, setEcritures] = useState<Ecriture[]>([])
-  const [totals, setTotals] = useState<{ debit_total: number; credit_total: number; solde: number } | null>(null)
-  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [page, setPage] = useState(1)
-  const PAGE_SIZE = 50
+  const [journalFilter, setJournalFilter] = useState("all")
+  const [search, setSearch] = useState("")
 
-  // Filtres - preremplis depuis URL params
-  const [filterCompte, setFilterCompte] = useState(() => searchParams.get("compte") || "")
-  const [filterMois, setFilterMois] = useState(() => searchParams.get("mois") || "")
-  const [filterJournal, setFilterJournal] = useState("")
-  const [filterQ, setFilterQ] = useState("")
-  const [filterLettre, setFilterLettre] = useState("")
-
-  // Dialog OD
-  const [odOpen, setOdOpen] = useState(false)
-  const [odDate, setOdDate] = useState(new Date().toISOString().slice(0, 10))
-  const [odLibelle, setOdLibelle] = useState("")
-  const [odJournal, setOdJournal] = useState("OD")
-  const [odLignes, setOdLignes] = useState([
-    { numero_compte: "", libelle: "", debit_mur: 0, credit_mur: 0 },
-    { numero_compte: "", libelle: "", debit_mur: 0, credit_mur: 0 },
-  ])
-  const [odSaving, setOdSaving] = useState(false)
-
-  // Dialog édit
-  const [editDialog, setEditDialog] = useState<Ecriture | null>(null)
-
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(() => setToast(null), 5000)
-    return () => clearTimeout(t)
-  }, [toast])
-
-
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!societeId) return
     setLoading(true)
     try {
-      const qs = new URLSearchParams({
-        societe_id: societeId,
-        limit: String(PAGE_SIZE),
-        offset: String((page - 1) * PAGE_SIZE),
-      })
-      if (filterCompte) qs.set("compte", filterCompte)
-      if (filterMois) qs.set("mois", filterMois)
-      if (filterJournal) qs.set("journal", filterJournal)
-      if (filterQ) qs.set("q", filterQ)
-      if (filterLettre) qs.set("lettre", filterLettre)
-      const res = await fetch(`/api/comptable/ecritures?${qs}`)
+      const res = await fetch(
+        `/api/comptable/ecritures?societe_id=${societeId}&limit=500`
+      )
       const d = await res.json()
-      setEcritures(d.ecritures || [])
-      setTotal(d.total || 0)
-      setTotals(d.totals || null)
-    } catch (e: any) {
-      setToast({ type: 'error', message: e.message })
-    } finally {
+      setEcritures(d?.ecritures || d?.data || [])
+    } catch {}
+    finally {
       setLoading(false)
     }
-  }
+  }, [societeId])
+  useEffect(() => {
+    load()
+  }, [load])
 
-  useEffect(() => { load() }, [societeId, page])
-
-  // OD
-  const addLigne = () => setOdLignes([...odLignes, { numero_compte: "", libelle: "", debit_mur: 0, credit_mur: 0 }])
-  const removeLigne = (i: number) => setOdLignes(odLignes.filter((_, idx) => idx !== i))
-  const updateLigne = (i: number, field: string, value: any) => {
-    const next = [...odLignes]
-    next[i] = { ...next[i], [field]: field.includes('mur') ? Number(value) || 0 : value }
-    setOdLignes(next)
-  }
-  const totalDebitOd = odLignes.reduce((s, l) => s + (Number(l.debit_mur) || 0), 0)
-  const totalCreditOd = odLignes.reduce((s, l) => s + (Number(l.credit_mur) || 0), 0)
-  const ecartOd = Math.round((totalDebitOd - totalCreditOd) * 100) / 100
-
-  const saveOd = async () => {
-    if (!societeId) return
-    if (Math.abs(ecartOd) > 0.01) {
-      setToast({ type: 'error', message: `Ecart ${ecartOd.toFixed(2)} MUR — l'OD doit etre equilibree` })
-      return
+  const filtered = useMemo(() => {
+    let list = ecritures
+    if (journalFilter !== "all") list = list.filter((e) => e.journal === journalFilter)
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(
+        (e) =>
+          e.libelle?.toLowerCase().includes(q) ||
+          e.numero_compte?.includes(q) ||
+          e.ref_folio?.toLowerCase().includes(q)
+      )
     }
-    setOdSaving(true)
-    try {
-      const res = await fetch("/api/comptable/ecritures", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          societe_id: societeId,
-          date_ecriture: odDate,
-          libelle: odLibelle,
-          journal: odJournal,
-          lignes: odLignes.filter(l => l.numero_compte && (l.debit_mur > 0 || l.credit_mur > 0)),
-        }),
-      })
-      const d = await res.json()
-      if (!res.ok) {
-        setToast({ type: 'error', message: d.error })
-      } else {
-        setToast({ type: 'success', message: `✓ OD enregistree : ${d.nb_lignes} lignes, ref ${d.ref_folio}` })
-        setOdOpen(false)
-        setOdLibelle("")
-        setOdLignes([
-          { numero_compte: "", libelle: "", debit_mur: 0, credit_mur: 0 },
-          { numero_compte: "", libelle: "", debit_mur: 0, credit_mur: 0 },
-        ])
-        load()
-      }
-    } catch (e: any) {
-      setToast({ type: 'error', message: e.message })
-    } finally {
-      setOdSaving(false)
-    }
-  }
+    return list
+      .slice()
+      .sort((a, b) => (b.date_ecriture || "").localeCompare(a.date_ecriture || ""))
+  }, [ecritures, journalFilter, search])
 
-  // Edit
-  const saveEdit = async () => {
-    if (!editDialog) return
-    try {
-      const res = await fetch("/api/comptable/ecritures", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editDialog.id,
-          societe_id: societeId,
-          numero_compte: editDialog.numero_compte,
-          libelle: editDialog.libelle,
-          debit_mur: editDialog.debit_mur,
-          credit_mur: editDialog.credit_mur,
-          date_ecriture: editDialog.date_ecriture,
-          lettre: editDialog.lettre,
-        }),
-      })
-      const d = await res.json()
-      if (!res.ok) setToast({ type: 'error', message: d.error })
-      else {
-        setToast({ type: 'success', message: "✓ Ecriture modifiee" })
-        setEditDialog(null)
-        load()
-      }
-    } catch (e: any) {
-      setToast({ type: 'error', message: e.message })
-    }
-  }
-
-  const deleteEcr = async (e: Ecriture) => {
-    if (!window.confirm(`Supprimer l'ecriture ${e.numero_compte} ${fmt(e.debit_mur || e.credit_mur)} MUR du ${formatDate(e.date_ecriture)} ?`)) return
-    try {
-      const res = await fetch(`/api/comptable/ecritures?id=${e.id}${societeId ? `&societe_id=${societeId}` : ''}`, { method: "DELETE" })
-      const d = await res.json()
-      if (!res.ok) setToast({ type: 'error', message: d.error })
-      else {
-        setToast({ type: 'success', message: "✓ Ecriture supprimee" })
-        load()
-      }
-    } catch (e: any) {
-      setToast({ type: 'error', message: e.message })
-    }
-  }
-
-  const exportData = async (format: 'fec' | 'csv' | 'balance') => {
-    if (!societeId) return
-    const qs = new URLSearchParams({ societe_id: societeId, format })
-    if (filterMois && /^\d{4}-\d{2}$/.test(filterMois)) {
-      const [yy, mm] = filterMois.split('-').map(Number)
-      const start = `${yy}-${String(mm).padStart(2, '0')}-01`
-      const lastDay = new Date(yy, mm, 0).getDate()
-      const end = `${yy}-${String(mm).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-      qs.set('date_debut', start)
-      qs.set('date_fin', end)
-    }
-    window.open(`/api/comptable/export-fec?${qs}`, '_blank')
-  }
-
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const totalDebit = filtered.reduce((s, e) => s + (Number(e.debit_mur) || 0), 0)
+  const totalCredit = filtered.reduce((s, e) => s + (Number(e.credit_mur) || 0), 0)
+  const journaux = useMemo(() => {
+    const set = new Set<string>()
+    for (const e of ecritures) if (e.journal) set.add(e.journal)
+    return Array.from(set).sort()
+  }, [ecritures])
 
   return (
-    <div className="p-6 space-y-4">
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm text-white ${toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
-          {toast.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-          {toast.message}
-          <button onClick={() => setToast(null)}><X className="w-3.5 h-3.5" /></button>
+    <ClientPageShell hideHero disableParticles>
+      <div className="space-y-6 max-w-7xl">
+        {/* HEADER */}
+        <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-blue-50 to-sky-50 p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-indigo-600 to-blue-600 p-3 text-white shadow-md">
+                <BookOpen className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-indigo-900">Écritures comptables</h1>
+                <p className="text-sm text-indigo-700/80 mt-0.5">
+                  Grand livre détaillé · les BNQ sont produites par Lex Banque
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
+                <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+              <Link href="/client/grand-livre">
+                <Button variant="outline" size="sm">
+                  Grand livre
+                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              </Link>
+              <Link href="/client/rapprochement">
+                <Button className="bg-purple-600 hover:bg-purple-700 text-white">
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                  Lex Banque
+                </Button>
+              </Link>
+            </div>
+          </div>
         </div>
-      )}
 
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E] flex items-center gap-2">
-            <BookOpen className="w-6 h-6" /> Écritures comptables
-          </h1>
-          <p className="text-sm text-gray-500">Journal chronologique global · saisie OD · édition · export FEC</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button onClick={() => setOdOpen(true)} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#C9A82E]">
-            <Plus className="w-4 h-4 mr-1" /> Nouvelle OD
-          </Button>
-        </div>
+        {!societeId ? (
+          <Card>
+            <CardContent className="py-16 text-center text-gray-400">
+              Société non disponible.
+            </CardContent>
+          </Card>
+        ) : loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <KpiCard label="Écritures" value={filtered.length} />
+              <KpiCard label="Total débit" value={fmt(totalDebit)} tone="green" />
+              <KpiCard label="Total crédit" value={fmt(totalCredit)} tone="rose" />
+            </div>
+
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BookOpen className="h-5 w-5 text-indigo-600" />
+                    Liste des écritures ({filtered.length})
+                  </CardTitle>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Libellé, compte, ref…"
+                        className="pl-8 h-9 w-56"
+                      />
+                    </div>
+                    <Select value={journalFilter} onValueChange={setJournalFilter}>
+                      <SelectTrigger className="h-9 w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous journaux</SelectItem>
+                        {journaux.map((j) => (
+                          <SelectItem key={j} value={j}>
+                            {JOURNAL_LABELS[j]?.label || j}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {filtered.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    Aucune écriture pour ce filtre.
+                  </p>
+                ) : (
+                  <div className="rounded border bg-card divide-y">
+                    {filtered.map((e) => {
+                      const jLabel = JOURNAL_LABELS[e.journal] || {
+                        label: e.journal,
+                        color: "bg-slate-100 text-slate-700 border-slate-300",
+                      }
+                      const isBnqLex = e.journal === "BNQ" && e.ref_folio?.startsWith("BANK-")
+                      return (
+                        <div
+                          key={e.id}
+                          className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-muted-foreground font-mono">
+                                {formatDate(e.date_ecriture)}
+                              </span>
+                              <Badge className={`text-[10px] border ${jLabel.color}`}>
+                                {jLabel.label}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px] font-mono">
+                                {e.numero_compte}
+                              </Badge>
+                              {e.lettre && (
+                                <Badge className="text-[10px] bg-green-100 text-green-700 border-green-300 font-mono">
+                                  {e.lettre}
+                                </Badge>
+                              )}
+                              {isBnqLex && (
+                                <Badge className="text-[10px] bg-purple-100 text-purple-700 border-purple-300">
+                                  <Bot className="h-3 w-3 mr-0.5" />
+                                  Lex Banque
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm mt-1 break-words">{e.libelle || "—"}</p>
+                            {e.devise_origine && e.devise_origine !== "MUR" && e.montant_origine && (
+                              <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                                Origine : {fmt(e.montant_origine)} {e.devise_origine}
+                                {e.taux_change_applique && ` × ${e.taux_change_applique}`}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right flex-shrink-0 font-mono text-sm">
+                            {e.debit_mur > 0 && (
+                              <p className="text-green-700">D {fmt(e.debit_mur)}</p>
+                            )}
+                            {e.credit_mur > 0 && (
+                              <p className="text-rose-700">C {fmt(e.credit_mur)}</p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
+    </ClientPageShell>
+  )
+}
 
-      {/* Filtres */}
-      <Card>
-        <CardContent className="p-3">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
-            <div>
-              <Label className="text-xs">Compte</Label>
-              <Input placeholder="401, 455..." value={filterCompte} onChange={e => setFilterCompte(e.target.value)} className="h-8 text-sm" />
-            </div>
-            <div>
-              <Label className="text-xs">Mois</Label>
-              <Input type="month" value={filterMois} onChange={e => setFilterMois(e.target.value)} className="h-8 text-sm" />
-            </div>
-            <div>
-              <Label className="text-xs">Journal</Label>
-              <Select value={filterJournal || "all"} onValueChange={v => setFilterJournal(v === 'all' ? '' : v)}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Tous" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="BNQ">BNQ — Banque</SelectItem>
-                  <SelectItem value="ACH">ACH — Achats</SelectItem>
-                  <SelectItem value="VTE">VTE — Ventes</SelectItem>
-                  <SelectItem value="OD">OD — Opérations diverses</SelectItem>
-                  <SelectItem value="SAL">SAL — Salaires</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Libellé</Label>
-              <Input placeholder="mot-clé..." value={filterQ} onChange={e => setFilterQ(e.target.value)} className="h-8 text-sm" />
-            </div>
-            <div>
-              <Label className="text-xs">Lettre</Label>
-              <Input placeholder="MP..., CL..." value={filterLettre} onChange={e => setFilterLettre(e.target.value)} className="h-8 text-sm" />
-            </div>
-            <div className="flex gap-1">
-              <Button size="sm" className="h-8" onClick={() => { setPage(1); load() }}>
-                <Search className="w-3 h-3 mr-1" /> Filtrer
-              </Button>
-              <Button size="sm" variant="ghost" className="h-8" onClick={() => {
-                setFilterCompte(""); setFilterMois(""); setFilterJournal(""); setFilterQ(""); setFilterLettre("")
-                setPage(1); setTimeout(load, 100)
-              }}>
-                <X className="w-3 h-3" />
-              </Button>
-            </div>
-          </div>
-          {totals && (
-            <div className="mt-2 flex items-center gap-4 text-xs text-slate-600">
-              <span><strong>{total}</strong> écritures</span>
-              <span>Débit : <strong className="text-red-600">{fmt(totals.debit_total)}</strong></span>
-              <span>Crédit : <strong className="text-green-600">{fmt(totals.credit_total)}</strong></span>
-              <span>Solde : <strong className={Math.abs(totals.solde) < 0.01 ? 'text-emerald-600' : 'text-amber-600'}>{fmt(totals.solde)}</strong> {Math.abs(totals.solde) < 0.01 && '✓'}</span>
-              <div className="ml-auto flex gap-1">
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => exportData('csv')}>
-                  <Download className="w-3 h-3 mr-1" /> CSV
-                </Button>
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => exportData('balance')}>
-                  <Download className="w-3 h-3 mr-1" /> Balance
-                </Button>
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => exportData('fec')}>
-                  <Download className="w-3 h-3 mr-1" /> FEC
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Tableau */}
-      <Card>
-        <CardContent className="p-0 overflow-x-auto">
-          {loading ? (
-            <div className="flex items-center justify-center py-10 text-slate-500">
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Chargement…
-            </div>
-          ) : ecritures.length === 0 ? (
-            <div className="p-8 text-center text-slate-400">Aucune écriture trouvée</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-20">Date</TableHead>
-                  <TableHead className="w-16">Journal</TableHead>
-                  <TableHead className="w-20">Compte</TableHead>
-                  <TableHead>Libellé</TableHead>
-                  <TableHead className="text-right w-24">Débit</TableHead>
-                  <TableHead className="text-right w-24">Crédit</TableHead>
-                  <TableHead className="w-20">Lettre</TableHead>
-                  <TableHead className="w-24">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ecritures.map(e => (
-                  <TableRow key={e.id}>
-                    <TableCell className="text-sm">{formatDate(e.date_ecriture)}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-[10px] font-mono">{e.journal}</Badge></TableCell>
-                    <TableCell className="font-mono text-sm">{e.numero_compte}</TableCell>
-                    <TableCell className="text-sm max-w-[400px] truncate" title={e.libelle}>{e.libelle}</TableCell>
-                    <TableCell className="text-right text-sm text-red-600">{e.debit_mur > 0 ? fmt(e.debit_mur) : '—'}</TableCell>
-                    <TableCell className="text-right text-sm text-green-600">{e.credit_mur > 0 ? fmt(e.credit_mur) : '—'}</TableCell>
-                    <TableCell>{e.lettre ? <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px]">{e.lettre}</Badge> : '—'}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditDialog({ ...e })}>
-                          <Pencil className="w-3 h-3" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => deleteEcr(e)}>
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t px-4 py-2 text-sm">
-              <span className="text-slate-600">Page {page} / {totalPages} · {total} total</span>
-              <div className="flex gap-1">
-                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Précédent</Button>
-                <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Suivant →</Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Dialog OD */}
-      <Dialog open={odOpen} onOpenChange={setOdOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="w-5 h-5" /> Nouvelle écriture (OD)
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label>Date</Label>
-                <Input type="date" value={odDate} onChange={e => setOdDate(e.target.value)} />
-              </div>
-              <div>
-                <Label>Journal</Label>
-                <Select value={odJournal} onValueChange={setOdJournal}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="OD">OD — Opérations diverses</SelectItem>
-                    <SelectItem value="BNQ">BNQ — Banque</SelectItem>
-                    <SelectItem value="ACH">ACH — Achats</SelectItem>
-                    <SelectItem value="VTE">VTE — Ventes</SelectItem>
-                    <SelectItem value="SAL">SAL — Salaires</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Libellé général</Label>
-                <Input value={odLibelle} onChange={e => setOdLibelle(e.target.value)} placeholder="Provision, correction..." />
-              </div>
-            </div>
-
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-24">Compte</TableHead>
-                    <TableHead>Libellé ligne</TableHead>
-                    <TableHead className="w-32">Débit (MUR)</TableHead>
-                    <TableHead className="w-32">Crédit (MUR)</TableHead>
-                    <TableHead className="w-10"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {odLignes.map((l, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <Input value={l.numero_compte} onChange={e => updateLigne(i, 'numero_compte', e.target.value)} placeholder="401" className="h-8 text-sm font-mono" />
-                      </TableCell>
-                      <TableCell>
-                        <Input value={l.libelle} onChange={e => updateLigne(i, 'libelle', e.target.value)} placeholder="(hérite du libellé général si vide)" className="h-8 text-sm" />
-                      </TableCell>
-                      <TableCell>
-                        <Input type="number" step="0.01" value={l.debit_mur || ""} onChange={e => updateLigne(i, 'debit_mur', e.target.value)} className="h-8 text-sm text-right" />
-                      </TableCell>
-                      <TableCell>
-                        <Input type="number" step="0.01" value={l.credit_mur || ""} onChange={e => updateLigne(i, 'credit_mur', e.target.value)} className="h-8 text-sm text-right" />
-                      </TableCell>
-                      <TableCell>
-                        {odLignes.length > 2 && (
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => removeLigne(i)}>
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <Button size="sm" variant="outline" onClick={addLigne}>
-                <Plus className="w-3 h-3 mr-1" /> Ajouter une ligne
-              </Button>
-              <div className="text-sm">
-                Débit : <strong className="text-red-600">{fmt(totalDebitOd)}</strong> ·
-                Crédit : <strong className="text-green-600 ml-1">{fmt(totalCreditOd)}</strong> ·
-                Écart : <strong className={Math.abs(ecartOd) < 0.01 ? 'text-emerald-600 ml-1' : 'text-red-600 ml-1'}>
-                  {fmt(ecartOd)} {Math.abs(ecartOd) < 0.01 && '✓'}
-                </strong>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setOdOpen(false)}>Annuler</Button>
-              <Button
-                onClick={saveOd}
-                disabled={odSaving || Math.abs(ecartOd) > 0.01 || totalDebitOd === 0}
-                className="bg-[#0B0F2E] text-white"
-              >
-                {odSaving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
-                Enregistrer l'OD
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog édit */}
-      <Dialog open={!!editDialog} onOpenChange={o => { if (!o) setEditDialog(null) }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="w-5 h-5" /> Modifier l'écriture
-            </DialogTitle>
-          </DialogHeader>
-          {editDialog && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Date</Label>
-                  <Input type="date" value={editDialog.date_ecriture?.substring(0, 10) || ''} onChange={e => setEditDialog({ ...editDialog, date_ecriture: e.target.value })} />
-                </div>
-                <div>
-                  <Label>Compte</Label>
-                  <Input value={editDialog.numero_compte || ''} onChange={e => setEditDialog({ ...editDialog, numero_compte: e.target.value })} className="font-mono" />
-                </div>
-              </div>
-              <div>
-                <Label>Libellé</Label>
-                <Input value={editDialog.libelle || ''} onChange={e => setEditDialog({ ...editDialog, libelle: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Débit</Label>
-                  <Input type="number" step="0.01" value={editDialog.debit_mur || ''} onChange={e => setEditDialog({ ...editDialog, debit_mur: Number(e.target.value) || 0 })} />
-                </div>
-                <div>
-                  <Label>Crédit</Label>
-                  <Input type="number" step="0.01" value={editDialog.credit_mur || ''} onChange={e => setEditDialog({ ...editDialog, credit_mur: Number(e.target.value) || 0 })} />
-                </div>
-              </div>
-              <div>
-                <Label>Lettre (optionnel)</Label>
-                <Input value={editDialog.lettre || ''} onChange={e => setEditDialog({ ...editDialog, lettre: e.target.value })} />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setEditDialog(null)}>Annuler</Button>
-                <Button onClick={saveEdit} className="bg-[#0B0F2E] text-white">
-                  <Save className="w-4 h-4 mr-1" /> Sauvegarder
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
+function KpiCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number | string
+  tone?: "amber" | "green" | "rose" | "blue"
+}) {
+  const cls =
+    tone === "amber"
+      ? "border-amber-200 bg-amber-50"
+      : tone === "green"
+        ? "border-green-200 bg-green-50"
+        : tone === "rose"
+          ? "border-rose-200 bg-rose-50"
+          : tone === "blue"
+            ? "border-blue-200 bg-blue-50"
+            : "border-muted bg-card"
+  return (
+    <Card className={cls}>
+      <CardContent className="p-3">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-xl font-semibold mt-1">{value}</div>
+      </CardContent>
+    </Card>
   )
 }

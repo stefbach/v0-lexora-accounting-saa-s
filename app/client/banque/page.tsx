@@ -1,585 +1,517 @@
 "use client"
 
-import { useState, useEffect } from "react"
+/**
+ * Page /client/banque — agent-friendly.
+ *
+ * Vue d'ensemble des comptes bancaires de la société active du client +
+ * historique des relevés bancaires importés. Branche Lex Banque (lien direct
+ * vers /client/rapprochement pour la suite du flow).
+ */
+
+import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Search, Landmark, AlertCircle, Clock, RefreshCw, Loader2, Building2, X, Pencil } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useProfile } from "@/hooks/use-profile"
-import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
-import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
-import { MonthPicker } from "@/components/ui/MonthPicker"
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import {
+  Loader2,
+  Landmark,
+  RefreshCw,
+  Upload,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Bot,
+  ArrowRight,
+} from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
-function formatAmount(amount: number, devise?: string) {
-  const d = devise || "MUR"
-  return amount.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + d
-}
-function formatMUR(amount: number) {
-  return formatAmount(amount, "MUR")
-}
-
-function formatDate(dateStr: string) {
-  if (!dateStr) return "—"
-  return new Date(dateStr).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })
-}
-
-function getSocieteBadgeStyle(name?: string): Record<string, string> {
-  if (!name) return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
-  const n = name.toLowerCase()
-  if (n.includes('obesity') || n.includes('occ'))
-    return { backgroundColor: '#ccfbf1', color: '#0f766e', borderColor: '#99f6e4' }
-  if (n.includes('digital') || n.includes('dds'))
-    return { backgroundColor: '#dbeafe', color: '#1d4ed8', borderColor: '#bfdbfe' }
-  if (n.includes('tibok'))
-    return { backgroundColor: '#fef9c3', color: '#a16207', borderColor: '#fef08a' }
-  return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
+interface CompteBancaire {
+  id: string
+  banque: string
+  nom_compte: string
+  numero_compte: string
+  iban?: string | null
+  devise: string
+  compte_comptable: string
+  solde_actuel: number
+  solde_dernier_releve: number
+  date_dernier_releve: string | null
+  compte_principal: boolean
+  actif: boolean
 }
 
-function getStatutBadge(statut: string) {
-  if (statut?.includes("non_identifie")) return <Badge className="bg-red-100 text-red-700 border-red-200">Non identifié</Badge>
-  if (statut?.includes("a_verifier")) return <Badge className="bg-orange-100 text-orange-700 border-orange-200">À vérifier</Badge>
-  if (statut?.includes("lettre") || statut?.includes("rapproche")) return <Badge className="bg-green-100 text-green-700 border-green-200">Rapproché</Badge>
-  return <Badge className="bg-green-100 text-green-700 border-green-200">Identifié</Badge>
+interface ReleveBancaire {
+  id: string
+  compte_bancaire_id: string
+  periode: string
+  date_debut: string
+  date_fin: string
+  solde_ouverture: number
+  solde_cloture: number
+  total_debits: number
+  total_credits: number
+  statut_rapprochement: string
+  transactions_json: any[] | null
+  created_at: string
+}
+
+function fmt(n: number, dev = "MUR"): string {
+  return (
+    n.toLocaleString("fr-FR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }) +
+    " " +
+    dev
+  )
+}
+function formatDate(d: string | null): string {
+  if (!d) return "—"
+  return new Date(d).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
+function daysSince(d: string | null): number {
+  if (!d) return Infinity
+  return Math.floor((Date.now() - new Date(d).getTime()) / 86400000)
 }
 
 export default function ClientBanquePage() {
-  const [search, setSearch] = useState("")
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const { societeId } = useSocieteActive()
-  const [selectedCompte, setSelectedCompte] = useState("all")
-  const [dateFrom, setDateFrom] = useState("")
-  const [dateTo, setDateTo] = useState("")
-  const [showOnlyNonRapprochees, setShowOnlyNonRapprochees] = useState(false)
-  const [selectedTx, setSelectedTx] = useState<any>(null)
-  const [editingCompte, setEditingCompte] = useState<string | null>(null)
-  const [editingNom, setEditingNom] = useState("")
-  const [selectedMois, setSelectedMois] = useState<string | null>(null)
-  const { profile } = useProfile()
+  const [comptes, setComptes] = useState<CompteBancaire[]>([])
+  const [releves, setReleves] = useState<ReleveBancaire[]>([])
+  const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
 
-  async function fetchData() {
-    if (!societeId) { setData(null); return }
-    try {
-      setError(null)
-      const res = await fetch(`/api/client/financial?societe_id=${societeId}`)
-      if (res.ok) {
-        const json = await res.json()
-        setData(json.financial)
-      } else {
-        setData(null)
-        setError("Erreur de chargement des données bancaires.")
-      }
-    } catch {
-      setData(null)
-      setError("Erreur de chargement des données bancaires.")
-    }
-  }
+  const showToast = useCallback((msg: string, type: "success" | "error" = "success") => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 4000)
+  }, [])
 
-  useEffect(() => {
+  const load = useCallback(async () => {
+    if (!societeId) return
     setLoading(true)
-    setSelectedCompte("all")
-    fetchData().finally(() => setLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [societeId])
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await fetchData()
-    setRefreshing(false)
-  }
-
-  function getDisplayName(acc: any): string {
-    if (acc.nom_compte && acc.nom_compte !== acc.numero_compte) return acc.nom_compte
-    if (acc.numero_compte) return `Compte •${acc.numero_compte.slice(-4)}`
-    return "Compte sans nom"
-  }
-
-  async function saveNomCompte(accId: string, newNom: string) {
     try {
-      await fetch("/api/comptable/banque", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: accId, nom_compte: newNom }),
-      })
-      await fetchData()
-    } catch { /* silent */ }
-    setEditingCompte(null)
+      // /api/client/financial expose comptes_bancaires + relevés agrégés
+      const res = await fetch(`/api/client/financial?societe_id=${societeId}`)
+      const d = await res.json()
+      const accounts: CompteBancaire[] = (d.bankAccounts || []).map((a: any) => ({
+        id: a.id,
+        banque: a.banque || "—",
+        nom_compte: a.nom_compte || a.numero_compte,
+        numero_compte: a.numero_compte || "—",
+        iban: a.iban || null,
+        devise: a.devise || "MUR",
+        compte_comptable: a.compte_comptable || "—",
+        solde_actuel: Number(a.solde_actuel) || Number(a.solde_mur) || 0,
+        solde_dernier_releve: Number(a.solde_dernier_releve) || 0,
+        date_dernier_releve: a.date_dernier_releve || null,
+        compte_principal: !!a.compte_principal,
+        actif: a.actif !== false,
+      }))
+      setComptes(accounts)
+      setReleves(d.releves || d.relevesBancaires || [])
+    } catch {
+      showToast("Erreur chargement", "error")
+    } finally {
+      setLoading(false)
+    }
+  }, [societeId, showToast])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const handleUpload = async (file: File) => {
+    if (!societeId || !file) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      fd.append("societe_id", societeId)
+      const res = await fetch("/api/documents/upload", { method: "POST", body: fd })
+      const d = await res.json()
+      if (!res.ok) {
+        showToast(d?.error || "Erreur upload", "error")
+        return
+      }
+      showToast(`Relevé importé — ${d?.nb_transactions || 0} transactions extraites`)
+      load()
+    } catch (e: any) {
+      showToast(e?.message || "Erreur upload", "error")
+    } finally {
+      setUploading(false)
+    }
   }
 
-  if (profile?.role === "client_user") {
-    return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4AF37" }} />
-      </div>
-    )
-  }
-
-  if (error && !data) {
-    return (
-      <div className="flex-1 overflow-auto p-6">
-        <Card>
-          <CardContent className="py-12 text-center space-y-4">
-            <AlertCircle className="h-8 w-8 mx-auto text-red-500" />
-            <p className="text-muted-foreground">{error}</p>
-            <Button variant="outline" onClick={() => { setLoading(true); fetchData().finally(() => setLoading(false)) }}>
-              Réessayer
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  const bankAccounts = data?.bankAccounts ?? []
-  const totalBankMUR = bankAccounts.reduce((s: number, a: any) => s + (a.solde_mur ?? 0), 0)
-
-  // Account IDs for the selected accounts (used to filter transactions)
-  const bankAccountIds = new Set(bankAccounts.map((a: any) => a.id))
-
-  // Transactions depuis releves_bancaires (extraction JSON)
-  const rawTx: any[] = data?.bankTransactions ?? []
-  const allTransactions = rawTx.map((tx: any, idx: number) => ({
-    id: tx.id || `tx-${idx}`,
-    date: tx.date || "",
-    libelle: tx.libelle || "",
-    debit: Number(tx.debit) || 0,
-    credit: Number(tx.credit) || 0,
-    debit_mur: Number(tx.debit_mur) || Number(tx.debit) || 0,
-    credit_mur: Number(tx.credit_mur) || Number(tx.credit) || 0,
-    devise: tx.devise || "MUR",
-    solde_apres: tx.solde_apres ?? null,
-    tiers: tx.tiers || tx.tiers_detecte || null,
-    compte_comptable: tx.compte_comptable || null,
-    statut: tx.statut || "non_identifie",
-    banque: tx.banque || "—",
-    compte_bancaire_id: tx.compte_bancaire_id || null,
-    societe: tx.societe || "—",
-    lettre: tx.lettre || null,
-    facture_id: tx.facture_id || null,
-  }))
-
-  allTransactions.sort((a, b) => {
-    if (!a.date) return 1
-    if (!b.date) return -1
-    return new Date(b.date).getTime() - new Date(a.date).getTime()
-  })
-
-  const hasActiveFilters = !!(search || selectedCompte !== "all" || dateFrom || dateTo || showOnlyNonRapprochees || selectedMois !== null)
-
-  const filtered = allTransactions.filter((row) => {
-    // Month filter
-    if (selectedMois !== null && row.date) {
-      const txMonth = row.date.substring(0, 7) // "YYYY-MM"
-      if (txMonth !== selectedMois) return false
-    }
-    // Non-rapprochées filter (from KPI click)
-    if (showOnlyNonRapprochees && (row.statut?.includes("rapproche") || row.statut?.includes("lettre"))) return false
-    // Search filter
-    if (search) {
-      const s = search.toLowerCase()
-      if (!row.libelle.toLowerCase().includes(s) &&
-          !(row.tiers || "").toLowerCase().includes(s) &&
-          !(row.banque || "").toLowerCase().includes(s)) return false
-    }
-    // Account filter
-    if (selectedCompte !== "all" && row.compte_bancaire_id !== selectedCompte) return false
-    // Date range filter (normalize to timestamps for safe comparison)
-    if (dateFrom && row.date) {
-      const txDate = new Date(row.date).getTime()
-      const fromDate = new Date(dateFrom).getTime()
-      if (!isNaN(txDate) && !isNaN(fromDate) && txDate < fromDate) return false
-    }
-    if (dateTo && row.date) {
-      const txDate = new Date(row.date).getTime()
-      const toDate = new Date(dateTo).getTime()
-      if (!isNaN(txDate) && !isNaN(toDate) && txDate > toDate) return false
-    }
-    return true
-  })
-
-  const txForMonth = selectedMois !== null
-    ? allTransactions.filter(t => t.date?.substring(0, 7) === selectedMois)
-    : allTransactions
-  const nonRaprochees = txForMonth.filter(
-    (t) => !t.statut?.includes("rapproche") && !t.statut?.includes("lettre")
-  ).length
-
-  const derniereMaj = bankAccounts.length > 0
-    ? bankAccounts.map((a: any) => a.date_dernier_releve).filter(Boolean).sort().reverse()[0]
-    : null
+  const totalSoldes = useMemo(
+    () => comptes.reduce((s, c) => s + (c.solde_actuel || 0), 0),
+    [comptes]
+  )
+  const lastImport = useMemo(() => {
+    if (releves.length === 0) return null
+    return releves.reduce((max, r) =>
+      (r.created_at || "") > (max?.created_at || "") ? r : max
+    , releves[0]).created_at
+  }, [releves])
+  const txEnAttente = useMemo(() => {
+    return releves.reduce((sum, r) => {
+      const arr = Array.isArray(r.transactions_json) ? r.transactions_json : []
+      const enAttente = arr.filter(
+        (t: any) =>
+          t.statut === "propose" ||
+          t.statut === "a_verifier" ||
+          (!t.statut &&
+            !t.facture_id &&
+            !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0))
+      ).length
+      return sum + enAttente
+    }, 0)
+  }, [releves])
 
   return (
-    <ClientPageShell
-      breadcrumbs={[
-        { label: "Espace client", href: "/client" },
-        { label: "Banque" },
-      ]}
-      kicker={`${bankAccounts.length} compte${bankAccounts.length > 1 ? "s" : ""} bancaire${bankAccounts.length > 1 ? "s" : ""}`}
-      title="Vos comptes bancaires"
-      subtitle="Suivi en temps réel de vos comptes, import des relevés et rapprochement automatique des opérations."
-      actions={
-        <>
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-            Actualiser
-          </Button>
-        </>
-      }
-    >
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Solde total</CardTitle>
-            <div className="rounded-lg p-2 bg-blue-50">
-              <Landmark className="h-5 w-5" style={{ color: "#0B0F2E" }} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-              {bankAccounts.length > 0 ? formatMUR(totalBankMUR) : "—"}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {bankAccounts.length} compte{bankAccounts.length > 1 ? "s" : ""}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className={`cursor-pointer transition-all ${showOnlyNonRapprochees ? "ring-2 ring-red-300" : "hover:shadow-md"}`}
-          onClick={() => setShowOnlyNonRapprochees(v => !v)}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Opérations non rapprochées</CardTitle>
-            <div className="rounded-lg p-2 bg-red-50">
-              <AlertCircle className="h-5 w-5" style={{ color: "#DC2626" }} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" style={{ color: nonRaprochees > 0 ? "#DC2626" : "#0B0F2E" }}>
-              {nonRaprochees}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {hasActiveFilters
-                ? `sur ${filtered.length} filtrées (${allTransactions.length} au total)`
-                : `sur ${allTransactions.length} transaction${allTransactions.length > 1 ? "s" : ""}`}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Dernière MAJ</CardTitle>
-            <div className="rounded-lg p-2 bg-amber-50">
-              <Clock className="h-5 w-5" style={{ color: "#D4AF37" }} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold" style={{ color: "#0B0F2E" }}>
-              {derniereMaj ? formatDate(derniereMaj) : "—"}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {derniereMaj ? "Dernier relevé importé" : "Aucun relevé importé"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Comptes bancaires */}
-      {bankAccounts.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2" style={{ color: "#0B0F2E" }}>
-              <Landmark className="h-5 w-5" style={{ color: "#D4AF37" }} />
-              Comptes ({bankAccounts.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Banque</TableHead>
-                  <TableHead>Nom du compte</TableHead>
-                  <TableHead>N° compte</TableHead>
-                  <TableHead>Devise</TableHead>
-                  <TableHead className="text-right">Solde</TableHead>
-                  <TableHead>Dernier relevé</TableHead>
-                  <TableHead>Société</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {bankAccounts.map((acc: any) => (
-                  <TableRow key={acc.id || acc.nom_compte} className="cursor-pointer hover:bg-blue-50/50"
-                    onClick={() => setSelectedCompte(selectedCompte === acc.id ? "all" : acc.id)}>
-                    <TableCell>
-                      <Badge variant="outline" style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>
-                        {acc.banque}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {editingCompte === acc.id ? (
-                        <Input
-                          autoFocus
-                          className="h-7 text-sm w-40"
-                          value={editingNom}
-                          onChange={(e) => setEditingNom(e.target.value)}
-                          onBlur={() => saveNomCompte(acc.id, editingNom)}
-                          onKeyDown={(e) => { if (e.key === "Enter") saveNomCompte(acc.id, editingNom); if (e.key === "Escape") setEditingCompte(null) }}
-                        />
-                      ) : (
-                        <span className="flex items-center gap-1 group">
-                          {getDisplayName(acc)}
-                          <button className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => { setEditingCompte(acc.id); setEditingNom(acc.nom_compte || "") }}>
-                            <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#0B0F2E]" />
-                          </button>
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm text-muted-foreground">{acc.numero_compte || "—"}</TableCell>
-                    <TableCell>{acc.devise || "MUR"}</TableCell>
-                    <TableCell className="text-right font-bold" style={{ color: "#0B0F2E" }}>
-                      <div>{formatAmount(acc.solde_actuel ?? 0, acc.devise)}</div>
-                      {acc.devise && acc.devise !== "MUR" && acc.solde_mur != null && (
-                        <div className="text-xs text-muted-foreground font-normal">≈ {formatMUR(acc.solde_mur)}</div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {acc.date_dernier_releve ? formatDate(acc.date_dernier_releve) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      {acc.societe_nom ? (
-                        <Badge variant="outline" className="text-xs" style={getSocieteBadgeStyle(acc.societe_nom)}>{acc.societe_nom}</Badge>
-                      ) : <span className="text-xs text-muted-foreground">—</span>}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Month navigator */}
-      <MonthPicker value={selectedMois} onChange={setSelectedMois} />
-
-      {/* Filtres */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Rechercher par libellé, tiers, banque..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        {bankAccounts.length > 1 && (
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1">Compte</label>
-            <Select value={selectedCompte} onValueChange={setSelectedCompte}>
-              <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les comptes</SelectItem>
-                {bankAccounts.map((acc: any) => (
-                  <SelectItem key={acc.id} value={acc.id}>
-                    {acc.banque || "Compte"} {acc.numero_compte ? `•${acc.numero_compte.slice(-4)}` : ""} ({acc.devise || "MUR"})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <ClientPageShell hideHero disableParticles>
+      <div className="space-y-6 max-w-7xl">
+        {toast && (
+          <div
+            className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white ${
+              toast.type === "success" ? "bg-emerald-600" : "bg-red-600"
+            }`}
+          >
+            {toast.msg}
           </div>
         )}
-        <div>
-          <label className="text-xs text-muted-foreground block mb-1">De</label>
-          <Input type="date" className="w-[150px] h-9" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground block mb-1">À</label>
-          <Input type="date" className="w-[150px] h-9" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-        </div>
-        {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setSelectedCompte("all"); setDateFrom(""); setDateTo(""); setShowOnlyNonRapprochees(false) }}>
-            Effacer filtres
-          </Button>
-        )}
-      </div>
 
-      {/* Transactions */}
-      <Card>
-        <CardHeader>
-          <CardTitle style={{ color: "#0B0F2E" }}>
-            Opérations bancaires ({filtered.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 relative">
-          <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Banque</TableHead>
-                <TableHead>Libellé</TableHead>
-                <TableHead className="text-right">Débit</TableHead>
-                <TableHead className="text-right">Crédit</TableHead>
-                <TableHead className="text-right">Solde après</TableHead>
-                <TableHead>Tiers identifié</TableHead>
-                <TableHead>Compte</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Lettre</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((row) => (
-                <TableRow key={row.id} className="cursor-pointer hover:bg-blue-50/50" onClick={() => setSelectedTx(row)}>
-                  <TableCell className="whitespace-nowrap">{formatDate(row.date)}</TableCell>
-                  <TableCell className="text-xs">
-                    <Badge variant="outline" className="text-xs" style={{ borderColor: "#D4AF37" }}>{row.banque}</Badge>
-                    {row.devise !== "MUR" && <span className="ml-1 text-muted-foreground">{row.devise}</span>}
-                  </TableCell>
-                  <TableCell>
-                    <TooltipProvider delayDuration={200}><Tooltip><TooltipTrigger asChild><span className="block max-w-[300px] truncate cursor-help">{row.libelle}</span></TooltipTrigger><TooltipContent side="top" className="max-w-[400px] text-sm break-words">{row.libelle}</TooltipContent></Tooltip></TooltipProvider>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {row.debit > 0 ? (
-                      <div>
-                        <span className="text-red-600 font-medium">{formatAmount(row.debit, row.devise)}</span>
-                        {row.devise && row.devise !== "MUR" && row.debit_mur > 0 && (
-                          <div className="text-xs text-muted-foreground">≈ {formatMUR(row.debit_mur)}</div>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {row.credit > 0 ? (
-                      <div>
-                        <span className="text-green-600 font-medium">{formatAmount(row.credit, row.devise)}</span>
-                        {row.devise && row.devise !== "MUR" && row.credit_mur > 0 && (
-                          <div className="text-xs text-muted-foreground">≈ {formatMUR(row.credit_mur)}</div>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold">
-                    {row.solde_apres != null ? formatAmount(row.solde_apres, row.devise) : "—"}
-                  </TableCell>
-                  <TableCell>
-                    {row.tiers || <span className="text-muted-foreground italic">Non identifié</span>}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {row.compte_comptable || <span className="text-muted-foreground">—</span>}
-                  </TableCell>
-                  <TableCell>{getStatutBadge(row.statut)}</TableCell>
-                  <TableCell>
-                    {row.lettre ? (
-                      <Badge className="bg-green-100 text-green-700 border-green-200">{row.lettre}</Badge>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
-                    {search
-                      ? "Aucune opération trouvée pour cette recherche."
-                      : "Aucune opération bancaire disponible. Importez un relevé bancaire dans Mes Documents pour voir vos données ici."}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Transaction detail sheet */}
-      <Sheet open={!!selectedTx} onOpenChange={(o) => { if (!o) setSelectedTx(null) }}>
-        <SheetContent className="sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="text-[#0B0F2E]">Détail de l&apos;opération</SheetTitle>
-          </SheetHeader>
-          {selectedTx && (
-            <div className="space-y-4 mt-4">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase mb-1">Libellé complet</p>
-                <p className="font-medium">{selectedTx.libelle}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Date</p>
-                  <p>{formatDate(selectedTx.date)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Banque</p>
-                  <Badge variant="outline" style={{ borderColor: "#D4AF37" }}>{selectedTx.banque}</Badge>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Débit</p>
-                  <p className={selectedTx.debit > 0 ? "text-red-600 font-semibold" : "text-muted-foreground"}>
-                    {selectedTx.debit > 0 ? formatAmount(selectedTx.debit, selectedTx.devise) : "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Crédit</p>
-                  <p className={selectedTx.credit > 0 ? "text-green-600 font-semibold" : "text-muted-foreground"}>
-                    {selectedTx.credit > 0 ? formatAmount(selectedTx.credit, selectedTx.devise) : "—"}
-                  </p>
-                </div>
-              </div>
-              {selectedTx.solde_apres != null && (
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Solde après</p>
-                  <p className="font-semibold">{formatAmount(selectedTx.solde_apres, selectedTx.devise)}</p>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Tiers identifié</p>
-                  <p>{selectedTx.tiers || <span className="text-muted-foreground italic">Non identifié</span>}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Compte comptable</p>
-                  <p className="font-mono">{selectedTx.compte_comptable || "—"}</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Statut</p>
-                  {getStatutBadge(selectedTx.statut)}
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Lettre</p>
-                  {selectedTx.lettre
-                    ? <Badge className="bg-green-100 text-green-700">{selectedTx.lettre}</Badge>
-                    : <span className="text-muted-foreground">—</span>}
-                </div>
+        {/* HEADER */}
+        <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-sky-50 p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-blue-600 to-cyan-600 p-3 text-white shadow-md">
+                <Landmark className="h-7 w-7" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase mb-1">Devise</p>
-                <p>{selectedTx.devise}</p>
+                <h1 className="text-2xl font-bold text-blue-900">Comptes bancaires</h1>
+                <p className="text-sm text-blue-700/80 mt-0.5">
+                  Comptes & relevés · prérequis pour Lex Banque
+                </p>
               </div>
             </div>
-          )}
-        </SheetContent>
-      </Sheet>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={load}
+                disabled={loading || !societeId}
+                size="sm"
+              >
+                <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+              <label>
+                <input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) handleUpload(f)
+                    e.currentTarget.value = ""
+                  }}
+                />
+                <span
+                  className={`inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all h-9 rounded-md px-4 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-md ${
+                    uploading ? "opacity-50 pointer-events-none" : ""
+                  }`}
+                >
+                  {uploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  Importer un relevé
+                </span>
+              </label>
+              <Link href="/client/rapprochement">
+                <Button className="bg-purple-600 hover:bg-purple-700 text-white">
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                  Aller à Lex Banque
+                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {!societeId ? (
+          <Card>
+            <CardContent className="py-16 text-center text-gray-400">
+              Société non disponible.
+            </CardContent>
+          </Card>
+        ) : loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          </div>
+        ) : (
+          <>
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard label="Comptes actifs" value={comptes.filter((c) => c.actif).length} />
+              <KpiCard
+                label="Solde cumulé"
+                value={fmt(totalSoldes, comptes[0]?.devise || "MUR")}
+                tone="green"
+              />
+              <KpiCard
+                label="Dernier import"
+                value={lastImport ? formatDate(lastImport) : "—"}
+                tone="blue"
+              />
+              <KpiCard
+                label="Tx en attente"
+                value={txEnAttente}
+                tone={txEnAttente > 0 ? "amber" : "green"}
+                accent={txEnAttente > 0}
+              />
+            </div>
+
+            {/* Liste des comptes */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Landmark className="h-5 w-5 text-blue-600" />
+                  Vos comptes bancaires ({comptes.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {comptes.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    Aucun compte bancaire — importe un relevé pour en créer un.
+                  </p>
+                ) : (
+                  comptes.map((c) => {
+                    const days = daysSince(c.date_dernier_releve)
+                    const stale = days > 35
+                    return (
+                      <div
+                        key={c.id}
+                        className="flex items-start justify-between gap-4 p-4 border rounded-lg hover:bg-muted/20"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-medium">
+                              {c.banque} · {c.numero_compte}
+                            </h3>
+                            <Badge variant="outline" className="text-[10px] font-mono">
+                              {c.devise}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] font-mono">
+                              PCM {c.compte_comptable}
+                            </Badge>
+                            {c.compte_principal && (
+                              <Badge className="text-[10px] bg-blue-100 text-blue-700 border border-blue-300">
+                                Principal
+                              </Badge>
+                            )}
+                            {!c.actif && (
+                              <Badge variant="outline" className="text-[10px] opacity-60">
+                                Inactif
+                              </Badge>
+                            )}
+                          </div>
+                          {c.iban && (
+                            <p className="text-[11px] text-muted-foreground mt-1 font-mono">
+                              IBAN {c.iban}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-3 mt-2 flex-wrap text-xs">
+                            <span className="text-muted-foreground">
+                              Solde actuel :{" "}
+                              <span className="font-mono font-medium text-foreground">
+                                {fmt(c.solde_actuel, c.devise)}
+                              </span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Dernier relevé : {formatDate(c.date_dernier_releve)}
+                            </span>
+                            {stale && (
+                              <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                Plus de {days}j sans relevé
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <Link href="/client/rapprochement">
+                          <Button size="sm" variant="outline">
+                            <Bot className="h-4 w-4 mr-1.5" />
+                            Rapprocher
+                          </Button>
+                        </Link>
+                      </div>
+                    )
+                  })
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Relevés importés */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                  Relevés importés ({releves.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {releves.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    Aucun relevé importé. Clique sur "Importer un relevé" pour commencer.
+                  </p>
+                ) : (
+                  <div className="rounded border bg-card divide-y">
+                    {releves
+                      .slice()
+                      .sort((a, b) => (b.date_fin || "").localeCompare(a.date_fin || ""))
+                      .map((r) => {
+                        const compte = comptes.find((c) => c.id === r.compte_bancaire_id)
+                        const nbTx = Array.isArray(r.transactions_json)
+                          ? r.transactions_json.length
+                          : 0
+                        const enAttente = Array.isArray(r.transactions_json)
+                          ? r.transactions_json.filter(
+                              (t: any) => t.statut === "propose" || t.statut === "a_verifier"
+                            ).length
+                          : 0
+                        const rapprochees = Array.isArray(r.transactions_json)
+                          ? r.transactions_json.filter((t: any) => t.statut === "rapproche")
+                              .length
+                          : 0
+                        return (
+                          <div
+                            key={r.id}
+                            className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-medium text-sm">
+                                  {compte
+                                    ? `${compte.banque} ${compte.numero_compte}`
+                                    : "Compte inconnu"}
+                                </h4>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {r.periode || formatDate(r.date_debut)}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDate(r.date_debut)} → {formatDate(r.date_fin)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 mt-1 flex-wrap text-xs">
+                                <span className="text-muted-foreground">
+                                  Solde {fmt(r.solde_ouverture, compte?.devise)} →{" "}
+                                  {fmt(r.solde_cloture, compte?.devise)}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {nbTx} transaction{nbTx > 1 ? "s" : ""}
+                                </span>
+                                {rapprochees > 0 && (
+                                  <Badge className="text-[10px] bg-green-100 text-green-700 border-green-300">
+                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                    {rapprochees} rapprochée{rapprochees > 1 ? "s" : ""}
+                                  </Badge>
+                                )}
+                                {enAttente > 0 && (
+                                  <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    {enAttente} à valider
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <Link href="/client/rapprochement">
+                              <Button size="sm" variant="ghost">
+                                <ArrowRight className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* CTA Lex Banque */}
+            {(comptes.length > 0 || releves.length > 0) && (
+              <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-5">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl bg-purple-600 p-3 text-white shadow-md">
+                      <Bot className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-purple-900">Prêt pour Lex Banque ?</h3>
+                      <p className="text-sm text-purple-700/80 mt-0.5">
+                        L'agent IA va rapprocher tes {txEnAttente} transactions en attente avec
+                        tes factures.
+                      </p>
+                    </div>
+                  </div>
+                  <Link href="/client/rapprochement">
+                    <Button className="bg-purple-600 hover:bg-purple-700 text-white shadow-md">
+                      <Sparkles className="h-4 w-4 mr-1.5" />
+                      Lancer Lex Banque
+                      <ArrowRight className="h-4 w-4 ml-1.5" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </ClientPageShell>
+  )
+}
+
+function KpiCard({
+  label,
+  value,
+  tone,
+  accent,
+}: {
+  label: string
+  value: number | string
+  tone?: "amber" | "green" | "rose" | "blue"
+  accent?: boolean
+}) {
+  const cls =
+    tone === "amber"
+      ? "border-amber-200 bg-amber-50"
+      : tone === "green"
+        ? "border-green-200 bg-green-50"
+        : tone === "rose"
+          ? "border-rose-200 bg-rose-50"
+          : tone === "blue"
+            ? "border-blue-200 bg-blue-50"
+            : "border-muted bg-card"
+  return (
+    <Card className={`${cls} ${accent ? "ring-2 ring-amber-400" : ""}`}>
+      <CardContent className="p-3">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-xl font-semibold mt-1">{value}</div>
+      </CardContent>
+    </Card>
   )
 }

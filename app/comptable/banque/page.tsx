@@ -1,423 +1,530 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+/**
+ * Page /comptable/banque — miroir de /client/banque avec sélecteur de société.
+ */
+
+import { useState, useEffect, useCallback, useMemo } from "react"
+import Link from "next/link"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Search, RefreshCw, Landmark, Download, AlertCircle } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Loader2,
+  Landmark,
+  RefreshCw,
+  Upload,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Bot,
+  ArrowRight,
+} from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
-function fmt(n: number, devise?: string) {
-  const formatted = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
-  return devise ? formatted + " " + devise : formatted
+interface Societe {
+  id: string
+  nom: string
 }
-
-function fmtMUR(n: number) {
-  return fmt(n, "MUR")
-}
-
-function formatDate(d: string) {
-  if (!d) return "—"
-  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })
-}
-
-interface Societe { id: string; nom: string }
 interface CompteBancaire {
-  id: string; banque: string; nom_compte: string; numero_compte: string
-  devise: string; solde_actuel: number; solde_mur: number; date_dernier_releve: string | null; actif: boolean
+  id: string
+  banque: string
+  nom_compte: string
+  numero_compte: string
+  iban?: string | null
+  devise: string
+  compte_comptable: string
+  solde_actuel: number
+  solde_dernier_releve: number
+  date_dernier_releve: string | null
+  compte_principal: boolean
+  actif: boolean
 }
-interface Transaction {
-  id: string; date: string; libelle: string; debit: number; credit: number
-  debit_mur: number; credit_mur: number; devise: string
-  solde_apres: number | null; tiers: string | null; compte_comptable: string | null
-  statut: string; banque?: string; lettre?: string | null
-}
-interface Releve {
-  id: string; periode: string; date_debut: string; date_fin: string
-  solde_ouverture: number; solde_cloture: number; total_debits: number; total_credits: number
-  transactions_json: any[]; statut_rapprochement: string
+interface ReleveBancaire {
+  id: string
+  compte_bancaire_id: string
+  periode: string
+  date_debut: string
+  date_fin: string
+  solde_ouverture: number
+  solde_cloture: number
+  total_debits: number
+  total_credits: number
+  statut_rapprochement: string
+  transactions_json: any[] | null
+  created_at: string
 }
 
-function getStatutBadge(statut: string) {
-  if (statut?.includes("non_identifie")) return <Badge className="bg-red-100 text-red-700 border-red-200">Non identifié</Badge>
-  if (statut?.includes("a_verifier")) return <Badge className="bg-orange-100 text-orange-700 border-orange-200">À vérifier</Badge>
-  return <Badge className="bg-green-100 text-green-700 border-green-200">Identifié</Badge>
+function fmt(n: number, dev = "MUR"): string {
+  return (
+    n.toLocaleString("fr-FR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }) +
+    " " +
+    dev
+  )
+}
+function formatDate(d: string | null): string {
+  if (!d) return "—"
+  return new Date(d).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
+function daysSince(d: string | null): number {
+  if (!d) return Infinity
+  return Math.floor((Date.now() - new Date(d).getTime()) / 86400000)
 }
 
 export default function ComptableBanquePage() {
   const [societes, setSocietes] = useState<Societe[]>([])
   const [selectedSociete, setSelectedSociete] = useState("all")
   const [comptes, setComptes] = useState<CompteBancaire[]>([])
-  const [releves, setReleves] = useState<Releve[]>([])
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [releves, setReleves] = useState<ReleveBancaire[]>([])
   const [loading, setLoading] = useState(false)
-  const [search, setSearch] = useState("")
-  const [selectedCompte, setSelectedCompte] = useState("all")
-  const [rates, setRates] = useState<Record<string, number>>({})
-  const [totalBankMUR, setTotalBankMUR] = useState(0)
+  const [uploading, setUploading] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+
+  const showToast = useCallback((msg: string, type: "success" | "error" = "success") => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 4000)
+  }, [])
 
   useEffect(() => {
-    fetch("/api/comptable/societes").then(r => r.json()).then(d => {
-      const s = d.societes || []
-      setSocietes(s)
-      if (s.length === 1) setSelectedSociete(s[0].id)
-    })
+    fetch("/api/comptable/societes")
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Societe[] = d.societes || []
+        setSocietes(list)
+        if (list.length === 1) setSelectedSociete(list[0].id)
+      })
+      .catch(() => {})
   }, [])
 
   const load = useCallback(async () => {
     if (selectedSociete === "all") {
-      setComptes([]); setReleves([]); setTransactions([])
-      setLoading(false); return
+      setComptes([])
+      setReleves([])
+      return
     }
     setLoading(true)
     try {
       const res = await fetch(`/api/comptable/banque?societe_id=${selectedSociete}`)
       const d = await res.json()
-      setComptes(d.comptes || [])
-      setReleves(d.releves || [])
-      setRates(d.rates || {})
-      setTotalBankMUR(d.totalBankMUR || 0)
-      // Flatten transactions from releves
-      const txs: Transaction[] = []
-      ;(d.releves || []).forEach((r: any) => {
-        const compte = (d.comptes || []).find((c: CompteBancaire) =>
-          c.id === r.compte_bancaire_id
-        )
-        const banque = compte?.banque || "—"
-        const devise = r.devise || compte?.devise || "MUR"
-        ;(r.transactions_json || []).forEach((tx: any, idx: number) => {
-          txs.push({
-            id: `${r.id}-${idx}`,
-            date: tx.date || tx.date_operation || "",
-            libelle: tx.libelle || tx.description || "",
-            debit: Number(tx.debit) || 0,
-            credit: Number(tx.credit) || 0,
-            debit_mur: Number(tx.debit_mur) || Number(tx.debit) || 0,
-            credit_mur: Number(tx.credit_mur) || Number(tx.credit) || 0,
-            devise: tx.devise || devise,
-            solde_apres: tx.solde_apres ?? tx.solde ?? null,
-            tiers: tx.tiers_detecte || tx.tiers || null,
-            compte_comptable: tx.compte_comptable || null,
-            statut: tx.statut || "non_identifie",
-            banque,
-            lettre: tx.lettre || tx.lettrage || null,
-          })
-        })
-      })
-      txs.sort((a, b) => {
-        if (!a.date) return 1; if (!b.date) return -1
-        return new Date(b.date).getTime() - new Date(a.date).getTime()
-      })
-      setTransactions(txs)
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
-  }, [selectedSociete])
+      const accounts: CompteBancaire[] = (d.comptes || d.bankAccounts || []).map((a: any) => ({
+        id: a.id,
+        banque: a.banque || "—",
+        nom_compte: a.nom_compte || a.numero_compte,
+        numero_compte: a.numero_compte || "—",
+        iban: a.iban || null,
+        devise: a.devise || "MUR",
+        compte_comptable: a.compte_comptable || "—",
+        solde_actuel: Number(a.solde_actuel) || Number(a.solde_mur) || 0,
+        solde_dernier_releve: Number(a.solde_dernier_releve) || 0,
+        date_dernier_releve: a.date_dernier_releve || null,
+        compte_principal: !!a.compte_principal,
+        actif: a.actif !== false,
+      }))
+      setComptes(accounts)
+      setReleves(d.releves || d.relevesBancaires || [])
+    } catch {
+      showToast("Erreur chargement", "error")
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedSociete, showToast])
+  useEffect(() => {
+    load()
+  }, [load])
 
-  useEffect(() => { load() }, [load])
+  const handleUpload = async (file: File) => {
+    if (selectedSociete === "all" || !file) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      fd.append("societe_id", selectedSociete)
+      const res = await fetch("/api/documents/upload", { method: "POST", body: fd })
+      const d = await res.json()
+      if (!res.ok) {
+        showToast(d?.error || "Erreur upload", "error")
+        return
+      }
+      showToast(`Relevé importé — ${d?.nb_transactions || 0} transactions extraites`)
+      load()
+    } catch (e: any) {
+      showToast(e?.message || "Erreur upload", "error")
+    } finally {
+      setUploading(false)
+    }
+  }
 
-  const filteredTxs = transactions.filter(tx => {
-    const matchSearch = !search ||
-      tx.libelle.toLowerCase().includes(search.toLowerCase()) ||
-      (tx.tiers || "").toLowerCase().includes(search.toLowerCase())
-    return matchSearch
-  })
+  const totalSoldes = useMemo(
+    () => comptes.reduce((s, c) => s + (c.solde_actuel || 0), 0),
+    [comptes]
+  )
+  const lastImport = useMemo(() => {
+    if (releves.length === 0) return null
+    return releves.reduce((max, r) =>
+      (r.created_at || "") > (max?.created_at || "") ? r : max
+    , releves[0]).created_at
+  }, [releves])
+  const txEnAttente = useMemo(() => {
+    return releves.reduce((sum, r) => {
+      const arr = Array.isArray(r.transactions_json) ? r.transactions_json : []
+      return (
+        sum +
+        arr.filter(
+          (t: any) =>
+            t.statut === "propose" ||
+            t.statut === "a_verifier" ||
+            (!t.statut &&
+              !t.facture_id &&
+              !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0))
+        ).length
+      )
+    }, 0)
+  }, [releves])
 
-  const hasMultiCurrency = comptes.some(c => c.devise && c.devise !== "MUR")
-  const nonRaprochees = transactions.filter(t => !t.tiers || t.statut?.includes("non_identifie")).length
+  const canAct = selectedSociete !== "all"
 
   return (
     <ClientPageShell hideHero disableParticles>
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Banque & Relevés</h1>
-          <p className="text-sm text-gray-500 mt-1">Comptes bancaires et transactions importées</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={load} disabled={loading || selectedSociete === "all"} className="gap-1">
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-          <Button variant="outline" className="gap-2">
-            <Download className="w-4 h-4" /> Exporter
-          </Button>
-        </div>
-      </div>
-
-      {/* Filtre société */}
-      <div className="flex gap-4 items-end flex-wrap">
-        <div className="w-72">
-          <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-            <SelectTrigger><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">-- Choisir une société --</SelectItem>
-              {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {selectedSociete === "all" ? (
-        <Card>
-          <CardContent className="py-16 text-center text-gray-400">
-            Sélectionnez une société pour afficher les comptes bancaires
-          </CardContent>
-        </Card>
-      ) : loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-[#0B0F2E]" />
-        </div>
-      ) : (
-        <>
-          {/* KPIs */}
-          <div className="grid grid-cols-3 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-gray-500">Solde total (consolidé MUR)</p>
-                <p className="text-2xl font-bold text-[#0B0F2E]">
-                  {totalBankMUR > 0 ? fmtMUR(totalBankMUR) : "—"}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">{comptes.length} compte{comptes.length > 1 ? "s" : ""}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-gray-500">Transactions totales</p>
-                <p className="text-2xl font-bold text-[#0B0F2E]">{transactions.length}</p>
-                <p className="text-xs text-gray-400 mt-1">{releves.length} relevé{releves.length > 1 ? "s" : ""} importé{releves.length > 1 ? "s" : ""}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-gray-500">Non rapprochées</p>
-                <p className={`text-2xl font-bold ${nonRaprochees > 0 ? "text-red-600" : "text-green-600"}`}>
-                  {nonRaprochees}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">à vérifier</p>
-              </CardContent>
-            </Card>
+      <div className="space-y-6 max-w-7xl">
+        {toast && (
+          <div
+            className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white ${
+              toast.type === "success" ? "bg-emerald-600" : "bg-red-600"
+            }`}
+          >
+            {toast.msg}
           </div>
+        )}
 
-          {/* Taux de change */}
-          {hasMultiCurrency && Object.keys(rates).length > 0 && (
-            <Card className="bg-gradient-to-r from-[#0B0F2E] to-[#2a3d6b]">
-              <CardContent className="py-4">
-                <div className="flex items-center gap-6 flex-wrap">
-                  <p className="text-xs font-semibold text-white/60 uppercase tracking-wider">Taux de change</p>
-                  {["EUR", "GBP", "USD"].map(d => rates[d] ? (
-                    <div key={d} className="flex items-center gap-2">
-                      <span className="text-white font-bold text-sm">1 {d}</span>
-                      <span className="text-white/60">=</span>
-                      <span className="text-[#D4AF37] font-bold text-sm">{rates[d].toFixed(2)} MUR</span>
-                    </div>
-                  ) : null)}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Comptes bancaires */}
-          {comptes.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
-                  <Landmark className="w-5 h-5" /> Comptes bancaires ({comptes.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Banque</TableHead>
-                      <TableHead>Nom</TableHead>
-                      <TableHead>N° compte</TableHead>
-                      <TableHead>Devise</TableHead>
-                      <TableHead className="text-right">Solde actuel</TableHead>
-                      <TableHead>Taux appliqué</TableHead>
-                      <TableHead className="text-right">Contre-valeur MUR</TableHead>
-                      <TableHead>Dernier relevé</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {comptes.map(c => (
-                      <TableRow key={c.id}>
-                        <TableCell>
-                          <Badge variant="outline" style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>{c.banque}</Badge>
-                        </TableCell>
-                        <TableCell>{c.nom_compte || "—"}</TableCell>
-                        <TableCell className="font-mono text-sm text-gray-500">{c.numero_compte || "—"}</TableCell>
-                        <TableCell>{c.devise || "MUR"}</TableCell>
-                        <TableCell className="text-right font-bold text-[#0B0F2E]">
-                          {fmt(c.solde_actuel || 0, c.devise || "MUR")}
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-500">
-                          {c.devise && c.devise !== "MUR" && rates[c.devise]
-                            ? `1 ${c.devise} = ${rates[c.devise].toFixed(2)} MUR`
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-[#0B0F2E]">
-                          {c.devise && c.devise !== "MUR"
-                            ? fmtMUR(c.solde_mur || 0)
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-500">
-                          {c.date_dernier_releve ? formatDate(c.date_dernier_releve) : "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Relevés importés */}
-          {releves.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-[#0B0F2E] text-base">Relevés importés ({releves.length})</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Période</TableHead>
-                      <TableHead className="text-right">Solde ouverture</TableHead>
-                      <TableHead className="text-right">Débits</TableHead>
-                      <TableHead className="text-right">Crédits</TableHead>
-                      <TableHead className="text-right">Solde clôture</TableHead>
-                      <TableHead>Nb transactions</TableHead>
-                      <TableHead>Statut</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {releves.map(r => (
-                      <TableRow key={r.id}>
-                        <TableCell className="text-sm">
-                          {formatDate(r.date_debut)} → {formatDate(r.date_fin)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">{fmt(r.solde_ouverture)}</TableCell>
-                        <TableCell className="text-right font-mono text-red-600">{fmt(r.total_debits)}</TableCell>
-                        <TableCell className="text-right font-mono text-green-600">{fmt(r.total_credits)}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-[#0B0F2E]">{fmt(r.solde_cloture)}</TableCell>
-                        <TableCell>{(r.transactions_json || []).length}</TableCell>
-                        <TableCell>
-                          <Badge className={
-                            r.statut_rapprochement === "equilibre" ? "bg-green-100 text-green-700" :
-                            r.statut_rapprochement === "ecart_detecte" ? "bg-red-100 text-red-700" :
-                            "bg-amber-100 text-amber-700"
-                          }>
-                            {r.statut_rapprochement === "equilibre" ? "Équilibré" :
-                             r.statut_rapprochement === "ecart_detecte" ? "Écart détecté" : "En attente"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Transactions */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-[#0B0F2E]">
-                Transactions ({filteredTxs.length})
-              </CardTitle>
-              <div className="relative w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  className="pl-9"
-                  placeholder="Rechercher..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                />
+        {/* HEADER */}
+        <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-sky-50 p-5">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-gradient-to-br from-blue-600 to-cyan-600 p-3 text-white shadow-md">
+                <Landmark className="h-7 w-7" />
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {transactions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                  <AlertCircle className="w-10 h-10 mb-3 opacity-40" />
-                  <p className="text-sm">Aucune transaction.</p>
-                  <p className="text-xs mt-1">Importez un relevé bancaire dans Documents pour alimenter cet onglet.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Banque</TableHead>
-                        <TableHead>Libellé</TableHead>
-                        <TableHead className="text-right">Débit</TableHead>
-                        <TableHead className="text-right">Crédit</TableHead>
-                        <TableHead className="text-right">Solde après</TableHead>
-                        <TableHead>Tiers</TableHead>
-                        <TableHead>Compte</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Lettre</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredTxs.map(tx => {
-                        const isFC = tx.devise && tx.devise !== "MUR"
-                        return (
-                        <TableRow key={tx.id}>
-                          <TableCell className="whitespace-nowrap text-sm">{formatDate(tx.date)}</TableCell>
-                          <TableCell>
-                            {tx.banque ? (
-                              <Badge variant="outline" style={{ borderColor: "#D4AF37", color: "#D4AF37" }}>{tx.banque}</Badge>
-                            ) : "—"}
-                          </TableCell>
-                          <TableCell className="text-sm max-w-[240px] truncate">{tx.libelle}</TableCell>
-                          <TableCell className="text-right text-red-600 font-medium">
-                            {tx.debit > 0 ? (
-                              <div>
-                                <span>{fmt(tx.debit, isFC ? tx.devise : undefined)}</span>
-                                {isFC && <div className="text-xs text-gray-400">{fmtMUR(tx.debit_mur)}</div>}
-                              </div>
-                            ) : "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-green-600 font-medium">
-                            {tx.credit > 0 ? (
-                              <div>
-                                <span>{fmt(tx.credit, isFC ? tx.devise : undefined)}</span>
-                                {isFC && <div className="text-xs text-gray-400">{fmtMUR(tx.credit_mur)}</div>}
-                              </div>
-                            ) : "—"}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {tx.solde_apres != null ? fmt(tx.solde_apres) : "—"}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {tx.tiers || <span className="text-gray-400 italic">Non identifié</span>}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm text-gray-500">
-                            {tx.compte_comptable || "—"}
-                          </TableCell>
-                          <TableCell>{getStatutBadge(tx.statut)}</TableCell>
-                          <TableCell>
-                            {tx.lettre ? (
-                              <Badge className="bg-green-100 text-green-700 border-green-200">{tx.lettre}</Badge>
-                            ) : (
-                              <Badge className="bg-gray-100 text-gray-400 border-gray-200">—</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+              <div>
+                <h1 className="text-2xl font-bold text-blue-900">Comptes bancaires</h1>
+                <p className="text-sm text-blue-700/80 mt-0.5">
+                  Comptes & relevés · prérequis pour Lex Banque
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={load}
+                disabled={loading || !canAct}
+                size="sm"
+              >
+                <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
+              <label>
+                <input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  disabled={uploading || !canAct}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) handleUpload(f)
+                    e.currentTarget.value = ""
+                  }}
+                />
+                <span
+                  className={`inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all h-9 rounded-md px-4 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white shadow-md ${
+                    uploading || !canAct ? "opacity-50 pointer-events-none" : ""
+                  }`}
+                >
+                  {uploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  Importer un relevé
+                </span>
+              </label>
+              <Link href="/comptable/rapprochement">
+                <Button className="bg-purple-600 hover:bg-purple-700 text-white">
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                  Aller à Lex Banque
+                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Sélecteur société */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="w-72">
+            <Select value={selectedSociete} onValueChange={setSelectedSociete}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choisir une société..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">-- Choisir une société --</SelectItem>
+                {societes.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.nom}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {!canAct ? (
+          <Card>
+            <CardContent className="py-16 text-center text-gray-400">
+              Sélectionne une société.
             </CardContent>
           </Card>
-        </>
-      )}
-    </div>
+        ) : loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard label="Comptes actifs" value={comptes.filter((c) => c.actif).length} />
+              <KpiCard
+                label="Solde cumulé"
+                value={fmt(totalSoldes, comptes[0]?.devise || "MUR")}
+                tone="green"
+              />
+              <KpiCard
+                label="Dernier import"
+                value={lastImport ? formatDate(lastImport) : "—"}
+                tone="blue"
+              />
+              <KpiCard
+                label="Tx en attente"
+                value={txEnAttente}
+                tone={txEnAttente > 0 ? "amber" : "green"}
+                accent={txEnAttente > 0}
+              />
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Landmark className="h-5 w-5 text-blue-600" />
+                  Comptes bancaires ({comptes.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {comptes.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    Aucun compte bancaire — importe un relevé pour en créer un.
+                  </p>
+                ) : (
+                  comptes.map((c) => {
+                    const days = daysSince(c.date_dernier_releve)
+                    const stale = days > 35
+                    return (
+                      <div
+                        key={c.id}
+                        className="flex items-start justify-between gap-4 p-4 border rounded-lg hover:bg-muted/20"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-medium">
+                              {c.banque} · {c.numero_compte}
+                            </h3>
+                            <Badge variant="outline" className="text-[10px] font-mono">
+                              {c.devise}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] font-mono">
+                              PCM {c.compte_comptable}
+                            </Badge>
+                            {c.compte_principal && (
+                              <Badge className="text-[10px] bg-blue-100 text-blue-700 border border-blue-300">
+                                Principal
+                              </Badge>
+                            )}
+                            {!c.actif && (
+                              <Badge variant="outline" className="text-[10px] opacity-60">
+                                Inactif
+                              </Badge>
+                            )}
+                          </div>
+                          {c.iban && (
+                            <p className="text-[11px] text-muted-foreground mt-1 font-mono">
+                              IBAN {c.iban}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-3 mt-2 flex-wrap text-xs">
+                            <span className="text-muted-foreground">
+                              Solde actuel :{" "}
+                              <span className="font-mono font-medium text-foreground">
+                                {fmt(c.solde_actuel, c.devise)}
+                              </span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Dernier relevé : {formatDate(c.date_dernier_releve)}
+                            </span>
+                            {stale && (
+                              <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                Plus de {days}j sans relevé
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <Link href="/comptable/rapprochement">
+                          <Button size="sm" variant="outline">
+                            <Bot className="h-4 w-4 mr-1.5" />
+                            Rapprocher
+                          </Button>
+                        </Link>
+                      </div>
+                    )
+                  })
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                  Relevés importés ({releves.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {releves.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    Aucun relevé importé.
+                  </p>
+                ) : (
+                  <div className="rounded border bg-card divide-y">
+                    {releves
+                      .slice()
+                      .sort((a, b) => (b.date_fin || "").localeCompare(a.date_fin || ""))
+                      .map((r) => {
+                        const compte = comptes.find((c) => c.id === r.compte_bancaire_id)
+                        const nbTx = Array.isArray(r.transactions_json)
+                          ? r.transactions_json.length
+                          : 0
+                        const enAttente = Array.isArray(r.transactions_json)
+                          ? r.transactions_json.filter(
+                              (t: any) => t.statut === "propose" || t.statut === "a_verifier"
+                            ).length
+                          : 0
+                        const rapprochees = Array.isArray(r.transactions_json)
+                          ? r.transactions_json.filter((t: any) => t.statut === "rapproche")
+                              .length
+                          : 0
+                        return (
+                          <div
+                            key={r.id}
+                            className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-medium text-sm">
+                                  {compte
+                                    ? `${compte.banque} ${compte.numero_compte}`
+                                    : "Compte inconnu"}
+                                </h4>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {r.periode || formatDate(r.date_debut)}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDate(r.date_debut)} → {formatDate(r.date_fin)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 mt-1 flex-wrap text-xs">
+                                <span className="text-muted-foreground">
+                                  Solde {fmt(r.solde_ouverture, compte?.devise)} →{" "}
+                                  {fmt(r.solde_cloture, compte?.devise)}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {nbTx} transaction{nbTx > 1 ? "s" : ""}
+                                </span>
+                                {rapprochees > 0 && (
+                                  <Badge className="text-[10px] bg-green-100 text-green-700 border-green-300">
+                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                    {rapprochees} rapprochée{rapprochees > 1 ? "s" : ""}
+                                  </Badge>
+                                )}
+                                {enAttente > 0 && (
+                                  <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    {enAttente} à valider
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <Link href="/comptable/rapprochement">
+                              <Button size="sm" variant="ghost">
+                                <ArrowRight className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </div>
     </ClientPageShell>
+  )
+}
+
+function KpiCard({
+  label,
+  value,
+  tone,
+  accent,
+}: {
+  label: string
+  value: number | string
+  tone?: "amber" | "green" | "rose" | "blue"
+  accent?: boolean
+}) {
+  const cls =
+    tone === "amber"
+      ? "border-amber-200 bg-amber-50"
+      : tone === "green"
+        ? "border-green-200 bg-green-50"
+        : tone === "rose"
+          ? "border-rose-200 bg-rose-50"
+          : tone === "blue"
+            ? "border-blue-200 bg-blue-50"
+            : "border-muted bg-card"
+  return (
+    <Card className={`${cls} ${accent ? "ring-2 ring-amber-400" : ""}`}>
+      <CardContent className="p-3">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-xl font-semibold mt-1">{value}</div>
+      </CardContent>
+    </Card>
   )
 }
