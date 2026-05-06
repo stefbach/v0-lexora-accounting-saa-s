@@ -1,0 +1,111 @@
+{
+  "name": "[Lexora] Test connexion Supabase",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-manual-001",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://dqepdoimpqhmuhkklxva.supabase.co/rest/v1/clients?select=count",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "count=exact"
+            },
+            {
+              "name": "Range",
+              "value": "0-0"
+            }
+          ]
+        },
+        "options": {
+          "fullResponse": true
+        }
+      },
+      "id": "http-count-clients-001",
+      "name": "Count clients (Supabase REST)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Lexora Supabase (service_role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "ok",
+              "value": "={{ $json.statusCode === 200 }}",
+              "type": "boolean"
+            },
+            {
+              "id": "a2",
+              "name": "totalClients",
+              "value": "={{ Number(($json.headers['content-range'] || '*/0').split('/')[1]) }}",
+              "type": "number"
+            },
+            {
+              "id": "a3",
+              "name": "checkedAt",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "supabaseUrl",
+              "value": "https://dqepdoimpqhmuhkklxva.supabase.co",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-result-001",
+      "name": "Format result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Count clients (Supabase REST)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count clients (Supabase REST)": {
+      "main": [
+        [
+          {
+            "node": "Format result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
