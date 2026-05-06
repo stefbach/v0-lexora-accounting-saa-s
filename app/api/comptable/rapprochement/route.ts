@@ -223,6 +223,18 @@ export async function GET(request: Request) {
           director_id: tx.director_id || null,
           director_name: tx.director_name || null,
           qualification_status: tx.qualification_status || null,
+          // Champs agent IA (Lex Banque) — exposés au front pour les onglets
+          // "À valider" / suggestions, badges confiance/source/stratégie.
+          facture_ids: Array.isArray(tx.facture_ids) ? tx.facture_ids : (tx.facture_id ? [tx.facture_id] : []),
+          matched_strategy: tx.matched_strategy || null,
+          matched_confidence: typeof tx.matched_confidence === 'number' ? tx.matched_confidence : null,
+          match_confidence: tx.match_confidence || null,
+          classification: tx.classification || null,
+          classification_suggestion: tx.classification_suggestion || null,
+          suggestion_source: tx.suggestion_source || null,
+          rapprochement_multi: !!tx.rapprochement_multi,
+          nb_factures: typeof tx.nb_factures === 'number' ? tx.nb_factures : (Array.isArray(tx.facture_ids) ? tx.facture_ids.length : 0),
+          rapproche_at: tx.rapproche_at || null,
         })
       })
     })
