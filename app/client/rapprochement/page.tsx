@@ -516,38 +516,48 @@ export default function ClientRapprochementPage() {
     }
   }, [societeId, periodeDebut, periodeFin, load, showToast])
 
-  const handleRunAgent = useCallback(async () => {
-    if (!societeId) return
-    setRunningAgent(true)
-    try {
-      const body: any = { societe_id: societeId, dry_run: false, min_confidence: 0.7 }
-      if (periodeDebut) body.date_debut = periodeDebut
-      if (periodeFin) body.date_fin = periodeFin
-      const res = await fetch("/api/agent/rapprochement", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      const d = await res.json()
-      if (!res.ok) {
-        showToast(d?.error || `Erreur ${AGENT_NAME}`, "error")
-        return
+  const handleRunAgent = useCallback(
+    async (withAi = false) => {
+      if (!societeId) return
+      setRunningAgent(true)
+      try {
+        // Par défaut : sans couche IA Claude (rapide, ~2s, ne bloque pas).
+        // Avec IA : appel Claude pour les cas ambigus (~30s, +5-15 matches sémantiques).
+        const body: any = {
+          societe_id: societeId,
+          dry_run: false,
+          min_confidence: 0.7,
+          use_semantic: withAi,
+        }
+        if (periodeDebut) body.date_debut = periodeDebut
+        if (periodeFin) body.date_fin = periodeFin
+        const res = await fetch("/api/agent/rapprochement", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        const d = await res.json()
+        if (!res.ok) {
+          showToast(d?.error || `Erreur ${AGENT_NAME}`, "error")
+          return
+        }
+        const total =
+          (d.stats?.matched || 0) +
+          (d.stats?.classified || 0) +
+          (d.stats?.semantic_matches || 0) +
+          (d.stats?.semantic_classifications || 0)
+        showToast(
+          `${AGENT_NAME}${withAi ? " + IA" : ""} : ${total} suggestion(s), ${d.writes?.transactions_modifiees || 0} écrites`
+        )
+        load()
+      } catch (e: any) {
+        showToast(`Erreur ${AGENT_NAME} : ${e?.message || "réseau"}`, "error")
+      } finally {
+        setRunningAgent(false)
       }
-      const total =
-        (d.stats?.matched || 0) +
-        (d.stats?.classified || 0) +
-        (d.stats?.semantic_matches || 0) +
-        (d.stats?.semantic_classifications || 0)
-      showToast(
-        `${AGENT_NAME} : ${total} suggestion(s), ${d.writes?.transactions_modifiees || 0} écrites`
-      )
-      load()
-    } catch (e: any) {
-      showToast(`Erreur ${AGENT_NAME} : ${e?.message || "réseau"}`, "error")
-    } finally {
-      setRunningAgent(false)
-    }
-  }, [societeId, periodeDebut, periodeFin, load, showToast])
+    },
+    [societeId, periodeDebut, periodeFin, load, showToast]
+  )
 
   const validateOne = useCallback(
     async (tx: BankTx): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
@@ -703,9 +713,10 @@ export default function ClientRapprochementPage() {
                 Actualiser
               </Button>
               <Button
-                onClick={handleRunAgent}
+                onClick={() => handleRunAgent(false)}
                 disabled={runningAgent || !societeId}
                 className="bg-purple-600 hover:bg-purple-700 text-white shadow-md"
+                title="Algo pur, ~2 secondes"
               >
                 {runningAgent ? (
                   <>
@@ -718,6 +729,16 @@ export default function ClientRapprochementPage() {
                     Lancer {AGENT_NAME}
                   </>
                 )}
+              </Button>
+              <Button
+                onClick={() => handleRunAgent(true)}
+                disabled={runningAgent || !societeId}
+                variant="outline"
+                className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                title="Approfondit avec l'IA Claude (~30s) sur les cas ambigus"
+              >
+                <Bot className="h-4 w-4 mr-1.5" />
+                + Approfondir avec IA
               </Button>
             </div>
           </div>
