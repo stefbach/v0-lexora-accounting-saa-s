@@ -294,17 +294,19 @@ export async function POST(request: Request) {
     const classifiedTxKeys = new Set(
       result.classifications.map((c) => c.transactionKey)
     )
-    const matchedFactureIds = new Set(
-      result.matches.flatMap((m) => m.factureIds)
-    )
     const orphanTransactions = matchingTx.filter(
       (t) =>
         !matchedTxKeys.has(`${t.releve_id}:${t.transaction_idx}`) &&
         !classifiedTxKeys.has(`${t.releve_id}:${t.transaction_idx}`)
     )
-    const unmatchedFactures = matchingFactures.filter(
-      (f) => !matchedFactureIds.has(f.id)
-    )
+
+    // ⚠️ On envoie TOUTES les factures impayées à Claude (pas juste celles
+    // que l'algo n'a pas consommées). Raison : un paiement orphelin peut
+    // correspondre à un ACOMPTE supplémentaire sur une facture déjà partiellement
+    // matchée (cas "N paiements → 1 facture"). Claude raisonne mieux avec le
+    // contexte complet, et la déduplication finale est faite plus tard côté
+    // serveur (l'algo prévaut sur l'IA).
+    const unmatchedFactures = matchingFactures
 
     const semResult = await runSemanticRapprochement({
       orphanTransactions,
