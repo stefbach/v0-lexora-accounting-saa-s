@@ -52,6 +52,23 @@ interface ComptePCM {
   societe_id: string | null
 }
 
+interface CompteUsage {
+  nb_ecritures: number
+  total_debit: number
+  total_credit: number
+  solde: number
+  ecritures: Array<{
+    id: string
+    date: string | null
+    journal: string | null
+    libelle: string | null
+    debit: number
+    credit: number
+    lettre: string | null
+    ref_folio: string | null
+  }>
+}
+
 const CLASSES: Array<{ num: number; label: string; desc: string; color: string; Icon: any }> = [
   { num: 1, label: "Capitaux", desc: "Capital, réserves, emprunts long terme", color: "blue", Icon: Wallet },
   { num: 2, label: "Immobilisations", desc: "Actifs corporels, incorporels, financiers", color: "cyan", Icon: Building2 },
@@ -74,17 +91,52 @@ const colorMap: Record<string, { bg: string; border: string; text: string; bgLig
 export default function PlanComptablePage() {
   const { societeId } = useSocieteActive()
   const [comptes, setComptes] = useState<ComptePCM[]>([])
+  const [usage, setUsage] = useState<Map<string, CompteUsage>>(new Map())
   const [loading, setLoading] = useState(false)
   const [openClasses, setOpenClasses] = useState<Set<number>>(new Set([1, 2, 3, 4, 5, 6, 7]))
+  const [openCompte, setOpenCompte] = useState<string | null>(null)
   const [search, setSearch] = useState("")
 
   const load = useCallback(async () => {
     if (!societeId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/client/plan-comptable?societe_id=${societeId}`)
-      const d = await res.json()
-      setComptes(d?.comptes || [])
+      const [pcmRes, finRes] = await Promise.all([
+        fetch(`/api/client/plan-comptable?societe_id=${societeId}`).then((r) => r.json()),
+        fetch(`/api/client/financial?societe_id=${societeId}`).then((r) => r.json()),
+      ])
+      setComptes(pcmRes?.comptes || [])
+      // Calcul usage par compte (nb écritures, totaux, détail) via financial.ecritures
+      const ecr: any[] = finRes?.financial?.ecritures || []
+      const map = new Map<string, CompteUsage>()
+      for (const e of ecr) {
+        const num = e.numero_compte || e.compte || "?"
+        const debit = Number(e.debit_mur) || Number(e.debit) || 0
+        const credit = Number(e.credit_mur) || Number(e.credit) || 0
+        const cur = map.get(num) || {
+          nb_ecritures: 0,
+          total_debit: 0,
+          total_credit: 0,
+          solde: 0,
+          ecritures: [],
+        }
+        cur.nb_ecritures++
+        cur.total_debit += debit
+        cur.total_credit += credit
+        cur.solde = cur.total_debit - cur.total_credit
+        cur.ecritures.push({
+          id: e.id,
+          date: e.date_ecriture || null,
+          journal: e.journal || null,
+          libelle: e.libelle || null,
+          debit,
+          credit,
+          lettre: e.lettre || null,
+          ref_folio: e.ref_folio || null,
+        })
+        map.set(num, cur)
+      }
+      setUsage(map)
     } catch {}
     finally {
       setLoading(false)
@@ -260,7 +312,18 @@ export default function PlanComptablePage() {
                         ) : (
                           <div className="divide-y">
                             {arr.map((c) => (
-                              <PCMRow key={c.id} c={c} cls={cls} />
+                              <PCMRow
+                                key={c.id}
+                                c={c}
+                                cls={cls}
+                                usage={usage.get(c.compte)}
+                                isOpen={openCompte === c.compte}
+                                onToggle={() =>
+                                  setOpenCompte(
+                                    openCompte === c.compte ? null : c.compte
+                                  )
+                                }
+                              />
                             ))}
                           </div>
                         )}
@@ -277,59 +340,167 @@ export default function PlanComptablePage() {
   )
 }
 
+function fmt(n: number): string {
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 function PCMRow({
   c,
   cls,
+  usage,
+  isOpen,
+  onToggle,
 }: {
   c: ComptePCM
   cls: { bgLight: string; text: string }
+  usage?: CompteUsage
+  isOpen: boolean
+  onToggle: () => void
 }) {
   const indent = Math.max(0, (c.niveau || 1) - 2) * 16
   const isOverride = !!c.societe_id
+  const hasUsage = usage && usage.nb_ecritures > 0
+
   return (
-    <div
-      className="flex items-start gap-3 p-3 hover:bg-muted/30"
-      style={{ paddingLeft: 12 + indent }}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="outline" className={`text-[11px] font-mono ${cls.bgLight} ${cls.text}`}>
-            {c.compte}
-          </Badge>
-          {c.sens_normal && (
-            <Badge variant="outline" className="text-[10px]">
-              Sens {c.sens_normal === "D" ? "Débit" : "Crédit"}
+    <div>
+      <button
+        onClick={() => hasUsage && onToggle()}
+        disabled={!hasUsage}
+        className={`w-full flex items-start gap-3 p-3 text-left ${
+          hasUsage ? "hover:bg-muted/30 cursor-pointer" : "cursor-default"
+        }`}
+        style={{ paddingLeft: 12 + indent }}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {hasUsage &&
+              (isOpen ? (
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              ))}
+            <Badge variant="outline" className={`text-[11px] font-mono ${cls.bgLight} ${cls.text}`}>
+              {c.compte}
             </Badge>
-          )}
-          {c.type_compte && (
-            <Badge variant="outline" className="text-[10px]">
-              {c.type_compte}
-            </Badge>
-          )}
-          {isOverride && (
-            <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
-              Personnalisé société
-            </Badge>
-          )}
-          {!c.actif && (
-            <Badge variant="outline" className="text-[10px] opacity-60">
-              Inactif
-            </Badge>
-          )}
-          {c.est_analytique && (
-            <Badge variant="outline" className="text-[10px]">
-              Analytique
-            </Badge>
-          )}
-          {c.compte_parent && (
-            <span className="text-[10px] text-muted-foreground font-mono">
-              ↳ parent {c.compte_parent}
-            </span>
+            {c.sens_normal && (
+              <Badge variant="outline" className="text-[10px]">
+                Sens {c.sens_normal === "D" ? "Débit" : "Crédit"}
+              </Badge>
+            )}
+            {c.type_compte && (
+              <Badge variant="outline" className="text-[10px]">
+                {c.type_compte}
+              </Badge>
+            )}
+            {isOverride && (
+              <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
+                Personnalisé société
+              </Badge>
+            )}
+            {!c.actif && (
+              <Badge variant="outline" className="text-[10px] opacity-60">
+                Inactif
+              </Badge>
+            )}
+            {c.est_analytique && (
+              <Badge variant="outline" className="text-[10px]">
+                Analytique
+              </Badge>
+            )}
+            {c.compte_parent && (
+              <span className="text-[10px] text-muted-foreground font-mono">
+                ↳ parent {c.compte_parent}
+              </span>
+            )}
+          </div>
+          <p className="text-sm mt-1 break-words font-medium">{c.libelle || "—"}</p>
+          {c.notes && <p className="text-[11px] italic text-muted-foreground">{c.notes}</p>}
+        </div>
+        <div className="text-right flex-shrink-0 text-xs font-mono space-y-0.5">
+          {hasUsage ? (
+            <>
+              <div className="text-[10px] text-muted-foreground uppercase">
+                {usage!.nb_ecritures} écr.
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                D {fmt(usage!.total_debit)}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                C {fmt(usage!.total_credit)}
+              </div>
+              <div
+                className={`font-medium ${
+                  usage!.solde >= 0 ? "text-green-700" : "text-rose-700"
+                }`}
+              >
+                {fmt(usage!.solde)}
+              </div>
+            </>
+          ) : (
+            <div className="text-[10px] text-muted-foreground italic">non utilisé</div>
           )}
         </div>
-        <p className="text-sm mt-1 break-words font-medium">{c.libelle || "—"}</p>
-        {c.notes && <p className="text-[11px] italic text-muted-foreground">{c.notes}</p>}
-      </div>
+      </button>
+      {isOpen && hasUsage && (
+        <div className="bg-slate-50 border-t border-b">
+          <div className="px-4 py-2 text-[11px] text-muted-foreground border-b">
+            {usage!.nb_ecritures} écriture(s) sur le compte{" "}
+            <span className="font-mono">{c.compte}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-100">
+                <tr>
+                  <th className="px-2 py-1.5 text-left font-medium">Date</th>
+                  <th className="px-2 py-1.5 text-left font-medium">Journal</th>
+                  <th className="px-2 py-1.5 text-left font-medium">Libellé</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Débit</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Crédit</th>
+                  <th className="px-2 py-1.5 text-left font-medium">Lettre</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usage!.ecritures
+                  .slice()
+                  .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+                  .map((e) => (
+                    <tr key={e.id} className="border-b border-slate-200 hover:bg-white">
+                      <td className="px-2 py-1.5 font-mono whitespace-nowrap">
+                        {e.date ? new Date(e.date).toLocaleDateString("fr-FR") : "—"}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {e.journal && (
+                          <Badge variant="outline" className="text-[10px] font-mono">
+                            {e.journal}
+                          </Badge>
+                        )}
+                      </td>
+                      <td
+                        className="px-2 py-1.5 max-w-md truncate"
+                        title={e.libelle || ""}
+                      >
+                        {e.libelle || "—"}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono text-green-700">
+                        {e.debit > 0 ? fmt(e.debit) : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono text-rose-700">
+                        {e.credit > 0 ? fmt(e.credit) : "—"}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {e.lettre && (
+                          <Badge className="text-[10px] font-mono bg-green-100 text-green-700 border-green-300">
+                            {e.lettre}
+                          </Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

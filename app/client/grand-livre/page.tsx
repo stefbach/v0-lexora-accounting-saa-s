@@ -53,6 +53,18 @@ interface CompteSolde {
   nb_ecritures: number
 }
 
+interface Ecriture {
+  id: string
+  date_ecriture: string | null
+  journal: string | null
+  numero_compte: string
+  libelle: string | null
+  debit_mur: number
+  credit_mur: number
+  lettre: string | null
+  ref_folio: string | null
+}
+
 interface PCMEntry {
   compte: string
   libelle: string | null
@@ -94,8 +106,10 @@ function fmt(n: number): string {
 export default function ClientGrandLivrePage() {
   const { societeId } = useSocieteActive()
   const [comptes, setComptes] = useState<CompteSolde[]>([])
+  const [ecritures, setEcritures] = useState<Ecriture[]>([])
   const [pcm, setPcm] = useState<PCMEntry[]>([])
   const [loading, setLoading] = useState(false)
+  const [openCompte, setOpenCompte] = useState<string | null>(null)
   const [auditing, setAuditing] = useState(false)
   const [lettering, setLettering] = useState(false)
   const [audit, setAudit] = useState<any>(null)
@@ -122,6 +136,7 @@ export default function ClientGrandLivrePage() {
       const pcmMap = new Map<string, PCMEntry>()
       for (const p of pcmList) pcmMap.set(p.compte, p)
       const map = new Map<string, CompteSolde>()
+      const allEcritures: Ecriture[] = []
       for (const e of ecr) {
         const num = e.numero_compte || e.compte || "?"
         const debit = Number(e.debit_mur) || Number(e.debit) || 0
@@ -139,8 +154,20 @@ export default function ClientGrandLivrePage() {
         cur.solde = cur.total_debit - cur.total_credit
         cur.nb_ecritures++
         map.set(num, cur)
+        allEcritures.push({
+          id: e.id,
+          date_ecriture: e.date_ecriture || null,
+          journal: e.journal || null,
+          numero_compte: num,
+          libelle: e.libelle || null,
+          debit_mur: debit,
+          credit_mur: credit,
+          lettre: e.lettre || null,
+          ref_folio: e.ref_folio || null,
+        })
       }
       setComptes(Array.from(map.values()))
+      setEcritures(allEcritures)
       setPcm(pcmList)
     } catch {}
     finally {
@@ -441,47 +468,71 @@ export default function ClientGrandLivrePage() {
                           </p>
                         ) : (
                           <div className="divide-y">
-                            {arr.map((c) => (
-                              <Link
-                                key={c.numero_compte}
-                                href={`/client/ecritures?search=${encodeURIComponent(c.numero_compte)}`}
-                                className="flex items-start justify-between gap-3 p-3 hover:bg-muted/30"
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <Badge
-                                      variant="outline"
-                                      className={`text-[11px] font-mono ${cls.bgLight} ${cls.text}`}
-                                    >
-                                      {c.numero_compte}
-                                    </Badge>
-                                    <span className="text-xs text-muted-foreground">
-                                      {c.nb_ecritures} écriture{c.nb_ecritures > 1 ? "s" : ""}
-                                    </span>
-                                  </div>
-                                  {c.libelle && (
-                                    <p className="text-sm mt-1 break-words">{c.libelle}</p>
+                            {arr.map((c) => {
+                              const isOpenCompte = openCompte === c.numero_compte
+                              const compteEcritures = ecritures
+                                .filter((e) => e.numero_compte === c.numero_compte)
+                                .sort((a, b) =>
+                                  (b.date_ecriture || "").localeCompare(a.date_ecriture || "")
+                                )
+                              return (
+                                <div key={c.numero_compte}>
+                                  <button
+                                    onClick={() =>
+                                      setOpenCompte(isOpenCompte ? null : c.numero_compte)
+                                    }
+                                    className="w-full flex items-start justify-between gap-3 p-3 hover:bg-muted/30 text-left"
+                                  >
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {isOpenCompte ? (
+                                          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                        ) : (
+                                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                        )}
+                                        <Badge
+                                          variant="outline"
+                                          className={`text-[11px] font-mono ${cls.bgLight} ${cls.text}`}
+                                        >
+                                          {c.numero_compte}
+                                        </Badge>
+                                        <span className="text-xs text-muted-foreground">
+                                          {c.nb_ecritures} écriture{c.nb_ecritures > 1 ? "s" : ""}
+                                        </span>
+                                      </div>
+                                      {c.libelle && (
+                                        <p className="text-sm mt-1 break-words pl-5">
+                                          {c.libelle}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="text-right flex-shrink-0 font-mono text-sm space-y-0.5">
+                                      <p className="text-[11px] text-muted-foreground">
+                                        D {fmt(c.total_debit)} · C {fmt(c.total_credit)}
+                                      </p>
+                                      <p
+                                        className={`text-base font-medium ${
+                                          c.solde >= 0 ? "text-green-700" : "text-rose-700"
+                                        }`}
+                                      >
+                                        {c.solde >= 0 ? (
+                                          <TrendingUp className="inline h-3 w-3 mr-0.5" />
+                                        ) : (
+                                          <TrendingDown className="inline h-3 w-3 mr-0.5" />
+                                        )}
+                                        {fmt(c.solde)} MUR
+                                      </p>
+                                    </div>
+                                  </button>
+                                  {isOpenCompte && (
+                                    <EcrituresDetail
+                                      ecritures={compteEcritures}
+                                      compte={c.numero_compte}
+                                    />
                                   )}
                                 </div>
-                                <div className="text-right flex-shrink-0 font-mono text-sm space-y-0.5">
-                                  <p className="text-[11px] text-muted-foreground">
-                                    D {fmt(c.total_debit)} · C {fmt(c.total_credit)}
-                                  </p>
-                                  <p
-                                    className={`text-base font-medium ${
-                                      c.solde >= 0 ? "text-green-700" : "text-rose-700"
-                                    }`}
-                                  >
-                                    {c.solde >= 0 ? (
-                                      <TrendingUp className="inline h-3 w-3 mr-0.5" />
-                                    ) : (
-                                      <TrendingDown className="inline h-3 w-3 mr-0.5" />
-                                    )}
-                                    {fmt(c.solde)} MUR
-                                  </p>
-                                </div>
-                              </Link>
-                            ))}
+                              )
+                            })}
                           </div>
                         )}
                       </div>
@@ -590,6 +641,89 @@ function AuditPanel({ audit }: { audit: any }) {
           </div>
         </details>
       )}
+    </div>
+  )
+}
+
+function EcrituresDetail({
+  ecritures,
+  compte,
+}: {
+  ecritures: Ecriture[]
+  compte: string
+}) {
+  if (ecritures.length === 0) {
+    return (
+      <div className="px-4 pb-3 pt-1 bg-muted/20 text-xs text-muted-foreground italic border-t">
+        Aucune écriture pour ce compte.
+      </div>
+    )
+  }
+  const totalD = ecritures.reduce((s, e) => s + e.debit_mur, 0)
+  const totalC = ecritures.reduce((s, e) => s + e.credit_mur, 0)
+  return (
+    <div className="bg-slate-50 border-t">
+      <div className="px-4 py-2 text-[11px] flex items-center justify-between gap-3 border-b">
+        <span className="text-muted-foreground font-medium">
+          Détail des écritures du compte <span className="font-mono">{compte}</span>
+        </span>
+        <span className="font-mono">
+          D <span className="text-green-700">{fmt(totalD)}</span> · C{" "}
+          <span className="text-rose-700">{fmt(totalC)}</span>
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-100">
+            <tr>
+              <th className="px-2 py-1.5 text-left font-medium">Date</th>
+              <th className="px-2 py-1.5 text-left font-medium">Journal</th>
+              <th className="px-2 py-1.5 text-left font-medium">Libellé</th>
+              <th className="px-2 py-1.5 text-right font-medium">Débit</th>
+              <th className="px-2 py-1.5 text-right font-medium">Crédit</th>
+              <th className="px-2 py-1.5 text-left font-medium">Lettre</th>
+              <th className="px-2 py-1.5 text-left font-medium">Réf.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ecritures.map((e) => (
+              <tr key={e.id} className="border-b border-slate-200 hover:bg-white">
+                <td className="px-2 py-1.5 font-mono whitespace-nowrap">
+                  {e.date_ecriture
+                    ? new Date(e.date_ecriture).toLocaleDateString("fr-FR")
+                    : "—"}
+                </td>
+                <td className="px-2 py-1.5">
+                  {e.journal && (
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      {e.journal}
+                    </Badge>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 max-w-md truncate" title={e.libelle || ""}>
+                  {e.libelle || "—"}
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono text-green-700">
+                  {e.debit_mur > 0 ? fmt(e.debit_mur) : "—"}
+                </td>
+                <td className="px-2 py-1.5 text-right font-mono text-rose-700">
+                  {e.credit_mur > 0 ? fmt(e.credit_mur) : "—"}
+                </td>
+                <td className="px-2 py-1.5">
+                  {e.lettre && (
+                    <Badge className="text-[10px] font-mono bg-green-100 text-green-700 border-green-300">
+                      {e.lettre}
+                    </Badge>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 text-[10px] text-muted-foreground font-mono">
+                  {e.ref_folio || "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
