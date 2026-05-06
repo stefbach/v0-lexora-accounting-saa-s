@@ -323,65 +323,131 @@ export async function POST(request: Request) {
     semantic = semResult
   }
 
-  // 11. Persister les matches qui dépassent min_confidence dans les JSONB
-  // Format ref unique par tx : "<releve_id>:<idx>"
-  type Patch = { facture_ids?: string[]; statut?: string; lettre?: string; rapproche_at?: string; classification_suggestion?: any; matched_strategy?: string; matched_confidence?: number; classification?: string; compte_comptable_suggestion?: string }
+  // 11. Persister au format Lexora (compatible avec le front /comptable/rapprochement) :
+  //   - Match → statut "rapproche", facture_id (singulier), facture_ids (array),
+  //             matched_type, lettre, rapproche_at
+  //   - Classification → statut "non_identifie" + compte_comptable défini
+  //                      (le front filtre déjà les tx avec compte_comptable de "non identifié")
+  // Référence par tx : "<releve_id>:<idx>"
+  type Patch = {
+    statut?: string
+    facture_id?: string
+    facture_ids?: string[]
+    matched_type?: string
+    matched_strategy?: string
+    matched_confidence?: number
+    match_confidence?: string
+    lettre?: string
+    rapproche_at?: string
+    rapprochement_multi?: boolean
+    nb_factures?: number
+    classification?: string
+    classification_suggestion?: any
+    compte_comptable?: string | null
+    note?: string
+  }
   const patchByTx = new Map<string, Patch>()
 
-  for (const m of result.matches) {
-    if (m.confidence < min_confidence) continue
-    const patch = patchByTx.get(m.transactionKey) || {}
-    patch.facture_ids = m.factureIds
-    patch.statut = "suggested"
-    patch.lettre = "agent-" + m.transactionKey.replace(/[:-]/g, "").slice(0, 18)
-    patch.rapproche_at = new Date().toISOString()
-    patch.matched_strategy = m.strategy
-    patch.matched_confidence = m.confidence
-    patchByTx.set(m.transactionKey, patch)
-  }
-  for (const c of result.classifications) {
-    if (c.confidence < min_confidence) continue
-    const patch = patchByTx.get(c.transactionKey) || {}
-    patch.classification = c.type
-    patch.statut = patch.statut || "suggested"
-    patch.classification_suggestion = {
-      type: c.type,
-      note: c.note,
-      ecritureId: c.ecritureId,
-      confidence: c.confidence,
-    }
-    patchByTx.set(c.transactionKey, patch)
+  // PCM par défaut pour les classifications natives du moteur intelligent
+  const PCM_BY_CLASSIFICATION: Record<string, string> = {
+    frais_bancaires: "6270",
+    salaire_bulk: "4210",
+    salaire_individuel: "4210",
+    paiement_mra: "4330",
+    virement_interne: "5811",
+    transfert_interne: "5811",
+    interets: "6611",
+    agios: "6611",
+    charges_sociales: "4310",
+    remboursement_pret: "1641",
+    reversal_salaire: "4210",
   }
 
-  // Suggestions Claude (couche sémantique) — n'écrasent pas les résultats algo
-  for (const m of semantic.matches) {
-    if (patchByTx.has(m.transactionKey)) continue // l'algo a déjà décidé
+  function genLettre(prefix: string, key: string) {
+    return `${prefix}-${key.replace(/[:-]/g, "").slice(0, 18)}`
+  }
+
+  // Matches algorithmiques
+  for (const m of result.matches) {
     if (m.confidence < min_confidence) continue
     const patch: Patch = {
+      statut: "rapproche",
+      facture_id: m.factureIds[0],
       facture_ids: m.factureIds,
-      statut: "suggested",
-      lettre: "ai-" + m.transactionKey.replace(/[:-]/g, "").slice(0, 18),
-      rapproche_at: new Date().toISOString(),
-      matched_strategy: "claude_semantic",
+      matched_type: m.strategy,
+      matched_strategy: m.strategy,
       matched_confidence: m.confidence,
+      match_confidence: `agent_${Math.round(m.confidence * 100)}`,
+      lettre: genLettre("agent", m.transactionKey),
+      rapproche_at: new Date().toISOString(),
+      note: "Rapprochement automatique (agent)",
+    }
+    if (m.factureIds.length > 1) {
+      patch.rapprochement_multi = true
+      patch.nb_factures = m.factureIds.length
     }
     patchByTx.set(m.transactionKey, patch)
   }
+
+  // Classifications algorithmiques
+  for (const c of result.classifications) {
+    if (c.confidence < min_confidence) continue
+    if (patchByTx.has(c.transactionKey)) continue // un match prévaut sur une classif
+    const pcm = PCM_BY_CLASSIFICATION[c.type] || null
+    patchByTx.set(c.transactionKey, {
+      statut: "non_identifie",
+      compte_comptable: pcm,
+      classification: c.type,
+      matched_strategy: "classification_agent",
+      classification_suggestion: {
+        type: c.type,
+        note: c.note,
+        ecritureId: c.ecritureId,
+        confidence: c.confidence,
+      },
+      note: c.note || `Classification automatique (${c.type})`,
+    })
+  }
+
+  // Matches Claude (uniquement si l'algo n'a pas déjà décidé pour cette tx)
+  for (const m of semantic.matches) {
+    if (patchByTx.has(m.transactionKey)) continue
+    if (m.confidence < min_confidence) continue
+    patchByTx.set(m.transactionKey, {
+      statut: "rapproche",
+      facture_id: m.factureIds[0],
+      facture_ids: m.factureIds,
+      matched_type: "claude_semantic",
+      matched_strategy: "claude_semantic",
+      matched_confidence: m.confidence,
+      match_confidence: `ai_${Math.round(m.confidence * 100)}`,
+      lettre: genLettre("ai", m.transactionKey),
+      rapproche_at: new Date().toISOString(),
+      rapprochement_multi: m.factureIds.length > 1,
+      nb_factures: m.factureIds.length,
+      note: `Rapprochement IA Claude — ${m.reasoning}`.slice(0, 200),
+    })
+  }
+
+  // Classifications Claude
   for (const c of semantic.classifications) {
     if (patchByTx.has(c.transactionKey)) continue
     if (c.confidence < min_confidence) continue
-    const patch: Patch = {
+    const pcm = c.compte_pcm || PCM_BY_CLASSIFICATION[c.type] || null
+    patchByTx.set(c.transactionKey, {
+      statut: "non_identifie",
+      compte_comptable: pcm,
       classification: c.type,
-      statut: "suggested",
+      matched_strategy: "claude_semantic",
       classification_suggestion: {
         type: c.type,
         note: c.reasoning,
-        compte_pcm: c.compte_pcm,
+        compte_pcm: pcm,
         confidence: c.confidence,
         source: "claude_semantic",
-      } as any,
-    }
-    patchByTx.set(c.transactionKey, patch)
+      },
+      note: `Classification IA Claude — ${c.reasoning}`.slice(0, 200),
+    })
   }
 
   // 12. Apply patches per relevé
