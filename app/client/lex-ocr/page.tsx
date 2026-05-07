@@ -4,7 +4,7 @@
  * Page /client/lex-ocr — Agent Lex OCR (contrôle qualité OCR).
  */
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,11 @@ import {
   Info,
   XCircle,
   FileText,
+  Check,
+  ArrowRight,
+  Ban,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -46,6 +51,17 @@ const CODE_LABELS: Record<string, string> = {
   MISMATCH_RELEVE_TX: "Écart nb transactions relevé",
 }
 
+// Construit un identifiant stable pour une alerte (pour suivi local)
+function alertKey(a: Alert): string {
+  const facId = a.details?.facture_id || ""
+  const docId = a.document_id || ""
+  const num = a.details?.numero || ""
+  const ids = a.details?.facture_ids ? a.details.facture_ids.join(",") : ""
+  return `${a.code}|${facId}|${docId}|${num}|${ids}`
+}
+
+const RESOLVED_KEY = "lex-ocr-resolved-v1"
+
 export default function LexOcrPage() {
   const { societeId } = useSocieteActive()
   const [analyzing, setAnalyzing] = useState(false)
@@ -54,11 +70,122 @@ export default function LexOcrPage() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(
     null
   )
+  const [acting, setActing] = useState<string | null>(null)
+  const [resolved, setResolved] = useState<Set<string>>(new Set())
+  const [showResolved, setShowResolved] = useState(false)
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
   }
+
+  // Charge les alertes marquées comme résolues (localStorage, par société)
+  useEffect(() => {
+    if (!societeId) return
+    try {
+      const raw = localStorage.getItem(`${RESOLVED_KEY}:${societeId}`)
+      if (raw) setResolved(new Set(JSON.parse(raw)))
+    } catch {}
+  }, [societeId])
+
+  const persistResolved = useCallback(
+    (next: Set<string>) => {
+      if (!societeId) return
+      try {
+        localStorage.setItem(
+          `${RESOLVED_KEY}:${societeId}`,
+          JSON.stringify(Array.from(next))
+        )
+      } catch {}
+    },
+    [societeId]
+  )
+
+  const markResolved = useCallback(
+    (a: Alert) => {
+      const k = alertKey(a)
+      setResolved((prev) => {
+        const n = new Set(prev)
+        n.add(k)
+        persistResolved(n)
+        return n
+      })
+      showToast("Alerte marquée comme résolue")
+    },
+    [persistResolved]
+  )
+
+  const unmarkResolved = useCallback(
+    (a: Alert) => {
+      const k = alertKey(a)
+      setResolved((prev) => {
+        const n = new Set(prev)
+        n.delete(k)
+        persistResolved(n)
+        return n
+      })
+      showToast("Alerte ré-affichée")
+    },
+    [persistResolved]
+  )
+
+  const callAction = useCallback(
+    async (payload: Record<string, any>): Promise<boolean> => {
+      if (!societeId) return false
+      setActing(JSON.stringify(payload))
+      try {
+        const res = await fetch("/api/agent/alerts/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ societe_id: societeId, ...payload }),
+        })
+        const d = await res.json()
+        if (!res.ok) {
+          showToast(d?.error || "Erreur action", "error")
+          return false
+        }
+        return true
+      } catch (e: any) {
+        showToast(e?.message || "Erreur réseau", "error")
+        return false
+      } finally {
+        setActing(null)
+      }
+    },
+    [societeId]
+  )
+
+  const handleApplyOcr = useCallback(
+    async (a: Alert) => {
+      const facture_id = a.details?.facture_id
+      const field = a.details?.field
+      const ocr_value = a.details?.ocr_value
+      if (!facture_id || !field) return
+      const fields: Record<string, any> = {}
+      fields[field] = ocr_value
+      const ok = await callAction({
+        action: "apply_ocr_to_facture",
+        facture_id,
+        fields,
+      })
+      if (ok) {
+        showToast(`OCR appliqué (${field}) — relance Lex OCR pour vérifier`)
+        markResolved(a)
+      }
+    },
+    [callAction, markResolved]
+  )
+
+  const handleAnnuleFacture = useCallback(
+    async (facture_id: string, a: Alert) => {
+      const ok = await callAction({ action: "annule_facture", facture_id })
+      if (ok) {
+        showToast("Facture annulée")
+        markResolved(a)
+      }
+    },
+    [callAction, markResolved]
+  )
 
   const handleAnalyze = useCallback(async () => {
     if (!societeId) return
@@ -86,8 +213,14 @@ export default function LexOcrPage() {
   const alerts: Alert[] = result?.alerts || []
   const summary = result?.summary || {}
 
+  const visibleAlerts = showResolved
+    ? alerts
+    : alerts.filter((a) => !resolved.has(alertKey(a)))
+
   const filteredAlerts =
-    filter === "all" ? alerts : alerts.filter((a) => a.severity === filter)
+    filter === "all" ? visibleAlerts : visibleAlerts.filter((a) => a.severity === filter)
+
+  const resolvedCount = alerts.filter((a) => resolved.has(alertKey(a))).length
 
   const score = result?.score || 0
   const severity = result?.severity || "ok"
@@ -243,9 +376,31 @@ export default function LexOcrPage() {
             {/* Alertes */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
-                  Alertes ({filteredAlerts.length})
+                <CardTitle className="text-base flex items-center gap-2 justify-between">
+                  <span className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    Alertes ({filteredAlerts.length})
+                  </span>
+                  {resolvedCount > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowResolved((v) => !v)}
+                      className="h-7 text-xs"
+                    >
+                      {showResolved ? (
+                        <>
+                          <EyeOff className="h-3.5 w-3.5 mr-1" />
+                          Masquer résolues ({resolvedCount})
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-3.5 w-3.5 mr-1" />
+                          Voir résolues ({resolvedCount})
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -254,7 +409,9 @@ export default function LexOcrPage() {
                     <CheckCircle2 className="h-10 w-10 mx-auto text-green-500 mb-2" />
                     <p className="text-sm font-medium">
                       {filter === "all"
-                        ? "Aucune anomalie détectée — pipeline OCR propre"
+                        ? alerts.length === 0
+                          ? "Aucune anomalie détectée — pipeline OCR propre"
+                          : "Toutes les alertes ont été traitées"
                         : `Aucune alerte ${filter}`}
                     </p>
                   </div>
@@ -273,10 +430,14 @@ export default function LexOcrPage() {
                           : a.severity === "warning"
                             ? "border-amber-300 bg-amber-50 text-amber-900"
                             : "border-blue-300 bg-blue-50 text-blue-900"
+                      const isResolved = resolved.has(alertKey(a))
+                      const actingThis = !!acting && acting.includes(a.details?.facture_id || "___")
                       return (
                         <div
                           key={i}
-                          className={`rounded border-l-4 p-3 ${cls} flex items-start gap-3`}
+                          className={`rounded border-l-4 p-3 ${cls} flex items-start gap-3 ${
+                            isResolved ? "opacity-60" : ""
+                          }`}
                         >
                           <Icon className="h-4 w-4 mt-0.5 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
@@ -289,10 +450,134 @@ export default function LexOcrPage() {
                                   {a.document_nom.slice(0, 50)}
                                 </Badge>
                               )}
+                              {isResolved && (
+                                <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300">
+                                  Résolue
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-sm mt-1 break-words">{a.message}</p>
+
+                            {/* Boutons d'action contextuels */}
+                            {!isResolved && (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {(a.code === "MISMATCH_AMOUNT" ||
+                                  a.code === "MISMATCH_DATE" ||
+                                  a.code === "MISMATCH_TIERS" ||
+                                  a.code === "MISMATCH_CURRENCY") &&
+                                  a.details?.facture_id && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+                                        disabled={actingThis}
+                                        onClick={() => handleApplyOcr(a)}
+                                      >
+                                        {actingThis ? (
+                                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                        ) : (
+                                          <ArrowRight className="h-3 w-3 mr-1" />
+                                        )}
+                                        Appliquer OCR
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs"
+                                        onClick={() => markResolved(a)}
+                                      >
+                                        <Check className="h-3 w-3 mr-1" />
+                                        OK garder DB
+                                      </Button>
+                                      <Link
+                                        href={`/client/factures/${a.details.facture_id}`}
+                                      >
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 text-xs"
+                                        >
+                                          <FileText className="h-3 w-3 mr-1" />
+                                          Ouvrir facture
+                                        </Button>
+                                      </Link>
+                                    </>
+                                  )}
+
+                                {a.code === "DUPLICATE_INVOICE" &&
+                                  Array.isArray(a.details?.facture_ids) &&
+                                  a.details.facture_ids.map((fid: string, idx: number) => (
+                                    <Button
+                                      key={fid}
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-50"
+                                      disabled={!!acting}
+                                      onClick={() => handleAnnuleFacture(fid, a)}
+                                    >
+                                      <Ban className="h-3 w-3 mr-1" />
+                                      Annuler #{idx + 1}
+                                    </Button>
+                                  ))}
+
+                                {a.code === "MISSING_FIELDS" && a.details?.facture_id && (
+                                  <Link href={`/client/factures/${a.details.facture_id}`}>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs"
+                                    >
+                                      <FileText className="h-3 w-3 mr-1" />
+                                      Compléter la facture
+                                    </Button>
+                                  </Link>
+                                )}
+
+                                {(a.code === "OCR_ERROR" ||
+                                  a.code === "ORPHAN_OCR" ||
+                                  a.code === "ORPHAN_RELEVE") &&
+                                  a.document_id && (
+                                    <Link href={`/client/documents`}>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs"
+                                      >
+                                        <FileText className="h-3 w-3 mr-1" />
+                                        Voir document
+                                      </Button>
+                                    </Link>
+                                  )}
+
+                                {/* Marquer résolu — toujours dispo */}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs text-emerald-700 hover:bg-emerald-100"
+                                  onClick={() => markResolved(a)}
+                                >
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Marquer résolu
+                                </Button>
+                              </div>
+                            )}
+
+                            {isResolved && (
+                              <div className="mt-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs"
+                                  onClick={() => unmarkResolved(a)}
+                                >
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  Ré-afficher
+                                </Button>
+                              </div>
+                            )}
+
                             {a.details && (
-                              <details className="mt-1 text-[11px]">
+                              <details className="mt-2 text-[11px]">
                                 <summary className="cursor-pointer text-muted-foreground">
                                   détail
                                 </summary>

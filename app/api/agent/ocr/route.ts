@@ -212,7 +212,7 @@ export async function POST(request: Request) {
           message: `Facture ${f.numero_facture || f.id.slice(0, 8)} : OCR ${ocrAmount.toFixed(2)} vs DB ${dbAmount.toFixed(2)} (écart ${pct(ocrAmount, dbAmount).toFixed(1)}%)`,
           document_id: d.id,
           document_nom: d.nom_fichier,
-          details: { ocr: ocrAmount, db: dbAmount },
+          details: { facture_id: f.id, field: "montant_ttc", ocr_value: ocrAmount, db_value: dbAmount },
         })
       }
 
@@ -229,6 +229,7 @@ export async function POST(request: Request) {
             message: `Facture ${f.numero_facture || f.id.slice(0, 8)} : date OCR ${ocrD} vs DB ${dbD}`,
             document_id: d.id,
             document_nom: d.nom_fichier,
+            details: { facture_id: f.id, field: "date_facture", ocr_value: ocrD, db_value: dbD },
           })
         }
       }
@@ -238,12 +239,14 @@ export async function POST(request: Request) {
       const dbTiers = normStr(f.tiers)
       if (ocrTiers && dbTiers && ocrTiers !== dbTiers && !ocrTiers.includes(dbTiers) && !dbTiers.includes(ocrTiers)) {
         mismatchesTiers++
+        const ocrTiersRaw = (extraction.tiers || extraction.fournisseur || extraction.client || "").toString()
         alerts.push({
           severity: "info",
           code: "MISMATCH_TIERS",
-          message: `Facture ${f.numero_facture || f.id.slice(0, 8)} : tiers OCR "${(extraction.tiers || extraction.fournisseur || extraction.client || "").toString().slice(0, 50)}" vs DB "${(f.tiers || "").slice(0, 50)}"`,
+          message: `Facture ${f.numero_facture || f.id.slice(0, 8)} : tiers OCR "${ocrTiersRaw.slice(0, 50)}" vs DB "${(f.tiers || "").slice(0, 50)}"`,
           document_id: d.id,
           document_nom: d.nom_fichier,
+          details: { facture_id: f.id, field: "tiers", ocr_value: ocrTiersRaw, db_value: f.tiers },
         })
       }
 
@@ -258,6 +261,7 @@ export async function POST(request: Request) {
           message: `Facture ${f.numero_facture || f.id.slice(0, 8)} : devise OCR ${ocrDevise} vs DB ${dbDevise}`,
           document_id: d.id,
           document_nom: d.nom_fichier,
+          details: { facture_id: f.id, field: "devise", ocr_value: ocrDevise, db_value: dbDevise },
         })
       }
 

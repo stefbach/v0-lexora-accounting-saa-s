@@ -11,7 +11,7 @@
  * - Score de santé /100 + plan d'alerte priorisé
  */
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -31,6 +31,10 @@ import {
   Calendar,
   Search,
   ArrowRight,
+  Check,
+  Eye,
+  EyeOff,
+  AlertCircle,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -88,6 +92,13 @@ function formatDate(d: string | null): string {
   })
 }
 
+// Identifiant stable d'une alerte pour suivi local
+function alertKey(a: Alert): string {
+  return `${a.code}|${a.tiers}|${a.type}`
+}
+
+const RESOLVED_KEY = "lex-factures-resolved-v1"
+
 export default function LexFacturesPage() {
   const { societeId } = useSocieteActive()
   const [analyzing, setAnalyzing] = useState(false)
@@ -99,11 +110,145 @@ export default function LexFacturesPage() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(
     null
   )
+  const [acting, setActing] = useState<string | null>(null)
+  const [resolved, setResolved] = useState<Set<string>>(new Set())
+  const [showResolved, setShowResolved] = useState(false)
+  const [taggedFactures, setTaggedFactures] = useState<Set<string>>(new Set())
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
   }
+
+  useEffect(() => {
+    if (!societeId) return
+    try {
+      const raw = localStorage.getItem(`${RESOLVED_KEY}:${societeId}`)
+      if (raw) setResolved(new Set(JSON.parse(raw)))
+      const tagged = localStorage.getItem(`${RESOLVED_KEY}-tagged:${societeId}`)
+      if (tagged) setTaggedFactures(new Set(JSON.parse(tagged)))
+    } catch {}
+  }, [societeId])
+
+  const persistResolved = useCallback(
+    (next: Set<string>) => {
+      if (!societeId) return
+      try {
+        localStorage.setItem(
+          `${RESOLVED_KEY}:${societeId}`,
+          JSON.stringify(Array.from(next))
+        )
+      } catch {}
+    },
+    [societeId]
+  )
+
+  const persistTagged = useCallback(
+    (next: Set<string>) => {
+      if (!societeId) return
+      try {
+        localStorage.setItem(
+          `${RESOLVED_KEY}-tagged:${societeId}`,
+          JSON.stringify(Array.from(next))
+        )
+      } catch {}
+    },
+    [societeId]
+  )
+
+  const markResolved = useCallback(
+    (a: Alert) => {
+      const k = alertKey(a)
+      setResolved((prev) => {
+        const n = new Set(prev)
+        n.add(k)
+        persistResolved(n)
+        return n
+      })
+      showToast("Alerte marquée comme résolue")
+    },
+    [persistResolved]
+  )
+
+  const unmarkResolved = useCallback(
+    (a: Alert) => {
+      const k = alertKey(a)
+      setResolved((prev) => {
+        const n = new Set(prev)
+        n.delete(k)
+        persistResolved(n)
+        return n
+      })
+    },
+    [persistResolved]
+  )
+
+  const callAction = useCallback(
+    async (payload: Record<string, any>): Promise<boolean> => {
+      if (!societeId) return false
+      setActing(JSON.stringify(payload))
+      try {
+        const res = await fetch("/api/agent/alerts/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ societe_id: societeId, ...payload }),
+        })
+        const d = await res.json()
+        if (!res.ok) {
+          showToast(d?.error || "Erreur action", "error")
+          return false
+        }
+        return true
+      } catch (e: any) {
+        showToast(e?.message || "Erreur réseau", "error")
+        return false
+      } finally {
+        setActing(null)
+      }
+    },
+    [societeId]
+  )
+
+  const handleConfirmPenalty = useCallback(
+    async (factureId: string, montantSupp: number, tiers: string) => {
+      const ok = await callAction({
+        action: "tag_penalty",
+        facture_id: factureId,
+        montant_penalty: montantSupp,
+        raison: `Pénalité confirmée — ${tiers}`,
+      })
+      if (ok) {
+        showToast("Pénalité taguée sur la facture")
+        setTaggedFactures((prev) => {
+          const n = new Set(prev)
+          n.add(factureId)
+          persistTagged(n)
+          return n
+        })
+      }
+    },
+    [callAction, persistTagged]
+  )
+
+  const handleConfirmNormal = useCallback(
+    async (factureId: string, code: string) => {
+      const ok = await callAction({
+        action: "confirm_normal",
+        facture_id: factureId,
+        alert_code: code,
+      })
+      if (ok) {
+        showToast("Facture marquée comme normale")
+        setTaggedFactures((prev) => {
+          const n = new Set(prev)
+          n.add(factureId)
+          persistTagged(n)
+          return n
+        })
+      }
+    },
+    [callAction, persistTagged]
+  )
 
   const handleAnalyze = useCallback(async () => {
     if (!societeId) return
@@ -130,6 +275,11 @@ export default function LexFacturesPage() {
 
   const analyses: TiersAnalysis[] = result?.analyses || []
   const alerts: Alert[] = result?.alerts || []
+
+  const visibleAlerts = showResolved
+    ? alerts
+    : alerts.filter((a) => !resolved.has(alertKey(a)))
+  const resolvedCount = alerts.filter((a) => resolved.has(alertKey(a))).length
 
   const filteredAnalyses = analyses
     .filter((a) => {
@@ -227,7 +377,22 @@ export default function LexFacturesPage() {
             <ScoreCard result={result} />
 
             {/* Alertes */}
-            {alerts.length > 0 && <AlertsPanel alerts={alerts} />}
+            {alerts.length > 0 && (
+              <AlertsPanel
+                alerts={visibleAlerts}
+                allAlerts={alerts}
+                resolved={resolved}
+                resolvedCount={resolvedCount}
+                showResolved={showResolved}
+                setShowResolved={setShowResolved}
+                taggedFactures={taggedFactures}
+                acting={acting}
+                onMarkResolved={markResolved}
+                onUnmarkResolved={unmarkResolved}
+                onConfirmPenalty={handleConfirmPenalty}
+                onConfirmNormal={handleConfirmNormal}
+              />
+            )}
 
             {/* Filtres */}
             <Card>
@@ -347,16 +512,69 @@ function ScoreCard({ result }: { result: any }) {
   )
 }
 
-function AlertsPanel({ alerts }: { alerts: Alert[] }) {
+function AlertsPanel({
+  alerts,
+  allAlerts,
+  resolved,
+  resolvedCount,
+  showResolved,
+  setShowResolved,
+  taggedFactures,
+  acting,
+  onMarkResolved,
+  onUnmarkResolved,
+  onConfirmPenalty,
+  onConfirmNormal,
+}: {
+  alerts: Alert[]
+  allAlerts: Alert[]
+  resolved: Set<string>
+  resolvedCount: number
+  showResolved: boolean
+  setShowResolved: (v: boolean | ((p: boolean) => boolean)) => void
+  taggedFactures: Set<string>
+  acting: string | null
+  onMarkResolved: (a: Alert) => void
+  onUnmarkResolved: (a: Alert) => void
+  onConfirmPenalty: (factureId: string, montantSupp: number, tiers: string) => void
+  onConfirmNormal: (factureId: string, code: string) => void
+}) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 text-amber-600" />
-          Alertes ({alerts.length})
+        <CardTitle className="text-base flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-600" />
+            Alertes ({alerts.length})
+          </span>
+          {resolvedCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowResolved((v) => !v)}
+              className="h-7 text-xs"
+            >
+              {showResolved ? (
+                <>
+                  <EyeOff className="h-3.5 w-3.5 mr-1" />
+                  Masquer résolues ({resolvedCount})
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3.5 w-3.5 mr-1" />
+                  Voir résolues ({resolvedCount})
+                </>
+              )}
+            </Button>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
+        {alerts.length === 0 && resolvedCount > 0 && (
+          <p className="text-sm text-center py-4 text-muted-foreground">
+            Toutes les alertes ont été traitées
+          </p>
+        )}
         {alerts.map((a, i) => {
           const Icon =
             a.severity === "critical"
@@ -370,24 +588,150 @@ function AlertsPanel({ alerts }: { alerts: Alert[] }) {
               : a.severity === "warning"
                 ? "border-amber-300 bg-amber-50 text-amber-900"
                 : "border-blue-300 bg-blue-50 text-blue-900"
+          const isResolved = resolved.has(alertKey(a))
+          const factures: any[] = a.details?.factures || []
           return (
-            <div key={i} className={`rounded border-l-4 p-3 ${cls} flex items-start gap-3`}>
+            <div
+              key={i}
+              className={`rounded border-l-4 p-3 ${cls} flex items-start gap-3 ${
+                isResolved ? "opacity-60" : ""
+              }`}
+            >
               <Icon className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <Badge variant="outline" className="text-[10px] mr-1">
-                  {a.code}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={`text-[10px] ${
-                    a.type === "client"
-                      ? "bg-green-50 text-green-700 border-green-300"
-                      : "bg-rose-50 text-rose-700 border-rose-300"
-                  }`}
-                >
-                  {a.type === "client" ? "Client" : "Fournisseur"}
-                </Badge>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <Badge variant="outline" className="text-[10px]">
+                    {a.code}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] ${
+                      a.type === "client"
+                        ? "bg-green-50 text-green-700 border-green-300"
+                        : "bg-rose-50 text-rose-700 border-rose-300"
+                    }`}
+                  >
+                    {a.type === "client" ? "Client" : "Fournisseur"}
+                  </Badge>
+                  {isResolved && (
+                    <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300">
+                      Résolue
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-sm mt-1 break-words">{a.message}</p>
+
+                {/* Pour POSSIBLE_PENALTY : action par facture concernée */}
+                {!isResolved && a.code === "POSSIBLE_PENALTY" && factures.length > 0 && (
+                  <div className="mt-2 rounded border bg-white/60 divide-y">
+                    {factures.map((f: any) => {
+                      const tagged = taggedFactures.has(f.id)
+                      const supplement = (f.montant || 0) - (f.montant_attendu || 0)
+                      const actingThis = !!acting && acting.includes(f.id)
+                      return (
+                        <div
+                          key={f.id}
+                          className="flex items-center justify-between gap-2 p-2 text-xs"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-mono">
+                              {f.numero || f.id.slice(0, 8)}
+                              {tagged && (
+                                <Badge className="ml-2 text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300">
+                                  taguée
+                                </Badge>
+                              )}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {formatDate(f.date)} — supplément ~{supplement.toFixed(2)}
+                            </p>
+                          </div>
+                          {!tagged && (
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                                disabled={actingThis}
+                                onClick={() =>
+                                  onConfirmPenalty(f.id, supplement, a.tiers)
+                                }
+                              >
+                                {actingThis ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : (
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                )}
+                                Pénalité
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                disabled={actingThis}
+                                onClick={() => onConfirmNormal(f.id, a.code)}
+                              >
+                                <Check className="h-3 w-3 mr-1" />
+                                Normal
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {!isResolved && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {(a.code === "MISSING_PERIODS" || a.code === "OVERDUE_RECURRING") && (
+                      <Link
+                        href={`/client/factures/nouvelle?tiers=${encodeURIComponent(
+                          a.tiers
+                        )}&type=${a.type}`}
+                      >
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          Créer la facture manquante
+                        </Button>
+                      </Link>
+                    )}
+                    <Link
+                      href={`/client/factures?search=${encodeURIComponent(a.tiers.slice(0, 30))}`}
+                    >
+                      <Button size="sm" variant="outline" className="h-7 text-xs">
+                        <ArrowRight className="h-3 w-3 mr-1" />
+                        Voir factures du tiers
+                      </Button>
+                    </Link>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs text-emerald-700 hover:bg-emerald-100"
+                      onClick={() => onMarkResolved(a)}
+                    >
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Marquer résolu
+                    </Button>
+                  </div>
+                )}
+
+                {isResolved && (
+                  <div className="mt-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => onUnmarkResolved(a)}
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      Ré-afficher
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           )
