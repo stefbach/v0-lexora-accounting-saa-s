@@ -750,7 +750,7 @@ function buildCoherenceParTiers(opts: {
       const slot = paiementsParTiers.get(key) || {
         tiersDisplay: info.tiers,
         type: info.type,
-        montants: [],
+        montants: [] as number[],
       }
       slot.montants.push(txMur)
       paiementsParTiers.set(key, slot)
@@ -774,7 +774,7 @@ function buildCoherenceParTiers(opts: {
       const slot = paiementsParTiers.get(key) || {
         tiersDisplay: info.tiers,
         type: info.type,
-        montants: [],
+        montants: [] as number[],
       }
       const f = factures.find((x) => x.id === fid)
       const fmur = Number(f?.montant_mur) || Number(f?.montant_ttc) || 0
@@ -795,7 +795,7 @@ function buildCoherenceParTiers(opts: {
     const slot = facturesParTiers.get(key) || {
       tiersDisplay: f.tiers,
       type: (f.type_facture as any) || "?",
-      factures: [],
+      factures: [] as MatchingFacture[],
     }
     slot.factures.push(f)
     facturesParTiers.set(key, slot)
