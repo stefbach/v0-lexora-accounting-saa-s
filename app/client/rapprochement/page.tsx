@@ -1115,7 +1115,39 @@ export default function ClientRapprochementPage() {
                   ) : (
                     <div className="rounded border bg-card divide-y">
                       {rapprochees.map((tx) => (
-                        <TxRow key={tx.id} tx={tx} facturesById={facturesById} />
+                        <TxRow
+                          key={tx.id}
+                          tx={tx}
+                          facturesById={facturesById}
+                          onModifier={async () => {
+                            // 1) délettre
+                            try {
+                              const res = await fetch("/api/comptable/rapprochement", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  action: "delettrer",
+                                  societe_id: societeId,
+                                  transaction_id: tx.id,
+                                  releve_id: tx.releve_id,
+                                  facture_id: tx.facture_id,
+                                }),
+                              })
+                              if (!res.ok) {
+                                const d = await res.json().catch(() => null)
+                                showToast(d?.error || "Délettrage impossible", "error")
+                                return
+                              }
+                            } catch (e: any) {
+                              showToast(e?.message || "Erreur réseau", "error")
+                              return
+                            }
+                            // 2) ouvre le dialog Imputer pour re-affecter
+                            await load()
+                            setAffectTx(tx)
+                            showToast("Rapprochement annulé — réaffecte cette tx")
+                          }}
+                        />
                       ))}
                     </div>
                   )}
@@ -1538,10 +1570,12 @@ function TxRow({
   tx,
   facturesById,
   onImputer,
+  onModifier,
 }: {
   tx: BankTx
   facturesById: Map<string, Facture>
   onImputer?: () => void
+  onModifier?: () => void
 }) {
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
   return (
@@ -1585,6 +1619,18 @@ function TxRow({
           <Button size="sm" variant="outline" onClick={onImputer} className="h-7 text-xs">
             <Edit3 className="h-3.5 w-3.5 mr-1" />
             Imputer
+          </Button>
+        )}
+        {onModifier && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onModifier}
+            className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+            title="Annuler ce rapprochement et le refaire (ex: si la facture liée est fausse)"
+          >
+            <Edit3 className="h-3.5 w-3.5 mr-1" />
+            Modifier
           </Button>
         )}
       </div>
@@ -1642,6 +1688,10 @@ function AffectDialog({
   const [pcmCustom, setPcmCustom] = useState("")
   const [pcmPreset, setPcmPreset] = useState<string>("")
   const [busy, setBusy] = useState(false)
+  const [propagationCandidates, setPropagationCandidates] = useState<BankTx[]>([])
+  const [propagationCompte, setPropagationCompte] = useState<string>("")
+  const [propagationClassif, setPropagationClassif] = useState<string>("")
+  const [propagationSelected, setPropagationSelected] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (tx) {
@@ -1649,6 +1699,10 @@ function AffectDialog({
       setSearch("")
       setPcmCustom("")
       setPcmPreset("")
+      setPropagationCandidates([])
+      setPropagationSelected(new Set())
+      setPropagationCompte("")
+      setPropagationClassif("")
     }
   }, [tx?.id])
 
@@ -1692,14 +1746,100 @@ function AffectDialog({
     const compte = pcmCustom.trim() || pcmPreset
     if (!compte) return showToast("Choisis un compte PCM", "error")
     const preset = PCM_PRESETS.find((p) => p.value === pcmPreset)
+    const classif = preset?.classification || "manuel"
     setBusy(true)
     const r = await onAffect(tx, "pcm", {
       compte_charge: compte,
-      classification: preset?.classification || "manuel",
+      classification: classif,
     })
     setBusy(false)
     if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
     showToast(`Imputée sur PCM ${compte} (${r.lettre || "—"})`)
+
+    // ── Propagation : cherche les tx similaires non encore imputées ──
+    // Critères de similarité (souples) :
+    //   - Même tiers_detecte (si défini)
+    //   - OU 4 premiers mots du libellé en commun
+    //   - Et tx orpheline (statut non_identifie ou a_verifier)
+    const tiersTx = (tx.tiers_detecte || "").toLowerCase().trim()
+    const libWords = (tx.libelle || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 4)
+      .join(" ")
+    const similar = allTransactions.filter((t) => {
+      if (t.id === tx.id) return false
+      if (
+        t.statut !== "non_identifie" &&
+        t.statut !== "a_verifier" &&
+        t.statut
+      )
+        return false
+      if (
+        t.facture_id ||
+        (Array.isArray(t.facture_ids) && t.facture_ids.length > 0)
+      )
+        return false
+      if (t.compte_comptable) return false
+      // Match sur tiers détecté
+      if (tiersTx && (t.tiers_detecte || "").toLowerCase().trim() === tiersTx)
+        return true
+      // Match sur 4 premiers mots du libellé
+      if (libWords) {
+        const tWords = (t.libelle || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, " ")
+          .trim()
+          .split(/\s+/)
+          .slice(0, 4)
+          .join(" ")
+        if (tWords && tWords === libWords) return true
+      }
+      return false
+    })
+    if (similar.length > 0) {
+      setPropagationCandidates(similar)
+      setPropagationCompte(compte)
+      setPropagationClassif(classif)
+      setPropagationSelected(new Set(similar.map((s) => s.id)))
+      // Ne ferme PAS le dialog — affiche le panneau propagation
+    } else {
+      onClose()
+      onReload()
+    }
+  }
+
+  const handlePropagate = async () => {
+    const items = propagationCandidates.filter((t) => propagationSelected.has(t.id))
+    if (items.length === 0) return showToast("Rien sélectionné", "error")
+    setBusy(true)
+    let ok = 0
+    const errors: string[] = []
+    for (const t of items) {
+      const r = await onAffect(t, "pcm", {
+        compte_charge: propagationCompte,
+        classification: propagationClassif,
+      })
+      if (r.ok) ok++
+      else errors.push(`${t.libelle.slice(0, 40)} : ${r.error}`)
+    }
+    setBusy(false)
+    if (errors.length === 0) {
+      showToast(`Propagation : ${ok} tx imputées sur ${propagationCompte}`)
+    } else {
+      showToast(`${ok} OK / ${errors.length} échec — ${errors[0]}`, "error")
+    }
+    setPropagationCandidates([])
+    setPropagationSelected(new Set())
+    onClose()
+    onReload()
+  }
+
+  const handleSkipPropagation = () => {
+    setPropagationCandidates([])
+    setPropagationSelected(new Set())
     onClose()
     onReload()
   }
@@ -1720,6 +1860,80 @@ function AffectDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* Panneau de propagation post-imputation */}
+        {propagationCandidates.length > 0 ? (
+          <div className="space-y-3">
+            <div className="rounded border-2 border-blue-300 bg-blue-50 p-3">
+              <h4 className="font-medium text-sm text-blue-900 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Imputation enregistrée. {propagationCandidates.length} transaction
+                {propagationCandidates.length > 1 ? "s" : ""} similaire
+                {propagationCandidates.length > 1 ? "s" : ""} détectée
+                {propagationCandidates.length > 1 ? "s" : ""}.
+              </h4>
+              <p className="text-xs text-blue-800/80 mt-1">
+                Veux-tu propager la même imputation (PCM{" "}
+                <span className="font-mono">{propagationCompte}</span>{" "}
+                <span className="opacity-70">— {propagationClassif}</span>) à ces
+                transactions ?
+              </p>
+            </div>
+            <div className="rounded border bg-card divide-y max-h-72 overflow-y-auto">
+              {propagationCandidates.map((t) => {
+                const checked = propagationSelected.has(t.id)
+                const m = t.debit > 0 ? -t.debit : t.credit
+                return (
+                  <label
+                    key={t.id}
+                    className="flex items-start gap-2 p-2 hover:bg-muted/30 cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() => {
+                        setPropagationSelected((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(t.id)) next.delete(t.id)
+                          else next.add(t.id)
+                          return next
+                        })
+                      }}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1 min-w-0 text-xs">
+                      <p className="text-muted-foreground">{formatDate(t.date)}</p>
+                      <p className="break-words">{t.libelle}</p>
+                    </div>
+                    <p
+                      className={`font-mono text-xs flex-shrink-0 ${
+                        m >= 0 ? "text-green-700" : "text-rose-700"
+                      }`}
+                    >
+                      {m >= 0 ? "+" : ""}
+                      {fmt(m)} {t.devise || "MUR"}
+                    </p>
+                  </label>
+                )
+              })}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" onClick={handleSkipPropagation} disabled={busy}>
+                Non merci
+              </Button>
+              <Button
+                onClick={handlePropagate}
+                disabled={busy || propagationSelected.size === 0}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {busy ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                )}
+                Propager à {propagationSelected.size} tx
+              </Button>
+            </div>
+          </div>
+        ) : (
         <Tabs value={tab} onValueChange={(v: any) => setTab(v)}>
           <TabsList className="w-full">
             <TabsTrigger value="facture" className="flex-1">
@@ -1904,6 +2118,7 @@ function AffectDialog({
             />
           </TabsContent>
         </Tabs>
+        )}
       </DialogContent>
     </Dialog>
   )
