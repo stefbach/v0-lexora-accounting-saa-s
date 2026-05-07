@@ -284,6 +284,34 @@ function isPlausibleDateRange(date_facture: string | null, date_tx: string): boo
   return true
 }
 
+/**
+ * Extrait des séquences alphanumériques candidates depuis un libellé bancaire,
+ * pour les comparer aux numéros de facture connus. On garde tout token de
+ * 4+ caractères contenant au moins un chiffre — couvre les formats type
+ * "20251022-004", "INV-202601-001", "25072025/DDS", "FAC-XXX-2025", etc.
+ */
+function extractRefCandidates(libelle: string): string[] {
+  if (!libelle) return []
+  const cleaned = libelle.toUpperCase()
+  // Tokens séparés par caractères non alpha-numérique (sauf - et /)
+  // On garde - et / car ils font partie de nombreux numéros de facture.
+  const tokens = cleaned.split(/[^A-Z0-9\-/]+/).filter(Boolean)
+  return tokens.filter(t => t.length >= 4 && /\d/.test(t))
+}
+
+/**
+ * Indique si le numéro de facture apparaît dans le libellé bancaire.
+ * On normalise les deux côtés (uppercase, retire séparateurs) pour matcher
+ * "20251022-004" ↔ "REF20251022004" ↔ "20251022/004", etc.
+ */
+function libelleContainsFactureRef(libelle: string, numero_facture: string | null | undefined): boolean {
+  if (!libelle || !numero_facture) return false
+  const norm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const facNorm = norm(numero_facture)
+  if (facNorm.length < 4) return false
+  return norm(libelle).includes(facNorm)
+}
+
 function sameMonth(d1: string, d2: string): boolean {
   return (d1 || '').substring(0, 7) === (d2 || '').substring(0, 7)
 }
@@ -425,6 +453,57 @@ export function matchBySupplier(
 
     // Sort transactions by date (oldest first) for chronological matching
     unmatchedTxs.sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+
+    // ── Strategy 0 (PRIORITÉ ABSOLUE) : numéro de facture trouvé dans le libellé ──
+    // Si le libellé bancaire cite explicitement le numéro de facture (ex.
+    // "REF 20251022-004" ou "Facture INV-202601-001"), on prend cette
+    // facture EN PRIORITÉ, indépendamment des autres signaux. C'est le
+    // signal le plus fiable disponible — un humain ferait pareil.
+    for (const tx of unmatchedTxs) {
+      if (usedTxKeys.has(txKey(tx))) continue
+      const libelle = tx.libelle || ''
+      if (!libelle) continue
+      // Cherche LA facture dont le numéro est cité dans le libellé
+      let refMatch: MatchingFacture | null = null
+      for (const f of unpaidFactures) {
+        if (usedFactureIds.has(f.id)) continue
+        if (!libelleContainsFactureRef(libelle, f.numero_facture)) continue
+        // On ignore les références trop courtes (3 chars = trop ambigu).
+        if ((f.numero_facture || '').replace(/[^A-Z0-9]/gi, '').length < 4) continue
+        // Garde-fou date raisonnable : -90j / +365j (la référence prime
+        // mais on évite les vraiment absurdes comme 2 ans d'écart).
+        const d = daysBetween(f.date_facture || '', tx.date)
+        if (d > 365 || d < -90) continue
+        refMatch = f
+        break
+      }
+      if (!refMatch) continue
+
+      // Calcul de l'écart montant pour info (pas de filtre — la ref prime)
+      const fTTC = Number(refMatch.montant_ttc) || 0
+      const fMUR = Number(refMatch.montant_mur) || 0
+      const txRaw = Math.max(tx.debit, tx.credit)
+      const txAmt = toMUR(txRaw, tx.devise, rates)
+      const fAmt = fMUR > 0 ? fMUR : toMUR(fTTC, refMatch.devise, rates)
+      const diff = fAmt > 0 ? Math.abs(txAmt - fAmt) / fAmt : 0
+      const delay = daysBetween(refMatch.date_facture || '', tx.date)
+
+      allMatches.push({
+        supplierKey: profile.key,
+        supplierName: profile.rawNames[0],
+        transactionKey: txKey(tx),
+        transaction: tx,
+        factureIds: [refMatch.id],
+        factures: [refMatch],
+        strategy: 'supplier_ref_in_libelle',
+        confidence: 0.95,
+        reasoning: `Référence "${refMatch.numero_facture}" trouvée dans le libellé bancaire — match prioritaire (écart montant ${(diff * 100).toFixed(1)}%, délai ${delay}j)`,
+        amountDiff: Math.abs(txAmt - fAmt),
+        phase: 'supplier_match',
+      })
+      usedFactureIds.add(refMatch.id)
+      usedTxKeys.add(txKey(tx))
+    }
 
     // ── Strategy A: 1 paiement → 1 facture (exact ou proche, délai décalé OK) ──
     for (const tx of unmatchedTxs) {
@@ -916,6 +995,47 @@ function matchByAmountFallback(
   const matches: IntermediateMatch[] = []
   const usedTxKeys = new Set<string>()
   const usedFactureIds = new Set<string>()
+
+  // ── Passe 0 (PRIORITÉ ABSOLUE) : numéro de facture cité dans le libellé ──
+  for (const tx of unmatchedTxs) {
+    if (usedTxKeys.has(txKey(tx))) continue
+    const libelle = tx.libelle || ''
+    if (!libelle) continue
+    let refMatch: MatchingFacture | null = null
+    for (const f of unpaidFactures) {
+      if (usedFactureIds.has(f.id)) continue
+      if (!libelleContainsFactureRef(libelle, f.numero_facture)) continue
+      if ((f.numero_facture || '').replace(/[^A-Z0-9]/gi, '').length < 4) continue
+      const d = daysBetween(f.date_facture || '', tx.date)
+      if (d > 365 || d < -90) continue
+      refMatch = f
+      break
+    }
+    if (!refMatch) continue
+    const fTTC = Number(refMatch.montant_ttc) || 0
+    const fMUR = Number(refMatch.montant_mur) || 0
+    const txRawR = Math.max(tx.debit, tx.credit)
+    const txAmt = toMUR(txRawR, tx.devise, rates)
+    const fAmt = fMUR > 0 ? fMUR : toMUR(fTTC, refMatch.devise, rates)
+    const diff = fAmt > 0 ? Math.abs(txAmt - fAmt) / fAmt : 0
+    const delay = daysBetween(refMatch.date_facture || '', tx.date)
+    const tiersTx = (tx.tiers_detecte || tx.libelle || '').substring(0, 40)
+    matches.push({
+      supplierKey: `__ref_${refMatch.numero_facture}`,
+      supplierName: refMatch.tiers || tiersTx,
+      transactionKey: txKey(tx),
+      transaction: tx,
+      factureIds: [refMatch.id],
+      factures: [refMatch],
+      strategy: 'ref_in_libelle',
+      confidence: 0.95,
+      reasoning: `Référence "${refMatch.numero_facture}" trouvée dans le libellé bancaire — match prioritaire (écart montant ${(diff * 100).toFixed(1)}%, délai ${delay}j)`,
+      amountDiff: Math.abs(txAmt - fAmt),
+      phase: 'fallback',
+    })
+    usedFactureIds.add(refMatch.id)
+    usedTxKeys.add(txKey(tx))
+  }
 
   // ── Passe 1 : 1 tx → 1 facture (match exact ou TDS) ──────────
   for (const tx of unmatchedTxs) {
