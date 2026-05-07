@@ -255,12 +255,33 @@ function txKey(tx: MatchingTransaction): string {
   return `${tx.releve_id}:${tx.transaction_idx}`
 }
 
+/**
+ * Délai signé entre date_facture (d1) et date_tx (d2) en jours :
+ *   > 0 → tx postérieure à la facture (paiement après émission, cas normal)
+ *   < 0 → tx antérieure à la facture (prépaiement / facturation a posteriori)
+ *
+ * IMPORTANT : version PRÉCÉDENTE retournait Math.abs() ce qui masquait les
+ * faux matches type "facture du 15/12/2025 réglée par tx du 02/07/2025"
+ * (delay réel = -166 j, mais ABS = 166 j → semblait être un retard normal).
+ */
 function daysBetween(d1: string, d2: string): number {
   if (!d1 || !d2) return 999
   const a = new Date(d1).getTime()
   const b = new Date(d2).getTime()
   if (isNaN(a) || isNaN(b)) return 999
-  return Math.abs(Math.floor((b - a) / (1000 * 60 * 60 * 24)))
+  return Math.floor((b - a) / (1000 * 60 * 60 * 24))
+}
+
+// Plafonds de plausibilité date — alignés avec matching-engine.ts
+const MAX_DELAY_DAYS = 180         // tx > 180j après facture → rejet
+const MAX_PREPAYMENT_DAYS = 60     // tx > 60j avant facture → rejet
+
+function isPlausibleDateRange(date_facture: string | null, date_tx: string): boolean {
+  if (!date_facture || !date_tx) return true
+  const d = daysBetween(date_facture, date_tx)
+  if (d > MAX_DELAY_DAYS) return false
+  if (d < -MAX_PREPAYMENT_DAYS) return false
+  return true
 }
 
 function sameMonth(d1: string, d2: string): boolean {
@@ -419,6 +440,8 @@ export function matchBySupplier(
 
       for (const f of unpaidFactures) {
         if (usedFactureIds.has(f.id)) continue
+        // Priorité 1 : DATE — fenêtre plausible -60j à +180j
+        if (!isPlausibleDateRange(f.date_facture, tx.date)) continue
         const fTTC = Number(f.montant_ttc) || 0
         const fMUR = Number(f.montant_mur) || 0
         const fDevise = (f.devise || 'MUR').toUpperCase()
@@ -444,8 +467,9 @@ export function matchBySupplier(
 
         const delay = daysBetween(f.date_facture || '', tx.date)
 
-        // Préférer le match le plus proche en montant, puis en date
-        if (diff < bestDiff || (diff === bestDiff && delay < bestDelay)) {
+        // Préférer le match le plus proche en montant, puis en date (signed,
+        // les deltas négatifs = prépaiement, on préfère 0+ proche)
+        if (diff < bestDiff || (diff === bestDiff && Math.abs(delay) < Math.abs(bestDelay))) {
           bestDiff = diff
           bestDelay = delay
           bestFac = f
@@ -460,8 +484,10 @@ export function matchBySupplier(
         else if (looksLikeTDS) confidence = 0.88
         else confidence = 0.75
 
-        if (bestDelay <= 45) confidence += 0.03
-        if (bestDelay > 120) confidence -= 0.08
+        const absBestDelay = Math.abs(bestDelay)
+        if (absBestDelay <= 45) confidence += 0.03
+        if (absBestDelay > 90) confidence -= 0.08
+        if (bestDelay < 0) confidence -= 0.05 // malus prépaiement
 
         allMatches.push({
           supplierKey: profile.key,
@@ -507,9 +533,16 @@ export function matchBySupplier(
         const subset: MatchingFacture[] = []
         let sum = 0
         let allSameCcy = true
+        let allDatesPlausibles = true
         for (let i = 0; i < n; i++) {
           if (mask & (1 << i)) {
             const f = sortedFacs[i]
+            // Priorité 1 : DATE — chaque facture du sous-ensemble doit être
+            // dans la fenêtre -60j/+180j de la tx. Sinon on skip ce subset.
+            if (!isPlausibleDateRange(f.date_facture, tx.date)) {
+              allDatesPlausibles = false
+              break
+            }
             const fDevise = (f.devise || 'MUR').toUpperCase()
             // Same-currency sum when all factures share the tx currency
             if (fDevise === txDeviseB && Number(f.montant_ttc) > 0) {
@@ -521,6 +554,7 @@ export function matchBySupplier(
             subset.push(f)
           }
         }
+        if (!allDatesPlausibles) continue
         if (sum === 0) continue
         const compareAmt = allSameCcy ? txRawB : txAmtMURb
         const diff = Math.abs(compareAmt - sum) / sum
@@ -577,7 +611,12 @@ export function matchBySupplier(
       const fAmt = Number(f.montant_mur) || toMUR(fRaw, f.devise, rates)
       if (fAmt === 0 && fRaw === 0) continue
 
-      const availableTxs = unmatchedTxs.filter(t => !usedTxKeys.has(txKey(t)))
+      // Priorité 1 : DATE — ne considérer QUE les tx dont la date est dans
+      // la fenêtre plausible (-60j à +180j) par rapport à la facture.
+      // Empêche d'apparier ex. tx juillet à facture décembre (delay -166j).
+      const availableTxs = unmatchedTxs
+        .filter(t => !usedTxKeys.has(txKey(t)))
+        .filter(t => isPlausibleDateRange(f.date_facture, t.date))
       if (availableTxs.length < 2) continue
 
       // Chercher des paiements dont la somme ≈ montant facture
@@ -891,6 +930,8 @@ function matchByAmountFallback(
 
     for (const f of unpaidFactures) {
       if (usedFactureIds.has(f.id)) continue
+      // Priorité 1 : DATE — fenêtre plausible -60j / +180j
+      if (!isPlausibleDateRange(f.date_facture, tx.date)) continue
       const fTTC = Number(f.montant_ttc) || 0
       const fMUR = Number(f.montant_mur) || 0
       if (fTTC === 0 && fMUR === 0) continue
@@ -919,13 +960,15 @@ function matchByAmountFallback(
 
     if (candidates.length === 0) continue
 
-    // Trier : montant exact > TDS > reste ; puis tiers similaire > inconnu ; puis date
+    // Trier : montant exact > TDS > reste ; puis tiers similaire > inconnu ;
+    // puis date proche (priorité aux délais positifs faibles, puis aux
+    // prépaiements proches — d'où Math.abs).
     candidates.sort((a, b) => {
       const diffBin = (d: number) => d < 0.005 ? 0 : d < 0.06 ? 1 : 2
       const da = diffBin(a.diff), db = diffBin(b.diff)
       if (da !== db) return da - db
       if (Math.abs(a.tiersSim - b.tiersSim) > 0.15) return b.tiersSim - a.tiersSim
-      return a.delay - b.delay
+      return Math.abs(a.delay) - Math.abs(b.delay)
     })
 
     const best = candidates[0]
@@ -955,10 +998,12 @@ function matchByAmountFallback(
     if (best.tiersSim > 0.50) confidence += 0.15
     else if (best.tiersSim > 0.25) confidence += 0.08
 
-    // Bonus date (même mois)
-    if (best.delay <= 15) confidence += 0.05
-    else if (best.delay <= 45) confidence += 0.02
-    if (best.delay > 180) confidence -= 0.10
+    // Bonus date (paiement rapide ; |delay| pour gérer les prépaiements proches)
+    const absDelay = Math.abs(best.delay)
+    if (absDelay <= 15) confidence += 0.05
+    else if (absDelay <= 45) confidence += 0.02
+    if (absDelay > 90) confidence -= 0.10
+    if (best.delay < 0) confidence -= 0.05 // léger malus prépaiement
 
     // Pénalité ambiguïté
     if (isAmbiguous) confidence -= 0.15
