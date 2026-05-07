@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createEcrituresForPayment } from '@/lib/accounting/ecritures-factures'
+import { runLettrage } from '@/lib/accounting/lettrage'
 import { getTauxForDate } from '@/lib/taux-change'
 
 export const dynamic = 'force-dynamic'
@@ -71,12 +72,23 @@ export async function POST(request: Request) {
     // Pre-load all releves for this societe to avoid N+1 queries
     const { data: relevesRaw } = await supabase
       .from('releves_bancaires')
-      .select('id, transactions_json, societe_id')
+      .select('id, transactions_json, societe_id, compte_bancaire_id')
       .eq('societe_id', societe_id)
 
     const releveMap = new Map<string, any>()
     for (const r of relevesRaw || []) {
       releveMap.set(r.id, { ...r, updatedTxs: [...(r.transactions_json || [])] })
+    }
+
+    // Map compte_bancaire_id → compte_comptable (512xxx) pour router la
+    // 2e ligne BNQ vers le bon sous-compte de banque (au lieu du 512 global).
+    const { data: comptesBcRaw } = await supabase
+      .from('comptes_bancaires')
+      .select('id, compte_comptable')
+      .eq('societe_id', societe_id)
+    const cbToCompteComptable: Record<string, string> = {}
+    for (const c of comptesBcRaw || []) {
+      if (c.compte_comptable) cbToCompteComptable[c.id] = String(c.compte_comptable)
     }
 
     // Track factures that have been matched in this batch (avoid double-applying)
@@ -271,6 +283,11 @@ export async function POST(request: Request) {
         ? `${factures.length} factures`
         : (factures[0]?.numero_facture || '')
 
+      // FIX lettrage : passer facture_id (single-facture) + compte_banque +
+      // lettre_code pour que les BNQ soient lettrées dès la création et
+      // qu'elles partagent le facture_id avec la VTE/ACH initiale.
+      const compteBanque =
+        cbToCompteComptable[releve.compte_bancaire_id || ''] || undefined
       await createEcrituresForPayment(supabase, {
         societe_id,
         date_payment: datePayment,
@@ -279,7 +296,22 @@ export async function POST(request: Request) {
         tiers,
         ref_folio: `BANK-${releve_id}-${transaction_idx}`,
         description: `Paiement ${numFactures} — ${tiers}${txDev !== 'MUR' ? ` [${txRaw.toFixed(2)} ${txDev}]` : ''}`,
+        facture_id: facture_ids.length === 1 ? facture_ids[0] : null,
+        compte_banque: compteBanque,
+        lettre_code: lettre,
       })
+
+      // Lettre aussi la facture initiale (VTE/ACH) sur 411x/401x si elle
+      // n'est pas déjà lettrée — sinon Lex Livre devra le faire après coup.
+      if (facture_ids.length === 1) {
+        await supabase
+          .from('ecritures_comptables_v2')
+          .update({ lettre, date_lettrage: reconcileDate })
+          .eq('societe_id', societe_id)
+          .eq('facture_id', facture_ids[0])
+          .or('numero_compte.like.411%,numero_compte.like.401%')
+          .is('lettre', null)
+      }
 
       applied++
     }
@@ -293,6 +325,19 @@ export async function POST(request: Request) {
         await supabase.from('releves_bancaires')
           .update({ transactions_json: releve.updatedTxs })
           .eq('id', rid)
+      }
+    }
+
+    // ── Auto-lettrage : finalise les écritures 411x/401x non lettrées ──
+    // Garantit que toute facture rapprochée par Lex Banque ressort avec
+    // ses paiements lettrés, sans nécessiter une exécution manuelle de
+    // Lex Livre. Idempotent (skip silencieux si tout est déjà lettré).
+    let lettrageStats: any = null
+    if (applied > 0) {
+      try {
+        lettrageStats = await runLettrage(supabase, societe_id)
+      } catch (e: any) {
+        console.warn('[smart/apply] auto-lettrage failed:', e?.message)
       }
     }
 
@@ -327,6 +372,7 @@ export async function POST(request: Request) {
         skipped_low_confidence: skippedLowConf,
         skipped_validation_errors: skipped - skippedLowConf,
         consistency: consistencyStats,
+        lettrage: lettrageStats,
       },
     })
   } catch (e: any) {
