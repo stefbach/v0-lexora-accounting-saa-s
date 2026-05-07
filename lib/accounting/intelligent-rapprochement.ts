@@ -272,9 +272,18 @@ function daysBetween(d1: string, d2: string): number {
   return Math.floor((b - a) / (1000 * 60 * 60 * 24))
 }
 
-// Plafonds de plausibilité date — alignés avec matching-engine.ts
-const MAX_DELAY_DAYS = 180         // tx > 180j après facture → rejet
-const MAX_PREPAYMENT_DAYS = 60     // tx > 60j avant facture → rejet
+// Plafonds de plausibilité date — règle comptable Maurice
+// RÈGLE STRICTE : un virement ne peut PAS être antérieur à la facture.
+// Tolérance de 3j pour les décalages timezone / écritures de banque
+// postées le lendemain. Au-delà, prépaiement explicite (acompte sur
+// facture future) qui sort du flux normal et doit être traité humain.
+//
+// Côté retard de paiement : un comptable accepte normalement 30-60j
+// (même mois ou mois suivant), 90j max pour les paiements internationaux.
+// Au-delà = facture probablement déjà appariée à un autre paiement, ou
+// erreur d'identification → alerte cohérence.
+const MAX_DELAY_DAYS = 90          // tx > 90j après facture → rejet (flag cohérence)
+const MAX_PREPAYMENT_DAYS = 3      // tx > 3j avant facture → rejet (prépaiement)
 
 function isPlausibleDateRange(date_facture: string | null, date_tx: string): boolean {
   if (!date_facture || !date_tx) return true

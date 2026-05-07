@@ -176,17 +176,13 @@ function daysBetween(d1: string, d2: string): number {
   return Math.floor((b - a) / (1000 * 60 * 60 * 24))
 }
 
-// ── Plafonds de proximité date (jours) ────────────────────────────────────
-// Un paiement bancaire ne devrait jamais être proposé pour une facture émise
-// > MAX_DELAY_DAYS jours plus tôt — c'est probablement une autre facture du
-// même tiers. Inversement, un paiement antérieur à la facture de plus de
-// MAX_PREPAYMENT_DAYS jours est un faux match.
-//
-// Les valeurs sont volontairement strictes pour Maurice : la fenêtre normale
-// de paiement client/fournisseur est 0–90 jours. Au-delà de 180j, on rejette.
-const MAX_DELAY_DAYS = 180         // facture émise > 180j avant paiement → rejet
-const MAX_PREPAYMENT_DAYS = 60     // paiement émis > 60j avant facture → rejet
-const SOFT_DELAY_DAYS = 90         // au-delà : forte pénalité confidence
+// ── Plafonds de proximité date (jours) — règle comptable Maurice ─────────
+// RÈGLE STRICTE : un virement ne peut PAS être antérieur à la facture.
+// Tolérance 3j (timezone / bank posting). Côté retard, un paiement doit
+// arriver dans le mois ou le mois suivant max (60j), 90j absolu.
+const MAX_DELAY_DAYS = 90          // facture > 90j avant paiement → rejet (incohérent)
+const MAX_PREPAYMENT_DAYS = 3      // paiement > 3j avant facture → rejet (prépaiement)
+const SOFT_DELAY_DAYS = 60         // au-delà : forte pénalité confidence
 const TIGHT_DELAY_DAYS = 30        // dans cette fenêtre : bonus confidence
 
 /**
@@ -211,11 +207,11 @@ function isPlausibleDateRange(date_facture: string | null, date_tx: string): boo
 function dateProximityFactor(date_facture: string | null, date_tx: string): number {
   if (!date_facture || !date_tx) return 0.95
   const delay = daysBetween(date_facture, date_tx)
-  if (delay >= 0 && delay <= TIGHT_DELAY_DAYS) return 1.0
-  if (delay > TIGHT_DELAY_DAYS && delay <= SOFT_DELAY_DAYS) return 0.95
-  if (delay > SOFT_DELAY_DAYS && delay <= MAX_DELAY_DAYS) return 0.75
-  if (delay < 0 && delay >= -MAX_PREPAYMENT_DAYS) return 0.85
-  return 0.5
+  if (delay >= 0 && delay <= TIGHT_DELAY_DAYS) return 1.0      // 0-30j paiement rapide
+  if (delay > TIGHT_DELAY_DAYS && delay <= SOFT_DELAY_DAYS) return 0.95 // 30-60j normal
+  if (delay > SOFT_DELAY_DAYS && delay <= MAX_DELAY_DAYS) return 0.75   // 60-90j tardif
+  if (delay < 0 && delay >= -MAX_PREPAYMENT_DAYS) return 0.85           // tolerance ±3j
+  return 0.5                                                            // hors fenêtre
 }
 
 function cleanRef(s: string): string {

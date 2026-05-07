@@ -517,6 +517,49 @@ export async function POST(request: Request) {
     latest: allDates.length ? allDates.reduce((a, b) => (a > b ? a : b)) : null,
   }
 
+  // ── Audit de cohérence par tiers ─────────────────────────────────────
+  // Pour chaque client/fournisseur récurrent, on compare factures émises vs
+  // virements identifiés. Permet de remonter "client A : 7 factures, 5
+  // virements seulement" → 2 paiements manquants → intervention humaine.
+  const allTxsForCoherence: Array<{
+    date: string
+    libelle: string
+    debit: number
+    credit: number
+    devise: string
+    statut: string | null
+    facture_ids: string[]
+    tiers_detecte: string | null
+  }> = []
+  for (const r of releves) {
+    const arr = Array.isArray(r.transactions_json) ? r.transactions_json : []
+    const compteDevise = compteDeviseMap.get(r.compte_bancaire_id) || "MUR"
+    for (const tx of arr) {
+      const fids = Array.isArray(tx.facture_ids)
+        ? tx.facture_ids
+        : tx.facture_id
+          ? [tx.facture_id]
+          : []
+      allTxsForCoherence.push({
+        date: tx.date || "",
+        libelle: tx.libelle || "",
+        debit: Number(tx.debit) || 0,
+        credit: Number(tx.credit) || 0,
+        devise: (tx.devise || compteDevise || "MUR").toUpperCase(),
+        statut: tx.statut || null,
+        facture_ids: fids,
+        tiers_detecte: tx.tiers_detecte || null,
+      })
+    }
+  }
+  const coherence = buildCoherenceParTiers({
+    factures: matchingFactures,
+    allTxs: allTxsForCoherence,
+    autoMatches: result.matches,
+    semanticMatches: semantic.matches,
+    rates,
+  })
+
   return NextResponse.json({
     ok: true,
     societe_id,
@@ -529,6 +572,7 @@ export async function POST(request: Request) {
       bulletins_paie: bulletins.length,
       coverage,
     },
+    coherence,
     stats: {
       ...result.stats,
       semantic_matches: semantic.matches.length,
@@ -575,4 +619,295 @@ export async function POST(request: Request) {
     fx_rates_used: rates,
     writes: { dry_run, releves_modifies, transactions_modifiees, min_confidence },
   })
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Helper : audit de cohérence par tiers
+// ════════════════════════════════════════════════════════════════════
+//
+// Pour chaque tiers (client / fournisseur), on liste :
+//   - les factures émises (montant total + détail)
+//   - les virements identifiés liés à ce tiers (via tiers_detecte ou via
+//     les match facture_ids existants ou les nouvelles propositions agent)
+// Puis on calcule l'écart et on génère une alerte si :
+//   - nb_factures > nb_paiements_detectés (factures non payées)
+//   - nb_paiements > nb_factures (virements en surplus, suspect)
+//   - écart cumulé > 5%
+//   - 1 facture sans aucun paiement plausible dans la fenêtre 0–60j
+//
+// Une alerte = "intervention humaine nécessaire".
+
+interface CoherenceAlert {
+  severity: "critical" | "warning" | "info"
+  code:
+    | "FACTURES_SANS_PAIEMENT"
+    | "PAIEMENTS_SANS_FACTURE"
+    | "ECART_MONTANT"
+    | "FACTURE_VIEILLE"
+    | "TIERS_INCOHERENT"
+  message: string
+  tiers: string
+  type: "client" | "fournisseur" | "?"
+  details?: any
+}
+
+interface CoherenceTiers {
+  tiers: string
+  type: "client" | "fournisseur" | "?"
+  nb_factures: number
+  nb_paiements_identifies: number
+  total_factures_mur: number
+  total_paiements_mur: number
+  ecart_mur: number
+  ecart_pct: number
+  status: "equilibre" | "manque_paiement" | "surplus_paiement" | "ecart_montant"
+  factures_sans_paiement: Array<{
+    id: string
+    numero: string | null
+    date: string
+    montant_mur: number
+  }>
+}
+
+function normalizeTiersName(s: string | null | undefined): string {
+  if (!s) return ""
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 4)
+    .join(" ")
+}
+
+function toMurAmount(
+  amount: number,
+  devise: string,
+  rates: Record<string, number>
+): number {
+  const d = (devise || "MUR").toUpperCase()
+  if (d === "MUR") return amount
+  const rate = rates[d] || 1
+  return amount * rate
+}
+
+function buildCoherenceParTiers(opts: {
+  factures: MatchingFacture[]
+  allTxs: Array<{
+    date: string
+    libelle: string
+    debit: number
+    credit: number
+    devise: string
+    statut: string | null
+    facture_ids: string[]
+    tiers_detecte: string | null
+  }>
+  autoMatches: Array<{ transactionKey?: string; factureIds: string[]; supplierName?: string }>
+  semanticMatches: Array<{ transactionKey?: string; factureIds: string[] }>
+  rates: Record<string, number>
+}): {
+  par_tiers: CoherenceTiers[]
+  alerts: CoherenceAlert[]
+  summary: {
+    tiers_total: number
+    tiers_equilibres: number
+    tiers_alertes: number
+    factures_sans_paiement: number
+    paiements_orphelins: number
+  }
+} {
+  const { factures, allTxs, autoMatches, semanticMatches, rates } = opts
+
+  // Map facture_id → tiers (pour relier les paiements aux tiers via les fids)
+  const factureToTiers = new Map<string, { tiers: string; type: string }>()
+  for (const f of factures) {
+    factureToTiers.set(f.id, {
+      tiers: f.tiers || "",
+      type: (f.type_facture as any) || "?",
+    })
+  }
+
+  // Set des facture_ids ayant déjà un paiement identifié (toutes sources confondues)
+  const factureIdsPayes = new Set<string>()
+  // Map tiers normalisé → liste des paiements MUR identifiés
+  const paiementsParTiers = new Map<
+    string,
+    { tiersDisplay: string; type: string; montants: number[] }
+  >()
+  // 1) tx avec facture_ids déjà persistés
+  for (const tx of allTxs) {
+    if (tx.facture_ids.length === 0) continue
+    const txAmount = Math.max(tx.debit, tx.credit)
+    const txMur = toMurAmount(txAmount, tx.devise, rates)
+    for (const fid of tx.facture_ids) {
+      factureIdsPayes.add(fid)
+      const info = factureToTiers.get(fid)
+      if (!info || !info.tiers) continue
+      const key = normalizeTiersName(info.tiers)
+      const slot = paiementsParTiers.get(key) || {
+        tiersDisplay: info.tiers,
+        type: info.type,
+        montants: [],
+      }
+      slot.montants.push(txMur)
+      paiementsParTiers.set(key, slot)
+    }
+  }
+  // 2) Propositions agent automatiques + sémantiques (non encore appliquées)
+  const matchKeyToTx = new Map<string, (typeof allTxs)[number]>()
+  for (let i = 0; i < allTxs.length; i++) {
+    const tx = allTxs[i]
+    matchKeyToTx.set(`tx-${i}`, tx)
+  }
+  // Pour les autoMatches/semanticMatches, on ne dispose pas du txKey direct ici.
+  // Approximatif : on incrémente le compteur de paiement du tiers via factureIds.
+  for (const m of [...autoMatches, ...semanticMatches]) {
+    for (const fid of m.factureIds || []) {
+      if (factureIdsPayes.has(fid)) continue
+      factureIdsPayes.add(fid)
+      const info = factureToTiers.get(fid)
+      if (!info || !info.tiers) continue
+      const key = normalizeTiersName(info.tiers)
+      const slot = paiementsParTiers.get(key) || {
+        tiersDisplay: info.tiers,
+        type: info.type,
+        montants: [],
+      }
+      const f = factures.find((x) => x.id === fid)
+      const fmur = Number(f?.montant_mur) || Number(f?.montant_ttc) || 0
+      slot.montants.push(fmur)
+      paiementsParTiers.set(key, slot)
+    }
+  }
+
+  // Group factures par tiers
+  const facturesParTiers = new Map<
+    string,
+    { tiersDisplay: string; type: string; factures: MatchingFacture[] }
+  >()
+  for (const f of factures) {
+    if (!f.tiers) continue
+    const key = normalizeTiersName(f.tiers)
+    if (!key) continue
+    const slot = facturesParTiers.get(key) || {
+      tiersDisplay: f.tiers,
+      type: (f.type_facture as any) || "?",
+      factures: [],
+    }
+    slot.factures.push(f)
+    facturesParTiers.set(key, slot)
+  }
+
+  const par_tiers: CoherenceTiers[] = []
+  const alerts: CoherenceAlert[] = []
+
+  for (const [key, group] of facturesParTiers) {
+    const totalFacturesMur = group.factures.reduce(
+      (s, f) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0),
+      0
+    )
+    const paiements = paiementsParTiers.get(key)
+    const nbPaiements = paiements?.montants.length || 0
+    const totalPaiementsMur =
+      paiements?.montants.reduce((s, x) => s + x, 0) || 0
+    const ecartMur = totalFacturesMur - totalPaiementsMur
+    const ecartPct =
+      totalFacturesMur > 0 ? (ecartMur / totalFacturesMur) * 100 : 0
+
+    const facturesSansPaiement = group.factures
+      .filter((f) => !factureIdsPayes.has(f.id))
+      .map((f) => ({
+        id: f.id,
+        numero: f.numero_facture || null,
+        date: f.date_facture || "",
+        montant_mur: Number(f.montant_mur) || Number(f.montant_ttc) || 0,
+      }))
+
+    let status: CoherenceTiers["status"] = "equilibre"
+    if (group.factures.length > nbPaiements) status = "manque_paiement"
+    else if (nbPaiements > group.factures.length) status = "surplus_paiement"
+    else if (Math.abs(ecartPct) > 5) status = "ecart_montant"
+
+    par_tiers.push({
+      tiers: group.tiersDisplay,
+      type: (group.type as any) || "?",
+      nb_factures: group.factures.length,
+      nb_paiements_identifies: nbPaiements,
+      total_factures_mur: Math.round(totalFacturesMur * 100) / 100,
+      total_paiements_mur: Math.round(totalPaiementsMur * 100) / 100,
+      ecart_mur: Math.round(ecartMur * 100) / 100,
+      ecart_pct: Math.round(ecartPct * 100) / 100,
+      status,
+      factures_sans_paiement: facturesSansPaiement,
+    })
+
+    // Génération d'alertes
+    if (facturesSansPaiement.length > 0 && group.factures.length > 1) {
+      // Plusieurs factures, certaines sans paiement → alerte
+      alerts.push({
+        severity: facturesSansPaiement.length > 2 ? "critical" : "warning",
+        code: "FACTURES_SANS_PAIEMENT",
+        message: `${group.tiersDisplay} : ${group.factures.length} facture(s) émise(s), ${nbPaiements} virement(s) identifié(s). ${facturesSansPaiement.length} facture(s) sans paiement détecté — intervention humaine nécessaire.`,
+        tiers: group.tiersDisplay,
+        type: (group.type as any) || "?",
+        details: { factures_sans_paiement: facturesSansPaiement },
+      })
+    }
+    if (status === "ecart_montant" && Math.abs(ecartPct) > 10) {
+      alerts.push({
+        severity: "warning",
+        code: "ECART_MONTANT",
+        message: `${group.tiersDisplay} : total factures ${totalFacturesMur.toFixed(0)} MUR vs total virements ${totalPaiementsMur.toFixed(0)} MUR — écart ${ecartPct.toFixed(1)}%, vérifier (TDS, devise, paiement partiel ?).`,
+        tiers: group.tiersDisplay,
+        type: (group.type as any) || "?",
+      })
+    }
+    // Facture > 60j sans paiement → urgence
+    const today = new Date().toISOString().substring(0, 10)
+    for (const f of facturesSansPaiement) {
+      if (!f.date) continue
+      const ageJ = Math.floor(
+        (new Date(today).getTime() - new Date(f.date).getTime()) / 86400000
+      )
+      if (ageJ > 60) {
+        alerts.push({
+          severity: ageJ > 90 ? "critical" : "warning",
+          code: "FACTURE_VIEILLE",
+          message: `Facture ${f.numero || f.id.slice(0, 8)} de ${group.tiersDisplay} (${f.montant_mur.toFixed(0)} MUR) émise il y a ${ageJ}j sans paiement détecté — relance ou écriture manuelle ?`,
+          tiers: group.tiersDisplay,
+          type: (group.type as any) || "?",
+          details: { facture_id: f.id, age_jours: ageJ },
+        })
+      }
+    }
+  }
+
+  // Tri alerts : critical > warning > info
+  const sevOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 }
+  alerts.sort((a, b) => sevOrder[a.severity] - sevOrder[b.severity])
+
+  par_tiers.sort((a, b) => {
+    // Tiers avec alertes en premier
+    const aAlerted = a.status !== "equilibre" ? 0 : 1
+    const bAlerted = b.status !== "equilibre" ? 0 : 1
+    if (aAlerted !== bAlerted) return aAlerted - bAlerted
+    return b.nb_factures - a.nb_factures
+  })
+
+  const summary = {
+    tiers_total: par_tiers.length,
+    tiers_equilibres: par_tiers.filter((t) => t.status === "equilibre").length,
+    tiers_alertes: par_tiers.filter((t) => t.status !== "equilibre").length,
+    factures_sans_paiement: par_tiers.reduce(
+      (s, t) => s + t.factures_sans_paiement.length,
+      0
+    ),
+    paiements_orphelins: par_tiers.filter((t) => t.status === "surplus_paiement")
+      .length,
+  }
+
+  return { par_tiers, alerts, summary }
 }
