@@ -1,0 +1,75 @@
+{
+  "name": "[Lexora] OCC — Lex OCR (contrôle qualité OCR)",
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    { "parameters": {}, "id": "node-trigger", "name": "Run manuel", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [80, 300] },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "p1", "name": "societe_id", "value": "b010d75c-62a2-4aae-a52b-8c18261047f7", "type": "string" },
+            { "id": "p2", "name": "societe_nom", "value": "Obesity Care Clinic Ltd", "type": "string" },
+            { "id": "p3", "name": "lexora_base_url", "value": "https://www.lexora.finance", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-params", "name": "Paramètres OCC", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [280, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.lexora_base_url }}/api/agent/ocr",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ societe_id: $json.societe_id }) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "node-ocr", "name": "Lex OCR — Contrôle qualité", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [500, 300],
+      "credentials": { "httpHeaderAuth": { "name": "Lexora Agent (bearer)" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const params = $('Paramètres OCC').first().json;\nconst d = $('Lex OCR — Contrôle qualité').first().json;\nconst brief = {\n  societe: { id: params.societe_id, nom: params.societe_nom },\n  generated_at: new Date().toISOString(),\n  score: d.score,\n  severity: d.severity,\n  summary: d.summary,\n  alerts_top: (d.alerts || []).slice(0, 30),\n};\nconst systemPrompt = [\n  \"Tu es un expert-comptable mauricien spécialiste de la dématérialisation comptable.\",\n  \"Tu reçois le résultat d'un contrôle qualité de la pipeline OCR (Lex OCR).\",\n  \"Produis un RAPPORT en français, structuré et exploitable.\",\n  \"\",\n  \"Format strict (markdown) :\",\n  \"\",\n  \"# Contrôle OCR — <nom société>\",\n  \"\",\n  \"## 1. Résumé exécutif\",\n  \"3 phrases : santé OCR (score), nb docs traités, alertes critiques.\",\n  \"\",\n  \"## 2. Erreurs critiques\",\n  \"Documents en erreur OCR + documents orphelins (extraction réussie mais pas de facture/relevé créé). Action : ré-uploader, relancer la pipeline.\",\n  \"\",\n  \"## 3. Mismatches OCR ↔ DB\",\n  \"Pour chaque type (montant, date, tiers, devise) : nb cas + recommandation (corriger manuellement, vérifier l'OCR).\",\n  \"\",\n  \"## 4. Doublons et champs manquants\",\n  \"Liste les factures dupliquées et celles avec champs critiques absents.\",\n  \"\",\n  \"## 5. Plan d'action priorisé (5 max)\",\n  \"Numéroté, actionnable cette semaine.\",\n  \"\",\n  \"Ne JAMAIS inventer. Sois concis. Pas d'emoji.\",\n].join('\\n');\nconst userText = 'Brief :\\n\\n```json\\n' + JSON.stringify(brief, null, 2) + '\\n```';\nreturn { json: { brief, anthropic_payload: { model: 'claude-haiku-4-5-20251001', max_tokens: 4096, system: systemPrompt, messages: [{ role: 'user', content: userText }] } } };"
+      },
+      "id": "node-build-brief", "name": "Construire brief pour Claude", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST", "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "anthropic-version", "value": "2023-06-01" }, { "name": "content-type", "value": "application/json" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.anthropic_payload) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "node-claude", "name": "Claude — Génère le rapport", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [940, 300],
+      "credentials": { "httpHeaderAuth": { "name": "Anthropic Lexora (x-api-key)" } }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "out1", "name": "report_markdown", "value": "={{ $json.content?.[0]?.text || '— pas de réponse Claude —' }}", "type": "string" },
+            { "id": "out2", "name": "score", "value": "={{ $('Construire brief pour Claude').item.json.brief.score }}", "type": "number" },
+            { "id": "out3", "name": "severity", "value": "={{ $('Construire brief pour Claude').item.json.brief.severity }}", "type": "string" },
+            { "id": "out4", "name": "summary", "value": "={{ $('Construire brief pour Claude').item.json.brief.summary }}", "type": "object" },
+            { "id": "out5", "name": "generated_at", "value": "={{ $now.toISO() }}", "type": "string" }
+          ]
+        }, "options": {}
+      },
+      "id": "node-output", "name": "Sortie finale", "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [1160, 300]
+    }
+  ],
+  "connections": {
+    "Run manuel": { "main": [[{ "node": "Paramètres OCC", "type": "main", "index": 0 }]] },
+    "Paramètres OCC": { "main": [[{ "node": "Lex OCR — Contrôle qualité", "type": "main", "index": 0 }]] },
+    "Lex OCR — Contrôle qualité": { "main": [[{ "node": "Construire brief pour Claude", "type": "main", "index": 0 }]] },
+    "Construire brief pour Claude": { "main": [[{ "node": "Claude — Génère le rapport", "type": "main", "index": 0 }]] },
+    "Claude — Génère le rapport": { "main": [[{ "node": "Sortie finale", "type": "main", "index": 0 }]] }
+  }
+}

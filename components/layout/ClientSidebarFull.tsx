@@ -91,6 +91,7 @@ const MENU: MenuSection[] = [
       { href: "/client/tableau-de-bord", label: "Tableau de bord", labelKey: "nav.dashboard", icon: LayoutDashboard },
       { href: "/client/societes", label: "Mes Sociétés", labelKey: "nav.companies", icon: Building2 },
       { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
+      { href: "/client/lex-ocr", label: "Lex OCR (contrôle)", icon: Sparkles } as any,
       { href: "/client/utilisateurs", label: "Mon Équipe", labelKey: "nav.team", icon: Users },
       { href: "/client/alertes", label: "Alertes", labelKey: "nav.alerts", icon: Bell },
       { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload, visibleForRoles: ["client_assistant"] } as any,
