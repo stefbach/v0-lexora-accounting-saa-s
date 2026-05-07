@@ -176,6 +176,48 @@ function daysBetween(d1: string, d2: string): number {
   return Math.floor((b - a) / (1000 * 60 * 60 * 24))
 }
 
+// ── Plafonds de proximité date (jours) ────────────────────────────────────
+// Un paiement bancaire ne devrait jamais être proposé pour une facture émise
+// > MAX_DELAY_DAYS jours plus tôt — c'est probablement une autre facture du
+// même tiers. Inversement, un paiement antérieur à la facture de plus de
+// MAX_PREPAYMENT_DAYS jours est un faux match.
+//
+// Les valeurs sont volontairement strictes pour Maurice : la fenêtre normale
+// de paiement client/fournisseur est 0–90 jours. Au-delà de 180j, on rejette.
+const MAX_DELAY_DAYS = 180         // facture émise > 180j avant paiement → rejet
+const MAX_PREPAYMENT_DAYS = 60     // paiement émis > 60j avant facture → rejet
+const SOFT_DELAY_DAYS = 90         // au-delà : forte pénalité confidence
+const TIGHT_DELAY_DAYS = 30        // dans cette fenêtre : bonus confidence
+
+/**
+ * Indique si une paire (date_facture, date_tx) est plausible.
+ * Renvoie false → le candidat est éliminé sans examen plus poussé.
+ */
+function isPlausibleDateRange(date_facture: string | null, date_tx: string): boolean {
+  if (!date_facture || !date_tx) return true // pas de date → on n'élimine pas (autres signaux décident)
+  const delay = daysBetween(date_facture, date_tx)
+  if (delay > MAX_DELAY_DAYS) return false
+  if (delay < -MAX_PREPAYMENT_DAYS) return false
+  return true
+}
+
+/**
+ * Score de proximité date — multiplicateur de confiance :
+ *   delay ∈ [0, 30]    → 1.0  (paiement rapide)
+ *   delay ∈ [30, 90]   → 0.95 (terme normal)
+ *   delay ∈ [90, 180]  → 0.75 (paiement tardif)
+ *   delay < 0 (prépay) → 0.85 (cas atypique mais possible)
+ */
+function dateProximityFactor(date_facture: string | null, date_tx: string): number {
+  if (!date_facture || !date_tx) return 0.95
+  const delay = daysBetween(date_facture, date_tx)
+  if (delay >= 0 && delay <= TIGHT_DELAY_DAYS) return 1.0
+  if (delay > TIGHT_DELAY_DAYS && delay <= SOFT_DELAY_DAYS) return 0.95
+  if (delay > SOFT_DELAY_DAYS && delay <= MAX_DELAY_DAYS) return 0.75
+  if (delay < 0 && delay >= -MAX_PREPAYMENT_DAYS) return 0.85
+  return 0.5
+}
+
 function cleanRef(s: string): string {
   return (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
@@ -188,6 +230,9 @@ function tryExactReference(tx: MatchingTransaction, factures: MatchingFacture[],
     const facRef = cleanRef(f.numero_facture)
     if (facRef.length < 3) continue
     if (txRef.includes(facRef)) {
+      // Garde-fou date : même avec la référence dans le libellé, on rejette
+      // si l'écart > 180j (probablement homonyme de numéro ou facture obsolète).
+      if (!isPlausibleDateRange(f.date_facture, tx.date)) continue
       const txRaw = Math.max(tx.debit, tx.credit)
       const fRaw = Number(f.montant_ttc) || 0
       const txDevise = (tx.devise || 'MUR').toUpperCase()
@@ -197,13 +242,14 @@ function tryExactReference(tx: MatchingTransaction, factures: MatchingFacture[],
       const fAmt = (txDevise === fDevise && txDevise !== 'MUR') ? fRaw : (Number(f.montant_mur) || toMUR(fRaw, f.devise, rates))
       const diff = fAmt > 0 ? Math.abs(txAmt - fAmt) / fAmt : 1
       const delay = daysBetween(f.date_facture || '', tx.date)
+      const dateFactor = dateProximityFactor(f.date_facture, tx.date)
       return {
         transaction: tx,
         facture_ids: [f.id],
         factures: [f],
         strategy: 'exact_reference',
-        confidence: diff < 0.05 ? 1.0 : 0.9,
-        reasoning: `Reference "${f.numero_facture}" trouvee dans le libelle bancaire${txDevise !== 'MUR' ? ` [${txDevise}]` : ''}`,
+        confidence: (diff < 0.05 ? 1.0 : 0.9) * dateFactor,
+        reasoning: `Reference "${f.numero_facture}" trouvee dans le libelle bancaire${txDevise !== 'MUR' ? ` [${txDevise}]` : ''}, delai ${delay}j`,
         amount_diff: Math.abs(txAmt - fAmt),
         delay_days: delay,
         within_terms: delay <= (Number(f.conditions_paiement) || 30) + 10,
@@ -247,17 +293,23 @@ function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[],
       continue
     }
 
-    const tolerance = 0.08 // 8% covers TDS (5%) + bank fees + rounding
-    if (diff > tolerance) continue
+    // ── Priorité 1 : DATE (garde-fou strict — élimine les écarts > 180j) ──
+    if (!isPlausibleDateRange(f.date_facture, tx.date)) continue
 
+    // ── Priorité 2 : NOM (tiers) — score min strict ────────────────────────
     const score = tiersScore(txTiers, f.tiers || '')
     // Lower threshold for short names (MyT, MRA, MCB...) — min 0.25 if name very short
     const tiersSeuil = Math.min(f.tiers?.length || 99, tx.tiers_detecte?.length || 99) <= 5 ? 0.25 : 0.40
     if (score < tiersSeuil) continue
 
+    // ── Priorité 3 : MONTANT — tolérance 8% (couvre TDS, frais bancaires) ──
+    const tolerance = 0.08
+    if (diff > tolerance) continue
+
     const delay = daysBetween(f.date_facture || '', tx.date)
     const terms = Number(f.conditions_paiement) || 30
     const withinTerms = delay <= terms + 10
+    const dateFactor = dateProximityFactor(f.date_facture, tx.date)
 
     const isExactAmount = diff < 0.005
     const isStrongTiers = score >= 0.75
@@ -279,8 +331,9 @@ function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[],
       strategy = 'close_amount'
     }
 
+    // Application multiplicative du facteur date (1.0 → 0.5 selon proximité)
+    confidence *= dateFactor
     if (withinTerms) confidence += 0.05
-    if (delay > 90) confidence -= 0.1
 
     if (!best || confidence > best.confidence) {
       best = {
@@ -307,12 +360,14 @@ function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[], rat
   const txTiers = (tx.tiers_detecte || tx.libelle || '').toLowerCase()
   if (txAmountMUR === 0) return null
 
-  // Group factures by tiers — lower tiers threshold to 0.3 to catch more
+  // Group factures by tiers — tiers seuil 0.40 (priorité NOM stricte) +
+  // garde date à -60/+180j (priorité DATE).
   const byTiers = new Map<string, MatchingFacture[]>()
   for (const f of factures) {
     const key = normalize(f.tiers || '')
     if (!key) continue
-    if (tiersScore(txTiers, f.tiers || '') < 0.3) continue
+    if (tiersScore(txTiers, f.tiers || '') < 0.40) continue
+    if (!isPlausibleDateRange(f.date_facture, tx.date)) continue
     if (!byTiers.has(key)) byTiers.set(key, [])
     byTiers.get(key)!.push(f)
   }
@@ -343,11 +398,17 @@ function tryGroupedSum(tx: MatchingTransaction, factures: MatchingFacture[], rat
       const avgDelay = subset.reduce((s, f) => s + daysBetween(f.date_facture || '', tx.date), 0) / subset.length
       const maxTerms = Math.max(...subset.map(f => Number(f.conditions_paiement) || 30))
       const withinTerms = avgDelay <= maxTerms + 15
+      // Garde-fou strict : moyenne des délais doit rester dans la fenêtre
+      // -60 à +180j. Au-delà, on rejette le sous-ensemble même si la somme matche.
+      if (avgDelay > MAX_DELAY_DAYS || avgDelay < -MAX_PREPAYMENT_DAYS) continue
 
       const tiersName = subset[0].tiers || ''
+      // Facteur date moyen sur le subset
+      const avgDateFactor =
+        subset.reduce((s, f) => s + dateProximityFactor(f.date_facture, tx.date), 0) / subset.length
       // Boost confidence when diff looks like TDS/WHT (3-6% range is typical for Maurice)
       const looksLikeTDS = diff >= 0.02 && diff <= 0.06
-      const baseConf = 0.87 - (diff * 1.5) + (withinTerms ? 0.05 : 0)
+      const baseConf = (0.87 - (diff * 1.5)) * avgDateFactor + (withinTerms ? 0.05 : 0)
       const conf = Math.min(0.96, looksLikeTDS ? baseConf + 0.08 : baseConf)
       return {
         transaction: tx,
@@ -373,6 +434,9 @@ function tryPartial(tx: MatchingTransaction, factures: MatchingFacture[], rates?
 
   let best: MatchProposal | null = null
   for (const f of factures) {
+    // Priorité 1 : DATE
+    if (!isPlausibleDateRange(f.date_facture, tx.date)) continue
+
     const fAmount = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
     if (fAmount <= 0) continue
     // Payment must be smaller than invoice (partial) by 10-90%
@@ -384,7 +448,8 @@ function tryPartial(tx: MatchingTransaction, factures: MatchingFacture[], rates?
     if (score < 0.7) continue // Strong tiers match required for partial
 
     const delay = daysBetween(f.date_facture || '', tx.date)
-    const confidence = 0.55 + (score * 0.15) + (ratio > 0.5 ? 0.05 : 0)
+    const dateFactor = dateProximityFactor(f.date_facture, tx.date)
+    const confidence = (0.55 + (score * 0.15) + (ratio > 0.5 ? 0.05 : 0)) * dateFactor
 
     if (!best || confidence > best.confidence) {
       best = {
@@ -451,6 +516,9 @@ function tryHistorical(
     for (const f of factures) {
       const tiersSim = tiersScore(normalize(f.tiers || ''), normalize(bestPattern.cible_tiers))
       if (tiersSim < 0.6) continue
+      // Garde-fou date : pattern historique ne doit pas matcher une facture
+      // ancienne (>180j) — c'est probablement une autre facture du tiers.
+      if (!isPlausibleDateRange(f.date_facture, tx.date)) continue
       const fAmt = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
       if (fAmt === 0) continue
       const diff = Math.abs(txAmtMUR - fAmt) / fAmt
@@ -593,6 +661,8 @@ function tryRefund(
   let best: MatchProposal | null = null
   for (const f of factures) {
     if (f.type_facture && f.type_facture !== expectedType) continue
+    // Priorité 1 : DATE — un remboursement > 180j après facture est suspect
+    if (!isPlausibleDateRange(f.date_facture, tx.date)) continue
     const fAmount = Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates)
     if (fAmount === 0) continue
     const diff = Math.abs(amountMUR - fAmount) / fAmount
@@ -601,10 +671,11 @@ function tryRefund(
     const score = tiersScore(txTiers, f.tiers || '')
     if (score < 0.4 && !looksLikeReversal) continue
 
-    const confidence = 0.55
+    const dateFactor = dateProximityFactor(f.date_facture, tx.date)
+    const confidence = (0.55
       + (looksLikeReversal ? 0.15 : 0)
       + (score * 0.15)
-      + (diff < 0.005 ? 0.10 : 0)
+      + (diff < 0.005 ? 0.10 : 0)) * dateFactor
 
     if (!best || confidence > best.confidence) {
       best = {
