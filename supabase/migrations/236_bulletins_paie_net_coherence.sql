@@ -104,7 +104,7 @@ SELECT
   b.societe_id,
   b.employe_id,
   b.periode,
-  e.nom_complet,
+  TRIM(COALESCE(e.prenom, '') || ' ' || COALESCE(e.nom, '')) AS nom_complet,
   b.salaire_brut,
   b.salaire_net,
   public.compute_salaire_net(
