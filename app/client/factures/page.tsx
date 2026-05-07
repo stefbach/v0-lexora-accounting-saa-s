@@ -256,6 +256,13 @@ export default function ClientFacturesPage() {
                   Nouvelle facture
                 </Button>
               </Link>
+              <Link href="/client/lex-factures">
+                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                  Lex Factures
+                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              </Link>
               <Link href="/client/rapprochement">
                 <Button className="bg-purple-600 hover:bg-purple-700 text-white">
                   <Sparkles className="h-4 w-4 mr-1.5" />
