@@ -398,6 +398,26 @@ export async function POST(request: Request) {
           const total_ded = emp.total_deductions || ((emp.csg || 0) + (emp.nsf || 0) + (emp.paye || 0) + (emp.absence_deductions || 0))
           const total_charges = emp.total_er || ((emp.er_csg || 0) + (emp.er_nsf || 0) + (emp.er_levy || 0) + (emp.er_prgf || 0))
 
+          // FIX 2026-05-07 — On NE prend PLUS emp.net_pay tel quel : le calculer
+          // depuis brut - retenues_salariales pour garantir la cohérence avec
+          // salaire_brut (colonne GENERATED) et empêcher tout déséquilibre OD-PAIE.
+          // L'ancienne approche causait des bulletins où net > brut (ex. Cecilia
+          // PAUL OCC : brut=27472 mais net=75311 importé → écart 53k MUR par
+          // bulletin → -382k MUR sur le Grand Livre). Voir scripts/diag-bulletin.mjs
+          // et scripts/regul-paie.mjs.
+          const computedBrut =
+            (emp.salaire_base || 0) + ot_total + (emp.electricity || 0) +
+            (emp.prime_production || 0) + all_primes +
+            (emp.internet_allowance || 0) + (emp.meal_allowance || 0)
+          const retenuesSalariales =
+            (emp.csg || 0) + (emp.nsf || 0) + (emp.paye || 0) + (emp.absence_deductions || 0)
+          const computedNet = Math.max(0, Math.round((computedBrut - retenuesSalariales) * 100) / 100)
+          if (emp.net_pay && Math.abs((emp.net_pay || 0) - computedNet) > 1) {
+            console.warn(
+              `[import-paie] net_pay incohérent pour ${emp.nom || nom} : Excel=${emp.net_pay}, recalculé=${computedNet} (utilisation du recalculé pour préserver l'équilibre comptable)`
+            )
+          }
+
           // NOTE: salaire_brut is a GENERATED column in PostgreSQL
           // It auto-calculates: base + increment + OT + transport + petrol + special_1/2/3 + other + eoy + departure
           // So we must NOT include it in the upsert — just set its components correctly
@@ -413,7 +433,7 @@ export async function POST(request: Request) {
             special_allowance_3: emp.meal_allowance || 0,
             transport_allowance: emp.electricity || 0,
             petrol_allowance: emp.prime_production || 0,
-            salaire_net: emp.net_pay || 0,
+            salaire_net: computedNet,
             csg_salarie: emp.csg || 0,
             csg_patronal: emp.er_csg || 0,
             nsf_salarie: emp.nsf || 0,
@@ -433,12 +453,15 @@ export async function POST(request: Request) {
               emp.prime_tl ? `Prime TL: ${emp.prime_tl}` : '',
               emp.electricity ? `Electricity: ${emp.electricity}` : '',
               emp.meal_allowance ? `Meal: ${emp.meal_allowance}` : '',
+              emp.net_pay && Math.abs((emp.net_pay || 0) - computedNet) > 1
+                ? `Excel net=${emp.net_pay} ignoré (recalculé=${computedNet})`
+                : '',
             ].filter(Boolean).join(' | ') || null,
           }, { onConflict: 'employe_id,periode' })
           if (bulErr) {
             console.warn(`[import-paie] bulletin upsert failed for ${nom}, trying insert:`, bulErr.message)
             // Fallback: try simple insert without upsert
-            const { error: insErr } = await supabase.from('bulletins_paie').insert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, heures_sup_montant: ot_total, special_allowance_1: all_primes, salaire_net: emp.net_pay || 0, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: total_ded, total_charges_patronales: total_charges, montant_absence: emp.absence_deductions || 0, statut: 'valide', source: 'import_excel' })
+            const { error: insErr } = await supabase.from('bulletins_paie').insert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, heures_sup_montant: ot_total, special_allowance_1: all_primes, salaire_net: computedNet, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: total_ded, total_charges_patronales: total_charges, montant_absence: emp.absence_deductions || 0, statut: 'valide', source: 'import_excel' })
             if (insErr) {
               console.error(`[import-paie] bulletin insert also failed:`, insErr.message)
               errors.push(`${nom}: bulletin - ${insErr.message}`)
