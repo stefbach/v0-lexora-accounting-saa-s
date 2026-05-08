@@ -517,16 +517,21 @@ export async function POST(request: Request) {
     const now = heure_forcee || new Date().toTimeString().split(' ')[0]
 
     // Check if employee is on approved congé today — prevent pointage
+    // EXCEPTION : demi_journee=true → pointage autorisé sur l'autre demi
+    // (un demi-congé matin n'empêche pas le pointage de l'après-midi).
     const { data: activeConge } = await supabase
       .from('demandes_conges')
-      .select('id, type_conge')
+      .select('id, type_conge, demi_journee, matin_ou_apres_midi')
       .eq('employe_id', employe_id)
       .eq('statut', 'approuve')
       .lte('date_debut', today)
       .gte('date_fin', today)
       .limit(1)
 
-    if (activeConge && activeConge.length > 0 && type_pointage !== 'absence_justifiee') {
+    const isFullDayConge =
+      activeConge && activeConge.length > 0 && activeConge[0].demi_journee !== true
+
+    if (isFullDayConge && type_pointage !== 'absence_justifiee') {
       return NextResponse.json({
         error: 'Employe en conge',
         message: `Cet employe est en conge approuve (${activeConge[0].type_conge}) aujourd'hui. Pointage non requis.`,

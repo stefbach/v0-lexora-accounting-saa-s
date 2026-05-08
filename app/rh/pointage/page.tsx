@@ -23,7 +23,9 @@ interface Pointage {
   heures_travaillees?: number | null
   heures_sup?: number | null
   absent_justifie?: boolean
-  en_conge?: boolean
+  en_conge?: boolean        // full-day leave → masque le pointage
+  demi_conge?: boolean      // half-day leave → pointage attendu sur l'autre demi
+  demi_conge_quand?: "matin" | "apres_midi" | null
   type_conge?: string
   employe?: { nom: string; prenom: string; poste?: string }
 }
@@ -31,6 +33,8 @@ interface Pointage {
 interface CongeToday {
   employe_id: string
   type_conge: string
+  demi_journee: boolean
+  matin_ou_apres_midi: "matin" | "apres_midi" | null
 }
 
 interface Employe {
@@ -60,14 +64,34 @@ function dureeFmt(min: number | null): string {
   return `${hrs}h${String(mins).padStart(2, "0")}`
 }
 
+function congeSuffix(p: Pointage): string {
+  if (!p.demi_conge) return ""
+  const half = p.demi_conge_quand === "matin" ? "matin" : p.demi_conge_quand === "apres_midi" ? "après-midi" : ""
+  const type = p.type_conge ? p.type_conge : "congé"
+  return half ? ` + ${type} ${half}` : ` + ${type}`
+}
+
 function statutLabel(p: Pointage): { text: string; variant: "present" | "pause" | "sorti" | "absent" | "none" | "conge" } {
+  // Full-day leave masque toujours le pointage.
   if (p.en_conge) return { text: `En congé${p.type_conge ? ` (${p.type_conge})` : ""}`, variant: "conge" }
-  if (p.heure_entree && p.heure_sortie) return { text: "Termine", variant: "sorti" }
+  // Half-day : on garde le statut work normal et on suffixe le badge avec
+  // le demi-congé. Si pas encore de pointage côté demi-jour travaillé, on
+  // affiche "Demi-congé (X)" comme statut principal.
+  const suffix = congeSuffix(p)
+  if (p.heure_entree && p.heure_sortie) return { text: `Termine${suffix}`, variant: "sorti" }
   // Hotfix 190 — pointages.heure_pause_debut/fin reflète la dernière pause.
   // Si heure_pause_debut renseigné sans heure_pause_fin => pause en cours.
-  if (p.heure_entree && p.heure_pause_debut && !p.heure_pause_fin) return { text: "En pause", variant: "pause" }
-  if (p.heure_entree && !p.heure_sortie) return { text: "Present", variant: "present" }
-  if (p.absent_justifie) return { text: "Absent", variant: "absent" }
+  if (p.heure_entree && p.heure_pause_debut && !p.heure_pause_fin) return { text: `En pause${suffix}`, variant: "pause" }
+  if (p.heure_entree && !p.heure_sortie) return { text: `Present${suffix}`, variant: "present" }
+  if (p.absent_justifie) return { text: `Absent${suffix}`, variant: "absent" }
+  if (p.demi_conge) {
+    // Pas de pointage encore : afficher le demi-congé comme statut principal,
+    // mais variant "conge" pour le visuel vert (l'employé a quand même
+    // un demi-congé approuvé aujourd'hui).
+    const half = p.demi_conge_quand === "matin" ? "matin" : p.demi_conge_quand === "apres_midi" ? "après-midi" : ""
+    const type = p.type_conge || "congé"
+    return { text: half ? `Demi-${type} ${half}` : `Demi-${type}`, variant: "conge" }
+  }
   if (!p.heure_entree) return { text: "Non pointe", variant: "none" }
   return { text: "--", variant: "none" }
 }
@@ -214,7 +238,14 @@ export default function PointagePage() {
       const today = todayISO()
       const todayConges: CongeToday[] = ((congesRes.conges || []) as any[])
         .filter((c: any) => c.date_debut <= today && c.date_fin >= today)
-        .map((c: any) => ({ employe_id: c.employe_id, type_conge: c.type_conge }))
+        .map((c: any) => ({
+          employe_id: c.employe_id,
+          type_conge: c.type_conge,
+          demi_journee: c.demi_journee === true,
+          matin_ou_apres_midi: c.matin_ou_apres_midi === "matin" || c.matin_ou_apres_midi === "apres_midi"
+            ? c.matin_ou_apres_midi
+            : null,
+        }))
       setCongesToday(todayConges)
     } catch (e) {
       console.error(e)
@@ -388,20 +419,34 @@ export default function PointagePage() {
       pointageMap.set(p.employe_id, p)
     }
 
+    // Helper : enrichit un pointage avec les infos congé du jour. Distingue
+    // pleine journée (en_conge=true → masque le pointage) et demi-journée
+    // (demi_conge=true → pointage attendu sur l'autre demi, badge en suffixe).
+    const enrichWithConge = (p: Pointage, conge: CongeToday | undefined): Pointage => {
+      if (!conge) return p
+      if (conge.demi_journee) {
+        return {
+          ...p,
+          demi_conge: true,
+          demi_conge_quand: conge.matin_ou_apres_midi,
+          type_conge: conge.type_conge,
+        }
+      }
+      return { ...p, en_conge: true, type_conge: conge.type_conge }
+    }
+
     // For each employee, either use existing pointage or create a placeholder
     const merged: Pointage[] = employes.map((emp) => {
       const existing = pointageMap.get(emp.id)
       const conge = congeMap.get(emp.id)
 
       if (existing) {
-        // Enrich with congé info if applicable
-        if (conge) return { ...existing, en_conge: true, type_conge: conge.type_conge }
-        return existing
+        return enrichWithConge(existing, conge)
       }
 
       // Employee on approved congé today — mark as "En congé"
       if (conge) {
-        return {
+        const base = {
           id: `conge-${emp.id}`,
           employe_id: emp.id,
           heure_entree: null,
@@ -411,10 +456,19 @@ export default function PointagePage() {
           duree_minutes: null,
           heures_travaillees: null,
           heures_sup: null,
-          en_conge: true,
           type_conge: conge.type_conge,
           employe: { nom: emp.nom, prenom: emp.prenom, poste: emp.poste },
         }
+        if (conge.demi_journee) {
+          // Demi-congé sans pointage encore → on garde la ligne "pointable"
+          // (pas de en_conge=true) avec drapeau demi pour l'affichage.
+          return {
+            ...base,
+            demi_conge: true,
+            demi_conge_quand: conge.matin_ou_apres_midi,
+          }
+        }
+        return { ...base, en_conge: true }
       }
 
       // Placeholder for employees with no pointage today
@@ -435,9 +489,7 @@ export default function PointagePage() {
     // Also include pointages for employees not in the current employes list
     for (const p of pointages) {
       if (!employes.find((e) => e.id === p.employe_id)) {
-        const conge = congeMap.get(p.employe_id)
-        if (conge) merged.push({ ...p, en_conge: true, type_conge: conge.type_conge })
-        else merged.push(p)
+        merged.push(enrichWithConge(p, congeMap.get(p.employe_id)))
       }
     }
 
@@ -458,6 +510,7 @@ export default function PointagePage() {
   }, [employeId, sortedPointages])
 
   // Determine button states for selected employee
+  // demi_conge n'empêche PAS le pointage : l'employé travaille l'autre demi.
   const canClockIn = useMemo(() => {
     if (!selectedEmployeePointage) return true
     if (selectedEmployeePointage.en_conge) return false

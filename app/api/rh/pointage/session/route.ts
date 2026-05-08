@@ -76,15 +76,17 @@ async function ensureNotOnConge(
   employe_id: string,
   date: string,
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  // demi_journee=true → pointage autorisé (l'employé travaille l'autre demi).
+  // Seul un congé pleine journée bloque le pointage.
   const { data: conges } = await supabase
     .from('demandes_conges')
-    .select('id, type_conge')
+    .select('id, type_conge, demi_journee')
     .eq('employe_id', employe_id)
     .eq('statut', 'approuve')
     .lte('date_debut', date)
     .gte('date_fin', date)
     .limit(1)
-  if (conges && conges.length > 0) {
+  if (conges && conges.length > 0 && conges[0].demi_journee !== true) {
     return {
       ok: false,
       status: 409,
