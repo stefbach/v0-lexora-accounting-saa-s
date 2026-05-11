@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, RefreshCw, AlertCircle, Shield, TrendingUp, Info } from 'lucide-react'
+import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
 
 type EclRow = {
   tiers: string
@@ -59,14 +60,14 @@ const STAGE_LABEL: Record<number, { label: string; color: string }> = {
 }
 
 export default function Ifrs9EclPage() {
+  const { societeId } = useSocieteActive()
   const [data, setData] = useState<EclResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [societeId, setSocieteId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async (refresh = false) => {
-    if (!societeId) return
+    if (!societeId) { setLoading(false); return }
     setError(null)
     if (refresh) setRefreshing(true); else setLoading(true)
     try {
@@ -82,15 +83,7 @@ export default function Ifrs9EclPage() {
     }
   }, [societeId])
 
-  useEffect(() => {
-    // Récupère la société active depuis l'API mes-societes
-    fetch('/api/client/mes-societes').then(r => r.json()).then((s: any) => {
-      const id = s?.societes?.[0]?.id || s?.[0]?.id
-      if (id) setSocieteId(id)
-    }).catch(() => { /* swallow */ })
-  }, [])
-
-  useEffect(() => { if (societeId) load(false) }, [societeId, load])
+  useEffect(() => { load(false) }, [load])
 
   const overrideStage = async (tiers: string, stage: number) => {
     const reason = window.prompt(`Override Stage IFRS 9 pour "${tiers}" → Stage ${stage}\n\nRaison (audit trail) :`)
@@ -110,6 +103,16 @@ export default function Ifrs9EclPage() {
 
   if (loading && !data) {
     return <div className="p-8 flex items-center gap-2 text-slate-600"><Loader2 className="animate-spin h-5 w-5" /> Chargement IFRS 9…</div>
+  }
+
+  if (!societeId) {
+    return (
+      <div className="p-8">
+        <div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <strong>Aucune société sélectionnée.</strong> Choisis une société dans la barre supérieure pour calculer son ECL IFRS 9.
+        </div>
+      </div>
+    )
   }
 
   return (
