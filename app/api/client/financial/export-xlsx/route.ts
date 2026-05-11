@@ -34,7 +34,12 @@ export async function GET(request: Request) {
   if (!res.ok) {
     return new Response(`Erreur P&L: ${res.status}`, { status: res.status })
   }
-  const fin: any = await res.json()
+  // /api/client/financial renvoie { financial: {...}, exercice_actuel, ... }
+  // On unwrap pour accéder directement aux champs P&L. Si le shape évolue, le
+  // fallback || json garantit qu'on ne plante pas (mais champs à 0 dans l'export).
+  const json: any = await res.json()
+  const fin: any = json?.financial || json
+  const exerciceActuel = json?.exercice_actuel
 
   const { data: societe } = await supabase
     .from('societes').select('raison_sociale').eq('id', societe_id).single()
@@ -47,7 +52,7 @@ export async function GET(request: Request) {
     ws: aoaSheet([
       [cell('Compte de résultat (P&L)')],
       [cell('Société'), cell(societe?.raison_sociale || '—')],
-      [cell('Exercice'), cell(fin.exercice || '—')],
+      [cell('Exercice'), cell(exerciceActuel || fin.exercice || '—')],
       [cell('Période'), cell(`${fin.date_debut || ''} → ${fin.date_fin || ''}`)],
       [cell('Exporté le'), cell(new Date(), FMT_DATE)],
       [],
@@ -70,7 +75,7 @@ export async function GET(request: Request) {
   const produitsFinanciers = Number(fin.produitsFinanciers) || 0
 
   const rows: any[][] = [
-    [cell('Compte de résultat — Exercice ' + (fin.exercice || ''))],
+    [cell('Compte de résultat — Exercice ' + (exerciceActuel || fin.exercice || ''))],
     [],
     [cell('PRODUITS D\'EXPLOITATION'), cell('Montant MUR')],
     [cell('Chiffre d\'affaires (706, 707, 708)'), cell(ca, FMT_MUR)],
@@ -130,6 +135,6 @@ export async function GET(request: Request) {
     title: `P&L ${societe?.raison_sociale || ''}`,
     subject: 'Compte de résultat IFRS Maurice',
   })
-  const fname = `pnl_${(societe?.raison_sociale || 'societe').replace(/\s+/g, '_')}_${fin.exercice || ''}.xlsx`
+  const fname = `pnl_${(societe?.raison_sociale || 'societe').replace(/\s+/g, '_')}_${exerciceActuel || fin.exercice || ''}.xlsx`
   return xlsxResponse(buf, fname)
 }

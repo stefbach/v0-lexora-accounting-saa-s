@@ -70,7 +70,11 @@ export async function GET(request: Request) {
     searchParams.forEach((v, k) => url.searchParams.set(k, v))
     const res = await fetch(url.toString(), { headers: { cookie: request.headers.get('cookie') || '' } })
     if (!res.ok) return NextResponse.json({ error: `Erreur P&L: ${res.status}` }, { status: res.status })
-    const fin: any = await res.json()
+    // /api/client/financial renvoie { financial: {...}, exercice_actuel, ... }
+    // On unwrap pour accéder directement aux champs P&L.
+    const json: any = await res.json()
+    const fin: any = json?.financial || json
+    const exerciceActuel = json?.exercice_actuel
 
     const { data: societe } = await supabase
       .from('societes').select('raison_sociale, brn, vat_number, adresse, exercice_debut').eq('id', societe_id).single()
@@ -100,7 +104,7 @@ export async function GET(request: Request) {
           elt(Text, { style: styles.company }, societe?.raison_sociale || '—'),
           societe?.brn && elt(Text, { style: styles.subtitle }, `BRN : ${societe.brn}${societe.vat_number ? ' · VAT : ' + societe.vat_number : ''}`),
           elt(Text, { style: styles.title }, 'Compte de Résultat'),
-          elt(Text, { style: styles.subtitle }, `Exercice ${fin.exercice || '—'} · Période ${fmtDate(fin.date_debut)} → ${fmtDate(fin.date_fin)}`),
+          elt(Text, { style: styles.subtitle }, `Exercice ${exerciceActuel || fin.exercice || '—'} · Période ${fmtDate(fin.date_debut)} → ${fmtDate(fin.date_fin)}`),
           elt(Text, { style: styles.subtitle }, `Référentiel : IFRS for SMEs · Companies Act 2001 Mauritius · Devise : MUR`),
         ),
 
@@ -202,13 +206,13 @@ export async function GET(request: Request) {
         ),
 
         elt(View, { style: styles.footer },
-          elt(Text, {}, `${societe?.raison_sociale || ''} · Compte de Résultat · Exercice ${fin.exercice || ''} · Document confidentiel`),
+          elt(Text, {}, `${societe?.raison_sociale || ''} · Compte de Résultat · Exercice ${exerciceActuel || fin.exercice || ''} · Document confidentiel`),
         ),
       )
     )
 
     const buffer = await renderToBuffer(doc as any)
-    const fname = `pnl_${(societe?.raison_sociale || 'societe').replace(/\s+/g, '_')}_${fin.exercice || ''}.pdf`
+    const fname = `pnl_${(societe?.raison_sociale || 'societe').replace(/\s+/g, '_')}_${exerciceActuel || fin.exercice || ''}.pdf`
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
