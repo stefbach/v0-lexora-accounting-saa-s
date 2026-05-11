@@ -565,6 +565,36 @@ export default function BilanPage() {
           <Download className="h-4 w-4" />
           Télécharger PDF
         </Button>
+
+        {/* Exports XLSX / PDF cabinet — endpoints serveur officiels */}
+        <Button
+          onClick={() => {
+            if (!societeId) return
+            const ex = exercice ? `&exercice=${exercice}` : ''
+            window.location.href = `/api/client/financial/export-xlsx?societe_id=${societeId}${ex}`
+          }}
+          disabled={!societeId}
+          variant="outline"
+          className="no-print flex items-center gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+          title="P&L cascade IFRS multi-feuilles avec formules de sous-totaux"
+        >
+          <Download className="h-4 w-4" />
+          P&L Excel
+        </Button>
+        <Button
+          onClick={() => {
+            if (!societeId) return
+            const ex = exercice ? `&exercice=${exercice}` : ''
+            window.location.href = `/api/client/financial/export-pdf?societe_id=${societeId}${ex}`
+          }}
+          disabled={!societeId}
+          variant="outline"
+          className="no-print flex items-center gap-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+          title="Compte de résultat PDF signable (IFRS for SMEs / Companies Act 2001 Maurice)"
+        >
+          <Download className="h-4 w-4" />
+          P&L PDF IFRS
+        </Button>
       </div>
 
       {/* PDF Import for prior year data */}
