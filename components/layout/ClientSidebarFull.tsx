@@ -125,6 +125,7 @@ const MENU: MenuSection[] = [
     requiredModule: "etats_financiers",
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
+      { href: "/client/ifrs9-ecl", label: "Provision IFRS 9 (ECL)", icon: Scale },
       { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
     ]
   },
