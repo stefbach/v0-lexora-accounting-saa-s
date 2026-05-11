@@ -15,7 +15,7 @@ import {
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
-  Sparkles
+  Sparkles, Repeat
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -104,6 +104,7 @@ const MENU: MenuSection[] = [
       { href: "/client/factures", label: "Mes Factures", labelKey: "inv.my_invoices", icon: Receipt },
       { href: "/client/lex-factures", label: "Lex Factures (analyse)", icon: Sparkles } as any,
       { href: "/client/nouvelle-facture", label: "Nouvelle Facture", labelKey: "inv.new_invoice", icon: FilePlus2 },
+      { href: "/client/recurrences", label: "Récurrences", icon: Repeat } as any,
       { href: "/comptable/contrats", label: "Contrats Clients", icon: FileText, visibleForRoles: ["client_admin", "direction"] } as any,
       { href: "/client/facturation-settings", label: "Paramètres Facturation", labelKey: "inv.settings", icon: SlidersHorizontal },
     ]

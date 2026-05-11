@@ -71,6 +71,10 @@
     {
       "path": "/api/cron/compliance-scan",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/factures-recurrentes",
+      "schedule": "0 6 * * *"
     }
   ]
 }

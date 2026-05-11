@@ -98,6 +98,7 @@ export async function POST(request: Request) {
       recurrent = false, recurrent_frequence, logo_url,
       mode_paiement = 'banque', paye_par, contact_id,
       type_document = 'facture', facture_reference_id,
+      recurrence_jour_du_mois, recurrence_date_debut, recurrence_date_fin,
     } = body
 
     if (!societe_id || !date_facture) {
@@ -157,17 +158,28 @@ export async function POST(request: Request) {
     const ttc = montant_ttc ?? (montant_ht + montant_tva)
     const mur = devise === 'MUR' ? ttc : ttc * (taux_change || 1)
 
+    // Si l'utilisateur active la récurrence, on force statut='modele' :
+    // le modèle ne doit jamais devenir une facture comptabilisée. Le cron
+    // /api/cron/factures-recurrentes clonera ce modèle pour générer les
+    // vraies factures au fil du temps.
+    const finalStatut = recurrent === true ? 'modele' : statut
+
     const insertData: Record<string, unknown> = {
       societe_id, type_facture: 'client',
       numero_facture: finalNumero, tiers, description,
       date_facture, date_echeance, devise, taux_change,
       montant_ht, montant_tva, montant_ttc: ttc,
-      taux_tva, montant_mur: mur, statut, notes,
+      taux_tva, montant_mur: mur, statut: finalStatut, notes,
       notes_internes, lignes, conditions_paiement, termes,
       template, client_offshore, remise_pct, remise_montant,
       recurrent, recurrent_frequence, logo_url,
       mode_paiement, paye_par, contact_id,
       type_document,
+    }
+    if (recurrent === true) {
+      insertData.recurrence_jour_du_mois = recurrence_jour_du_mois || null
+      insertData.recurrence_date_debut = recurrence_date_debut || date_facture
+      insertData.recurrence_date_fin = recurrence_date_fin || null
     }
     if (facture_reference_id) {
       insertData.facture_reference_id = facture_reference_id
