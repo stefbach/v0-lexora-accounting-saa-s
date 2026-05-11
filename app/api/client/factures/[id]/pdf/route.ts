@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
 import React from 'react'
-import { renderToBuffer, Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
+import { renderToBuffer, Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -15,6 +15,7 @@ const styles = StyleSheet.create({
   header:      { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
   companyName: { fontSize: 16, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
   companyInfo: { fontSize: 8, color: '#555' },
+  logo:        { width: 96, height: 48, objectFit: 'contain', marginBottom: 8 },
   invoiceTitle:{ fontSize: 20, fontFamily: 'Helvetica-Bold', textAlign: 'right', marginBottom: 4 },
   invoiceNum:  { fontSize: 10, textAlign: 'right', color: '#555' },
   sectionTitle:{ fontSize: 8, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, color: '#555' },
@@ -74,7 +75,7 @@ export async function GET(_request: Request, { params }: Params) {
     // Récupérer la facture
     const { data: facture, error } = await admin
       .from('factures')
-      .select('*, societe:societes(nom, brn, vat_number, adresse, telephone, email, banque_nom, banque_compte, banque_iban, banque_swift)')
+      .select('*, societe:societes(nom, brn, vat_number, adresse, telephone, email, banque_nom, banque_compte, banque_iban, banque_swift, logo_url)')
       .eq('id', id)
       .single()
 
@@ -105,6 +106,13 @@ export async function GET(_request: Request, { params }: Params) {
         // En-tête
         React.createElement(View, { style: styles.header },
           React.createElement(View, {},
+            // Logo société (mig 242, bucket societes-logos). On retire le query
+            // string de cache-busting éventuel — @react-pdf récupère via fetch
+            // serveur côté Vercel donc pas de cache navigateur à invalider.
+            soc?.logo_url && React.createElement(Image, {
+              src: String(soc.logo_url).split('?')[0],
+              style: styles.logo,
+            }),
             React.createElement(Text, { style: styles.companyName }, soc?.nom || ''),
             React.createElement(Text, { style: styles.companyInfo }, soc?.adresse || ''),
             soc?.telephone && React.createElement(Text, { style: styles.companyInfo }, `Tél : ${soc.telephone}`),
