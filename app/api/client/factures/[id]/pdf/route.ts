@@ -15,7 +15,9 @@ const styles = StyleSheet.create({
   header:      { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
   companyName: { fontSize: 16, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
   companyInfo: { fontSize: 8, color: '#555' },
-  logo:        { width: 96, height: 48, objectFit: 'contain', marginBottom: 8 },
+  // Logo : taille volontairement généreuse pour rester lisible une fois
+  // l'A4 imprimé. objectFit:contain garantit le respect du ratio source.
+  logo:        { width: 160, height: 80, objectFit: 'contain', marginBottom: 10 },
   invoiceTitle:{ fontSize: 20, fontFamily: 'Helvetica-Bold', textAlign: 'right', marginBottom: 4 },
   invoiceNum:  { fontSize: 10, textAlign: 'right', color: '#555' },
   sectionTitle:{ fontSize: 8, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, color: '#555' },
@@ -36,12 +38,18 @@ const styles = StyleSheet.create({
   tableHd:     { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#fff' },
   tableCell:   { fontSize: 8 },
   totals:      { marginTop: 12, alignItems: 'flex-end' },
-  totalRow:    { flexDirection: 'row', justifyContent: 'flex-end', gap: 24, marginBottom: 3 },
+  totalRow:    { flexDirection: 'row', justifyContent: 'flex-end', gap: 24, marginBottom: 3, alignItems: 'baseline' },
   totalLabel:  { fontSize: 8, color: '#555', width: 120, textAlign: 'right' },
-  totalValue:  { fontSize: 8, fontFamily: 'Helvetica-Bold', width: 80, textAlign: 'right' },
-  totalTTC:    { flexDirection: 'row', justifyContent: 'flex-end', gap: 24, marginTop: 6, paddingTop: 6, borderTopWidth: 1.5 },
+  totalValue:  { fontSize: 8, fontFamily: 'Helvetica-Bold', width: 100, textAlign: 'right' },
+  // Affichage de la contre-valeur en MUR à droite du montant en devise.
+  // Plus petit + gris pour bien marquer que c'est l'équivalent informatif.
+  totalMurValue:{ fontSize: 7, color: '#777', width: 100, textAlign: 'right' },
+  totalTTC:    { flexDirection: 'row', justifyContent: 'flex-end', gap: 24, marginTop: 6, paddingTop: 6, borderTopWidth: 1.5, alignItems: 'baseline' },
   ttcLabel:    { fontSize: 11, fontFamily: 'Helvetica-Bold', width: 120, textAlign: 'right' },
-  ttcValue:    { fontSize: 11, fontFamily: 'Helvetica-Bold', width: 80, textAlign: 'right' },
+  ttcValue:    { fontSize: 11, fontFamily: 'Helvetica-Bold', width: 100, textAlign: 'right' },
+  ttcMurValue: { fontSize: 9, color: '#555', width: 100, textAlign: 'right' },
+  // Bandeau "Taux de change appliqué" affiché si devise étrangère.
+  fxNotice:    { fontSize: 8, fontStyle: 'italic', color: '#666', marginTop: 10, padding: 8, backgroundColor: '#fafafa', borderRadius: 4, textAlign: 'right' },
   notes:       { marginTop: 24, padding: 10, backgroundColor: '#f8f8f8', borderRadius: 4 },
   notesTitle:  { fontSize: 8, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
   notesText:   { fontSize: 8, color: '#555' },
@@ -99,6 +107,26 @@ export async function GET(_request: Request, { params }: Params) {
     const lignes: any[] = facture.lignes || []
     const devise = facture.devise || 'MUR'
     const accentColor = facture.accent_color || '#0B0F2E'
+
+    // ── Double devise : si la facture est en devise étrangère, on affiche
+    //    en parallèle l'équivalent en MUR sur chaque ligne de totaux et
+    //    on ajoute une mention explicite du cours utilisé. Source de vérité :
+    //    facture.taux_change (figé à la création) et facture.montant_mur.
+    const taux = Number(facture.taux_change) > 0 ? Number(facture.taux_change) : 1
+    const isForeign = devise !== 'MUR' && Math.abs(taux - 1) > 0.0001
+    const ttcMur = Number(facture.montant_mur) > 0
+      ? Number(facture.montant_mur)
+      : Number(facture.montant_ttc) * taux
+    // Ratio MUR/devise réel (basé sur ttcMur/ttc) pour préserver les
+    // sommes même si l'utilisateur a saisi un montant_mur ajusté à la main.
+    const ttcOrig = Number(facture.montant_ttc) || 0
+    const murRatio = ttcOrig > 0 ? ttcMur / ttcOrig : taux
+    const htMur = Math.round((Number(facture.montant_ht) || 0) * murRatio * 100) / 100
+    const tvaMur = Math.round((Number(facture.montant_tva) || 0) * murRatio * 100) / 100
+    const tauxAffiche = murRatio.toLocaleString('fr-FR', {
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
+    })
 
     const doc = React.createElement(Document, {},
       React.createElement(Page, { size: 'A4', style: styles.page },
@@ -169,19 +197,31 @@ export async function GET(_request: Request, { params }: Params) {
           )
         ),
 
-        // Totaux
+        // Totaux — affichage double devise quand devise étrangère :
+        //   colonne 1 : libellé · colonne 2 : montant en devise · colonne 3 : ≈ MUR
         React.createElement(View, { style: styles.totals },
           React.createElement(View, { style: styles.totalRow },
             React.createElement(Text, { style: styles.totalLabel }, 'Sous-total HT'),
             React.createElement(Text, { style: styles.totalValue }, fmtMontant(facture.montant_ht, devise)),
+            isForeign && React.createElement(Text, { style: styles.totalMurValue },
+              `≈ ${fmtMontant(htMur, 'MUR')}`),
           ),
           React.createElement(View, { style: styles.totalRow },
             React.createElement(Text, { style: styles.totalLabel }, `TVA ${facture.client_offshore ? '0%' : '15%'}`),
             React.createElement(Text, { style: styles.totalValue }, fmtMontant(facture.montant_tva, devise)),
+            isForeign && React.createElement(Text, { style: styles.totalMurValue },
+              `≈ ${fmtMontant(tvaMur, 'MUR')}`),
           ),
           React.createElement(View, { style: { ...styles.totalTTC, borderTopColor: accentColor } },
             React.createElement(Text, { style: { ...styles.ttcLabel, color: accentColor } }, 'TOTAL TTC'),
             React.createElement(Text, { style: { ...styles.ttcValue, color: accentColor } }, fmtMontant(facture.montant_ttc, devise)),
+            isForeign && React.createElement(Text, { style: styles.ttcMurValue },
+              `≈ ${fmtMontant(ttcMur, 'MUR')}`),
+          ),
+          // Mention du taux de change utilisé (cohérence comptable + transparence client)
+          isForeign && React.createElement(View, { style: styles.fxNotice },
+            React.createElement(Text, {},
+              `Taux de change appliqué : 1 ${devise} = ${tauxAffiche} MUR (cours du ${fmtDate(facture.date_facture)})`),
           ),
         ),
 
