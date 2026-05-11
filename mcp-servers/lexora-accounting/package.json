@@ -1,0 +1,25 @@
+{
+  "name": "lexora-accounting-mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing Lexora accounting operations as typed tools for Claude agents (Mauritian IFRS).",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "lexora-accounting-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@supabase/supabase-js": "^2.100.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4.7.0",
+    "typescript": "5.7.3"
+  }
+}

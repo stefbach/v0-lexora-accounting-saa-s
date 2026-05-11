@@ -21,6 +21,7 @@ import {
   ShieldAlert,
   Wrench,
   Activity,
+  Brain,
 } from "lucide-react"
 
 const MENU = [
@@ -34,6 +35,7 @@ const MENU = [
       { href: "/admin/societes", label: "Societes", labelKey: "admin.companies", icon: Building2 },
       { href: "/admin/documents", label: "Documents", labelKey: "admin.documents", icon: FileText },
       { href: "/admin/services", label: "Services & Plans", labelKey: "admin.services", icon: Settings },
+      { href: "/admin/lexora-tooling", label: "Lexora Tooling (IA)", icon: Brain },
     ],
   },
   {
