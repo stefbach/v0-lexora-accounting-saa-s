@@ -40,6 +40,7 @@ import {
   Landmark,
   ArrowDownCircle,
   ArrowUpCircle,
+  Download,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -339,6 +340,20 @@ export default function ClientGrandLivrePage() {
                   <CheckCircle2 className="h-4 w-4 mr-1.5" />
                 )}
                 Lettrer auto
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!societeId) return
+                  window.location.href = `/api/comptable/grand-livre/export-xlsx?societe_id=${societeId}`
+                }}
+                disabled={!societeId}
+                variant="outline"
+                size="sm"
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                title="Télécharger le grand-livre en Excel multi-feuilles (par classe PCM + synthèse)"
+              >
+                <Download className="h-4 w-4 mr-1.5" />
+                Export Excel
               </Button>
               <Button
                 onClick={handleAudit}
