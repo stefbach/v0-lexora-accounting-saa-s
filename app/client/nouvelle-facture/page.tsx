@@ -35,7 +35,13 @@ const ACCENT_COLORS = [
   { name: "Slate", hex: "#475569" }, { name: "Rose", hex: "#E11D48" },
   { name: "Indigo", hex: "#4F46E5" }, { name: "Black", hex: "#000000" },
 ] as const
-const ECHEANCES = [{ label: "30 jours", value: 30 }, { label: "60 jours", value: 60 }, { label: "90 jours", value: 90 }, { label: "Personnalise", value: -1 }] as const
+const ECHEANCES = [
+  { label: "À réception", value: 0 },
+  { label: "30 jours", value: 30 },
+  { label: "60 jours", value: 60 },
+  { label: "90 jours", value: 90 },
+  { label: "Personnalisé", value: -1 },
+] as const
 
 function Sel({ value, onValueChange, placeholder, children }: { value?: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) {
   return <Select value={value} onValueChange={onValueChange}><SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent>{children}</SelectContent></Select>
@@ -157,7 +163,15 @@ export default function NouvelleFacturePage() {
   const totalTTC = useMemo(() => totalHTApresRemise + totalTVA, [totalHTApresRemise, totalTVA])
   const contreValeurMUR = useMemo(() => devise !== "MUR" ? totalTTC * tauxChange : null, [totalTTC, devise, tauxChange])
 
-  const handleEcheancePreset = (val: string) => { const n = parseInt(val); setEcheancePreset(n); if (n > 0) setDateEcheance(addDays(dateFacture, n)) }
+  const handleEcheancePreset = (val: string) => {
+    const n = parseInt(val)
+    setEcheancePreset(n)
+    // n === 0  → "À réception" : échéance = date de facture
+    // n  >  0  → délai en jours
+    // n === -1 → "Personnalisé" : on ne touche pas à la date saisie
+    if (n === 0) setDateEcheance(dateFacture)
+    else if (n > 0) setDateEcheance(addDays(dateFacture, n))
+  }
 
   const handleTemplateSelect = (id: string) => {
     setTemplateId(id)
@@ -191,7 +205,7 @@ export default function NouvelleFacturePage() {
       date_facture: dateFacture, date_echeance: dateEcheance, devise, taux_change: tauxChange,
       montant_ht: signedHT, montant_tva: signedTVA, montant_ttc: signedTTC,
       taux_tva: clientOffshore ? 0 : 15, statut, lignes, mode_paiement: modePaiement,
-      conditions_paiement: echeancePreset > 0 ? echeancePreset : (settings?.conditions_paiement || 30),
+      conditions_paiement: echeancePreset >= 0 ? echeancePreset : (settings?.conditions_paiement || 30),
       notes_visibles: notesVisibles, notes_internes: notesInternes,
       template: localStorage.getItem("lexora_invoice_template") || "standard",
       template_id: templateId || undefined,
@@ -357,7 +371,11 @@ export default function NouvelleFacturePage() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Field label="N. Facture"><Input value={numeroFacture} onChange={e => setNumeroFacture(e.target.value)} className="font-mono" /></Field>
-            <Field label="Date facture"><Input type="date" value={dateFacture} onChange={e => { setDateFacture(e.target.value); if (echeancePreset > 0) setDateEcheance(addDays(e.target.value, echeancePreset)) }} /></Field>
+            <Field label="Date facture"><Input type="date" value={dateFacture} onChange={e => {
+              setDateFacture(e.target.value)
+              if (echeancePreset === 0) setDateEcheance(e.target.value)
+              else if (echeancePreset > 0) setDateEcheance(addDays(e.target.value, echeancePreset))
+            }} /></Field>
             <Field label="Date echeance"><Input type="date" value={dateEcheance} onChange={e => { setDateEcheance(e.target.value); setEcheancePreset(-1) }} /></Field>
             <Field label="Reference"><Input value={reference} onChange={e => setReference(e.target.value)} placeholder="Ref. / PO" /></Field>
           </div>
@@ -447,14 +465,28 @@ export default function NouvelleFacturePage() {
                     </Select>
                   </TableCell>
                   <TableCell><Input type="number" min={0} step="0.01" value={l.quantite} onChange={e => updateLigne(l.id, "quantite", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-20" /></TableCell>
-                  <TableCell><Input type="number" step="0.01" value={l.prix_unitaire} onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-28" /></TableCell>
+                  <TableCell>
+                    <Input type="number" step="0.01" value={l.prix_unitaire} onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-28" />
+                    {devise !== "MUR" && tauxChange > 1.0001 && l.prix_unitaire > 0 && (
+                      <div className="text-[10px] text-gray-400 text-right font-mono mt-0.5">
+                        ≈ {fmt(l.prix_unitaire * tauxChange)} MUR
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Select value={String(l.taux_tva)} onValueChange={v => updateLigne(l.id, "taux_tva", parseFloat(v))}>
                       <SelectTrigger className="border-0 bg-transparent w-20 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="15">15%</SelectItem><SelectItem value="0">0%</SelectItem></SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell className="text-right font-mono font-semibold text-[#0B0F2E]">{fmt(l.montant_ht)}</TableCell>
+                  <TableCell className="text-right font-mono font-semibold text-[#0B0F2E]">
+                    <div>{fmt(l.montant_ht)} {devise !== "MUR" ? devise : ""}</div>
+                    {devise !== "MUR" && tauxChange > 1.0001 && l.montant_ht > 0 && (
+                      <div className="text-[10px] text-gray-400 font-normal mt-0.5">
+                        ≈ {fmt(l.montant_ht * tauxChange)} MUR
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell><Button variant="ghost" size="sm" onClick={() => removeLigne(l.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></Button></TableCell>
                 </TableRow>
               ))}
@@ -494,8 +526,22 @@ export default function NouvelleFacturePage() {
                     <Label className="whitespace-nowrap">1 {devise} =</Label>
                     <Input type="number" step="0.01" value={tauxChange} onChange={e => setTauxChange(parseFloat(e.target.value) || 1)} className="w-28 font-mono" />
                     <span className="text-sm text-gray-500">MUR</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchTaux(devise)}
+                      disabled={tauxLoading}
+                      title="Récupérer le cours du jour"
+                    >
+                      {tauxLoading ? "…" : "↻ Cours du jour"}
+                    </Button>
                   </div>
                   {tauxLoading && <p className="text-xs text-gray-400">Chargement du taux...</p>}
+                  <p className="text-[11px] text-gray-500">
+                    Le taux affiché est récupéré automatiquement depuis l'API officielle
+                    (cache 1h). Vous pouvez le modifier manuellement si besoin.
+                  </p>
                 </div>
               )}
             </CardContent>

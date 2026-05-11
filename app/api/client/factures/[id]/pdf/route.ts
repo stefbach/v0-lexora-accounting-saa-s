@@ -37,6 +37,9 @@ const styles = StyleSheet.create({
   col_ht:      { flex: 1.5, textAlign: 'right' },
   tableHd:     { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#fff' },
   tableCell:   { fontSize: 8 },
+  // Sous-ligne MUR affichée sous chaque montant en devise étrangère.
+  // Permet d'avoir « 50 EUR / ≈ 2 506 MUR » dans la même cellule.
+  tableCellMur:{ fontSize: 6.5, color: '#888', textAlign: 'right' },
   totals:      { marginTop: 12, alignItems: 'flex-end' },
   totalRow:    { flexDirection: 'row', justifyContent: 'flex-end', gap: 24, marginBottom: 3, alignItems: 'baseline' },
   totalLabel:  { fontSize: 8, color: '#555', width: 120, textAlign: 'right' },
@@ -163,8 +166,15 @@ export async function GET(_request: Request, { params }: Params) {
             React.createElement(Text, { style: styles.dateValue }, fmtDate(facture.date_facture)),
           ),
           React.createElement(View, { style: styles.dateBox },
-            React.createElement(Text, { style: styles.dateLabel }, "Date d'échéance"),
-            React.createElement(Text, { style: styles.dateValue }, fmtDate(facture.date_echeance)),
+            React.createElement(Text, { style: styles.dateLabel }, "Échéance"),
+            React.createElement(Text, { style: styles.dateValue },
+              // "À réception de facture" si les conditions de paiement sont à 0
+              // (ou si l'échéance est égale à la date de facture, fallback robuste).
+              Number(facture.conditions_paiement) === 0
+                || (facture.date_echeance && facture.date_facture === facture.date_echeance)
+                ? 'À réception de facture'
+                : fmtDate(facture.date_echeance),
+            ),
           ),
           facture.reference && React.createElement(View, { style: styles.dateBox },
             React.createElement(Text, { style: styles.dateLabel }, 'Référence'),
@@ -179,23 +189,35 @@ export async function GET(_request: Request, { params }: Params) {
         ),
 
         // Tableau lignes
+        // En devise étrangère : chaque cellule "P.U." et "Montant HT" empile
+        // le montant en devise et l'équivalent MUR juste en dessous (gris).
         React.createElement(View, { style: { ...styles.tableHeader, backgroundColor: accentColor } },
           React.createElement(Text, { style: { ...styles.col_desc, ...styles.tableHd } }, 'Description'),
           React.createElement(Text, { style: { ...styles.col_qty, ...styles.tableHd } }, 'Qté'),
-          React.createElement(Text, { style: { ...styles.col_pu, ...styles.tableHd } }, 'P.U. HT'),
+          React.createElement(Text, { style: { ...styles.col_pu, ...styles.tableHd } }, isForeign ? `P.U. HT (${devise} / MUR)` : 'P.U. HT'),
           React.createElement(Text, { style: { ...styles.col_tva, ...styles.tableHd } }, 'TVA'),
-          React.createElement(Text, { style: { ...styles.col_ht, ...styles.tableHd } }, 'Montant HT'),
+          React.createElement(Text, { style: { ...styles.col_ht, ...styles.tableHd } }, isForeign ? `Montant HT (${devise} / MUR)` : 'Montant HT'),
         ),
 
-        ...lignes.map((l: any) =>
-          React.createElement(View, { style: styles.tableRow },
+        ...lignes.map((l: any) => {
+          const pu = Number(l.prix_unitaire) || 0
+          const ht = Number(l.montant_ht) || (Number(l.quantite) || 0) * pu
+          const puMur = Math.round(pu * murRatio * 100) / 100
+          const htMurLine = Math.round(ht * murRatio * 100) / 100
+          return React.createElement(View, { style: styles.tableRow },
             React.createElement(Text, { style: { ...styles.col_desc, ...styles.tableCell } }, l.description || ''),
             React.createElement(Text, { style: { ...styles.col_qty, ...styles.tableCell } }, String(l.quantite || 0)),
-            React.createElement(Text, { style: { ...styles.col_pu, ...styles.tableCell } }, fmtMontant(l.prix_unitaire, '')),
+            React.createElement(View, { style: styles.col_pu },
+              React.createElement(Text, { style: styles.tableCell }, fmtMontant(pu, isForeign ? devise : '')),
+              isForeign && React.createElement(Text, { style: styles.tableCellMur }, `≈ ${fmtMontant(puMur, 'MUR')}`),
+            ),
             React.createElement(Text, { style: { ...styles.col_tva, ...styles.tableCell } }, `${l.taux_tva || 0}%`),
-            React.createElement(Text, { style: { ...styles.col_ht, ...styles.tableCell } }, fmtMontant(l.montant_ht || l.quantite * l.prix_unitaire, '')),
+            React.createElement(View, { style: styles.col_ht },
+              React.createElement(Text, { style: styles.tableCell }, fmtMontant(ht, isForeign ? devise : '')),
+              isForeign && React.createElement(Text, { style: styles.tableCellMur }, `≈ ${fmtMontant(htMurLine, 'MUR')}`),
+            ),
           )
-        ),
+        }),
 
         // Totaux — affichage double devise quand devise étrangère :
         //   colonne 1 : libellé · colonne 2 : montant en devise · colonne 3 : ≈ MUR
