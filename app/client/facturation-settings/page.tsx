@@ -16,6 +16,7 @@ import {
   Shield, Wifi, WifiOff, Info, Loader2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -66,8 +67,39 @@ const TEMPLATES: InvoiceTemplate[] = [
 
 function genId() { return crypto.randomUUID() }
 
+/**
+ * Mappe la société DB (colonnes Supabase) → CompanySettings du form.
+ * Privilégie les valeurs DB, fallback sur les valeurs déjà saisies en
+ * localStorage pour ne rien perdre lors de la première migration.
+ */
+function mapSocieteToSettings(societe: any, legacy: Partial<CompanySettings>): CompanySettings {
+  return {
+    nom:                 societe?.nom                          ?? legacy.nom                 ?? "",
+    brn:                 societe?.brn                          ?? legacy.brn                 ?? "",
+    vat_number:          societe?.numero_tva_mra               ?? legacy.vat_number          ?? "",
+    logo_url:            societe?.logo_url                     ?? legacy.logo_url            ?? "",
+    adresse:             societe?.adresse                      ?? legacy.adresse             ?? "",
+    telephone:           societe?.telephone                    ?? legacy.telephone           ?? "",
+    email:               societe?.email                        ?? legacy.email               ?? "",
+    website:             societe?.website                      ?? legacy.website             ?? "",
+    banque_nom:          societe?.bank_name                    ?? legacy.banque_nom          ?? "",
+    banque_compte:       societe?.bank_account_number          ?? legacy.banque_compte       ?? "",
+    banque_iban:         societe?.iban                         ?? legacy.banque_iban         ?? "",
+    banque_swift:        societe?.banque_swift                 ?? legacy.banque_swift        ?? "",
+    devise_defaut:       societe?.devise_principale            ?? legacy.devise_defaut       ?? "MUR",
+    prefixe_facture:     societe?.facture_prefixe              ?? legacy.prefixe_facture     ?? "INV-",
+    prochain_numero:     Number(societe?.facture_prochain_numero ?? legacy.prochain_numero ?? 1),
+    conditions_paiement: Number(societe?.facture_conditions_paiement ?? legacy.conditions_paiement ?? 30),
+    footer_text:         societe?.facture_footer_text          ?? legacy.footer_text         ?? "",
+    mention_legale:      societe?.facture_mention_legale       ?? legacy.mention_legale      ?? "",
+  }
+}
+
 export default function FacturationSettingsPage() {
+  const { societeId, societe, refresh } = useSocieteActive()
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS)
+  const [persisting, setPersisting] = useState(false)
+  const [persistError, setPersistError] = useState<string | null>(null)
   const [clients, setClients] = useState<InvoiceClient[]>([])
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState("standard")
@@ -106,11 +138,15 @@ export default function FacturationSettingsPage() {
   const [catTva, setCatTva] = useState(true)
   const [catCategorie, setCatCategorie] = useState("")
 
-  // Load from localStorage
+  // Charge depuis la DB (société active) en priorité, fallback localStorage
+  // pour les utilisateurs legacy qui n'ont pas encore migré vers la mig 243.
+  // Le mapping est fait par mapSocieteToSettings → toutes les colonnes DB
+  // pertinentes (nom, BRN, adresse, banque, etc.) auto-remplissent le form.
   useEffect(() => {
+    let legacy: Partial<CompanySettings> = {}
     try {
       const s = localStorage.getItem("lexora_invoice_settings")
-      if (s) setSettings(JSON.parse(s))
+      if (s) legacy = JSON.parse(s) as Partial<CompanySettings>
       const c = localStorage.getItem("lexora_invoice_clients")
       if (c) setClients(JSON.parse(c))
       const cat = localStorage.getItem("lexora_invoice_catalogue")
@@ -129,9 +165,16 @@ export default function FacturationSettingsPage() {
         setMraApiUrl(m.api_url || "https://sandboxifp.mra.mu/api/v1")
       }
     } catch { /* ignore */ }
-  }, [])
+    // DB > legacy localStorage. Si pas de société chargée encore, on
+    // pose au moins le legacy pour que le user voie ses anciennes valeurs.
+    setSettings(mapSocieteToSettings(societe, legacy))
+  }, [societe])
 
-  const saveAll = useCallback(() => {
+  const saveAll = useCallback(async () => {
+    // 1. localStorage : conserve les paramètres pas encore migrés en DB
+    //    (clients legacy, catalogue legacy, template choisi, MRA). Quand
+    //    le composant catalogue / contacts DB sera la source unique, on
+    //    pourra retirer ces lignes.
     localStorage.setItem("lexora_invoice_settings", JSON.stringify(settings))
     localStorage.setItem("lexora_invoice_clients", JSON.stringify(clients))
     localStorage.setItem("lexora_invoice_catalogue", JSON.stringify(catalogue))
@@ -141,9 +184,49 @@ export default function FacturationSettingsPage() {
       active: mraActive, ebs_id: mraEbsId, api_key: mraApiKey,
       environment: mraEnvironment, api_url: mraApiUrl,
     }))
+
+    // 2. PATCH société : pousse les colonnes mappables en DB (mig 243+)
+    if (societeId) {
+      setPersisting(true)
+      setPersistError(null)
+      try {
+        const body = {
+          nom:                          settings.nom,
+          brn:                          settings.brn,
+          numero_tva_mra:               settings.vat_number,
+          adresse:                      settings.adresse,
+          telephone:                    settings.telephone,
+          email:                        settings.email,
+          website:                      settings.website,
+          devise_principale:            settings.devise_defaut,
+          bank_name:                    settings.banque_nom,
+          bank_account_number:          settings.banque_compte,
+          iban:                         settings.banque_iban,
+          banque_swift:                 settings.banque_swift,
+          facture_prefixe:              settings.prefixe_facture,
+          facture_prochain_numero:      settings.prochain_numero,
+          facture_conditions_paiement:  settings.conditions_paiement,
+          facture_footer_text:          settings.footer_text,
+          facture_mention_legale:       settings.mention_legale,
+        }
+        const res = await fetch(`/api/client/societes?id=${societeId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data?.error || "Erreur enregistrement")
+        await refresh()
+      } catch (e: any) {
+        setPersistError(e?.message || "Erreur enregistrement DB")
+      } finally {
+        setPersisting(false)
+      }
+    }
+
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
-  }, [settings, clients, catalogue, selectedTemplate, templateColors, mraActive, mraEbsId, mraApiKey, mraEnvironment, mraApiUrl])
+  }, [settings, clients, catalogue, selectedTemplate, templateColors, mraActive, mraEbsId, mraApiKey, mraEnvironment, mraApiUrl, societeId, refresh])
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -225,9 +308,22 @@ export default function FacturationSettingsPage() {
       title="Paramètres de Facturation"
       subtitle="Configuration MRA (ERN, IRN, TVA, devise par défaut) pour toutes vos factures émises."
       actions={
-        <Button onClick={saveAll} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
-          {saved ? <><Check className="w-4 h-4 mr-2" />Sauvegardé !</> : <><Save className="w-4 h-4 mr-2" />Sauvegarder tout</>}
-        </Button>
+        <div className="flex items-center gap-3">
+          {persistError && (
+            <span className="text-xs text-red-600 max-w-xs truncate" title={persistError}>
+              ⚠ {persistError}
+            </span>
+          )}
+          <Button onClick={saveAll} disabled={persisting} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
+            {persisting ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enregistrement…</>
+            ) : saved ? (
+              <><Check className="w-4 h-4 mr-2" />Sauvegardé !</>
+            ) : (
+              <><Save className="w-4 h-4 mr-2" />Sauvegarder tout</>
+            )}
+          </Button>
+        </div>
       }
     >
       <div className="space-y-6">
