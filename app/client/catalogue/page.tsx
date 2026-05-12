@@ -47,10 +47,12 @@ import {
   Package,
   RefreshCw,
   Upload,
+  FileSpreadsheet,
   Search,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { CatalogueImportDialog } from "@/components/client/CatalogueImportDialog"
 
 interface CatalogueItem {
   id: string
@@ -86,6 +88,7 @@ export default function ClientCataloguePage() {
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [editing, setEditing] = useState<CatalogueItem | null>(null)
   const [fDescription, setFDescription] = useState("")
   const [fPrix, setFPrix] = useState("")
@@ -305,6 +308,15 @@ export default function ClientCataloguePage() {
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
                 Actualiser
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setImportDialogOpen(true)}
+                disabled={!societeId}
+                className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+                Importer fichier
               </Button>
               <Button
                 onClick={openNew}
@@ -559,6 +571,16 @@ export default function ClientCataloguePage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Dialog d'import en masse (CSV/XLSX) — appelle l'endpoint
+            bulk POST /api/client/catalogue { items: [...] } mis en place
+            depuis la PR #54. */}
+        <CatalogueImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          societeId={societeId}
+          onImported={() => load()}
+        />
       </div>
     </ClientPageShell>
   )
