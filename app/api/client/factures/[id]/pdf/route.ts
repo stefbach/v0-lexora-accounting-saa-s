@@ -30,17 +30,27 @@ const styles = StyleSheet.create({
   dateValue:   { fontSize: 9, fontFamily: 'Helvetica-Bold' },
   tableHeader: { flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 8, marginBottom: 2, borderRadius: 2 },
   tableRow:    { flexDirection: 'row', paddingVertical: 5, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: '#eee' },
+  // Largeurs ajustables : en devise étrangère, P.U. et Montant HT
+  // s'élargissent pour accueillir 2 sous-colonnes (devise + MUR) côte
+  // à côte. col_*_foreign = variante 2 colonnes.
   col_desc:    { flex: 4 },
   col_qty:     { flex: 1, textAlign: 'right' },
   col_pu:      { flex: 1.5, textAlign: 'right' },
   col_tva:     { flex: 1, textAlign: 'right' },
   col_ht:      { flex: 1.5, textAlign: 'right' },
+  col_desc_fx: { flex: 2.8 },
+  col_qty_fx:  { flex: 0.7, textAlign: 'right' },
+  col_pu_fx:   { flex: 2.4, flexDirection: 'row', justifyContent: 'flex-end' },
+  col_tva_fx:  { flex: 0.7, textAlign: 'right' },
+  col_ht_fx:   { flex: 2.4, flexDirection: 'row', justifyContent: 'flex-end' },
+  // Sous-cellule (devise ou MUR) dans P.U./HT en mode double devise.
+  // Chaque sous-cellule prend la moitié de la cellule parent.
+  col_sub:     { flex: 1, textAlign: 'right', paddingLeft: 4 },
   tableHd:     { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#fff' },
   tableCell:   { fontSize: 8 },
-  // Sous-ligne MUR : MÊME TAILLE que tableCell pour rester aussi lisible
-  // que le montant en devise étrangère. Couleur légèrement atténuée et
-  // un peu d'espace au-dessus pour bien séparer les 2 valeurs.
-  tableCellMur:{ fontSize: 8, color: '#444', textAlign: 'right', marginTop: 2 },
+  // Affichage MUR côte à côte avec le montant en devise : même taille,
+  // couleur très légèrement atténuée pour conserver une hiérarchie subtile.
+  tableCellMur:{ fontSize: 8, color: '#444', textAlign: 'right', paddingLeft: 4 },
   totals:      { marginTop: 12, alignItems: 'flex-end' },
   totalRow:    { flexDirection: 'row', justifyContent: 'flex-end', gap: 24, marginBottom: 3, alignItems: 'baseline' },
   totalLabel:  { fontSize: 8, color: '#555', width: 120, textAlign: 'right' },
@@ -75,7 +85,7 @@ function fmtMontant(n: number | null | undefined, devise = 'MUR'): string {
 
 type Params = { params: Promise<{ id: string }> }
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -83,6 +93,10 @@ export async function GET(_request: Request, { params }: Params) {
 
     const { id } = await params
     const admin = getAdminClient()
+    // ?refresh=1 force la régénération même si un PDF est déjà en Storage
+    // (utile après évolution du gabarit ou changement de logo / taux).
+    const url = new URL(request.url)
+    const forceRefresh = url.searchParams.get('refresh') === '1'
 
     // Récupérer la facture
     const { data: facture, error } = await admin
@@ -98,8 +112,8 @@ export async function GET(_request: Request, { params }: Params) {
       await assertSocieteAccess(admin, user.id, facture.societe_id)
     }
 
-    // Si PDF déjà stocké → signed URL
-    if (facture.pdf_url) {
+    // Si PDF déjà stocké → signed URL (sauf ?refresh=1 pour forcer regen)
+    if (facture.pdf_url && !forceRefresh) {
       const { data: signed } = await admin.storage.from(BUCKET).createSignedUrl(facture.pdf_url, 3600)
       if (signed?.signedUrl) {
         return NextResponse.redirect(signed.signedUrl)
@@ -116,8 +130,15 @@ export async function GET(_request: Request, { params }: Params) {
     //    en parallèle l'équivalent en MUR sur chaque ligne de totaux et
     //    on ajoute une mention explicite du cours utilisé. Source de vérité :
     //    facture.taux_change (figé à la création) et facture.montant_mur.
+    //
+    // Fix bug "le MUR ne s'affiche pas en EUR" : on retire le filtre
+    // sur abs(taux-1) > 0.0001 qui masquait la 2e colonne MUR quand la
+    // facture avait été créée avec taux_change=1 par défaut. Désormais
+    // dès que devise != MUR on affiche les 2 colonnes — si le taux n'a
+    // pas été saisi le MUR sera = devise, l'utilisateur le verra et
+    // pourra corriger le taux côté formulaire.
     const taux = Number(facture.taux_change) > 0 ? Number(facture.taux_change) : 1
-    const isForeign = devise !== 'MUR' && Math.abs(taux - 1) > 0.0001
+    const isForeign = devise !== 'MUR'
     const ttcMur = Number(facture.montant_mur) > 0
       ? Number(facture.montant_mur)
       : Number(facture.montant_ttc) * taux
@@ -190,14 +211,26 @@ export async function GET(_request: Request, { params }: Params) {
         ),
 
         // Tableau lignes
-        // En devise étrangère : chaque cellule "P.U." et "Montant HT" empile
-        // le montant en devise et l'équivalent MUR juste en dessous (gris).
+        // En devise étrangère : P.U. et Montant HT sont SPLITTED en 2
+        // sous-colonnes côte-à-côte (devise | MUR) au lieu d'être empilées.
+        // L'utilisateur voit immédiatement les deux valeurs au même niveau,
+        // et les colonnes elles-mêmes sont élargies (col_*_fx).
         React.createElement(View, { style: { ...styles.tableHeader, backgroundColor: accentColor } },
-          React.createElement(Text, { style: { ...styles.col_desc, ...styles.tableHd } }, 'Description'),
-          React.createElement(Text, { style: { ...styles.col_qty, ...styles.tableHd } }, 'Qté'),
-          React.createElement(Text, { style: { ...styles.col_pu, ...styles.tableHd } }, isForeign ? `P.U. HT (${devise} / MUR)` : 'P.U. HT'),
-          React.createElement(Text, { style: { ...styles.col_tva, ...styles.tableHd } }, 'TVA'),
-          React.createElement(Text, { style: { ...styles.col_ht, ...styles.tableHd } }, isForeign ? `Montant HT (${devise} / MUR)` : 'Montant HT'),
+          React.createElement(Text, { style: { ...(isForeign ? styles.col_desc_fx : styles.col_desc), ...styles.tableHd } }, 'Description'),
+          React.createElement(Text, { style: { ...(isForeign ? styles.col_qty_fx : styles.col_qty), ...styles.tableHd } }, 'Qté'),
+          isForeign
+            ? React.createElement(View, { style: styles.col_pu_fx },
+                React.createElement(Text, { style: { ...styles.col_sub, ...styles.tableHd } }, `P.U. ${devise}`),
+                React.createElement(Text, { style: { ...styles.col_sub, ...styles.tableHd } }, 'P.U. MUR'),
+              )
+            : React.createElement(Text, { style: { ...styles.col_pu, ...styles.tableHd } }, 'P.U. HT'),
+          React.createElement(Text, { style: { ...(isForeign ? styles.col_tva_fx : styles.col_tva), ...styles.tableHd } }, 'TVA'),
+          isForeign
+            ? React.createElement(View, { style: styles.col_ht_fx },
+                React.createElement(Text, { style: { ...styles.col_sub, ...styles.tableHd } }, `Mt HT ${devise}`),
+                React.createElement(Text, { style: { ...styles.col_sub, ...styles.tableHd } }, 'Mt HT MUR'),
+              )
+            : React.createElement(Text, { style: { ...styles.col_ht, ...styles.tableHd } }, 'Montant HT'),
         ),
 
         ...lignes.map((l: any) => {
@@ -206,17 +239,21 @@ export async function GET(_request: Request, { params }: Params) {
           const puMur = Math.round(pu * murRatio * 100) / 100
           const htMurLine = Math.round(ht * murRatio * 100) / 100
           return React.createElement(View, { style: styles.tableRow },
-            React.createElement(Text, { style: { ...styles.col_desc, ...styles.tableCell } }, l.description || ''),
-            React.createElement(Text, { style: { ...styles.col_qty, ...styles.tableCell } }, String(l.quantite || 0)),
-            React.createElement(View, { style: styles.col_pu },
-              React.createElement(Text, { style: styles.tableCell }, fmtMontant(pu, isForeign ? devise : '')),
-              isForeign && React.createElement(Text, { style: styles.tableCellMur }, `≈ ${fmtMontant(puMur, 'MUR')}`),
-            ),
-            React.createElement(Text, { style: { ...styles.col_tva, ...styles.tableCell } }, `${l.taux_tva || 0}%`),
-            React.createElement(View, { style: styles.col_ht },
-              React.createElement(Text, { style: styles.tableCell }, fmtMontant(ht, isForeign ? devise : '')),
-              isForeign && React.createElement(Text, { style: styles.tableCellMur }, `≈ ${fmtMontant(htMurLine, 'MUR')}`),
-            ),
+            React.createElement(Text, { style: { ...(isForeign ? styles.col_desc_fx : styles.col_desc), ...styles.tableCell } }, l.description || ''),
+            React.createElement(Text, { style: { ...(isForeign ? styles.col_qty_fx : styles.col_qty), ...styles.tableCell } }, String(l.quantite || 0)),
+            isForeign
+              ? React.createElement(View, { style: styles.col_pu_fx },
+                  React.createElement(Text, { style: { ...styles.col_sub, ...styles.tableCell } }, fmtMontant(pu, devise)),
+                  React.createElement(Text, { style: { ...styles.col_sub, ...styles.tableCellMur } }, fmtMontant(puMur, 'MUR')),
+                )
+              : React.createElement(Text, { style: { ...styles.col_pu, ...styles.tableCell } }, fmtMontant(pu, '')),
+            React.createElement(Text, { style: { ...(isForeign ? styles.col_tva_fx : styles.col_tva), ...styles.tableCell } }, `${l.taux_tva || 0}%`),
+            isForeign
+              ? React.createElement(View, { style: styles.col_ht_fx },
+                  React.createElement(Text, { style: { ...styles.col_sub, ...styles.tableCell } }, fmtMontant(ht, devise)),
+                  React.createElement(Text, { style: { ...styles.col_sub, ...styles.tableCellMur } }, fmtMontant(htMurLine, 'MUR')),
+                )
+              : React.createElement(Text, { style: { ...styles.col_ht, ...styles.tableCell } }, fmtMontant(ht, '')),
           )
         }),
 
