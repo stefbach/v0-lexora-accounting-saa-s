@@ -527,10 +527,15 @@ export default function NouvelleFacturePage() {
                       <SelectContent><SelectItem value="15">15%</SelectItem><SelectItem value="0">0%</SelectItem></SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell className="text-right font-mono font-semibold text-[#0B0F2E]">
-                    <div>{fmt(l.montant_ht)} {devise !== "MUR" ? devise : ""}</div>
-                    {devise !== "MUR" && tauxChange > 1.0001 && l.montant_ht > 0 && (
-                      <div className="text-[10px] text-gray-400 font-normal mt-0.5">
+                  <TableCell className="text-right font-mono">
+                    {/* En devise étrangère : on affiche les DEUX montants au
+                        même format (taille + couleur). Le MUR est juste
+                        marqué "≈" pour signaler qu'il est dérivé du taux. */}
+                    <div className="font-semibold text-[#0B0F2E]">
+                      {fmt(l.montant_ht)} {devise !== "MUR" ? devise : "MUR"}
+                    </div>
+                    {devise !== "MUR" && tauxChange > 1.0001 && (
+                      <div className="font-semibold text-[#0B0F2E] mt-0.5">
                         ≈ {fmt(l.montant_ht * tauxChange)} MUR
                       </div>
                     )}

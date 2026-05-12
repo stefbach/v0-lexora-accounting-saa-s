@@ -37,9 +37,10 @@ const styles = StyleSheet.create({
   col_ht:      { flex: 1.5, textAlign: 'right' },
   tableHd:     { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#fff' },
   tableCell:   { fontSize: 8 },
-  // Sous-ligne MUR affichée sous chaque montant en devise étrangère.
-  // Permet d'avoir « 50 EUR / ≈ 2 506 MUR » dans la même cellule.
-  tableCellMur:{ fontSize: 6.5, color: '#888', textAlign: 'right' },
+  // Sous-ligne MUR : MÊME TAILLE que tableCell pour rester aussi lisible
+  // que le montant en devise étrangère. Couleur légèrement atténuée et
+  // un peu d'espace au-dessus pour bien séparer les 2 valeurs.
+  tableCellMur:{ fontSize: 8, color: '#444', textAlign: 'right', marginTop: 2 },
   totals:      { marginTop: 12, alignItems: 'flex-end' },
   totalRow:    { flexDirection: 'row', justifyContent: 'flex-end', gap: 24, marginBottom: 3, alignItems: 'baseline' },
   totalLabel:  { fontSize: 8, color: '#555', width: 120, textAlign: 'right' },
