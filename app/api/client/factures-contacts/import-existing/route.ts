@@ -68,22 +68,25 @@ export async function POST(request: Request) {
     const candidats = new Map<string, CandidatContact>() // clé = normalizeName(nom)
 
     if (sources.includes('tiers_annuaire')) {
-      // tiers_annuaire (mig 128) — table normalisée par OCR
+      // tiers_annuaire (mig 128) est une table GLOBALE (pas de societe_id).
+      // On filtre seulement sur type_tiers — on récupère les tiers
+      // identifiés comme clients par l'OCR ou la saisie manuelle.
+      // Mig 244 ajoute email/telephone/adresse → on récupère tous les
+      // champs pertinents pour pré-remplir factures_contacts complet.
       try {
         const { data } = await supabase
           .from('tiers_annuaire')
-          .select('nom, brn, vat_number, type_tiers, pays')
-          .eq('societe_id', societe_id)
-          .in('type_tiers', ['client', 'prospect'])
+          .select('nom, brn, vat_number, type_tiers, pays, email, telephone, adresse')
+          .in('type_tiers', ['client', 'both'])
         for (const t of data || []) {
           const key = normalizeName(String(t.nom || ''))
           if (!key || seen.has(key) || candidats.has(key)) continue
           candidats.set(key, {
             nom: String(t.nom),
             entreprise: null,
-            email: null,
-            telephone: null,
-            adresse: t.pays || null,
+            email: t.email || null,
+            telephone: t.telephone || null,
+            adresse: t.adresse || t.pays || null,
             vat_number: t.vat_number || null,
             source: 'tiers_annuaire',
           })
