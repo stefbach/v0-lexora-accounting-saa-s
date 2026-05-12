@@ -138,6 +138,7 @@ const MENU: MenuSection[] = [
     section: "GBC & Full IFRS",
     requiredModule: "etats_financiers",
     items: [
+      { href: "/client/gbc-dashboard", label: "Dashboard GBC", icon: Globe } as any,
       { href: "/client/gbc-per", label: "PER 80% + FTC", icon: Banknote } as any,
       { href: "/client/gbc-substance", label: "Substance (CIGA)", icon: Scale } as any,
       { href: "/client/gbc-transfer-pricing", label: "Transfer Pricing", icon: BarChart3 } as any,

@@ -1,0 +1,178 @@
+import { describe, it, expect, vi } from 'vitest'
+import { applyGbcAutoTagging } from './gbc-auto-tagging'
+
+/**
+ * Tests d'intégration légers pour le helper auto-tagging GBC.
+ * Le client Supabase est mocké : on vérifie que la bonne séquence
+ * d'opérations est demandée selon le profil de la société (MUR vs GBC).
+ */
+
+function mockSupabase(opts: {
+  societe?: any
+  taux?: any
+  ecritures?: any[]
+  relations?: any[]
+  prevFacture?: any
+} = {}) {
+  const updates: any[] = []
+  const inserts: any[] = []
+  const queries: any[] = []
+
+  const fromMock = (table: string) => {
+    const ctx: any = { _table: table, _filters: [] as any[] }
+    const chain: any = {
+      select: (cols: string) => { ctx._cols = cols; return chain },
+      eq: (col: string, val: any) => { ctx._filters.push(['eq', col, val]); return chain },
+      is: (col: string, val: any) => { ctx._filters.push(['is', col, val]); return chain },
+      like: (col: string, val: any) => { ctx._filters.push(['like', col, val]); return chain },
+      or: (filter: string) => { ctx._filters.push(['or', filter]); return chain },
+      order: () => chain, limit: () => chain,
+      maybeSingle: () => {
+        queries.push(ctx)
+        if (table === 'taux_change') return Promise.resolve({ data: opts.taux ?? null, error: null })
+        return Promise.resolve({ data: null, error: null })
+      },
+      single: () => {
+        queries.push(ctx)
+        if (table === 'societes' && ctx._filters.find((f: any) => f[1] === 'id')) {
+          return Promise.resolve({ data: opts.societe ?? null, error: opts.societe ? null : { message: 'not found' } })
+        }
+        return Promise.resolve({ data: null, error: null })
+      },
+      update: (vals: any) => {
+        const upd: any = { _table: table, vals, _filters: [] as any[] }
+        const updChain: any = {
+          eq: (col: string, val: any) => { upd._filters.push(['eq', col, val]); return updChain },
+          like: (col: string, val: any) => { upd._filters.push(['like', col, val]); return updChain },
+        }
+        updates.push(upd)
+        // Promise-like behavior: any await on updChain resolves to ok
+        ;(updChain as any).then = (resolve: any) => resolve({ data: null, error: null })
+        return updChain
+      },
+      insert: (vals: any) => {
+        inserts.push({ _table: table, vals })
+        return Promise.resolve({ data: null, error: null })
+      },
+    }
+    // For relations: select then .or.is — resolves to relations[]
+    ;(chain as any).then = (resolve: any) => {
+      queries.push(ctx)
+      if (table === 'societes_relationships') return resolve({ data: opts.relations || [], error: null })
+      if (table === 'factures' && ctx._filters.find((f: any) => f[1] === 'related_party' && f[2] === true)) {
+        return resolve({ data: opts.prevFacture ? [opts.prevFacture] : [], error: null })
+      }
+      if (table === 'ecritures_comptables_v2') return resolve({ data: opts.ecritures || [], error: null })
+      return resolve({ data: [], error: null })
+    }
+    return chain
+  }
+
+  return {
+    from: fromMock,
+    _updates: updates,
+    _inserts: inserts,
+    _queries: queries,
+  }
+}
+
+describe('applyGbcAutoTagging', () => {
+  it('société MUR-only : pas de translation IAS 21, mais PER possible si tiers étranger', async () => {
+    const sb = mockSupabase({
+      societe: { id: 'soc-1', nom: 'Acme Ltd', devise_fonctionnelle: 'MUR' },
+    })
+    const r = await applyGbcAutoTagging(sb, {
+      facture_id: 'fac-1', societe_id: 'soc-1',
+      tiers: 'Foreign Holdings ZA',
+      tiers_country_iso: 'ZA',
+      type_facture: 'client',
+      numero_compte_principal: '761',
+      description: 'Dividend payment',
+      montant_mur: 100000,
+    })
+    expect(r.per_category).toBe('foreign_dividends')
+    expect(r.ias21_translated).toBe(false)        // MUR-only → pas de translation
+    expect(r.related_party).toBe(false)
+  })
+
+  it('société GBC USD avec taux change : applique la translation IAS 21', async () => {
+    const sb = mockSupabase({
+      societe: { id: 'soc-2', nom: 'Holdings USD', devise_fonctionnelle: 'USD' },
+      taux: { taux: 47.5 },
+      ecritures: [
+        { id: 'e1', numero_compte: '512', debit_mur: 47500, credit_mur: 0 },
+        { id: 'e2', numero_compte: '706', debit_mur: 0, credit_mur: 47500 },
+      ],
+    })
+    const r = await applyGbcAutoTagging(sb, {
+      facture_id: 'fac-2', societe_id: 'soc-2',
+      tiers: 'Customer USA', type_facture: 'client',
+      numero_compte_principal: '706',
+      montant_mur: 47500,
+    })
+    expect(r.ias21_translated).toBe(true)
+    expect(r.ias21_rate_used).toBe(47.5)
+  })
+
+  it('tiers est une société du groupe : flag related_party + crée TP transaction si seuil > 1M', async () => {
+    const sb = mockSupabase({
+      societe: { id: 'soc-3', nom: 'Parent Ltd', devise_fonctionnelle: 'USD' },
+      relations: [{
+        parent_societe_id: 'soc-3',
+        child_societe_id: 'soc-4',
+        child: { nom: 'Subsidiary Ltd' },
+        parent: { nom: 'Parent Ltd' },
+      }],
+    })
+    const r = await applyGbcAutoTagging(sb, {
+      facture_id: 'fac-3', societe_id: 'soc-3',
+      tiers: 'Subsidiary Ltd', type_facture: 'fournisseur',
+      numero_compte_principal: '607',
+      montant_mur: 6_000_000,   // > 5M → documentation_required
+      date_facture: '2025-09-15',
+    })
+    expect(r.related_party).toBe(true)
+    expect(r.related_party_type).toBe('subsidiary')
+    expect(r.tp_transaction_created).toBe(true)
+    // Vérifie que tp_transactions a reçu un insert
+    expect(sb._inserts.filter(i => i._table === 'tp_transactions').length).toBe(1)
+  })
+
+  it('société introuvable : retourne avec warning', async () => {
+    const sb = mockSupabase({ societe: null })
+    const r = await applyGbcAutoTagging(sb, {
+      facture_id: 'fac-x', societe_id: 'unknown',
+      tiers: 'X', type_facture: 'client', montant_mur: 1000,
+    })
+    expect(r.warnings.length).toBeGreaterThan(0)
+    expect(r.per_category).toBeNull()
+  })
+
+  it('facture fournisseur : pas de classification PER (PER = revenus uniquement)', async () => {
+    const sb = mockSupabase({
+      societe: { id: 'soc-5', nom: 'X', devise_fonctionnelle: 'MUR' },
+    })
+    const r = await applyGbcAutoTagging(sb, {
+      facture_id: 'fac-5', societe_id: 'soc-5',
+      tiers: 'Foreign Supplier ZA',
+      tiers_country_iso: 'ZA',
+      type_facture: 'fournisseur',
+      numero_compte_principal: '607',
+      montant_mur: 50000,
+    })
+    expect(r.per_category).toBeNull()
+  })
+
+  it('taux change introuvable : translation skipped avec warning', async () => {
+    const sb = mockSupabase({
+      societe: { id: 'soc-6', nom: 'X', devise_fonctionnelle: 'EUR' },
+      taux: null,
+    })
+    const r = await applyGbcAutoTagging(sb, {
+      facture_id: 'fac-6', societe_id: 'soc-6',
+      tiers: 'X', type_facture: 'client', montant_mur: 1000,
+    })
+    expect(r.ias21_translated).toBe(false)
+    expect(r.warnings.some(w => w.includes('Taux'))).toBe(true)
+  })
+})

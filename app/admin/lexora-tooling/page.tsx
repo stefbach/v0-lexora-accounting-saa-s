@@ -51,6 +51,7 @@ const SKILLS = [
 ]
 
 const GBC_MODULES = [
+  { code: "Dashboard", title: "Vue d'ensemble compliance GBC", page: "/client/gbc-dashboard", mig: 0, route: "(agrégation 8 modules)", Icon: Globe, color: "purple", topic: "Dashboard unifié : KPI + statut compliance par phase + tuiles cliquables. Phase J." },
   { code: "Phase A", title: "Monnaie fonctionnelle IAS 21", page: "/client/societes", mig: 249, route: "/api/comptable/cta-recalc", Icon: Banknote, color: "indigo", topic: "Comptabilité primaire ≠ MUR (USD/EUR), translation IAS 21 §38-49, écart de conversion compte 1078." },
   { code: "Phase B", title: "PER 80% + Foreign Tax Credit", page: "/client/gbc-per", mig: 250, route: "/api/comptable/gbc/per-computation", Icon: Banknote, color: "amber", topic: "ITA §50C : IS 3% sur revenus PER-éligibles (dividendes, intérêts, PE étrangères). FTC §77." },
   { code: "Phase C", title: "Substance Requirements (CIGA)", page: "/client/gbc-substance", mig: 251, route: "/api/comptable/gbc/substance", Icon: Shield, color: "emerald", topic: "ITA §73A : seuils dépenses + employés Maurice. 11 catégories d'activité. Auto-assessment compliance." },

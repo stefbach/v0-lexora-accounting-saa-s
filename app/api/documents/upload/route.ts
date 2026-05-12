@@ -1801,6 +1801,39 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
                 montant_mur: Number(factureData.montant_mur) || undefined,
               })
               if (!r.ok) console.warn('[upload] Écritures v2 non générées:', r.error)
+
+              // Phase J — Auto-tagging GBC (PER + related_party + IAS 21).
+              // No-op pour une société MUR-only. Pour une GBC (devise_fonctionnelle ≠ MUR
+              // ou tiers étranger), enrichit la facture et les écritures.
+              try {
+                const { applyGbcAutoTagging } = await import('@/lib/accounting/gbc-auto-tagging')
+                const isFactureClient = factureData.type_facture === 'client'
+                // Compte principal pour heuristique PER (706/707/761 côté client,
+                // 60x côté fournisseur). On utilise le premier code détecté par OCR.
+                const lignesOCR = (extraction as any)?.lignes || []
+                const compteOCR = lignesOCR[0]?.compte_comptable || lignesOCR[0]?.compte ||
+                  (isFactureClient ? '706' : '607')
+                const tagging = await applyGbcAutoTagging(supabase, {
+                  facture_id: insertedFacture.id,
+                  societe_id: factureData.societe_id as string,
+                  tiers: (factureData.tiers as string) || null,
+                  tiers_country_iso: (extraction as any)?.tiers_country_iso || null,
+                  type_facture: isFactureClient ? 'client' : 'fournisseur',
+                  numero_compte_principal: compteOCR,
+                  description: (factureData.description as string) || (extraction as any)?.description || null,
+                  montant_mur: Number(factureData.montant_mur) || Number(factureData.montant_ttc) || 0,
+                  date_facture: (factureData.date_facture as string) || null,
+                })
+                if (tagging.per_category || tagging.related_party || tagging.ias21_translated) {
+                  console.log('[upload][GBC] auto-tagging appliqué:', tagging)
+                }
+                if (tagging.warnings.length > 0) {
+                  console.warn('[upload][GBC] warnings:', tagging.warnings)
+                }
+              } catch (e: any) {
+                // Ne JAMAIS bloquer le pipeline OCR si tagging GBC échoue.
+                console.warn('[upload][GBC] applyGbcAutoTagging exception (non bloquant):', e?.message)
+              }
             } catch (e: any) {
               console.warn('[upload] createEcrituresForFacture exception:', e?.message)
             }
