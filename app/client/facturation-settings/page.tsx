@@ -34,7 +34,12 @@ interface CompanySettings {
   nom: string; brn: string; vat_number: string; logo_url: string
   adresse: string; telephone: string; email: string; website: string
   banque_nom: string; banque_compte: string; banque_iban: string; banque_swift: string
-  devise_defaut: string; prefixe_facture: string; prochain_numero: number
+  devise_defaut: string
+  // Numérotation par type de document (mig 243 + mig 247)
+  prefixe_facture: string; prochain_numero: number
+  devis_prefixe: string; devis_prochain_numero: number
+  avoir_prefixe: string; avoir_prochain_numero: number
+  note_debit_prefixe: string; note_debit_prochain_numero: number
   conditions_paiement: number; footer_text: string; mention_legale: string
 }
 interface InvoiceClient {
@@ -56,7 +61,11 @@ const DEFAULT_SETTINGS: CompanySettings = {
   nom: "", brn: "", vat_number: "", logo_url: "",
   adresse: "", telephone: "", email: "", website: "",
   banque_nom: "", banque_compte: "", banque_iban: "", banque_swift: "",
-  devise_defaut: "MUR", prefixe_facture: "INV-", prochain_numero: 1,
+  devise_defaut: "MUR",
+  prefixe_facture: "INV-", prochain_numero: 1,
+  devis_prefixe: "DEV-", devis_prochain_numero: 1,
+  avoir_prefixe: "AV-", avoir_prochain_numero: 1,
+  note_debit_prefixe: "ND-", note_debit_prochain_numero: 1,
   conditions_paiement: 30, footer_text: "Thank you for your business",
   mention_legale: "VAT Reg No: XXXXX | BRN: XXXXX",
 }
@@ -109,6 +118,12 @@ function mapSocieteToSettings(societe: any, legacy: Partial<CompanySettings>): C
     devise_defaut:       societe?.devise_principale            ?? legacy.devise_defaut       ?? "MUR",
     prefixe_facture:     societe?.facture_prefixe              ?? legacy.prefixe_facture     ?? "INV-",
     prochain_numero:     Number(societe?.facture_prochain_numero ?? legacy.prochain_numero ?? 1),
+    devis_prefixe:       societe?.devis_prefixe                 ?? legacy.devis_prefixe       ?? "DEV-",
+    devis_prochain_numero: Number(societe?.devis_prochain_numero ?? legacy.devis_prochain_numero ?? 1),
+    avoir_prefixe:       societe?.avoir_prefixe                 ?? legacy.avoir_prefixe       ?? "AV-",
+    avoir_prochain_numero: Number(societe?.avoir_prochain_numero ?? legacy.avoir_prochain_numero ?? 1),
+    note_debit_prefixe:  societe?.note_debit_prefixe            ?? legacy.note_debit_prefixe  ?? "ND-",
+    note_debit_prochain_numero: Number(societe?.note_debit_prochain_numero ?? legacy.note_debit_prochain_numero ?? 1),
     conditions_paiement: Number(societe?.facture_conditions_paiement ?? legacy.conditions_paiement ?? 30),
     footer_text:         societe?.facture_footer_text          ?? legacy.footer_text         ?? "",
     // Auto-génère la mention légale depuis BRN/VAT si l'utilisateur n'a
@@ -259,6 +274,12 @@ export default function FacturationSettingsPage() {
           banque_swift:                 settings.banque_swift,
           facture_prefixe:              settings.prefixe_facture,
           facture_prochain_numero:      settings.prochain_numero,
+          devis_prefixe:                settings.devis_prefixe,
+          devis_prochain_numero:        settings.devis_prochain_numero,
+          avoir_prefixe:                settings.avoir_prefixe,
+          avoir_prochain_numero:        settings.avoir_prochain_numero,
+          note_debit_prefixe:           settings.note_debit_prefixe,
+          note_debit_prochain_numero:   settings.note_debit_prochain_numero,
           facture_conditions_paiement:  settings.conditions_paiement,
           facture_footer_text:          settings.footer_text,
           facture_mention_legale:       settings.mention_legale,
@@ -597,9 +618,65 @@ export default function FacturationSettingsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><Label>Prefixe facture</Label><Input value={settings.prefixe_facture} onChange={e => setSettings(s => ({ ...s, prefixe_facture: e.target.value }))} placeholder="INV-" /></div>
-                    <div><Label>Prochain numero</Label><Input type="number" min={1} value={settings.prochain_numero} onChange={e => setSettings(s => ({ ...s, prochain_numero: parseInt(e.target.value) || 1 }))} /></div>
+                  {/* Numérotation automatique : préfixe + compteur par
+                      type de document (facture, devis, avoir, note débit).
+                      Une fois paramétré ici, le numéro est généré et
+                      incrémenté automatiquement à chaque création. */}
+                  <div className="space-y-3 border-t pt-3 mt-1">
+                    <Label className="text-sm font-semibold text-[#0B0F2E]">
+                      Numérotation automatique
+                    </Label>
+                    <p className="text-[11px] text-gray-500 -mt-2">
+                      Préfixe + prochain numéro pour chaque type de document.
+                      Le numéro est généré et incrémenté automatiquement à
+                      chaque création — plus besoin de le saisir manuellement.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Préfixe facture</Label>
+                        <Input value={settings.prefixe_facture}
+                          onChange={e => setSettings(s => ({ ...s, prefixe_facture: e.target.value }))}
+                          placeholder="INV-" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Prochain numéro facture</Label>
+                        <Input type="number" min={1} value={settings.prochain_numero}
+                          onChange={e => setSettings(s => ({ ...s, prochain_numero: parseInt(e.target.value) || 1 }))} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Préfixe devis</Label>
+                        <Input value={settings.devis_prefixe}
+                          onChange={e => setSettings(s => ({ ...s, devis_prefixe: e.target.value }))}
+                          placeholder="DEV-" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Prochain numéro devis</Label>
+                        <Input type="number" min={1} value={settings.devis_prochain_numero}
+                          onChange={e => setSettings(s => ({ ...s, devis_prochain_numero: parseInt(e.target.value) || 1 }))} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Préfixe avoir</Label>
+                        <Input value={settings.avoir_prefixe}
+                          onChange={e => setSettings(s => ({ ...s, avoir_prefixe: e.target.value }))}
+                          placeholder="AV-" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Prochain numéro avoir</Label>
+                        <Input type="number" min={1} value={settings.avoir_prochain_numero}
+                          onChange={e => setSettings(s => ({ ...s, avoir_prochain_numero: parseInt(e.target.value) || 1 }))} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Préfixe note de débit</Label>
+                        <Input value={settings.note_debit_prefixe}
+                          onChange={e => setSettings(s => ({ ...s, note_debit_prefixe: e.target.value }))}
+                          placeholder="ND-" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Prochain numéro note de débit</Label>
+                        <Input type="number" min={1} value={settings.note_debit_prochain_numero}
+                          onChange={e => setSettings(s => ({ ...s, note_debit_prochain_numero: parseInt(e.target.value) || 1 }))} />
+                      </div>
+                    </div>
                   </div>
                   <div><Label>Texte de pied de page</Label><Input value={settings.footer_text} onChange={e => setSettings(s => ({ ...s, footer_text: e.target.value }))} /></div>
                   <div>

@@ -126,45 +126,53 @@ export async function POST(request: Request) {
       : statutIn
 
     // Generate sequential invoice number if not provided.
-    // Source de vérité = societes.facture_prefixe + facture_prochain_numero
-    // (mig 243). On lit la société, on incrémente atomiquement le compteur,
-    // et on construit le numéro avec le préfixe paramétré. Fallback sur la
-    // logique legacy (parse du dernier numéro) si la société n'a pas encore
-    // ces colonnes (env pré-mig 243).
+    // Source de vérité = societes.<type>_prefixe + <type>_prochain_numero
+    // (mig 243 pour facture + mig 247 pour devis/avoir/note_debit).
+    // L'utilisateur paramètre une fois ses préfixes + compteurs dans
+    // /client/facturation-settings, ensuite tout est auto.
     let finalNumero = numero_facture
     if (!finalNumero) {
       const filterDoc = type_document || 'facture'
-      // Pour avoir / note de débit / devis : on garde des préfixes dédiés
-      // (pas piloté par la société, pas de compteur séparé en DB pour
-      // l'instant — l'incrémentation reste basée sur le dernier numéro).
-      const isSpecialDoc = filterDoc !== 'facture'
 
-      if (!isSpecialDoc) {
-        // Cas standard "facture client" — utilise les paramètres société.
-        const { data: societeRow } = await supabase
-          .from('societes')
-          .select('facture_prefixe, facture_prochain_numero')
-          .eq('id', societe_id)
-          .maybeSingle()
+      // Mapping type_document → colonnes (préfixe + compteur) sur societes
+      const colMap: Record<string, { prefCol: string; numCol: string; defaultPrefix: string }> = {
+        facture:    { prefCol: 'facture_prefixe',    numCol: 'facture_prochain_numero',    defaultPrefix: 'INV-' },
+        devis:      { prefCol: 'devis_prefixe',      numCol: 'devis_prochain_numero',      defaultPrefix: 'DEV-' },
+        avoir:      { prefCol: 'avoir_prefixe',      numCol: 'avoir_prochain_numero',      defaultPrefix: 'AV-'  },
+        note_debit: { prefCol: 'note_debit_prefixe', numCol: 'note_debit_prochain_numero', defaultPrefix: 'ND-'  },
+      }
+      const cfg = colMap[filterDoc] || colMap.facture
 
-        const prefixe = (societeRow?.facture_prefixe as string | undefined) || 'INV-'
-        const prochain = Number(societeRow?.facture_prochain_numero) || 1
+      // Lit le compteur + le préfixe dans societes. Si la requête échoue
+      // (mig 247 non appliquée → colonne devis/avoir manquante), on
+      // retombe sur la logique legacy parse-dernier-numéro.
+      let prefixe = cfg.defaultPrefix
+      let prochain = 0
+      let dbCounterAvailable = false
+      const counterRes = await supabase
+        .from('societes')
+        .select(`${cfg.prefCol}, ${cfg.numCol}`)
+        .eq('id', societe_id)
+        .maybeSingle()
+      if (!counterRes.error && counterRes.data) {
+        const row = counterRes.data as Record<string, any>
+        if (row[cfg.prefCol] || row[cfg.numCol]) {
+          prefixe = (row[cfg.prefCol] as string) || cfg.defaultPrefix
+          prochain = Number(row[cfg.numCol]) || 1
+          dbCounterAvailable = true
+        }
+      }
 
+      if (dbCounterAvailable) {
         finalNumero = `${prefixe}${String(prochain).padStart(4, '0')}`
-
-        // Incrémente le compteur en base pour la prochaine facture.
-        // Pas d'atomicité parfaite (Supabase n'a pas d'INCREMENT direct
-        // via PostgREST sans RPC), mais le risque de collision est faible
-        // dans le contexte mono-utilisateur et facilement détectable via
-        // l'index unique implicite sur (societe_id, numero_facture).
+        // Incrémente le compteur en base — best-effort, sans atomicité
+        // parfaite. Risque de collision faible dans contexte SME mono-user.
         await supabase
           .from('societes')
-          .update({ facture_prochain_numero: prochain + 1 })
+          .update({ [cfg.numCol]: prochain + 1 })
           .eq('id', societe_id)
       } else {
-        // Fallback legacy : préfixes AV-/ND-/DEV- avec parse du dernier numéro
-        const prefix = type_document === 'avoir' ? 'AV-' : type_document === 'note_debit' ? 'ND-' : 'DEV-'
-
+        // Fallback : mig pas appliquée → parse du dernier numéro existant
         const { data: lastInvoice } = await supabase
           .from('factures')
           .select('numero_facture')
@@ -181,7 +189,7 @@ export async function POST(request: Request) {
           const match = lastInvoice.numero_facture.match(/(\d+)$/)
           if (match) nextNum = parseInt(match[1]) + 1
         }
-        finalNumero = `${prefix}${String(nextNum).padStart(3, '0')}`
+        finalNumero = `${cfg.defaultPrefix}${String(nextNum).padStart(3, '0')}`
       }
     }
 

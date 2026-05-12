@@ -210,6 +210,25 @@ export async function PATCH(request: Request) {
     if (body.facture_footer_text !== undefined) updateData.facture_footer_text = body.facture_footer_text || null
     if (body.facture_mention_legale !== undefined) updateData.facture_mention_legale = body.facture_mention_legale || null
 
+    // Numérotation devis / avoir / note de débit (mig 247) — même
+    // pattern que facture_*, avec préfixe + compteur. Le retry défensif
+    // plus bas filtre les colonnes manquantes si mig 247 pas appliquée.
+    if (body.devis_prefixe !== undefined) updateData.devis_prefixe = body.devis_prefixe || 'DEV-'
+    if (body.devis_prochain_numero !== undefined) {
+      const n = Number(body.devis_prochain_numero)
+      updateData.devis_prochain_numero = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1
+    }
+    if (body.avoir_prefixe !== undefined) updateData.avoir_prefixe = body.avoir_prefixe || 'AV-'
+    if (body.avoir_prochain_numero !== undefined) {
+      const n = Number(body.avoir_prochain_numero)
+      updateData.avoir_prochain_numero = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1
+    }
+    if (body.note_debit_prefixe !== undefined) updateData.note_debit_prefixe = body.note_debit_prefixe || 'ND-'
+    if (body.note_debit_prochain_numero !== undefined) {
+      const n = Number(body.note_debit_prochain_numero)
+      updateData.note_debit_prochain_numero = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1
+    }
+
     // Tentative initiale d'update. Si elle échoue à cause d'une colonne
     // qui n'existe pas en DB (typique : mig 243/106/046 pas appliquée),
     // on retire la colonne fautive et on retry. Boucle bornée pour
