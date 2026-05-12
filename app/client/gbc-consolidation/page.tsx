@@ -62,7 +62,7 @@ export default function GbcConsolidationPage() {
               <tbody>
                 {data.relationships.map((r: any) => (
                   <tr key={r.id} className="border-b">
-                    <td className="py-2 px-2 font-medium">{r.child?.raison_sociale || '—'}</td>
+                    <td className="py-2 px-2 font-medium">{r.child?.nom || '—'}</td>
                     <td className="py-2 px-2 text-xs">{r.relationship_type}</td>
                     <td className="py-2 px-2 text-right">{Number(r.pct_detention).toFixed(2)}%</td>
                     <td className="py-2 px-2 text-xs">{r.consolidation_method}</td>

@@ -313,7 +313,7 @@ COMMENT ON FUNCTION public.ias21_compute_cta IS
 CREATE OR REPLACE VIEW public.vw_ias21_societes_multi_devises AS
 SELECT
   s.id               AS societe_id,
-  s.raison_sociale,
+  s.nom,
   s.devise_fonctionnelle,
   COUNT(e.id)        AS nb_ecritures,
   ROUND(SUM(COALESCE(e.debit_fonctionnelle, 0)),  2) AS total_debit_fonctionnelle,
@@ -326,7 +326,7 @@ SELECT
 FROM public.societes s
 LEFT JOIN public.ecritures_comptables_v2 e ON e.societe_id = s.id
 WHERE COALESCE(s.devise_fonctionnelle, 'MUR') <> 'MUR'
-GROUP BY s.id, s.raison_sociale, s.devise_fonctionnelle;
+GROUP BY s.id, s.nom, s.devise_fonctionnelle;
 
 COMMENT ON VIEW public.vw_ias21_societes_multi_devises IS
   'Vue de monitoring pour les sociétés à monnaie fonctionnelle non-MUR (GBC). '

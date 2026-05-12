@@ -47,11 +47,11 @@ export async function POST(request: Request) {
 
     if (body.action === 'generate_xml') {
       const { societe_id, year } = body
-      const { data: societe } = await supabase.from('societes').select('raison_sociale, brn, vat_number').eq('id', societe_id).single()
+      const { data: societe } = await supabase.from('societes').select('nom, brn, vat_number').eq('id', societe_id).single()
       const { data: holders } = await supabase.from('crs_account_holders').select('*').eq('societe_id', societe_id).eq('reporting_year', year).eq('is_crs_reportable', true)
       const xml = generateCrsXmlSkeleton({
         reportingYear: year,
-        societeName: societe?.raison_sociale || '—',
+        societeName: societe?.nom || '—',
         societeTin: societe?.brn || societe?.vat_number || 'UNKNOWN',
         holders: (holders || []).map((h: any) => ({
           holderName: h.holder_name, countryOfResidence: h.country_of_residence,

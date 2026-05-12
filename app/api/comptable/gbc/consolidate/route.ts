@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
     const supabase = getAdminClient()
     const [{ data: relationships }, { data: aggregate }, { data: eliminations }, { data: nci }] = await Promise.all([
-      supabase.from('societes_relationships').select('*, child:societes!child_societe_id(id, raison_sociale, devise_fonctionnelle)').eq('parent_societe_id', parent_societe_id).is('effective_to', null),
+      supabase.from('societes_relationships').select('*, child:societes!child_societe_id(id, nom, devise_fonctionnelle)').eq('parent_societe_id', parent_societe_id).is('effective_to', null),
       supabase.rpc('consolidate_aggregate', { p_parent_societe_id: parent_societe_id, p_exercice: exercice }),
       supabase.from('consolidation_eliminations').select('*').eq('parent_societe_id', parent_societe_id).eq('exercice', exercice),
       supabase.rpc('compute_nci', { p_parent_societe_id: parent_societe_id, p_exercice: exercice }),

@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   const exerciceActuel = json?.exercice_actuel
 
   const { data: societe } = await supabase
-    .from('societes').select('raison_sociale').eq('id', societe_id).single()
+    .from('societes').select('nom').eq('id', societe_id).single()
 
   const sheets: Array<{ name: string; ws: any }> = []
 
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     name: 'Filtres',
     ws: aoaSheet([
       [cell('Compte de résultat (P&L)')],
-      [cell('Société'), cell(societe?.raison_sociale || '—')],
+      [cell('Société'), cell(societe?.nom || '—')],
       [cell('Exercice'), cell(exerciceActuel || fin.exercice || '—')],
       [cell('Période'), cell(`${fin.date_debut || ''} → ${fin.date_fin || ''}`)],
       [cell('Exporté le'), cell(new Date(), FMT_DATE)],
@@ -132,9 +132,9 @@ export async function GET(request: Request) {
   })
 
   const buf = buildWorkbook(sheets, {
-    title: `P&L ${societe?.raison_sociale || ''}`,
+    title: `P&L ${societe?.nom || ''}`,
     subject: 'Compte de résultat IFRS Maurice',
   })
-  const fname = `pnl_${(societe?.raison_sociale || 'societe').replace(/\s+/g, '_')}_${exerciceActuel || fin.exercice || ''}.xlsx`
+  const fname = `pnl_${(societe?.nom || 'societe').replace(/\s+/g, '_')}_${exerciceActuel || fin.exercice || ''}.xlsx`
   return xlsxResponse(buf, fname)
 }
