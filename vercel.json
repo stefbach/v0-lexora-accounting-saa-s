@@ -75,6 +75,10 @@
     {
       "path": "/api/cron/relances-factures",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/factures-recurrentes",
+      "schedule": "0 6 * * *"
     }
   ]
 }

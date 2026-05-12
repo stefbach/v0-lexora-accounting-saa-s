@@ -15,13 +15,8 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
-<<<<<<< HEAD
-interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean }
-interface CatalogueItem { id: string; description: string; prix_unitaire: number; devise: string; tva_applicable: boolean; categorie: string | null; unite?: string }
-=======
 interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean; isDb?: boolean }
-interface CatalogueItem { id: string; description: string; prix_unitaire: number; devise: string; tva_applicable: boolean; categorie: string; unite?: string }
->>>>>>> origin/claude/feat-contacts-clients
+interface CatalogueItem { id: string; description: string; prix_unitaire: number; devise: string; tva_applicable: boolean; categorie: string | null; unite?: string }
 interface CompanySettings { nom: string; brn: string; vat_number: string; logo_url: string; adresse: string; telephone: string; email: string; website: string; banque_nom: string; banque_compte: string; banque_iban: string; banque_swift: string; devise_defaut: string; prefixe_facture: string; prochain_numero: number; conditions_paiement: number; footer_text: string; mention_legale: string }
 interface Societe { id: string; nom: string }
 
@@ -82,6 +77,13 @@ export default function NouvelleFacturePage() {
   const [echeancePreset, setEcheancePreset] = useState(30)
   const [notesVisibles, setNotesVisibles] = useState("")
   const [notesInternes, setNotesInternes] = useState("")
+  // Récurrence (mig 241) : ce bloc transforme la facture en MODÈLE généré
+  // automatiquement chaque mois/trimestre/année par le cron quotidien.
+  const [recurrent, setRecurrent] = useState(false)
+  const [recurrentFreq, setRecurrentFreq] = useState<"mensuel" | "trimestriel" | "annuel">("mensuel")
+  const [recurrenceJour, setRecurrenceJour] = useState("1")
+  const [recurrenceDebut, setRecurrenceDebut] = useState("")
+  const [recurrenceFin, setRecurrenceFin] = useState("")
   const [accentColor, setAccentColor] = useState("#0B0F2E")
   const [templates, setTemplates] = useState<any[]>([])
   const [templateId, setTemplateId] = useState("")
@@ -122,7 +124,6 @@ export default function NouvelleFacturePage() {
     }).catch(() => {})
   }, [])
 
-<<<<<<< HEAD
   // Catalogue depuis l'API — déclenché dès que societeId est disponible.
   // Remplace les items localStorage par ceux en base (source de vérité).
   useEffect(() => {
@@ -139,7 +140,12 @@ export default function NouvelleFacturePage() {
             tva_applicable: it.tva_applicable !== false,
             categorie: it.categorie || null,
             unite: it.unite || "Forfait",
-=======
+          })))
+        }
+      })
+      .catch(() => { /* fallback localStorage déjà chargé */ })
+  }, [societeId])
+
   // Contacts depuis l'API — déclenché dès que societeId est dispo.
   // Remplace les items localStorage par ceux en base (source de vérité).
   useEffect(() => {
@@ -160,7 +166,6 @@ export default function NouvelleFacturePage() {
             conditions_paiement: Number(c.conditions_paiement) || 30,
             offshore: c.offshore === true,
             isDb: true,
->>>>>>> origin/claude/feat-contacts-clients
           })))
         }
       })
@@ -262,6 +267,11 @@ export default function NouvelleFacturePage() {
         const c = clients.find(cl => cl.id === selectedClientId)
         return c?.isDb ? c.id : null
       })(),
+      recurrent,
+      recurrent_frequence: recurrent ? recurrentFreq : undefined,
+      recurrence_jour_du_mois: recurrent ? Number(recurrenceJour) || null : undefined,
+      recurrence_date_debut: recurrent ? (recurrenceDebut || dateFacture) : undefined,
+      recurrence_date_fin: recurrent ? (recurrenceFin || null) : undefined,
     }
   }
 
@@ -637,6 +647,74 @@ export default function NouvelleFacturePage() {
             <Field label="Notes visibles sur la facture"><Textarea value={notesVisibles} onChange={e => setNotesVisibles(e.target.value)} placeholder="Conditions de paiement, mentions legales..." rows={3} className="resize-y" /></Field>
             <Field label="Notes internes (non imprimees)"><Textarea value={notesInternes} onChange={e => setNotesInternes(e.target.value)} placeholder="Notes internes, rappels..." rows={3} className="resize-y" /></Field>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* 10. Récurrence */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
+            <ListOrdered className="w-4 h-4" />Récurrence (facturation automatique)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={recurrent}
+              onChange={e => setRecurrent(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span className="text-sm font-medium">
+              Faire de cette facture un modèle récurrent
+            </span>
+          </label>
+          {recurrent && (
+            <div className="space-y-3 pl-6 border-l-2 border-violet-200">
+              <p className="text-xs text-muted-foreground">
+                La facture sera enregistrée comme <strong>modèle</strong> (statut=modele, jamais
+                comptabilisée). Le cron quotidien clonera ce modèle à intervalle régulier.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Fréquence">
+                  <Sel
+                    value={recurrentFreq}
+                    onValueChange={v => setRecurrentFreq(v as any)}
+                  >
+                    <SelectItem value="mensuel">Mensuelle</SelectItem>
+                    <SelectItem value="trimestriel">Trimestrielle</SelectItem>
+                    <SelectItem value="annuel">Annuelle</SelectItem>
+                  </Sel>
+                </Field>
+                <Field label="Jour du mois (1-28)">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="28"
+                    value={recurrenceJour}
+                    onChange={e => setRecurrenceJour(e.target.value)}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Date de début">
+                  <Input
+                    type="date"
+                    value={recurrenceDebut}
+                    onChange={e => setRecurrenceDebut(e.target.value)}
+                    placeholder={dateFacture}
+                  />
+                </Field>
+                <Field label="Date de fin (optionnel)">
+                  <Input
+                    type="date"
+                    value={recurrenceFin}
+                    onChange={e => setRecurrenceFin(e.target.value)}
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
