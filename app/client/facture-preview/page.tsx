@@ -52,6 +52,74 @@ interface InvoiceData {
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtDate(d: string) { if (!d) return "-"; return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) }
 
+/**
+ * Métadonnées par type de document (mig 042 type_document) — pilote tout
+ * le rendu différencié devis/avoir/note de débit/facture standard.
+ *
+ * `accent` peut surcharger la couleur primaire de la facture (rouge pour
+ * avoir, orange pour note de débit) afin que le client identifie le type
+ * au premier coup d'œil sur le PDF imprimé.
+ */
+type DocType = 'facture' | 'avoir' | 'note_debit' | 'devis'
+interface DocTypeMeta {
+  title_fr: string
+  title_en: string
+  echeance_label: string
+  ref_label: string         // libellé pour facture_reference_id (avoir/note_debit)
+  show_bank: boolean        // afficher coordonnées bancaires
+  show_signature: boolean   // afficher zone "Bon pour accord" (devis)
+  validity_note: string | null   // mention de validité (devis surtout)
+  accent_override: string | null // couleur dominante surchargée
+}
+function getDocMeta(type: string | undefined): DocTypeMeta {
+  switch (type) {
+    case 'avoir':
+      return {
+        title_fr: 'AVOIR',
+        title_en: 'CREDIT NOTE',
+        echeance_label: 'Date d\'émission',
+        ref_label: 'Avoir sur facture N°',
+        show_bank: true, // pour le remboursement
+        show_signature: false,
+        validity_note: null,
+        accent_override: '#DC2626',
+      }
+    case 'note_debit':
+      return {
+        title_fr: 'NOTE DE DÉBIT',
+        title_en: 'DEBIT NOTE',
+        echeance_label: 'Date d\'échéance',
+        ref_label: 'En complément de facture N°',
+        show_bank: true,
+        show_signature: false,
+        validity_note: null,
+        accent_override: '#EA580C',
+      }
+    case 'devis':
+      return {
+        title_fr: 'DEVIS',
+        title_en: 'QUOTATION',
+        echeance_label: 'Valable jusqu\'au',
+        ref_label: '',
+        show_bank: false, // pas encore à payer
+        show_signature: true,
+        validity_note: 'Bon pour accord — Date et signature du client précédées de la mention « Bon pour accord ».',
+        accent_override: null,
+      }
+    default:
+      return {
+        title_fr: 'FACTURE',
+        title_en: 'INVOICE',
+        echeance_label: 'Échéance',
+        ref_label: '',
+        show_bank: true,
+        show_signature: false,
+        validity_note: null,
+        accent_override: null,
+      }
+  }
+}
+
 function FacturePreviewContent() {
   const searchParams = useSearchParams()
   const [data, setData] = useState<InvoiceData | null>(null)
@@ -134,17 +202,21 @@ function FacturePreviewContent() {
   const totalTVA = lignes.reduce((sum, l) => sum + l.quantite * l.prix_unitaire * l.taux_tva / 100, 0)
   const discount = data.remise_pct > 0 ? subtotalHT * data.remise_pct / 100 : (data.remise_montant || 0)
   const grandTotal = subtotalHT + totalTVA - discount
+  const docMeta = getDocMeta(data.type_document)
   const colors = (() => {
-    // Prefer accent_color from invoice data (set in nouvelle-facture), fall back to localStorage template colors
+    // Pour avoir/note de débit, on surcharge la couleur d'accent par la
+    // couleur du type de doc (rouge/orange) pour bien distinguer du flux
+    // facture standard. Pour devis/facture, on garde le accent_color.
     const fallback = { primaire: "#0B0F2E", secondaire: "#D4AF37" }
     try {
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       const stored = tc ? JSON.parse(tc) : fallback
-      if (data.accent_color) {
-        return { primaire: data.accent_color, secondaire: stored.secondaire || fallback.secondaire }
-      }
-      return stored
-    } catch { return fallback }
+      const primaire = docMeta.accent_override
+        || data.accent_color
+        || stored.primaire
+        || fallback.primaire
+      return { primaire, secondaire: stored.secondaire || fallback.secondaire }
+    } catch { return { ...fallback, primaire: docMeta.accent_override || fallback.primaire } }
   })()
 
   return (
@@ -185,12 +257,10 @@ function FacturePreviewContent() {
             </div>
           </div>
           <div className="text-right">
-            <h1 className="text-3xl font-black tracking-tight" style={{ color: data.type_document === 'avoir' ? '#DC2626' : colors.primaire }}>
-              {data.type_document === 'avoir' ? 'AVOIR' : data.type_document === 'note_debit' ? 'NOTE DE DEBIT' : 'FACTURE'}
+            <h1 className="text-3xl font-black tracking-tight" style={{ color: colors.primaire }}>
+              {docMeta.title_fr}
             </h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              {data.type_document === 'avoir' ? 'CREDIT NOTE' : data.type_document === 'note_debit' ? 'DEBIT NOTE' : 'INVOICE'}
-            </p>
+            <p className="text-sm text-gray-400 mt-0.5">{docMeta.title_en}</p>
           </div>
         </div>
 
@@ -231,21 +301,35 @@ function FacturePreviewContent() {
           </div>
           <div className="text-right space-y-1.5">
             <div className="flex justify-end gap-8">
-              <span className="text-sm text-gray-500">N. Facture:</span>
+              <span className="text-sm text-gray-500">N° {docMeta.title_fr.charAt(0) + docMeta.title_fr.slice(1).toLowerCase()}:</span>
               <span className="font-mono font-bold" style={{ color: colors.primaire }}>{data.numero_facture}</span>
             </div>
             <div className="flex justify-end gap-8">
               <span className="text-sm text-gray-500">Date:</span>
               <span className="text-sm">{fmtDate(data.date_facture)}</span>
             </div>
-            <div className="flex justify-end gap-8">
-              <span className="text-sm text-gray-500">Echeance:</span>
-              <span className="text-sm">{fmtDate(data.date_echeance)}</span>
-            </div>
+            {/* Échéance / Validité / etc. — label adapté au type de doc */}
+            {data.date_echeance && (
+              <div className="flex justify-end gap-8">
+                <span className="text-sm text-gray-500">{docMeta.echeance_label}:</span>
+                <span className="text-sm">
+                  {data.type_document !== 'devis' && data.date_facture === data.date_echeance
+                    ? 'À réception de facture'
+                    : fmtDate(data.date_echeance)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-end gap-8">
               <span className="text-sm text-gray-500">Devise:</span>
               <span className="text-sm font-semibold">{data.devise}</span>
             </div>
+            {/* Référence facture d'origine (avoir / note de débit) */}
+            {docMeta.ref_label && data.facture_reference_id && (
+              <div className="flex justify-end gap-8 mt-1">
+                <span className="text-sm text-gray-500">{docMeta.ref_label}:</span>
+                <span className="font-mono text-sm font-semibold">{data.facture_reference_id.slice(0, 8)}</span>
+              </div>
+            )}
             {data.client_offshore && (
               <div className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
                 Export / Zero-rated
@@ -341,15 +425,44 @@ function FacturePreviewContent() {
           </div>
         </div>
 
-        {/* Payment Details */}
-        {(s.banque_nom || s.banque_iban) && (
+        {/* Payment Details — masqué pour les devis (rien à payer pour le
+            moment). Pour avoir : libellé adapté "Remboursement effectué
+            sur le compte ci-dessous". */}
+        {docMeta.show_bank && (s.banque_nom || s.banque_iban) && (
           <div className="rounded-lg p-4 mb-6 border" style={{ borderColor: colors.secondaire + "40" }}>
-            <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.primaire }}>Coordonnees de paiement / Payment Details</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.primaire }}>
+              {data.type_document === 'avoir'
+                ? 'Remboursement / Refund — Compte créditeur'
+                : 'Coordonnees de paiement / Payment Details'}
+            </h3>
             <div className="grid grid-cols-2 gap-2 text-sm">
               {s.banque_nom && <div><span className="text-gray-500">Banque: </span><span className="font-medium">{s.banque_nom}</span></div>}
               {s.banque_compte && <div><span className="text-gray-500">Compte: </span><span className="font-mono">{s.banque_compte}</span></div>}
               {s.banque_iban && <div><span className="text-gray-500">IBAN: </span><span className="font-mono">{s.banque_iban}</span></div>}
               {s.banque_swift && <div><span className="text-gray-500">SWIFT/BIC: </span><span className="font-mono">{s.banque_swift}</span></div>}
+            </div>
+          </div>
+        )}
+
+        {/* Zone signature (devis uniquement) — emplacement standard pour
+            la mention "Bon pour accord" + date + signature client. */}
+        {docMeta.show_signature && (
+          <div className="rounded-lg p-4 mb-6 border-2 border-dashed" style={{ borderColor: colors.primaire + "40" }}>
+            <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.primaire }}>
+              Bon pour accord / Accepted by client
+            </h3>
+            {docMeta.validity_note && (
+              <p className="text-xs text-gray-600 mb-4 italic">{docMeta.validity_note}</p>
+            )}
+            <div className="grid grid-cols-2 gap-6 mt-4">
+              <div>
+                <p className="text-xs text-gray-500 mb-6">Date :</p>
+                <div className="border-b border-gray-300 h-8"></div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-6">Signature précédée de « Bon pour accord » :</p>
+                <div className="border-b border-gray-300 h-8"></div>
+              </div>
             </div>
           </div>
         )}
