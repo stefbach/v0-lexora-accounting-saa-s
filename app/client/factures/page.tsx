@@ -55,6 +55,9 @@ interface Facture {
   statut: string | null
   rapproche_releve_id: string | null
   solde_non_paye: number | null
+  // MRA e-invoicing (mig 102 + 248)
+  mra_status?: string | null
+  irn?: string | null
 }
 
 function fmt(n: number, dev = "MUR"): string {
@@ -518,6 +521,17 @@ function FactureList({
                     Rapprochée
                   </Badge>
                 )}
+                {/* Badge MRA e-invoicing (mig 102 + 248) */}
+                {f.mra_status === 'fiscalise' && f.irn && (
+                  <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300" title={`IRN : ${f.irn}`}>
+                    ✓ MRA Fiscalisée
+                  </Badge>
+                )}
+                {f.mra_status === 'erreur' && (
+                  <Badge className="text-[10px] bg-red-100 text-red-700 border-red-300">
+                    ⚠ MRA erreur
+                  </Badge>
+                )}
               </div>
               <p className="text-sm mt-1 break-words">{f.tiers || "—"}</p>
               <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-muted-foreground">
@@ -563,6 +577,29 @@ function FactureList({
                   onClick={() => onEnregistrerPaiement(f)}
                 >
                   Enregistrer paiement
+                </Button>
+              )}
+              {/* Bouton MRA Fiscaliser — uniquement factures clients non
+                  encore fiscalisées (ou en erreur, pour retry). */}
+              {isClient && f.statut !== 'annule' && (f.mra_status !== 'fiscalise' || !f.irn) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px] mt-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                  onClick={async () => {
+                    if (!confirm(`Fiscaliser la facture ${f.numero_facture} auprès du MRA ?`)) return
+                    try {
+                      const res = await fetch(`/api/client/factures/${f.id}/fiscalise`, { method: 'POST' })
+                      const data = await res.json()
+                      if (!res.ok) throw new Error(data?.error || 'Erreur fiscalisation')
+                      alert(`✓ Facture fiscalisée\nIRN : ${data.irn}\nEnvironnement : ${data.environment}`)
+                      window.location.reload()
+                    } catch (e: any) {
+                      alert(`❌ ${e?.message || 'Erreur fiscalisation MRA'}`)
+                    }
+                  }}
+                >
+                  {f.mra_status === 'erreur' ? '↻ Réessayer MRA' : '🇲🇺 Fiscaliser MRA'}
                 </Button>
               )}
             </div>

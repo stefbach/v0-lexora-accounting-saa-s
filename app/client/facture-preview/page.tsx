@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
+import QRCode from "qrcode"
 import { useSearchParams } from "next/navigation"
 
 interface LigneFacture {
@@ -125,6 +126,20 @@ function FacturePreviewContent() {
   const [data, setData] = useState<InvoiceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [templateData, setTemplateData] = useState<{ entete_html?: string; pied_page_html?: string; mentions_legales?: string } | null>(null)
+  // QR code PNG généré depuis qr_code_data (URL MRA verify) — la lib
+  // qrcode produit un vrai PNG scannable, à la différence du faux SVG
+  // stocké éventuellement en base.
+  const [qrCodePng, setQrCodePng] = useState<string | null>(null)
+  useEffect(() => {
+    const qd = data?.qr_code_data
+    if (!qd) { setQrCodePng(null); return }
+    // Si qr_code_data est déjà un data URL d'image, on l'utilise tel quel
+    if (qd.startsWith('data:image/')) { setQrCodePng(qd); return }
+    // Sinon (URL HTTP du MRA), on génère un PNG scannable
+    QRCode.toDataURL(qd, { width: 200, margin: 2, errorCorrectionLevel: 'M' })
+      .then(setQrCodePng)
+      .catch(() => setQrCodePng(null))
+  }, [data?.qr_code_data])
 
   useEffect(() => {
     const factureId = searchParams.get("facture_id")
@@ -520,11 +535,11 @@ function FacturePreviewContent() {
                   This invoice has been fiscalised with the Mauritius Revenue Authority (MRA) Invoice Fiscalization Platform.
                 </p>
               </div>
-              {data.qr_code_data && (
+              {qrCodePng && (
                 <div className="flex-shrink-0 text-center">
                   <img
-                    src={data.qr_code_data}
-                    alt="MRA QR Code"
+                    src={qrCodePng}
+                    alt="MRA QR Code — scannable"
                     className="w-24 h-24 border rounded"
                     style={{ borderColor: colors.primaire + '20' }}
                   />
