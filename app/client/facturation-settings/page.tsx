@@ -16,6 +16,8 @@ import {
   Shield, Wifi, WifiOff, Info, Loader2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { LogoUploader } from "@/components/client/LogoUploader"
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -67,6 +69,7 @@ const TEMPLATES: InvoiceTemplate[] = [
 function genId() { return crypto.randomUUID() }
 
 export default function FacturationSettingsPage() {
+  const { societeId } = useSocieteActive()
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS)
   const [clients, setClients] = useState<InvoiceClient[]>([])
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
@@ -256,12 +259,17 @@ export default function FacturationSettingsPage() {
                   <div><Label>N. TVA / VAT</Label><Input value={settings.vat_number} onChange={e => setSettings(s => ({ ...s, vat_number: e.target.value }))} placeholder="VAT12345678" /></div>
                 </div>
                 <div>
-                  <Label>Logo</Label>
-                  <div className="flex items-center gap-4 mt-1">
-                    {(logoPreview || settings.logo_url) && (
-                      <img src={logoPreview || settings.logo_url} alt="Logo" className="w-16 h-16 object-contain rounded border" />
-                    )}
-                    <Input type="file" accept="image/*" onChange={handleLogoChange} className="max-w-xs" />
+                  <Label>Logo société</Label>
+                  <div className="mt-2">
+                    <LogoUploader
+                      societeId={societeId}
+                      initialLogoUrl={settings.logo_url || undefined}
+                      onChange={(url) => {
+                        // Synchronise localStorage pour rétrocompat (lecture
+                        // par nouvelle-facture jusqu'à la prochaine refonte).
+                        setSettings(s => ({ ...s, logo_url: url || "" }))
+                      }}
+                    />
                   </div>
                 </div>
                 <div><Label>Adresse</Label><Textarea value={settings.adresse} onChange={e => setSettings(s => ({ ...s, adresse: e.target.value }))} placeholder="Port Louis, Mauritius" rows={2} /></div>

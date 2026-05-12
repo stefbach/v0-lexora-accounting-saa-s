@@ -35,7 +35,13 @@ const ACCENT_COLORS = [
   { name: "Slate", hex: "#475569" }, { name: "Rose", hex: "#E11D48" },
   { name: "Indigo", hex: "#4F46E5" }, { name: "Black", hex: "#000000" },
 ] as const
-const ECHEANCES = [{ label: "30 jours", value: 30 }, { label: "60 jours", value: 60 }, { label: "90 jours", value: 90 }, { label: "Personnalise", value: -1 }] as const
+const ECHEANCES = [
+  { label: "À réception", value: 0 },
+  { label: "30 jours", value: 30 },
+  { label: "60 jours", value: 60 },
+  { label: "90 jours", value: 90 },
+  { label: "Personnalisé", value: -1 },
+] as const
 
 function Sel({ value, onValueChange, placeholder, children }: { value?: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) {
   return <Select value={value} onValueChange={onValueChange}><SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent>{children}</SelectContent></Select>
@@ -217,7 +223,15 @@ export default function NouvelleFacturePage() {
   const totalTTC = useMemo(() => totalHTApresRemise + totalTVA, [totalHTApresRemise, totalTVA])
   const contreValeurMUR = useMemo(() => devise !== "MUR" ? totalTTC * tauxChange : null, [totalTTC, devise, tauxChange])
 
-  const handleEcheancePreset = (val: string) => { const n = parseInt(val); setEcheancePreset(n); if (n > 0) setDateEcheance(addDays(dateFacture, n)) }
+  const handleEcheancePreset = (val: string) => {
+    const n = parseInt(val)
+    setEcheancePreset(n)
+    // n === 0  → "À réception" : échéance = date de facture
+    // n  >  0  → délai en jours
+    // n === -1 → "Personnalisé" : on ne touche pas à la date saisie
+    if (n === 0) setDateEcheance(dateFacture)
+    else if (n > 0) setDateEcheance(addDays(dateFacture, n))
+  }
 
   const handleTemplateSelect = (id: string) => {
     setTemplateId(id)
@@ -251,7 +265,7 @@ export default function NouvelleFacturePage() {
       date_facture: dateFacture, date_echeance: dateEcheance, devise, taux_change: tauxChange,
       montant_ht: signedHT, montant_tva: signedTVA, montant_ttc: signedTTC,
       taux_tva: clientOffshore ? 0 : 15, statut, lignes, mode_paiement: modePaiement,
-      conditions_paiement: echeancePreset > 0 ? echeancePreset : (settings?.conditions_paiement || 30),
+      conditions_paiement: echeancePreset >= 0 ? echeancePreset : (settings?.conditions_paiement || 30),
       notes_visibles: notesVisibles, notes_internes: notesInternes,
       template: localStorage.getItem("lexora_invoice_template") || "standard",
       template_id: templateId || undefined,
@@ -429,7 +443,11 @@ export default function NouvelleFacturePage() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Field label="N. Facture"><Input value={numeroFacture} onChange={e => setNumeroFacture(e.target.value)} className="font-mono" /></Field>
-            <Field label="Date facture"><Input type="date" value={dateFacture} onChange={e => { setDateFacture(e.target.value); if (echeancePreset > 0) setDateEcheance(addDays(e.target.value, echeancePreset)) }} /></Field>
+            <Field label="Date facture"><Input type="date" value={dateFacture} onChange={e => {
+              setDateFacture(e.target.value)
+              if (echeancePreset === 0) setDateEcheance(e.target.value)
+              else if (echeancePreset > 0) setDateEcheance(addDays(e.target.value, echeancePreset))
+            }} /></Field>
             <Field label="Date echeance"><Input type="date" value={dateEcheance} onChange={e => { setDateEcheance(e.target.value); setEcheancePreset(-1) }} /></Field>
             <Field label="Reference"><Input value={reference} onChange={e => setReference(e.target.value)} placeholder="Ref. / PO" /></Field>
           </div>
@@ -490,18 +508,32 @@ export default function NouvelleFacturePage() {
               <Button onClick={addLigne} variant="outline" size="sm" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"><Plus className="w-4 h-4 mr-1" />Ajouter une ligne</Button>
             </div>
           </div>
+          {devise !== "MUR" && tauxChange > 1.0001 && (
+            <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-1.5 mt-2">
+              💡 Vous pouvez saisir le prix unitaire en <strong>{devise}</strong> ou en <strong>MUR</strong> :
+              la conversion se fait automatiquement au taux de {fmt(tauxChange)} MUR / {devise}.
+              La facture finale est émise en {devise} avec l'équivalent MUR à titre informatif.
+            </p>
+          )}
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-[#0B0F2E]/5">
                 <TableHead className="w-[4%] text-center">#</TableHead>
-                <TableHead className="w-[28%]">Description</TableHead>
-                <TableHead className="w-[11%]">Unite</TableHead>
-                <TableHead className="text-right w-[10%]">Quantite</TableHead>
-                <TableHead className="text-right w-[13%]">Prix unitaire</TableHead>
-                <TableHead className="text-right w-[8%]">TVA %</TableHead>
-                <TableHead className="text-right w-[14%]">Montant HT</TableHead>
+                <TableHead className="w-[26%]">Description</TableHead>
+                <TableHead className="w-[10%]">Unite</TableHead>
+                <TableHead className="text-right w-[9%]">Quantite</TableHead>
+                <TableHead className="text-right w-[17%]">
+                  Prix unitaire
+                  {devise !== "MUR" && (
+                    <div className="text-[10px] font-normal text-gray-500 mt-0.5">
+                      Saisie en {devise} ou MUR
+                    </div>
+                  )}
+                </TableHead>
+                <TableHead className="text-right w-[7%]">TVA %</TableHead>
+                <TableHead className="text-right w-[13%]">Montant HT</TableHead>
                 <TableHead className="w-[4%]" />
               </TableRow>
             </TableHeader>
@@ -519,14 +551,67 @@ export default function NouvelleFacturePage() {
                     </Select>
                   </TableCell>
                   <TableCell><Input type="number" min={0} step="0.01" value={l.quantite} onChange={e => updateLigne(l.id, "quantite", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-20" /></TableCell>
-                  <TableCell><Input type="number" step="0.01" value={l.prix_unitaire} onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-28" /></TableCell>
+                  <TableCell>
+                    {devise === "MUR" || tauxChange <= 1.0001 ? (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={l.prix_unitaire}
+                        onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)}
+                        className="text-right border-0 bg-transparent focus:bg-white w-28"
+                      />
+                    ) : (
+                      // Bi-directionnel : on stocke toujours prix_unitaire dans
+                      // la devise de facturation (devise étrangère). L'input MUR
+                      // calcule à l'inverse via le taux et met à jour
+                      // prix_unitaire. Permet à l'utilisateur de penser dans la
+                      // devise qui lui parle (prix d'achat en MUR, vente en EUR).
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-[10px] text-gray-500 w-7">{devise}</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={l.prix_unitaire}
+                            onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)}
+                            className="text-right border-0 bg-transparent focus:bg-white w-24 h-8"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-[10px] text-gray-500 w-7">MUR</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={Number((l.prix_unitaire * tauxChange).toFixed(2))}
+                            onChange={e => {
+                              const mur = parseFloat(e.target.value) || 0
+                              updateLigne(l.id, "prix_unitaire", Number((mur / tauxChange).toFixed(4)))
+                            }}
+                            className="text-right border-0 bg-transparent focus:bg-white w-24 h-8 text-gray-600"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Select value={String(l.taux_tva)} onValueChange={v => updateLigne(l.id, "taux_tva", parseFloat(v))}>
                       <SelectTrigger className="border-0 bg-transparent w-20 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="15">15%</SelectItem><SelectItem value="0">0%</SelectItem></SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell className="text-right font-mono font-semibold text-[#0B0F2E]">{fmt(l.montant_ht)}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {/* En devise étrangère : on affiche les DEUX montants au
+                        même format (taille + couleur). Le MUR est juste
+                        marqué "≈" pour signaler qu'il est dérivé du taux. */}
+                    <div className="font-semibold text-[#0B0F2E]">
+                      {fmt(l.montant_ht)} {devise !== "MUR" ? devise : "MUR"}
+                    </div>
+                    {devise !== "MUR" && tauxChange > 1.0001 && (
+                      <div className="font-semibold text-[#0B0F2E] mt-0.5">
+                        ≈ {fmt(l.montant_ht * tauxChange)} MUR
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell><Button variant="ghost" size="sm" onClick={() => removeLigne(l.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></Button></TableCell>
                 </TableRow>
               ))}
@@ -566,8 +651,22 @@ export default function NouvelleFacturePage() {
                     <Label className="whitespace-nowrap">1 {devise} =</Label>
                     <Input type="number" step="0.01" value={tauxChange} onChange={e => setTauxChange(parseFloat(e.target.value) || 1)} className="w-28 font-mono" />
                     <span className="text-sm text-gray-500">MUR</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchTaux(devise)}
+                      disabled={tauxLoading}
+                      title="Récupérer le cours du jour"
+                    >
+                      {tauxLoading ? "…" : "↻ Cours du jour"}
+                    </Button>
                   </div>
                   {tauxLoading && <p className="text-xs text-gray-400">Chargement du taux...</p>}
+                  <p className="text-[11px] text-gray-500">
+                    Le taux affiché est récupéré automatiquement depuis l'API officielle
+                    (cache 1h). Vous pouvez le modifier manuellement si besoin.
+                  </p>
                 </div>
               )}
             </CardContent>
