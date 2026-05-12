@@ -1593,6 +1593,22 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               ? (rawTiers.nom || rawTiers.name || JSON.stringify(rawTiers))
               : String(rawTiers))
           : null
+        // Coordonnées du tiers depuis l'extraction OCR (mig 244 + lib/tiers-annuaire enrich).
+        // Claude renvoie souvent ces champs imbriqués dans `emetteur`/`destinataire`
+        // quand ils sont visibles sur la facture (en-tête / pied de page).
+        const tiersSource: any = typeDocument === 'facture_client'
+          ? (extraction.destinataire || extraction.client || {})
+          : (extraction.emetteur || extraction.fournisseur || {})
+        const tiersEmail: string | null =
+          (typeof tiersSource === 'object' && (tiersSource.email || tiersSource.mail)) || extraction.email_tiers || null
+        const tiersTelephone: string | null =
+          (typeof tiersSource === 'object' && (tiersSource.telephone || tiersSource.tel || tiersSource.phone)) || extraction.telephone_tiers || null
+        const tiersAdresse: string | null =
+          (typeof tiersSource === 'object' && tiersSource.adresse) || extraction.adresse_tiers || null
+        const tiersVat: string | null =
+          (typeof tiersSource === 'object' && (tiersSource.vat_number || tiersSource.vat || tiersSource.tva)) || extraction.vat_number_tiers || null
+        const tiersBrn: string | null =
+          (typeof tiersSource === 'object' && tiersSource.brn) || extraction.brn || null
         const factureTypeForTiers = typeDocument === 'facture_client' ? 'client' : 'fournisseur'
         let clientOffshoreFlag = false
         let reverseChargeFlag = false
@@ -1603,16 +1619,30 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               clientOffshoreFlag = existingTiers.est_offshore
               reverseChargeFlag = existingTiers.reverse_charge
               await incrementTiersUsage(supabase, existingTiers.id)
+              // Enrichit le tiers existant avec les nouvelles coordonnées
+              // si elles ne sont pas déjà connues (ne remplace jamais).
+              const { enrichTiersFromOcr } = await import('@/lib/tiers-annuaire')
+              await enrichTiersFromOcr(supabase, existingTiers.id, {
+                brn: tiersBrn,
+                vat_number: tiersVat,
+                email: tiersEmail,
+                telephone: tiersTelephone,
+                adresse: tiersAdresse,
+              })
               console.log(`[upload] Tiers annuaire HIT: "${tiersName}" → offshore=${clientOffshoreFlag}, reverse_charge=${reverseChargeFlag} (verifie=${existingTiers.verifie})`)
             } else {
               const created = await createTiersFromOcr(supabase, {
                 nom: tiersName,
                 type_tiers: factureTypeForTiers as 'client' | 'fournisseur',
                 confiance: Number(extraction.confidence) || 50,
-                brn: extraction.brn || null,
+                brn: tiersBrn,
+                vat_number: tiersVat,
+                email: tiersEmail,
+                telephone: tiersTelephone,
+                adresse: tiersAdresse,
               })
               if (created) {
-                console.log(`[upload] Tiers annuaire NEW: "${tiersName}" created (id=${created.id})`)
+                console.log(`[upload] Tiers annuaire NEW: "${tiersName}" created (id=${created.id}, email=${tiersEmail || 'n/a'})`)
               }
             }
           } catch (e) {
