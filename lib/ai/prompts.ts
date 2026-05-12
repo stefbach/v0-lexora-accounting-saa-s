@@ -810,7 +810,8 @@ BRN mapping:
 === REGLES PAR TYPE ===
 
 --- FACTURE FOURNISSEUR ---
-Format: {"routing":{"societe":"<nom>","type_document":"facture_fournisseur","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_exonere":false,"tva_applicable":true,"fournisseur_vat_number":"","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"6xx","libelle":"","debit":0,"credit":0}]}}
+Format: {"routing":{"societe":"<nom>","type_document":"facture_fournisseur","confiance_type":0-100},"extraction":{"emetteur":{"nom":"","email":"","telephone":"","adresse":"","brn":"","vat_number":""},"destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_exonere":false,"tva_applicable":true,"fournisseur_vat_number":"","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"6xx","libelle":"","debit":0,"credit":0}]}}
+EMETTEUR : extrais TOUTES les coordonnées visibles sur le document (nom, email, téléphone, adresse postale complète, BRN, VAT). Ces données alimentent automatiquement le carnet de contacts. Si une info n'est pas visible, mets "" (chaîne vide).
 Comptes de charges:
 - 622: Honoraires et fees (avocats, comptables, consultants, 2E2J)
 - 612: Loyer et charges locatives (MWPI, MW PROP)
@@ -854,7 +855,8 @@ Si le titre du document contient "Statement of Account" ET a un champ "Amount Du
 - Compte: 626 (Telecommunications)
 
 --- FACTURE CLIENT ---
-Format: {"routing":{"societe":"<nom>","type_document":"facture_client","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":"","date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_applicable":true,"tva_exonere":false,"type_client":"B2B|B2C","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"7xx","libelle":"","debit":0,"credit":0}]}}
+Format: {"routing":{"societe":"<nom>","type_document":"facture_client","confiance_type":0-100},"extraction":{"emetteur":"","destinataire":{"nom":"","email":"","telephone":"","adresse":"","brn":"","vat_number":""},"date_document":"YYYY-MM-DD","numero_reference":"","devise":"EUR|USD|GBP|MUR|AUD","montant_ht":0,"montant_tva":0,"montant_ttc":0,"taux_tva":15,"tva_applicable":true,"tva_exonere":false,"type_client":"B2B|B2C","analyse_tva":"","lignes":[{"description":"","montant":0}],"ecritures_comptables":[{"compte":"7xx","libelle":"","debit":0,"credit":0}]}}
+DESTINATAIRE : extrais TOUTES les coordonnées du client (nom, email, téléphone, adresse, BRN, VAT) visibles sur la facture. Ces données alimentent automatiquement le carnet de contacts pour faciliter la facturation future. Si une info n'est pas visible, mets "" (chaîne vide).
 Comptes de produits:
 - 706: Prestations de services (telemedicine, BPO, consulting)
 - 707: Ventes de marchandises

@@ -188,6 +188,28 @@ export async function PATCH(request: Request) {
     if (body.adresse !== undefined) updateData.adresse = body.adresse || null
     if (body.telephone !== undefined) updateData.telephone = body.telephone || null
     if (body.email !== undefined) updateData.email = body.email || null
+
+    // Champs facturation (mig 243) + coordonnées bancaires (mig 106) +
+    // logo (mig 046 / mig 242) + devise (mig 006). Tous facultatifs.
+    if (body.website !== undefined) updateData.website = body.website || null
+    if (body.logo_url !== undefined) updateData.logo_url = body.logo_url || null
+    if (body.devise_principale !== undefined) updateData.devise_principale = body.devise_principale || 'MUR'
+    if (body.bank_name !== undefined) updateData.bank_name = body.bank_name || null
+    if (body.bank_account_number !== undefined) updateData.bank_account_number = body.bank_account_number || null
+    if (body.iban !== undefined) updateData.iban = body.iban || null
+    if (body.banque_swift !== undefined) updateData.banque_swift = body.banque_swift || null
+    if (body.facture_prefixe !== undefined) updateData.facture_prefixe = body.facture_prefixe || 'INV-'
+    if (body.facture_prochain_numero !== undefined) {
+      const n = Number(body.facture_prochain_numero)
+      updateData.facture_prochain_numero = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1
+    }
+    if (body.facture_conditions_paiement !== undefined) {
+      const n = Number(body.facture_conditions_paiement)
+      updateData.facture_conditions_paiement = Number.isFinite(n) && n >= 0 && n <= 365 ? Math.floor(n) : 30
+    }
+    if (body.facture_footer_text !== undefined) updateData.facture_footer_text = body.facture_footer_text || null
+    if (body.facture_mention_legale !== undefined) updateData.facture_mention_legale = body.facture_mention_legale || null
+
     const { data, error } = await admin.from('societes').update(updateData).eq('id', id).select().single()
     if (error) throw error
     return NextResponse.json({ societe: data })
