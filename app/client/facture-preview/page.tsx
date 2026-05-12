@@ -7,6 +7,20 @@ interface LigneFacture {
   id: string; description: string; quantite: number; prix_unitaire: number
   taux_tva: number; total: number
 }
+interface ContactDetail {
+  nom?: string | null
+  entreprise?: string | null
+  adresse?: string | null
+  code_postal?: string | null
+  ville?: string | null
+  pays?: string | null
+  email?: string | null
+  telephone?: string | null
+  mobile?: string | null
+  vat_number?: string | null
+  brn?: string | null
+  kbis?: string | null
+}
 interface InvoiceData {
   numero_facture: string; date_facture: string; date_echeance: string
   devise: string; taux_change: number
@@ -17,6 +31,7 @@ interface InvoiceData {
   tiers: string; logo_url: string
   accent_color?: string
   template_id?: string
+  contact_id?: string | null
   irn?: string; qr_code_data?: string; fiscalisation_date?: string
   mra_status?: string; type_document?: string
   facture_reference_id?: string
@@ -24,6 +39,8 @@ interface InvoiceData {
     nom: string; entreprise: string; adresse: string; email: string
     vat_number: string; offshore: boolean
   }
+  // Détail enrichi récupéré depuis factures_contacts (mig 245/246)
+  contact?: ContactDetail | null
   settings: {
     nom: string; brn: string; vat_number: string; logo_url: string
     adresse: string; telephone: string; email: string; website: string
@@ -44,16 +61,33 @@ function FacturePreviewContent() {
   useEffect(() => {
     const factureId = searchParams.get("facture_id")
     if (factureId) {
-      // Load from DB
+      // Load from DB. On charge la facture + le contact lié (mig 246)
+      // pour avoir adresse structurée, VAT, BRN. Si contact_id est null
+      // on retombe sur le simple champ tiers (legacy).
       fetch(`/api/client/factures?id=${factureId}`)
         .then(r => r.json())
-        .then(d => {
+        .then(async d => {
           if (d.factures?.[0]) {
             const f = d.factures[0]
             const settings = JSON.parse(localStorage.getItem("lexora_invoice_settings") || "{}")
+            let contact: ContactDetail | null = null
+            if (f.contact_id) {
+              try {
+                const ct = await fetch(`/api/client/factures-contacts/${f.contact_id}`).then(r => r.json())
+                contact = ct?.item || null
+              } catch { /* contact non trouvé → fallback nom */ }
+            }
             setData({
               ...f,
-              client: { nom: f.tiers, entreprise: "", adresse: "", email: "", vat_number: "", offshore: f.client_offshore },
+              client: {
+                nom: contact?.nom || f.tiers,
+                entreprise: contact?.entreprise || "",
+                adresse: contact?.adresse || "",
+                email: contact?.email || "",
+                vat_number: contact?.vat_number || "",
+                offshore: f.client_offshore,
+              },
+              contact,
               settings,
             })
           }
@@ -164,11 +198,36 @@ function FacturePreviewContent() {
         <div className="grid grid-cols-2 gap-8 mb-8">
           <div className="rounded-lg p-4" style={{ backgroundColor: colors.primaire + "08" }}>
             <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.primaire }}>Facture a / Bill to</h3>
-            <p className="font-semibold text-gray-900">{c.nom || c.entreprise || data.tiers || "-"}</p>
-            {c.entreprise && c.nom && <p className="text-sm text-gray-600">{c.entreprise}</p>}
-            {c.adresse && <p className="text-sm text-gray-600 whitespace-pre-line">{c.adresse}</p>}
-            {c.email && <p className="text-sm text-gray-600">{c.email}</p>}
-            {c.vat_number && <p className="text-sm text-gray-600">VAT: {c.vat_number}</p>}
+            {/* Affichage enrichi depuis factures_contacts si dispo (mig 246) :
+                entreprise (gras) + nom + adresse + code_postal/ville + pays
+                + email + tel/mobile + VAT + BRN + KBIS. Fallback sur les
+                champs legacy si pas de contact lié. */}
+            {(() => {
+              const ct = data.contact
+              const nom = ct?.entreprise || ct?.nom || c.nom || c.entreprise || data.tiers || "-"
+              const sousNom = ct?.entreprise && ct?.nom && ct.nom !== ct.entreprise ? ct.nom : null
+              const adresse = ct?.adresse || c.adresse
+              const villeLine = ct && (ct.code_postal || ct.ville)
+                ? [ct.code_postal, ct.ville].filter(Boolean).join(' ')
+                : null
+              const email = ct?.email || c.email
+              const tels = [ct?.telephone, ct?.mobile].filter(Boolean).join(' / ')
+              const vat = ct?.vat_number || c.vat_number
+              return (
+                <>
+                  <p className="font-semibold text-gray-900">{nom}</p>
+                  {sousNom && <p className="text-sm text-gray-600">{sousNom}</p>}
+                  {adresse && <p className="text-sm text-gray-600 whitespace-pre-line">{adresse}</p>}
+                  {villeLine && <p className="text-sm text-gray-600">{villeLine}</p>}
+                  {ct?.pays && <p className="text-sm text-gray-600">{ct.pays}</p>}
+                  {email && <p className="text-sm text-gray-600">{email}</p>}
+                  {tels && <p className="text-sm text-gray-600">Tel: {tels}</p>}
+                  {vat && <p className="text-sm text-gray-600">VAT: {vat}</p>}
+                  {ct?.brn && <p className="text-sm text-gray-600">BRN: {ct.brn}</p>}
+                  {ct?.kbis && <p className="text-sm text-gray-600">{ct.kbis}</p>}
+                </>
+              )
+            })()}
           </div>
           <div className="text-right space-y-1.5">
             <div className="flex justify-end gap-8">
@@ -195,29 +254,55 @@ function FacturePreviewContent() {
           </div>
         </div>
 
-        {/* Line Items Table */}
-        <table className="w-full mb-6" style={{ borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ backgroundColor: colors.primaire }}>
-              <th className="text-left text-white text-xs font-semibold py-3 px-4 rounded-tl-lg">Description</th>
-              <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">Qte</th>
-              <th className="text-right text-white text-xs font-semibold py-3 px-3 w-28">Prix unit.</th>
-              <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">TVA</th>
-              <th className="text-right text-white text-xs font-semibold py-3 px-4 rounded-tr-lg w-28">Montant</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lignes.map((l, i) => (
-              <tr key={l.id || i} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
-                <td className="py-3 px-4 text-sm">{l.description}</td>
-                <td className="py-3 px-3 text-sm text-right">{l.quantite}</td>
-                <td className="py-3 px-3 text-sm text-right font-mono">{fmt(l.prix_unitaire)}</td>
-                <td className="py-3 px-3 text-sm text-right">{l.taux_tva}%</td>
-                <td className="py-3 px-4 text-sm text-right font-mono font-semibold">{fmt(l.quantite * l.prix_unitaire * (1 + l.taux_tva / 100))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {/* Line Items Table — affichage double devise (EUR/USD/GBP + MUR)
+            quand devise étrangère. Chaque cellule Prix unitaire et Montant
+            empile la valeur en devise + l'équivalent MUR juste en dessous.
+            Le header de colonnes l'indique : "Prix unit. (EUR / MUR)". */}
+        {(() => {
+          const isForeign = data.devise !== "MUR" && Number(data.taux_change) > 1.0001
+          const taux = Number(data.taux_change) || 1
+          return (
+            <table className="w-full mb-6" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ backgroundColor: colors.primaire }}>
+                  <th className="text-left text-white text-xs font-semibold py-3 px-4 rounded-tl-lg">Description</th>
+                  <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">Qte</th>
+                  <th className="text-right text-white text-xs font-semibold py-3 px-3 w-32">
+                    Prix unit.{isForeign && <div className="text-[10px] font-normal opacity-80">{data.devise} / MUR</div>}
+                  </th>
+                  <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">TVA</th>
+                  <th className="text-right text-white text-xs font-semibold py-3 px-4 rounded-tr-lg w-32">
+                    Montant{isForeign && <div className="text-[10px] font-normal opacity-80">{data.devise} / MUR</div>}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {lignes.map((l, i) => {
+                  const pu = Number(l.prix_unitaire) || 0
+                  const qte = Number(l.quantite) || 0
+                  const montant = qte * pu * (1 + (l.taux_tva || 0) / 100)
+                  const puMur = pu * taux
+                  const montantMur = montant * taux
+                  return (
+                    <tr key={l.id || i} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                      <td className="py-3 px-4 text-sm align-top">{l.description || "—"}</td>
+                      <td className="py-3 px-3 text-sm text-right align-top">{qte}</td>
+                      <td className="py-3 px-3 text-sm text-right font-mono align-top">
+                        <div>{fmt(pu)} {isForeign ? data.devise : ""}</div>
+                        {isForeign && <div className="text-[11px] text-gray-600 mt-0.5">≈ {fmt(puMur)} MUR</div>}
+                      </td>
+                      <td className="py-3 px-3 text-sm text-right align-top">{l.taux_tva}%</td>
+                      <td className="py-3 px-4 text-sm text-right font-mono font-semibold align-top">
+                        <div>{fmt(montant)} {isForeign ? data.devise : ""}</div>
+                        {isForeign && <div className="text-[11px] text-gray-600 font-normal mt-0.5">≈ {fmt(montantMur)} MUR</div>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )
+        })()}
 
         {/* Totals */}
         <div className="flex justify-end mb-8">
@@ -241,10 +326,17 @@ function FacturePreviewContent() {
               <span className="font-mono" style={{ color: colors.primaire }}>{fmt(grandTotal)} {data.devise}</span>
             </div>
             {data.devise !== "MUR" && data.taux_change > 0 && (
-              <div className="flex justify-between text-xs text-gray-500 pt-1">
-                <span>Equivalent MUR (taux: {data.taux_change})</span>
-                <span className="font-mono">{fmt(grandTotal * data.taux_change)} MUR</span>
-              </div>
+              <>
+                <div className="flex justify-between text-sm pt-1">
+                  <span className="text-gray-700 font-medium">Equivalent MUR</span>
+                  <span className="font-mono font-medium">{fmt(grandTotal * data.taux_change)} MUR</span>
+                </div>
+                <div className="mt-2 px-3 py-2 rounded-md text-[11px] italic text-gray-600 bg-gray-50 border border-gray-200 text-right">
+                  Taux de change appliqué : 1 {data.devise} = {fmt(data.taux_change)} MUR
+                  <br />
+                  (cours du {fmtDate(data.date_facture)})
+                </div>
+              </>
             )}
           </div>
         </div>
