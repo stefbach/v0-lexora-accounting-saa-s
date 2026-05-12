@@ -16,7 +16,7 @@ import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
 interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean }
-interface CatalogueItem { id: string; description: string; prix_unitaire: number; devise: string; tva_applicable: boolean; categorie: string; unite?: string }
+interface CatalogueItem { id: string; description: string; prix_unitaire: number; devise: string; tva_applicable: boolean; categorie: string | null; unite?: string }
 interface CompanySettings { nom: string; brn: string; vat_number: string; logo_url: string; adresse: string; telephone: string; email: string; website: string; banque_nom: string; banque_compte: string; banque_iban: string; banque_swift: string; devise_defaut: string; prefixe_facture: string; prochain_numero: number; conditions_paiement: number; footer_text: string; mention_legale: string }
 interface Societe { id: string; nom: string }
 
@@ -94,8 +94,13 @@ export default function NouvelleFacturePage() {
       } else { setDateEcheance(addDays(today(), 30)) }
       const c = localStorage.getItem("lexora_invoice_clients")
       if (c) setClients(JSON.parse(c))
-      const cat = localStorage.getItem("lexora_invoice_catalogue")
-      if (cat) setCatalogue(JSON.parse(cat))
+      // Catalogue : on charge depuis l'API ci-dessous (effet séparé). Fallback
+      // localStorage tant que la DB n'est pas peuplée, pour ne pas perdre les
+      // articles des utilisateurs legacy.
+      const catLegacy = localStorage.getItem("lexora_invoice_catalogue")
+      if (catLegacy) {
+        try { setCatalogue(JSON.parse(catLegacy)) } catch { /* ignore */ }
+      }
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       if (tc) { try { const parsed = JSON.parse(tc); if (parsed.primaire) setAccentColor(parsed.primaire) } catch { /* ignore */ } }
     } catch { /* ignore */ }
@@ -111,6 +116,28 @@ export default function NouvelleFacturePage() {
       })))
     }).catch(() => {})
   }, [])
+
+  // Catalogue depuis l'API — déclenché dès que societeId est disponible.
+  // Remplace les items localStorage par ceux en base (source de vérité).
+  useEffect(() => {
+    if (!societeId) return
+    fetch(`/api/client/catalogue?societe_id=${societeId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d?.items) && d.items.length > 0) {
+          setCatalogue(d.items.map((it: any) => ({
+            id: it.id,
+            description: it.description,
+            prix_unitaire: Number(it.prix_unitaire) || 0,
+            devise: it.devise || "MUR",
+            tva_applicable: it.tva_applicable !== false,
+            categorie: it.categorie || null,
+            unite: it.unite || "Forfait",
+          })))
+        }
+      })
+      .catch(() => { /* fallback localStorage déjà chargé */ })
+  }, [societeId])
 
   const fetchTaux = useCallback(async (dev: string) => {
     if (dev === "MUR") { setTauxChange(1); return }
