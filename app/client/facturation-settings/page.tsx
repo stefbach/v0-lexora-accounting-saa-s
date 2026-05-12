@@ -68,6 +68,24 @@ const TEMPLATES: InvoiceTemplate[] = [
 function genId() { return crypto.randomUUID() }
 
 /**
+ * Construit la mention légale obligatoire à partir des identifiants
+ * fiscaux de la société (VAT MRA + BRN). Affichée en bas des factures.
+ *
+ * Format Maurice : "VAT Reg No: 12345 | BRN: C12345678"
+ * Si l'une des deux valeurs manque, on n'affiche que celle qui est là.
+ * Si les deux manquent, retourne chaîne vide → l'utilisateur sait
+ * qu'il doit renseigner BRN/VAT plus haut.
+ */
+function buildMentionLegale(brn: string | null | undefined, vat: string | null | undefined): string {
+  const parts: string[] = []
+  const v = (vat || "").trim()
+  const b = (brn || "").trim()
+  if (v) parts.push(`VAT Reg No: ${v}`)
+  if (b) parts.push(`BRN: ${b}`)
+  return parts.join(" | ")
+}
+
+/**
  * Mappe la société DB (colonnes Supabase) → CompanySettings du form.
  * Privilégie les valeurs DB, fallback sur les valeurs déjà saisies en
  * localStorage pour ne rien perdre lors de la première migration.
@@ -91,7 +109,16 @@ function mapSocieteToSettings(societe: any, legacy: Partial<CompanySettings>): C
     prochain_numero:     Number(societe?.facture_prochain_numero ?? legacy.prochain_numero ?? 1),
     conditions_paiement: Number(societe?.facture_conditions_paiement ?? legacy.conditions_paiement ?? 30),
     footer_text:         societe?.facture_footer_text          ?? legacy.footer_text         ?? "",
-    mention_legale:      societe?.facture_mention_legale       ?? legacy.mention_legale      ?? "",
+    // Auto-génère la mention légale depuis BRN/VAT si l'utilisateur n'a
+    // rien saisi (ni en DB, ni en localStorage). Si la valeur stockée
+    // ressemble au placeholder par défaut, on la régénère aussi.
+    mention_legale:      (() => {
+      const stored = societe?.facture_mention_legale ?? legacy.mention_legale ?? ""
+      if (!stored || stored === "VAT Reg No: XXXXX | BRN: XXXXX") {
+        return buildMentionLegale(societe?.brn, societe?.numero_tva_mra)
+      }
+      return stored
+    })(),
   }
 }
 
@@ -373,8 +400,33 @@ export default function FacturationSettingsPage() {
               <CardContent className="space-y-3">
                 <div><Label>Nom de l&apos;entreprise</Label><Input value={settings.nom} onChange={e => setSettings(s => ({ ...s, nom: e.target.value }))} placeholder="DDS Consulting Ltd" /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>BRN</Label><Input value={settings.brn} onChange={e => setSettings(s => ({ ...s, brn: e.target.value }))} placeholder="C12345678" /></div>
-                  <div><Label>N. TVA / VAT</Label><Input value={settings.vat_number} onChange={e => setSettings(s => ({ ...s, vat_number: e.target.value }))} placeholder="VAT12345678" /></div>
+                  <div><Label>BRN</Label><Input value={settings.brn} onChange={e => {
+                    // Si la mention légale courante a été auto-générée
+                    // depuis l'ancien BRN/VAT, on la régénère avec la nouvelle
+                    // valeur de BRN. Sinon on respecte l'édition manuelle.
+                    const newBrn = e.target.value
+                    setSettings(s => {
+                      const auto = buildMentionLegale(s.brn, s.vat_number)
+                      const isAuto = !s.mention_legale || s.mention_legale === auto
+                      return {
+                        ...s,
+                        brn: newBrn,
+                        mention_legale: isAuto ? buildMentionLegale(newBrn, s.vat_number) : s.mention_legale,
+                      }
+                    })
+                  }} placeholder="C12345678" /></div>
+                  <div><Label>N. TVA / VAT</Label><Input value={settings.vat_number} onChange={e => {
+                    const newVat = e.target.value
+                    setSettings(s => {
+                      const auto = buildMentionLegale(s.brn, s.vat_number)
+                      const isAuto = !s.mention_legale || s.mention_legale === auto
+                      return {
+                        ...s,
+                        vat_number: newVat,
+                        mention_legale: isAuto ? buildMentionLegale(s.brn, newVat) : s.mention_legale,
+                      }
+                    })
+                  }} placeholder="VAT12345678" /></div>
                 </div>
                 <div>
                   <Label>Logo</Label>
@@ -471,7 +523,31 @@ export default function FacturationSettingsPage() {
                     <div><Label>Prochain numero</Label><Input type="number" min={1} value={settings.prochain_numero} onChange={e => setSettings(s => ({ ...s, prochain_numero: parseInt(e.target.value) || 1 }))} /></div>
                   </div>
                   <div><Label>Texte de pied de page</Label><Input value={settings.footer_text} onChange={e => setSettings(s => ({ ...s, footer_text: e.target.value }))} /></div>
-                  <div><Label>Mention legale MRA</Label><Input value={settings.mention_legale} onChange={e => setSettings(s => ({ ...s, mention_legale: e.target.value }))} placeholder="VAT Reg No: XXXXX | BRN: XXXXX" /></div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label>Mention légale MRA</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSettings(s => ({ ...s, mention_legale: buildMentionLegale(s.brn, s.vat_number) }))}
+                        disabled={!settings.brn && !settings.vat_number}
+                        className="h-6 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                        title="Régénère la mention à partir du BRN et du N° TVA renseignés ci-dessus"
+                      >
+                        ↻ Régénérer depuis BRN/VAT
+                      </Button>
+                    </div>
+                    <Input
+                      value={settings.mention_legale}
+                      onChange={e => setSettings(s => ({ ...s, mention_legale: e.target.value }))}
+                      placeholder={buildMentionLegale(settings.brn, settings.vat_number) || "VAT Reg No: XXXXX | BRN: XXXXX"}
+                    />
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Auto-générée depuis BRN + N° TVA. Modifie l'un des deux ci-dessus → mise à jour automatique.
+                      Tu peux aussi la personnaliser manuellement.
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </div>
