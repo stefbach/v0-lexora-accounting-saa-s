@@ -433,12 +433,14 @@ export async function GET(request: Request) {
       )
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
-    // Charges sociales : 645 (cotisations patronales) — pas d'ACH (paie passe par SAL/OD-PAIE).
-    // On garde aussi le solde du compte 43 (organismes sociaux) pour visibilité,
-    // mais en passif il devrait s'annuler si toutes les cotisations sont payées.
+    // Charges sociales : uniquement comptes de charge classe 6 (645x cotisations
+    // patronales, 647x autres charges sociales, 648x). Le compte 43 (passif —
+    // dettes envers organismes sociaux) ne doit PAS être mélangé ici : son solde
+    // créditeur est une dette, pas une charge. Inclure 43 surestimait le P&L dès
+    // qu'une cotisation déclarée n'avait pas encore été payée.
     const chargesSociales = allEcritures
       .filter(e =>
-        (e.compte?.startsWith('645') || e.compte?.startsWith('43'))
+        (e.compte?.startsWith('645') || e.compte?.startsWith('647') || e.compte?.startsWith('648'))
         && e.journal !== 'ACH'
         && !isPayrollCurrentMonth(e)
       )

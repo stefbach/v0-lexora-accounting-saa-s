@@ -94,6 +94,10 @@ export async function createTiersFromOcr(
     type_tiers?: 'client' | 'fournisseur' | 'both'
     confiance?: number
     brn?: string | null
+    vat_number?: string | null
+    email?: string | null
+    telephone?: string | null
+    adresse?: string | null
   }
 ): Promise<TiersAnnuaireRecord | null> {
   const nom = (params.nom || '').trim()
@@ -106,6 +110,10 @@ export async function createTiersFromOcr(
         nom,
         type_tiers: params.type_tiers || 'both',
         brn: params.brn || null,
+        vat_number: params.vat_number || null,
+        email: params.email || null,
+        telephone: params.telephone || null,
+        adresse: params.adresse || null,
         est_offshore: false,
         reverse_charge: false,
         source: 'ocr_auto',
@@ -117,10 +125,14 @@ export async function createTiersFromOcr(
       .select()
       .single()
     if (error) {
-      // Duplicate (race condition) — fetch existing
+      // Duplicate (race condition) — fetch existing puis enrichir si on a
+      // de nouvelles infos non encore stockées (email/tel/adresse).
       if (error.code === '23505') {
         const existing = await findTiersInAnnuaire(supabase, nom)
-        if (existing) return existing
+        if (existing) {
+          await enrichTiersFromOcr(supabase, existing.id, params)
+          return existing
+        }
       }
       console.warn('[tiers-annuaire] create failed:', error.message)
       return null
@@ -129,6 +141,45 @@ export async function createTiersFromOcr(
   } catch (e) {
     console.warn('[tiers-annuaire] create exception:', e)
     return null
+  }
+}
+
+/**
+ * Enrichit un tiers existant avec des coordonnées extraites par OCR :
+ * on ne remplace JAMAIS une valeur déjà présente (l'OCR peut être
+ * légèrement différent d'une facture à l'autre). On complète seulement
+ * les colonnes NULL — préserve les données vérifiées manuellement.
+ */
+export async function enrichTiersFromOcr(
+  supabase: SupabaseClient,
+  tiersId: string,
+  params: {
+    brn?: string | null
+    vat_number?: string | null
+    email?: string | null
+    telephone?: string | null
+    adresse?: string | null
+  }
+): Promise<void> {
+  try {
+    const { data: current } = await supabase
+      .from('tiers_annuaire')
+      .select('brn, vat_number, email, telephone, adresse')
+      .eq('id', tiersId)
+      .single()
+    if (!current) return
+
+    const patch: Record<string, string> = {}
+    if (!current.brn && params.brn) patch.brn = params.brn
+    if (!current.vat_number && params.vat_number) patch.vat_number = params.vat_number
+    if (!current.email && params.email) patch.email = params.email
+    if (!current.telephone && params.telephone) patch.telephone = params.telephone
+    if (!current.adresse && params.adresse) patch.adresse = params.adresse
+
+    if (Object.keys(patch).length === 0) return
+    await supabase.from('tiers_annuaire').update(patch).eq('id', tiersId)
+  } catch (e) {
+    console.warn('[tiers-annuaire] enrich failed:', e)
   }
 }
 

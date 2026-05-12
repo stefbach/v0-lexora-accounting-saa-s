@@ -98,6 +98,7 @@ export async function POST(request: Request) {
       recurrent = false, recurrent_frequence, logo_url,
       mode_paiement = 'banque', paye_par, contact_id,
       type_document = 'facture', facture_reference_id,
+      recurrence_jour_du_mois, recurrence_date_debut, recurrence_date_fin,
     } = body
 
     if (!societe_id || !date_facture) {
@@ -124,50 +125,99 @@ export async function POST(request: Request) {
       ? (statutIn === 'converti' ? 'converti' : 'devis')
       : statutIn
 
-    // Generate sequential invoice number if not provided
+    // Generate sequential invoice number if not provided.
+    // Source de vérité = societes.<type>_prefixe + <type>_prochain_numero
+    // (mig 243 pour facture + mig 247 pour devis/avoir/note_debit).
+    // L'utilisateur paramètre une fois ses préfixes + compteurs dans
+    // /client/facturation-settings, ensuite tout est auto.
     let finalNumero = numero_facture
     if (!finalNumero) {
-      const prefix = type_document === 'avoir' ? 'AV-' : type_document === 'note_debit' ? 'ND-' : type_document === 'devis' ? 'DEV-' : 'INV-'
       const filterDoc = type_document || 'facture'
 
-      let query = supabase
-        .from('factures')
-        .select('numero_facture')
-        .eq('societe_id', societe_id)
-        .eq('type_facture', 'client')
-        .not('numero_facture', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
+      // Mapping type_document → colonnes (préfixe + compteur) sur societes
+      const colMap: Record<string, { prefCol: string; numCol: string; defaultPrefix: string }> = {
+        facture:    { prefCol: 'facture_prefixe',    numCol: 'facture_prochain_numero',    defaultPrefix: 'INV-' },
+        devis:      { prefCol: 'devis_prefixe',      numCol: 'devis_prochain_numero',      defaultPrefix: 'DEV-' },
+        avoir:      { prefCol: 'avoir_prefixe',      numCol: 'avoir_prochain_numero',      defaultPrefix: 'AV-'  },
+        note_debit: { prefCol: 'note_debit_prefixe', numCol: 'note_debit_prochain_numero', defaultPrefix: 'ND-'  },
+      }
+      const cfg = colMap[filterDoc] || colMap.facture
 
-      // Filter by type_document if it's an avoir or note_debit
-      if (filterDoc !== 'facture') {
-        query = query.eq('type_document', filterDoc)
+      // Lit le compteur + le préfixe dans societes. Si la requête échoue
+      // (mig 247 non appliquée → colonne devis/avoir manquante), on
+      // retombe sur la logique legacy parse-dernier-numéro.
+      let prefixe = cfg.defaultPrefix
+      let prochain = 0
+      let dbCounterAvailable = false
+      const counterRes = await supabase
+        .from('societes')
+        .select(`${cfg.prefCol}, ${cfg.numCol}`)
+        .eq('id', societe_id)
+        .maybeSingle()
+      if (!counterRes.error && counterRes.data) {
+        const row = counterRes.data as Record<string, any>
+        if (row[cfg.prefCol] || row[cfg.numCol]) {
+          prefixe = (row[cfg.prefCol] as string) || cfg.defaultPrefix
+          prochain = Number(row[cfg.numCol]) || 1
+          dbCounterAvailable = true
+        }
       }
 
-      const { data: lastInvoice } = await query.single()
+      if (dbCounterAvailable) {
+        finalNumero = `${prefixe}${String(prochain).padStart(4, '0')}`
+        // Incrémente le compteur en base — best-effort, sans atomicité
+        // parfaite. Risque de collision faible dans contexte SME mono-user.
+        await supabase
+          .from('societes')
+          .update({ [cfg.numCol]: prochain + 1 })
+          .eq('id', societe_id)
+      } else {
+        // Fallback : mig pas appliquée → parse du dernier numéro existant
+        const { data: lastInvoice } = await supabase
+          .from('factures')
+          .select('numero_facture')
+          .eq('societe_id', societe_id)
+          .eq('type_facture', 'client')
+          .eq('type_document', filterDoc)
+          .not('numero_facture', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
 
-      let nextNum = 1
-      if (lastInvoice?.numero_facture) {
-        const match = lastInvoice.numero_facture.match(/(\d+)$/)
-        if (match) nextNum = parseInt(match[1]) + 1
+        let nextNum = 1
+        if (lastInvoice?.numero_facture) {
+          const match = lastInvoice.numero_facture.match(/(\d+)$/)
+          if (match) nextNum = parseInt(match[1]) + 1
+        }
+        finalNumero = `${cfg.defaultPrefix}${String(nextNum).padStart(3, '0')}`
       }
-      finalNumero = `${prefix}${String(nextNum).padStart(3, '0')}`
     }
 
     const ttc = montant_ttc ?? (montant_ht + montant_tva)
     const mur = devise === 'MUR' ? ttc : ttc * (taux_change || 1)
+
+    // Si l'utilisateur active la récurrence, on force statut='modele' :
+    // le modèle ne doit jamais devenir une facture comptabilisée. Le cron
+    // /api/cron/factures-recurrentes clonera ce modèle pour générer les
+    // vraies factures au fil du temps.
+    const finalStatut = recurrent === true ? 'modele' : statut
 
     const insertData: Record<string, unknown> = {
       societe_id, type_facture: 'client',
       numero_facture: finalNumero, tiers, description,
       date_facture, date_echeance, devise, taux_change,
       montant_ht, montant_tva, montant_ttc: ttc,
-      taux_tva, montant_mur: mur, statut, notes,
+      taux_tva, montant_mur: mur, statut: finalStatut, notes,
       notes_internes, lignes, conditions_paiement, termes,
       template, client_offshore, remise_pct, remise_montant,
       recurrent, recurrent_frequence, logo_url,
       mode_paiement, paye_par, contact_id,
       type_document,
+    }
+    if (recurrent === true) {
+      insertData.recurrence_jour_du_mois = recurrence_jour_du_mois || null
+      insertData.recurrence_date_debut = recurrence_date_debut || date_facture
+      insertData.recurrence_date_fin = recurrence_date_fin || null
     }
     if (facture_reference_id) {
       insertData.facture_reference_id = facture_reference_id

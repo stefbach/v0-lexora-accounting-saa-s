@@ -9,7 +9,7 @@ import {
   Calculator, Receipt, BarChart3, Scale, Clock, CreditCard,
   Settings, LogOut, ChevronDown, ChevronRight, UserCog,
   Banknote, FileSpreadsheet, Gavel, MessageSquare, TrendingUp,
-  ClipboardList, AlertCircle, AlertTriangle, Globe
+  ClipboardList, AlertCircle, AlertTriangle, Globe, Brain
 } from "lucide-react"
 
 const MENU = [
@@ -21,6 +21,7 @@ const MENU = [
       { href: "/admin/users", label: "Utilisateurs", icon: Users },
       { href: "/admin/comptables", label: "Comptables", icon: UserCog },
       { href: "/admin/parametres", label: "Paramètres", icon: Settings },
+      { href: "/admin/lexora-tooling", label: "Lexora Tooling (IA)", icon: Brain },
     ]
   },
   {
