@@ -436,18 +436,32 @@ export default function NouvelleFacturePage() {
               <Button onClick={addLigne} variant="outline" size="sm" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"><Plus className="w-4 h-4 mr-1" />Ajouter une ligne</Button>
             </div>
           </div>
+          {devise !== "MUR" && tauxChange > 1.0001 && (
+            <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-1.5 mt-2">
+              💡 Vous pouvez saisir le prix unitaire en <strong>{devise}</strong> ou en <strong>MUR</strong> :
+              la conversion se fait automatiquement au taux de {fmt(tauxChange)} MUR / {devise}.
+              La facture finale est émise en {devise} avec l'équivalent MUR à titre informatif.
+            </p>
+          )}
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-[#0B0F2E]/5">
                 <TableHead className="w-[4%] text-center">#</TableHead>
-                <TableHead className="w-[28%]">Description</TableHead>
-                <TableHead className="w-[11%]">Unite</TableHead>
-                <TableHead className="text-right w-[10%]">Quantite</TableHead>
-                <TableHead className="text-right w-[13%]">Prix unitaire</TableHead>
-                <TableHead className="text-right w-[8%]">TVA %</TableHead>
-                <TableHead className="text-right w-[14%]">Montant HT</TableHead>
+                <TableHead className="w-[26%]">Description</TableHead>
+                <TableHead className="w-[10%]">Unite</TableHead>
+                <TableHead className="text-right w-[9%]">Quantite</TableHead>
+                <TableHead className="text-right w-[17%]">
+                  Prix unitaire
+                  {devise !== "MUR" && (
+                    <div className="text-[10px] font-normal text-gray-500 mt-0.5">
+                      Saisie en {devise} ou MUR
+                    </div>
+                  )}
+                </TableHead>
+                <TableHead className="text-right w-[7%]">TVA %</TableHead>
+                <TableHead className="text-right w-[13%]">Montant HT</TableHead>
                 <TableHead className="w-[4%]" />
               </TableRow>
             </TableHeader>
@@ -466,10 +480,44 @@ export default function NouvelleFacturePage() {
                   </TableCell>
                   <TableCell><Input type="number" min={0} step="0.01" value={l.quantite} onChange={e => updateLigne(l.id, "quantite", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-20" /></TableCell>
                   <TableCell>
-                    <Input type="number" step="0.01" value={l.prix_unitaire} onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-28" />
-                    {devise !== "MUR" && tauxChange > 1.0001 && l.prix_unitaire > 0 && (
-                      <div className="text-[10px] text-gray-400 text-right font-mono mt-0.5">
-                        ≈ {fmt(l.prix_unitaire * tauxChange)} MUR
+                    {devise === "MUR" || tauxChange <= 1.0001 ? (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={l.prix_unitaire}
+                        onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)}
+                        className="text-right border-0 bg-transparent focus:bg-white w-28"
+                      />
+                    ) : (
+                      // Bi-directionnel : on stocke toujours prix_unitaire dans
+                      // la devise de facturation (devise étrangère). L'input MUR
+                      // calcule à l'inverse via le taux et met à jour
+                      // prix_unitaire. Permet à l'utilisateur de penser dans la
+                      // devise qui lui parle (prix d'achat en MUR, vente en EUR).
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-[10px] text-gray-500 w-7">{devise}</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={l.prix_unitaire}
+                            onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)}
+                            className="text-right border-0 bg-transparent focus:bg-white w-24 h-8"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 justify-end">
+                          <span className="text-[10px] text-gray-500 w-7">MUR</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={Number((l.prix_unitaire * tauxChange).toFixed(2))}
+                            onChange={e => {
+                              const mur = parseFloat(e.target.value) || 0
+                              updateLigne(l.id, "prix_unitaire", Number((mur / tauxChange).toFixed(4)))
+                            }}
+                            className="text-right border-0 bg-transparent focus:bg-white w-24 h-8 text-gray-600"
+                          />
+                        </div>
                       </div>
                     )}
                   </TableCell>
