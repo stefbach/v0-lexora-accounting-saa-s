@@ -507,15 +507,22 @@ export default function FacturationSettingsPage() {
                       </Select>
                     </div>
                     <div>
-                      <Label>Conditions de paiement</Label>
+                      <Label>Conditions de paiement par défaut</Label>
                       <Select value={String(settings.conditions_paiement)} onValueChange={v => setSettings(s => ({ ...s, conditions_paiement: parseInt(v) }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="0">À réception</SelectItem>
+                          <SelectItem value="7">7 jours</SelectItem>
+                          <SelectItem value="14">14 jours</SelectItem>
                           <SelectItem value="30">30 jours</SelectItem>
+                          <SelectItem value="45">45 jours</SelectItem>
                           <SelectItem value="60">60 jours</SelectItem>
                           <SelectItem value="90">90 jours</SelectItem>
                         </SelectContent>
                       </Select>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        Valeur pré-remplie à chaque création de facture. "À réception" = paiement immédiat (date d'échéance = date de facture).
+                      </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -653,7 +660,13 @@ export default function FacturationSettingsPage() {
                     <Select value={String(cConditions)} onValueChange={v => setCConditions(parseInt(v))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="30">30</SelectItem><SelectItem value="60">60</SelectItem><SelectItem value="90">90</SelectItem>
+                        <SelectItem value="0">À réception</SelectItem>
+                        <SelectItem value="7">7</SelectItem>
+                        <SelectItem value="14">14</SelectItem>
+                        <SelectItem value="30">30</SelectItem>
+                        <SelectItem value="45">45</SelectItem>
+                        <SelectItem value="60">60</SelectItem>
+                        <SelectItem value="90">90</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
