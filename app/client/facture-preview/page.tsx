@@ -23,6 +23,7 @@ interface ContactDetail {
   kbis?: string | null
 }
 interface InvoiceData {
+  id?: string
   numero_facture: string; date_facture: string; date_echeance: string
   devise: string; taux_change: number
   montant_ht: number; montant_tva: number; montant_ttc: number
@@ -130,6 +131,37 @@ function FacturePreviewContent() {
   // qrcode produit un vrai PNG scannable, à la différence du faux SVG
   // stocké éventuellement en base.
   const [qrCodePng, setQrCodePng] = useState<string | null>(null)
+  const [mraLoading, setMraLoading] = useState(false)
+  const [mraMsg, setMraMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+
+  async function handleFiscalise() {
+    if (!data?.id) return
+    setMraLoading(true)
+    setMraMsg(null)
+    try {
+      const r = await fetch(`/api/client/factures/${data.id}/fiscalise`, { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok || j.ok === false) {
+        setMraMsg({ kind: 'err', text: j.error || `Erreur fiscalisation (${r.status})` })
+      } else {
+        setMraMsg({
+          kind: 'ok',
+          text: j.already_fiscalise ? 'Facture déjà fiscalisée.' : `Fiscalisée — IRN ${j.irn}`,
+        })
+        setData(prev => prev ? {
+          ...prev,
+          irn: j.irn,
+          qr_code_data: j.qr_code_image || j.qr_code_data,
+          fiscalisation_date: j.fiscalisation_date,
+          mra_status: 'fiscalise',
+        } : prev)
+      }
+    } catch (e: any) {
+      setMraMsg({ kind: 'err', text: e?.message || 'Erreur réseau' })
+    } finally {
+      setMraLoading(false)
+    }
+  }
   useEffect(() => {
     const qd = data?.qr_code_data
     if (!qd) { setQrCodePng(null); return }
@@ -252,14 +284,37 @@ function FacturePreviewContent() {
         @page { size: A4; margin: 15mm; }
       `}</style>
 
-      {/* Print button */}
-      <div className="no-print fixed top-4 right-4 z-50 flex gap-2">
-        <button onClick={() => window.print()} className="bg-[#0B0F2E] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#2a3d6b] transition-colors">
-          Imprimer / PDF
-        </button>
-        <button onClick={() => window.close()} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">
-          Fermer
-        </button>
+      {/* Print + MRA buttons */}
+      <div className="no-print fixed top-4 right-4 z-50 flex flex-col items-end gap-2">
+        <div className="flex gap-2">
+          {data.id && data.type_document !== 'devis' && (
+            data.irn ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-green-100 text-green-800 border border-green-200">
+                ✓ MRA fiscalisée
+              </span>
+            ) : (
+              <button
+                onClick={handleFiscalise}
+                disabled={mraLoading}
+                className="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                title="Soumettre cette facture à la MRA EBS"
+              >
+                {mraLoading ? 'Fiscalisation…' : 'Fiscaliser MRA'}
+              </button>
+            )
+          )}
+          <button onClick={() => window.print()} className="bg-[#0B0F2E] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#2a3d6b] transition-colors">
+            Imprimer / PDF
+          </button>
+          <button onClick={() => window.close()} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">
+            Fermer
+          </button>
+        </div>
+        {mraMsg && (
+          <div className={`max-w-md px-3 py-2 rounded-lg text-xs font-medium shadow ${mraMsg.kind === 'ok' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+            {mraMsg.text}
+          </div>
+        )}
       </div>
 
       {/* Invoice */}
