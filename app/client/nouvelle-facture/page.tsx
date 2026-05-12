@@ -10,8 +10,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check, FileWarning, FileMinus, Wand2 } from "lucide-react"
+import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, ListOrdered, Calculator, CreditCard, StickyNote, Palette, Check, FileWarning, FileMinus, Wand2, Package } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { CatalogueSelectorDialog, type CatalogueItem as CatalogueDialogItem } from "@/components/client/CatalogueSelectorDialog"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
@@ -56,6 +57,7 @@ export default function NouvelleFacturePage() {
   const [settings, setSettings] = useState<CompanySettings | null>(null)
   const [clients, setClients] = useState<InvoiceClient[]>([])
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
+  const [catalogueDialogOpen, setCatalogueDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [typeDocument, setTypeDocument] = useState<"facture" | "avoir" | "note_debit" | "devis">("facture")
@@ -499,13 +501,20 @@ export default function NouvelleFacturePage() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><ListOrdered className="w-4 h-4" />Lignes de facture</CardTitle>
             <div className="flex gap-2">
-              {catalogue.length > 0 && (
-                <Select onValueChange={v => { const item = catalogue.find(i => i.id === v); if (item) addFromCatalogue(item) }}>
-                  <SelectTrigger className="w-56 text-sm"><SelectValue placeholder="Ajouter du catalogue..." /></SelectTrigger>
-                  <SelectContent>{catalogue.map(item => <SelectItem key={item.id} value={item.id}>{item.description} - {fmt(item.prix_unitaire)} {item.devise}</SelectItem>)}</SelectContent>
-                </Select>
-              )}
-              <Button onClick={addLigne} variant="outline" size="sm" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"><Plus className="w-4 h-4 mr-1" />Ajouter une ligne</Button>
+              {/* Bouton dialog catalogue — visible même si le catalogue est
+                  vide (le dialog explique alors comment en créer). Plus
+                  prominent que l'ancien dropdown caché. */}
+              <Button
+                type="button"
+                onClick={() => setCatalogueDialogOpen(true)}
+                variant="outline"
+                size="sm"
+                className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+              >
+                <Package className="w-4 h-4 mr-1" />
+                Choisir du catalogue
+              </Button>
+              <Button onClick={addLigne} variant="outline" size="sm" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"><Plus className="w-4 h-4 mr-1" />Ajouter une ligne vide</Button>
             </div>
           </div>
           {devise !== "MUR" && tauxChange > 1.0001 && (
@@ -831,6 +840,35 @@ export default function NouvelleFacturePage() {
         </div>
       </div>
     </div>
+
+    {/* Sélecteur catalogue (dialog modal). S'ouvre via le bouton
+        "Choisir du catalogue" dans la card Lignes de facture. */}
+    <CatalogueSelectorDialog
+      open={catalogueDialogOpen}
+      onOpenChange={setCatalogueDialogOpen}
+      societeId={societeId || null}
+      defaultQuantite={1}
+      onSelect={(picks, qte) => {
+        // Ajoute toutes les lignes sélectionnées avec la quantité choisie.
+        // Réutilise la logique de addFromCatalogue (TVA selon offshore).
+        setLignes(prev => [
+          ...prev,
+          ...picks.map(item => {
+            const tva = clientOffshore ? 0 : (item.tva_applicable ? 15 : 0)
+            const ht = (Number(qte) || 1) * item.prix_unitaire
+            return {
+              id: genId(),
+              description: item.description,
+              unite: item.unite || "Forfait",
+              quantite: Number(qte) || 1,
+              prix_unitaire: item.prix_unitaire,
+              taux_tva: tva,
+              montant_ht: ht,
+            }
+          }),
+        ])
+      }}
+    />
     </ClientPageShell>
   )
 }
