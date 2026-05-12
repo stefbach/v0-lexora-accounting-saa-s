@@ -98,10 +98,12 @@ export async function GET(request: Request, { params }: Params) {
     const url = new URL(request.url)
     const forceRefresh = url.searchParams.get('refresh') === '1'
 
-    // Récupérer la facture + société émettrice + contact client si lié.
-    // Le contact (mig 246) porte l'adresse structurée que l'on affiche
-    // sur le PDF sous la section "Facturé à". Si la facture n'a pas de
-    // contact_id, on retombe sur le simple champ tiers (legacy).
+    // Récupérer la facture + société émettrice.
+    // Note : le JOIN PostgREST `contact:factures_contacts(...)` ne fonctionne
+    // pas car la colonne factures.contact_id n'a PAS de foreign key
+    // déclarée (mig 042 n'a ajouté que la colonne, pas la contrainte).
+    // On fait donc une 2e requête manuelle pour récupérer le contact —
+    // marche sur n'importe quel environnement sans migration FK.
     const { data: facture, error } = await admin
       .from('factures')
       .select(`
@@ -109,37 +111,81 @@ export async function GET(request: Request, { params }: Params) {
         societe:societes(nom, brn, numero_tva_mra, vat_number, adresse, adresse2, ville, telephone, email, website,
           bank_name, bank_account_number, iban, banque_swift,
           banque_nom, banque_compte, banque_iban,
-          logo_url, facture_footer_text, facture_mention_legale),
-        contact:factures_contacts(nom, entreprise, adresse, code_postal, ville, pays, email, telephone, mobile, vat_number, brn, kbis, site_web)
+          logo_url, facture_footer_text, facture_mention_legale)
       `)
       .eq('id', id)
       .single()
 
     if (error || !facture) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
 
+    // Charge le contact lié s'il existe (mig 246 : adresse structurée).
+    // Fail-safe : si la table n'a pas les nouvelles colonnes (mig 245/246
+    // pas encore appliquée), on retombe sur les colonnes basiques.
+    let contact: any = null
+    if ((facture as any).contact_id) {
+      const ctRes = await admin
+        .from('factures_contacts')
+        .select('nom, entreprise, adresse, code_postal, ville, pays, email, telephone, mobile, vat_number, brn, kbis, site_web')
+        .eq('id', (facture as any).contact_id)
+        .maybeSingle()
+      contact = ctRes.data
+      if (ctRes.error) {
+        // Mig 245/246 pas appliquée → retry avec colonnes pré-mig 245
+        const fallback = await admin
+          .from('factures_contacts')
+          .select('nom, entreprise, adresse, email, telephone, vat_number')
+          .eq('id', (facture as any).contact_id)
+          .maybeSingle()
+        contact = fallback.data
+      }
+    }
+    ;(facture as any).contact = contact
+
     // Tenant isolation unifiée via getAccessibleSocieteIds (user_societes + dossiers + created_by)
     if (facture.societe_id) {
       await assertSocieteAccess(admin, user.id, facture.societe_id)
     }
 
-    // Si PDF déjà stocké → signed URL, SAUF :
-    //   • ?refresh=1 force la régénération
-    //   • la facture a été modifiée depuis le dernier rendu PDF
-    //     (updated_at > pdf_stored_at) → on régénère automatiquement
-    //   • le PDF a été généré avant le PDF_TEMPLATE_VERSION_BUMP
-    //     ci-dessous → on régénère pour servir la dernière version du
-    //     gabarit (lignes multi-devises, logo agrandi, taux affiché…).
-    //     À bumper à chaque déploiement majeur du gabarit PDF.
-    // Bumper cette date à chaque évolution majeure du gabarit PDF
-    // (refonte mise en page, ajout adresse client, etc.) → tous les
-    // PDFs en cache générés AVANT cette date sont régénérés à la
-    // prochaine ouverture.
-    const PDF_TEMPLATE_VERSION_BUMP = '2026-05-12T14:00:00Z'
-    const pdfStaleByUpdate = facture.pdf_stored_at && facture.updated_at
-      && new Date(facture.updated_at).getTime() > new Date(facture.pdf_stored_at).getTime() + 1000
-    const pdfStaleByTemplate = facture.pdf_stored_at &&
-      new Date(facture.pdf_stored_at).getTime() < new Date(PDF_TEMPLATE_VERSION_BUMP).getTime()
-    if (facture.pdf_url && !forceRefresh && !pdfStaleByUpdate && !pdfStaleByTemplate) {
+    // Politique cache PDF — STRICT.
+    //
+    // Cas du bug observé : `pdf_url` était posé mais `pdf_stored_at` était
+    // null (héritage de versions antérieures), et ma condition précédente
+    // `facture.pdf_stored_at && ...` retombait sur falsy → le vieux PDF
+    // restait servi indéfiniment.
+    //
+    // Nouvelle logique : on calcule un timestamp normalisé (0 si null)
+    // et on régénère SAUF si TOUTES les conditions de fraîcheur sont
+    // remplies. Plus restrictif mais on est sûr de ne JAMAIS servir un
+    // PDF obsolète.
+    //
+    // Bumper PDF_TEMPLATE_VERSION_BUMP à chaque évolution du gabarit
+    // (mise en page, nouvelles colonnes affichées, etc.).
+    const PDF_TEMPLATE_VERSION_BUMP = '2026-05-12T15:00:00Z'
+    const pdfStoredAtMs = facture.pdf_stored_at
+      ? new Date(facture.pdf_stored_at).getTime()
+      : 0
+    const updatedAtMs = facture.updated_at
+      ? new Date(facture.updated_at).getTime()
+      : Date.now()
+    const templateVersionMs = new Date(PDF_TEMPLATE_VERSION_BUMP).getTime()
+    const isCacheFresh =
+      pdfStoredAtMs > 0
+      && pdfStoredAtMs >= templateVersionMs
+      && pdfStoredAtMs >= updatedAtMs - 1000
+    // Log explicite pour faciliter le debug en prod : voir Vercel logs.
+    console.log('[pdf]', {
+      facture_id: id,
+      has_pdf_url: !!facture.pdf_url,
+      pdf_stored_at: facture.pdf_stored_at || null,
+      updated_at: facture.updated_at || null,
+      template_bump: PDF_TEMPLATE_VERSION_BUMP,
+      isCacheFresh,
+      forceRefresh,
+      decision: facture.pdf_url && !forceRefresh && isCacheFresh ? 'served-from-cache' : 'regenerating',
+      contact_id: (facture as any).contact_id || null,
+      contact_loaded: !!contact,
+    })
+    if (facture.pdf_url && !forceRefresh && isCacheFresh) {
       const { data: signed } = await admin.storage.from(BUCKET).createSignedUrl(facture.pdf_url, 3600)
       if (signed?.signedUrl) {
         return NextResponse.redirect(signed.signedUrl)

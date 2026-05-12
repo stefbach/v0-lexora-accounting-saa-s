@@ -210,7 +210,49 @@ export async function PATCH(request: Request) {
     if (body.facture_footer_text !== undefined) updateData.facture_footer_text = body.facture_footer_text || null
     if (body.facture_mention_legale !== undefined) updateData.facture_mention_legale = body.facture_mention_legale || null
 
-    const { data, error } = await admin.from('societes').update(updateData).eq('id', id).select().single()
+    // Tentative initiale d'update. Si elle échoue à cause d'une colonne
+    // qui n'existe pas en DB (typique : mig 243/106/046 pas appliquée),
+    // on retire la colonne fautive et on retry. Boucle bornée pour
+    // éviter un infinite loop sur erreur non-schema.
+    //
+    // Code d'erreur Postgres "42703" = undefined_column. Le message
+    // Supabase contient typiquement "Could not find the 'xxx' column".
+    let updateRes = await admin.from('societes').update(updateData).eq('id', id).select().single()
+    let safety = 20
+    while (updateRes.error && safety > 0) {
+      const msg = updateRes.error.message || ''
+      const code = (updateRes.error as any).code
+      // Extrait le nom de la colonne manquante du message d'erreur PostgREST
+      // Pattern: Could not find the 'XYZ' column of 'societes' in the schema cache
+      const colMatch = msg.match(/['"]([a-z_]+)['"][\s_]*column/i)
+        || msg.match(/column ['"]?([a-z_]+)['"]? does not exist/i)
+        || msg.match(/column "([a-z_]+)"/i)
+      const missingCol = colMatch?.[1]
+      const isSchemaError = code === '42703' || /column.*(not exist|schema cache)/i.test(msg)
+      if (!isSchemaError || !missingCol || !(missingCol in updateData)) {
+        // Pas une erreur de colonne manquante → on abandonne avec un
+        // message clair pour l'UI au lieu de crasher silencieusement.
+        return NextResponse.json(
+          {
+            error: `Erreur sauvegarde : ${msg}`,
+            hint: `Migrations 243-246 sans doute pas appliquées. Lance le SQL des migrations sur ta DB Supabase.`,
+            details: msg,
+          },
+          { status: 500 },
+        )
+      }
+      console.warn(`[client/societes] PATCH : colonne "${missingCol}" manquante en DB, retrait et retry`)
+      delete updateData[missingCol]
+      if (Object.keys(updateData).length === 0) {
+        return NextResponse.json(
+          { error: 'Aucun champ valide à sauvegarder. Vérifie que les migrations DB sont appliquées.' },
+          { status: 500 },
+        )
+      }
+      updateRes = await admin.from('societes').update(updateData).eq('id', id).select().single()
+      safety -= 1
+    }
+    const { data, error } = updateRes
     if (error) throw error
     return NextResponse.json({ societe: data })
   } catch (e: unknown) {
