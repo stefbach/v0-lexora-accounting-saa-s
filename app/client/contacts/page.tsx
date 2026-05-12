@@ -49,9 +49,11 @@ import {
   Mail,
   Phone,
   Globe,
+  FileSpreadsheet,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { ContactsImportDialog } from "@/components/client/ContactsImportDialog"
 
 interface Contact {
   id: string
@@ -88,6 +90,7 @@ export default function ClientContactsPage() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
 
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Contact | null>(null)
   const [fNom, setFNom] = useState("")
   const [fEntreprise, setFEntreprise] = useState("")
@@ -367,6 +370,15 @@ export default function ClientContactsPage() {
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
                 Actualiser
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setImportDialogOpen(true)}
+                disabled={!societeId}
+                className="border-sky-300 text-sky-700 hover:bg-sky-50"
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+                Importer fichier
               </Button>
               <Button
                 onClick={openNew}
@@ -653,6 +665,16 @@ export default function ClientContactsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Import en masse (CSV/XLSX) — réutilise l'endpoint bulk
+            POST /api/client/factures-contacts { items: [...] } mis en
+            place depuis la PR #55. */}
+        <ContactsImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          societeId={societeId}
+          onImported={() => load()}
+        />
       </div>
     </ClientPageShell>
   )
