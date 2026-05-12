@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Building2, Users, Package, Layout, Save, Plus, Pencil, Trash2, Check, X, Eye, Palette,
-  Shield, Wifi, WifiOff, Info, Loader2
+  Shield, Wifi, WifiOff, Info, Loader2, Download
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -95,11 +95,23 @@ function mapSocieteToSettings(societe: any, legacy: Partial<CompanySettings>): C
   }
 }
 
+interface CompteBancaireBrief {
+  id: string
+  banque: string | null
+  nom_compte: string | null
+  numero_compte: string | null
+  iban: string | null
+  swift: string | null
+  devise: string | null
+  compte_principal: boolean
+}
+
 export default function FacturationSettingsPage() {
   const { societeId, societe, refresh } = useSocieteActive()
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS)
   const [persisting, setPersisting] = useState(false)
   const [persistError, setPersistError] = useState<string | null>(null)
+  const [comptesBancaires, setComptesBancaires] = useState<CompteBancaireBrief[]>([])
   const [clients, setClients] = useState<InvoiceClient[]>([])
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState("standard")
@@ -169,6 +181,19 @@ export default function FacturationSettingsPage() {
     // pose au moins le legacy pour que le user voie ses anciennes valeurs.
     setSettings(mapSocieteToSettings(societe, legacy))
   }, [societe])
+
+  // Charge les comptes bancaires de la société active (mig 010 + 043)
+  // pour permettre le pré-remplissage 1-clic des coordonnées bancaires.
+  useEffect(() => {
+    if (!societeId) {
+      setComptesBancaires([])
+      return
+    }
+    fetch(`/api/client/comptes-bancaires?societe_id=${societeId}`)
+      .then((r) => r.json())
+      .then((d) => setComptesBancaires(d?.comptes || []))
+      .catch(() => setComptesBancaires([]))
+  }, [societeId])
 
   const saveAll = useCallback(async () => {
     // 1. localStorage : conserve les paramètres pas encore migrés en DB
@@ -374,6 +399,41 @@ export default function FacturationSettingsPage() {
               <Card>
                 <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Coordonnees bancaires</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
+                  {/* Importer depuis un compte bancaire existant (mig 010/043).
+                      L'utilisateur a souvent déjà saisi ses RIB via la page
+                      /client/banque : pas la peine de les retaper ici. */}
+                  {comptesBancaires.length > 0 && (
+                    <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+                      <div className="text-xs text-emerald-900 font-medium">
+                        💡 {comptesBancaires.length} compte(s) bancaire(s) trouvé(s) en base. Cliquez pour pré-remplir :
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {comptesBancaires.map((c) => (
+                          <Button
+                            key={c.id}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSettings(s => ({
+                                ...s,
+                                banque_nom: c.banque || s.banque_nom,
+                                banque_compte: c.numero_compte || s.banque_compte,
+                                banque_iban: c.iban || s.banque_iban,
+                                banque_swift: c.swift || s.banque_swift,
+                              }))
+                            }}
+                            className="text-xs h-8 border-emerald-300 hover:bg-emerald-100"
+                          >
+                            {c.compte_principal && '⭐ '}
+                            {c.banque}
+                            {c.nom_compte && ` — ${c.nom_compte}`}
+                            {c.devise && c.devise !== 'MUR' && ` (${c.devise})`}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div><Label>Nom de la banque</Label><Input value={settings.banque_nom} onChange={e => setSettings(s => ({ ...s, banque_nom: e.target.value }))} placeholder="MCB / SBM / AfrAsia" /></div>
                   <div><Label>Numero de compte</Label><Input value={settings.banque_compte} onChange={e => setSettings(s => ({ ...s, banque_compte: e.target.value }))} /></div>
                   <div className="grid grid-cols-2 gap-3">
@@ -420,10 +480,39 @@ export default function FacturationSettingsPage() {
 
         {/* ══════════ TAB: Clients ══════════ */}
         <TabsContent value="clients" className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm text-gray-500">Base de donnees clients pour la facturation</p>
-            <Button onClick={openNewClient} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />Nouveau client</Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  if (!societeId) return
+                  if (!confirm("Importer automatiquement les clients déjà connus du système (historique de facturation + annuaire OCR) dans votre carnet de contacts ?")) return
+                  try {
+                    const res = await fetch(`/api/client/factures-contacts/import-existing`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ societe_id: societeId }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) throw new Error(data?.error || "Erreur")
+                    alert(`Import terminé : ${data.inserted} nouveau(x) client(s) ajouté(s) sur ${data.candidats} candidat(s). Source: ${(data.sources_utilisees || []).join(', ')}`)
+                  } catch (e: any) {
+                    alert(e?.message || "Erreur import")
+                  }
+                }}
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Importer mes clients existants
+              </Button>
+              <Button onClick={openNewClient} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />Nouveau client</Button>
+            </div>
           </div>
+          <p className="text-xs text-gray-500 -mt-2">
+            💡 <strong>Importer mes clients existants</strong> récupère vos clients depuis l'historique de facturation et l'annuaire OCR (factures fournisseur scannées) pour pré-remplir votre carnet sans saisie manuelle.
+          </p>
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               {clients.length === 0 ? (
