@@ -102,17 +102,16 @@ BEGIN;
 -- ============================================================================
 
 -- ── 1. Colonne devise_fonctionnelle sur societes ────────────────────────────
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'societes' AND column_name = 'devise_fonctionnelle'
-  ) THEN
-    ALTER TABLE public.societes
-      ADD COLUMN devise_fonctionnelle TEXT NOT NULL DEFAULT 'MUR';
+ALTER TABLE public.societes
+  ADD COLUMN IF NOT EXISTS devise_fonctionnelle TEXT NOT NULL DEFAULT 'MUR';
 
-    -- Contrainte : ISO 4217 (3 lettres uppercase) — accepte les principales
-    -- devises GBC + extensibilité future.
+-- Contrainte ISO 4217 (3 lettres uppercase) — idempotente via NOT EXISTS sur pg_constraint
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'societes_devise_fonctionnelle_check'
+       AND conrelid = 'public.societes'::regclass
+  ) THEN
     ALTER TABLE public.societes
       ADD CONSTRAINT societes_devise_fonctionnelle_check
       CHECK (devise_fonctionnelle ~ '^[A-Z]{3}$');
@@ -125,29 +124,26 @@ COMMENT ON COLUMN public.societes.devise_fonctionnelle IS
   'typiquement USD, EUR, GBP, ZAR. Code ISO 4217 (3 lettres).';
 
 -- ── 2. Colonnes fonctionnelle sur ecritures_comptables_v2 ───────────────────
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'ecritures_comptables_v2' AND column_name = 'debit_fonctionnelle'
-  ) THEN
-    ALTER TABLE public.ecritures_comptables_v2
-      ADD COLUMN debit_fonctionnelle  NUMERIC(15,2),
-      ADD COLUMN credit_fonctionnelle NUMERIC(15,2),
-      ADD COLUMN devise_origine       TEXT,
-      ADD COLUMN taux_fonct_vers_mur  NUMERIC(15,8);
+-- Utilise ADD COLUMN IF NOT EXISTS colonne par colonne pour être résilient
+-- face à une exécution partielle précédente (ex: une seule colonne créée).
+ALTER TABLE public.ecritures_comptables_v2
+  ADD COLUMN IF NOT EXISTS debit_fonctionnelle  NUMERIC(15,2),
+  ADD COLUMN IF NOT EXISTS credit_fonctionnelle NUMERIC(15,2),
+  ADD COLUMN IF NOT EXISTS devise_origine       TEXT,
+  ADD COLUMN IF NOT EXISTS taux_fonct_vers_mur  NUMERIC(15,8);
 
-    -- Backfill : pour les sociétés MUR, fonctionnelle = MUR, taux = 1
-    UPDATE public.ecritures_comptables_v2 e
-       SET debit_fonctionnelle  = e.debit_mur,
-           credit_fonctionnelle = e.credit_mur,
-           devise_origine       = 'MUR',
-           taux_fonct_vers_mur  = 1
-      FROM public.societes s
-     WHERE e.societe_id = s.id
-       AND COALESCE(s.devise_fonctionnelle, 'MUR') = 'MUR';
-  END IF;
-END $$;
+-- Backfill : pour les sociétés MUR, fonctionnelle = MUR, taux = 1.
+-- WHERE debit_fonctionnelle IS NULL garantit qu'on ne ré-écrit pas les
+-- valeurs déjà calculées d'un run précédent (idempotent).
+UPDATE public.ecritures_comptables_v2 e
+   SET debit_fonctionnelle  = e.debit_mur,
+       credit_fonctionnelle = e.credit_mur,
+       devise_origine       = 'MUR',
+       taux_fonct_vers_mur  = 1
+  FROM public.societes s
+ WHERE e.societe_id = s.id
+   AND COALESCE(s.devise_fonctionnelle, 'MUR') = 'MUR'
+   AND e.debit_fonctionnelle IS NULL;
 
 COMMENT ON COLUMN public.ecritures_comptables_v2.debit_fonctionnelle IS
   'Débit dans la monnaie fonctionnelle de la société (IAS 21). Pour une société '
@@ -393,16 +389,10 @@ ON CONFLICT (code) DO UPDATE
   SET libelle = EXCLUDED.libelle, exemption_pct = EXCLUDED.exemption_pct, legal_ref = EXCLUDED.legal_ref;
 
 -- ── 2. Tag PER sur les lignes de revenu (factures + écritures) ─────────────
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='factures' AND column_name='per_category') THEN
-    ALTER TABLE public.factures
-      ADD COLUMN per_category TEXT REFERENCES public.gbc_per_categories(code) DEFAULT 'not_eligible';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ecritures_comptables_v2' AND column_name='per_category') THEN
-    ALTER TABLE public.ecritures_comptables_v2
-      ADD COLUMN per_category TEXT REFERENCES public.gbc_per_categories(code);
-  END IF;
-END $$;
+ALTER TABLE public.factures
+  ADD COLUMN IF NOT EXISTS per_category TEXT REFERENCES public.gbc_per_categories(code) DEFAULT 'not_eligible';
+ALTER TABLE public.ecritures_comptables_v2
+  ADD COLUMN IF NOT EXISTS per_category TEXT REFERENCES public.gbc_per_categories(code);
 
 -- ── 3. Foreign Tax Credit (FTC) tracking ───────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.gbc_foreign_tax_credits (
@@ -663,14 +653,11 @@ DO $$ BEGIN RAISE NOTICE '✓ Migration 251 — Phase C GBC : Substance tracking
 -- intragroupe. Pénalité : 10% + ajustement fiscal si non-conforme.
 -- ============================================================================
 
--- Tag related party sur les tiers (employes / factures.tiers)
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='factures' AND column_name='related_party') THEN
-    ALTER TABLE public.factures
-      ADD COLUMN related_party BOOLEAN NOT NULL DEFAULT FALSE,
-      ADD COLUMN related_party_type TEXT;  -- 'parent' | 'subsidiary' | 'sister' | 'common_control' | 'key_management'
-  END IF;
-END $$;
+-- Tag related party sur les factures (TP Act 2023). ADD COLUMN IF NOT EXISTS
+-- pour rester résilient face aux exécutions partielles antérieures.
+ALTER TABLE public.factures
+  ADD COLUMN IF NOT EXISTS related_party BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS related_party_type TEXT;  -- 'parent' | 'subsidiary' | 'sister' | 'common_control' | 'key_management'
 
 -- Local File : enregistrement détaillé par transaction intragroupe > 5M MUR
 CREATE TABLE IF NOT EXISTS public.tp_transactions (
