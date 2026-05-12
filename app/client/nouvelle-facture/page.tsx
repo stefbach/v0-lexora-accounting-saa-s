@@ -15,8 +15,13 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
+<<<<<<< HEAD
 interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean }
 interface CatalogueItem { id: string; description: string; prix_unitaire: number; devise: string; tva_applicable: boolean; categorie: string | null; unite?: string }
+=======
+interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean; isDb?: boolean }
+interface CatalogueItem { id: string; description: string; prix_unitaire: number; devise: string; tva_applicable: boolean; categorie: string; unite?: string }
+>>>>>>> origin/claude/feat-contacts-clients
 interface CompanySettings { nom: string; brn: string; vat_number: string; logo_url: string; adresse: string; telephone: string; email: string; website: string; banque_nom: string; banque_compte: string; banque_iban: string; banque_swift: string; devise_defaut: string; prefixe_facture: string; prochain_numero: number; conditions_paiement: number; footer_text: string; mention_legale: string }
 interface Societe { id: string; nom: string }
 
@@ -117,6 +122,7 @@ export default function NouvelleFacturePage() {
     }).catch(() => {})
   }, [])
 
+<<<<<<< HEAD
   // Catalogue depuis l'API — déclenché dès que societeId est disponible.
   // Remplace les items localStorage par ceux en base (source de vérité).
   useEffect(() => {
@@ -133,6 +139,28 @@ export default function NouvelleFacturePage() {
             tva_applicable: it.tva_applicable !== false,
             categorie: it.categorie || null,
             unite: it.unite || "Forfait",
+=======
+  // Contacts depuis l'API — déclenché dès que societeId est dispo.
+  // Remplace les items localStorage par ceux en base (source de vérité).
+  useEffect(() => {
+    if (!societeId) return
+    fetch(`/api/client/factures-contacts?societe_id=${societeId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d?.items) && d.items.length > 0) {
+          setClients(d.items.map((c: any) => ({
+            id: c.id,
+            nom: c.nom || "",
+            entreprise: c.entreprise || "",
+            adresse: c.adresse || "",
+            email: c.email || "",
+            telephone: c.telephone || "",
+            vat_number: c.vat_number || "",
+            devise: c.devise || "MUR",
+            conditions_paiement: Number(c.conditions_paiement) || 30,
+            offshore: c.offshore === true,
+            isDb: true,
+>>>>>>> origin/claude/feat-contacts-clients
           })))
         }
       })
@@ -227,6 +255,13 @@ export default function NouvelleFacturePage() {
       accent_color: accentColor,
       type_document: typeDocument,
       facture_reference_id: factureReferenceId || undefined,
+      // Lien stable vers le contact DB (utilisé par les relances et le
+      // suivi client). On envoie null si le client a été saisi à la main
+      // ou provient du localStorage legacy.
+      contact_id: (() => {
+        const c = clients.find(cl => cl.id === selectedClientId)
+        return c?.isDb ? c.id : null
+      })(),
     }
   }
 

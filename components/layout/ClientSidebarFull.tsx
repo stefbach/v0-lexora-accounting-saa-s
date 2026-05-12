@@ -105,6 +105,7 @@ const MENU: MenuSection[] = [
       { href: "/client/lex-factures", label: "Lex Factures (analyse)", icon: Sparkles } as any,
       { href: "/client/nouvelle-facture", label: "Nouvelle Facture", labelKey: "inv.new_invoice", icon: FilePlus2 },
       { href: "/client/catalogue", label: "Catalogue services", icon: Package } as any,
+      { href: "/client/contacts", label: "Contacts clients", icon: Users } as any,
       { href: "/client/relances", label: "Relances", icon: Send } as any,
       { href: "/comptable/contrats", label: "Contrats Clients", icon: FileText, visibleForRoles: ["client_admin", "direction"] } as any,
       { href: "/client/facturation-settings", label: "Paramètres Facturation", labelKey: "inv.settings", icon: SlidersHorizontal },
