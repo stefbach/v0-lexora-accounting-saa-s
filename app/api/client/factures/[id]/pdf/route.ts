@@ -98,10 +98,20 @@ export async function GET(request: Request, { params }: Params) {
     const url = new URL(request.url)
     const forceRefresh = url.searchParams.get('refresh') === '1'
 
-    // Récupérer la facture
+    // Récupérer la facture + société émettrice + contact client si lié.
+    // Le contact (mig 246) porte l'adresse structurée que l'on affiche
+    // sur le PDF sous la section "Facturé à". Si la facture n'a pas de
+    // contact_id, on retombe sur le simple champ tiers (legacy).
     const { data: facture, error } = await admin
       .from('factures')
-      .select('*, societe:societes(nom, brn, vat_number, adresse, telephone, email, banque_nom, banque_compte, banque_iban, banque_swift, logo_url)')
+      .select(`
+        *,
+        societe:societes(nom, brn, numero_tva_mra, vat_number, adresse, adresse2, ville, telephone, email, website,
+          bank_name, bank_account_number, iban, banque_swift,
+          banque_nom, banque_compte, banque_iban,
+          logo_url, facture_footer_text, facture_mention_legale),
+        contact:factures_contacts(nom, entreprise, adresse, code_postal, ville, pays, email, telephone, mobile, vat_number, brn, kbis, site_web)
+      `)
       .eq('id', id)
       .single()
 
@@ -120,7 +130,11 @@ export async function GET(request: Request, { params }: Params) {
     //     ci-dessous → on régénère pour servir la dernière version du
     //     gabarit (lignes multi-devises, logo agrandi, taux affiché…).
     //     À bumper à chaque déploiement majeur du gabarit PDF.
-    const PDF_TEMPLATE_VERSION_BUMP = '2026-05-12T00:00:00Z'
+    // Bumper cette date à chaque évolution majeure du gabarit PDF
+    // (refonte mise en page, ajout adresse client, etc.) → tous les
+    // PDFs en cache générés AVANT cette date sont régénérés à la
+    // prochaine ouverture.
+    const PDF_TEMPLATE_VERSION_BUMP = '2026-05-12T14:00:00Z'
     const pdfStaleByUpdate = facture.pdf_stored_at && facture.updated_at
       && new Date(facture.updated_at).getTime() > new Date(facture.pdf_stored_at).getTime() + 1000
     const pdfStaleByTemplate = facture.pdf_stored_at &&
@@ -135,7 +149,11 @@ export async function GET(request: Request, { params }: Params) {
     // Générer le PDF
     const soc = facture.societe as any
     const lignes: any[] = facture.lignes || []
-    const devise = facture.devise || 'MUR'
+    // Normalisation : on force la devise en MAJUSCULES + trim. Sans ça,
+    // une facture créée avec devise='eur' (cas vu en prod) faisait
+    // isForeign=false → pas de double affichage. La devise est aussi
+    // affichée sur le PDF, donc une casse propre c'est mieux.
+    const devise = (facture.devise || 'MUR').toString().trim().toUpperCase() || 'MUR'
     const accentColor = facture.accent_color || '#0B0F2E'
 
     // ── Double devise : si la facture est en devise étrangère, on affiche
@@ -179,10 +197,16 @@ export async function GET(request: Request, { params }: Params) {
               style: styles.logo,
             }),
             React.createElement(Text, { style: styles.companyName }, soc?.nom || ''),
-            React.createElement(Text, { style: styles.companyInfo }, soc?.adresse || ''),
+            // Adresse structurée société : rue + ligne 2 + ville
+            soc?.adresse && React.createElement(Text, { style: styles.companyInfo }, soc.adresse),
+            soc?.adresse2 && React.createElement(Text, { style: styles.companyInfo }, soc.adresse2),
+            soc?.ville && React.createElement(Text, { style: styles.companyInfo }, soc.ville),
             soc?.telephone && React.createElement(Text, { style: styles.companyInfo }, `Tél : ${soc.telephone}`),
             soc?.email && React.createElement(Text, { style: styles.companyInfo }, soc.email),
-            soc?.vat_number && React.createElement(Text, { style: styles.companyInfo }, `VAT : ${soc.vat_number}`),
+            soc?.website && React.createElement(Text, { style: styles.companyInfo }, soc.website),
+            // Numero TVA Maurice (numero_tva_mra) ou VAT générique
+            (soc?.numero_tva_mra || soc?.vat_number) && React.createElement(Text, { style: styles.companyInfo },
+              `VAT : ${soc.numero_tva_mra || soc.vat_number}`),
             soc?.brn && React.createElement(Text, { style: styles.companyInfo }, `BRN : ${soc.brn}`),
           ),
           React.createElement(View, {},
@@ -216,11 +240,31 @@ export async function GET(request: Request, { params }: Params) {
           ),
         ),
 
-        // Client
-        React.createElement(View, { style: styles.billTo },
-          React.createElement(Text, { style: styles.sectionTitle }, 'Facturé à'),
-          React.createElement(Text, { style: styles.clientName }, facture.tiers || '—'),
-        ),
+        // Client — affichage riche avec adresse structurée si le contact
+        // DB est lié à la facture (mig 246 : code_postal/ville/pays/mobile).
+        // Sinon fallback sur le nom legacy "tiers".
+        (() => {
+          const ct = (facture as any).contact as any | null
+          const villeLine = ct && (ct.code_postal || ct.ville)
+            ? [ct.code_postal, ct.ville].filter(Boolean).join(' ')
+            : null
+          const clientNomAff = ct?.entreprise || ct?.nom || facture.tiers || '—'
+          const sousNom = ct?.entreprise && ct?.nom && ct.nom !== ct.entreprise ? ct.nom : null
+          return React.createElement(View, { style: styles.billTo },
+            React.createElement(Text, { style: styles.sectionTitle }, 'Facturé à'),
+            React.createElement(Text, { style: styles.clientName }, clientNomAff),
+            sousNom && React.createElement(Text, { style: styles.clientInfo }, sousNom),
+            ct?.adresse && React.createElement(Text, { style: styles.clientInfo }, ct.adresse),
+            villeLine && React.createElement(Text, { style: styles.clientInfo }, villeLine),
+            ct?.pays && React.createElement(Text, { style: styles.clientInfo }, ct.pays),
+            ct?.email && React.createElement(Text, { style: styles.clientInfo }, `Email : ${ct.email}`),
+            (ct?.telephone || ct?.mobile) && React.createElement(Text, { style: styles.clientInfo },
+              `Tél : ${[ct.telephone, ct.mobile].filter(Boolean).join(' / ')}`),
+            ct?.vat_number && React.createElement(Text, { style: styles.clientInfo }, `VAT : ${ct.vat_number}`),
+            ct?.brn && React.createElement(Text, { style: styles.clientInfo }, `BRN : ${ct.brn}`),
+            ct?.kbis && React.createElement(Text, { style: styles.clientInfo }, ct.kbis),
+          )
+        })(),
 
         // Tableau lignes
         // En devise étrangère : P.U. et Montant HT sont SPLITTED en 2
@@ -303,14 +347,23 @@ export async function GET(request: Request, { params }: Params) {
           React.createElement(Text, { style: styles.notesText }, facture.notes_visibles),
         ),
 
-        // Coordonnées bancaires
-        soc?.banque_iban && React.createElement(View, { style: styles.bankInfo },
-          React.createElement(Text, { style: styles.notesTitle }, 'Coordonnées bancaires'),
-          soc.banque_nom && React.createElement(Text, { style: styles.notesText }, `Banque : ${soc.banque_nom}`),
-          soc.banque_compte && React.createElement(Text, { style: styles.notesText }, `Compte : ${soc.banque_compte}`),
-          soc.banque_iban && React.createElement(Text, { style: styles.notesText }, `IBAN : ${soc.banque_iban}`),
-          soc.banque_swift && React.createElement(Text, { style: styles.notesText }, `SWIFT : ${soc.banque_swift}`),
-        ),
+        // Coordonnées bancaires — supporte les colonnes legacy
+        // (banque_nom/banque_compte/banque_iban) ET les nouvelles
+        // (bank_name/bank_account_number/iban) en chaîne de fallback.
+        (() => {
+          const banqueNom = soc?.banque_nom || soc?.bank_name
+          const banqueCompte = soc?.banque_compte || soc?.bank_account_number
+          const banqueIban = soc?.banque_iban || soc?.iban
+          const banqueSwift = soc?.banque_swift
+          if (!banqueIban && !banqueCompte) return null
+          return React.createElement(View, { style: styles.bankInfo },
+            React.createElement(Text, { style: styles.notesTitle }, 'Coordonnées bancaires'),
+            banqueNom && React.createElement(Text, { style: styles.notesText }, `Banque : ${banqueNom}`),
+            banqueCompte && React.createElement(Text, { style: styles.notesText }, `Compte : ${banqueCompte}`),
+            banqueIban && React.createElement(Text, { style: styles.notesText }, `IBAN : ${banqueIban}`),
+            banqueSwift && React.createElement(Text, { style: styles.notesText }, `SWIFT : ${banqueSwift}`),
+          )
+        })(),
 
         // Footer
         React.createElement(View, { style: styles.footer },
