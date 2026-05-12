@@ -112,8 +112,15 @@ export async function GET(request: Request, { params }: Params) {
       await assertSocieteAccess(admin, user.id, facture.societe_id)
     }
 
-    // Si PDF déjà stocké → signed URL (sauf ?refresh=1 pour forcer regen)
-    if (facture.pdf_url && !forceRefresh) {
+    // Si PDF déjà stocké → signed URL, SAUF :
+    //   • ?refresh=1 force la régénération
+    //   • la facture a été modifiée depuis le dernier rendu PDF
+    //     (updated_at > pdf_stored_at) → on régénère automatiquement
+    //     pour servir la version à jour. Évite que le user voie une
+    //     vieille version après édition des lignes / coordonnées banque.
+    const pdfStaleByUpdate = facture.pdf_stored_at && facture.updated_at
+      && new Date(facture.updated_at).getTime() > new Date(facture.pdf_stored_at).getTime() + 1000
+    if (facture.pdf_url && !forceRefresh && !pdfStaleByUpdate) {
       const { data: signed } = await admin.storage.from(BUCKET).createSignedUrl(facture.pdf_url, 3600)
       if (signed?.signedUrl) {
         return NextResponse.redirect(signed.signedUrl)

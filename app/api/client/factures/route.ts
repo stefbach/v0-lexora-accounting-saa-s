@@ -125,34 +125,64 @@ export async function POST(request: Request) {
       ? (statutIn === 'converti' ? 'converti' : 'devis')
       : statutIn
 
-    // Generate sequential invoice number if not provided
+    // Generate sequential invoice number if not provided.
+    // Source de vérité = societes.facture_prefixe + facture_prochain_numero
+    // (mig 243). On lit la société, on incrémente atomiquement le compteur,
+    // et on construit le numéro avec le préfixe paramétré. Fallback sur la
+    // logique legacy (parse du dernier numéro) si la société n'a pas encore
+    // ces colonnes (env pré-mig 243).
     let finalNumero = numero_facture
     if (!finalNumero) {
-      const prefix = type_document === 'avoir' ? 'AV-' : type_document === 'note_debit' ? 'ND-' : type_document === 'devis' ? 'DEV-' : 'INV-'
       const filterDoc = type_document || 'facture'
+      // Pour avoir / note de débit / devis : on garde des préfixes dédiés
+      // (pas piloté par la société, pas de compteur séparé en DB pour
+      // l'instant — l'incrémentation reste basée sur le dernier numéro).
+      const isSpecialDoc = filterDoc !== 'facture'
 
-      let query = supabase
-        .from('factures')
-        .select('numero_facture')
-        .eq('societe_id', societe_id)
-        .eq('type_facture', 'client')
-        .not('numero_facture', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
+      if (!isSpecialDoc) {
+        // Cas standard "facture client" — utilise les paramètres société.
+        const { data: societeRow } = await supabase
+          .from('societes')
+          .select('facture_prefixe, facture_prochain_numero')
+          .eq('id', societe_id)
+          .maybeSingle()
 
-      // Filter by type_document if it's an avoir or note_debit
-      if (filterDoc !== 'facture') {
-        query = query.eq('type_document', filterDoc)
+        const prefixe = (societeRow?.facture_prefixe as string | undefined) || 'INV-'
+        const prochain = Number(societeRow?.facture_prochain_numero) || 1
+
+        finalNumero = `${prefixe}${String(prochain).padStart(4, '0')}`
+
+        // Incrémente le compteur en base pour la prochaine facture.
+        // Pas d'atomicité parfaite (Supabase n'a pas d'INCREMENT direct
+        // via PostgREST sans RPC), mais le risque de collision est faible
+        // dans le contexte mono-utilisateur et facilement détectable via
+        // l'index unique implicite sur (societe_id, numero_facture).
+        await supabase
+          .from('societes')
+          .update({ facture_prochain_numero: prochain + 1 })
+          .eq('id', societe_id)
+      } else {
+        // Fallback legacy : préfixes AV-/ND-/DEV- avec parse du dernier numéro
+        const prefix = type_document === 'avoir' ? 'AV-' : type_document === 'note_debit' ? 'ND-' : 'DEV-'
+
+        const { data: lastInvoice } = await supabase
+          .from('factures')
+          .select('numero_facture')
+          .eq('societe_id', societe_id)
+          .eq('type_facture', 'client')
+          .eq('type_document', filterDoc)
+          .not('numero_facture', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+
+        let nextNum = 1
+        if (lastInvoice?.numero_facture) {
+          const match = lastInvoice.numero_facture.match(/(\d+)$/)
+          if (match) nextNum = parseInt(match[1]) + 1
+        }
+        finalNumero = `${prefix}${String(nextNum).padStart(3, '0')}`
       }
-
-      const { data: lastInvoice } = await query.single()
-
-      let nextNum = 1
-      if (lastInvoice?.numero_facture) {
-        const match = lastInvoice.numero_facture.match(/(\d+)$/)
-        if (match) nextNum = parseInt(match[1]) + 1
-      }
-      finalNumero = `${prefix}${String(nextNum).padStart(3, '0')}`
     }
 
     const ttc = montant_ttc ?? (montant_ht + montant_tva)

@@ -13,6 +13,9 @@ export interface ContactPayload {
   email: string | null
   telephone: string | null
   vat_number: string | null
+  brn: string | null
+  kbis: string | null
+  site_web: string | null
   devise: string
   conditions_paiement: number
   offshore: boolean
@@ -53,6 +56,9 @@ export function validateContactPayload(
       email: email || null,
       telephone: body.telephone ? String(body.telephone).trim().slice(0, 50) || null : null,
       vat_number: body.vat_number ? String(body.vat_number).trim().slice(0, 50) || null : null,
+      brn: body.brn ? String(body.brn).trim().slice(0, 50) || null : null,
+      kbis: body.kbis ? String(body.kbis).trim().slice(0, 50) || null : null,
+      site_web: body.site_web ? String(body.site_web).trim().slice(0, 200) || null : null,
       devise,
       conditions_paiement: Math.floor(conditions_paiement),
       offshore: body.offshore === true,

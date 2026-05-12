@@ -61,6 +61,9 @@ interface Contact {
   email: string | null
   telephone: string | null
   vat_number: string | null
+  brn: string | null
+  kbis: string | null
+  site_web: string | null
   devise: string
   conditions_paiement: number
   offshore: boolean
@@ -87,6 +90,9 @@ export default function ClientContactsPage() {
   const [fEmail, setFEmail] = useState("")
   const [fTel, setFTel] = useState("")
   const [fVat, setFVat] = useState("")
+  const [fBrn, setFBrn] = useState("")
+  const [fKbis, setFKbis] = useState("")
+  const [fSiteWeb, setFSiteWeb] = useState("")
   const [fDevise, setFDevise] = useState("MUR")
   const [fCondPaie, setFCondPaie] = useState("30")
   const [fOffshore, setFOffshore] = useState(false)
@@ -145,6 +151,9 @@ export default function ClientContactsPage() {
     setFEmail("")
     setFTel("")
     setFVat("")
+    setFBrn("")
+    setFKbis("")
+    setFSiteWeb("")
     setFDevise("MUR")
     setFCondPaie("30")
     setFOffshore(false)
@@ -160,6 +169,9 @@ export default function ClientContactsPage() {
     setFEmail(c.email || "")
     setFTel(c.telephone || "")
     setFVat(c.vat_number || "")
+    setFBrn(c.brn || "")
+    setFKbis(c.kbis || "")
+    setFSiteWeb(c.site_web || "")
     setFDevise(c.devise)
     setFCondPaie(String(c.conditions_paiement))
     setFOffshore(c.offshore)
@@ -183,6 +195,9 @@ export default function ClientContactsPage() {
         email: fEmail.trim() || null,
         telephone: fTel.trim() || null,
         vat_number: fVat.trim() || null,
+        brn: fBrn.trim() || null,
+        kbis: fKbis.trim() || null,
+        site_web: fSiteWeb.trim() || null,
         devise: fDevise,
         conditions_paiement: Number(fCondPaie) || 30,
         offshore: fOffshore,
@@ -257,6 +272,9 @@ export default function ClientContactsPage() {
         email: it.email ? String(it.email) : null,
         telephone: it.telephone ? String(it.telephone) : null,
         vat_number: it.vat_number ? String(it.vat_number) : null,
+        brn: it.brn ? String(it.brn) : null,
+        kbis: it.kbis ? String(it.kbis) : null,
+        site_web: it.site_web ? String(it.site_web) : null,
         devise: String(it.devise || "MUR"),
         conditions_paiement: Number(it.conditions_paiement) || 30,
         offshore: it.offshore === true,
@@ -427,7 +445,10 @@ export default function ClientContactsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-xs">
-                        {c.vat_number || <span className="text-muted-foreground">—</span>}
+                        {c.vat_number && <div>VAT : {c.vat_number}</div>}
+                        {c.brn && <div className="text-muted-foreground">BRN : {c.brn}</div>}
+                        {c.kbis && <div className="text-muted-foreground">{c.kbis}</div>}
+                        {!c.vat_number && !c.brn && !c.kbis && <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-right">{c.conditions_paiement} j</TableCell>
                       <TableCell>
@@ -508,6 +529,20 @@ export default function ClientContactsPage() {
                 <div className="space-y-1">
                   <Label>VAT number</Label>
                   <Input value={fVat} onChange={(e) => setFVat(e.target.value)} placeholder="VAT-XXX" />
+                </div>
+                <div className="space-y-1">
+                  <Label>BRN (Maurice)</Label>
+                  <Input value={fBrn} onChange={(e) => setFBrn(e.target.value)} placeholder="C12345678" />
+                </div>
+                <div className="space-y-1">
+                  <Label>KBIS / SIREN / autre</Label>
+                  <Input value={fKbis} onChange={(e) => setFKbis(e.target.value)} placeholder="Identifiant légal étranger" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label>Site web</Label>
+                  <Input value={fSiteWeb} onChange={(e) => setFSiteWeb(e.target.value)} placeholder="https://..." />
                 </div>
                 <div className="space-y-1">
                   <Label>Devise</Label>

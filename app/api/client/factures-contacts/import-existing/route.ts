@@ -29,6 +29,7 @@ interface CandidatContact {
   telephone: string | null
   adresse: string | null
   vat_number: string | null
+  brn: string | null
   source: string
 }
 
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
           telephone: t.telephone || null,
           adresse: t.adresse || t.pays || null,
           vat_number: t.vat_number || null,
+          brn: t.brn || null,
           source: 'tiers_annuaire',
         })
         nbTiers += 1
@@ -131,6 +133,7 @@ export async function POST(request: Request) {
           telephone: null,
           adresse: null,
           vat_number: null,
+          brn: null,
           source: 'factures_historique',
         })
         nbFactures += 1
@@ -160,6 +163,7 @@ export async function POST(request: Request) {
     }
 
     // ── 3. Insertion en lot dans factures_contacts
+    // BRN (mig 245) inclus si présent dans le tiers_annuaire OCR.
     const toInsert = Array.from(candidats.values()).map((c) => ({
       societe_id,
       nom: c.nom,
@@ -168,6 +172,7 @@ export async function POST(request: Request) {
       telephone: c.telephone,
       adresse: c.adresse,
       vat_number: c.vat_number,
+      brn: c.brn,
       devise: 'MUR',
       conditions_paiement: 30,
       offshore: false,
