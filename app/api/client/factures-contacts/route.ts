@@ -16,7 +16,7 @@ import { validateContactPayload } from '@/lib/contacts/validate'
 export const dynamic = 'force-dynamic'
 
 const SELECT_COLS =
-  'id, nom, entreprise, adresse, email, telephone, vat_number, brn, kbis, site_web, devise, conditions_paiement, offshore, actif, created_at, updated_at'
+  'id, nom, entreprise, adresse, code_postal, ville, pays, email, telephone, mobile, fax, vat_number, brn, kbis, site_web, devise, conditions_paiement, offshore, actif, created_at, updated_at'
 
 export async function GET(request: Request) {
   try {

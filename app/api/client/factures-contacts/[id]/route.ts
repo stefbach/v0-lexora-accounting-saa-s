@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic'
 type Params = { params: Promise<{ id: string }> }
 
 const SELECT_COLS =
-  'id, nom, entreprise, adresse, email, telephone, vat_number, brn, kbis, site_web, devise, conditions_paiement, offshore, actif, created_at, updated_at'
+  'id, nom, entreprise, adresse, code_postal, ville, pays, email, telephone, mobile, fax, vat_number, brn, kbis, site_web, devise, conditions_paiement, offshore, actif, created_at, updated_at'
 
 async function loadAndAssert(supabase: any, userId: string, id: string) {
   const { data, error } = await supabase

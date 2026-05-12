@@ -18,6 +18,7 @@ import {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { LogoUploader } from "@/components/client/LogoUploader"
+import { inferSwiftFromIban, inferSwiftWithDiagnostic } from "@/lib/banque/iban-swift"
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -495,8 +496,48 @@ export default function FacturationSettingsPage() {
                   <div><Label>Nom de la banque</Label><Input value={settings.banque_nom} onChange={e => setSettings(s => ({ ...s, banque_nom: e.target.value }))} placeholder="MCB / SBM / AfrAsia" /></div>
                   <div><Label>Numero de compte</Label><Input value={settings.banque_compte} onChange={e => setSettings(s => ({ ...s, banque_compte: e.target.value }))} /></div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><Label>IBAN</Label><Input value={settings.banque_iban} onChange={e => setSettings(s => ({ ...s, banque_iban: e.target.value }))} /></div>
-                    <div><Label>SWIFT / BIC</Label><Input value={settings.banque_swift} onChange={e => setSettings(s => ({ ...s, banque_swift: e.target.value }))} /></div>
+                    <div>
+                      <Label>IBAN</Label>
+                      <Input
+                        value={settings.banque_iban}
+                        onChange={e => {
+                          const newIban = e.target.value
+                          setSettings(s => {
+                            // Auto-déduit le SWIFT si on n'en a pas déjà saisi
+                            // un manuellement. Le helper retourne null si la
+                            // banque n'est pas reconnue → on laisse l'existant.
+                            const auto = inferSwiftFromIban(newIban)
+                            const next = { ...s, banque_iban: newIban }
+                            if (auto && !s.banque_swift) next.banque_swift = auto
+                            return next
+                          })
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <Label>SWIFT / BIC</Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const diag = inferSwiftWithDiagnostic(settings.banque_iban)
+                            if (diag.swift) {
+                              setSettings(s => ({ ...s, banque_swift: diag.swift! }))
+                            } else {
+                              alert(diag.message)
+                            }
+                          }}
+                          disabled={!settings.banque_iban}
+                          className="h-6 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                          title="Déduit le SWIFT à partir du code banque de l'IBAN"
+                        >
+                          ↻ Déduire depuis IBAN
+                        </Button>
+                      </div>
+                      <Input value={settings.banque_swift} onChange={e => setSettings(s => ({ ...s, banque_swift: e.target.value }))} />
+                    </div>
                   </div>
                 </CardContent>
               </Card>

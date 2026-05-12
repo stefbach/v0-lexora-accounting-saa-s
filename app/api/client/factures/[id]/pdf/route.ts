@@ -116,11 +116,16 @@ export async function GET(request: Request, { params }: Params) {
     //   • ?refresh=1 force la régénération
     //   • la facture a été modifiée depuis le dernier rendu PDF
     //     (updated_at > pdf_stored_at) → on régénère automatiquement
-    //     pour servir la version à jour. Évite que le user voie une
-    //     vieille version après édition des lignes / coordonnées banque.
+    //   • le PDF a été généré avant le PDF_TEMPLATE_VERSION_BUMP
+    //     ci-dessous → on régénère pour servir la dernière version du
+    //     gabarit (lignes multi-devises, logo agrandi, taux affiché…).
+    //     À bumper à chaque déploiement majeur du gabarit PDF.
+    const PDF_TEMPLATE_VERSION_BUMP = '2026-05-12T00:00:00Z'
     const pdfStaleByUpdate = facture.pdf_stored_at && facture.updated_at
       && new Date(facture.updated_at).getTime() > new Date(facture.pdf_stored_at).getTime() + 1000
-    if (facture.pdf_url && !forceRefresh && !pdfStaleByUpdate) {
+    const pdfStaleByTemplate = facture.pdf_stored_at &&
+      new Date(facture.pdf_stored_at).getTime() < new Date(PDF_TEMPLATE_VERSION_BUMP).getTime()
+    if (facture.pdf_url && !forceRefresh && !pdfStaleByUpdate && !pdfStaleByTemplate) {
       const { data: signed } = await admin.storage.from(BUCKET).createSignedUrl(facture.pdf_url, 3600)
       if (signed?.signedUrl) {
         return NextResponse.redirect(signed.signedUrl)

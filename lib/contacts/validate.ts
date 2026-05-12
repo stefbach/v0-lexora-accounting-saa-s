@@ -10,8 +10,13 @@ export interface ContactPayload {
   nom: string
   entreprise: string | null
   adresse: string | null
+  code_postal: string | null
+  ville: string | null
+  pays: string | null
   email: string | null
   telephone: string | null
+  mobile: string | null
+  fax: string | null
   vat_number: string | null
   brn: string | null
   kbis: string | null
@@ -53,8 +58,13 @@ export function validateContactPayload(
       nom,
       entreprise: body.entreprise ? String(body.entreprise).trim().slice(0, 200) || null : null,
       adresse: body.adresse ? String(body.adresse).trim().slice(0, 500) || null : null,
+      code_postal: body.code_postal ? String(body.code_postal).trim().slice(0, 20) || null : null,
+      ville: body.ville ? String(body.ville).trim().slice(0, 100) || null : null,
+      pays: body.pays ? String(body.pays).trim().slice(0, 100) || null : null,
       email: email || null,
       telephone: body.telephone ? String(body.telephone).trim().slice(0, 50) || null : null,
+      mobile: body.mobile ? String(body.mobile).trim().slice(0, 50) || null : null,
+      fax: body.fax ? String(body.fax).trim().slice(0, 50) || null : null,
       vat_number: body.vat_number ? String(body.vat_number).trim().slice(0, 50) || null : null,
       brn: body.brn ? String(body.brn).trim().slice(0, 50) || null : null,
       kbis: body.kbis ? String(body.kbis).trim().slice(0, 50) || null : null,

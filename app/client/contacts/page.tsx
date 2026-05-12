@@ -58,8 +58,13 @@ interface Contact {
   nom: string
   entreprise: string | null
   adresse: string | null
+  code_postal: string | null
+  ville: string | null
+  pays: string | null
   email: string | null
   telephone: string | null
+  mobile: string | null
+  fax: string | null
   vat_number: string | null
   brn: string | null
   kbis: string | null
@@ -93,6 +98,11 @@ export default function ClientContactsPage() {
   const [fBrn, setFBrn] = useState("")
   const [fKbis, setFKbis] = useState("")
   const [fSiteWeb, setFSiteWeb] = useState("")
+  const [fCodePostal, setFCodePostal] = useState("")
+  const [fVille, setFVille] = useState("")
+  const [fPays, setFPays] = useState("")
+  const [fMobile, setFMobile] = useState("")
+  const [fFax, setFFax] = useState("")
   const [fDevise, setFDevise] = useState("MUR")
   const [fCondPaie, setFCondPaie] = useState("30")
   const [fOffshore, setFOffshore] = useState(false)
@@ -148,8 +158,13 @@ export default function ClientContactsPage() {
     setFNom("")
     setFEntreprise("")
     setFAdresse("")
+    setFCodePostal("")
+    setFVille("")
+    setFPays("")
     setFEmail("")
     setFTel("")
+    setFMobile("")
+    setFFax("")
     setFVat("")
     setFBrn("")
     setFKbis("")
@@ -166,8 +181,13 @@ export default function ClientContactsPage() {
     setFNom(c.nom)
     setFEntreprise(c.entreprise || "")
     setFAdresse(c.adresse || "")
+    setFCodePostal(c.code_postal || "")
+    setFVille(c.ville || "")
+    setFPays(c.pays || "")
     setFEmail(c.email || "")
     setFTel(c.telephone || "")
+    setFMobile(c.mobile || "")
+    setFFax(c.fax || "")
     setFVat(c.vat_number || "")
     setFBrn(c.brn || "")
     setFKbis(c.kbis || "")
@@ -192,8 +212,13 @@ export default function ClientContactsPage() {
         nom,
         entreprise: fEntreprise.trim() || null,
         adresse: fAdresse.trim() || null,
+        code_postal: fCodePostal.trim() || null,
+        ville: fVille.trim() || null,
+        pays: fPays.trim() || null,
         email: fEmail.trim() || null,
         telephone: fTel.trim() || null,
+        mobile: fMobile.trim() || null,
+        fax: fFax.trim() || null,
         vat_number: fVat.trim() || null,
         brn: fBrn.trim() || null,
         kbis: fKbis.trim() || null,
@@ -269,8 +294,13 @@ export default function ClientContactsPage() {
         nom: String(it.nom || it.entreprise || "Contact"),
         entreprise: it.entreprise ? String(it.entreprise) : null,
         adresse: it.adresse ? String(it.adresse) : null,
+        code_postal: it.code_postal ? String(it.code_postal) : null,
+        ville: it.ville ? String(it.ville) : null,
+        pays: it.pays ? String(it.pays) : null,
         email: it.email ? String(it.email) : null,
         telephone: it.telephone ? String(it.telephone) : null,
+        mobile: it.mobile ? String(it.mobile) : null,
+        fax: it.fax ? String(it.fax) : null,
         vat_number: it.vat_number ? String(it.vat_number) : null,
         brn: it.brn ? String(it.brn) : null,
         kbis: it.kbis ? String(it.kbis) : null,
@@ -506,14 +536,31 @@ export default function ClientContactsPage() {
                   <Input value={fEntreprise} onChange={(e) => setFEntreprise(e.target.value)} placeholder="ACME Ltd" />
                 </div>
               </div>
+              {/* Adresse structurée : ligne adresse libre + code postal +
+                  ville + pays. Permet le filtrage / regroupement ultérieur
+                  par ville/pays et le formatage propre sur la facture. */}
               <div className="space-y-1">
-                <Label>Adresse</Label>
+                <Label>Adresse (rue, numéro)</Label>
                 <Textarea
                   value={fAdresse}
                   onChange={(e) => setFAdresse(e.target.value)}
                   rows={2}
-                  placeholder="Rue, ville, code postal, pays"
+                  placeholder="12 Royal Road, Bâtiment B"
                 />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label>Code postal</Label>
+                  <Input value={fCodePostal} onChange={(e) => setFCodePostal(e.target.value)} placeholder="11328" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Ville</Label>
+                  <Input value={fVille} onChange={(e) => setFVille(e.target.value)} placeholder="Port Louis" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Pays</Label>
+                  <Input value={fPays} onChange={(e) => setFPays(e.target.value)} placeholder="Maurice" />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -521,8 +568,18 @@ export default function ClientContactsPage() {
                   <Input type="email" value={fEmail} onChange={(e) => setFEmail(e.target.value)} placeholder="bob@acme.com" />
                 </div>
                 <div className="space-y-1">
-                  <Label>Téléphone</Label>
+                  <Label>Téléphone (fixe)</Label>
                   <Input value={fTel} onChange={(e) => setFTel(e.target.value)} placeholder="+230 5..." />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Mobile</Label>
+                  <Input value={fMobile} onChange={(e) => setFMobile(e.target.value)} placeholder="+230 5 123 4567" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Fax</Label>
+                  <Input value={fFax} onChange={(e) => setFFax(e.target.value)} placeholder="+230 2 12 34 56" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
