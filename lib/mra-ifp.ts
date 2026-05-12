@@ -1,13 +1,28 @@
 /**
  * MRA Invoice Fiscalization Platform (IFP) Integration
  *
- * Handles communication with the Mauritius Revenue Authority e-invoicing system.
- * Currently operates in MOCK mode for development/testing. Set USE_MOCK = false
- * and configure real MRA EBS credentials for production fiscalisation.
+ * Handles communication with the Mauritius Revenue Authority e-invoicing
+ * system (Electronic Billing System EBS).
+ *
+ * Mode mock vs réel : contrôlé par la variable d'env MRA_USE_MOCK.
+ * Par défaut TRUE (sécurité — éviter d'envoyer des données réelles au MRA
+ * tant que les certificats n'ont pas été validés en sandbox).
+ * Mettre MRA_USE_MOCK=false en prod pour activer les vrais appels.
+ *
+ * Audit : tous les appels passent par fiscaliseInvoiceWithAudit() qui
+ * insère systématiquement une ligne dans mra_fiscalisation_logs
+ * (mig 248) — conformité légale 7 ans.
+ *
+ * QR code : généré via lib `qrcode` (vrais codes scannables). L'ancien
+ * generateQRCode() qui produisait un pattern SVG aléatoire est conservé
+ * uniquement pour rétrocompat — utiliser generateQRCodeDataURL().
  */
 
-// Toggle this to switch between mock and real MRA API
-const USE_MOCK = true
+import QRCode from 'qrcode'
+
+// Mode mock par défaut activé côté serveur. Pour passer en réel sur
+// production : MRA_USE_MOCK=false dans Vercel + clé API MRA active.
+const USE_MOCK = process.env.MRA_USE_MOCK !== 'false'
 
 // ── Types ──
 
@@ -132,42 +147,94 @@ async function mockFiscalise(invoice: MRAInvoice): Promise<MRAFiscalisationRespo
   }
 }
 
-// ── Real API Implementation (placeholder) ──
+// ── Real API Implementation ──
+// Retry exponentiel : 1s, 2s, 4s. Timeout 15s par tentative. Conforme
+// recommandations MRA EBS pour résilience réseau.
 
-async function realFiscalise(config: MRAConfig, invoice: MRAInvoice): Promise<MRAFiscalisationResponse> {
+const REAL_MAX_ATTEMPTS = 3
+const REAL_TIMEOUT_MS = 15000
+
+async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), ms)
   try {
-    const response = await fetch(`${config.api_url}/invoices/fiscalise`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.api_key}`,
-        'X-EBS-ID': config.ebs_id,
-      },
-      body: JSON.stringify(invoice),
-    })
+    return await fetch(url, { ...init, signal: ctrl.signal })
+  } finally {
+    clearTimeout(t)
+  }
+}
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
+async function realFiscalise(config: MRAConfig, invoice: MRAInvoice): Promise<MRAFiscalisationResponse & { httpStatus?: number; durationMs: number; rawResponse?: unknown }> {
+  const start = Date.now()
+  let lastError: { code: string; message: string; status?: number } | null = null
+  for (let attempt = 1; attempt <= REAL_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(
+        `${config.api_url}/invoices/fiscalise`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${config.api_key}`,
+            'X-EBS-ID': config.ebs_id,
+            'X-Idempotency-Key': `${invoice.ebsId}-${invoice.invoiceNumber}`,
+          },
+          body: JSON.stringify(invoice),
+        },
+        REAL_TIMEOUT_MS,
+      )
+      const httpStatus = response.status
+
+      // 5xx / 429 = retriable. 4xx hors 429 = abandon (erreur métier client).
+      if (response.status >= 500 || response.status === 429) {
+        const errBody = await response.json().catch(() => ({}))
+        lastError = { code: `HTTP_${response.status}`, message: errBody.message || `Retry-able server error`, status: response.status }
+        if (attempt < REAL_MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)))
+          continue
+        }
+        return { success: false, errorCode: lastError.code, errorMessage: lastError.message, httpStatus, durationMs: Date.now() - start, rawResponse: errBody }
+      }
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}))
+        return {
+          success: false,
+          errorCode: `HTTP_${response.status}`,
+          errorMessage: errBody.message || `MRA API returned status ${response.status}`,
+          httpStatus,
+          durationMs: Date.now() - start,
+          rawResponse: errBody,
+        }
+      }
+
+      const data = await response.json()
       return {
-        success: false,
-        errorCode: `HTTP_${response.status}`,
-        errorMessage: errorData.message || `MRA API returned status ${response.status}`,
+        success: true,
+        irn: data.irn || data.invoiceReferenceNumber,
+        qrCodeData: data.qrCodeData || data.qrCode,
+        fiscalisationDate: data.fiscalisationDate || new Date().toISOString(),
+        httpStatus,
+        durationMs: Date.now() - start,
+        rawResponse: data,
+      }
+    } catch (error) {
+      // Network/abort → retriable
+      lastError = {
+        code: 'NETWORK_ERROR',
+        message: error instanceof Error ? error.message : 'Erreur de connexion au serveur MRA',
+      }
+      if (attempt < REAL_MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)))
+        continue
       }
     }
-
-    const data = await response.json()
-    return {
-      success: true,
-      irn: data.irn || data.invoiceReferenceNumber,
-      qrCodeData: data.qrCodeData || data.qrCode,
-      fiscalisationDate: data.fiscalisationDate || new Date().toISOString(),
-    }
-  } catch (error) {
-    return {
-      success: false,
-      errorCode: 'NETWORK_ERROR',
-      errorMessage: error instanceof Error ? error.message : 'Erreur de connexion au serveur MRA',
-    }
+  }
+  return {
+    success: false,
+    errorCode: lastError?.code || 'UNKNOWN',
+    errorMessage: lastError?.message || `Échec après ${REAL_MAX_ATTEMPTS} tentatives`,
+    durationMs: Date.now() - start,
   }
 }
 
@@ -277,9 +344,32 @@ export function convertFactureToMRA(
 }
 
 /**
- * Generate a simple QR code as an SVG data URL.
- * Uses a placeholder visual representation with encoded data.
- * In production, replace with a proper QR code library.
+ * Generate a REAL QR code (PNG data URL) — utilise la lib `qrcode`.
+ * Le code est SCANNABLE par n'importe quel lecteur QR mobile, conforme
+ * à la spec MRA EBS (qui demande de pouvoir vérifier la facture via
+ * scan du QR vers efiling.mra.mu).
+ *
+ * Niveau M (medium) suffit pour les URLs MRA — pas besoin du high-error
+ * correction. Format PNG 200x200 lisible imprimé sur A4.
+ */
+export async function generateQRCodeDataURL(data: string, size = 200): Promise<string> {
+  if (!data) return ''
+  try {
+    return await QRCode.toDataURL(data, {
+      errorCorrectionLevel: 'M',
+      width: size,
+      margin: 2,
+      color: { dark: '#0B0F2E', light: '#FFFFFF' },
+    })
+  } catch (e) {
+    console.warn('[mra-ifp] QR generation failed:', e)
+    return ''
+  }
+}
+
+/**
+ * @deprecated Utiliser generateQRCodeDataURL() (async, vraie lib qrcode).
+ * Gardé pour rétrocompat : produit un faux pattern SVG non scannable.
  */
 export function generateQRCode(data: string): string {
   // Generate a deterministic pattern from the data string
@@ -390,4 +480,109 @@ export async function testMRAConnection(config: MRAConfig): Promise<{ success: b
       message: error instanceof Error ? error.message : 'Erreur de connexion',
     }
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Wrapper avec audit (mig 248)
+// ──────────────────────────────────────────────────────────────────────
+
+type SupabaseClient = any
+
+export interface FiscaliseWithAuditResult extends MRAFiscalisationResponse {
+  /** ID de la ligne mra_fiscalisation_logs créée. */
+  log_id?: string
+  /** PNG data URL du QR code prêt à l'affichage (PDF/UI). */
+  qr_code_image?: string
+}
+
+/**
+ * Wrapper de fiscaliseInvoice qui :
+ *   1. Appelle l'API MRA (mock ou réel selon MRA_USE_MOCK)
+ *   2. Génère le QR code PNG (lib qrcode)
+ *   3. Persiste un audit log dans mra_fiscalisation_logs
+ *   4. Met à jour factures (irn, qr_code_data, mra_status, fiscalisation_date)
+ *
+ * À utiliser depuis les routes API et les jobs — pas à appeler directement
+ * fiscaliseInvoice() qui ne loggue rien.
+ */
+export async function fiscaliseInvoiceWithAudit(
+  supabase: SupabaseClient,
+  args: {
+    facture_id: string
+    societe_id: string
+    config: MRAConfig
+    invoice: MRAInvoice
+    source?: 'manuel' | 'cron' | 'retry' | 'api'
+    created_by?: string | null
+  },
+): Promise<FiscaliseWithAuditResult> {
+  const t0 = Date.now()
+  const { facture_id, societe_id, config, invoice, source = 'manuel', created_by = null } = args
+
+  // 1. Appel MRA (mock ou réel)
+  const res = await fiscaliseInvoice(config, invoice)
+  const durationMs = Date.now() - t0
+
+  // 2. Génération QR code PNG si succès (URL renvoyée par MRA)
+  let qr_code_image: string | undefined
+  if (res.success && res.qrCodeData) {
+    qr_code_image = await generateQRCodeDataURL(res.qrCodeData)
+  }
+
+  // 3. Audit log — try/catch pour ne JAMAIS faire échouer la
+  //    fiscalisation à cause d'une écriture log qui plante.
+  let log_id: string | undefined
+  try {
+    const { data: logRow } = await supabase
+      .from('mra_fiscalisation_logs')
+      .insert({
+        facture_id,
+        societe_id,
+        action: 'fiscalise',
+        environment: config.environment,
+        success: res.success,
+        irn: res.irn || null,
+        qr_code_url: res.qrCodeData || null,
+        http_status: (res as any).httpStatus || null,
+        duration_ms: durationMs,
+        error_code: res.errorCode || null,
+        error_message: res.errorMessage || null,
+        request_payload: invoice as unknown as object,
+        response_payload: (res as any).rawResponse || res,
+        source,
+        created_by,
+      })
+      .select('id')
+      .single()
+    log_id = logRow?.id
+  } catch (e) {
+    console.warn('[mra-ifp] audit log insert failed:', e)
+  }
+
+  // 4. Mise à jour facture (si succès)
+  if (res.success) {
+    try {
+      await supabase
+        .from('factures')
+        .update({
+          irn: res.irn,
+          qr_code_data: res.qrCodeData,
+          fiscalisation_date: res.fiscalisationDate,
+          mra_status: 'fiscalise',
+        })
+        .eq('id', facture_id)
+    } catch (e) {
+      console.warn('[mra-ifp] facture update failed:', e)
+    }
+  } else {
+    // On marque la facture en erreur pour permettre un retry visible côté UI.
+    try {
+      await supabase
+        .from('factures')
+        .update({ mra_status: 'erreur' })
+        .eq('id', facture_id)
+    } catch { /* ignore */ }
+  }
+
+  return { ...res, log_id, qr_code_image }
 }
