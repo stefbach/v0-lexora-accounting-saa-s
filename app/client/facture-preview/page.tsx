@@ -202,6 +202,13 @@ function FacturePreviewContent() {
   const totalTVA = lignes.reduce((sum, l) => sum + l.quantite * l.prix_unitaire * l.taux_tva / 100, 0)
   const discount = data.remise_pct > 0 ? subtotalHT * data.remise_pct / 100 : (data.remise_montant || 0)
   const grandTotal = subtotalHT + totalTVA - discount
+  // AVOIR / CREDIT NOTE : affiche les montants en NÉGATIF côté client
+  // (convention comptable : un avoir = remboursement / annulation).
+  // Les valeurs en base restent positives, on inverse uniquement à
+  // l'affichage. Note de débit reste positive (c'est un complément
+  // à payer au fournisseur).
+  const signMul = data.type_document === 'avoir' ? -1 : 1
+  const fmtSigned = (n: number) => fmt(n * signMul)
   const docMeta = getDocMeta(data.type_document)
   const colors = (() => {
     // Pour avoir/note de débit, on surcharge la couleur d'accent par la
@@ -267,7 +274,11 @@ function FacturePreviewContent() {
         {/* Invoice Info + Bill To */}
         <div className="grid grid-cols-2 gap-8 mb-8">
           <div className="rounded-lg p-4" style={{ backgroundColor: colors.primaire + "08" }}>
-            <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.primaire }}>Facture a / Bill to</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.primaire }}>
+              {/* Libellé neutre — évite "Facture à" sur un Devis ou Avoir.
+                  Pour un avoir on parle plutôt du destinataire du remboursement. */}
+              {data.type_document === 'avoir' ? 'Émis pour / Issued to' : 'Destinataire / Bill to'}
+            </h3>
             {/* Affichage enrichi depuis factures_contacts si dispo (mig 246) :
                 entreprise (gras) + nom + adresse + code_postal/ville + pays
                 + email + tel/mobile + VAT + BRN + KBIS. Fallback sur les
@@ -301,7 +312,9 @@ function FacturePreviewContent() {
           </div>
           <div className="text-right space-y-1.5">
             <div className="flex justify-end gap-8">
-              <span className="text-sm text-gray-500">N° {docMeta.title_fr.charAt(0) + docMeta.title_fr.slice(1).toLowerCase()}:</span>
+              {/* Pas de répétition du type de doc — il est déjà affiché
+                  en grand en haut à droite. On garde juste "N°". */}
+              <span className="text-sm text-gray-500">N°:</span>
               <span className="font-mono font-bold" style={{ color: colors.primaire }}>{data.numero_facture}</span>
             </div>
             <div className="flex justify-end gap-8">
@@ -372,13 +385,13 @@ function FacturePreviewContent() {
                       <td className="py-3 px-4 text-sm align-top">{l.description || "—"}</td>
                       <td className="py-3 px-3 text-sm text-right align-top">{qte}</td>
                       <td className="py-3 px-3 text-sm text-right font-mono align-top">
-                        <div>{fmt(pu)} {isForeign ? data.devise : ""}</div>
-                        {isForeign && <div className="text-[11px] text-gray-600 mt-0.5">≈ {fmt(puMur)} MUR</div>}
+                        <div>{fmtSigned(pu)} {isForeign ? data.devise : ""}</div>
+                        {isForeign && <div className="text-[11px] text-gray-600 mt-0.5">≈ {fmtSigned(puMur)} MUR</div>}
                       </td>
                       <td className="py-3 px-3 text-sm text-right align-top">{l.taux_tva}%</td>
                       <td className="py-3 px-4 text-sm text-right font-mono font-semibold align-top">
-                        <div>{fmt(montant)} {isForeign ? data.devise : ""}</div>
-                        {isForeign && <div className="text-[11px] text-gray-600 font-normal mt-0.5">≈ {fmt(montantMur)} MUR</div>}
+                        <div>{fmtSigned(montant)} {isForeign ? data.devise : ""}</div>
+                        {isForeign && <div className="text-[11px] text-gray-600 font-normal mt-0.5">≈ {fmtSigned(montantMur)} MUR</div>}
                       </td>
                     </tr>
                   )
@@ -393,7 +406,7 @@ function FacturePreviewContent() {
           <div className="w-72 space-y-1.5">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Sous-total HT</span>
-              <span className="font-mono">{fmt(subtotalHT)} {data.devise}</span>
+              <span className="font-mono">{fmtSigned(subtotalHT)} {data.devise}</span>
             </div>
             {discount > 0 && (
               <div className="flex justify-between text-sm text-red-600">
@@ -403,17 +416,17 @@ function FacturePreviewContent() {
             )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">TVA {data.client_offshore ? "(Zero-rated export)" : "(15%)"}</span>
-              <span className="font-mono">{fmt(totalTVA)} {data.devise}</span>
+              <span className="font-mono">{fmtSigned(totalTVA)} {data.devise}</span>
             </div>
             <div className="border-t-2 pt-2 flex justify-between font-bold text-lg" style={{ borderColor: colors.primaire }}>
               <span style={{ color: colors.primaire }}>Total TTC</span>
-              <span className="font-mono" style={{ color: colors.primaire }}>{fmt(grandTotal)} {data.devise}</span>
+              <span className="font-mono" style={{ color: colors.primaire }}>{fmtSigned(grandTotal)} {data.devise}</span>
             </div>
             {data.devise !== "MUR" && data.taux_change > 0 && (
               <>
                 <div className="flex justify-between text-sm pt-1">
                   <span className="text-gray-700 font-medium">Equivalent MUR</span>
-                  <span className="font-mono font-medium">{fmt(grandTotal * data.taux_change)} MUR</span>
+                  <span className="font-mono font-medium">{fmtSigned(grandTotal * data.taux_change)} MUR</span>
                 </div>
                 <div className="mt-2 px-3 py-2 rounded-md text-[11px] italic text-gray-600 bg-gray-50 border border-gray-200 text-right">
                   Taux de change appliqué : 1 {data.devise} = {fmt(data.taux_change)} MUR
