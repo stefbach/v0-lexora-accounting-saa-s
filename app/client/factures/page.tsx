@@ -40,6 +40,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { PaiementFactureDialog } from "@/components/client/PaiementFactureDialog"
 
 interface Facture {
   id: string
@@ -53,6 +54,7 @@ interface Facture {
   devise: string | null
   statut: string | null
   rapproche_releve_id: string | null
+  solde_non_paye: number | null
 }
 
 function fmt(n: number, dev = "MUR"): string {
@@ -101,6 +103,7 @@ export default function ClientFacturesPage() {
   const [dateFin, setDateFin] = useState<string>("")
   const [search, setSearch] = useState("")
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [paiementFacture, setPaiementFacture] = useState<Facture | null>(null)
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
@@ -418,24 +421,43 @@ export default function ClientFacturesPage() {
                 </div>
 
                 <TabsContent value="toutes" className="mt-0 p-0">
-                  <FactureList factures={filtered} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
                 </TabsContent>
                 <TabsContent value="client" className="mt-0 p-0">
-                  <FactureList factures={filtered} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
                 </TabsContent>
                 <TabsContent value="fournisseur" className="mt-0 p-0">
-                  <FactureList factures={filtered} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
                 </TabsContent>
               </Tabs>
             </Card>
           </>
         )}
       </div>
+
+      <PaiementFactureDialog
+        facture={paiementFacture}
+        open={!!paiementFacture}
+        onOpenChange={(open) => {
+          if (!open) setPaiementFacture(null)
+        }}
+        onSuccess={() => {
+          showToast("Paiement enregistré", "success")
+          setPaiementFacture(null)
+          load()
+        }}
+      />
     </ClientPageShell>
   )
 }
 
-function FactureList({ factures }: { factures: Facture[] }) {
+function FactureList({
+  factures,
+  onEnregistrerPaiement,
+}: {
+  factures: Facture[]
+  onEnregistrerPaiement?: (f: Facture) => void
+}) {
   if (factures.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
@@ -451,6 +473,10 @@ function FactureList({ factures }: { factures: Facture[] }) {
         const dueSoon = f.statut !== "paye" && f.statut !== "annule" && days !== null && days >= 0 && days <= 7
         const statutInfo = STATUT_LABELS[f.statut || "en_attente"] || STATUT_LABELS.en_attente
         const isClient = f.type_facture === "client"
+        const totalMur = Number(f.montant_mur) || Number(f.montant_ttc) || 0
+        const soldeMur = f.solde_non_paye == null ? totalMur : Number(f.solde_non_paye)
+        const pctPaye = totalMur > 0 ? Math.round(((totalMur - soldeMur) / totalMur) * 100) : 0
+        const canPay = f.statut !== "paye" && f.statut !== "annule" && totalMur > 0
         return (
           <div
             key={f.id}
@@ -499,7 +525,7 @@ function FactureList({ factures }: { factures: Facture[] }) {
                 <span>Échéance : {formatDate(f.date_echeance)}</span>
               </div>
             </div>
-            <div className="text-right flex-shrink-0">
+            <div className="text-right flex-shrink-0 flex flex-col items-end gap-1">
               <p
                 className={`font-mono font-medium ${
                   isClient ? "text-green-700" : "text-rose-700"
@@ -512,6 +538,32 @@ function FactureList({ factures }: { factures: Facture[] }) {
                 <p className="text-[11px] text-muted-foreground font-mono">
                   ≈ {fmt(f.montant_mur, "MUR")}
                 </p>
+              )}
+              {totalMur > 0 && f.statut !== "annule" && (
+                <div className="w-32 text-right">
+                  <div className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+                    <span>{pctPaye}% payé</span>
+                    {soldeMur > 1 && (
+                      <span className="font-mono">· reste {fmt(soldeMur, "MUR")}</span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 h-1 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 transition-all"
+                      style={{ width: `${pctPaye}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {canPay && onEnregistrerPaiement && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px] mt-1"
+                  onClick={() => onEnregistrerPaiement(f)}
+                >
+                  Enregistrer paiement
+                </Button>
               )}
             </div>
           </div>
