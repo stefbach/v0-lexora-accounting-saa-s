@@ -507,21 +507,46 @@ export default function FacturationSettingsPage() {
                       </Select>
                     </div>
                     <div>
-                      <Label>Conditions de paiement par défaut</Label>
-                      <Select value={String(settings.conditions_paiement)} onValueChange={v => setSettings(s => ({ ...s, conditions_paiement: parseInt(v) }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="0">À réception</SelectItem>
-                          <SelectItem value="7">7 jours</SelectItem>
-                          <SelectItem value="14">14 jours</SelectItem>
-                          <SelectItem value="30">30 jours</SelectItem>
-                          <SelectItem value="45">45 jours</SelectItem>
-                          <SelectItem value="60">60 jours</SelectItem>
-                          <SelectItem value="90">90 jours</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label>Conditions de paiement par défaut (jours)</Label>
+                      {/* Input libre 0..365 avec datalist pour suggérer les
+                          valeurs courantes. L'utilisateur peut taper
+                          n'importe quoi (1, 2, 5, 21, 75…) — le Select
+                          précédent était trop restrictif. */}
+                      <Input
+                        type="number"
+                        min={0}
+                        max={365}
+                        step={1}
+                        list="conditions-paiement-suggestions"
+                        value={settings.conditions_paiement}
+                        onChange={e => {
+                          const v = e.target.value
+                          // Permet le champ vide pendant la saisie (Backspace)
+                          if (v === '') {
+                            setSettings(s => ({ ...s, conditions_paiement: 0 }))
+                            return
+                          }
+                          const n = parseInt(v, 10)
+                          if (Number.isFinite(n) && n >= 0 && n <= 365) {
+                            setSettings(s => ({ ...s, conditions_paiement: n }))
+                          }
+                        }}
+                      />
+                      <datalist id="conditions-paiement-suggestions">
+                        <option value="0" label="À réception" />
+                        <option value="1" />
+                        <option value="7" />
+                        <option value="14" />
+                        <option value="15" />
+                        <option value="30" />
+                        <option value="45" />
+                        <option value="60" />
+                        <option value="90" />
+                      </datalist>
                       <p className="text-[11px] text-gray-500 mt-1">
-                        Valeur pré-remplie à chaque création de facture. "À réception" = paiement immédiat (date d'échéance = date de facture).
+                        Valeur pré-remplie à chaque création de facture (0 à 365 jours).
+                        <strong> 0 = "À réception"</strong> (date d'échéance = date de facture).
+                        Tu peux taper n'importe quelle valeur (1, 2, 5, 21, etc.).
                       </p>
                     </div>
                   </div>
@@ -580,7 +605,23 @@ export default function FacturationSettingsPage() {
                     })
                     const data = await res.json()
                     if (!res.ok) throw new Error(data?.error || "Erreur")
-                    alert(`Import terminé : ${data.inserted} nouveau(x) client(s) ajouté(s) sur ${data.candidats} candidat(s). Source: ${(data.sources_utilisees || []).join(', ')}`)
+                    // Détail des sources pour diagnostic — l'API renvoie
+                    // source_counts depuis le PR fix-conditions-paiement.
+                    const counts = data.source_counts || {}
+                    const detail = [
+                      `Annuaire OCR : ${counts.tiers_annuaire ?? 0} client(s) trouvé(s)`,
+                      `Historique factures : ${counts.factures_historique ?? 0} nom(s) distinct(s)`,
+                    ].join("\n")
+                    if (data.inserted > 0) {
+                      alert(`✓ Import terminé : ${data.inserted} nouveau(x) client(s) ajouté(s) sur ${data.candidats} candidat(s).\n\n${detail}`)
+                      // Recharger la page pour voir les contacts importés
+                      window.location.reload()
+                    } else if (data.message) {
+                      // Cas spécial : aucun candidat → diagnostic détaillé du serveur
+                      alert(data.message)
+                    } else {
+                      alert(`Aucun client à importer (tout est déjà dans ton carnet).\n\n${detail}`)
+                    }
                   } catch (e: any) {
                     alert(e?.message || "Erreur import")
                   }

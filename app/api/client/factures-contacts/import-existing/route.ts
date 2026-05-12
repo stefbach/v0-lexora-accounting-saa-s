@@ -67,49 +67,61 @@ export async function POST(request: Request) {
     // ── 2. Construction des candidats à partir des sources demandées
     const candidats = new Map<string, CandidatContact>() // clé = normalizeName(nom)
 
+    // Compteurs par source pour le retour de diagnostic
+    const sourceCounts: Record<string, number> = {}
+
     if (sources.includes('tiers_annuaire')) {
       // tiers_annuaire (mig 128) est une table GLOBALE (pas de societe_id).
-      // On filtre seulement sur type_tiers — on récupère les tiers
-      // identifiés comme clients par l'OCR ou la saisie manuelle.
-      // Mig 244 ajoute email/telephone/adresse → on récupère tous les
-      // champs pertinents pour pré-remplir factures_contacts complet.
-      try {
-        const { data } = await supabase
+      // Mig 244 ajoute email/telephone/adresse. On essaie d'abord la
+      // requête enrichie ; si la migration n'est pas encore appliquée
+      // sur l'env, on retombe sur la version basique sans ces colonnes.
+      const trySelect = async (cols: string) => {
+        return await supabase
           .from('tiers_annuaire')
-          .select('nom, brn, vat_number, type_tiers, pays, email, telephone, adresse')
+          .select(cols)
           .in('type_tiers', ['client', 'both'])
-        for (const t of data || []) {
-          const key = normalizeName(String(t.nom || ''))
-          if (!key || seen.has(key) || candidats.has(key)) continue
-          candidats.set(key, {
-            nom: String(t.nom),
-            entreprise: null,
-            email: t.email || null,
-            telephone: t.telephone || null,
-            adresse: t.adresse || t.pays || null,
-            vat_number: t.vat_number || null,
-            source: 'tiers_annuaire',
-          })
-        }
-      } catch {
-        /* table peut ne pas exister sur env legacy → on continue */
       }
+      let res = await trySelect('nom, brn, vat_number, type_tiers, pays, email, telephone, adresse')
+      if (res.error) {
+        // Mig 244 manquante → fallback
+        res = await trySelect('nom, brn, vat_number, type_tiers, pays')
+      }
+      let nbTiers = 0
+      for (const t of (res.data as any[]) || []) {
+        const key = normalizeName(String(t.nom || ''))
+        if (!key || seen.has(key) || candidats.has(key)) continue
+        candidats.set(key, {
+          nom: String(t.nom),
+          entreprise: null,
+          email: t.email || null,
+          telephone: t.telephone || null,
+          adresse: t.adresse || t.pays || null,
+          vat_number: t.vat_number || null,
+          source: 'tiers_annuaire',
+        })
+        nbTiers += 1
+      }
+      sourceCounts.tiers_annuaire = nbTiers
     }
 
     if (sources.includes('factures')) {
-      // Noms distincts de tiers des factures clients de la société
+      // Noms distincts de tiers des factures clients de la société.
+      // Quand factures.contact_id est rempli (PR #55), on récupère aussi
+      // les coordonnées de ce contact existant pour ne pas perdre l'info.
       const { data: facs } = await supabase
         .from('factures')
-        .select('tiers')
+        .select('tiers, contact_id')
         .eq('societe_id', societe_id)
         .eq('type_facture', 'client')
         .not('tiers', 'is', null)
-      const tiersDistincts = new Set<string>()
+      const tiersDistincts = new Map<string, string | null>() // nom → contact_id
       for (const f of facs || []) {
         const t = String(f.tiers || '').trim()
-        if (t) tiersDistincts.add(t)
+        if (!t) continue
+        if (!tiersDistincts.has(t)) tiersDistincts.set(t, f.contact_id || null)
       }
-      for (const t of tiersDistincts) {
+      let nbFactures = 0
+      for (const [t] of tiersDistincts) {
         const key = normalizeName(t)
         if (!key || seen.has(key) || candidats.has(key)) continue
         candidats.set(key, {
@@ -121,11 +133,30 @@ export async function POST(request: Request) {
           vat_number: null,
           source: 'factures_historique',
         })
+        nbFactures += 1
       }
+      sourceCounts.factures_historique = nbFactures
     }
 
     if (candidats.size === 0) {
-      return NextResponse.json({ inserted: 0, candidats: 0, message: 'Aucun nouveau client à importer.' })
+      // Diagnostic plus parlant pour l'utilisateur : quelles sources ont été
+      // consultées et combien d'entrées chacune contient ?
+      const diag: string[] = []
+      if (sources.includes('tiers_annuaire')) {
+        const n = sourceCounts.tiers_annuaire ?? 0
+        diag.push(`Annuaire OCR (tiers_annuaire) : ${n} client(s) candidat(s)`)
+      }
+      if (sources.includes('factures')) {
+        const n = sourceCounts.factures_historique ?? 0
+        diag.push(`Historique factures clients : ${n} nom(s) distinct(s)`)
+      }
+      return NextResponse.json({
+        inserted: 0,
+        candidats: 0,
+        sources_utilisees: sources,
+        source_counts: sourceCounts,
+        message: `Aucun nouveau client à importer.\n${diag.join('\n')}.\n\nSi tu attendais plus de résultats :\n• Vérifie que tu as numérisé des factures CLIENT (pas seulement fournisseur)\n• Vérifie que la migration 244 (email/tel/adresse OCR) est bien appliquée`,
+      })
     }
 
     // ── 3. Insertion en lot dans factures_contacts
@@ -154,6 +185,7 @@ export async function POST(request: Request) {
       inserted: inserted?.length || 0,
       candidats: candidats.size,
       sources_utilisees: sources,
+      source_counts: sourceCounts,
     })
   } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
