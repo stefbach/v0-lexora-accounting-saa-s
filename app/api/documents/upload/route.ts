@@ -1801,6 +1801,63 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
                 montant_mur: Number(factureData.montant_mur) || undefined,
               })
               if (!r.ok) console.warn('[upload] Écritures v2 non générées:', r.error)
+
+              // Phase J — Auto-tagging GBC (PER + related_party + IAS 21).
+              // No-op pour une société MUR-only. Pour une GBC (devise_fonctionnelle ≠ MUR
+              // ou tiers étranger), enrichit la facture et les écritures.
+              try {
+                const { applyGbcAutoTagging } = await import('@/lib/accounting/gbc-auto-tagging')
+                const isFactureClient = factureData.type_facture === 'client'
+                // Compte principal pour heuristique PER (706/707/761 côté client,
+                // 60x côté fournisseur). On utilise le premier code détecté par OCR.
+                const lignesOCR = (extraction as any)?.lignes || []
+                const compteOCR = lignesOCR[0]?.compte_comptable || lignesOCR[0]?.compte ||
+                  (isFactureClient ? '706' : '607')
+                const tagging = await applyGbcAutoTagging(supabase, {
+                  facture_id: insertedFacture.id,
+                  societe_id: factureData.societe_id as string,
+                  tiers: (factureData.tiers as string) || null,
+                  tiers_country_iso: (extraction as any)?.tiers_country_iso || null,
+                  type_facture: isFactureClient ? 'client' : 'fournisseur',
+                  numero_compte_principal: compteOCR,
+                  description: (factureData.description as string) || (extraction as any)?.description || null,
+                  montant_mur: Number(factureData.montant_mur) || Number(factureData.montant_ttc) || 0,
+                  date_facture: (factureData.date_facture as string) || null,
+                })
+                if (tagging.per_category || tagging.related_party || tagging.ias21_translated) {
+                  console.log('[upload][GBC] auto-tagging appliqué:', tagging)
+                }
+                if (tagging.warnings.length > 0) {
+                  console.warn('[upload][GBC] warnings:', tagging.warnings)
+                }
+
+                // Phase L.1 — Auto-classification TDS pour factures fournisseur Maurice
+                if (!isFactureClient) {
+                  try {
+                    const { autoClassifyTds, computeTds } = await import('@/lib/accounting/tds')
+                    const cat = autoClassifyTds({
+                      description: (factureData.description as string) || (extraction as any)?.description || null,
+                      numero_compte: compteOCR,
+                      tiers_country: (extraction as any)?.tiers_country_iso || null,
+                    })
+                    if (cat !== 'none') {
+                      const calc = computeTds(Number(factureData.montant_mur) || 0, cat)
+                      if (calc.applies) {
+                        await supabase.from('factures').update({
+                          tds_category: cat, tds_rate_pct: calc.rate, tds_amount_mur: calc.amount,
+                          tds_period: (factureData.date_facture as string)?.slice(0, 7) || null,
+                        }).eq('id', insertedFacture.id)
+                        console.log(`[upload][TDS] auto: ${cat} ${calc.rate}% → ${calc.amount} MUR retenu`)
+                      }
+                    }
+                  } catch (e: any) {
+                    console.warn('[upload][TDS] exception (non bloquant):', e?.message)
+                  }
+                }
+              } catch (e: any) {
+                // Ne JAMAIS bloquer le pipeline OCR si tagging GBC échoue.
+                console.warn('[upload][GBC] applyGbcAutoTagging exception (non bloquant):', e?.message)
+              }
             } catch (e: any) {
               console.warn('[upload] createEcrituresForFacture exception:', e?.message)
             }

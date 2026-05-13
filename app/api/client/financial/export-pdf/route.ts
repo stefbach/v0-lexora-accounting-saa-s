@@ -77,7 +77,7 @@ export async function GET(request: Request) {
     const exerciceActuel = json?.exercice_actuel
 
     const { data: societe } = await supabase
-      .from('societes').select('raison_sociale, brn, vat_number, adresse, exercice_debut').eq('id', societe_id).single()
+      .from('societes').select('nom, brn, vat_number, adresse, exercice_debut').eq('id', societe_id).single()
 
     // Calculs cascade
     const ca = Number(fin.chiffreAffaires) || 0
@@ -101,7 +101,7 @@ export async function GET(request: Request) {
     const doc = elt(Document, {},
       elt(Page, { size: 'A4', style: styles.page },
         elt(View, { style: styles.header },
-          elt(Text, { style: styles.company }, societe?.raison_sociale || '—'),
+          elt(Text, { style: styles.company }, societe?.nom || '—'),
           societe?.brn && elt(Text, { style: styles.subtitle }, `BRN : ${societe.brn}${societe.vat_number ? ' · VAT : ' + societe.vat_number : ''}`),
           elt(Text, { style: styles.title }, 'Compte de Résultat'),
           elt(Text, { style: styles.subtitle }, `Exercice ${exerciceActuel || fin.exercice || '—'} · Période ${fmtDate(fin.date_debut)} → ${fmtDate(fin.date_fin)}`),
@@ -206,13 +206,13 @@ export async function GET(request: Request) {
         ),
 
         elt(View, { style: styles.footer },
-          elt(Text, {}, `${societe?.raison_sociale || ''} · Compte de Résultat · Exercice ${exerciceActuel || fin.exercice || ''} · Document confidentiel`),
+          elt(Text, {}, `${societe?.nom || ''} · Compte de Résultat · Exercice ${exerciceActuel || fin.exercice || ''} · Document confidentiel`),
         ),
       )
     )
 
     const buffer = await renderToBuffer(doc as any)
-    const fname = `pnl_${(societe?.raison_sociale || 'societe').replace(/\s+/g, '_')}_${exerciceActuel || fin.exercice || ''}.pdf`
+    const fname = `pnl_${(societe?.nom || 'societe').replace(/\s+/g, '_')}_${exerciceActuel || fin.exercice || ''}.pdf`
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

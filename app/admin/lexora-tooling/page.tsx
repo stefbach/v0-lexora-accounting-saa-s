@@ -13,7 +13,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Brain, Boxes, Shield, Calculator, GitMerge, BookOpen, ListChecks, Receipt, Scale, FileSpreadsheet, ExternalLink } from "lucide-react"
+import { Brain, Boxes, Shield, Calculator, GitMerge, BookOpen, ListChecks, Receipt, Scale, FileSpreadsheet, ExternalLink, Globe, Banknote, Layers, UserCheck, FileSignature, Building2 } from "lucide-react"
 
 const SKILLS = [
   {
@@ -40,6 +40,27 @@ const SKILLS = [
     triggers: ["rapprochement", "lettrage", "BNQ", "agent déterministe", "RULE 4", "classer transaction"],
     related: ["lib/accounting/ecritures-factures.ts", "app/api/comptable/rapprochement/", "/client/rapprochement"],
   },
+  {
+    name: "lexora-gbc-ifrs-complete",
+    Icon: Globe,
+    color: "purple",
+    description: "Conformité Global Business Companies (GBC) Maurice + Full IFRS : PER 80%, substance CIGA, Transfer Pricing, UBO, CRS/FATCA, BEPS Pillar Two, consolidation IFRS 10, IFRS 16 leases, monnaie fonctionnelle IAS 21.",
+    triggers: ["GBC", "Global Business", "FSC", "PER", "substance", "CIGA", "Transfer Pricing", "UBO", "Pillar Two", "GloBE", "IFRS 10", "IFRS 16", "Full IFRS", "consolidation", "Authorised Company"],
+    related: ["Migrations 249-257", "9 routes /api/comptable/gbc/*", "9 pages /client/gbc-*"],
+  },
+]
+
+const GBC_MODULES = [
+  { code: "Dashboard", title: "Vue d'ensemble compliance GBC", page: "/client/gbc-dashboard", mig: 0, route: "(agrégation 8 modules)", Icon: Globe, color: "purple", topic: "Dashboard unifié : KPI + statut compliance par phase + tuiles cliquables. Phase J." },
+  { code: "Phase A", title: "Monnaie fonctionnelle IAS 21", page: "/client/societes", mig: 249, route: "/api/comptable/cta-recalc", Icon: Banknote, color: "indigo", topic: "Comptabilité primaire ≠ MUR (USD/EUR), translation IAS 21 §38-49, écart de conversion compte 1078." },
+  { code: "Phase B", title: "PER 80% + Foreign Tax Credit", page: "/client/gbc-per", mig: 250, route: "/api/comptable/gbc/per-computation", Icon: Banknote, color: "amber", topic: "ITA §50C : IS 3% sur revenus PER-éligibles (dividendes, intérêts, PE étrangères). FTC §77." },
+  { code: "Phase C", title: "Substance Requirements (CIGA)", page: "/client/gbc-substance", mig: 251, route: "/api/comptable/gbc/substance", Icon: Shield, color: "emerald", topic: "ITA §73A : seuils dépenses + employés Maurice. 11 catégories d'activité. Auto-assessment compliance." },
+  { code: "Phase D", title: "Transfer Pricing", page: "/client/gbc-transfer-pricing", mig: 252, route: "/api/comptable/gbc/transfer-pricing", Icon: GitMerge, color: "slate", topic: "Maurice TP Act 2023 + OECD TPG. Local + Master file. 5 méthodes CUP/RPM/CPM/TNMM/PSM. Seuil MUR 5M." },
+  { code: "Phase E", title: "Beneficial Ownership", page: "/client/gbc-ubo", mig: 253, route: "/api/comptable/gbc/beneficial-owners", Icon: UserCheck, color: "blue", topic: "FSC AML Act. UBO ≥10%. KYC docs JSONB. PEP screening. Audit trail immuable." },
+  { code: "Phase F", title: "Consolidation IFRS 10", page: "/client/gbc-consolidation", mig: 254, route: "/api/comptable/gbc/consolidate", Icon: Layers, color: "purple", topic: "Holdings + filiales. Goodwill IFRS 3. NCI. Méthodes full/equity/proportional. Éliminations intercompany." },
+  { code: "Phase G", title: "CRS / FATCA", page: "/client/gbc-crs-fatca", mig: 255, route: "/api/comptable/gbc/crs-fatca", Icon: FileSpreadsheet, color: "indigo", topic: "OECD CRS + US IGA Model 1A. XML schema 2.0. Submission annuelle MRA (deadline 31 juillet)." },
+  { code: "Phase H", title: "BEPS Pillar Two GloBE", page: "/client/gbc-pillar-two", mig: 256, route: "/api/comptable/gbc/pillar-two", Icon: Globe, color: "purple", topic: "MNE > €750M. Taxe minimale 15% (ETR + SBIE + Top-up). DMTT pour Maurice si ETR < 15%." },
+  { code: "Phase I", title: "IFRS 16 Leases", page: "/client/leases", mig: 257, route: "/api/comptable/leases", Icon: FileSignature, color: "emerald", topic: "Right-of-Use + Lease Liability. Comptes 1751/1752/2151/28151/6611/6811. Exemptions §5 (short-term ≤12m, low-value < $5k)." },
 ]
 
 const MCP_TOOLS = [
@@ -88,6 +109,7 @@ const MCP_TOOLS = [
 const colorMap: Record<string, { bg: string; border: string; text: string; iconBg: string }> = {
   indigo:  { bg: "bg-indigo-50",  border: "border-indigo-200",  text: "text-indigo-900",  iconBg: "bg-indigo-600 text-white" },
   amber:   { bg: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-900",   iconBg: "bg-amber-600 text-white" },
+  purple:  { bg: "bg-purple-50",  border: "border-purple-200",  text: "text-purple-900",  iconBg: "bg-purple-700 text-white" },
   emerald: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-900", iconBg: "bg-emerald-600 text-white" },
   slate:   { bg: "bg-slate-50",   border: "border-slate-200",   text: "text-slate-900",   iconBg: "bg-slate-700 text-white" },
   blue:    { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-900",    iconBg: "bg-blue-600 text-white" },
@@ -201,6 +223,55 @@ export default function LexoraToolingPage() {
                   <div>
                     <div className="text-[10px] uppercase font-semibold text-slate-500 mb-1">Sécurité serveur</div>
                     <p className="text-[11px] text-slate-700">{tool.safety}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* GBC MODULES SECTION */}
+      <section>
+        <h2 className="text-lg font-semibold text-slate-900 mb-3 flex items-center gap-2">
+          <Globe className="h-5 w-5 text-purple-700" />
+          Modules GBC & Full IFRS <Badge variant="outline" className="ml-2">{GBC_MODULES.length} phases livrées</Badge>
+        </h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Couverture étendue pour les Global Business Companies (GBC1, Authorised Companies, holdings).
+          Chaque phase = 1 migration SQL + 1 librairie TypeScript + 1 route API + 1 page UI.
+          Tests Vitest couvrent les helpers métier (PER, substance, TP, UBO, consolidation, CRS, Pillar Two, IFRS 16).
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {GBC_MODULES.map(m => {
+            const c = colorMap[m.color] || colorMap.indigo
+            return (
+              <div key={m.code} className={`rounded-xl border ${c.border} ${c.bg} p-4`}>
+                <div className="flex items-start gap-3 mb-2">
+                  <div className={`rounded-lg ${c.iconBg} p-2 shadow-sm`}>
+                    <m.Icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[10px]">{m.code}</Badge>
+                      <span className={`text-sm font-semibold ${c.text}`}>{m.title}</span>
+                    </div>
+                    <p className={`text-xs ${c.text} mt-1 opacity-80`}>{m.topic}</p>
+                  </div>
+                </div>
+                <div className="space-y-1 mt-3 text-[11px]">
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-500 font-medium uppercase tracking-wide text-[9px]">Migration :</span>
+                    <code className="bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono">{m.mig}</code>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-500 font-medium uppercase tracking-wide text-[9px]">Page :</span>
+                    <a href={m.page} className="text-indigo-700 hover:underline font-mono">{m.page}</a>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-500 font-medium uppercase tracking-wide text-[9px]">API :</span>
+                    <code className="bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono text-[10px]">{m.route}</code>
                   </div>
                 </div>
               </div>
