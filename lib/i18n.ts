@@ -1,6 +1,13 @@
+import { gbcChunk } from './i18n/gbc'
+import { mraChunk } from './i18n/mra'
+import { coreChunk } from './i18n/core'
+import { hrChunk } from './i18n/hr'
+import { invoicingChunk } from './i18n/invoicing'
+import { accountingChunk } from './i18n/accounting'
+
 export type Locale = 'fr' | 'en'
 
-const translations = {
+const baseTranslations = {
   fr: {
     // Navigation
     'nav.dashboard': 'Tableau de bord',
@@ -597,8 +604,29 @@ const translations = {
   },
 } as const
 
+const translations: Record<Locale, Record<string, string>> = {
+  fr: {
+    ...baseTranslations.fr,
+    ...gbcChunk.fr,
+    ...mraChunk.fr,
+    ...coreChunk.fr,
+    ...hrChunk.fr,
+    ...invoicingChunk.fr,
+    ...accountingChunk.fr,
+  },
+  en: {
+    ...baseTranslations.en,
+    ...gbcChunk.en,
+    ...mraChunk.en,
+    ...coreChunk.en,
+    ...hrChunk.en,
+    ...invoicingChunk.en,
+    ...accountingChunk.en,
+  },
+}
+
 export function t(key: string, locale: Locale = 'fr'): string {
-  return (translations[locale] as Record<string, string>)[key] || key
+  return translations[locale][key] || key
 }
 
 export function getLocale(): Locale {
