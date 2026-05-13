@@ -374,7 +374,7 @@ export default function FicheClientPage() {
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 border border-red-200">
                   <AlertTriangle className="h-4 w-4 text-red-600" />
                   <span className="text-sm font-semibold text-red-700">
-                    {alertesByCriticite.critique.length} critique{alertesByCriticite.critique.length > 1 ? "s" : ""}
+                    {alertesByCriticite.critique.length} {alertesByCriticite.critique.length > 1 ? t('cabclt.client.critical_plural', locale) : t('cabclt.client.critical', locale)}
                   </span>
                 </div>
               )}
@@ -382,14 +382,14 @@ export default function FicheClientPage() {
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 border border-orange-200">
                   <AlertTriangle className="h-4 w-4 text-orange-600" />
                   <span className="text-sm font-semibold text-orange-700">
-                    {alertesByCriticite.important.length} important{alertesByCriticite.important.length > 1 ? "s" : ""}
+                    {alertesByCriticite.important.length} {alertesByCriticite.important.length > 1 ? t('cabclt.client.important_plural', locale) : t('cabclt.client.important', locale)}
                   </span>
                 </div>
               )}
               {alertes.length === 0 && (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50 border border-green-200">
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  <span className="text-sm font-semibold text-green-700">Aucune alerte</span>
+                  <span className="text-sm font-semibold text-green-700">{t('cabclt.client.no_alert', locale)}</span>
                 </div>
               )}
             </div>
@@ -403,24 +403,24 @@ export default function FicheClientPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
               <Eye className="h-4 w-4" />
-              Accès rapide — Vue client
+              {t('cabclt.client.quick_access_title', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Liens directs vers les modules principaux que{" "}
-              <span className="font-semibold">{client.full_name}</span> voit dans son espace client.
+              {t('cabclt.client.quick_access_desc_pre', locale)}{" "}
+              <span className="font-semibold">{client.full_name}</span> {t('cabclt.client.quick_access_desc_post', locale)}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {[
-                { href: `/comptable/clients/${clientId}/${societes[0].id}`, label: "Vue d'ensemble", icon: BarChart3 },
-                { href: `/comptable/clients/${clientId}/${societes[0].id}/grand-livre`, label: "Grand Livre", icon: BookOpen },
-                { href: `/comptable/clients/${clientId}/${societes[0].id}/balance`, label: "Balance", icon: Scale },
-                { href: `/comptable/clients/${clientId}/${societes[0].id}/bilan`, label: "Bilan & P&L", icon: TrendingUp },
-                { href: `/comptable/clients/${clientId}/${societes[0].id}/tva`, label: "TVA MRA", icon: Receipt },
-                { href: `/comptable/clients/${clientId}/${societes[0].id}/salaires`, label: "Salaires / RH", icon: Wallet },
-                { href: `/comptable/clients/${clientId}/${societes[0].id}/it-form3`, label: "IT Form 3", icon: Calculator },
-                { href: `/comptable/clients/${clientId}/${societes[0].id}/documents`, label: "Documents", icon: FolderOpen },
+                { href: `/comptable/clients/${clientId}/${societes[0].id}`, label: t('cabclt.client.overview', locale), icon: BarChart3 },
+                { href: `/comptable/clients/${clientId}/${societes[0].id}/grand-livre`, label: t('cabclt.client.mod_ledger', locale), icon: BookOpen },
+                { href: `/comptable/clients/${clientId}/${societes[0].id}/balance`, label: t('cabclt.client.mod_balance', locale), icon: Scale },
+                { href: `/comptable/clients/${clientId}/${societes[0].id}/bilan`, label: t('cabclt.client.mod_bilan', locale), icon: TrendingUp },
+                { href: `/comptable/clients/${clientId}/${societes[0].id}/tva`, label: t('cabclt.client.mod_vat_mra', locale), icon: Receipt },
+                { href: `/comptable/clients/${clientId}/${societes[0].id}/salaires`, label: t('cabclt.client.mod_salaries_hr', locale), icon: Wallet },
+                { href: `/comptable/clients/${clientId}/${societes[0].id}/it-form3`, label: t('cabclt.client.mod_itform3', locale), icon: Calculator },
+                { href: `/comptable/clients/${clientId}/${societes[0].id}/documents`, label: t('cabclt.client.mod_documents', locale), icon: FolderOpen },
               ].map(({ href, label, icon: Icon }) => (
                 <Link key={href} href={href}>
                   <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
@@ -435,7 +435,7 @@ export default function FicheClientPage() {
             </div>
             {societes.length > 1 && (
               <p className="text-xs text-muted-foreground italic">
-                Affichage pour la 1re société ({societes[0].nom}). Cliquez sur une société ci-dessous pour accéder aux modules spécifiques.
+                {t('cabclt.client.first_company_note_pre', locale)} ({societes[0].nom}). {t('cabclt.client.first_company_note_post', locale)}
               </p>
             )}
           </CardContent>
@@ -446,7 +446,7 @@ export default function FicheClientPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold" style={{ color: NAVY }}>
-            Sociétés ({societes.length})
+            {t('cabclt.client.companies_title', locale)} ({societes.length})
           </h2>
         </div>
 
@@ -454,15 +454,15 @@ export default function FicheClientPage() {
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
               <Building2 className="h-10 w-10 text-muted-foreground/40" />
-              <p className="font-medium">Aucune société enregistrée</p>
-              <p className="text-sm">Ce client n&apos;a aucune société liée.</p>
+              <p className="font-medium">{t('cabclt.client.no_companies', locale)}</p>
+              <p className="text-sm">{t('cabclt.client.no_linked_companies', locale)}</p>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-6">
             {societes.map((soc) => {
               const fin = financials[soc.id]
-              const modules = MODULE_LINKS(clientId, soc.id)
+              const modules = MODULE_LINKS(clientId, soc.id, locale)
               return (
                 <Card
                   key={soc.id}
@@ -483,7 +483,7 @@ export default function FicheClientPage() {
                           </h3>
                           <div className="flex flex-wrap items-center gap-2 mt-1">
                             {soc.brn && (
-                              <span className="text-xs text-muted-foreground">BRN : {soc.brn}</span>
+                              <span className="text-xs text-muted-foreground">{t('cabclt.client.brn_label', locale)} {soc.brn}</span>
                             )}
                             <Badge
                               variant="outline"
@@ -493,7 +493,7 @@ export default function FicheClientPage() {
                                   : "text-xs bg-gray-50 text-gray-500 border-gray-200"
                               }
                             >
-                              TVA : {soc.statut_tva ? "Assujetti" : "Non assujetti"}
+                              {t('cabclt.client.vat_label', locale)} {soc.statut_tva ? t('cabclt.client.vat_subject', locale) : t('cabclt.client.vat_not_subject', locale)}
                             </Badge>
                           </div>
                         </div>
@@ -508,7 +508,7 @@ export default function FicheClientPage() {
                           router.push(`/comptable/clients/${clientId}/${soc.id}`)
                         }}
                       >
-                        Ouvrir la fiche
+                        {t('cabclt.client.open_file', locale)}
                         <ChevronRight className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -523,25 +523,25 @@ export default function FicheClientPage() {
                         ))
                       ) : fin?.error ? (
                         <div className="col-span-4 text-xs text-muted-foreground italic py-2">
-                          Données financières non disponibles
+                          {t('cabclt.client.no_financial_data', locale)}
                         </div>
                       ) : fin ? (
                         <>
                           <div className="rounded-lg border p-3 space-y-0.5">
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <TrendingUp className="h-3 w-3" /> Chiffre d&apos;affaires
+                              <TrendingUp className="h-3 w-3" /> {t('cabclt.client.revenue', locale)}
                             </p>
                             <p className="text-sm font-bold text-green-700">{fmt(fin.ca)}</p>
                           </div>
                           <div className="rounded-lg border p-3 space-y-0.5">
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <TrendingDown className="h-3 w-3" /> Charges
+                              <TrendingDown className="h-3 w-3" /> {t('cabclt.client.charges', locale)}
                             </p>
                             <p className="text-sm font-bold text-red-600">{fmt(fin.charges)}</p>
                           </div>
                           <div className="rounded-lg border p-3 space-y-0.5">
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <BarChart3 className="h-3 w-3" /> Résultat
+                              <BarChart3 className="h-3 w-3" /> {t('cabclt.client.profit', locale)}
                             </p>
                             <p
                               className="text-sm font-bold"
@@ -552,7 +552,7 @@ export default function FicheClientPage() {
                           </div>
                           <div className="rounded-lg border p-3 space-y-0.5">
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Landmark className="h-3 w-3" /> Trésorerie
+                              <Landmark className="h-3 w-3" /> {t('cabclt.client.treasury', locale)}
                             </p>
                             <p className="text-sm font-bold" style={{ color: NAVY }}>
                               {fmt(fin.tresorerie)}
@@ -565,7 +565,7 @@ export default function FicheClientPage() {
                     {/* Quick-access module links */}
                     <div>
                       <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
-                        Accès rapide aux modules
+                        {t('cabclt.client.quick_access_modules', locale)}
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {modules.map(({ href, label, icon: Icon }) => (
@@ -589,17 +589,17 @@ export default function FicheClientPage() {
                       <div className="flex gap-4 text-xs text-muted-foreground border-t pt-3">
                         <span className="flex items-center gap-1">
                           <FileText className="h-3.5 w-3.5" />
-                          <strong>{fin.totalDocuments}</strong> document{fin.totalDocuments !== 1 ? "s" : ""}
+                          <strong>{fin.totalDocuments}</strong> {fin.totalDocuments !== 1 ? t('cabclt.client.documents_plural', locale) : t('cabclt.client.documents_singular', locale)}
                         </span>
                         <span className="flex items-center gap-1">
                           <BookOpen className="h-3.5 w-3.5" />
-                          <strong>{fin.totalEcritures}</strong> écriture{fin.totalEcritures !== 1 ? "s" : ""}
+                          <strong>{fin.totalEcritures}</strong> {fin.totalEcritures !== 1 ? t('cabclt.client.entries_plural', locale) : t('cabclt.client.entries_singular', locale)}
                         </span>
                         {soc.derniere_activite && (
                           <span className="flex items-center gap-1 ml-auto">
                             <Clock className="h-3.5 w-3.5" />
-                            Dossier créé le{" "}
-                            {new Date(soc.derniere_activite).toLocaleDateString("fr-FR", {
+                            {t('cabclt.client.file_created_on', locale)}{" "}
+                            {new Date(soc.derniere_activite).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB', {
                               day: "2-digit",
                               month: "short",
                               year: "numeric",
@@ -619,13 +619,13 @@ export default function FicheClientPage() {
       {/* Alertes */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold" style={{ color: NAVY }}>
-          Alertes actives ({alertes.length})
+          {t('cabclt.client.active_alerts', locale)} ({alertes.length})
         </h2>
         {alertes.length === 0 ? (
           <Card className="border-green-200 bg-green-50">
             <CardContent className="flex items-center gap-3 pt-6">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <span className="text-green-700 font-medium">Aucune alerte active pour ce client</span>
+              <span className="text-green-700 font-medium">{t('cabclt.client.no_active_alerts', locale)}</span>
             </CardContent>
           </Card>
         ) : (
@@ -675,7 +675,7 @@ export default function FicheClientPage() {
         <Link href="/comptable/clients">
           <Button variant="outline" className="gap-2" style={{ borderColor: NAVY, color: NAVY }}>
             <ArrowLeft className="h-4 w-4" />
-            Retour au portefeuille
+            {t('cabclt.client.back_portfolio', locale)}
           </Button>
         </Link>
       </div>

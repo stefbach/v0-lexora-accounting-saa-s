@@ -16,6 +16,7 @@ import {
   FileText as FileIcon, CheckCircle, AlertTriangle as AlertIcon, Pencil,
   Building2, Eye, Mail, Phone, BookOpen, Scale, Receipt,
 } from "lucide-react"
+import { t, getLocale } from '@/lib/i18n'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -158,6 +159,7 @@ function EmptyTab({ icon: Icon, message, detail }: { icon: React.ComponentType<{
 
 export default function SocieteContextPage() {
   const params = useParams()
+  const locale = getLocale()
   const clientId = params.clientId as string
   const societeId = params.societeId as string
 
@@ -199,8 +201,8 @@ export default function SocieteContextPage() {
           : null
         const resolvedSociete = societe || societeFromDossier
 
-        if (!user) throw new Error("Client introuvable")
-        if (!resolvedSociete) throw new Error("Société introuvable")
+        if (!user) throw new Error(t('cabclt.soc.client_not_found', locale))
+        if (!resolvedSociete) throw new Error(t('cabclt.soc.company_not_found', locale))
 
         setSocieteInfo({ brn: resolvedSociete.brn, statut_tva: resolvedSociete.statut_tva })
         setClientInfo({ email: user.email, phone: user.phone })

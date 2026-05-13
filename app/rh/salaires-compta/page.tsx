@@ -4,11 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Users } from "lucide-react"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) }
 
 export default function SalairesComptaPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
   const [loading, setLoading] = useState(true)
@@ -76,11 +78,11 @@ export default function SalairesComptaPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Salaires — Plan comptable</h1>
-          <p className="text-sm text-gray-500">Écritures comptables des salaires et charges patronales (Journal SAL)</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.b.salcompta.title', locale)}</h1>
+          <p className="text-sm text-gray-500">{t('rha.b.salcompta.subtitle', locale)}</p>
         </div>
         <Select value={societe} onValueChange={setSociete}>
-          <SelectTrigger className="w-[220px]"><SelectValue placeholder="Société" /></SelectTrigger>
+          <SelectTrigger className="w-[220px]"><SelectValue placeholder={t('rha.b.salcompta.societe_ph', locale)} /></SelectTrigger>
           <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
         </Select>
       </div>
