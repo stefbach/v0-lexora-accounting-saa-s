@@ -376,7 +376,7 @@ export default function ITForm3Page() {
                 <TableRow className="bg-green-50 border-t">
                   <TableCell className="font-semibold text-green-700 flex items-center gap-1">
                     CSR — 2% Corporate Social Responsibility
-                    <Badge className="bg-green-100 text-green-800 text-[10px]">Profit &gt; 10M MUR</Badge>
+                    <Badge className="bg-green-100 text-green-800 text-[10px]">{t('cabclt.itf.profit_above_10m', locale)}</Badge>
                   </TableCell>
                   <TableCell className="text-right font-mono font-bold text-green-700">{fmt(form.csr_2pct)} MUR</TableCell>
                 </TableRow>
@@ -384,7 +384,7 @@ export default function ITForm3Page() {
 
               {/* Solde dû */}
               <TableRow className="bg-yellow-50 border-t-2 border-t-yellow-300">
-                <TableCell className="font-bold text-xl text-red-700">SOLDE DÛ À LA MRA</TableCell>
+                <TableCell className="font-bold text-xl text-red-700">{t('cabclt.itf.balance_due_mra', locale)}</TableCell>
                 <TableCell className="text-right font-mono font-bold text-2xl text-red-700">{fmt(form.impot_solde)} MUR</TableCell>
               </TableRow>
             </TableBody>
@@ -395,10 +395,10 @@ export default function ITForm3Page() {
       {/* Actions */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          <h3 className="font-semibold text-sm" style={{ color: NAVY }}>Soumission MRA</h3>
+          <h3 className="font-semibold text-sm" style={{ color: NAVY }}>{t('cabclt.itf.mra_submission', locale)}</h3>
           <div className="flex flex-wrap gap-3 items-end">
             <div>
-              <Label className="text-xs">Référence MRA</Label>
+              <Label className="text-xs">{t('cabclt.itf.mra_reference', locale)}</Label>
               <Input
                 value={refMRA}
                 onChange={e => setRefMRA(e.target.value)}
@@ -407,7 +407,7 @@ export default function ITForm3Page() {
               />
             </div>
             <div>
-              <Label className="text-xs">Date soumission</Label>
+              <Label className="text-xs">{t('cabclt.itf.submission_date', locale)}</Label>
               <Input
                 type="date"
                 value={form.date_soumission || ""}
@@ -418,7 +418,7 @@ export default function ITForm3Page() {
             <div className="flex gap-2">
               <Button onClick={handleSave} variant="outline" size="sm" className="gap-1" disabled={saving}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Sauvegarder
+                {t('cabclt.itf.save', locale)}
               </Button>
               <Button
                 onClick={handleSoumettre}
@@ -428,14 +428,14 @@ export default function ITForm3Page() {
                 disabled={saving || form.statut === "soumis"}
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                Marquer soumis
+                {t('cabclt.itf.mark_submitted', locale)}
               </Button>
             </div>
           </div>
           {form.statut === "soumis" && form.date_soumission && (
             <p className="text-sm text-green-600">
-              ✓ Déclaration soumise le {new Date(form.date_soumission).toLocaleDateString("fr-FR")}
-              {form.reference_mra && ` — Réf: ${form.reference_mra}`}
+              ✓ {t('cabclt.itf.submitted_on', locale)} {new Date(form.date_soumission).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB')}
+              {form.reference_mra && ` — ${t('cabclt.itf.ref_short', locale)} ${form.reference_mra}`}
             </p>
           )}
         </CardContent>
