@@ -7,18 +7,19 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, User, Shield, Bell, Key, CheckCircle, LogOut } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
-const ROLE_LABELS: Record<string, { label: string; color: string; desc: string }> = {
-  admin:           { label: "Administrateur", color: "bg-red-100 text-red-700", desc: "Accès complet à la plateforme" },
-  direction:       { label: "Direction", color: "bg-purple-100 text-purple-700", desc: "Vue consolidée groupe" },
-  comptable:       { label: "Comptable", color: "bg-blue-100 text-blue-700", desc: "Gestion multi-clients" },
-  comptable_dedie: { label: "Comptable dédié", color: "bg-indigo-100 text-indigo-700", desc: "Comptable interne" },
-  rh_manager:      { label: "RH Manager", color: "bg-green-100 text-green-700", desc: "RH & Paie" },
-  juridique:       { label: "Juriste", color: "bg-amber-100 text-amber-700", desc: "Module juridique" },
-  client_admin:    { label: "Dirigeant client", color: "bg-orange-100 text-orange-700", desc: "Accès complet à sa société" },
-  client_user:     { label: "Collaborateur", color: "bg-gray-100 text-gray-700", desc: "Upload & consultation" },
-  salarie:         { label: "Employé", color: "bg-teal-100 text-teal-700", desc: "Portail salarié uniquement" },
-}
+const roleLabels = (locale: Locale): Record<string, { label: string; color: string; desc: string }> => ({
+  admin:           { label: t('pub.profil.role_admin', locale), color: "bg-red-100 text-red-700", desc: t('pub.profil.role_admin_desc', locale) },
+  direction:       { label: t('pub.profil.role_direction', locale), color: "bg-purple-100 text-purple-700", desc: t('pub.profil.role_direction_desc', locale) },
+  comptable:       { label: t('pub.profil.role_accountant', locale), color: "bg-blue-100 text-blue-700", desc: t('pub.profil.role_accountant_desc', locale) },
+  comptable_dedie: { label: t('pub.profil.role_dedicated', locale), color: "bg-indigo-100 text-indigo-700", desc: t('pub.profil.role_dedicated_desc', locale) },
+  rh_manager:      { label: t('pub.profil.role_hr', locale), color: "bg-green-100 text-green-700", desc: t('pub.profil.role_hr_desc', locale) },
+  juridique:       { label: t('pub.profil.role_legal', locale), color: "bg-amber-100 text-amber-700", desc: t('pub.profil.role_legal_desc', locale) },
+  client_admin:    { label: t('pub.profil.role_client_admin', locale), color: "bg-orange-100 text-orange-700", desc: t('pub.profil.role_client_admin_desc', locale) },
+  client_user:     { label: t('pub.profil.role_client_user', locale), color: "bg-gray-100 text-gray-700", desc: t('pub.profil.role_client_user_desc', locale) },
+  salarie:         { label: t('pub.profil.role_employee', locale), color: "bg-teal-100 text-teal-700", desc: t('pub.profil.role_employee_desc', locale) },
+})
 
 const ROLE_DASHBOARD: Record<string, string> = {
   admin: '/admin', direction: '/direction', comptable: '/comptable',
@@ -27,6 +28,8 @@ const ROLE_DASHBOARD: Record<string, string> = {
 }
 
 export default function ProfilPage() {
+  const locale = getLocale()
+  const ROLE_LABELS = roleLabels(locale)
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -69,20 +72,20 @@ export default function ProfilPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#0B0F2E]">Mon profil</h1>
-            <p className="text-sm text-gray-500">Gérez vos informations personnelles et préférences</p>
+            <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('pub.profil.title', locale)}</h1>
+            <p className="text-sm text-gray-500">{t('pub.profil.subtitle', locale)}</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => window.location.href = dashUrl}>← Mon espace</Button>
+            <Button variant="outline" size="sm" onClick={() => window.location.href = dashUrl}>{t('pub.profil.my_space', locale)}</Button>
             <Button variant="outline" size="sm" onClick={logout} className="text-red-600 hover:text-red-700">
-              <LogOut className="w-4 h-4 mr-1"/>Déconnexion
+              <LogOut className="w-4 h-4 mr-1"/>{t('pub.profil.logout', locale)}
             </Button>
           </div>
         </div>
 
         {/* Identité & Rôle */}
         <Card>
-          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><User className="w-4 h-4"/>Identité</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><User className="w-4 h-4"/>{t('pub.profil.identity', locale)}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-full bg-[#0B0F2E] flex items-center justify-center text-white text-xl font-bold">
@@ -97,55 +100,55 @@ export default function ProfilPage() {
               </div>
             </div>
             <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-700">
-              <strong>Vos accès :</strong> {roleInfo.desc}
+              <strong>{t('pub.profil.access', locale)}</strong> {roleInfo.desc}
             </div>
           </CardContent>
         </Card>
 
         {/* Modifier informations */}
         <Card>
-          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Key className="w-4 h-4"/>Informations personnelles</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Key className="w-4 h-4"/>{t('pub.profil.personal_info', locale)}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Nom complet</Label>
-                <Input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} placeholder="Votre nom"/>
+                <Label>{t('pub.profil.full_name', locale)}</Label>
+                <Input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} placeholder={t('pub.profil.full_name_ph', locale)}/>
               </div>
               <div>
-                <Label>Téléphone</Label>
-                <Input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="+230 xxx xxxx"/>
+                <Label>{t('pub.profil.phone', locale)}</Label>
+                <Input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder={t('pub.profil.phone_ph', locale)}/>
               </div>
             </div>
             <div>
-              <Label>Email (non modifiable)</Label>
+              <Label>{t('pub.profil.email_readonly', locale)}</Label>
               <Input value={profile?.email || ''} disabled className="bg-gray-50 text-gray-500"/>
             </div>
             <Button onClick={save} disabled={saving || saved} className="bg-[#0B0F2E] text-white">
               {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : saved ? <CheckCircle className="w-4 h-4 mr-2 text-green-400"/> : null}
-              {saved ? "Enregistré !" : "Enregistrer"}
+              {saved ? t('pub.profil.saved', locale) : t('pub.profil.save', locale)}
             </Button>
           </CardContent>
         </Card>
 
         {/* Informations du compte */}
         <Card>
-          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Shield className="w-4 h-4"/>Compte & Sécurité</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Shield className="w-4 h-4"/>{t('pub.profil.account_security', locale)}</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex justify-between py-2 border-b">
-              <span className="text-gray-500">Rôle</span>
+              <span className="text-gray-500">{t('pub.profil.role', locale)}</span>
               <Badge className={`text-xs ${roleInfo.color}`}>{roleInfo.label}</Badge>
             </div>
             <div className="flex justify-between py-2 border-b">
-              <span className="text-gray-500">Membre depuis</span>
-              <span className="font-medium">{profile?.created_at ? new Date(profile.created_at).toLocaleDateString('fr-FR') : '—'}</span>
+              <span className="text-gray-500">{t('pub.profil.member_since', locale)}</span>
+              <span className="font-medium">{profile?.created_at ? new Date(profile.created_at).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR') : '—'}</span>
             </div>
             <div className="flex justify-between py-2 border-b">
-              <span className="text-gray-500">ID utilisateur</span>
+              <span className="text-gray-500">{t('pub.profil.user_id', locale)}</span>
               <span className="font-mono text-xs text-gray-400">{profile?.id?.slice(0,8)}…</span>
             </div>
             {profile?.module_acces?.length > 0 && (
               <div className="flex justify-between py-2">
-                <span className="text-gray-500">Modules autorisés</span>
+                <span className="text-gray-500">{t('pub.profil.allowed_modules', locale)}</span>
                 <span className="text-sm">{profile.module_acces.join(', ')}</span>
               </div>
             )}
@@ -154,15 +157,15 @@ export default function ProfilPage() {
 
         {/* Mot de passe */}
         <Card>
-          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Bell className="w-4 h-4"/>Modifier le mot de passe</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Bell className="w-4 h-4"/>{t('pub.profil.change_password', locale)}</CardTitle></CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-500 mb-3">Un email de réinitialisation sera envoyé à votre adresse.</p>
+            <p className="text-sm text-gray-500 mb-3">{t('pub.profil.reset_hint', locale)}</p>
             <Button variant="outline" onClick={async () => {
               const supabase = createClient()
               await supabase.auth.resetPasswordForEmail(profile?.email || '')
-              alert('Email de réinitialisation envoyé à ' + profile?.email)
+              alert(t('pub.profil.reset_sent', locale) + ' ' + profile?.email)
             }}>
-              Envoyer le lien de réinitialisation
+              {t('pub.profil.send_reset', locale)}
             </Button>
           </CardContent>
         </Card>

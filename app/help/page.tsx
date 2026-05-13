@@ -27,6 +27,7 @@ const ICONS: Record<string, LucideIcon> = {
   Lock,
 }
 
+// TODO i18n: server component — strings are static FR. Translation keys exist in publicChunk (pub.help.*) for future client-side migration.
 export const metadata = {
   title: "Centre d'aide — Lexora",
   description: "Articles, guides et tutoriels pour utiliser Lexora au quotidien.",

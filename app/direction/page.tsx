@@ -82,8 +82,8 @@ export default function DirectionPage() {
       {/* Header Direction */}
       <div className="bg-[#0B0F2E] text-white px-6 py-4 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2"><Building2 className="w-5 h-5 text-[#D4AF37]"/>Direction — Vue Groupe</h1>
-          <p className="text-white/60 text-sm">Consolidation multi-sociétés LEXORA Group</p>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Building2 className="w-5 h-5 text-[#D4AF37]"/>{t('adm.dir.title', locale)}</h1>
+          <p className="text-white/60 text-sm">{t('adm.dir.subtitle', locale)}</p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={exercice} onValueChange={setExercice}>
@@ -94,7 +94,7 @@ export default function DirectionPage() {
             </SelectContent>
           </Select>
           <Button onClick={() => setCerveauOpen(true)} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#b8973a]">
-            <Brain className="w-4 h-4 mr-2"/>Assistant LEXORA
+            <Brain className="w-4 h-4 mr-2"/>{t('adm.dir.assistant', locale)}
           </Button>
         </div>
       </div>
@@ -103,10 +103,10 @@ export default function DirectionPage() {
         {/* KPIs Consolidés */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Sociétés actives", value: societes.length, icon: Building2, color: "text-blue-600" },
-            { label: "Effectif total", value: consolidation.total?.nb_employes || 0, icon: Users, color: "text-green-600" },
-            { label: "Coût employeur total", value: fmt(consolidation.total?.masse_salariale || 0), icon: TrendingUp, color: "text-purple-600" },
-            { label: "Créances en retard", value: consolidation.total?.nb_retard || 0, icon: AlertTriangle, color: "text-red-600" },
+            { label: t('adm.dir.active_companies', locale), value: societes.length, icon: Building2, color: "text-blue-600" },
+            { label: t('adm.dir.total_headcount', locale), value: consolidation.total?.nb_employes || 0, icon: Users, color: "text-green-600" },
+            { label: t('adm.dir.total_employer_cost', locale), value: fmt(consolidation.total?.masse_salariale || 0), icon: TrendingUp, color: "text-purple-600" },
+            { label: t('adm.dir.overdue_receivables', locale), value: consolidation.total?.nb_retard || 0, icon: AlertTriangle, color: "text-red-600" },
           ].map(k => (
             <Card key={k.label}><CardContent className="p-4 flex items-center gap-3">
               <k.icon className={`w-8 h-8 ${k.color}`}/>
@@ -125,15 +125,15 @@ export default function DirectionPage() {
                     <div className="w-10 h-10 bg-[#0B0F2E] rounded-lg flex items-center justify-center text-[#D4AF37] font-bold text-sm">{s.code?.slice(0,3) || "?"}</div>
                     <div>
                       <p className="font-semibold text-[#0B0F2E]">{s.nom}</p>
-                      <p className="text-xs text-gray-500">{s.nb_employes} employé(s)</p>
+                      <p className="text-xs text-gray-500">{s.nb_employes} {t('adm.dir.employees_suffix', locale)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-6 text-sm">
-                    <div className="text-center"><p className="text-xs text-gray-500">CA (MUR)</p><p className="font-semibold">{fmt(s.ca_mur)}</p></div>
-                    <div className="text-center"><p className="text-xs text-gray-500">Coût employeur</p><p className="font-semibold text-purple-600">{fmt(s.masse_salariale)}</p></div>
-                    {s.nb_retard > 0 && <div className="text-center"><p className="text-xs text-gray-500">Retards</p><p className="font-semibold text-red-600">{s.nb_retard}</p></div>}
+                    <div className="text-center"><p className="text-xs text-gray-500">{t('adm.dir.revenue', locale)}</p><p className="font-semibold">{fmt(s.ca_mur)}</p></div>
+                    <div className="text-center"><p className="text-xs text-gray-500">{t('adm.dir.employer_cost', locale)}</p><p className="font-semibold text-purple-600">{fmt(s.masse_salariale)}</p></div>
+                    {s.nb_retard > 0 && <div className="text-center"><p className="text-xs text-gray-500">{t('adm.dir.overdue', locale)}</p><p className="font-semibold text-red-600">{s.nb_retard}</p></div>}
                     <Button size="sm" variant="outline" onClick={() => exportMgmtAccounts(s.id)} className="gap-1">
-                      <Download className="w-3 h-3"/>Mgmt Accounts
+                      <Download className="w-3 h-3"/>{t('adm.dir.mgmt_accounts', locale)}
                     </Button>
                   </div>
                 </div>
@@ -145,10 +145,10 @@ export default function DirectionPage() {
         {/* Raccourcis */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            {href:"/comptable", label:"Comptabilité", icon:"📊"},
-            {href:"/rh", label:"RH & Paie", icon:"👥"},
-            {href:"/rh/juridique", label:"Juridique", icon:"⚖️"},
-            {href:"/rh/chat", label:"Chat CLARA", icon:"🤖"},
+            {href:"/comptable", label:t('adm.dir.shortcut_accounting', locale), icon:"📊"},
+            {href:"/rh", label:t('adm.dir.shortcut_hr', locale), icon:"👥"},
+            {href:"/rh/juridique", label:t('adm.dir.shortcut_legal', locale), icon:"⚖️"},
+            {href:"/rh/chat", label:t('adm.dir.shortcut_clara', locale), icon:"🤖"},
           ].map(a => (
             <a key={a.href} href={a.href}>
               <Card className="hover:shadow-md cursor-pointer transition-shadow">
@@ -164,7 +164,7 @@ export default function DirectionPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="font-bold text-[#0B0F2E] flex items-center gap-2"><Brain className="w-4 h-4 text-[#D4AF37]"/>Assistant LEXORA</h2>
+              <h2 className="font-bold text-[#0B0F2E] flex items-center gap-2"><Brain className="w-4 h-4 text-[#D4AF37]"/>{t('adm.dir.assistant', locale)}</h2>
               <Button variant="ghost" size="sm" onClick={() => setCerveauOpen(false)}>✕</Button>
             </div>
             <CerveauTIBOK mode="panel" />
