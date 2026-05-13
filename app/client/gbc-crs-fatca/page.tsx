@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2, RefreshCw, AlertCircle, Download, FileText, Plus } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(Number(n))
 
@@ -22,6 +23,7 @@ const EMPTY_H = {
 }
 
 export default function GbcCrsFatcaPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -39,13 +41,13 @@ export default function GbcCrsFatcaPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
       setData(json)
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
+    } catch (e: any) { setError(e?.message || t('gbc.common.error', locale)) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId, year])
 
   const declareHolder = async () => {
     if (!societeId || !form.holder_name || !form.country_of_residence || !form.account_number) {
-      setError('Nom, pays et n° compte requis'); return
+      setError(t('gbc.crs.required_fields', locale)); return
     }
     setSaving(true); setError(null)
     try {
@@ -66,7 +68,7 @@ export default function GbcCrsFatcaPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
       setOpen(false); setForm(EMPTY_H); load()
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSaving(false) }
+    } catch (e: any) { setError(e?.message || t('gbc.common.error', locale)) } finally { setSaving(false) }
   }
 
   const generateXml = async () => {
@@ -79,8 +81,8 @@ export default function GbcCrsFatcaPage() {
     }
   }
 
-  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Aucune société sélectionnée.</div></div>
-  if (loading) return <div className="p-8 flex items-center gap-2"><Loader2 className="animate-spin h-5 w-5" /> Chargement…</div>
+  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t('gbc.common.no_societe', locale)}</div></div>
+  if (loading) return <div className="p-8 flex items-center gap-2"><Loader2 className="animate-spin h-5 w-5" /> {t('gbc.common.loading', locale)}</div>
 
   const s = data?.summary || {}
 
@@ -88,58 +90,58 @@ export default function GbcCrsFatcaPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><FileText className="h-6 w-6 text-indigo-600" /> CRS / FATCA</h1>
-          <p className="text-sm text-slate-500">OECD CRS + US-Mauritius IGA Model 1A — déclarations annuelles MRA</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><FileText className="h-6 w-6 text-indigo-600" /> {t('gbc.crs.title', locale)}</h1>
+          <p className="text-sm text-slate-500">{t('gbc.crs.subtitle', locale)}</p>
         </div>
         <div className="flex gap-2 items-center">
           <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value))} className="border rounded px-2 py-1 text-sm w-24" />
-          <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />Rafraîchir</Button>
-          <Button onClick={generateXml} variant="outline" className="border-indigo-300 text-indigo-700"><Download className="h-4 w-4 mr-2" />XML CRS</Button>
+          <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />{t('gbc.common.refresh', locale)}</Button>
+          <Button onClick={generateXml} variant="outline" className="border-indigo-300 text-indigo-700"><Download className="h-4 w-4 mr-2" />{t('gbc.crs.xml_btn', locale)}</Button>
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="h-4 w-4 mr-2" />Déclarer Holder</Button></DialogTrigger>
+            <DialogTrigger asChild><Button className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="h-4 w-4 mr-2" />{t('gbc.crs.declare_holder_btn', locale)}</Button></DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>Déclarer un Account Holder CRS/FATCA</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t('gbc.crs.dialog_title', locale)}</DialogTitle></DialogHeader>
               <div className="space-y-3 pt-2">
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Type holder</Label>
+                  <div><Label>{t('gbc.crs.holder_type', locale)}</Label>
                     <Select value={form.holder_type} onValueChange={v => setForm({ ...form, holder_type: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="individual">Personne physique</SelectItem>
-                        <SelectItem value="entity">Personne morale</SelectItem>
-                        <SelectItem value="controlling_person">Personne contrôlante</SelectItem>
+                        <SelectItem value="individual">{t('gbc.crs.holder_individual', locale)}</SelectItem>
+                        <SelectItem value="entity">{t('gbc.crs.holder_entity', locale)}</SelectItem>
+                        <SelectItem value="controlling_person">{t('gbc.crs.holder_controlling', locale)}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div><Label>Nom *</Label><Input value={form.holder_name} onChange={e => setForm({ ...form, holder_name: e.target.value })} /></div>
-                  <div><Label>Date naissance</Label><Input type="date" value={form.holder_dob} onChange={e => setForm({ ...form, holder_dob: e.target.value })} /></div>
-                  <div><Label>Pays résidence (ISO) *</Label><Input value={form.country_of_residence} onChange={e => setForm({ ...form, country_of_residence: e.target.value })} placeholder="FR, GB, ZA..." /></div>
-                  <div><Label>TIN (tax ID)</Label><Input value={form.tin} onChange={e => setForm({ ...form, tin: e.target.value })} /></div>
-                  <div><Label>Pays émetteur TIN</Label><Input value={form.tin_issuing_country} onChange={e => setForm({ ...form, tin_issuing_country: e.target.value })} /></div>
-                  <div className="col-span-2"><Label>N° compte *</Label><Input value={form.account_number} onChange={e => setForm({ ...form, account_number: e.target.value })} /></div>
-                  <div><Label>Balance EOY (USD)</Label><Input type="number" value={form.account_balance_eoy_usd} onChange={e => setForm({ ...form, account_balance_eoy_usd: Number(e.target.value) || 0 })} /></div>
-                  <div><Label>Devise</Label><Input value={form.account_currency} onChange={e => setForm({ ...form, account_currency: e.target.value })} /></div>
-                  <div><Label>Intérêts payés (USD)</Label><Input type="number" value={form.interest_paid_usd} onChange={e => setForm({ ...form, interest_paid_usd: Number(e.target.value) || 0 })} /></div>
-                  <div><Label>Dividendes payés (USD)</Label><Input type="number" value={form.dividends_paid_usd} onChange={e => setForm({ ...form, dividends_paid_usd: Number(e.target.value) || 0 })} /></div>
-                  <div><Label>Gross proceeds (USD)</Label><Input type="number" value={form.gross_proceeds_usd} onChange={e => setForm({ ...form, gross_proceeds_usd: Number(e.target.value) || 0 })} /></div>
-                  <div><Label>Autres revenus (USD)</Label><Input type="number" value={form.other_income_usd} onChange={e => setForm({ ...form, other_income_usd: Number(e.target.value) || 0 })} /></div>
-                  <div><Label>Reportable FATCA (US Person) ?</Label>
+                  <div><Label>{t('gbc.crs.holder_name', locale)}</Label><Input value={form.holder_name} onChange={e => setForm({ ...form, holder_name: e.target.value })} /></div>
+                  <div><Label>{t('gbc.crs.dob', locale)}</Label><Input type="date" value={form.holder_dob} onChange={e => setForm({ ...form, holder_dob: e.target.value })} /></div>
+                  <div><Label>{t('gbc.crs.country_residence', locale)}</Label><Input value={form.country_of_residence} onChange={e => setForm({ ...form, country_of_residence: e.target.value })} placeholder="FR, GB, ZA..." /></div>
+                  <div><Label>{t('gbc.crs.tin', locale)}</Label><Input value={form.tin} onChange={e => setForm({ ...form, tin: e.target.value })} /></div>
+                  <div><Label>{t('gbc.crs.tin_country', locale)}</Label><Input value={form.tin_issuing_country} onChange={e => setForm({ ...form, tin_issuing_country: e.target.value })} /></div>
+                  <div className="col-span-2"><Label>{t('gbc.crs.account_number', locale)}</Label><Input value={form.account_number} onChange={e => setForm({ ...form, account_number: e.target.value })} /></div>
+                  <div><Label>{t('gbc.crs.balance_eoy', locale)}</Label><Input type="number" value={form.account_balance_eoy_usd} onChange={e => setForm({ ...form, account_balance_eoy_usd: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>{t('gbc.crs.currency', locale)}</Label><Input value={form.account_currency} onChange={e => setForm({ ...form, account_currency: e.target.value })} /></div>
+                  <div><Label>{t('gbc.crs.interest_paid', locale)}</Label><Input type="number" value={form.interest_paid_usd} onChange={e => setForm({ ...form, interest_paid_usd: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>{t('gbc.crs.dividends_paid', locale)}</Label><Input type="number" value={form.dividends_paid_usd} onChange={e => setForm({ ...form, dividends_paid_usd: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>{t('gbc.crs.gross_proceeds', locale)}</Label><Input type="number" value={form.gross_proceeds_usd} onChange={e => setForm({ ...form, gross_proceeds_usd: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>{t('gbc.crs.other_income', locale)}</Label><Input type="number" value={form.other_income_usd} onChange={e => setForm({ ...form, other_income_usd: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>{t('gbc.crs.fatca_reportable', locale)}</Label>
                     <Select value={form.is_fatca_reportable ? 'oui' : 'non'} onValueChange={v => setForm({ ...form, is_fatca_reportable: v === 'oui' })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="non">Non</SelectItem><SelectItem value="oui">Oui</SelectItem></SelectContent>
+                      <SelectContent><SelectItem value="non">{t('gbc.common.no', locale)}</SelectItem><SelectItem value="oui">{t('gbc.common.yes', locale)}</SelectItem></SelectContent>
                     </Select>
                   </div>
-                  <div><Label>Reportable CRS ?</Label>
+                  <div><Label>{t('gbc.crs.crs_reportable', locale)}</Label>
                     <Select value={form.is_crs_reportable ? 'oui' : 'non'} onValueChange={v => setForm({ ...form, is_crs_reportable: v === 'oui' })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="oui">Oui</SelectItem><SelectItem value="non">Non</SelectItem></SelectContent>
+                      <SelectContent><SelectItem value="oui">{t('gbc.common.yes', locale)}</SelectItem><SelectItem value="non">{t('gbc.common.no', locale)}</SelectItem></SelectContent>
                     </Select>
                   </div>
                 </div>
-                <div><Label>Adresse</Label><Input value={form.holder_address} onChange={e => setForm({ ...form, holder_address: e.target.value })} /></div>
-                <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+                <div><Label>{t('gbc.crs.address', locale)}</Label><Input value={form.holder_address} onChange={e => setForm({ ...form, holder_address: e.target.value })} /></div>
+                <div><Label>{t('gbc.crs.notes', locale)}</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
                 {error && <div className="text-sm text-red-600">{error}</div>}
-                <Button onClick={declareHolder} disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">{saving ? 'Enregistrement…' : 'Déclarer holder'}</Button>
+                <Button onClick={declareHolder} disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">{saving ? t('gbc.common.saving', locale) : t('gbc.crs.declare_holder', locale)}</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -149,20 +151,20 @@ export default function GbcCrsFatcaPage() {
       {error && !open && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex gap-2"><AlertCircle className="h-4 w-4" />{error}</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Account holders</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{s.nb_holders || 0}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">CRS reportable</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{s.nb_crs_reportable || 0}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">FATCA reportable</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{s.nb_fatca_reportable || 0}</div><div className="text-xs text-slate-500">US Persons</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Balance totale USD</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{fmt(s.total_balance_usd)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.crs.kpi_holders', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{s.nb_holders || 0}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.crs.kpi_crs', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{s.nb_crs_reportable || 0}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.crs.kpi_fatca', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{s.nb_fatca_reportable || 0}</div><div className="text-xs text-slate-500">{t('gbc.crs.kpi_us_persons', locale)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.crs.kpi_balance', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{fmt(s.total_balance_usd)}</div></CardContent></Card>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Account holders</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t('gbc.crs.holders_title', locale)}</CardTitle></CardHeader>
         <CardContent>
           {(data?.holders?.length || 0) === 0 ? (
-            <div className="text-sm text-slate-500 p-4 text-center">Aucun holder déclaré pour {year}. Clique sur "Déclarer Holder".</div>
+            <div className="text-sm text-slate-500 p-4 text-center">{t('gbc.crs.no_holder_prefix', locale)} {year}. {t('gbc.crs.no_holder_suffix', locale)}</div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="border-b"><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 px-2">Holder</th><th className="py-2 px-2">Pays</th><th className="py-2 px-2">Type</th><th className="py-2 px-2 text-right">Balance USD</th><th className="py-2 px-2">CRS</th><th className="py-2 px-2">FATCA</th><th className="py-2 px-2">Statut</th></tr></thead>
+              <thead className="border-b"><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 px-2">{t('gbc.crs.col_holder', locale)}</th><th className="py-2 px-2">{t('gbc.crs.col_country', locale)}</th><th className="py-2 px-2">{t('gbc.crs.col_type', locale)}</th><th className="py-2 px-2 text-right">{t('gbc.crs.col_balance', locale)}</th><th className="py-2 px-2">{t('gbc.crs.col_crs', locale)}</th><th className="py-2 px-2">{t('gbc.crs.col_fatca', locale)}</th><th className="py-2 px-2">{t('gbc.crs.col_status', locale)}</th></tr></thead>
               <tbody>
                 {data.holders.map((h: any) => (
                   <tr key={h.id} className="border-b">

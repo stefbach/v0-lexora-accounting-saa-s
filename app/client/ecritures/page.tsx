@@ -31,6 +31,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface Ecriture {
   id: string
@@ -71,6 +72,7 @@ function formatDate(d: string | null): string {
 }
 
 export default function ClientEcrituresPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [ecritures, setEcritures] = useState<Ecriture[]>([])
   const [loading, setLoading] = useState(false)
@@ -148,20 +150,20 @@ export default function ClientEcrituresPage() {
                 <BookOpen className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-indigo-900">Écritures comptables</h1>
+                <h1 className="text-2xl font-bold text-indigo-900">{t('acc.ecr.title', locale)}</h1>
                 <p className="text-sm text-indigo-700/80 mt-0.5">
-                  Grand livre détaillé · les BNQ sont produites par Lex Banque
+                  {t('acc.ecr.subtitle', locale)}
                 </p>
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('common.refresh', locale)}
               </Button>
               <Link href="/client/grand-livre">
                 <Button variant="outline" size="sm">
-                  Grand livre
+                  {t('acc.ecr.general_ledger', locale)}
                   <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
               </Link>
@@ -178,7 +180,7 @@ export default function ClientEcrituresPage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('acc.ecr.no_company', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -188,9 +190,9 @@ export default function ClientEcrituresPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <KpiCard label="Écritures" value={filtered.length} />
-              <KpiCard label="Total débit" value={fmt(totalDebit)} tone="green" />
-              <KpiCard label="Total crédit" value={fmt(totalCredit)} tone="rose" />
+              <KpiCard label={t('acc.ecr.entries', locale)} value={filtered.length} />
+              <KpiCard label={t('acc.ecr.total_debit', locale)} value={fmt(totalDebit)} tone="green" />
+              <KpiCard label={t('acc.ecr.total_credit', locale)} value={fmt(totalCredit)} tone="rose" />
             </div>
 
             <Card>
@@ -198,7 +200,7 @@ export default function ClientEcrituresPage() {
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <CardTitle className="text-base flex items-center gap-2">
                     <BookOpen className="h-5 w-5 text-indigo-600" />
-                    Liste des écritures ({filtered.length})
+                    {t('acc.ecr.list_title', locale)} ({filtered.length})
                   </CardTitle>
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative">
@@ -206,7 +208,7 @@ export default function ClientEcrituresPage() {
                       <Input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Libellé, compte, ref…"
+                        placeholder={t('acc.ecr.search_placeholder', locale)}
                         className="pl-8 h-9 w-56"
                       />
                     </div>
@@ -215,7 +217,7 @@ export default function ClientEcrituresPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Tous journaux</SelectItem>
+                        <SelectItem value="all">{t('acc.ecr.all_journals', locale)}</SelectItem>
                         {journaux.map((j) => (
                           <SelectItem key={j} value={j}>
                             {JOURNAL_LABELS[j]?.label || j}
@@ -229,7 +231,7 @@ export default function ClientEcrituresPage() {
               <CardContent>
                 {filtered.length === 0 ? (
                   <p className="py-10 text-center text-sm text-muted-foreground">
-                    Aucune écriture pour ce filtre.
+                    {t('acc.ecr.no_entries', locale)}
                   </p>
                 ) : (
                   <div className="rounded border bg-card divide-y">
@@ -270,7 +272,7 @@ export default function ClientEcrituresPage() {
                             <p className="text-sm mt-1 break-words">{e.libelle || "—"}</p>
                             {e.devise_origine && e.devise_origine !== "MUR" && e.montant_origine && (
                               <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                                Origine : {fmt(e.montant_origine)} {e.devise_origine}
+                                {t('acc.ecr.origin', locale)} : {fmt(e.montant_origine)} {e.devise_origine}
                                 {e.taux_change_applique && ` × ${e.taux_change_applique}`}
                               </p>
                             )}

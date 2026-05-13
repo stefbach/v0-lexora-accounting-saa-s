@@ -16,6 +16,7 @@ import {
   Shield, Wifi, WifiOff, Info, Loader2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t as tr, getLocale, type Locale } from '@/lib/i18n'
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -67,6 +68,7 @@ const TEMPLATES: InvoiceTemplate[] = [
 function genId() { return crypto.randomUUID() }
 
 export default function FacturationSettingsPage() {
+  const locale = getLocale()
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS)
   const [clients, setClients] = useState<InvoiceClient[]>([])
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
@@ -220,13 +222,13 @@ export default function FacturationSettingsPage() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Paramètres Facturation" }]}
-      kicker="Facturation"
-      title="Paramètres de Facturation"
-      subtitle="Configuration MRA (ERN, IRN, TVA, devise par défaut) pour toutes vos factures émises."
+      breadcrumbs={[{ label: tr('inv.fs.client_area', locale), href: "/client" }, { label: tr('inv.fs.title', locale) }]}
+      kicker={tr('inv.invoicing', locale)}
+      title={tr('inv.fs.title', locale)}
+      subtitle={tr('inv.fs.subtitle', locale)}
       actions={
         <Button onClick={saveAll} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
-          {saved ? <><Check className="w-4 h-4 mr-2" />Sauvegardé !</> : <><Save className="w-4 h-4 mr-2" />Sauvegarder tout</>}
+          {saved ? <><Check className="w-4 h-4 mr-2" />{tr('inv.fs.saved', locale)}</> : <><Save className="w-4 h-4 mr-2" />{tr('inv.fs.save_all', locale)}</>}
         </Button>
       }
     >
@@ -236,10 +238,10 @@ export default function FacturationSettingsPage() {
 
       <Tabs defaultValue="entreprise" className="space-y-4">
         <TabsList className="grid grid-cols-5 w-full max-w-3xl">
-          <TabsTrigger value="entreprise" className="flex items-center gap-1.5"><Building2 className="w-4 h-4" />Mon Entreprise</TabsTrigger>
-          <TabsTrigger value="clients" className="flex items-center gap-1.5"><Users className="w-4 h-4" />Clients</TabsTrigger>
-          <TabsTrigger value="catalogue" className="flex items-center gap-1.5"><Package className="w-4 h-4" />Services/Produits</TabsTrigger>
-          <TabsTrigger value="modeles" className="flex items-center gap-1.5"><Layout className="w-4 h-4" />Modeles</TabsTrigger>
+          <TabsTrigger value="entreprise" className="flex items-center gap-1.5"><Building2 className="w-4 h-4" />{tr('inv.fs.tab_company', locale)}</TabsTrigger>
+          <TabsTrigger value="clients" className="flex items-center gap-1.5"><Users className="w-4 h-4" />{tr('inv.fs.tab_clients', locale)}</TabsTrigger>
+          <TabsTrigger value="catalogue" className="flex items-center gap-1.5"><Package className="w-4 h-4" />{tr('inv.fs.tab_catalogue', locale)}</TabsTrigger>
+          <TabsTrigger value="modeles" className="flex items-center gap-1.5"><Layout className="w-4 h-4" />{tr('inv.fs.tab_templates', locale)}</TabsTrigger>
           <TabsTrigger value="mra" className="flex items-center gap-1.5"><Shield className="w-4 h-4" />MRA e-Invoicing</TabsTrigger>
         </TabsList>
 
@@ -248,7 +250,7 @@ export default function FacturationSettingsPage() {
           <div className="grid grid-cols-2 gap-4">
             {/* Company identity */}
             <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Identite de l&apos;entreprise</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{tr('inv.fs.company_identity', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div><Label>Nom de l&apos;entreprise</Label><Input value={settings.nom} onChange={e => setSettings(s => ({ ...s, nom: e.target.value }))} placeholder="DDS Consulting Ltd" /></div>
                 <div className="grid grid-cols-2 gap-3">
@@ -276,7 +278,7 @@ export default function FacturationSettingsPage() {
             {/* Bank details & invoicing */}
             <div className="space-y-4">
               <Card>
-                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Coordonnees bancaires</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{tr('inv.nf.bank_details', locale)}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <div><Label>Nom de la banque</Label><Input value={settings.banque_nom} onChange={e => setSettings(s => ({ ...s, banque_nom: e.target.value }))} placeholder="MCB / SBM / AfrAsia" /></div>
                   <div><Label>Numero de compte</Label><Input value={settings.banque_compte} onChange={e => setSettings(s => ({ ...s, banque_compte: e.target.value }))} /></div>
@@ -288,7 +290,7 @@ export default function FacturationSettingsPage() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Parametres de facturation</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{tr('inv.fs.invoicing_settings', locale)}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -325,13 +327,13 @@ export default function FacturationSettingsPage() {
         {/* ══════════ TAB: Clients ══════════ */}
         <TabsContent value="clients" className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Base de donnees clients pour la facturation</p>
-            <Button onClick={openNewClient} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />Nouveau client</Button>
+            <p className="text-sm text-gray-500">{tr('inv.fs.clients_db', locale)}</p>
+            <Button onClick={openNewClient} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />{tr('inv.fs.new_client', locale)}</Button>
           </div>
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               {clients.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">Aucun client. Ajoutez votre premier client de facturation.</div>
+                <div className="text-center py-12 text-gray-500">{tr('inv.fs.no_clients', locale)}</div>
               ) : (
                 <Table>
                   <TableHeader>

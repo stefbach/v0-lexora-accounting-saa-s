@@ -38,6 +38,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface TiersAnalysis {
   tiers: string
@@ -100,6 +101,7 @@ function alertKey(a: Alert): string {
 const RESOLVED_KEY = "lex-factures-resolved-v1"
 
 export default function LexFacturesPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [analyzing, setAnalyzing] = useState(false)
   const [result, setResult] = useState<any>(null)
@@ -318,11 +320,11 @@ export default function LexFacturesPage() {
                 <h1 className="text-2xl font-bold text-emerald-900 flex items-center gap-2">
                   Lex Factures
                   <Badge className="bg-emerald-600 text-white text-[10px] uppercase">
-                    Agent IA
+                    {t('inv.lex.ai_agent', locale)}
                   </Badge>
                 </h1>
                 <p className="text-sm text-emerald-700/80 mt-0.5">
-                  Analyse de récurrence + détection factures manquantes + pénalités
+                  {t('inv.lex.subtitle', locale)}
                 </p>
               </div>
             </div>
@@ -330,7 +332,7 @@ export default function LexFacturesPage() {
               <Link href="/client/factures">
                 <Button variant="outline" size="sm">
                   <FileText className="h-4 w-4 mr-1.5" />
-                  Mes factures
+                  {t('inv.my_invoices', locale)}
                 </Button>
               </Link>
               <Button
@@ -341,12 +343,12 @@ export default function LexFacturesPage() {
                 {analyzing ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Analyse en cours…
+                    {t('inv.lex.analyzing', locale)}
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Lancer Lex Factures
+                    {t('inv.lex.run', locale)}
                   </>
                 )}
               </Button>
@@ -357,17 +359,16 @@ export default function LexFacturesPage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('inv.lex.no_company', locale)}
             </CardContent>
           </Card>
         ) : !result ? (
           <Card>
             <CardContent className="py-16 text-center">
               <Bot className="h-12 w-12 mx-auto text-emerald-300 mb-3" />
-              <p className="font-medium text-sm">Lance l'analyse pour démarrer</p>
+              <p className="font-medium text-sm">{t('inv.lex.start_prompt', locale)}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                L'agent va parcourir tes factures, détecter les récurrences et identifier
-                les anomalies.
+                {t('inv.lex.start_help', locale)}
               </p>
             </CardContent>
           </Card>
@@ -401,10 +402,10 @@ export default function LexFacturesPage() {
                   <div className="flex gap-1 flex-wrap">
                     {(
                       [
-                        { v: "all", label: "Tous", count: analyses.length },
+                        { v: "all", label: t('common.all', locale), count: analyses.length },
                         {
                           v: "recurrents",
-                          label: "Récurrents",
+                          label: t('inv.lex.recurring', locale),
                           count: analyses.filter(
                             (a) =>
                               a.frequence_detectee !== "irregulier" &&
@@ -413,7 +414,7 @@ export default function LexFacturesPage() {
                         },
                         {
                           v: "missing",
-                          label: "Avec manques",
+                          label: t('inv.lex.missing', locale),
                           count: analyses.filter((a) => a.periodes_manquantes.length > 0)
                             .length,
                         },
@@ -437,7 +438,7 @@ export default function LexFacturesPage() {
                     <Input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Rechercher un tiers…"
+                      placeholder={t('inv.lex.search_tiers', locale)}
                       className="pl-8 h-9 w-64"
                     />
                   </div>
@@ -449,13 +450,13 @@ export default function LexFacturesPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  Analyse par tiers ({filteredAnalyses.length})
+                  {t('inv.lex.analysis_by_tiers', locale)} ({filteredAnalyses.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {filteredAnalyses.length === 0 ? (
                   <p className="py-10 text-center text-sm text-muted-foreground">
-                    Aucun tiers pour ce filtre.
+                    {t('inv.lex.no_tiers', locale)}
                   </p>
                 ) : (
                   <div className="rounded border bg-card divide-y">

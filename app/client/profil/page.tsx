@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { User, Building2, Bell, Shield, Loader2 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useProfile } from "@/hooks/use-profile"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Societe {
   id: string
@@ -33,6 +34,7 @@ interface Societe {
 }
 
 export default function ProfilPage() {
+  const locale = getLocale()
   const { profile, loading } = useProfile()
   const { societe: activeSociete, loading: societeLoading } = useSocieteActive()
 
@@ -73,10 +75,10 @@ export default function ProfilPage() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Mon Profil" }]}
-      kicker="Mon compte"
-      title="Mon Profil"
-      subtitle="Gérez vos informations personnelles, votre langue et vos préférences de notification."
+      breadcrumbs={[{ label: t('core.prof.client_space', locale), href: "/client" }, { label: t('core.prof.my_profile', locale) }]}
+      kicker={t('core.prof.my_account', locale)}
+      title={t('core.prof.my_profile', locale)}
+      subtitle={t('core.prof.subtitle', locale)}
     >
       <div className="space-y-6">
       {/* Informations personnelles */}
@@ -84,13 +86,13 @@ export default function ProfilPage() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <User className="h-5 w-5" style={{ color: "#0B0F2E" }} />
-            <CardTitle style={{ color: "#0B0F2E" }}>Informations personnelles</CardTitle>
+            <CardTitle style={{ color: "#0B0F2E" }}>{t('core.prof.personal_info', locale)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="fullName">Nom complet</Label>
+              <Label htmlFor="fullName">{t('core.prof.full_name', locale)}</Label>
               <Input
                 id="fullName"
                 value={fullName}
@@ -98,7 +100,7 @@ export default function ProfilPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Adresse email</Label>
+              <Label htmlFor="email">{t('core.prof.email', locale)}</Label>
               <Input
                 id="email"
                 type="email"
@@ -107,7 +109,7 @@ export default function ProfilPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">T&eacute;l&eacute;phone</Label>
+              <Label htmlFor="phone">{t('core.prof.phone', locale)}</Label>
               <Input
                 id="phone"
                 value={phone}
@@ -115,17 +117,17 @@ export default function ProfilPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>R&ocirc;le</Label>
+              <Label>{t('core.prof.role', locale)}</Label>
               <div className="flex items-center h-9">
                 <Badge style={{ backgroundColor: "#0B0F2E", color: "white" }}>
-                  {profile?.role === "client_admin" ? "Administrateur" : profile?.role || "---"}
+                  {profile?.role === "client_admin" ? t('core.prof.administrator', locale) : profile?.role || "---"}
                 </Badge>
               </div>
             </div>
           </div>
           <div className="flex justify-end">
             <Button style={{ backgroundColor: "#D4AF37", color: "white" }}>
-              Enregistrer les modifications
+              {t('core.prof.save_changes', locale)}
             </Button>
           </div>
         </CardContent>
@@ -136,7 +138,7 @@ export default function ProfilPage() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <Building2 className="h-5 w-5" style={{ color: "#0B0F2E" }} />
-            <CardTitle style={{ color: "#0B0F2E" }}>Ma Soci&eacute;t&eacute;</CardTitle>
+            <CardTitle style={{ color: "#0B0F2E" }}>{t('core.prof.my_company', locale)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
@@ -147,26 +149,26 @@ export default function ProfilPage() {
           ) : societe ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Nom de la soci&eacute;t&eacute;</p>
+                <p className="text-sm text-muted-foreground">{t('core.prof.company_name', locale)}</p>
                 <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
                   {societe.nom}
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Num&eacute;ro BRN</p>
+                <p className="text-sm text-muted-foreground">{t('core.prof.brn', locale)}</p>
                 <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
                   {societe.brn || "---"}
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Num&eacute;ro TVA (MRA)</p>
+                <p className="text-sm text-muted-foreground">{t('core.prof.vat_mra', locale)}</p>
                 <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
                   {societe.numero_tva_mra || "---"}
                 </p>
               </div>
               {societe.comptable && (
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Comptable assign&eacute;</p>
+                  <p className="text-sm text-muted-foreground">{t('core.prof.accountant_assigned', locale)}</p>
                   <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
                     {societe.comptable.full_name}
                   </p>
@@ -177,15 +179,15 @@ export default function ProfilPage() {
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <Building2 className="h-10 w-10 text-muted-foreground/40 mb-3" />
               <p className="text-sm text-muted-foreground">
-                Aucune soci&eacute;t&eacute; associ&eacute;e &agrave; votre compte.
+                {t('core.prof.no_company_associated', locale)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Contactez votre comptable pour lier votre soci&eacute;t&eacute;.
+                {t('core.prof.contact_accountant_link', locale)}
               </p>
             </div>
           )}
           <p className="text-xs text-muted-foreground mt-4">
-            Ces informations sont g&eacute;r&eacute;es par votre comptable. Contactez-le pour toute modification.
+            {t('core.prof.info_managed_accountant', locale)}
           </p>
         </CardContent>
       </Card>
@@ -195,42 +197,42 @@ export default function ProfilPage() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <Bell className="h-5 w-5" style={{ color: "#0B0F2E" }} />
-            <CardTitle style={{ color: "#0B0F2E" }}>Pr&eacute;f&eacute;rences de notifications</CardTitle>
+            <CardTitle style={{ color: "#0B0F2E" }}>{t('core.prof.notification_preferences', locale)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Notifications par email</p>
-              <p className="text-sm text-muted-foreground">Recevez les alertes par email.</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{t('core.prof.notif_email', locale)}</p>
+              <p className="text-sm text-muted-foreground">{t('core.prof.notif_email_desc', locale)}</p>
             </div>
             <Switch checked={notifEmail} onCheckedChange={setNotifEmail} />
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Notifications WhatsApp</p>
-              <p className="text-sm text-muted-foreground">Recevez les alertes par WhatsApp.</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{t('core.prof.notif_wa', locale)}</p>
+              <p className="text-sm text-muted-foreground">{t('core.prof.notif_wa_desc', locale)}</p>
             </div>
             <Switch checked={notifWhatsapp} onCheckedChange={setNotifWhatsapp} />
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Rappels TVA</p>
-              <p className="text-sm text-muted-foreground">Soyez pr&eacute;venu avant chaque date limite de TVA.</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{t('core.prof.notif_vat', locale)}</p>
+              <p className="text-sm text-muted-foreground">{t('core.prof.notif_vat_desc', locale)}</p>
             </div>
             <Switch checked={notifTva} onCheckedChange={setNotifTva} />
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Documents trait&eacute;s</p>
-              <p className="text-sm text-muted-foreground">Notification quand vos documents sont class&eacute;s.</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{t('core.prof.notif_docs', locale)}</p>
+              <p className="text-sm text-muted-foreground">{t('core.prof.notif_docs_desc', locale)}</p>
             </div>
             <Switch checked={notifDocuments} onCheckedChange={setNotifDocuments} />
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Salaires</p>
-              <p className="text-sm text-muted-foreground">Notification quand les fiches de paie sont pr&ecirc;tes.</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{t('core.prof.notif_salaries', locale)}</p>
+              <p className="text-sm text-muted-foreground">{t('core.prof.notif_salaries_desc', locale)}</p>
             </div>
             <Switch checked={notifSalaires} onCheckedChange={setNotifSalaires} />
           </div>
@@ -242,19 +244,19 @@ export default function ProfilPage() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <Shield className="h-5 w-5" style={{ color: "#0B0F2E" }} />
-            <CardTitle style={{ color: "#0B0F2E" }}>S&eacute;curit&eacute;</CardTitle>
+            <CardTitle style={{ color: "#0B0F2E" }}>{t('core.prof.security', locale)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Mot de passe</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{t('core.prof.password', locale)}</p>
               <p className="text-sm text-muted-foreground">
-                Modifiez votre mot de passe pour s&eacute;curiser votre compte.
+                {t('core.prof.password_desc', locale)}
               </p>
             </div>
             <Button variant="outline" style={{ borderColor: "#0B0F2E", color: "#0B0F2E" }}>
-              Changer le mot de passe
+              {t('core.prof.change_password', locale)}
             </Button>
           </div>
         </CardContent>

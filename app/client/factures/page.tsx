@@ -40,6 +40,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface Facture {
   id: string
@@ -75,15 +76,18 @@ function daysUntil(d: string | null): number | null {
   return Math.floor((new Date(d).getTime() - Date.now()) / 86400000)
 }
 
-const STATUT_LABELS: Record<string, { label: string; color: string }> = {
-  paye: { label: "Payée", color: "bg-green-100 text-green-700 border-green-300" },
-  partiel: { label: "Partiel", color: "bg-blue-100 text-blue-700 border-blue-300" },
-  retard: { label: "En retard", color: "bg-red-100 text-red-700 border-red-300" },
-  en_attente: { label: "En attente", color: "bg-amber-100 text-amber-700 border-amber-300" },
-  annule: { label: "Annulée", color: "bg-gray-100 text-gray-600 border-gray-300" },
+function getStatutLabels(locale: Locale): Record<string, { label: string; color: string }> {
+  return {
+    paye: { label: t('inv.fac.status_paid', locale), color: "bg-green-100 text-green-700 border-green-300" },
+    partiel: { label: t('inv.fac.status_partial', locale), color: "bg-blue-100 text-blue-700 border-blue-300" },
+    retard: { label: t('inv.fac.status_overdue', locale), color: "bg-red-100 text-red-700 border-red-300" },
+    en_attente: { label: t('inv.fac.status_pending', locale), color: "bg-amber-100 text-amber-700 border-amber-300" },
+    annule: { label: t('inv.fac.status_cancelled', locale), color: "bg-gray-100 text-gray-600 border-gray-300" },
+  }
 }
 
 export default function ClientFacturesPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [factures, setFactures] = useState<Facture[]>([])
   const [loading, setLoading] = useState(false)
@@ -119,7 +123,7 @@ export default function ClientFacturesPage() {
       const fin = d?.financial || {}
       setFactures(fin.factures || [])
     } catch {
-      showToast("Erreur chargement", "error")
+      showToast(t('inv.fac.load_error', locale), "error")
     } finally {
       setLoading(false)
     }
@@ -239,21 +243,21 @@ export default function ClientFacturesPage() {
                 <FileText className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-emerald-900">Mes factures</h1>
+                <h1 className="text-2xl font-bold text-emerald-900">{t('inv.fac.title', locale)}</h1>
                 <p className="text-sm text-emerald-700/80 mt-0.5">
-                  Toutes les factures de la société — vente (clients) + achat (fournisseurs)
+                  {t('inv.fac.subtitle', locale)}
                 </p>
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('common.refresh', locale)}
               </Button>
               <Link href="/client/nouvelle-facture">
                 <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md">
                   <Plus className="h-4 w-4 mr-1.5" />
-                  Nouvelle facture
+                  {t('inv.new_invoice', locale)}
                 </Button>
               </Link>
               <Link href="/client/lex-factures">
@@ -277,7 +281,7 @@ export default function ClientFacturesPage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('inv.fac.no_company', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -313,15 +317,15 @@ export default function ClientFacturesPage() {
             {/* KPIs (sur le périmètre filtré) */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <KpiCard
-                label={hasActiveFilter ? "Filtrées" : "Total factures"}
+                label={hasActiveFilter ? t('inv.fac.filtered', locale) : t('inv.fac.total_invoices', locale)}
                 value={stats.total}
                 accent={hasActiveFilter}
               />
-              <KpiCard label="Total filtré" value={fmt(stats.totalAll)} tone="blue" />
-              <KpiCard label="Impayées" value={`${stats.enAttente + stats.retard} · ${fmt(stats.totalImpaye)}`} tone={stats.retard > 0 ? "rose" : "amber"} accent={stats.enAttente + stats.retard > 0} />
-              <KpiCard label="Payées" value={`${stats.paye} · ${fmt(stats.totalPaye)}`} tone="green" />
+              <KpiCard label={t('inv.fac.total_filtered', locale)} value={fmt(stats.totalAll)} tone="blue" />
+              <KpiCard label={t('inv.fac.unpaid', locale)} value={`${stats.enAttente + stats.retard} · ${fmt(stats.totalImpaye)}`} tone={stats.retard > 0 ? "rose" : "amber"} accent={stats.enAttente + stats.retard > 0} />
+              <KpiCard label={t('inv.fac.paid_plural', locale)} value={`${stats.paye} · ${fmt(stats.totalPaye)}`} tone="green" />
               <KpiCard
-                label="Rapprochées banque"
+                label={t('inv.fac.reconciled_bank', locale)}
                 value={`${stats.rapproche} / ${stats.total}`}
                 tone={stats.rapproche === stats.total && stats.total > 0 ? "green" : "amber"}
               />
@@ -334,20 +338,20 @@ export default function ClientFacturesPage() {
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <TabsList className="bg-transparent gap-1">
                       <TabsTrigger value="toutes" className="px-3 py-1.5">
-                        Toutes ({counts.toutes})
+                        {t('inv.fac.tab_all', locale)} ({counts.toutes})
                       </TabsTrigger>
                       <TabsTrigger value="client" className="px-3 py-1.5">
                         <TrendingUp className="h-3.5 w-3.5 mr-1 text-green-600" />
-                        Clients ({counts.client})
+                        {t('inv.fac.tab_clients', locale)} ({counts.client})
                       </TabsTrigger>
                       <TabsTrigger value="fournisseur" className="px-3 py-1.5">
                         <TrendingDown className="h-3.5 w-3.5 mr-1 text-rose-600" />
-                        Fournisseurs ({counts.fournisseur})
+                        {t('inv.fac.tab_suppliers', locale)} ({counts.fournisseur})
                       </TabsTrigger>
                     </TabsList>
                     {hasActiveFilter && (
                       <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs">
-                        Réinitialiser les filtres
+                        {t('inv.fac.reset_filters', locale)}
                       </Button>
                     )}
                   </div>
@@ -357,16 +361,16 @@ export default function ClientFacturesPage() {
                       <Input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="N° ou tiers…"
+                        placeholder={t('inv.fac.search_placeholder', locale)}
                         className="pl-8 h-9 w-56"
                       />
                     </div>
                     <Select value={tiersFilter} onValueChange={setTiersFilter}>
                       <SelectTrigger className="h-9 w-56">
-                        <SelectValue placeholder="Tiers" />
+                        <SelectValue placeholder={t('inv.fac.tiers', locale)} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Tous les tiers</SelectItem>
+                        <SelectItem value="all">{t('inv.fac.all_tiers', locale)}</SelectItem>
                         {tiersList.map((t) => (
                           <SelectItem key={t} value={t}>
                             {t.length > 50 ? t.slice(0, 47) + "…" : t}
@@ -379,12 +383,12 @@ export default function ClientFacturesPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Tous statuts</SelectItem>
-                        <SelectItem value="en_attente">En attente</SelectItem>
-                        <SelectItem value="partiel">Partiel</SelectItem>
-                        <SelectItem value="retard">En retard</SelectItem>
-                        <SelectItem value="paye">Payée</SelectItem>
-                        <SelectItem value="annule">Annulée</SelectItem>
+                        <SelectItem value="all">{t('inv.fac.all_status', locale)}</SelectItem>
+                        <SelectItem value="en_attente">{t('inv.fac.status_pending', locale)}</SelectItem>
+                        <SelectItem value="partiel">{t('inv.fac.status_partial', locale)}</SelectItem>
+                        <SelectItem value="retard">{t('inv.fac.status_overdue', locale)}</SelectItem>
+                        <SelectItem value="paye">{t('inv.fac.status_paid', locale)}</SelectItem>
+                        <SelectItem value="annule">{t('inv.fac.status_cancelled', locale)}</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={rapprochementFilter} onValueChange={setRapprochementFilter}>
@@ -392,9 +396,9 @@ export default function ClientFacturesPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Tous rapprochements</SelectItem>
-                        <SelectItem value="rapproche">Rapprochée banque</SelectItem>
-                        <SelectItem value="non_rapproche">Pas encore rapprochée</SelectItem>
+                        <SelectItem value="all">{t('inv.fac.all_reconciliations', locale)}</SelectItem>
+                        <SelectItem value="rapproche">{t('inv.fac.reconciled', locale)}</SelectItem>
+                        <SelectItem value="non_rapproche">{t('inv.fac.not_reconciled', locale)}</SelectItem>
                       </SelectContent>
                     </Select>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -436,10 +440,12 @@ export default function ClientFacturesPage() {
 }
 
 function FactureList({ factures }: { factures: Facture[] }) {
+  const locale = getLocale()
+  const STATUT_LABELS = getStatutLabels(locale)
   if (factures.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
-        Aucune facture pour ce filtre.
+        {t('inv.fac.no_invoice_filter', locale)}
       </p>
     )
   }
@@ -469,7 +475,7 @@ function FactureList({ factures }: { factures: Facture[] }) {
                       : "bg-rose-50 text-rose-700 border-rose-300"
                   }`}
                 >
-                  {isClient ? "Client" : "Fournisseur"}
+                  {isClient ? t('inv.client', locale) : t('inv.supplier', locale)}
                 </Badge>
                 <Badge className={`text-[10px] border ${statutInfo.color}`}>
                   {statutInfo.label}
@@ -477,26 +483,26 @@ function FactureList({ factures }: { factures: Facture[] }) {
                 {overdue && (
                   <Badge className="text-[10px] bg-red-100 text-red-700 border-red-300">
                     <AlertTriangle className="h-3 w-3 mr-1" />
-                    Échue depuis {Math.abs(days!)}j
+                    {t('inv.fac.overdue_since', locale)} {Math.abs(days!)}{t('inv.fac.day_abbr', locale)}
                   </Badge>
                 )}
                 {dueSoon && !overdue && (
                   <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
                     <Clock className="h-3 w-3 mr-1" />
-                    Dans {days}j
+                    {t('inv.fac.in', locale)} {days}{t('inv.fac.day_abbr', locale)}
                   </Badge>
                 )}
                 {f.rapproche_releve_id && (
                   <Badge className="text-[10px] bg-purple-100 text-purple-700 border-purple-300">
                     <Bot className="h-3 w-3 mr-1" />
-                    Rapprochée
+                    {t('inv.fac.reconciled', locale)}
                   </Badge>
                 )}
               </div>
               <p className="text-sm mt-1 break-words">{f.tiers || "—"}</p>
               <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-muted-foreground">
-                <span>Émise : {formatDate(f.date_facture)}</span>
-                <span>Échéance : {formatDate(f.date_echeance)}</span>
+                <span>{t('inv.fac.issued', locale)} : {formatDate(f.date_facture)}</span>
+                <span>{t('inv.due_date', locale)} : {formatDate(f.date_echeance)}</span>
               </div>
             </div>
             <div className="text-right flex-shrink-0">

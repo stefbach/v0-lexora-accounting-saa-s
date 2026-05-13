@@ -22,6 +22,7 @@ import {
   Clock, Download, ChevronRight, Lock, AlertTriangle, Building2, RefreshCw, Camera, Pencil, Trash2,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -45,29 +46,33 @@ interface Folder {
   readOnly: boolean
 }
 
-const FOLDERS: Folder[] = [
-  { key: "all", label: "Tous les Documents", readOnly: true },
-  { key: "recent", label: "Envois Récents", readOnly: false },
-  { key: "facture_fournisseur", label: "Factures Fournisseurs", readOnly: false },
-  { key: "facture_client", label: "Factures Clients", readOnly: false },
-  { key: "releve_bancaire", label: "Relevés Bancaires", readOnly: false },
-  { key: "fiche_paie", label: "Fiches de Paie", readOnly: false },
-  { key: "charges_sociales", label: "Cotisations Sociales", readOnly: false },
-  { key: "contrat", label: "Contrats", readOnly: false },
-  { key: "rapport", label: "Rapports Mensuels", readOnly: true },
-  { key: "autre", label: "Autres Documents", readOnly: false },
-]
+function getFolders(locale: Locale): Folder[] {
+  return [
+    { key: "all", label: t('core.doc.folder_all', locale), readOnly: true },
+    { key: "recent", label: t('core.doc.folder_recent', locale), readOnly: false },
+    { key: "facture_fournisseur", label: t('core.doc.folder_supplier_invoices', locale), readOnly: false },
+    { key: "facture_client", label: t('core.doc.folder_client_invoices', locale), readOnly: false },
+    { key: "releve_bancaire", label: t('core.doc.folder_bank_statements', locale), readOnly: false },
+    { key: "fiche_paie", label: t('core.doc.folder_payslips', locale), readOnly: false },
+    { key: "charges_sociales", label: t('core.doc.folder_social_charges', locale), readOnly: false },
+    { key: "contrat", label: t('core.doc.folder_contracts', locale), readOnly: false },
+    { key: "rapport", label: t('core.doc.folder_monthly_reports', locale), readOnly: true },
+    { key: "autre", label: t('core.doc.folder_other', locale), readOnly: false },
+  ]
+}
 
-const DOCUMENT_TYPES = [
-  { value: "facture_fournisseur", label: "Facture fournisseur" },
-  { value: "facture_client", label: "Facture client" },
-  { value: "releve_bancaire", label: "Relevé bancaire" },
-  { value: "fiche_paie", label: "Fiche de paie" },
-  { value: "payroll_report", label: "Rapport paie (Excel)" },
-  { value: "charges_sociales", label: "Charges sociales" },
-  { value: "contrat", label: "Contrat" },
-  { value: "autre", label: "Autre" },
-]
+function getDocumentTypes(locale: Locale) {
+  return [
+    { value: "facture_fournisseur", label: t('core.doc.type_supplier_invoice', locale) },
+    { value: "facture_client", label: t('core.doc.type_client_invoice', locale) },
+    { value: "releve_bancaire", label: t('core.doc.type_bank_statement', locale) },
+    { value: "fiche_paie", label: t('core.doc.type_payslip', locale) },
+    { value: "payroll_report", label: t('core.doc.type_payroll_excel', locale) },
+    { value: "charges_sociales", label: t('core.doc.type_social_charges', locale) },
+    { value: "contrat", label: t('core.doc.type_contract', locale) },
+    { value: "autre", label: t('core.doc.type_other', locale) },
+  ]
+}
 
 function getSocieteBadgeStyle(name?: string | null): Record<string, string> {
   if (!name) return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }

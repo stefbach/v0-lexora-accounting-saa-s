@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2, RefreshCw, AlertCircle, Layers, Plus } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2 }).format(Number(n))
 
@@ -19,6 +20,7 @@ const EMPTY_REL = {
 }
 
 export default function GbcConsolidationPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [data, setData] = useState<any>(null)
   const [allSocietes, setAllSocietes] = useState<any[]>([])
@@ -46,12 +48,12 @@ export default function GbcConsolidationPage() {
       const list = Array.isArray(r2?.societes) ? r2.societes
         : Array.isArray(r2) ? r2 : []
       setAllSocietes(list.filter((s: any) => s.id !== societeId))
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
+    } catch (e: any) { setError(e?.message || t('gbc.common.error', locale)) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId, exercice])
 
   const addRelationship = async () => {
-    if (!societeId || !form.child_societe_id) { setError('Filiale requise'); return }
+    if (!societeId || !form.child_societe_id) { setError(t('gbc.consolidation.required_subsidiary', locale)); return }
     setSaving(true); setError(null)
     try {
       // Calcul goodwill : cost - FV × pct
@@ -77,11 +79,11 @@ export default function GbcConsolidationPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
       setOpen(false); setForm(EMPTY_REL); load()
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSaving(false) }
+    } catch (e: any) { setError(e?.message || t('gbc.common.error', locale)) } finally { setSaving(false) }
   }
 
-  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Aucune société sélectionnée.</div></div>
-  if (loading) return <div className="p-8 flex items-center gap-2"><Loader2 className="animate-spin h-5 w-5" /> Chargement…</div>
+  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t('gbc.common.no_societe', locale)}</div></div>
+  if (loading) return <div className="p-8 flex items-center gap-2"><Loader2 className="animate-spin h-5 w-5" /> {t('gbc.common.loading', locale)}</div>
 
   const goodwillPreview = Number(form.acquisition_cost_mur) - (Number(form.fair_value_net_assets_acquisition_mur) * Number(form.pct_detention) / 100)
 
@@ -89,59 +91,59 @@ export default function GbcConsolidationPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Layers className="h-6 w-6 text-indigo-600" /> Consolidation IFRS 10</h1>
-          <p className="text-sm text-slate-500">États consolidés du groupe — Goodwill IFRS 3 + NCI + éliminations</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Layers className="h-6 w-6 text-indigo-600" /> {t('gbc.consolidation.title', locale)}</h1>
+          <p className="text-sm text-slate-500">{t('gbc.consolidation.subtitle', locale)}</p>
         </div>
         <div className="flex gap-2 items-center">
           <input value={exercice} onChange={e => setExercice(e.target.value)} className="border rounded px-2 py-1 text-sm w-32" />
-          <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />Rafraîchir</Button>
+          <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />{t('gbc.common.refresh', locale)}</Button>
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="h-4 w-4 mr-2" />Ajouter filiale</Button></DialogTrigger>
+            <DialogTrigger asChild><Button className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="h-4 w-4 mr-2" />{t('gbc.consolidation.add_subsidiary', locale)}</Button></DialogTrigger>
             <DialogContent className="max-w-xl">
-              <DialogHeader><DialogTitle>Ajouter une filiale au périmètre de consolidation</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t('gbc.consolidation.add_subsidiary_dialog', locale)}</DialogTitle></DialogHeader>
               <div className="space-y-3 pt-2">
                 <div>
-                  <Label>Filiale (société Lexora) *</Label>
+                  <Label>{t('gbc.consolidation.subsidiary_label', locale)}</Label>
                   <Select value={form.child_societe_id} onValueChange={v => setForm({ ...form, child_societe_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('gbc.consolidation.subsidiary_placeholder', locale)} /></SelectTrigger>
                     <SelectContent>
                       {allSocietes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>% Détention</Label><Input type="number" min="0" max="100" step="0.01" value={form.pct_detention} onChange={e => setForm({ ...form, pct_detention: Number(e.target.value) || 0 })} /></div>
-                  <div><Label>% Droits de vote</Label><Input type="number" min="0" max="100" step="0.01" value={form.pct_voting_rights} onChange={e => setForm({ ...form, pct_voting_rights: Number(e.target.value) || 0 })} /></div>
-                  <div><Label>Type</Label>
+                  <div><Label>{t('gbc.consolidation.pct_detention', locale)}</Label><Input type="number" min="0" max="100" step="0.01" value={form.pct_detention} onChange={e => setForm({ ...form, pct_detention: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>{t('gbc.consolidation.pct_voting', locale)}</Label><Input type="number" min="0" max="100" step="0.01" value={form.pct_voting_rights} onChange={e => setForm({ ...form, pct_voting_rights: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>{t('gbc.consolidation.type', locale)}</Label>
                     <Select value={form.relationship_type} onValueChange={v => setForm({ ...form, relationship_type: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="subsidiary">Filiale (subsidiary)</SelectItem>
-                        <SelectItem value="associate">Associée (associate)</SelectItem>
-                        <SelectItem value="joint_venture">Coentreprise (JV)</SelectItem>
+                        <SelectItem value="subsidiary">{t('gbc.consolidation.type_subsidiary', locale)}</SelectItem>
+                        <SelectItem value="associate">{t('gbc.consolidation.type_associate', locale)}</SelectItem>
+                        <SelectItem value="joint_venture">{t('gbc.consolidation.type_jv', locale)}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div><Label>Méthode consolidation</Label>
+                  <div><Label>{t('gbc.consolidation.method', locale)}</Label>
                     <Select value={form.consolidation_method} onValueChange={v => setForm({ ...form, consolidation_method: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="full">Intégrale (contrôle)</SelectItem>
-                        <SelectItem value="equity">Mise en équivalence</SelectItem>
-                        <SelectItem value="proportional">Proportionnelle</SelectItem>
+                        <SelectItem value="full">{t('gbc.consolidation.method_full', locale)}</SelectItem>
+                        <SelectItem value="equity">{t('gbc.consolidation.method_equity', locale)}</SelectItem>
+                        <SelectItem value="proportional">{t('gbc.consolidation.method_proportional', locale)}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div><Label>Date acquisition</Label><Input type="date" value={form.acquisition_date} onChange={e => setForm({ ...form, acquisition_date: e.target.value })} /></div>
-                  <div><Label>Coût acquisition (MUR)</Label><Input type="number" min="0" value={form.acquisition_cost_mur} onChange={e => setForm({ ...form, acquisition_cost_mur: Number(e.target.value) || 0 })} /></div>
-                  <div className="col-span-2"><Label>FV actif net acquis (MUR)</Label><Input type="number" min="0" value={form.fair_value_net_assets_acquisition_mur} onChange={e => setForm({ ...form, fair_value_net_assets_acquisition_mur: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>{t('gbc.consolidation.acquisition_date', locale)}</Label><Input type="date" value={form.acquisition_date} onChange={e => setForm({ ...form, acquisition_date: e.target.value })} /></div>
+                  <div><Label>{t('gbc.consolidation.acquisition_cost', locale)}</Label><Input type="number" min="0" value={form.acquisition_cost_mur} onChange={e => setForm({ ...form, acquisition_cost_mur: Number(e.target.value) || 0 })} /></div>
+                  <div className="col-span-2"><Label>{t('gbc.consolidation.fv_net_assets', locale)}</Label><Input type="number" min="0" value={form.fair_value_net_assets_acquisition_mur} onChange={e => setForm({ ...form, fair_value_net_assets_acquisition_mur: Number(e.target.value) || 0 })} /></div>
                 </div>
                 <div className="rounded bg-indigo-50 border border-indigo-200 p-3 text-sm">
-                  <strong>Goodwill calculé (IFRS 3) :</strong> {fmt(goodwillPreview)} MUR
-                  <div className="text-xs text-slate-500 mt-1">= Coût {fmt(form.acquisition_cost_mur)} − (FV actif net {fmt(form.fair_value_net_assets_acquisition_mur)} × {form.pct_detention}%)</div>
+                  <strong>{t('gbc.consolidation.goodwill_calculated', locale)}</strong> {fmt(goodwillPreview)} MUR
+                  <div className="text-xs text-slate-500 mt-1">{t('gbc.consolidation.goodwill_formula_cost', locale)} {fmt(form.acquisition_cost_mur)} {t('gbc.consolidation.goodwill_formula_fv', locale)} {fmt(form.fair_value_net_assets_acquisition_mur)} × {form.pct_detention}%)</div>
                 </div>
                 {error && <div className="text-sm text-red-600">{error}</div>}
-                <Button onClick={addRelationship} disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">{saving ? 'Enregistrement…' : 'Ajouter la filiale'}</Button>
+                <Button onClick={addRelationship} disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">{saving ? t('gbc.common.saving', locale) : t('gbc.consolidation.add_subsidiary_btn', locale)}</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -151,20 +153,20 @@ export default function GbcConsolidationPage() {
       {error && !open && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex gap-2"><AlertCircle className="h-4 w-4" />{error}</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Filiales consolidées</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{data?.consolidation_scope?.full || 0}</div><div className="text-xs text-slate-500">méthode intégrale</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Goodwill total</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-indigo-700">{fmt(data?.total_goodwill_mur)}</div><div className="text-xs text-slate-500">MUR (IFRS 3)</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Éliminations</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{data?.eliminations?.length || 0}</div><div className="text-xs text-slate-500">retraitements</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">NCI</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{fmt((data?.nci || []).reduce((s: number, n: any) => s + Number(n.nci_share_mur || 0), 0))}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.consolidation.kpi_consolidated', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{data?.consolidation_scope?.full || 0}</div><div className="text-xs text-slate-500">{t('gbc.consolidation.kpi_full_method', locale)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.consolidation.kpi_total_goodwill', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-indigo-700">{fmt(data?.total_goodwill_mur)}</div><div className="text-xs text-slate-500">{t('gbc.consolidation.kpi_goodwill_unit', locale)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.consolidation.kpi_eliminations', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{data?.eliminations?.length || 0}</div><div className="text-xs text-slate-500">{t('gbc.consolidation.kpi_eliminations_sub', locale)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.consolidation.kpi_nci', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{fmt((data?.nci || []).reduce((s: number, n: any) => s + Number(n.nci_share_mur || 0), 0))}</div></CardContent></Card>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Périmètre de consolidation</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t('gbc.consolidation.scope_title', locale)}</CardTitle></CardHeader>
         <CardContent>
           {(data?.relationships?.length || 0) === 0 ? (
-            <div className="text-sm text-slate-500 p-4 text-center">Aucune filiale. Clique sur "Ajouter filiale" pour commencer.</div>
+            <div className="text-sm text-slate-500 p-4 text-center">{t('gbc.consolidation.no_subsidiary', locale)}</div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="border-b"><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 px-2">Filiale</th><th className="py-2 px-2">Type</th><th className="py-2 px-2 text-right">% Détention</th><th className="py-2 px-2">Méthode</th><th className="py-2 px-2 text-right">Coût acquisition</th><th className="py-2 px-2 text-right">Goodwill</th></tr></thead>
+              <thead className="border-b"><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 px-2">{t('gbc.consolidation.col_subsidiary', locale)}</th><th className="py-2 px-2">{t('gbc.consolidation.col_type', locale)}</th><th className="py-2 px-2 text-right">{t('gbc.consolidation.col_pct', locale)}</th><th className="py-2 px-2">{t('gbc.consolidation.col_method', locale)}</th><th className="py-2 px-2 text-right">{t('gbc.consolidation.col_cost', locale)}</th><th className="py-2 px-2 text-right">{t('gbc.consolidation.col_goodwill', locale)}</th></tr></thead>
               <tbody>
                 {data.relationships.map((r: any) => (
                   <tr key={r.id} className="border-b">

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Merge, Loader2, AlertCircle, CheckCircle2, X, Edit2 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface TiersInfo {
   raw: string
@@ -27,6 +28,7 @@ function fmt(n: number) {
 }
 
 export default function TiersConsolidationPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [groups, setGroups] = useState<ConsolidationGroup[]>([])
   const [loading, setLoading] = useState(false)
@@ -114,17 +116,17 @@ export default function TiersConsolidationPage() {
 
       <div>
         <h1 className="text-2xl font-bold text-[#0B0F2E] flex items-center gap-2">
-          <Users className="w-6 h-6" /> Consolidation des tiers
+          <Users className="w-6 h-6" /> {t('acc.tiers.title', locale)}
         </h1>
         <p className="text-sm text-gray-500">
-          Détecter et fusionner les variantes de noms (ex: "Mauritius Telecom Ltd" = "MyT" = "Mauritius Telecom") dans les factures, comptes courants, etc.
+          {t('acc.tiers.subtitle', locale)}
         </p>
       </div>
 
       <Card>
         <CardContent className="p-3 flex items-end gap-2 flex-wrap">
           <div>
-            <label className="text-xs">Sensibilité (0 = tous, 1 = identiques)</label>
+            <label className="text-xs">{t('acc.tiers.sensitivity', locale)}</label>
             <Input
               type="number"
               min={0.4}
@@ -137,10 +139,10 @@ export default function TiersConsolidationPage() {
           </div>
           <Button onClick={scan} disabled={loading} className="bg-[#0B0F2E] text-white h-8">
             {loading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Users className="w-4 h-4 mr-1" />}
-            Scanner les variantes
+            {t('acc.tiers.scan', locale)}
           </Button>
           <div className="ml-auto text-sm text-slate-500">
-            {groups.length > 0 && `${groups.length} groupes détectés`}
+            {groups.length > 0 && `${groups.length} ${t('acc.tiers.groups_detected', locale)}`}
           </div>
         </CardContent>
       </Card>
@@ -148,7 +150,7 @@ export default function TiersConsolidationPage() {
       {groups.length === 0 && !loading && (
         <Card>
           <CardContent className="p-6 text-center text-slate-500 text-sm">
-            Aucune variante détectée. Tous les tiers sont distincts (ou non assez similaires pour la sensibilité choisie).
+            {t('acc.tiers.no_variant', locale)}
           </CardContent>
         </Card>
       )}
@@ -167,16 +169,16 @@ export default function TiersConsolidationPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
                 <Merge className="w-4 h-4 text-amber-600" />
-                <span>Groupe {g.key.substring(0, 40)}</span>
-                <Badge variant="outline" className="text-[10px]">{g.variants.length} variantes</Badge>
-                {totalFactures > 0 && <Badge className="bg-blue-100 text-blue-800 border-0 text-[10px]">{totalFactures} factures</Badge>}
+                <span>{t('acc.tiers.group', locale)} {g.key.substring(0, 40)}</span>
+                <Badge variant="outline" className="text-[10px]">{g.variants.length} {t('acc.tiers.variants', locale)}</Badge>
+                {totalFactures > 0 && <Badge className="bg-blue-100 text-blue-800 border-0 text-[10px]">{totalFactures} {t('acc.tiers.invoices_lc', locale)}</Badge>}
                 {totalCca > 0 && <Badge className="bg-purple-100 text-purple-800 border-0 text-[10px]">{totalCca} CCA</Badge>}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded p-2">
                 <Edit2 className="w-4 h-4 text-amber-600 shrink-0" />
-                <span className="text-xs font-medium shrink-0">Nom canonique :</span>
+                <span className="text-xs font-medium shrink-0">{t('acc.tiers.canonical_name', locale)} :</span>
                 <Input
                   value={current}
                   onChange={e => setEditedCanonical({ ...editedCanonical, [g.key]: e.target.value })}
@@ -189,7 +191,7 @@ export default function TiersConsolidationPage() {
                   disabled={isMerging || !current.trim()}
                 >
                   {isMerging ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Merge className="w-3 h-3 mr-1" />}
-                  Consolider {g.variants.length} variantes
+                  {t('acc.tiers.consolidate', locale)} {g.variants.length} {t('acc.tiers.variants', locale)}
                 </Button>
               </div>
 
@@ -213,7 +215,7 @@ export default function TiersConsolidationPage() {
                               s.kind === 'cca' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
                             }`}
                           >
-                            {s.kind === 'cca' ? 'CCA' : `Facture ${s.type || ''}`} · {s.count}
+                            {s.kind === 'cca' ? 'CCA' : `${t('acc.tiers.invoice', locale)} ${s.type || ''}`} · {s.count}
                             {s.total !== undefined ? ` · ${fmt(s.total)} MUR` : ''}
                           </Badge>
                         ))}
@@ -225,7 +227,7 @@ export default function TiersConsolidationPage() {
                           className="h-6 text-[10px]"
                           onClick={() => setEditedCanonical({ ...editedCanonical, [g.key]: v.raw })}
                         >
-                          Utiliser comme canonique
+                          {t('acc.tiers.use_as_canonical', locale)}
                         </Button>
                       )}
                     </div>
