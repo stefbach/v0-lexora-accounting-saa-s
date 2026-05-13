@@ -275,10 +275,10 @@ export default function SocieteContextPage() {
           }))
 
         const kpis: KPI[] = [
-          { label: 'Chiffre d\'affaires', value: fin.totalRevenue || 0, green: true },
-          { label: 'Dépenses', value: fin.totalExpenses || 0 },
-          { label: 'Résultat', value: fin.resultat || 0, green: (fin.resultat || 0) > 0 },
-          { label: 'Trésorerie', value: fin.totalBankMUR || 0, green: true },
+          { label: t('cabclt.soc.kpi_revenue', locale), value: fin.totalRevenue || 0, green: true },
+          { label: t('cabclt.soc.kpi_expenses', locale), value: fin.totalExpenses || 0 },
+          { label: t('cabclt.soc.kpi_profit', locale), value: fin.resultat || 0, green: (fin.resultat || 0) > 0 },
+          { label: t('cabclt.soc.kpi_treasury', locale), value: fin.totalBankMUR || 0, green: true },
         ]
 
         // Build bank entries from bankTransactions (individual lines from statements)
@@ -306,10 +306,10 @@ export default function SocieteContextPage() {
 
         // Build TVA rows from tvaRecords or from computed values
         const tvaRows: TVAEntry[] = (fin.tvaRecords || []).length > 0
-          ? (fin.tvaRecords || []).map((t: any) => ({
-              mois: t.periode, collectee: t.tva_collectee || 0, deductible: t.tva_deductible || 0,
-              nette: t.tva_nette || 0, deadline: t.date_limite || '—',
-              statut: t.statut || 'a_declarer', ref: '',
+          ? (fin.tvaRecords || []).map((rec: any) => ({
+              mois: rec.periode, collectee: rec.tva_collectee || 0, deductible: rec.tva_deductible || 0,
+              nette: rec.tva_nette || 0, deadline: rec.date_limite || '—',
+              statut: rec.statut || 'a_declarer', ref: '',
             }))
           : (fin.tvaCollectee || fin.tvaDeductible)
             ? [{
@@ -348,7 +348,7 @@ export default function SocieteContextPage() {
           facturesClients,
           banque: bankEntries,
           salaires: fin.salaires ? [{
-            employe: 'Total masse salariale', brut: fin.salaires, csg: 0, nsf: 0,
+            employe: t('cabclt.soc.total_payroll_mass', locale), brut: fin.salaires, csg: 0, nsf: 0,
             paye: 0, net: fin.salaires, cout: fin.salaires + (fin.chargesSociales || 0),
             statut: 'a_verifier',
           }] : [],
@@ -384,7 +384,7 @@ export default function SocieteContextPage() {
           },
         })
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Une erreur est survenue")
+        setError(err instanceof Error ? err.message : t('cabclt.soc.error_occurred', locale))
       } finally {
         setLoading(false)
       }
@@ -407,13 +407,13 @@ export default function SocieteContextPage() {
         const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
         const respData = await res.json()
         if (res.ok) {
-          setUploadedFiles(prev => [{ name: file.name, status: "En cours de traitement", date: new Date().toLocaleDateString("fr-FR"), type: "Détection..." }, ...prev])
-          setUploadSuccess(`${file.name} uploadé avec succès. Analyse en cours...`)
+          setUploadedFiles(prev => [{ name: file.name, status: t('cabclt.soc.processing', locale), date: new Date().toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB'), type: t('cabclt.soc.detecting', locale) }, ...prev])
+          setUploadSuccess(`${file.name} ${t('cabclt.soc.upload_success', locale)}`)
         } else {
-          setUploadError(respData.error || "Erreur lors de l'upload")
+          setUploadError(respData.error || t('cabclt.soc.upload_error', locale))
         }
       } catch {
-        setUploadError("Erreur de connexion")
+        setUploadError(t('cabclt.soc.connection_error', locale))
       }
     }
     setUploading(false)

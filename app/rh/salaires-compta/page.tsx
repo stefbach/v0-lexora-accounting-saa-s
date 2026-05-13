@@ -91,20 +91,20 @@ export default function SalairesComptaPage() {
         <Card><CardContent className="p-4 text-center">
           <Users className="h-5 w-5 mx-auto mb-1" style={{ color: NAVY }} />
           <p className="text-2xl font-bold" style={{ color: NAVY }}>{periodes.length}</p>
-          <p className="text-xs text-gray-500">Mois comptabilisés</p>
+          <p className="text-xs text-gray-500">{t('rha.b.salcompta.months_booked', locale)}</p>
         </CardContent></Card>
         <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
-          <p className="text-xs text-gray-400">641 — Masse salariale brute</p>
+          <p className="text-xs text-gray-400">{t('rha.b.salcompta.gross_mass', locale)}</p>
           <p className="text-2xl font-bold text-blue-600">{fmt(totalBrut)} MUR</p>
-          <p className="text-xs text-gray-400 mt-1">Basic: {fmt(periodes.reduce((s, p) => s + p.basic, 0))}</p>
+          <p className="text-xs text-gray-400 mt-1">{t('rha.b.salcompta.basic', locale)}: {fmt(periodes.reduce((s, p) => s + p.basic, 0))}</p>
         </CardContent></Card>
         <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-4">
-          <p className="text-xs text-gray-400">421 — Net à payer</p>
+          <p className="text-xs text-gray-400">{t('rha.b.salcompta.net_to_pay', locale)}</p>
           <p className="text-2xl font-bold text-emerald-600">{fmt(totalNet)} MUR</p>
-          <p className="text-xs text-gray-400 mt-1">{totalBrut > 0 ? Math.round(totalNet / totalBrut * 100) : 0}% du brut</p>
+          <p className="text-xs text-gray-400 mt-1">{totalBrut > 0 ? Math.round(totalNet / totalBrut * 100) : 0}{t('rha.b.salcompta.of_gross', locale)}</p>
         </CardContent></Card>
         <Card className="border-l-4 border-l-red-500"><CardContent className="p-4">
-          <p className="text-xs text-gray-400">431/444 — Retenues salariales</p>
+          <p className="text-xs text-gray-400">{t('rha.b.salcompta.deductions', locale)}</p>
           <p className="text-2xl font-bold text-red-600">{fmt(totalCSGSal + totalNSFSal + totalPaye)} MUR</p>
           <p className="text-xs text-gray-400 mt-1">CSG {fmt(totalCSGSal)} • NSF {fmt(totalNSFSal)} • PAYE {fmt(totalPaye)}</p>
         </CardContent></Card>
