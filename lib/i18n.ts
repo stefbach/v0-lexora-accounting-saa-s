@@ -4,6 +4,10 @@ import { coreChunk } from './i18n/core'
 import { hrChunk } from './i18n/hr'
 import { invoicingChunk } from './i18n/invoicing'
 import { accountingChunk } from './i18n/accounting'
+import { comptableChunk } from './i18n/comptable'
+import { rhAdminChunk } from './i18n/rh_admin'
+import { adminChunk } from './i18n/admin'
+import { publicChunk } from './i18n/public'
 
 export type Locale = 'fr' | 'en'
 
@@ -613,6 +617,10 @@ const translations: Record<Locale, Record<string, string>> = {
     ...hrChunk.fr,
     ...invoicingChunk.fr,
     ...accountingChunk.fr,
+    ...comptableChunk.fr,
+    ...rhAdminChunk.fr,
+    ...adminChunk.fr,
+    ...publicChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -622,6 +630,10 @@ const translations: Record<Locale, Record<string, string>> = {
     ...hrChunk.en,
     ...invoicingChunk.en,
     ...accountingChunk.en,
+    ...comptableChunk.en,
+    ...rhAdminChunk.en,
+    ...adminChunk.en,
+    ...publicChunk.en,
   },
 }
 

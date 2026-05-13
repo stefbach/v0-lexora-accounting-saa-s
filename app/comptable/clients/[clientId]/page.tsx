@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -79,20 +80,21 @@ interface AlerteEntry {
   societeName?: string
 }
 
-const MODULE_LINKS = (clientId: string, societeId: string) => [
-  { href: `/comptable/clients/${clientId}/${societeId}/tableau-de-bord`, label: "Tableau de Bord", icon: BarChart3 },
-  { href: `/comptable/clients/${clientId}/${societeId}/grand-livre`, label: "Grand Livre", icon: BookOpen },
-  { href: `/comptable/clients/${clientId}/${societeId}/balance`, label: "Balance", icon: Scale },
-  { href: `/comptable/clients/${clientId}/${societeId}/bilan`, label: "Bilan & P&L", icon: TrendingUp },
-  { href: `/comptable/clients/${clientId}/${societeId}/tva`, label: "TVA", icon: Receipt },
-  { href: `/comptable/clients/${clientId}/${societeId}/salaires`, label: "Salaires", icon: Wallet },
-  { href: `/comptable/clients/${clientId}/${societeId}/it-form3`, label: "IT Form 3", icon: Calculator },
-  { href: `/comptable/clients/${clientId}/${societeId}/documents`, label: "Documents", icon: FolderOpen },
+const MODULE_LINKS = (clientId: string, societeId: string, locale: Locale) => [
+  { href: `/comptable/clients/${clientId}/${societeId}/tableau-de-bord`, label: t('cabclt.client.mod_dashboard', locale), icon: BarChart3 },
+  { href: `/comptable/clients/${clientId}/${societeId}/grand-livre`, label: t('cabclt.client.mod_ledger', locale), icon: BookOpen },
+  { href: `/comptable/clients/${clientId}/${societeId}/balance`, label: t('cabclt.client.mod_balance', locale), icon: Scale },
+  { href: `/comptable/clients/${clientId}/${societeId}/bilan`, label: t('cabclt.client.mod_bilan', locale), icon: TrendingUp },
+  { href: `/comptable/clients/${clientId}/${societeId}/tva`, label: t('cabclt.client.mod_vat', locale), icon: Receipt },
+  { href: `/comptable/clients/${clientId}/${societeId}/salaires`, label: t('cabclt.client.mod_salaries', locale), icon: Wallet },
+  { href: `/comptable/clients/${clientId}/${societeId}/it-form3`, label: t('cabclt.client.mod_itform3', locale), icon: Calculator },
+  { href: `/comptable/clients/${clientId}/${societeId}/documents`, label: t('cabclt.client.mod_documents', locale), icon: FolderOpen },
 ]
 
 export default function FicheClientPage() {
   const params = useParams()
   const router = useRouter()
+  const locale = getLocale()
   const clientId = params.clientId as string
 
   const [loading, setLoading] = useState(true)
@@ -119,7 +121,7 @@ export default function FicheClientPage() {
         // Find client in the list
         const allClients = clientsData.clients || []
         const user = allClients.find((u: Record<string, unknown>) => u.id === clientId)
-        if (!user) throw new Error("Client introuvable")
+        if (!user) throw new Error(t('cabclt.client.client_not_found', locale))
 
         setClient({
           id: user.id,
@@ -144,7 +146,7 @@ export default function FicheClientPage() {
           if (!sId || societeMap.has(sId)) continue
           societeMap.set(sId, {
             id: sId,
-            nom: d.societe.nom || "Sans nom",
+            nom: d.societe.nom || t('cabclt.client.no_name', locale),
             brn: d.societe.brn || null,
             statut_tva: d.societe.statut_tva || false,
             derniere_activite: d.created_at || "",
@@ -217,7 +219,7 @@ export default function FicheClientPage() {
           })
         )
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Une erreur est survenue")
+        setError(err instanceof Error ? err.message : t('cabclt.client.error_occurred', locale))
       } finally {
         setLoading(false)
       }
@@ -239,11 +241,11 @@ export default function FicheClientPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
             <UserX className="h-12 w-12 text-muted-foreground/40" />
-            <p className="font-medium text-base">{error || "Client introuvable"}</p>
+            <p className="font-medium text-base">{error || t('cabclt.client.client_not_found', locale)}</p>
             <Link href="/comptable">
               <Button variant="outline" className="mt-2 gap-2" style={{ borderColor: NAVY, color: NAVY }}>
                 <ArrowLeft className="h-4 w-4" />
-                Retour au dashboard
+                {t('cabclt.client.back_dashboard', locale)}
               </Button>
             </Link>
           </CardContent>
@@ -279,11 +281,11 @@ export default function FicheClientPage() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link href="/comptable" className="flex items-center gap-1 hover:underline" style={{ color: NAVY }}>
             <ArrowLeft className="h-4 w-4" />
-            Dashboard
+            {t('cabclt.client.dashboard', locale)}
           </Link>
           <ChevronRight className="h-3 w-3" />
           <Link href="/comptable/clients" className="hover:underline" style={{ color: NAVY }}>
-            Portefeuille
+            {t('cabclt.client.portfolio', locale)}
           </Link>
           <ChevronRight className="h-3 w-3" />
           <span className="font-medium" style={{ color: NAVY }}>{client.full_name}</span>
@@ -302,7 +304,7 @@ export default function FicheClientPage() {
           onClick={() => setViewAsClient((v) => !v)}
         >
           <Eye className="h-4 w-4" />
-          {viewAsClient ? "Vue comptable" : "Voir comme le client"}
+          {viewAsClient ? t('cabclt.client.accountant_view', locale) : t('cabclt.client.view_as_client', locale)}
         </Button>
       </div>
 
@@ -328,7 +330,7 @@ export default function FicheClientPage() {
                       : "bg-gray-50 text-gray-600 border-gray-200"
                   }
                 >
-                  {client.role === "client_admin" ? "Admin" : "Utilisateur"}
+                  {client.role === "client_admin" ? t('cabclt.client.role_admin', locale) : t('cabclt.client.role_user', locale)}
                 </Badge>
                 <Badge
                   className={
@@ -337,7 +339,7 @@ export default function FicheClientPage() {
                       : "bg-red-50 text-red-700 border-red-200"
                   }
                 >
-                  {client.is_active ? "Actif" : "Inactif"}
+                  {client.is_active ? t('cabclt.client.active', locale) : t('cabclt.client.inactive', locale)}
                 </Badge>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
@@ -353,15 +355,15 @@ export default function FicheClientPage() {
                 )}
                 <span className="flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" />
-                  Client depuis{" "}
-                  {new Date(client.created_at).toLocaleDateString("fr-FR", {
+                  {t('cabclt.client.client_since', locale)}{" "}
+                  {new Date(client.created_at).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB', {
                     month: "long",
                     year: "numeric",
                   })}
                 </span>
                 <span className="flex items-center gap-1">
                   <Building2 className="h-3.5 w-3.5" />
-                  {societes.length} société{societes.length !== 1 ? "s" : ""}
+                  {societes.length} {societes.length !== 1 ? t('cabclt.client.companies', locale) : t('cabclt.client.company', locale)}
                 </span>
               </div>
             </div>
