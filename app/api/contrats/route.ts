@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       .from('contrats_clients')
       .select(`
         *,
-        societe:societes(id, nom, numero_registrar),
+        societe:societes(id, nom, brn),
         client:profiles!client_id(id, full_name, email),
         comptable:profiles!comptable_id(id, full_name)
       `, { count: 'exact' })

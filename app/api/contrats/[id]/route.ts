@@ -16,7 +16,7 @@ export async function GET(
       .from('contrats_clients')
       .select(`
         *,
-        societe:societes(id, nom, numero_registrar, adresse),
+        societe:societes(id, nom, brn, adresse),
         client:profiles!client_id(id, full_name, email, phone),
         comptable:profiles!comptable_id(id, full_name, email),
         versions:contrat_versions(id, version, raison_modification, created_at, modifie_par)
