@@ -96,10 +96,10 @@ function normalizeSocieteName(detected: string | null, knownSocietes: { nom: str
   return detected
 }
 
-function statutBadge(s: string) {
-  if (s === "traite") return <Badge className="bg-green-100 text-green-700">Traité</Badge>
-  if (s === "en_cours" || s === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Clock className="h-3 w-3 mr-1" />Analyse en cours...</Badge>
-  if (s === "erreur") return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />Erreur</Badge>
+function statutBadge(s: string, locale: Locale) {
+  if (s === "traite") return <Badge className="bg-green-100 text-green-700">{t('core.doc.status_processed', locale)}</Badge>
+  if (s === "en_cours" || s === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Clock className="h-3 w-3 mr-1" />{t('core.doc.status_analyzing', locale)}</Badge>
+  if (s === "erreur") return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />{t('core.doc.status_error', locale)}</Badge>
   return <Badge variant="outline">{s}</Badge>
 }
 
@@ -129,6 +129,9 @@ function getDocsForFolder(docs: Document[], folderKey: string): Document[] {
 }
 
 export default function ClientDocumentsPage() {
+  const locale = getLocale()
+  const FOLDERS = getFolders(locale)
+  const DOCUMENT_TYPES = getDocumentTypes(locale)
   const { profile } = useProfile()
   const { societeId, societe, societes: providerSocietes, switchSociete } = useSocieteActive()
   // `societes` reconstruit au format { id: string, nom: string } attendu par les helpers
@@ -154,7 +157,7 @@ export default function ClientDocumentsPage() {
   const handleBulkDelete = async () => {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) return
-    if (!confirm(`Supprimer ${ids.length} document(s) sélectionné(s) ?\n\nCela supprime les fichiers du storage ET toutes les écritures/factures/relevés liés. Action irréversible.`)) return
+    if (!confirm(`${t('core.doc.confirm_bulk_delete_a', locale)} ${ids.length} ${t('core.doc.confirm_bulk_delete_b', locale)}\n\n${t('core.doc.confirm_bulk_delete_warning', locale)}`)) return
     setBulkDeleting(true)
     try {
       const res = await fetch('/api/documents/bulk-delete', {
@@ -166,9 +169,9 @@ export default function ClientDocumentsPage() {
       if (!res.ok) { alert(data.error || `Erreur HTTP ${res.status}`); return }
       setDocuments(prev => prev.filter(d => !data.deleted?.includes(d.id)))
       setSelectedIds(new Set())
-      if (data.failed_count > 0) alert(`${data.deleted_count} supprimés, ${data.failed_count} échecs.`)
+      if (data.failed_count > 0) alert(`${data.deleted_count} ${t('core.doc.deleted_failed_msg', locale)} ${data.failed_count} ${t('core.doc.failures', locale)}`)
     } catch {
-      alert('Erreur de connexion')
+      alert(t('core.doc.connection_error', locale))
     } finally {
       setBulkDeleting(false)
     }
@@ -268,7 +271,7 @@ export default function ClientDocumentsPage() {
 
     // En mode mono-société: l'upload cible TOUJOURS la société active.
     if (!societeId) {
-      setUploadError("Aucune société active. Retournez à /client/select-societe.")
+      setUploadError(t('core.doc.no_active_company', locale))
       setTimeout(() => setUploadError(null), 5000)
       return
     }
@@ -294,7 +297,7 @@ export default function ClientDocumentsPage() {
           if (data.needs_confirmation) {
             setConfirmSocDoc({ id: doc.id, filename: file.name, detected: data.societe_detectee })
             setConfirmSocId(societes.length > 0 ? societes[0].id : "")
-            setUploadSuccess(`${file.name} envoyé — veuillez confirmer la société.`)
+            setUploadSuccess(`${file.name} ${t('core.doc.sent_confirm_company', locale)}`)
           } else if (doc.statut === "traite" && doc.type_document) {
             const folderLabel = FOLDERS.find(f => f.key === doc.type_document)?.label || doc.type_document
 
@@ -309,15 +312,15 @@ export default function ClientDocumentsPage() {
                 targetSocieteId: mismatch.id,
                 targetSocieteNom: mismatch.nom,
               })
-              setUploadSuccess(`${file.name} classé dans "${folderLabel}" — OCR suggère ${mismatch.nom}.`)
+              setUploadSuccess(`${file.name} ${t('core.doc.classified_in', locale)} "${folderLabel}" — ${t('core.doc.ocr_suggests', locale)} ${mismatch.nom}.`)
             } else {
-              setUploadSuccess(`${file.name} classé dans "${folderLabel}" !`)
+              setUploadSuccess(`${file.name} ${t('core.doc.classified_in', locale)} "${folderLabel}" !`)
             }
           // Auto-reanalyze "autre" documents with low confidence
           if (doc.type_document === "autre") {
             const conf = doc.confiance_type ?? doc.n8n_result?.routing?.confiance_type ?? 100
             if (conf < 70) {
-              setUploadSuccess(`${file.name} — Type non reconnu. Nouvelle analyse en cours...`)
+              setUploadSuccess(`${file.name} — ${t('core.doc.unrecognized_type_reanalyze', locale)}`)
               fetch(`/api/documents/${doc.id}/reanalyze`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({}),
@@ -325,9 +328,9 @@ export default function ClientDocumentsPage() {
             }
           }
           } else if (doc.statut === "erreur") {
-            setUploadError(`${file.name} : erreur d'analyse. Utilisez Réessayer.`)
+            setUploadError(`${file.name} : ${t('core.doc.error_analyze_retry', locale)}`)
           } else {
-            setUploadSuccess(`${file.name} envoyé !`)
+            setUploadSuccess(`${file.name} ${t('core.doc.sent', locale)}`)
           }
         } else {
           if (res.status === 409 && data.doublon) {
@@ -335,14 +338,14 @@ export default function ClientDocumentsPage() {
               // Show reprocess confirmation dialog for erreur/en_attente docs
               setReprocessDoc({ id: data.existingId, filename: file.name })
             } else {
-              setUploadError(`⚠️ Ce document a déjà été importé : "${file.name}"`)
+              setUploadError(`⚠️ ${t('core.doc.already_imported', locale)} : "${file.name}"`)
             }
           } else {
-            setUploadError(data.error || "Erreur lors de l'envoi")
+            setUploadError(data.error || t('core.doc.error_uploading', locale))
           }
         }
       } catch {
-        setUploadError("Erreur de connexion au serveur")
+        setUploadError(t('core.doc.connection_error_server', locale))
       }
     }
     await fetchDocuments()
@@ -364,13 +367,13 @@ export default function ClientDocumentsPage() {
         }),
       })
       if (patchRes.ok) {
-        setUploadSuccess(`Document réassigné avec succès à la société sélectionnée.`)
+        setUploadSuccess(t('core.doc.doc_reassigned_success', locale))
       } else {
         const errData = await patchRes.json()
-        setUploadError(errData.error || "Erreur lors de la réassignation")
+        setUploadError(errData.error || t('core.doc.error_reassign', locale))
       }
     } catch {
-      setUploadError("Erreur lors de la réassignation")
+      setUploadError(t('core.doc.error_reassign', locale))
     }
     setReassignDoc(null)
     setReassignSocieteId("")
@@ -424,22 +427,22 @@ export default function ClientDocumentsPage() {
   return (
     <ClientPageShell
       breadcrumbs={[
-        { label: "Espace client", href: "/client" },
-        { label: "Documents & OCR" },
+        { label: t('core.doc.breadcrumb_client', locale), href: "/client" },
+        { label: t('core.doc.docs_ocr', locale) },
       ]}
-      kicker="OCR IA · détection automatique"
-      title="Mes Documents"
-      subtitle="Déposez vos factures, reçus et relevés — l'OCR extrait les données et les classe automatiquement par société et par nature."
+      kicker={t('core.doc.kicker', locale)}
+      title={t('core.doc.my_documents', locale)}
+      subtitle={t('core.doc.subtitle', locale)}
     >
       {/* Bandeau info: les documents seront uploadés sur la société active */}
       {societe && (
         <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
           <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm" style={{ color: NAVY }}>
-            Upload sur : <strong>{societe.nom}</strong>
+            {t('core.doc.upload_on', locale)} : <strong>{societe.nom}</strong>
           </span>
           <span className="text-xs text-muted-foreground">
-            Si un document concerne une autre société, changez de société dans la barre latérale avant d&apos;uploader.
+            {t('core.doc.upload_other_co_hint', locale)}
           </span>
         </div>
       )}
