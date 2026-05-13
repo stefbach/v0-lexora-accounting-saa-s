@@ -12,6 +12,7 @@ import {
   Eye, ShieldAlert, CalendarDays, Wallet,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import {
   formaterMontantMUR, formaterPct, getMotifLabel,
   type EoyBonusCalcul, type EoyBonusRecap,
@@ -28,6 +29,7 @@ type EoyCalculEnriched = EoyBonusCalcul & {
 }
 
 export default function EoyBonusPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [annee, setAnnee] = useState<number>(new Date().getFullYear())
@@ -194,10 +196,10 @@ export default function EoyBonusPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2" style={{ color: NAVY }}>
             <Gift className="h-7 w-7" style={{ color: GOLD }} />
-            End of Year Bonus
+            {t('rha.b.eoy.title', locale)}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Workers&apos; Rights Act 2019 Section 54. Paiement 75% avant le 25/12 et 25% avant le 31/12.
+            {t('rha.b.eoy.subtitle', locale)}
           </p>
         </div>
 

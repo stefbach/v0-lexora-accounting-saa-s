@@ -14,6 +14,7 @@ import {
   ChevronLeft, ChevronRight, Sun, Moon, Sparkles, Clock, MapPin
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 // ─── Colors ───
 const NAVY = "#0B0F2E"
@@ -346,6 +347,7 @@ function HolidayCard({
 // ══════════════════════════════════════════════════════════════
 
 export default function JoursFeriesPage() {
+  const locale: Locale = getLocale()
   const currentYear = new Date().getFullYear()
   const years = [currentYear - 1, currentYear, currentYear + 1, currentYear + 2]
   const [activeYear, setActiveYear] = useState(currentYear.toString())
@@ -668,7 +670,7 @@ export default function JoursFeriesPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: NAVY }}>
             <Calendar className="w-7 h-7" style={{ color: GOLD }} />
-            Jours fériés
+            {t('rha.b.jf.title', locale)}
           </h1>
           <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
             <MapPin size={12} /> Maurice (Mauritius) &mdash; Calendrier officiel

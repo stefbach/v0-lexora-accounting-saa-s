@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
@@ -515,6 +516,7 @@ function RecentDepartures({ refreshKey, onReintegrated }: { refreshKey: number; 
 
 // ── Main page ──
 export default function DepartPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [breakdown, setBreakdown] = useState<any>(null)
   const [formData, setFormData] = useState<any>(null)
@@ -565,8 +567,8 @@ export default function DepartPage() {
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des départs</h1>
-        <p className="text-sm text-gray-500">Calculer le solde de tout compte et enregistrer les départs</p>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.b.depart.title', locale)}</h1>
+        <p className="text-sm text-gray-500">{t('rha.b.depart.subtitle', locale)}</p>
       </div>
 
       {/* Success message */}

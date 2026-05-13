@@ -20,6 +20,7 @@ import { IAS19EoyProvisionWidget } from "@/components/rh/IAS19EoyProvisionWidget
 import { DeclarationsMraWidget } from "@/components/rh/DeclarationsMraWidget"
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts"
 import Link from "next/link"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -41,14 +42,16 @@ const TAB_ICONS: Record<Tab, React.ComponentType<{ className?: string }>> = {
   parametres: Settings,
 }
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "dashboard", label: "Tableau de bord" },
-  { id: "pointages", label: "Pointages" },
-  { id: "absences", label: "Absences & Conges" },
-  { id: "primes", label: "Primes" },
-  { id: "paie", label: "Paie" },
-  { id: "parametres", label: "Parametres" },
-]
+function buildTabs(locale: Locale): { id: Tab; label: string }[] {
+  return [
+    { id: "dashboard", label: t('rha.a.dash.tab_dashboard', locale) },
+    { id: "pointages", label: t('rha.a.dash.tab_pointages', locale) },
+    { id: "absences", label: t('rha.a.dash.tab_absences', locale) },
+    { id: "primes", label: t('rha.a.dash.tab_primes', locale) },
+    { id: "paie", label: t('rha.a.dash.tab_paie', locale) },
+    { id: "parametres", label: t('rha.a.dash.tab_parametres', locale) },
+  ]
+}
 
 
 const ABSENCES_TYPE_DATA = [
@@ -99,6 +102,8 @@ function AnimatedKPIValue({ value, isCurrency, loading }: { value: number; isCur
 
 
 export default function RHDashboard() {
+  const locale = getLocale()
+  const TABS = buildTabs(locale)
   const [tab, setTab] = useState<Tab>("dashboard")
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
@@ -224,17 +229,17 @@ export default function RHDashboard() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "RH · Paie", href: "/rh" }, { label: "Tableau de bord" }]}
-      kicker={`RH & Paie · ${new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`}
-      title="Tableau de bord RH"
-      subtitle="Vue consolidée de votre équipe, des absences, des bulletins et des échéances MRA. Conforme WRA 2019."
+      breadcrumbs={[{ label: t('rha.a.dash.bc_rh', locale), href: "/rh" }, { label: t('rha.a.dash.bc_dashboard', locale) }]}
+      kicker={`${t('rha.a.dash.kicker_prefix', locale)} · ${new Date().toLocaleDateString(locale === 'fr' ? "fr-FR" : "en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`}
+      title={t('rha.a.dash.title', locale)}
+      subtitle={t('rha.a.dash.subtitle', locale)}
       actions={
         <Select value={societe} onValueChange={setSociete}>
           <SelectTrigger className="w-56" style={{ borderColor: "#D8DFED", borderRadius: 10 }}>
-            <SelectValue placeholder="Toutes sociétés" />
+            <SelectValue placeholder={t('rha.a.common.toutes_societes', locale)} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Toutes les sociétés</SelectItem>
+            <SelectItem value="all">{t('rha.a.common.toutes_les_societes', locale)}</SelectItem>
             {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -311,12 +316,12 @@ export default function RHDashboard() {
         </div>
 
         {/* Tab Content */}
-        {tab === "dashboard" && <DashboardTab stats={stats} loading={loading} chartData={chartData} deptData={deptData} />}
-        {tab === "pointages" && <PointagesTab />}
-        {tab === "absences" && <AbsencesTab />}
-        {tab === "primes" && <PrimesTab />}
-        {tab === "paie" && <PaieTab />}
-        {tab === "parametres" && <ParametresTab />}
+        {tab === "dashboard" && <DashboardTab stats={stats} loading={loading} chartData={chartData} deptData={deptData} locale={locale} />}
+        {tab === "pointages" && <PointagesTab locale={locale} />}
+        {tab === "absences" && <AbsencesTab locale={locale} />}
+        {tab === "primes" && <PrimesTab locale={locale} />}
+        {tab === "paie" && <PaieTab locale={locale} />}
+        {tab === "parametres" && <ParametresTab locale={locale} />}
       </div>
     </ClientPageShell>
   )
@@ -507,7 +512,7 @@ function ChartTooltip({ active, payload, label, isCurrency }: any) {
   )
 }
 
-function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loading: boolean; chartData: any[]; deptData: any[] }) {
+function DashboardTab({ stats, loading, chartData, deptData, locale }: { stats: any; loading: boolean; chartData: any[]; deptData: any[]; locale: Locale }) {
   // Premium panel style aligned with the homepage + /client — layered
   // shadows + subtle gradient instead of flat white.
   const cardStyle = {
@@ -519,10 +524,10 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
   }
 
   const kpis = [
-    { label: "Employés actifs",      value: stats.nb_employes,        icon: Users,      strong: "#4191FF", dark: "#1D5FC4", href: "/rh/employes", isCurrency: false },
-    { label: "Masse salariale brute", value: stats.masse_salariale,   icon: Banknote,   strong: "#2ECC8A", dark: "#1F9B68", href: "/rh/paie",     isCurrency: true  },
-    { label: "Charges patronales",   value: stats.charges_patronales, icon: CreditCard, strong: "#D4AF37", dark: "#A88925", href: "/rh/paie",     isCurrency: true  },
-    { label: "Absences ce mois",     value: stats.conges_attente,     icon: Calendar,   strong: "#E25555", dark: "#B93B3B", href: "/rh/conges",   isCurrency: false },
+    { label: t('rha.a.dash.kpi_employes_actifs', locale),    value: stats.nb_employes,        icon: Users,      strong: "#4191FF", dark: "#1D5FC4", href: "/rh/employes", isCurrency: false },
+    { label: t('rha.a.dash.kpi_masse_brute', locale),        value: stats.masse_salariale,   icon: Banknote,   strong: "#2ECC8A", dark: "#1F9B68", href: "/rh/paie",     isCurrency: true  },
+    { label: t('rha.a.dash.kpi_charges_patronales', locale), value: stats.charges_patronales, icon: CreditCard, strong: "#D4AF37", dark: "#A88925", href: "/rh/paie",     isCurrency: true  },
+    { label: t('rha.a.dash.kpi_absences_mois', locale),      value: stats.conges_attente,     icon: Calendar,   strong: "#E25555", dark: "#B93B3B", href: "/rh/conges",   isCurrency: false },
   ]
 
   return (
@@ -618,7 +623,7 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
         <Card className="lg:col-span-2" style={cardStyle}>
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
-              <TrendingUp className="w-4 h-4" style={{ color: BLUE }} /> Evolution masse salariale (12 mois)
+              <TrendingUp className="w-4 h-4" style={{ color: BLUE }} /> {t('rha.a.dash.evolution_masse', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -640,7 +645,7 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
         <Card style={cardStyle}>
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
-              <Users className="w-4 h-4" style={{ color: GOLD }} /> Repartition par departement
+              <Users className="w-4 h-4" style={{ color: GOLD }} /> {t('rha.a.dash.repartition_dept', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -675,7 +680,7 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
         <Card style={cardStyle}>
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
-              <Calendar className="w-4 h-4" style={{ color: "#EF4444" }} /> Absences par type
+              <Calendar className="w-4 h-4" style={{ color: "#EF4444" }} /> {t('rha.a.dash.absences_par_type', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -694,13 +699,13 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
 
         {/* Quick Actions */}
         <div className="lg:col-span-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: SECONDARY }}>Actions rapides</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: SECONDARY }}>{t('rha.a.dash.actions_rapides', locale)}</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { href: "/rh/paie", label: "Calculer paie", icon: Calculator, color: "#10B981", bg: "#ECFDF5" },
-              { href: "/rh/pointage", label: "Pointage du jour", icon: Clock, color: "#4191FF", bg: "#EBF3FF" },
-              { href: "/rh/conges", label: "Nouvelle absence", icon: CalendarDays, color: "#F59E0B", bg: "#FFF7ED" },
-              { href: "/rh/paie/exports-mra", label: "Export virement", icon: Upload, color: "#8B5CF6", bg: "#F3F0FF" },
+              { href: "/rh/paie", label: t('rha.a.dash.action_calculer_paie', locale), icon: Calculator, color: "#10B981", bg: "#ECFDF5" },
+              { href: "/rh/pointage", label: t('rha.a.dash.action_pointage_jour', locale), icon: Clock, color: "#4191FF", bg: "#EBF3FF" },
+              { href: "/rh/conges", label: t('rha.a.dash.action_nouvelle_absence', locale), icon: CalendarDays, color: "#F59E0B", bg: "#FFF7ED" },
+              { href: "/rh/paie/exports-mra", label: t('rha.a.dash.action_export_virement', locale), icon: Upload, color: "#8B5CF6", bg: "#F3F0FF" },
             ].map(a => (
               <Link key={a.href} href={a.href}>
                 <Card className="hover:shadow-md transition-all cursor-pointer group" style={{ ...cardStyle, borderColor: CARD_BORDER }}>
@@ -724,7 +729,7 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
         <Card style={cardStyle}>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
-              <Briefcase className="w-4 h-4" /> Modules RH
+              <Briefcase className="w-4 h-4" /> {t('rha.a.dash.modules_rh', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
@@ -756,7 +761,7 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
         <Card style={cardStyle}>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
-              <AlertTriangle className="w-4 h-4 text-amber-500" /> Obligations legales Maurice
+              <AlertTriangle className="w-4 h-4 text-amber-500" /> {t('rha.a.dash.obligations_legales', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-0">
@@ -798,10 +803,10 @@ function DashboardTab({ stats, loading, chartData, deptData }: { stats: any; loa
 }
 
 
-function PointagesTab() {
+function PointagesTab({ locale }: { locale: Locale }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm" style={{ color: SECONDARY }}>Raccourcis vers la gestion des pointages :</p>
+      <p className="text-sm" style={{ color: SECONDARY }}>{t('rha.a.dash.tab_pointages_desc', locale)}</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Link href="/rh/pointage">
           <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
@@ -810,8 +815,8 @@ function PointagesTab() {
                 <Clock className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <p className="font-bold text-lg" style={{ color: NAVY }}>Pointage temps reel</p>
-                <p className="text-sm" style={{ color: SECONDARY }}>Presences du jour, pointage manuel, corrections immediates</p>
+                <p className="font-bold text-lg" style={{ color: NAVY }}>{t('rha.a.dash.pointage_temps_reel', locale)}</p>
+                <p className="text-sm" style={{ color: SECONDARY }}>{t('rha.a.dash.pointage_temps_reel_desc', locale)}</p>
               </div>
             </CardContent>
           </Card>
@@ -823,8 +828,8 @@ function PointagesTab() {
                 <CalendarDays className="w-6 h-6 text-purple-600" />
               </div>
               <div>
-                <p className="font-bold text-lg" style={{ color: NAVY }}>Pointage mensuel</p>
-                <p className="text-sm" style={{ color: SECONDARY }}>Calendrier mensuel, validation OT, absences injustifiees</p>
+                <p className="font-bold text-lg" style={{ color: NAVY }}>{t('rha.a.dash.pointage_mensuel', locale)}</p>
+                <p className="text-sm" style={{ color: SECONDARY }}>{t('rha.a.dash.pointage_mensuel_desc', locale)}</p>
               </div>
             </CardContent>
           </Card>
@@ -834,10 +839,10 @@ function PointagesTab() {
   )
 }
 
-function AbsencesTab() {
+function AbsencesTab({ locale }: { locale: Locale }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm" style={{ color: SECONDARY }}>Gestion complete des absences et conges :</p>
+      <p className="text-sm" style={{ color: SECONDARY }}>{t('rha.a.dash.tab_absences_desc', locale)}</p>
       <Link href="/rh/conges">
         <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
           <CardContent className="p-6 flex items-center gap-4">
@@ -845,8 +850,8 @@ function AbsencesTab() {
               <Calendar className="w-6 h-6 text-orange-600" />
             </div>
             <div>
-              <p className="font-bold text-lg" style={{ color: NAVY }}>Absences & Conges</p>
-              <p className="text-sm" style={{ color: SECONDARY }}>Demandes en attente, planning, absences non planifiees -- validation + impact paie</p>
+              <p className="font-bold text-lg" style={{ color: NAVY }}>{t('rha.a.dash.absences_conges', locale)}</p>
+              <p className="text-sm" style={{ color: SECONDARY }}>{t('rha.a.dash.absences_conges_desc', locale)}</p>
             </div>
           </CardContent>
         </Card>
@@ -855,10 +860,10 @@ function AbsencesTab() {
   )
 }
 
-function PrimesTab() {
+function PrimesTab({ locale }: { locale: Locale }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm" style={{ color: SECONDARY }}>Catalogue et saisie mensuelle des primes :</p>
+      <p className="text-sm" style={{ color: SECONDARY }}>{t('rha.a.dash.tab_primes_desc', locale)}</p>
       <Link href="/rh/paie/primes">
         <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
           <CardContent className="p-6 flex items-center gap-4">
@@ -866,8 +871,8 @@ function PrimesTab() {
               <Target className="w-6 h-6 text-amber-600" />
             </div>
             <div>
-              <p className="font-bold text-lg" style={{ color: NAVY }}>Primes parametrables</p>
-              <p className="text-sm" style={{ color: SECONDARY }}>Catalogue primes, saisie mensuelle variable, approbation, integration automatique dans la paie</p>
+              <p className="font-bold text-lg" style={{ color: NAVY }}>{t('rha.a.dash.primes_param', locale)}</p>
+              <p className="text-sm" style={{ color: SECONDARY }}>{t('rha.a.dash.primes_param_desc', locale)}</p>
             </div>
           </CardContent>
         </Card>
@@ -876,16 +881,16 @@ function PrimesTab() {
   )
 }
 
-function PaieTab() {
+function PaieTab({ locale }: { locale: Locale }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm" style={{ color: SECONDARY }}>Module paie complet :</p>
+      <p className="text-sm" style={{ color: SECONDARY }}>{t('rha.a.dash.tab_paie_desc', locale)}</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
-          { href: "/rh/paie", icon: Calculator, label: "Bulletins de paie", desc: "Calcul batch, validation, PDF individuel", color: "text-green-600", bg: "bg-green-50" },
-          { href: "/rh/paie/exports-mra", icon: Building2, label: "Exports MRA", desc: "CSG/NSF, PAYE, PRGF, virements bancaires", color: "text-blue-600", bg: "bg-blue-50" },
-          { href: "/rh/paie/primes", icon: Target, label: "Primes du mois", desc: "Saisie et approbation des primes variables", color: "text-amber-600", bg: "bg-amber-50" },
-          { href: "/rh/paie/parametres", icon: Settings, label: "Parametres paie", desc: "Taux MRA, OT, jours feries", color: "text-gray-600", bg: "bg-gray-100" },
+          { href: "/rh/paie", icon: Calculator, label: t('rha.a.dash.bulletins_paie', locale), desc: t('rha.a.dash.bulletins_paie_desc', locale), color: "text-green-600", bg: "bg-green-50" },
+          { href: "/rh/paie/exports-mra", icon: Building2, label: t('rha.a.dash.exports_mra', locale), desc: t('rha.a.dash.exports_mra_desc', locale), color: "text-blue-600", bg: "bg-blue-50" },
+          { href: "/rh/paie/primes", icon: Target, label: t('rha.a.dash.primes_mois', locale), desc: t('rha.a.dash.primes_mois_desc', locale), color: "text-amber-600", bg: "bg-amber-50" },
+          { href: "/rh/paie/parametres", icon: Settings, label: t('rha.a.dash.params_paie', locale), desc: t('rha.a.dash.params_paie_desc', locale), color: "text-gray-600", bg: "bg-gray-100" },
         ].map(a => (
           <Link key={a.href} href={a.href}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
@@ -906,10 +911,10 @@ function PaieTab() {
   )
 }
 
-function ParametresTab() {
+function ParametresTab({ locale }: { locale: Locale }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm" style={{ color: SECONDARY }}>Configuration de l&apos;environnement RH :</p>
+      <p className="text-sm" style={{ color: SECONDARY }}>{t('rha.a.dash.tab_param_desc', locale)}</p>
       <Link href="/rh/paie/parametres">
         <Card className="hover:shadow-md transition-shadow cursor-pointer" style={{ border: `2px solid ${CARD_BORDER}`, borderRadius: 12, background: "#FFFFFF" }}>
           <CardContent className="p-6 flex items-center gap-4">
@@ -917,8 +922,8 @@ function ParametresTab() {
               <Settings className="w-6 h-6 text-gray-600" />
             </div>
             <div>
-              <p className="font-bold text-lg" style={{ color: NAVY }}>Parametres paie & RH</p>
-              <p className="text-sm" style={{ color: SECONDARY }}>Taux MRA 2024/25, calcul OT (1.5x / 2x), jours feries Maurice, taux change EUR/MUR</p>
+              <p className="font-bold text-lg" style={{ color: NAVY }}>{t('rha.a.dash.params_paie_rh', locale)}</p>
+              <p className="text-sm" style={{ color: SECONDARY }}>{t('rha.a.dash.params_paie_rh_desc', locale)}</p>
             </div>
           </CardContent>
         </Card>
@@ -932,11 +937,12 @@ function ParametresTab() {
 // Card discrète — pointage, congés, frais kilométriques, vue complète.
 
 function MonEspaceQuickActions() {
+  const locale = getLocale()
   const actions = [
-    { href: "/salarie/pointage", label: "Pointer",            icon: Clock, color: "#4191FF" },
-    { href: "/salarie/conges",   label: "Demander un congé", icon: Calendar, color: "#2ECC8A" },
-    { href: "/salarie/frais",    label: "Mes frais",          icon: Car, color: "#F97316" },
-    { href: "/salarie",          label: "Voir tout mon espace", icon: UserCircle, color: GOLD },
+    { href: "/salarie/pointage", label: t('rha.a.dash.qa_pointer', locale),    icon: Clock, color: "#4191FF" },
+    { href: "/salarie/conges",   label: t('rha.a.dash.qa_conge', locale),      icon: Calendar, color: "#2ECC8A" },
+    { href: "/salarie/frais",    label: t('rha.a.dash.qa_frais', locale),      icon: Car, color: "#F97316" },
+    { href: "/salarie",          label: t('rha.a.dash.qa_voir_tout', locale),  icon: UserCircle, color: GOLD },
   ]
   return (
     <Card
@@ -952,7 +958,7 @@ function MonEspaceQuickActions() {
             >
               <UserCircle className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm font-semibold" style={{ color: NAVY }}>Mon espace</span>
+            <span className="text-sm font-semibold" style={{ color: NAVY }}>{t('rha.a.dash.mon_espace', locale)}</span>
           </div>
           <Link href="/salarie" className="text-xs font-medium hover:underline" style={{ color: BLUE }}>
             Ouvrir →

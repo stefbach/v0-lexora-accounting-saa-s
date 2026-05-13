@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Car, Bike, Navigation, CheckCircle, XCircle, Settings, TrendingUp, Route, DollarSign, Save } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -75,6 +76,7 @@ interface Parametre {
 }
 
 export default function TrajetsKmPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
   const [trajets, setTrajets] = useState<Trajet[]>([])
@@ -228,9 +230,9 @@ export default function TrajetsKmPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: NAVY }}>
             <Route className="h-6 w-6" style={{ color: GOLD }} />
-            Indemnités Kilométriques
+            {t('rha.b.trajets.title', locale)}
           </h1>
-          <p className="text-gray-500 text-sm">Suivi GPS des trajets et calcul automatique des indemnités</p>
+          <p className="text-gray-500 text-sm">{t('rha.b.trajets.subtitle', locale)}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={societe} onValueChange={setSociete}>

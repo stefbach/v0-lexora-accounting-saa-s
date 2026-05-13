@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Plus, Loader2, ShoppingCart, TrendingDown, Clock, AlertCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Facture {
   id: string
@@ -42,6 +43,7 @@ function fmt(n: number, devise = "MUR") {
 }
 
 export default function FournisseursPage() {
+  const locale = getLocale()
   const [factures, setFactures] = useState<Facture[]>([])
   const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
@@ -125,13 +127,13 @@ export default function FournisseursPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Fournisseurs</h1>
-          <p className="text-sm text-gray-500 mt-1">Gestion des dettes fournisseurs (AP)</p>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('cab.fournisseurs.title', locale)}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('cab.fournisseurs.subtitle', locale)}</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-[#0B0F2E] text-white hover:bg-[#2a3a5a]">
-              <Plus className="w-4 h-4 mr-2" /> Nouvelle facture fournisseur
+              <Plus className="w-4 h-4 mr-2" /> {t('cab.fournisseurs.new', locale)}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
@@ -199,7 +201,7 @@ export default function FournisseursPage() {
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input className="pl-9" placeholder="Rechercher fournisseur..." value={search} onChange={e => setSearch(e.target.value)} />
+            <Input className="pl-9" placeholder={t('cab.fournisseurs.search', locale)} value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <Select value={filterSociete} onValueChange={setFilterSociete}>
             <SelectTrigger className="w-48"><SelectValue placeholder="Toutes les sociétés" /></SelectTrigger>
@@ -226,7 +228,7 @@ export default function FournisseursPage() {
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">Aucune facture fournisseur</div>
+            <div className="text-center py-12 text-gray-500">{t('cab.fournisseurs.empty', locale)}</div>
           ) : (
             <Table>
               <TableHeader>

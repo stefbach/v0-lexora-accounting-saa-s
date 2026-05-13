@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Scale, Download, TrendingUp, TrendingDown } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface BalanceLigne {
   compte: string; classe: string
@@ -32,6 +33,7 @@ function fmt(n: number) {
 }
 
 export default function BalancePage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [selectedSociete, setSelectedSociete] = useState("all")
   const [balance, setBalance] = useState<BalanceLigne[]>([])
@@ -75,27 +77,27 @@ export default function BalancePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Balance Générale</h1>
-          <p className="text-sm text-gray-500 mt-1">Soldes débiteurs et créditeurs par compte</p>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('cab.charges.title', locale)}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('cab.charges.subtitle', locale)}</p>
         </div>
-        <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> Exporter</Button>
+        <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> {t('cab.charges.export', locale)}</Button>
       </div>
 
       {/* Filtres */}
       <Card><CardContent className="p-4 flex flex-wrap gap-3">
         <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-          <SelectTrigger className="w-56"><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
+          <SelectTrigger className="w-56"><SelectValue placeholder={t('cab.charges.choose_company', locale)} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">-- Choisir une société --</SelectItem>
+            <SelectItem value="all">{t('cab.charges.choose_company_opt', locale)}</SelectItem>
             {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
           </SelectContent>
         </Select>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Au :</span>
+          <span className="text-sm text-gray-500">{t('cab.charges.at_date', locale)}</span>
           <Input type="date" className="w-40" value={dateFin} onChange={e => setDateFin(e.target.value)} />
         </div>
         {selectedSociete !== "all" && (
-          <Button onClick={fetchData} className="bg-[#0B0F2E] text-white">Actualiser</Button>
+          <Button onClick={fetchData} className="bg-[#0B0F2E] text-white">{t('cab.charges.refresh', locale)}</Button>
         )}
       </CardContent></Card>
 
@@ -119,15 +121,15 @@ export default function BalancePage() {
       {/* Balance par classe */}
       <Card>
         <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2">
-          <Scale className="w-5 h-5" /> Balance par classe
+          <Scale className="w-5 h-5" /> {t('cab.charges.balance_by_class', locale)}
         </CardTitle></CardHeader>
         <CardContent className="p-0">
           {selectedSociete === "all" ? (
-            <div className="text-center py-12 text-gray-500">Sélectionnez une société pour afficher la balance</div>
+            <div className="text-center py-12 text-gray-500">{t('cab.charges.select_company', locale)}</div>
           ) : loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
           ) : balance.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">Aucune écriture comptable enregistrée</div>
+            <div className="text-center py-12 text-gray-500">{t('cab.charges.empty', locale)}</div>
           ) : (
             <div className="divide-y">
               {Object.entries(parClasse).sort(([a], [b]) => a.localeCompare(b)).map(([classe, lignes]) => {

@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Save, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 type Params = {
   org_nom: string
@@ -49,6 +50,7 @@ const DEFAULTS: Params = {
 }
 
 export default function AdminParametresPage() {
+  const locale = getLocale()
   const [params, setParams] = useState<Params>(DEFAULTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -78,12 +80,12 @@ export default function AdminParametresPage() {
         body: JSON.stringify(params),
       })
       const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error || "Erreur sauvegarde")
+      if (!res.ok || data.error) throw new Error(data.error || t('adm.params.err_save', locale))
       setSaveStatus("success")
       setTimeout(() => setSaveStatus("idle"), 3000)
     } catch (e: unknown) {
       setSaveStatus("error")
-      setSaveError(e instanceof Error ? e.message : "Erreur inconnue")
+      setSaveError(e instanceof Error ? e.message : t('adm.params.err_unknown', locale))
     } finally {
       setSaving(false)
     }

@@ -267,13 +267,13 @@ export default function ImportPaiePage() {
           {/* Vérification cohérence */}
           {totals.brut > 0 && Math.abs(totals.brut - totals.deductions - totals.net) > 100 && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
-              Vérification : Brut ({fmt(totals.brut)}) - Déductions ({fmt(totals.deductions)}) = {fmt(totals.brut - totals.deductions)} ≠ Net ({fmt(totals.net)}) — Écart de {fmt(Math.abs(totals.brut - totals.deductions - totals.net))}
+              {t('rha.a.import.verif_coherence', locale)} : {t('rha.a.common.brut', locale)} ({fmt(totals.brut)}) - {t('rha.a.import.verif_deductions', locale)} ({fmt(totals.deductions)}) = {fmt(totals.brut - totals.deductions)} ≠ {t('rha.a.common.net', locale)} ({fmt(totals.net)}) — {t('rha.a.import.verif_ecart', locale)} {fmt(Math.abs(totals.brut - totals.deductions - totals.net))}
             </div>
           )}
 
           {/* Colonnes détectées */}
           <details className="text-xs">
-            <summary className="text-gray-400 cursor-pointer">Colonnes détectées ({columns.length})</summary>
+            <summary className="text-gray-400 cursor-pointer">{t('rha.a.import.colonnes_detectees', locale)} ({columns.length})</summary>
             <div className="flex flex-wrap gap-1 mt-1">
               {columns.map((c: any) => (
                 <Badge key={c.field} variant="outline" className="text-[10px]">{c.field}: col {c.index}</Badge>
@@ -358,20 +358,20 @@ export default function ImportPaiePage() {
         <Card>
           <CardContent className="p-8 text-center space-y-4">
             <CheckCircle className="h-16 w-16 mx-auto text-emerald-500" />
-            <h2 className="text-xl font-bold" style={{ color: NAVY }}>Import terminé</h2>
+            <h2 className="text-xl font-bold" style={{ color: NAVY }}>{t('rha.a.import.import_termine', locale)}</h2>
             <div className="flex justify-center gap-6">
-              <div><p className="text-3xl font-bold text-emerald-600">{result.created}</p><p className="text-sm text-gray-500">Créés</p></div>
-              <div><p className="text-3xl font-bold text-blue-600">{result.updated}</p><p className="text-sm text-gray-500">Mis à jour</p></div>
-              <div><p className="text-3xl font-bold text-red-600">{result.errors.length}</p><p className="text-sm text-gray-500">Erreurs</p></div>
+              <div><p className="text-3xl font-bold text-emerald-600">{result.created}</p><p className="text-sm text-gray-500">{t('rha.a.import.crees', locale)}</p></div>
+              <div><p className="text-3xl font-bold text-blue-600">{result.updated}</p><p className="text-sm text-gray-500">{t('rha.a.import.mis_a_jour', locale)}</p></div>
+              <div><p className="text-3xl font-bold text-red-600">{result.errors.length}</p><p className="text-sm text-gray-500">{t('rha.a.import.erreurs', locale)}</p></div>
             </div>
             {result.errors.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-left text-sm max-h-40 overflow-y-auto">
                 {result.errors.map((e, i) => <p key={i} className="text-red-700">{e}</p>)}
               </div>
             )}
-            <p className="text-sm text-gray-500">Les écritures comptables (641, 645, 421, 431, 444, 432) ont été générées automatiquement.</p>
+            <p className="text-sm text-gray-500">{t('rha.a.import.ecritures_generees', locale)}</p>
             <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setResult(null) }}>
-              Importer un autre fichier
+              {t('rha.a.import.importer_autre', locale)}
             </Button>
           </CardContent>
         </Card>
@@ -382,12 +382,12 @@ export default function ImportPaiePage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base" style={{ color: NAVY }}>
             <Banknote className="inline h-5 w-5 mr-2" style={{ color: GOLD }} />
-            Historique des imports
+            {t('rha.a.import.historique', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {history.length === 0 ? (
-            <p className="text-gray-400 text-center py-6">Aucun import effectué</p>
+            <p className="text-gray-400 text-center py-6">{t('rha.a.import.aucun_import', locale)}</p>
           ) : (
             <div className="space-y-1">
               {history.map(h => (
@@ -398,19 +398,19 @@ export default function ImportPaiePage() {
                       <Badge style={{ backgroundColor: NAVY }} className="text-white text-xs">
                         {new Date(h.periode + "T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}
                       </Badge>
-                      <span className="text-sm"><Users className="inline h-4 w-4 mr-1 text-gray-400" />{h.nb} employés</span>
+                      <span className="text-sm"><Users className="inline h-4 w-4 mr-1 text-gray-400" />{h.nb} {t('rha.a.common.employes', locale)}</span>
                     </div>
                     <div className="flex items-center gap-4 text-sm font-mono">
-                      <span>Brut: {fmt(h.total_brut)}</span>
-                      <span className="text-emerald-600">Net: {fmt(h.total_net)}</span>
-                      <span className="text-orange-600">Charges: {fmt(h.total_charges)}</span>
+                      <span>{t('rha.a.common.brut', locale)}: {fmt(h.total_brut)}</span>
+                      <span className="text-emerald-600">{t('rha.a.common.net', locale)}: {fmt(h.total_net)}</span>
+                      <span className="text-orange-600">{t('rha.a.common.charges', locale)}: {fmt(h.total_charges)}</span>
                       <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${historyDetail === h.periode ? "rotate-180" : ""}`} />
                     </div>
                   </button>
                   {historyDetail === h.periode && (
                     <div className="ml-4 mb-3 border-l-2 pl-4" style={{ borderColor: GOLD }}>
                       <table className="w-full text-xs">
-                        <thead><tr className="text-gray-400"><th className="text-left py-1">Employé</th><th className="text-right py-1">Base</th><th className="text-right py-1">Net</th><th className="text-right py-1">CSG</th><th className="text-right py-1">PAYE</th></tr></thead>
+                        <thead><tr className="text-gray-400"><th className="text-left py-1">{t('rha.a.common.employe', locale)}</th><th className="text-right py-1">{t('rha.a.common.base', locale)}</th><th className="text-right py-1">{t('rha.a.common.net', locale)}</th><th className="text-right py-1">CSG</th><th className="text-right py-1">PAYE</th></tr></thead>
                         <tbody>
                           {detailBulletins.map((b: any) => (
                             <tr key={b.id} className="border-t border-gray-100">

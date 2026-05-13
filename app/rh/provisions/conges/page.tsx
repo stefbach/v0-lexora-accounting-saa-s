@@ -12,6 +12,7 @@ import {
   BookOpenCheck, RotateCcw,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import {
   formaterMUR, STATUT_LABELS,
   type IAS19Snapshot, type IAS19Statut,
@@ -44,6 +45,7 @@ function moisPrecedentIso(isoFinMois: string): string {
 }
 
 export default function ProvisionsCongesPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [authorized, setAuthorized] = useState<boolean | null>(null)
@@ -235,11 +237,10 @@ export default function ProvisionsCongesPage() {
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: NAVY }}>
-            📊 Provisions IAS 19 — Congés payés
+            {t('rha.b.provc.title', locale)}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Charge mensuelle à passer en comptabilité. Compte <strong>64175</strong> (charge IAS 19) /
-            compte <strong>4287</strong> (passif). Journal OD.
+            {t('rha.b.provc.subtitle', locale)}
           </p>
         </div>
 

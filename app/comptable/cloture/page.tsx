@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, CheckCircle2, AlertTriangle, Calendar, TrendingUp, RefreshCw } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -20,6 +21,7 @@ function fmt(n: number) {
 interface Societe { id: string; nom: string }
 
 export default function CloturePage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [periode, setPeriode] = useState<string>(() => new Date().toISOString().slice(0, 7))
@@ -64,18 +66,18 @@ export default function CloturePage() {
     <ClientPageShell hideHero disableParticles>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Clôtures comptables</h1>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('cab.cloture.title', locale)}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Provisions IAS 19, ECL IFRS 9, prorata IFRS 15, réévaluation IAS 21, clôture exercice + RAN auto
+            {t('cab.cloture.subtitle', locale)}
           </p>
         </div>
 
         <Card>
           <CardContent className="p-4 flex flex-wrap gap-3 items-end">
             <div>
-              <Label>Société</Label>
+              <Label>{t('cab.cloture.company', locale)}</Label>
               <Select value={societeId} onValueChange={setSocieteId}>
-                <SelectTrigger className="w-72"><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
+                <SelectTrigger className="w-72"><SelectValue placeholder={t('cab.cloture.choose_company', locale)} /></SelectTrigger>
                 <SelectContent>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                 </SelectContent>
@@ -86,10 +88,10 @@ export default function CloturePage() {
 
         <Tabs defaultValue="mensuelle">
           <TabsList className="grid grid-cols-4 w-full max-w-3xl">
-            <TabsTrigger value="mensuelle"><Calendar className="w-4 h-4 mr-1" /> Mensuelle</TabsTrigger>
-            <TabsTrigger value="annuelle"><TrendingUp className="w-4 h-4 mr-1" /> Annuelle</TabsTrigger>
-            <TabsTrigger value="change"><RefreshCw className="w-4 h-4 mr-1" /> Change EOY</TabsTrigger>
-            <TabsTrigger value="immo">IAS 36 Immo</TabsTrigger>
+            <TabsTrigger value="mensuelle"><Calendar className="w-4 h-4 mr-1" /> {t('cab.cloture.tab_monthly', locale)}</TabsTrigger>
+            <TabsTrigger value="annuelle"><TrendingUp className="w-4 h-4 mr-1" /> {t('cab.cloture.tab_annual', locale)}</TabsTrigger>
+            <TabsTrigger value="change"><RefreshCw className="w-4 h-4 mr-1" /> {t('cab.cloture.tab_fx', locale)}</TabsTrigger>
+            <TabsTrigger value="immo">{t('cab.cloture.tab_immo', locale)}</TabsTrigger>
           </TabsList>
 
           {/* Clôture mensuelle */}

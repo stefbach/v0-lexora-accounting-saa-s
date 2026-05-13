@@ -35,6 +35,7 @@ import {
   ArrowRight,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Societe {
   id: string
@@ -93,6 +94,7 @@ function daysSince(d: string | null): number {
 }
 
 export default function ComptableBanquePage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [selectedSociete, setSelectedSociete] = useState("all")
   const [comptes, setComptes] = useState<CompteBancaire[]>([])
@@ -225,9 +227,9 @@ export default function ComptableBanquePage() {
                 <Landmark className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-blue-900">Comptes bancaires</h1>
+                <h1 className="text-2xl font-bold text-blue-900">{t('cab.banque.title', locale)}</h1>
                 <p className="text-sm text-blue-700/80 mt-0.5">
-                  Comptes & relevés · prérequis pour Lex Banque
+                  {t('cab.banque.subtitle', locale)}
                 </p>
               </div>
             </div>
@@ -239,7 +241,7 @@ export default function ComptableBanquePage() {
                 size="sm"
               >
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('cab.banque.refresh', locale)}
               </Button>
               <label>
                 <input
@@ -263,13 +265,13 @@ export default function ComptableBanquePage() {
                   ) : (
                     <Upload className="h-4 w-4" />
                   )}
-                  Importer un relevé
+                  {t('cab.banque.import_statement', locale)}
                 </span>
               </label>
               <Link href="/comptable/rapprochement">
                 <Button className="bg-purple-600 hover:bg-purple-700 text-white">
                   <Sparkles className="h-4 w-4 mr-1.5" />
-                  Aller à Lex Banque
+                  {t('cab.banque.go_lex_bank', locale)}
                   <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
               </Link>
@@ -282,10 +284,10 @@ export default function ComptableBanquePage() {
           <div className="w-72">
             <Select value={selectedSociete} onValueChange={setSelectedSociete}>
               <SelectTrigger>
-                <SelectValue placeholder="Choisir une société..." />
+                <SelectValue placeholder={t('cab.banque.choose_company', locale)} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">-- Choisir une société --</SelectItem>
+                <SelectItem value="all">{t('cab.banque.choose_company_opt', locale)}</SelectItem>
                 {societes.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.nom}
@@ -299,7 +301,7 @@ export default function ComptableBanquePage() {
         {!canAct ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Sélectionne une société.
+              {t('cab.banque.select_company', locale)}
             </CardContent>
           </Card>
         ) : loading ? (

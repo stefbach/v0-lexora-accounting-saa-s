@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Plus, Search, Loader2, UserPlus, Building2 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useProfile } from "@/hooks/use-profile"
+import { t, getLocale } from "@/lib/i18n"
 
 interface UserProfile {
   id: string
@@ -47,6 +48,7 @@ interface Dossier {
 }
 
 export default function ComptableSocietesPage() {
+  const locale = getLocale()
   const [search, setSearch] = useState("")
   const [societes, setSocietes] = useState<Societe[]>([])
   const [clients, setClients] = useState<UserProfile[]>([])
@@ -233,15 +235,15 @@ export default function ComptableSocietesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Sociétés</h1>
-          <p className="text-muted-foreground">Gestion des sociétés</p>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('cab.societes.title', locale)}</h1>
+          <p className="text-muted-foreground">{t('cab.societes.subtitle', locale)}</p>
         </div>
         {isComptableAdmin && (
           <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
             <DialogTrigger asChild>
               <Button style={{ backgroundColor: "#0B0F2E" }}>
                 <Plus className="mr-2 h-4 w-4" />
-                Ajouter une société
+                {t('cab.societes.add', locale)}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
@@ -346,7 +348,7 @@ export default function ComptableSocietesPage() {
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Rechercher par nom ou BRN..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input placeholder={t('cab.societes.search', locale)} className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       {loading ? (
@@ -404,7 +406,7 @@ export default function ComptableSocietesPage() {
                             onClick={() => { setLinkSocieteId(societe.id); setLinkClientId(""); setLinkError(null); setLinkDialogOpen(true) }}
                           >
                             <UserPlus className="mr-1 h-4 w-4" />
-                            Lier un client
+                            {t('cab.societes.link_client', locale)}
                           </Button>
                         )}
                       </TableCell>
@@ -414,7 +416,7 @@ export default function ComptableSocietesPage() {
                 {filtered.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      Aucune société trouvée.
+                      {t('cab.societes.empty', locale)}
                     </TableCell>
                   </TableRow>
                 )}

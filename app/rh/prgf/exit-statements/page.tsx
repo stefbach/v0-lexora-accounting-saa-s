@@ -12,6 +12,7 @@ import {
   AlertTriangle, LogOut,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import {
   formaterMUR, MOTIF_EXIT_LABELS,
   type ExitStatementPrgf, type MotifExit, type StatutExit,
@@ -24,6 +25,7 @@ interface Societe { id: string; nom: string }
 interface Employe { id: string; nom: string; prenom: string; societe_id: string }
 
 export default function ExitStatementsPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [employes, setEmployes] = useState<Employe[]>([])
@@ -199,11 +201,10 @@ export default function ExitStatementsPage() {
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" style={{ color: NAVY }}>
-            <LogOut className="h-6 w-6" style={{ color: GOLD }} /> Exit Statements PRGF
+            <LogOut className="h-6 w-6" style={{ color: GOLD }} /> {t('rha.b.exit.title', locale)}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Déclaration de sortie PRGF à la MRA. Gratuity return à soumettre dans
-            les 15 jours après paiement (retraite/décès).
+            {t('rha.b.exit.subtitle', locale)}
           </p>
         </div>
 

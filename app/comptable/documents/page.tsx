@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select"
 import { FileText, Eye, Search, CheckCircle, FolderOpen, Loader2, Trash2 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Document {
   id: string
@@ -53,6 +54,7 @@ function formatDate(d: string) {
 }
 
 export default function ComptableDocumentsPage() {
+  const locale = getLocale()
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [documents, setDocuments] = useState<Document[]>([])
@@ -124,8 +126,8 @@ export default function ComptableDocumentsPage() {
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Documents</h1>
-        <p className="text-muted-foreground">Documents de tous vos clients</p>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('cab.documents.title', locale)}</h1>
+        <p className="text-muted-foreground">{t('cab.documents.subtitle', locale)}</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -137,7 +139,7 @@ export default function ComptableDocumentsPage() {
       <div className="flex gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Rechercher par nom, client ou societe..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          <Input placeholder={t('cab.documents.search', locale)} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px]"><SelectValue placeholder="Statut" /></SelectTrigger>
@@ -258,8 +260,8 @@ export default function ComptableDocumentsPage() {
           ) : (
             <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
               <FolderOpen className="h-12 w-12 text-muted-foreground/40" />
-              <p className="font-medium text-base">Aucun document</p>
-              <p className="text-sm">Les documents de vos clients apparaitront ici une fois televerses.</p>
+              <p className="font-medium text-base">{t('cab.documents.empty', locale)}</p>
+              <p className="text-sm">{t('cab.documents.empty_hint', locale)}</p>
             </div>
           )}
         </CardContent>

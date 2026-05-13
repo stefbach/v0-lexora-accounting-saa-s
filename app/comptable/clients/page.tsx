@@ -19,6 +19,7 @@ import {
 import { ChevronRight, Search, Loader2, Plus } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useProfile } from "@/hooks/use-profile"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Client {
   id: string
@@ -44,6 +45,7 @@ interface Societe {
 }
 
 export default function ComptableClientsPage() {
+  const locale = getLocale()
   const [search, setSearch] = useState("")
   const [clients, setClients] = useState<Client[]>([])
   const [dossiers, setDossiers] = useState<Dossier[]>([])
@@ -181,16 +183,16 @@ export default function ComptableClientsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-            {isComptableAdmin ? "Mes Clients" : "Mes Clients Assignés"}
+            {isComptableAdmin ? t('cab.clients.title_admin', locale) : t('cab.clients.title_dedie', locale)}
           </h1>
           <p className="text-muted-foreground">
-            {isComptableAdmin ? "Portefeuille complet" : "Clients et sociétés assignés"}
+            {isComptableAdmin ? t('cab.clients.subtitle_admin', locale) : t('cab.clients.subtitle_dedie', locale)}
           </p>
         </div>
         {isComptableAdmin && (
           <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm() }}>
             <DialogTrigger asChild>
-              <Button style={{ backgroundColor: "#0B0F2E" }}><Plus className="mr-2 h-4 w-4" />Ajouter un client</Button>
+              <Button style={{ backgroundColor: "#0B0F2E" }}><Plus className="mr-2 h-4 w-4" />{t('cab.clients.add', locale)}</Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
               <DialogHeader><DialogTitle>Nouveau client</DialogTitle><DialogDescription>Créez un compte client et son dossier.</DialogDescription></DialogHeader>
@@ -283,7 +285,7 @@ export default function ComptableClientsPage() {
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Rechercher..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input placeholder={t('cab.clients.search', locale)} className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       {loading ? (
@@ -350,7 +352,7 @@ export default function ComptableClientsPage() {
                   )
                 })}
                 {filteredClients.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucun client trouvé.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t('cab.clients.empty', locale)}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

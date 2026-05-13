@@ -11,6 +11,7 @@ import {
   BookOpenCheck, RotateCcw, Gift,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import {
   formaterMUREoy, STATUT_EOY_LABELS, MOTIF_NON_ELIGIBLE_EOY, libellePeriodeMois,
   type IAS19EoySnapshot, type IAS19EoyStatut,
@@ -27,6 +28,7 @@ const MOIS_LABELS = [
 ]
 
 export default function ProvisionsEoyPage() {
+  const locale: Locale = getLocale()
   const now = new Date()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
@@ -205,12 +207,10 @@ export default function ProvisionsEoyPage() {
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" style={{ color: NAVY }}>
-            <Gift className="h-6 w-6" style={{ color: GOLD }} /> Provisions IAS 19 — EOY Bonus
+            <Gift className="h-6 w-6" style={{ color: GOLD }} /> {t('rha.b.proveoy.title', locale)}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Étalement mensuel de la charge 13e mois (janvier-novembre).
-            Compte <strong>64176</strong> (charge) / <strong>4288</strong> (passif). Journal OD.
-            Décembre : paiement réel via <a className="underline" href="/rh/eoy-bonus">EOY Bonus</a>.
+            {t('rha.b.proveoy.subtitle', locale)}
           </p>
         </div>
 

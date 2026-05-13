@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Loader2, MapPin, Users, Navigation, Truck, RefreshCw, Clock, Coffee, Send, Bot, Sparkles, Lightbulb, TrendingUp, AlertTriangle, Route, Zap, Brain, CheckCircle2 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -309,6 +310,7 @@ const shiftColor = (s: string) => {
 const MapComponent = dynamic(() => import("./MapComponent"), { ssr: false, loading: () => <div className="h-[500px] bg-gray-100 rounded-2xl flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div> })
 
 export default function GeolocalisationPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
   const [positions, setPositions] = useState<EmployeePosition[]>([])
@@ -495,9 +497,9 @@ export default function GeolocalisationPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: NAVY }}>
             <MapPin className="w-6 h-6" style={{ color: GOLD }} />
-            Carte des collaborateurs
+            {t('rha.b.geo.title', locale)}
           </h1>
-          <p className="text-sm text-gray-500">Localisation, planning du jour et organisation ramassage</p>
+          <p className="text-sm text-gray-500">{t('rha.b.geo.subtitle', locale)}</p>
         </div>
         <div className="flex gap-3 items-center">
           <Select value={societe} onValueChange={setSociete}>

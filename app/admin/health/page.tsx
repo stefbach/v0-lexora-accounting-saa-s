@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 type Severity = "critical" | "warning" | "info"
 type Status = "pass" | "fail" | "warn"
@@ -43,30 +44,30 @@ interface HealthResponse {
 
 const NAVY = "#0B0F2E"
 
-function severityTone(severity: Severity, status: Status): {
+function severityTone(severity: Severity, status: Status, locale: Locale): {
   bg: string; border: string; text: string; label: string; icon: LucideIcon
 } {
   if (status === "pass") {
-    return { bg: "#ECFDF5", border: "#A7F3D0", text: "#065F46", label: "OK", icon: CheckCircle2 }
+    return { bg: "#ECFDF5", border: "#A7F3D0", text: "#065F46", label: t('adm.health.lbl_ok', locale), icon: CheckCircle2 }
   }
   if (status === "warn") {
-    return { bg: "#FFFBEB", border: "#FDE68A", text: "#92400E", label: "AVERTISSEMENT", icon: AlertTriangle }
+    return { bg: "#FFFBEB", border: "#FDE68A", text: "#92400E", label: t('adm.health.lbl_warn', locale), icon: AlertTriangle }
   }
   // status === 'fail'
   if (severity === "critical") {
-    return { bg: "#FEF2F2", border: "#FECACA", text: "#991B1B", label: "CRITIQUE", icon: XCircle }
+    return { bg: "#FEF2F2", border: "#FECACA", text: "#991B1B", label: t('adm.health.lbl_critical', locale), icon: XCircle }
   }
   if (severity === "warning") {
-    return { bg: "#FFF7ED", border: "#FED7AA", text: "#9A3412", label: "ATTENTION", icon: AlertTriangle }
+    return { bg: "#FFF7ED", border: "#FED7AA", text: "#9A3412", label: t('adm.health.lbl_attention', locale), icon: AlertTriangle }
   }
-  return { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF", label: "INFO", icon: Activity }
+  return { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF", label: t('adm.health.lbl_info', locale), icon: Activity }
 }
 
-function SeverityBadge({ severity }: { severity: Severity }) {
+function SeverityBadge({ severity, locale }: { severity: Severity; locale: Locale }) {
   const map: Record<Severity, { bg: string; text: string; label: string }> = {
-    critical: { bg: "#FEE2E2", text: "#991B1B", label: "Critique" },
-    warning:  { bg: "#FEF3C7", text: "#92400E", label: "Warning" },
-    info:     { bg: "#DBEAFE", text: "#1E40AF", label: "Info" },
+    critical: { bg: "#FEE2E2", text: "#991B1B", label: t('adm.health.sev_critical', locale) },
+    warning:  { bg: "#FEF3C7", text: "#92400E", label: t('adm.health.sev_warning', locale) },
+    info:     { bg: "#DBEAFE", text: "#1E40AF", label: t('adm.health.sev_info', locale) },
   }
   const m = map[severity]
   return (
@@ -91,9 +92,9 @@ function StatusPill({ status, label }: { status: Status; label: string }) {
   )
 }
 
-function CheckCard({ check }: { check: HealthCheck }) {
+function CheckCard({ check, locale }: { check: HealthCheck; locale: Locale }) {
   const [open, setOpen] = useState(false)
-  const tone = severityTone(check.severity, check.status)
+  const tone = severityTone(check.severity, check.status, locale)
   const Icon = tone.icon
   const hasDetails = check.details && check.details.length > 0
   const expandable = check.status !== "pass" && hasDetails
@@ -122,7 +123,7 @@ function CheckCard({ check }: { check: HealthCheck }) {
                 <code className="text-[11px] font-mono font-semibold" style={{ color: NAVY }}>
                   {check.check_id}
                 </code>
-                <SeverityBadge severity={check.severity} />
+                <SeverityBadge severity={check.severity} locale={locale} />
                 <StatusPill status={check.status} label={tone.label} />
               </div>
               <p className="text-sm font-medium" style={{ color: NAVY }}>
@@ -130,8 +131,8 @@ function CheckCard({ check }: { check: HealthCheck }) {
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 {check.status === "pass"
-                  ? "Aucune anomalie détectée."
-                  : `${check.count} occurrence${check.count > 1 ? "s" : ""} détectée${check.count > 1 ? "s" : ""}`}
+                  ? t('adm.health.no_anomaly_short', locale)
+                  : `${check.count} occurrence${check.count > 1 ? "s" : ""} ${locale === 'en' ? 'detected' : 'détectée' + (check.count > 1 ? 's' : '')}`}
               </p>
             </div>
           </div>
@@ -145,11 +146,11 @@ function CheckCard({ check }: { check: HealthCheck }) {
             >
               {open ? (
                 <>
-                  <ChevronDown className="w-4 h-4 mr-1" /> Masquer
+                  <ChevronDown className="w-4 h-4 mr-1" /> {t('adm.health.hide', locale)}
                 </>
               ) : (
                 <>
-                  <ChevronRight className="w-4 h-4 mr-1" /> Voir {Math.min(10, check.details.length)} cas
+                  <ChevronRight className="w-4 h-4 mr-1" /> {t('adm.health.see', locale)} {Math.min(10, check.details.length)} {t('adm.health.cases', locale)}
                 </>
               )}
             </Button>
@@ -172,7 +173,7 @@ function CheckCard({ check }: { check: HealthCheck }) {
                       className="px-3 py-2 text-left font-bold uppercase tracking-wide"
                       style={{ color: tone.text }}
                     >
-                      Détails
+                      {t('adm.health.details', locale)}
                     </th>
                   </tr>
                 </thead>
@@ -198,6 +199,7 @@ function CheckCard({ check }: { check: HealthCheck }) {
 }
 
 export default function AdminHealthPage() {
+  const locale = getLocale()
   const [data, setData] = useState<HealthResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -214,12 +216,12 @@ export default function AdminHealthPage() {
       const json = (await res.json()) as HealthResponse
       setData(json)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur de chargement")
+      setError(e instanceof Error ? e.message : t('adm.health.err_default', locale))
       setData(null)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [locale])
 
   useEffect(() => { load() }, [load])
 
@@ -227,10 +229,10 @@ export default function AdminHealthPage() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Administration", href: "/admin" }, { label: "Santé comptable" }]}
-      kicker="Supervision"
-      title="Santé comptable"
-      subtitle="Détection automatique des anomalies structurantes : écritures manquantes, legacy, doublons, devises non converties et déséquilibres."
+      breadcrumbs={[{ label: t('adm.health.breadcrumb', locale), href: "/admin" }, { label: t('adm.health.breadcrumb_current', locale) }]}
+      kicker={t('adm.health.kicker', locale)}
+      title={t('adm.health.title', locale)}
+      subtitle={t('adm.health.subtitle', locale)}
       actions={
         <Button
           onClick={load}
@@ -238,7 +240,7 @@ export default function AdminHealthPage() {
           className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          Actualiser
+          {t('adm.health.refresh', locale)}
         </Button>
       }
     >
@@ -248,25 +250,25 @@ export default function AdminHealthPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card>
               <CardContent className="p-4">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Total checks</p>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{t('adm.health.total', locale)}</p>
                 <p className="text-2xl font-bold mt-1" style={{ color: NAVY }}>{summary.total}</p>
               </CardContent>
             </Card>
             <Card style={{ borderColor: "#A7F3D0" }}>
               <CardContent className="p-4">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-green-700">Réussis</p>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-green-700">{t('adm.health.passed', locale)}</p>
                 <p className="text-2xl font-bold mt-1 text-green-700">{summary.pass}</p>
               </CardContent>
             </Card>
             <Card style={{ borderColor: "#FECACA" }}>
               <CardContent className="p-4">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-red-700">En échec</p>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-red-700">{t('adm.health.failed', locale)}</p>
                 <p className="text-2xl font-bold mt-1 text-red-700">{summary.fail}</p>
               </CardContent>
             </Card>
             <Card style={{ borderColor: "#FDE68A" }}>
               <CardContent className="p-4">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Avertissements</p>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">{t('adm.health.warnings', locale)}</p>
                 <p className="text-2xl font-bold mt-1 text-amber-700">{summary.warn}</p>
               </CardContent>
             </Card>
@@ -275,7 +277,7 @@ export default function AdminHealthPage() {
 
         {data && (
           <p className="text-xs text-gray-500">
-            Généré le {new Date(data.generated_at).toLocaleString("fr-FR")} — exécution en {data.duration_ms} ms
+            {t('adm.health.generated_at', locale)} {new Date(data.generated_at).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR')} — {t('adm.health.duration', locale)} {data.duration_ms} ms
           </p>
         )}
 
@@ -290,27 +292,27 @@ export default function AdminHealthPage() {
           <Card>
             <CardContent className="py-12 text-center">
               <XCircle className="w-10 h-10 mx-auto mb-3 text-red-400" />
-              <p className="font-medium text-red-700">Erreur de chargement</p>
+              <p className="font-medium text-red-700">{t('adm.health.err_load_title', locale)}</p>
               <p className="text-sm text-gray-500 mt-1">{error}</p>
             </CardContent>
           </Card>
         ) : !data ? (
-          <Card><CardContent className="py-16 text-center text-gray-400">Aucune donnée</CardContent></Card>
+          <Card><CardContent className="py-16 text-center text-gray-400">{t('adm.health.no_data', locale)}</CardContent></Card>
         ) : (
           <>
             {/* Failed / warn first, then pass */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
-                  Anomalies détectées
+                  {t('adm.health.anomalies_detected', locale)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 {data.checks.filter((c: HealthCheck) => c.status !== "pass").length === 0 ? (
                   <div className="py-8 text-center">
                     <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-green-500" />
-                    <p className="font-medium text-green-700">Tous les checks sont OK</p>
-                    <p className="text-sm text-gray-500 mt-1">Aucune anomalie comptable détectée.</p>
+                    <p className="font-medium text-green-700">{t('adm.health.all_ok', locale)}</p>
+                    <p className="text-sm text-gray-500 mt-1">{t('adm.health.no_anomaly', locale)}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -323,7 +325,7 @@ export default function AdminHealthPage() {
                         const sev: Record<Severity, number> = { critical: 0, warning: 1, info: 2 }
                         return sev[a.severity] - sev[b.severity]
                       })
-                      .map((c: HealthCheck) => <CheckCard key={c.check_id} check={c} />)}
+                      .map((c: HealthCheck) => <CheckCard key={c.check_id} check={c} locale={locale} />)}
                   </div>
                 )}
               </CardContent>
@@ -333,13 +335,13 @@ export default function AdminHealthPage() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
-                    Checks OK
+                    {t('adm.health.checks_ok', locale)}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0">
                   <div className="space-y-3">
                     {data.checks.filter((c: HealthCheck) => c.status === "pass").map((c: HealthCheck) => (
-                      <CheckCard key={c.check_id} check={c} />
+                      <CheckCard key={c.check_id} check={c} locale={locale} />
                     ))}
                   </div>
                 </CardContent>

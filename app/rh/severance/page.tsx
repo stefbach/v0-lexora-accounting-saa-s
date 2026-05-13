@@ -12,6 +12,7 @@ import {
   CheckCircle2, Trash2, FileDown,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import {
   formaterSeverance, formaterAnciennete,
   getMotifNonEligibleLabel, MOTIF_LABELS, STATUT_LABELS,
@@ -25,6 +26,7 @@ interface Employe { id: string; nom: string; prenom: string; societe_id: string 
 interface Societe { id: string; nom: string }
 
 export default function SeverancePage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [employes, setEmployes] = useState<Employe[]>([])
@@ -213,10 +215,10 @@ export default function SeverancePage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2" style={{ color: NAVY }}>
             <Wallet className="h-7 w-7" style={{ color: GOLD }} />
-            Severance Calculator
+            {t('rha.b.sev.title', locale)}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Workers&apos; Rights Act 2019 Section 70. 3 mois × ancienneté × max(dernier_mois, moyenne_12).
+            {t('rha.b.sev.subtitle', locale)}
           </p>
         </div>
 

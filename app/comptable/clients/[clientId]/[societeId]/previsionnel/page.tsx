@@ -12,6 +12,7 @@ import {
 import {
   ArrowLeft, RefreshCw, TrendingUp, TrendingDown, Brain, Landmark, Loader2,
 } from "lucide-react"
+import { t, getLocale } from '@/lib/i18n'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -61,6 +62,7 @@ interface PrevisionnelData {
 
 export default function PrevisionnelPage() {
   const params = useParams()
+  const locale = getLocale()
   const clientId = params.clientId as string
   const societeId = params.societeId as string
 
@@ -195,15 +197,15 @@ export default function PrevisionnelPage() {
       <div className="flex items-center gap-3 mb-2">
         <Link href={`/comptable/clients/${clientId}/${societeId}`}>
           <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Retour
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t('cabclt.prev.back', locale)}
           </Button>
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Prévisionnel — {societeName}
+            {t('cabclt.prev.title', locale)} — {societeName}
           </h1>
           <p className="text-sm text-gray-500">
-            Projections financières et trésorerie prévisionnelle
+            {t('cabclt.prev.subtitle', locale)}
           </p>
         </div>
       </div>
@@ -212,7 +214,7 @@ export default function PrevisionnelPage() {
       {periods.length > 0 && (
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium" style={{ color: NAVY }}>Période :</label>
+            <label className="text-sm font-medium" style={{ color: NAVY }}>{t('cabclt.prev.period_label', locale)}</label>
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
@@ -224,7 +226,7 @@ export default function PrevisionnelPage() {
             </select>
           </div>
           <Button variant="outline" size="sm">
-            <RefreshCw className="w-4 h-4 mr-1" /> Regénérer
+            <RefreshCw className="w-4 h-4 mr-1" /> {t('cabclt.prev.regenerate', locale)}
           </Button>
         </div>
       )}
@@ -232,21 +234,21 @@ export default function PrevisionnelPage() {
       {/* Prévision vs Réel */}
       <Card className="border-t-4" style={{ borderTopColor: NAVY }}>
         <CardHeader>
-          <CardTitle style={{ color: NAVY }}>Prévision vs Réel</CardTitle>
+          <CardTitle style={{ color: NAVY }}>{t('cabclt.prev.forecast_vs_actual', locale)}</CardTitle>
         </CardHeader>
         <CardContent>
           {previsionVsReel.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
-              Aucune donnée prévisionnelle disponible.
+              {t('cabclt.prev.no_forecast_data', locale)}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Poste</TableHead>
-                  <TableHead className="text-right">Prévu</TableHead>
-                  <TableHead className="text-right">Réel</TableHead>
-                  <TableHead className="text-right">Écart</TableHead>
+                  <TableHead>{t('cabclt.prev.col_item', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cabclt.prev.col_forecast', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cabclt.prev.col_actual', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cabclt.prev.col_variance', locale)}</TableHead>
                   <TableHead className="text-right">%</TableHead>
                 </TableRow>
               </TableHeader>
@@ -283,24 +285,24 @@ export default function PrevisionnelPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
             <Landmark className="w-5 h-5" />
-            Trésorerie prévisionnelle par compte
+            {t('cabclt.prev.forecast_treasury_by_account', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {tresoParCompte.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
-              Aucune donnée de trésorerie disponible.
+              {t('cabclt.prev.no_treasury_data', locale)}
             </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Compte</TableHead>
-                    <TableHead className="text-right">Actuel</TableHead>
-                    <TableHead className="text-right">+30 jours</TableHead>
-                    <TableHead className="text-right">+60 jours</TableHead>
-                    <TableHead className="text-right">+90 jours</TableHead>
+                    <TableHead>{t('cabclt.prev.col_account', locale)}</TableHead>
+                    <TableHead className="text-right">{t('cabclt.prev.col_current', locale)}</TableHead>
+                    <TableHead className="text-right">{t('cabclt.prev.col_d30', locale)}</TableHead>
+                    <TableHead className="text-right">{t('cabclt.prev.col_d60', locale)}</TableHead>
+                    <TableHead className="text-right">{t('cabclt.prev.col_d90', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -325,7 +327,7 @@ export default function PrevisionnelPage() {
                 </TableBody>
                 <TableFooter>
                   <TableRow>
-                    <TableCell className="font-bold">TOTAL (en MUR)</TableCell>
+                    <TableCell className="font-bold">{t('cabclt.prev.total_mur', locale)}</TableCell>
                     <TableCell className="text-right font-bold">{fmt(totalMUR("actuel"))}</TableCell>
                     <TableCell className="text-right font-bold">{fmt(totalMUR("j30"))}</TableCell>
                     <TableCell className="text-right font-bold">{fmt(totalMUR("j60"))}</TableCell>
@@ -334,7 +336,7 @@ export default function PrevisionnelPage() {
                 </TableFooter>
               </Table>
               <p className="text-xs text-gray-400 mt-2">
-                Note : Les montants en devises étrangères sont convertis au taux du jour pour le total consolidé.
+                {t('cabclt.prev.fx_note', locale)}
               </p>
             </>
           )}
@@ -346,13 +348,13 @@ export default function PrevisionnelPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
             <Brain className="w-5 h-5" />
-            Analyse IA — Prévisions
+            {t('cabclt.prev.ai_analysis_title', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {analyseIA.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
-              Aucune analyse disponible. Les analyses seront générées une fois les données prévisionnelles saisies.
+              {t('cabclt.prev.no_analysis', locale)}
             </p>
           ) : (
             analyseIA.map((item, i) => {

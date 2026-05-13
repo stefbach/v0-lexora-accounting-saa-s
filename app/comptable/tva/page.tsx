@@ -17,6 +17,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -65,6 +66,7 @@ function statutBadge(statut_declaration: string, date_limite: string) {
 }
 
 export default function TVAPage() {
+  const locale = getLocale()
   const [societes, setSocietes]               = useState<Societe[]>([])
   const [selectedSociete, setSelectedSociete] = useState("all")
   const [selectedPeriode, setSelectedPeriode] = useState("")
@@ -170,8 +172,8 @@ export default function TVAPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>TVA MRA — Déclarations</h1>
-          <p className="text-sm text-gray-500 mt-1">9 boxes MRA — Calcul automatique depuis les écritures comptables</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('cab.tva.title', locale)}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('cab.tva.subtitle', locale)}</p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -180,7 +182,7 @@ export default function TVAPage() {
               className="gap-2"
               disabled={!selectedSociete || selectedSociete === "all" || !selectedPeriode || !calcResult}
             >
-              <Download className="w-4 h-4" /> Exporter
+              <Download className="w-4 h-4" /> {t('cab.tva.export', locale)}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -275,7 +277,7 @@ export default function TVAPage() {
               style={{ backgroundColor: NAVY }}
             >
               {calculating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              {calculating ? "Calcul en cours..." : "Calculer"}
+              {calculating ? t('cab.tva.computing', locale) : t('cab.tva.compute_btn', locale)}
             </Button>
           </div>
 
