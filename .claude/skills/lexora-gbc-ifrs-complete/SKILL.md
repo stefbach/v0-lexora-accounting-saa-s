@@ -44,14 +44,27 @@ Trigger keywords:
 
 ### Key principle for Lexora architecture
 
-A `societes` row needs a **`regime`** field with values like:
-- `domestic` (default — what Lexora handles today)
-- `gbc1` (Global Business License — formerly Cat 1)
-- `authorised_company` (formerly GBC2)
-- `holding` (consolidating entity)
-- `branch_foreign_pe` (foreign PE of Mauritian entity)
+A `societes` row has a **`regime`** field (mig 258, Phase K) with values:
+- `domestic` (default)
+- `gbc1`, `authorised_company`, `holding`, `branch_foreign_pe`
 
-Branch all GBC-specific logic on `societe.regime`.
+**Canonical helper** : `lib/accounting/regime.ts` exports
+`getActiveModules({ regime, devise_fonctionnelle })` which returns a
+`ModuleActivation` object (per_active, substance_required, ubo_required,
+tp_required, consolidation_active, crs_fatca_active, pillar_two_eligible,
+ias21_translation_active, ifrs16_leases_active).
+
+**Sidebar** is dynamic : section "GBC & Full IFRS" hidden if `regime === 'domestic'`
+via `requiredRegime` in `ClientSidebarFull.tsx`.
+
+**Dashboard** filters tiles via `getActiveModules()` — only relevant phases appear.
+
+**Société form** (`/client/societes`) has a "Type de société" dropdown with
+5 options that pre-fills suggested functional currency and conditionally
+shows FSC license fields for gbc1/authorised_company.
+
+Always branch GBC-specific logic on `societe.regime` via `getActiveModules()` —
+avoid ad-hoc `devise_fonctionnelle !== 'MUR'` checks.
 
 ## The 9 phases (implementation roadmap)
 

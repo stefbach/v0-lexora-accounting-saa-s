@@ -27,6 +27,9 @@ interface MenuSection {
   section: string
   sectionKey?: string
   requiredModule?: ModuleKey
+  /** Affichage conditionnel selon régime de la société active (mig 258).
+   *  Si défini, la section apparaît UNIQUEMENT pour ces régimes. */
+  requiredRegime?: ('gbc1' | 'authorised_company' | 'holding' | 'branch_foreign_pe' | 'domestic')[]
   items: { href: string; label: string; labelKey?: string; icon: any }[]
 }
 
@@ -137,6 +140,7 @@ const MENU: MenuSection[] = [
   {
     section: "GBC & Full IFRS",
     requiredModule: "etats_financiers",
+    requiredRegime: ['gbc1', 'authorised_company', 'holding', 'branch_foreign_pe'],
     items: [
       { href: "/client/gbc-dashboard", label: "Dashboard GBC", icon: Globe } as any,
       { href: "/client/gbc-per", label: "PER 80% + FTC", icon: Banknote } as any,
@@ -267,8 +271,12 @@ export function ClientSidebarFull() {
         },
       ]
     : MENU.filter(section => {
-        if (!section.requiredModule) return true
-        return activeModules[section.requiredModule]
+        if (section.requiredModule && !activeModules[section.requiredModule]) return false
+        if (section.requiredRegime && section.requiredRegime.length > 0) {
+          const currentRegime = (societe as any)?.regime || 'domestic'
+          if (!section.requiredRegime.includes(currentRegime as any)) return false
+        }
+        return true
       })
 
   return (

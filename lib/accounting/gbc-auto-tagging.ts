@@ -21,6 +21,7 @@
 import { autoClassifyPer, type PerCategory } from './per'
 import { getTranslationRate, type TranslationRates } from './functional-currency'
 import { getDocumentationTier } from './transfer-pricing'
+import { getActiveModules, type SocieteRegime } from './regime'
 
 type SupabaseLike = any
 
@@ -64,10 +65,10 @@ export async function applyGbcAutoTagging(
     warnings: [],
   }
 
-  // Récupère la société : devise_fonctionnelle + tags GBC potentiels
+  // Récupère la société : regime + devise_fonctionnelle (source unique d'activation)
   const { data: societe, error: socErr } = await supabase
     .from('societes')
-    .select('id, nom, devise_fonctionnelle')
+    .select('id, nom, devise_fonctionnelle, regime')
     .eq('id', input.societe_id)
     .single()
 
@@ -77,7 +78,12 @@ export async function applyGbcAutoTagging(
   }
 
   const deviseFonct = (societe.devise_fonctionnelle || 'MUR').toUpperCase()
-  const isGbc = deviseFonct !== 'MUR'
+  const regime: SocieteRegime = (societe.regime as SocieteRegime) || 'domestic'
+  const modules = getActiveModules({ regime, devise_fonctionnelle: deviseFonct })
+  // Société "GBC-like" : tout sauf domestic. La translation IAS 21 dépend
+  // de la devise fonctionnelle (peut être active même pour domestic si la
+  // société a explicitement basculé en devise étrangère).
+  const isGbc = modules.gbc_modules_active
 
   // ── 1. Auto-classification PER (Phase B) ──────────────────────────────
   // Applicable uniquement pour les factures CLIENT (revenu) — les
@@ -181,7 +187,9 @@ export async function applyGbcAutoTagging(
   // On suppose que createEcrituresForFacture a déjà créé les écritures en MUR.
   // Pour la translation : closing rate ~= taux du jour (à raffiner avec
   // un système de taux de clôture mensuels).
-  if (isGbc) {
+  // Active si modules.ias21_translation_active (basé sur devise_fonctionnelle ≠ MUR
+  // ou regime = branch_foreign_pe).
+  if (modules.ias21_translation_active) {
     // Récupère le taux actuel de la devise fonctionnelle → MUR
     const { data: taux } = await supabase
       .from('taux_change')
