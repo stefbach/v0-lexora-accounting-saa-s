@@ -69,8 +69,10 @@ export default function GbcDashboardPage() {
         fetch(`/api/comptable/leases?societe_id=${societeId}`).then(r => r.json()).catch(() => null),
         fetch(`/api/comptable/mes-societes`).then(r => r.json()).catch(() => null),
       ])
-      // Trouve la société courante dans la liste
-      const soc = (societeRes?.societes || societeRes || []).find?.((s: any) => s.id === societeId)
+      // Trouve la société courante dans la liste (extraction robuste)
+      const socList = Array.isArray(societeRes?.societes) ? societeRes.societes
+        : Array.isArray(societeRes) ? societeRes : []
+      const soc = socList.find((s: any) => s.id === societeId)
       setSociete(soc || null)
       setModules({ per, substance, tp, ubo, consol, crs, pillarTwo, leases })
     } catch (e: any) {
