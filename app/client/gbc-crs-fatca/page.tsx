@@ -3,10 +3,23 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, RefreshCw, AlertCircle, Download, FileText } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Loader2, RefreshCw, AlertCircle, Download, FileText, Plus } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(Number(n))
+
+const EMPTY_H = {
+  holder_type: 'individual', holder_name: '', holder_dob: '', holder_address: '',
+  country_of_residence: '', tin: '', tin_issuing_country: '',
+  account_number: '', account_balance_eoy_usd: 0, account_currency: 'USD',
+  interest_paid_usd: 0, dividends_paid_usd: 0, gross_proceeds_usd: 0, other_income_usd: 0,
+  is_fatca_reportable: false, is_crs_reportable: true,
+  document_status: 'pending', notes: '',
+}
 
 export default function GbcCrsFatcaPage() {
   const { societeId } = useSocieteActive()
@@ -14,6 +27,9 @@ export default function GbcCrsFatcaPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [year, setYear] = useState(new Date().getFullYear() - 1)
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState(EMPTY_H)
+  const [saving, setSaving] = useState(false)
 
   const load = async () => {
     if (!societeId) { setLoading(false); return }
@@ -27,14 +43,38 @@ export default function GbcCrsFatcaPage() {
   }
   useEffect(() => { load() }, [societeId, year])
 
+  const declareHolder = async () => {
+    if (!societeId || !form.holder_name || !form.country_of_residence || !form.account_number) {
+      setError('Nom, pays et n° compte requis'); return
+    }
+    setSaving(true); setError(null)
+    try {
+      const res = await fetch('/api/comptable/gbc/crs-fatca', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'declare_holder',
+          payload: { ...form, societe_id: societeId, reporting_year: year,
+            country_of_residence: form.country_of_residence.toUpperCase(),
+            account_balance_eoy_usd: Number(form.account_balance_eoy_usd) || 0,
+            interest_paid_usd: Number(form.interest_paid_usd) || 0,
+            dividends_paid_usd: Number(form.dividends_paid_usd) || 0,
+            gross_proceeds_usd: Number(form.gross_proceeds_usd) || 0,
+            other_income_usd: Number(form.other_income_usd) || 0,
+          },
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+      setOpen(false); setForm(EMPTY_H); load()
+    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSaving(false) }
+  }
+
   const generateXml = async () => {
     const res = await fetch('/api/comptable/gbc/crs-fatca', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'generate_xml', societe_id: societeId, year }) })
     if (res.ok) {
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = `crs_${societeId}_${year}.xml`; a.click()
+      const blob = await res.blob(); const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = `crs_${societeId}_${year}.xml`; a.click()
       URL.revokeObjectURL(url)
     }
   }
@@ -51,14 +91,62 @@ export default function GbcCrsFatcaPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2"><FileText className="h-6 w-6 text-indigo-600" /> CRS / FATCA</h1>
           <p className="text-sm text-slate-500">OECD CRS + US-Mauritius IGA Model 1A — déclarations annuelles MRA</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value))} className="border rounded px-2 py-1 text-sm w-24" />
           <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />Rafraîchir</Button>
           <Button onClick={generateXml} variant="outline" className="border-indigo-300 text-indigo-700"><Download className="h-4 w-4 mr-2" />XML CRS</Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild><Button className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="h-4 w-4 mr-2" />Déclarer Holder</Button></DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader><DialogTitle>Déclarer un Account Holder CRS/FATCA</DialogTitle></DialogHeader>
+              <div className="space-y-3 pt-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Type holder</Label>
+                    <Select value={form.holder_type} onValueChange={v => setForm({ ...form, holder_type: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="individual">Personne physique</SelectItem>
+                        <SelectItem value="entity">Personne morale</SelectItem>
+                        <SelectItem value="controlling_person">Personne contrôlante</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>Nom *</Label><Input value={form.holder_name} onChange={e => setForm({ ...form, holder_name: e.target.value })} /></div>
+                  <div><Label>Date naissance</Label><Input type="date" value={form.holder_dob} onChange={e => setForm({ ...form, holder_dob: e.target.value })} /></div>
+                  <div><Label>Pays résidence (ISO) *</Label><Input value={form.country_of_residence} onChange={e => setForm({ ...form, country_of_residence: e.target.value })} placeholder="FR, GB, ZA..." /></div>
+                  <div><Label>TIN (tax ID)</Label><Input value={form.tin} onChange={e => setForm({ ...form, tin: e.target.value })} /></div>
+                  <div><Label>Pays émetteur TIN</Label><Input value={form.tin_issuing_country} onChange={e => setForm({ ...form, tin_issuing_country: e.target.value })} /></div>
+                  <div className="col-span-2"><Label>N° compte *</Label><Input value={form.account_number} onChange={e => setForm({ ...form, account_number: e.target.value })} /></div>
+                  <div><Label>Balance EOY (USD)</Label><Input type="number" value={form.account_balance_eoy_usd} onChange={e => setForm({ ...form, account_balance_eoy_usd: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>Devise</Label><Input value={form.account_currency} onChange={e => setForm({ ...form, account_currency: e.target.value })} /></div>
+                  <div><Label>Intérêts payés (USD)</Label><Input type="number" value={form.interest_paid_usd} onChange={e => setForm({ ...form, interest_paid_usd: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>Dividendes payés (USD)</Label><Input type="number" value={form.dividends_paid_usd} onChange={e => setForm({ ...form, dividends_paid_usd: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>Gross proceeds (USD)</Label><Input type="number" value={form.gross_proceeds_usd} onChange={e => setForm({ ...form, gross_proceeds_usd: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>Autres revenus (USD)</Label><Input type="number" value={form.other_income_usd} onChange={e => setForm({ ...form, other_income_usd: Number(e.target.value) || 0 })} /></div>
+                  <div><Label>Reportable FATCA (US Person) ?</Label>
+                    <Select value={form.is_fatca_reportable ? 'oui' : 'non'} onValueChange={v => setForm({ ...form, is_fatca_reportable: v === 'oui' })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="non">Non</SelectItem><SelectItem value="oui">Oui</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>Reportable CRS ?</Label>
+                    <Select value={form.is_crs_reportable ? 'oui' : 'non'} onValueChange={v => setForm({ ...form, is_crs_reportable: v === 'oui' })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="oui">Oui</SelectItem><SelectItem value="non">Non</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div><Label>Adresse</Label><Input value={form.holder_address} onChange={e => setForm({ ...form, holder_address: e.target.value })} /></div>
+                <div><Label>Notes</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+                {error && <div className="text-sm text-red-600">{error}</div>}
+                <Button onClick={declareHolder} disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">{saving ? 'Enregistrement…' : 'Déclarer holder'}</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
-      {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex gap-2"><AlertCircle className="h-4 w-4" />{error}</div>}
+      {error && !open && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex gap-2"><AlertCircle className="h-4 w-4" />{error}</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Account holders</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{s.nb_holders || 0}</div></CardContent></Card>
@@ -71,7 +159,7 @@ export default function GbcCrsFatcaPage() {
         <CardHeader><CardTitle className="text-base">Account holders</CardTitle></CardHeader>
         <CardContent>
           {(data?.holders?.length || 0) === 0 ? (
-            <div className="text-sm text-slate-500 p-4 text-center">Aucun holder déclaré pour {year}.</div>
+            <div className="text-sm text-slate-500 p-4 text-center">Aucun holder déclaré pour {year}. Clique sur "Déclarer Holder".</div>
           ) : (
             <table className="w-full text-sm">
               <thead className="border-b"><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 px-2">Holder</th><th className="py-2 px-2">Pays</th><th className="py-2 px-2">Type</th><th className="py-2 px-2 text-right">Balance USD</th><th className="py-2 px-2">CRS</th><th className="py-2 px-2">FATCA</th><th className="py-2 px-2">Statut</th></tr></thead>
