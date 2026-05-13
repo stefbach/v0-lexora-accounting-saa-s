@@ -43,6 +43,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface CompteSolde {
   numero_compte: string
@@ -104,6 +105,7 @@ function fmt(n: number): string {
 }
 
 export default function ClientGrandLivrePage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [comptes, setComptes] = useState<CompteSolde[]>([])
   const [ecritures, setEcritures] = useState<Ecriture[]>([])
@@ -308,21 +310,21 @@ export default function ClientGrandLivrePage() {
                 <BookCopy className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">Grand livre</h1>
+                <h1 className="text-2xl font-bold text-slate-900">{t('acc.gl.title', locale)}</h1>
                 <p className="text-sm text-slate-700/80 mt-0.5">
-                  État comptable structuré par classe PCM mauricien
+                  {t('acc.gl.subtitle', locale)}
                 </p>
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('common.refresh', locale)}
               </Button>
               <Link href="/client/plan-comptable">
                 <Button variant="outline" size="sm" className="border-slate-400">
                   <BookOpen className="h-4 w-4 mr-1.5" />
-                  Plan Comptable
+                  {t('acc.gl.chart_accounts', locale)}
                 </Button>
               </Link>
               <Button
@@ -338,7 +340,7 @@ export default function ClientGrandLivrePage() {
                 ) : (
                   <CheckCircle2 className="h-4 w-4 mr-1.5" />
                 )}
-                Lettrer auto
+                {t('acc.gl.auto_match', locale)}
               </Button>
               <Button
                 onClick={handleAudit}
@@ -350,7 +352,7 @@ export default function ClientGrandLivrePage() {
                 ) : (
                   <Sparkles className="h-4 w-4 mr-2" />
                 )}
-                Lancer Lex Livre
+                {t('acc.gl.run_lex_livre', locale)}
               </Button>
             </div>
           </div>
@@ -359,7 +361,7 @@ export default function ClientGrandLivrePage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('acc.gl.no_company', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -372,16 +374,16 @@ export default function ClientGrandLivrePage() {
 
             {/* Synthèse comptable */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard label="Total débit" value={fmt(totalDebit)} tone="green" />
-              <KpiCard label="Total crédit" value={fmt(totalCredit)} tone="rose" />
+              <KpiCard label={t('acc.gl.total_debit', locale)} value={fmt(totalDebit)} tone="green" />
+              <KpiCard label={t('acc.gl.total_credit', locale)} value={fmt(totalCredit)} tone="rose" />
               <KpiCard
-                label="Balance R1 (D - C)"
+                label={t('acc.gl.balance', locale)}
                 value={fmt(ecart)}
                 tone={Math.abs(ecart) < 0.01 ? "green" : "rose"}
                 accent={Math.abs(ecart) >= 0.01}
               />
               <KpiCard
-                label="Résultat (P - C)"
+                label={t('acc.gl.result', locale)}
                 value={fmt(resultat)}
                 tone={resultat >= 0 ? "green" : "rose"}
               />
@@ -395,7 +397,7 @@ export default function ClientGrandLivrePage() {
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Rechercher un compte (numéro ou libellé)…"
+                    placeholder={t('acc.gl.search_placeholder', locale)}
                     className="pl-8 h-9"
                   />
                 </div>

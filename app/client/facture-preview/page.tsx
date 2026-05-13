@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface LigneFacture {
   id: string; description: string; quantite: number; prix_unitaire: number
@@ -36,6 +37,7 @@ function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigi
 function fmtDate(d: string) { if (!d) return "-"; return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) }
 
 function FacturePreviewContent() {
+  const locale = getLocale()
   const searchParams = useSearchParams()
   const [data, setData] = useState<InvoiceData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -90,8 +92,8 @@ function FacturePreviewContent() {
     }
   }, [loading, data, searchParams])
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><p>Chargement...</p></div>
-  if (!data) return <div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">Aucune facture a afficher. Creez une facture depuis le formulaire.</p></div>
+  if (loading) return <div className="flex items-center justify-center min-h-screen"><p>{t('common.loading', locale)}</p></div>
+  if (!data) return <div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">{t('inv.pv.no_invoice', locale)}</p></div>
 
   const s = data.settings || {} as InvoiceData["settings"]
   const c = data.client || {} as InvoiceData["client"]
@@ -127,10 +129,10 @@ function FacturePreviewContent() {
       {/* Print button */}
       <div className="no-print fixed top-4 right-4 z-50 flex gap-2">
         <button onClick={() => window.print()} className="bg-[#0B0F2E] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#2a3d6b] transition-colors">
-          Imprimer / PDF
+          {t('inv.pv.print_pdf', locale)}
         </button>
         <button onClick={() => window.close()} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">
-          Fermer
+          {t('inv.pv.close', locale)}
         </button>
       </div>
 
@@ -143,7 +145,7 @@ function FacturePreviewContent() {
               <img src={data.logo_url || s.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
             )}
             <div>
-              <h2 className="text-xl font-bold" style={{ color: colors.primaire }}>{s.nom || "Votre Entreprise"}</h2>
+              <h2 className="text-xl font-bold" style={{ color: colors.primaire }}>{s.nom || t('inv.pv.your_company', locale)}</h2>
               {s.adresse && <p className="text-sm text-gray-600 whitespace-pre-line">{s.adresse}</p>}
               {s.telephone && <p className="text-sm text-gray-600">{s.telephone}</p>}
               {s.email && <p className="text-sm text-gray-600">{s.email}</p>}
@@ -152,7 +154,7 @@ function FacturePreviewContent() {
           </div>
           <div className="text-right">
             <h1 className="text-3xl font-black tracking-tight" style={{ color: data.type_document === 'avoir' ? '#DC2626' : colors.primaire }}>
-              {data.type_document === 'avoir' ? 'AVOIR' : data.type_document === 'note_debit' ? 'NOTE DE DEBIT' : 'FACTURE'}
+              {data.type_document === 'avoir' ? t('inv.pv.credit_uc', locale) : data.type_document === 'note_debit' ? t('inv.pv.debit_note_uc', locale) : t('inv.pv.invoice_uc', locale)}
             </h1>
             <p className="text-sm text-gray-400 mt-0.5">
               {data.type_document === 'avoir' ? 'CREDIT NOTE' : data.type_document === 'note_debit' ? 'DEBIT NOTE' : 'INVOICE'}
@@ -163,7 +165,7 @@ function FacturePreviewContent() {
         {/* Invoice Info + Bill To */}
         <div className="grid grid-cols-2 gap-8 mb-8">
           <div className="rounded-lg p-4" style={{ backgroundColor: colors.primaire + "08" }}>
-            <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.primaire }}>Facture a / Bill to</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.primaire }}>{t('inv.pv.bill_to', locale)}</h3>
             <p className="font-semibold text-gray-900">{c.nom || c.entreprise || data.tiers || "-"}</p>
             {c.entreprise && c.nom && <p className="text-sm text-gray-600">{c.entreprise}</p>}
             {c.adresse && <p className="text-sm text-gray-600 whitespace-pre-line">{c.adresse}</p>}
@@ -172,19 +174,19 @@ function FacturePreviewContent() {
           </div>
           <div className="text-right space-y-1.5">
             <div className="flex justify-end gap-8">
-              <span className="text-sm text-gray-500">N. Facture:</span>
+              <span className="text-sm text-gray-500">{t('inv.invoice_number', locale)}:</span>
               <span className="font-mono font-bold" style={{ color: colors.primaire }}>{data.numero_facture}</span>
             </div>
             <div className="flex justify-end gap-8">
-              <span className="text-sm text-gray-500">Date:</span>
+              <span className="text-sm text-gray-500">{t('common.date', locale)}:</span>
               <span className="text-sm">{fmtDate(data.date_facture)}</span>
             </div>
             <div className="flex justify-end gap-8">
-              <span className="text-sm text-gray-500">Echeance:</span>
+              <span className="text-sm text-gray-500">{t('inv.due_date', locale)}:</span>
               <span className="text-sm">{fmtDate(data.date_echeance)}</span>
             </div>
             <div className="flex justify-end gap-8">
-              <span className="text-sm text-gray-500">Devise:</span>
+              <span className="text-sm text-gray-500">{t('common.currency', locale)}:</span>
               <span className="text-sm font-semibold">{data.devise}</span>
             </div>
             {data.client_offshore && (
@@ -199,11 +201,11 @@ function FacturePreviewContent() {
         <table className="w-full mb-6" style={{ borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ backgroundColor: colors.primaire }}>
-              <th className="text-left text-white text-xs font-semibold py-3 px-4 rounded-tl-lg">Description</th>
-              <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">Qte</th>
-              <th className="text-right text-white text-xs font-semibold py-3 px-3 w-28">Prix unit.</th>
-              <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">TVA</th>
-              <th className="text-right text-white text-xs font-semibold py-3 px-4 rounded-tr-lg w-28">Montant</th>
+              <th className="text-left text-white text-xs font-semibold py-3 px-4 rounded-tl-lg">{t('common.description', locale)}</th>
+              <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">{t('inv.pv.qty', locale)}</th>
+              <th className="text-right text-white text-xs font-semibold py-3 px-3 w-28">{t('inv.pv.unit_price_short', locale)}</th>
+              <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">{t('inv.vat', locale)}</th>
+              <th className="text-right text-white text-xs font-semibold py-3 px-4 rounded-tr-lg w-28">{t('common.amount', locale)}</th>
             </tr>
           </thead>
           <tbody>
@@ -223,21 +225,21 @@ function FacturePreviewContent() {
         <div className="flex justify-end mb-8">
           <div className="w-72 space-y-1.5">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Sous-total HT</span>
+              <span className="text-gray-600">{t('inv.subtotal', locale)}</span>
               <span className="font-mono">{fmt(subtotalHT)} {data.devise}</span>
             </div>
             {discount > 0 && (
               <div className="flex justify-between text-sm text-red-600">
-                <span>Remise{data.remise_pct > 0 ? ` (${data.remise_pct}%)` : ""}</span>
+                <span>{t('inv.nf.discount', locale)}{data.remise_pct > 0 ? ` (${data.remise_pct}%)` : ""}</span>
                 <span className="font-mono">-{fmt(discount)} {data.devise}</span>
               </div>
             )}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">TVA {data.client_offshore ? "(Zero-rated export)" : "(15%)"}</span>
+              <span className="text-gray-600">{t('inv.vat', locale)} {data.client_offshore ? "(Zero-rated export)" : "(15%)"}</span>
               <span className="font-mono">{fmt(totalTVA)} {data.devise}</span>
             </div>
             <div className="border-t-2 pt-2 flex justify-between font-bold text-lg" style={{ borderColor: colors.primaire }}>
-              <span style={{ color: colors.primaire }}>Total TTC</span>
+              <span style={{ color: colors.primaire }}>{t('inv.total_incl', locale)}</span>
               <span className="font-mono" style={{ color: colors.primaire }}>{fmt(grandTotal)} {data.devise}</span>
             </div>
             {data.devise !== "MUR" && data.taux_change > 0 && (
@@ -252,10 +254,10 @@ function FacturePreviewContent() {
         {/* Payment Details */}
         {(s.banque_nom || s.banque_iban) && (
           <div className="rounded-lg p-4 mb-6 border" style={{ borderColor: colors.secondaire + "40" }}>
-            <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.primaire }}>Coordonnees de paiement / Payment Details</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: colors.primaire }}>{t('inv.pv.payment_details', locale)}</h3>
             <div className="grid grid-cols-2 gap-2 text-sm">
-              {s.banque_nom && <div><span className="text-gray-500">Banque: </span><span className="font-medium">{s.banque_nom}</span></div>}
-              {s.banque_compte && <div><span className="text-gray-500">Compte: </span><span className="font-mono">{s.banque_compte}</span></div>}
+              {s.banque_nom && <div><span className="text-gray-500">{t('inv.pv.bank', locale)}: </span><span className="font-medium">{s.banque_nom}</span></div>}
+              {s.banque_compte && <div><span className="text-gray-500">{t('inv.pv.account', locale)}: </span><span className="font-mono">{s.banque_compte}</span></div>}
               {s.banque_iban && <div><span className="text-gray-500">IBAN: </span><span className="font-mono">{s.banque_iban}</span></div>}
               {s.banque_swift && <div><span className="text-gray-500">SWIFT/BIC: </span><span className="font-mono">{s.banque_swift}</span></div>}
             </div>
@@ -265,7 +267,7 @@ function FacturePreviewContent() {
         {/* Terms */}
         {data.termes && (
           <div className="mb-6">
-            <h3 className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: colors.primaire }}>Termes et conditions</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: colors.primaire }}>{t('inv.pv.terms', locale)}</h3>
             <p className="text-xs text-gray-600 whitespace-pre-line">{data.termes}</p>
           </div>
         )}

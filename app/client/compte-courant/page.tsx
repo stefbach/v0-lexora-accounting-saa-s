@@ -12,11 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Plus, Users, ArrowUpRight, ArrowDownLeft, Wallet, RefreshCw, ChevronLeft } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "--" }
 
 export default function CompteCourantPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [loading, setLoading] = useState(true)
   const [comptes, setComptes] = useState<any[]>([])
@@ -158,12 +160,12 @@ export default function CompteCourantPage() {
               <ChevronLeft className="w-4 h-4 mr-1" /> Retour
             </Button>
           )}
-          <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
+          <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />{t('common.refresh', locale)}</Button>
           <Button onClick={() => setAvanceDialog(true)} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/90">
-            <ArrowUpRight className="w-4 h-4 mr-2" />Avance
+            <ArrowUpRight className="w-4 h-4 mr-2" />{t('acc.cc.advance', locale)}
           </Button>
           <Button onClick={() => setRemboursementDialog(true)} className="bg-[#0B0F2E]">
-            <ArrowDownLeft className="w-4 h-4 mr-2" />Remboursement
+            <ArrowDownLeft className="w-4 h-4 mr-2" />{t('acc.cc.reimbursement', locale)}
           </Button>
         </>
       }
@@ -176,7 +178,7 @@ export default function CompteCourantPage() {
           <CardContent className="p-4 flex items-center gap-3">
             <Users className="w-8 h-8 text-[#0B0F2E]" />
             <div>
-              <p className="text-xs text-gray-500">Comptes ouverts</p>
+              <p className="text-xs text-gray-500">{t('acc.cc.open_accounts', locale)}</p>
               <p className="text-xl font-bold text-[#0B0F2E]">{comptes.length}</p>
             </div>
           </CardContent>
@@ -185,7 +187,7 @@ export default function CompteCourantPage() {
           <CardContent className="p-4 flex items-center gap-3">
             <Wallet className="w-8 h-8" style={{ color: "#D4AF37" }} />
             <div>
-              <p className="text-xs text-gray-500">Solde total du</p>
+              <p className="text-xs text-gray-500">{t('acc.cc.total_balance', locale)}</p>
               <p className="text-xl font-bold text-[#0B0F2E]">{fmt(totalSolde)} MUR</p>
             </div>
           </CardContent>
@@ -194,7 +196,7 @@ export default function CompteCourantPage() {
           <CardContent className="p-4 flex items-center gap-3">
             <ArrowUpRight className="w-8 h-8 text-orange-600" />
             <div>
-              <p className="text-xs text-gray-500">Associes</p>
+              <p className="text-xs text-gray-500">{t('acc.cc.shareholders', locale)}</p>
               <p className="text-xl font-bold text-[#0B0F2E]">{comptes.filter(c => c.type === 'associe').length}</p>
             </div>
           </CardContent>

@@ -458,19 +458,19 @@ export default function ClientDocumentsPage() {
         {uploading ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: GOLD }} />
-            <p className="text-sm text-muted-foreground">Analyse en cours...</p>
-            <p className="text-xs text-muted-foreground">Votre document sera classé automatiquement dans le bon dossier</p>
+            <p className="text-sm text-muted-foreground">{t('core.doc.status_analyzing', locale)}</p>
+            <p className="text-xs text-muted-foreground">{t('core.doc.your_doc_auto_classed', locale)}</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
             <Upload className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm font-medium">Glissez-déposez vos fichiers ici</p>
-            <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, XLSX — max 20 MB</p>
-            <p className="text-xs text-muted-foreground mt-1">Le système analyse et classe automatiquement dans le bon dossier</p>
+            <p className="text-sm font-medium">{t('core.doc.drop_files', locale)}</p>
+            <p className="text-xs text-muted-foreground">{t('core.doc.file_types', locale)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('core.doc.system_classifies', locale)}</p>
             <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e.target.files)} />
             <div className="flex gap-2 mt-2">
-              <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
-              <Button size="sm" variant="outline" onClick={() => cameraInputRef.current?.click()}><Camera className="h-4 w-4 mr-1" />Prendre une photo</Button>
+              <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>{t('core.doc.browse', locale)}</Button>
+              <Button size="sm" variant="outline" onClick={() => cameraInputRef.current?.click()}><Camera className="h-4 w-4 mr-1" />{t('core.doc.take_photo', locale)}</Button>
             </div>
           </div>
         )}
@@ -489,15 +489,15 @@ export default function ClientDocumentsPage() {
 
       {/* Document counter */}
       <div className="flex items-center gap-3 text-xs text-gray-400 px-2">
-        <span>{filteredDocuments.length} document(s)</span>
+        <span>{filteredDocuments.length} {t('core.doc.documents_count', locale)}</span>
         {unassignedCount > 0 && (
-          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{unassignedCount} non assigné{unassignedCount > 1 ? "s" : ""}</Badge>
+          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{unassignedCount} {unassignedCount > 1 ? t('core.doc.unassigned_many', locale) : t('core.doc.unassigned_one', locale)}</Badge>
         )}
       </div>
 
       {/* Folder list */}
       <div>
-        <h3 className="font-semibold mb-3" style={{ color: NAVY }}>Mes Dossiers</h3>
+        <h3 className="font-semibold mb-3" style={{ color: NAVY }}>{t('core.doc.my_folders', locale)}</h3>
         <div className="grid gap-2">
           {FOLDERS.map((folder) => {
             const count = getDocsForFolder(filteredDocuments, folder.key).length
@@ -518,15 +518,15 @@ export default function ClientDocumentsPage() {
                         {folder.readOnly && <Lock className="h-3 w-3 text-muted-foreground" />}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {count} document{count !== 1 ? "s" : ""}{count === 0 ? " — vide" : ""}
-                        {folder.readOnly ? " — rempli par votre comptable" : ""}
+                        {count} {count !== 1 ? t('core.doc.documents_word', locale) : t('core.doc.documents_word', locale).replace(/s$/, '')}{count === 0 ? t('core.doc.empty_suffix', locale) : ""}
+                        {folder.readOnly ? t('core.doc.filled_by_accountant', locale) : ""}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {folder.key === "recent" && documents.some(d => d.statut === "en_attente" || d.statut === "en_cours") && (
                       <Badge className="bg-blue-100 text-blue-700 text-xs">
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />En cours
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />{t('core.doc.in_progress', locale)}
                       </Badge>
                     )}
                     <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isSelected ? "rotate-90" : ""}`} />
@@ -544,11 +544,11 @@ export default function ClientDocumentsPage() {
         <div className="sticky top-0 z-20 flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-4 py-3 shadow-sm mb-3">
           <div className="text-sm">
             <span className="font-semibold text-[#0B0F2E]">{selectedIds.size}</span>
-            <span className="text-gray-600"> document{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}</span>
+            <span className="text-gray-600"> {selectedIds.size > 1 ? t('core.doc.docs_selected_many', locale) : t('core.doc.docs_selected_one', locale)}</span>
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())} disabled={bulkDeleting}>
-              Tout désélectionner
+              {t('core.doc.deselect_all', locale)}
             </Button>
             <Button
               size="sm"
@@ -557,7 +557,7 @@ export default function ClientDocumentsPage() {
               disabled={bulkDeleting}
             >
               {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Supprimer {selectedIds.size}
+              {t('core.doc.delete', locale)} {selectedIds.size}
             </Button>
           </div>
         </div>
@@ -573,7 +573,7 @@ export default function ClientDocumentsPage() {
             </CardTitle>
             {!currentFolder.readOnly && (
               <Button size="sm" style={{ backgroundColor: GOLD }} onClick={() => fileInputRef.current?.click()}>
-                <Upload className="mr-1 h-4 w-4" />Uploader ici
+                <Upload className="mr-1 h-4 w-4" />{t('core.doc.upload_here', locale)}
               </Button>
             )}
           </div>
@@ -581,26 +581,26 @@ export default function ClientDocumentsPage() {
         <div className="flex flex-wrap items-center gap-3 px-4 pb-3">
           <div className="relative flex-1 min-w-[180px] max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Rechercher par nom de fichier..." className="pl-9 h-8 text-sm" value={docSearch} onChange={(e) => setDocSearch(e.target.value)} />
+            <Input placeholder={t('core.doc.search_filename', locale)} className="pl-9 h-8 text-sm" value={docSearch} onChange={(e) => setDocSearch(e.target.value)} />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[140px] h-8 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous statuts</SelectItem>
-              <SelectItem value="traite">Traité</SelectItem>
-              <SelectItem value="en_cours">En cours</SelectItem>
-              <SelectItem value="erreur">Erreur</SelectItem>
+              <SelectItem value="all">{t('core.doc.all_statuses', locale)}</SelectItem>
+              <SelectItem value="traite">{t('core.doc.processed', locale)}</SelectItem>
+              <SelectItem value="en_cours">{t('core.doc.in_progress_filter', locale)}</SelectItem>
+              <SelectItem value="erreur">{t('core.doc.error', locale)}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger className="w-[170px] h-8 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous types</SelectItem>
-              <SelectItem value="facture_client">Facture client</SelectItem>
-              <SelectItem value="facture_fournisseur">Facture fournisseur</SelectItem>
-              <SelectItem value="releve_bancaire">Relevé bancaire</SelectItem>
-              <SelectItem value="fiche_paie">Fiche paie</SelectItem>
-              <SelectItem value="autre">Autre</SelectItem>
+              <SelectItem value="all">{t('core.doc.all_types', locale)}</SelectItem>
+              <SelectItem value="facture_client">{t('core.doc.type_client_invoice', locale)}</SelectItem>
+              <SelectItem value="facture_fournisseur">{t('core.doc.type_supplier_invoice', locale)}</SelectItem>
+              <SelectItem value="releve_bancaire">{t('core.doc.type_bank_statement', locale)}</SelectItem>
+              <SelectItem value="fiche_paie">{t('core.doc.type_payslip', locale)}</SelectItem>
+              <SelectItem value="autre">{t('core.doc.other', locale)}</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -608,9 +608,9 @@ export default function ClientDocumentsPage() {
             size="sm"
             className="h-8 text-xs"
             onClick={() => setSansFactureOnly(v => !v)}
-            title="Afficher uniquement les documents sans facture créée"
+            title={t('core.doc.without_invoice_title', locale)}
           >
-            Sans facture {sansFactureOnly ? "✓" : ""}
+            {t('core.doc.without_invoice', locale)} {sansFactureOnly ? "✓" : ""}
           </Button>
           {profile?.role === 'client_admin' && (
             <Button
@@ -622,10 +622,10 @@ export default function ClientDocumentsPage() {
                 // Reanalyze ALL documents currently shown in the filtered list
                 const candidates = allCurrentDocs
                 if (candidates.length === 0) {
-                  alert('Aucun document dans la sélection courante')
+                  alert(t('core.doc.no_doc_selection', locale))
                   return
                 }
-                if (!confirm(`Retraiter ${candidates.length} document(s) ?\n\nLe traitement est séquentiel et peut prendre plusieurs minutes.`)) return
+                if (!confirm(`${t('core.doc.confirm_bulk_reprocess_a', locale)} ${candidates.length} ${t('core.doc.confirm_bulk_reprocess_b', locale)}\n\n${t('core.doc.confirm_bulk_reprocess_c', locale)}`)) return
                 setBulkReprocessing(true)
                 setBulkProgress({ done: 0, total: candidates.length })
                 for (let i = 0; i < candidates.length; i++) {
@@ -644,12 +644,12 @@ export default function ClientDocumentsPage() {
               }}
             >
               {bulkReprocessing && bulkProgress
-                ? `Retraitement... ${bulkProgress.done}/${bulkProgress.total}`
-                : `Tout retraiter (${allCurrentDocs.length})`}
+                ? `${t('core.doc.reprocessing', locale)} ${bulkProgress.done}/${bulkProgress.total}`
+                : `${t('core.doc.reprocess_all', locale)} (${allCurrentDocs.length})`}
             </Button>
           )}
           {(docSearch || statusFilter !== "all" || typeFilter !== "all" || sansFactureOnly) && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all"); setTypeFilter("all"); setSansFactureOnly(false) }}>Effacer</Button>
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all"); setTypeFilter("all"); setSansFactureOnly(false) }}>{t('core.doc.clear', locale)}</Button>
           )}
         </div>
         <CardContent className="p-0">
@@ -661,7 +661,7 @@ export default function ClientDocumentsPage() {
                   <input
                     type="checkbox"
                     className="h-4 w-4 cursor-pointer"
-                    title="Tout (dé)sélectionner"
+                    title={t('core.doc.select_all_toggle', locale)}
                     checked={currentDocs.length > 0 && currentDocs.every(d => selectedIds.has(d.id))}
                     onChange={(e) => {
                       if (e.target.checked) setSelectedIds(new Set(currentDocs.map(d => d.id)))
@@ -669,13 +669,13 @@ export default function ClientDocumentsPage() {
                     }}
                   />
                 </TableHead>
-                <TableHead>Fichier</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Société</TableHead>
-                <TableHead>Type détecté</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Confiance IA</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('core.doc.col_file', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_date', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_company', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_type_detected', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_status', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_ai_confidence', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_actions', locale)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -702,7 +702,7 @@ export default function ClientDocumentsPage() {
                       {doc.nom_fichier}
                     </Link>
                   </TableCell>
-                  <TableCell>{new Date(doc.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                  <TableCell>{new Date(doc.created_at).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}</TableCell>
                   <TableCell>
                     {reassigningSocDocId === doc.id ? (
                       <div className="flex items-center gap-1">
@@ -718,7 +718,7 @@ export default function ClientDocumentsPage() {
                           } catch { /* silent */ }
                           setReassigningSocDocId(null)
                         }}>
-                          <SelectTrigger className="h-7 text-xs w-[160px]"><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                          <SelectTrigger className="h-7 text-xs w-[160px]"><SelectValue placeholder={t('core.doc.choose', locale)} /></SelectTrigger>
                           <SelectContent>
                             {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                           </SelectContent>
@@ -734,7 +734,7 @@ export default function ClientDocumentsPage() {
                             {normalizeSocieteName(doc.societe_detectee, societes)}
                           </Badge>
                         ) : (
-                          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">Non assignée</Badge>
+                          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{t('core.doc.unassigned_badge', locale)}</Badge>
                         )}
                         <button className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setReassigningSocDocId(doc.id); setReassigningSocValue("") }}>
                           <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#0B0F2E]" />
@@ -748,11 +748,11 @@ export default function ClientDocumentsPage() {
                         {FOLDERS.find(f => f.key === doc.type_document)?.label || doc.type_document}
                       </Badge>
                     ) : (
-                      <span className="text-xs text-muted-foreground italic">En attente...</span>
+                      <span className="text-xs text-muted-foreground italic">{t('core.doc.pending_dots', locale)}</span>
                     )}
                   </TableCell>
                   <TableCell>
-                    {statutBadge(doc.statut)}
+                    {statutBadge(doc.statut, locale)}
                     {doc.statut === "erreur" && doc.n8n_result?.error && (
                       <p className="text-xs text-red-500 mt-1">{doc.n8n_result.error}</p>
                     )}
@@ -763,7 +763,7 @@ export default function ClientDocumentsPage() {
                   <TableCell>
                     <div className="flex gap-1">
                       {doc.storage_path && (
-                        <Button variant="ghost" size="sm" title="Télécharger"
+                        <Button variant="ghost" size="sm" title={t('core.doc.download', locale)}
                           onClick={() => window.open(`/api/documents/${doc.id}/download`, '_blank')}
                         >
                           <Download className="h-3.5 w-3.5" />
@@ -773,9 +773,9 @@ export default function ClientDocumentsPage() {
                         <Button
                           variant="ghost" size="sm" className="text-xs"
                           style={{ color: doc.statut === "traite" ? undefined : GOLD }}
-                          title={doc.statut === "traite" ? "Réanalyser" : "Réessayer"}
+                          title={doc.statut === "traite" ? t('core.doc.reanalyze', locale) : t('core.doc.retry', locale)}
                           onClick={async () => {
-                            if (doc.statut === "traite" && !confirm("Ce document a déjà été traité. Voulez-vous relancer l'analyse ? Les écritures comptables seront recalculées.")) return
+                            if (doc.statut === "traite" && !confirm(t('core.doc.confirm_reanalyze_processed', locale))) return
                             setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, statut: "en_cours" } : d))
                             try {
                               await fetch(`/api/documents/${doc.id}/reanalyze`, {
@@ -787,10 +787,10 @@ export default function ClientDocumentsPage() {
                           }}
                         >
                           <RefreshCw className="h-3 w-3 mr-1" />
-                          {doc.statut === "traite" ? "Réanalyser" : "Réessayer"}
+                          {doc.statut === "traite" ? t('core.doc.reanalyze', locale) : t('core.doc.retry', locale)}
                         </Button>
                       )}
-                      <Button variant="ghost" size="sm" title="Changer catégorie"
+                      <Button variant="ghost" size="sm" title={t('core.doc.change_category', locale)}
                         onClick={() => { setChangeCatDoc(doc); setChangeCatType(doc.type_document || "autre"); setChangeCatHint("") }}
                       >
                         <Pencil className="h-3 w-3" />
@@ -798,14 +798,14 @@ export default function ClientDocumentsPage() {
                       <Button
                         variant="ghost" size="sm"
                         className="text-red-400 hover:text-red-600 hover:bg-red-50"
-                        title="Supprimer"
+                        title={t('core.doc.delete', locale)}
                         onClick={async () => {
-                          if (!confirm(`Supprimer "${doc.nom_fichier}" ? Cette action est irréversible.`)) return
+                          if (!confirm(`${t('core.doc.confirm_delete_one_a', locale)} "${doc.nom_fichier}" ? ${t('core.doc.confirm_delete_one_b', locale)}`)) return
                           try {
                             const res = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
                             if (res.ok) { setDocuments(prev => prev.filter(d => d.id !== doc.id)) }
-                            else { const d = await res.json(); alert(d.error || 'Erreur suppression') }
-                          } catch { alert('Erreur de connexion') }
+                            else { const d = await res.json(); alert(d.error || t('core.doc.delete_error', locale)) }
+                          } catch { alert(t('core.doc.connection_error', locale)) }
                         }}
                       >
                         🗑️
@@ -819,7 +819,7 @@ export default function ClientDocumentsPage() {
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-12">
                     <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                    <p className="text-muted-foreground">Aucun document dans ce dossier.</p>
+                    <p className="text-muted-foreground">{t('core.doc.no_docs_folder', locale)}</p>
                   </TableCell>
                 </TableRow>
               )}
@@ -832,36 +832,36 @@ export default function ClientDocumentsPage() {
       {/* Pagination */}
       {allCurrentDocs.length > visibleCount && (
         <div className="text-center py-2">
-          <p className="text-xs text-muted-foreground mb-2">Affichage {visibleCount} sur {allCurrentDocs.length} documents</p>
+          <p className="text-xs text-muted-foreground mb-2">{t('core.doc.display_of', locale)} {visibleCount} {t('core.doc.of', locale)} {allCurrentDocs.length} {t('core.doc.documents_word', locale)}</p>
           <Button variant="outline" size="sm" onClick={() => setVisibleCount(v => v + pageSize)}>
-            Charger plus
+            {t('core.doc.load_more', locale)}
           </Button>
         </div>
       )}
       {allCurrentDocs.length > 0 && allCurrentDocs.length <= visibleCount && (
-        <p className="text-xs text-muted-foreground text-center">{allCurrentDocs.length} document{allCurrentDocs.length > 1 ? "s" : ""}</p>
+        <p className="text-xs text-muted-foreground text-center">{allCurrentDocs.length} {t('core.doc.documents_word', locale)}</p>
       )}
 
       {/* Société confirmation dialog */}
       <Dialog open={!!confirmSocDoc} onOpenChange={(o) => { if (!o) setConfirmSocDoc(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Confirmer la société du document</DialogTitle>
+            <DialogTitle>{t('core.doc.confirm_company_doc', locale)}</DialogTitle>
             <DialogDescription>
-              Le document &quot;{confirmSocDoc?.filename}&quot; n&apos;a pas pu être automatiquement associé à une société.
-              {confirmSocDoc?.detected && <><br />Société détectée : <strong>{confirmSocDoc.detected}</strong></>}
+              {t('core.doc.confirm_company_msg_a', locale)} &quot;{confirmSocDoc?.filename}&quot; {t('core.doc.confirm_company_msg_b', locale)}
+              {confirmSocDoc?.detected && <><br />{t('core.doc.company_detected', locale)} : <strong>{confirmSocDoc.detected}</strong></>}
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
             <Select value={confirmSocId} onValueChange={setConfirmSocId}>
-              <SelectTrigger><SelectValue placeholder="Sélectionner la société..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('core.doc.select_company_dots', locale)} /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmSocDoc(null)}>Ignorer</Button>
+            <Button variant="outline" onClick={() => setConfirmSocDoc(null)}>{t('core.doc.ignore', locale)}</Button>
             <Button
               disabled={!confirmSocId || confirmSocSaving}
               style={{ backgroundColor: NAVY }}
@@ -890,7 +890,7 @@ export default function ClientDocumentsPage() {
                 setConfirmSocDoc(null)
               }}
             >
-              {confirmSocSaving ? "Traitement..." : "Confirmer et traiter"}
+              {confirmSocSaving ? t('core.doc.processing', locale) : t('core.doc.confirm_and_process', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -900,22 +900,22 @@ export default function ClientDocumentsPage() {
       <Dialog open={!!reassignDoc} onOpenChange={(o) => { if (!o) { setReassignDoc(null); setReassignSocieteId("") } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmer la société</DialogTitle>
+            <DialogTitle>{t('core.doc.confirm_company', locale)}</DialogTitle>
             <DialogDescription>
-              Le document &quot;{reassignDoc?.nom_fichier}&quot; a été analysé mais la société n&apos;a pas pu être identifiée automatiquement. Veuillez sélectionner la société concernée.
+              {t('core.doc.confirm_company_msg_a', locale)} &quot;{reassignDoc?.nom_fichier}&quot; {t('core.doc.confirm_company_undet', locale)}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-3">
             <Select value={reassignSocieteId} onValueChange={setReassignSocieteId}>
-              <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('core.doc.select_company', locale)} /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setReassignDoc(null); setReassignSocieteId("") }}>Ignorer</Button>
-            <Button style={{ backgroundColor: GOLD }} onClick={handleReassign} disabled={!reassignSocieteId}>Confirmer</Button>
+            <Button variant="outline" onClick={() => { setReassignDoc(null); setReassignSocieteId("") }}>{t('core.doc.ignore', locale)}</Button>
+            <Button style={{ backgroundColor: GOLD }} onClick={handleReassign} disabled={!reassignSocieteId}>{t('core.doc.confirm', locale)}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -923,7 +923,7 @@ export default function ClientDocumentsPage() {
       <Dialog open={!!changeCatDoc} onOpenChange={(o) => { if (!o) setChangeCatDoc(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Changer le type de document</DialogTitle>
+            <DialogTitle>{t('core.doc.change_doc_type', locale)}</DialogTitle>
             <DialogDescription>
               {changeCatDoc?.nom_fichier}
             </DialogDescription>
@@ -936,13 +936,13 @@ export default function ClientDocumentsPage() {
               </SelectContent>
             </Select>
             <Input
-              placeholder="Indice pour l'IA (optionnel)"
+              placeholder={t('core.doc.ai_hint_optional', locale)}
               value={changeCatHint}
               onChange={(e) => setChangeCatHint(e.target.value)}
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setChangeCatDoc(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setChangeCatDoc(null)}>{t('core.doc.cancel', locale)}</Button>
             <Button
               disabled={changeCatSaving}
               style={{ backgroundColor: NAVY }}
@@ -960,7 +960,7 @@ export default function ClientDocumentsPage() {
                 setChangeCatDoc(null)
               }}
             >
-              {changeCatSaving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Analyse...</> : "Confirmer"}
+              {changeCatSaving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />{t('core.doc.analyzing', locale)}</> : t('core.doc.confirm', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -970,13 +970,13 @@ export default function ClientDocumentsPage() {
       <Dialog open={!!reprocessDoc} onOpenChange={(o) => { if (!o) setReprocessDoc(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Document existant avec erreurs</DialogTitle>
+            <DialogTitle>{t('core.doc.existing_doc_with_errors', locale)}</DialogTitle>
             <DialogDescription>
-              &quot;{reprocessDoc?.filename}&quot; a déjà été importé mais contient des erreurs. Voulez-vous le retraiter ?
+              &quot;{reprocessDoc?.filename}&quot; {t('core.doc.already_imported_reprocess', locale)}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReprocessDoc(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setReprocessDoc(null)}>{t('core.doc.cancel', locale)}</Button>
             <Button
               style={{ backgroundColor: GOLD, color: NAVY }}
               onClick={async () => {
@@ -991,7 +991,7 @@ export default function ClientDocumentsPage() {
                 setReprocessDoc(null)
               }}
             >
-              Retraiter
+              {t('core.doc.reprocess', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1002,11 +1002,11 @@ export default function ClientDocumentsPage() {
       <Dialog open={!!mismatchDoc} onOpenChange={(o) => { if (!o) setMismatchDoc(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>OCR suggère une autre société</DialogTitle>
+            <DialogTitle>{t('core.doc.ocr_suggests_other', locale)}</DialogTitle>
             <DialogDescription>
-              Le document <strong>{mismatchDoc?.filename}</strong> vient d&apos;être uploadé sur <strong>{societe?.nom}</strong>,
-              mais l&apos;analyse OCR a détecté <strong>{mismatchDoc?.detectedName}</strong> qui correspond à la société <strong>{mismatchDoc?.targetSocieteNom}</strong>.
-              Que souhaitez-vous faire ?
+              {t('core.doc.confirm_company_msg_a', locale)} <strong>{mismatchDoc?.filename}</strong> {t('core.doc.mismatch_msg_a', locale)} <strong>{societe?.nom}</strong>,
+              {t('core.doc.mismatch_msg_b', locale)} <strong>{mismatchDoc?.detectedName}</strong> {t('core.doc.mismatch_msg_c', locale)} <strong>{mismatchDoc?.targetSocieteNom}</strong>.
+              {t('core.doc.what_to_do', locale)}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex flex-col gap-2 sm:flex-col sm:space-x-0">
@@ -1028,9 +1028,9 @@ export default function ClientDocumentsPage() {
                   })
                   // Switch active société + navigate refresh
                   switchSociete(mismatchDoc.targetSocieteId)
-                  setUploadSuccess(`Document réassigné sur ${mismatchDoc.targetSocieteNom}. Société active changée.`)
+                  setUploadSuccess(`${t('core.doc.doc_moved_to', locale)} ${mismatchDoc.targetSocieteNom}. ${t('core.doc.active_changed', locale)}`)
                 } catch {
-                  setUploadError("Erreur lors de la réassignation.")
+                  setUploadError(t('core.doc.error_reassign_period', locale))
                 } finally {
                   setMismatchSaving(false)
                   setMismatchDoc(null)
@@ -1038,14 +1038,14 @@ export default function ClientDocumentsPage() {
                 }
               }}
             >
-              Changer de société et déplacer le document
+              {t('core.doc.switch_and_move', locale)}
             </Button>
             <Button
               variant="outline"
               disabled={mismatchSaving}
               onClick={() => { setMismatchDoc(null) }}
             >
-              Garder sur {societe?.nom}
+              {t('core.doc.keep_on', locale)} {societe?.nom}
             </Button>
             <Button
               variant="ghost"
@@ -1055,7 +1055,7 @@ export default function ClientDocumentsPage() {
                 setMismatchSaving(true)
                 try {
                   await fetch(`/api/documents/${mismatchDoc.id}`, { method: "DELETE" })
-                  setUploadSuccess(`Document supprimé.`)
+                  setUploadSuccess(t('core.doc.doc_deleted', locale))
                 } catch { /* silent */ }
                 finally {
                   setMismatchSaving(false)
@@ -1065,7 +1065,7 @@ export default function ClientDocumentsPage() {
               }}
               className="text-red-600 hover:text-red-700"
             >
-              Annuler (supprimer le document)
+              {t('core.doc.cancel_delete_doc', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
