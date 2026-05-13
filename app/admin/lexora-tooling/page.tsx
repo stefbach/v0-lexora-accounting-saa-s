@@ -113,7 +113,6 @@ const colorMap: Record<string, { bg: string; border: string; text: string; iconB
   emerald: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-900", iconBg: "bg-emerald-600 text-white" },
   slate:   { bg: "bg-slate-50",   border: "border-slate-200",   text: "text-slate-900",   iconBg: "bg-slate-700 text-white" },
   blue:    { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-900",    iconBg: "bg-blue-600 text-white" },
-  purple:  { bg: "bg-purple-50",  border: "border-purple-200",  text: "text-purple-900",  iconBg: "bg-purple-700 text-white" },
 }
 
 export default function LexoraToolingPage() {
