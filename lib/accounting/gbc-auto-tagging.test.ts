@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { applyGbcAutoTagging } from './gbc-auto-tagging'
 
 /**
@@ -7,73 +7,76 @@ import { applyGbcAutoTagging } from './gbc-auto-tagging'
  * d'opérations est demandée selon le profil de la société (MUR vs GBC).
  */
 
-function mockSupabase(opts: {
+type MockOpts = {
   societe?: any
   taux?: any
   ecritures?: any[]
   relations?: any[]
   prevFacture?: any
-} = {}) {
+}
+
+function mockSupabase(opts: MockOpts = {}) {
   const updates: any[] = []
   const inserts: any[] = []
-  const queries: any[] = []
 
-  const fromMock = (table: string) => {
-    const ctx: any = { _table: table, _filters: [] as any[] }
-    const chain: any = {
-      select: (cols: string) => { ctx._cols = cols; return chain },
-      eq: (col: string, val: any) => { ctx._filters.push(['eq', col, val]); return chain },
-      is: (col: string, val: any) => { ctx._filters.push(['is', col, val]); return chain },
-      like: (col: string, val: any) => { ctx._filters.push(['like', col, val]); return chain },
-      or: (filter: string) => { ctx._filters.push(['or', filter]); return chain },
-      order: () => chain, limit: () => chain,
-      maybeSingle: () => {
-        queries.push(ctx)
-        if (table === 'taux_change') return Promise.resolve({ data: opts.taux ?? null, error: null })
-        return Promise.resolve({ data: null, error: null })
-      },
-      single: () => {
-        queries.push(ctx)
-        if (table === 'societes' && ctx._filters.find((f: any) => f[1] === 'id')) {
-          return Promise.resolve({ data: opts.societe ?? null, error: opts.societe ? null : { message: 'not found' } })
-        }
-        return Promise.resolve({ data: null, error: null })
-      },
+  // ChainBuilder : permet de chainer .select.eq.is.like.or.order.limit puis terminer
+  // soit avec .single/.maybeSingle, soit par un await direct (thenable).
+  function chain(table: string, filters: any[] = [], terminal?: string) {
+    const ctx: any = { _table: table, _filters: filters }
+
+    // Résolution finale selon le contexte
+    const resolve = (): { data: any; error: any } => {
+      if (terminal === 'single' && table === 'societes') {
+        return { data: opts.societe ?? null, error: opts.societe ? null : { message: 'not found' } }
+      }
+      if (terminal === 'maybeSingle' && table === 'taux_change') {
+        return { data: opts.taux ?? null, error: null }
+      }
+      if (table === 'societes_relationships') return { data: opts.relations || [], error: null }
+      if (table === 'ecritures_comptables_v2') return { data: opts.ecritures || [], error: null }
+      if (table === 'factures' && filters.some(f => f[1] === 'related_party' && f[2] === true)) {
+        return { data: opts.prevFacture ? [opts.prevFacture] : [], error: null }
+      }
+      return { data: [], error: null }
+    }
+
+    const obj: any = {
+      select: () => chain(table, filters),
+      eq:     (col: string, val: any) => chain(table, [...filters, ['eq', col, val]]),
+      is:     (col: string, val: any) => chain(table, [...filters, ['is', col, val]]),
+      like:   (col: string, val: any) => chain(table, [...filters, ['like', col, val]]),
+      or:     (f: string) => chain(table, [...filters, ['or', f]]),
+      order:  () => chain(table, filters),
+      limit:  () => chain(table, filters),
+      single: () => Promise.resolve(chain(table, filters, 'single')._resolve()),
+      maybeSingle: () => Promise.resolve(chain(table, filters, 'maybeSingle')._resolve()),
+      then:   (onFulfilled: any, onRejected?: any) => Promise.resolve(resolve()).then(onFulfilled, onRejected),
+      _resolve: resolve,
+    }
+    return obj
+  }
+
+  return {
+    from: (table: string) => ({
+      select: () => chain(table),
       update: (vals: any) => {
         const upd: any = { _table: table, vals, _filters: [] as any[] }
         const updChain: any = {
           eq: (col: string, val: any) => { upd._filters.push(['eq', col, val]); return updChain },
           like: (col: string, val: any) => { upd._filters.push(['like', col, val]); return updChain },
+          then: (onFulfilled: any) => Promise.resolve({ data: null, error: null }).then(onFulfilled),
         }
         updates.push(upd)
-        // Promise-like behavior: any await on updChain resolves to ok
-        ;(updChain as any).then = (resolve: any) => resolve({ data: null, error: null })
         return updChain
       },
       insert: (vals: any) => {
         inserts.push({ _table: table, vals })
         return Promise.resolve({ data: null, error: null })
       },
-    }
-    // For relations: select then .or.is — resolves to relations[]
-    ;(chain as any).then = (resolve: any) => {
-      queries.push(ctx)
-      if (table === 'societes_relationships') return resolve({ data: opts.relations || [], error: null })
-      if (table === 'factures' && ctx._filters.find((f: any) => f[1] === 'related_party' && f[2] === true)) {
-        return resolve({ data: opts.prevFacture ? [opts.prevFacture] : [], error: null })
-      }
-      if (table === 'ecritures_comptables_v2') return resolve({ data: opts.ecritures || [], error: null })
-      return resolve({ data: [], error: null })
-    }
-    return chain
-  }
-
-  return {
-    from: fromMock,
+    }),
     _updates: updates,
     _inserts: inserts,
-    _queries: queries,
-  }
+  } as any
 }
 
 describe('applyGbcAutoTagging', () => {
@@ -91,7 +94,7 @@ describe('applyGbcAutoTagging', () => {
       montant_mur: 100000,
     })
     expect(r.per_category).toBe('foreign_dividends')
-    expect(r.ias21_translated).toBe(false)        // MUR-only → pas de translation
+    expect(r.ias21_translated).toBe(false)  // MUR-only → pas de translation
     expect(r.related_party).toBe(false)
   })
 
@@ -117,6 +120,7 @@ describe('applyGbcAutoTagging', () => {
   it('tiers est une société du groupe : flag related_party + crée TP transaction si seuil > 1M', async () => {
     const sb = mockSupabase({
       societe: { id: 'soc-3', nom: 'Parent Ltd', devise_fonctionnelle: 'USD' },
+      taux: { taux: 47.5 },
       relations: [{
         parent_societe_id: 'soc-3',
         child_societe_id: 'soc-4',
@@ -128,14 +132,13 @@ describe('applyGbcAutoTagging', () => {
       facture_id: 'fac-3', societe_id: 'soc-3',
       tiers: 'Subsidiary Ltd', type_facture: 'fournisseur',
       numero_compte_principal: '607',
-      montant_mur: 6_000_000,   // > 5M → documentation_required
+      montant_mur: 6_000_000,
       date_facture: '2025-09-15',
     })
     expect(r.related_party).toBe(true)
     expect(r.related_party_type).toBe('subsidiary')
     expect(r.tp_transaction_created).toBe(true)
-    // Vérifie que tp_transactions a reçu un insert
-    expect(sb._inserts.filter(i => i._table === 'tp_transactions').length).toBe(1)
+    expect(sb._inserts.filter((i: any) => i._table === 'tp_transactions').length).toBe(1)
   })
 
   it('société introuvable : retourne avec warning', async () => {

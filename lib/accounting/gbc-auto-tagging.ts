@@ -19,7 +19,7 @@
  */
 
 import { autoClassifyPer, type PerCategory } from './per'
-import { classifyAccount, getTranslationRate, type TranslationRates } from './functional-currency'
+import { getTranslationRate, type TranslationRates } from './functional-currency'
 import { getDocumentationTier } from './transfer-pricing'
 
 type SupabaseLike = any
