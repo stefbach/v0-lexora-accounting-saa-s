@@ -85,7 +85,19 @@ export default function GbcDashboardPage() {
 
   // Compute status per module
   const deviseFonct = societe?.devise_fonctionnelle || 'MUR'
-  const isGbc = deviseFonct !== 'MUR'
+  const regime: 'domestic' | 'gbc1' | 'authorised_company' | 'holding' | 'branch_foreign_pe' = societe?.regime || 'domestic'
+  const isGbc = regime !== 'domestic'
+  // Active modules selon le régime (mirror de lib/accounting/regime.ts)
+  const mod = {
+    per_active: regime === 'gbc1' || regime === 'authorised_company' || regime === 'holding',
+    substance_required: regime === 'gbc1' || regime === 'holding',
+    ubo_required: regime === 'gbc1' || regime === 'authorised_company' || regime === 'holding',
+    tp_required: regime === 'gbc1' || regime === 'authorised_company' || regime === 'holding',
+    consolidation_active: regime === 'holding',
+    crs_fatca_active: regime === 'gbc1' || regime === 'authorised_company',
+    pillar_two_eligible: regime === 'holding',
+    ias21_translation_active: deviseFonct !== 'MUR' || regime === 'branch_foreign_pe',
+  }
 
   const perTotal = Number(modules.per?.tax_breakdown?.net_tax_liability_mur) || 0
   const perEligible = Number(modules.per?.tax_breakdown?.per_eligible_revenue_mur) || 0
@@ -103,20 +115,22 @@ export default function GbcDashboardPage() {
   const leasesCount = Number(modules.leases?.summary?.nb_active) || 0
   const leasesRou = Number(modules.leases?.summary?.total_rou_mur) || 0
 
-  const tiles: Array<{ icon: any; title: string; href: string; status: ModuleStatus; kpi: string; sub: string; phase: string }> = [
+  const tilesAll: Array<{ icon: any; title: string; href: string; status: ModuleStatus; kpi: string; sub: string; phase: string; show: boolean }> = [
     {
       icon: Banknote, title: 'Monnaie fonctionnelle', href: '/client/societes',
       phase: 'A',
-      status: isGbc ? 'ok' : 'na',
+      status: mod.ias21_translation_active ? 'ok' : 'na',
       kpi: deviseFonct,
-      sub: isGbc ? 'Comptabilité primaire (IAS 21)' : 'Société domestique MUR',
+      sub: mod.ias21_translation_active ? 'Comptabilité primaire (IAS 21)' : 'Société MUR',
+      show: true,  // toujours visible (info de base)
     },
     {
       icon: Banknote, title: 'PER + IS', href: '/client/gbc-per',
       phase: 'B',
-      status: perEligible > 0 ? 'ok' : (isGbc ? 'pending' : 'na'),
+      status: perEligible > 0 ? 'ok' : (mod.per_active ? 'pending' : 'na'),
       kpi: `${fmt(perTotal)} MUR`,
       sub: `${fmt(perEligible)} MUR PER-éligible`,
+      show: mod.per_active,
     },
     {
       icon: Shield, title: 'Substance (CIGA)', href: '/client/gbc-substance',
@@ -124,6 +138,7 @@ export default function GbcDashboardPage() {
       status: substanceStatus === 'compliant' ? 'ok' : substanceStatus === 'at_risk' ? 'warning' : substanceStatus === 'non_compliant' ? 'error' : 'pending',
       kpi: substanceStatus,
       sub: 'Exigences ITA §73A + FSC',
+      show: mod.substance_required,
     },
     {
       icon: GitBranch, title: 'Transfer Pricing', href: '/client/gbc-transfer-pricing',
@@ -131,6 +146,7 @@ export default function GbcDashboardPage() {
       status: tpFlagged > 0 ? 'error' : tpDocRequired > 0 ? 'warning' : 'ok',
       kpi: `${tpDocRequired} doc requise`,
       sub: tpFlagged > 0 ? `⚠ ${tpFlagged} hors arm's length` : 'Aucun écart détecté',
+      show: mod.tp_required,
     },
     {
       icon: UserCheck, title: 'UBO', href: '/client/gbc-ubo',
@@ -138,6 +154,7 @@ export default function GbcDashboardPage() {
       status: uboCount === 0 ? 'error' : uboTotalPct < 75 ? 'warning' : 'ok',
       kpi: `${uboCount} UBO`,
       sub: `${uboTotalPct.toFixed(0)}% détention déclarée`,
+      show: mod.ubo_required,
     },
     {
       icon: Layers, title: 'Consolidation', href: '/client/gbc-consolidation',
@@ -145,6 +162,7 @@ export default function GbcDashboardPage() {
       status: consolCount === 0 ? 'na' : 'ok',
       kpi: `${consolCount} filiale${consolCount > 1 ? 's' : ''}`,
       sub: consolCount > 0 ? `Goodwill ${fmt(consolGoodwill)} MUR` : 'Pas de groupe',
+      show: mod.consolidation_active,
     },
     {
       icon: FileText, title: 'CRS / FATCA', href: '/client/gbc-crs-fatca',
@@ -152,6 +170,7 @@ export default function GbcDashboardPage() {
       status: crsCount > 0 ? 'ok' : 'na',
       kpi: `${crsCount} holders`,
       sub: 'Reporting annuel MRA',
+      show: mod.crs_fatca_active,
     },
     {
       icon: Globe, title: 'Pillar Two', href: '/client/gbc-pillar-two',
@@ -159,6 +178,7 @@ export default function GbcDashboardPage() {
       status: pillarInScope === true ? (pillarTopUp > 0 ? 'warning' : 'ok') : pillarInScope === false ? 'na' : 'pending',
       kpi: pillarInScope === true ? `${fmt(pillarTopUp)} MUR top-up` : pillarInScope === false ? 'hors scope' : 'à évaluer',
       sub: pillarInScope === true ? `${pillarLowTaxed} juridictions low-taxed` : 'CA consolidé < €750M ?',
+      show: mod.pillar_two_eligible,
     },
     {
       icon: FileSignature, title: 'IFRS 16 Leases', href: '/client/leases',
@@ -166,9 +186,12 @@ export default function GbcDashboardPage() {
       status: leasesCount > 0 ? 'ok' : 'na',
       kpi: `${leasesCount} actif${leasesCount > 1 ? 's' : ''}`,
       sub: leasesCount > 0 ? `${fmt(leasesRou)} MUR RoU` : 'Aucun lease',
+      show: true,  // IFRS 16 cross-cutting, applicable à toutes
     },
   ]
 
+  // Filtre les tuiles selon le régime de la société
+  const tiles = tilesAll.filter(t => t.show)
   const compliantCount = tiles.filter(t => t.status === 'ok').length
   const warningCount = tiles.filter(t => t.status === 'warning').length
   const errorCount = tiles.filter(t => t.status === 'error').length
@@ -180,8 +203,14 @@ export default function GbcDashboardPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2"><Globe className="h-6 w-6 text-purple-700" /> Dashboard GBC & Full IFRS</h1>
           <p className="text-sm text-slate-500">
             Vue d'ensemble compliance pour {societe?.nom || '—'} · Exercice {exercice}
-            {isGbc && <Badge className="ml-2 bg-purple-100 text-purple-900 border-purple-200">GBC · {deviseFonct}</Badge>}
-            {!isGbc && <Badge variant="outline" className="ml-2">Domestic · MUR</Badge>}
+            <Badge className={`ml-2 ${isGbc ? 'bg-purple-100 text-purple-900 border-purple-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+              {regime === 'gbc1' && 'GBC1'}
+              {regime === 'authorised_company' && 'Authorised Company'}
+              {regime === 'holding' && 'Holding'}
+              {regime === 'branch_foreign_pe' && 'Succursale étrangère'}
+              {regime === 'domestic' && 'PME Domestic'}
+              {' · '}{deviseFonct}
+            </Badge>
           </p>
         </div>
         <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />Rafraîchir</Button>

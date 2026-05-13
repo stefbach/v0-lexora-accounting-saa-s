@@ -104,6 +104,15 @@ export async function POST(request: Request) {
     }
     if (body.ern) insertData.ern = body.ern
     if (body.secteur_activite) insertData.secteur_activite = body.secteur_activite
+    // Phase K — paramétrage régime + monnaie fonctionnelle + FSC
+    if (body.regime) insertData.regime = body.regime
+    if (body.devise_fonctionnelle) insertData.devise_fonctionnelle = body.devise_fonctionnelle
+    if (body.fsc_license_number) insertData.fsc_license_number = body.fsc_license_number
+    if (body.fsc_license_type) insertData.fsc_license_type = body.fsc_license_type
+    if (body.fsc_license_issued) insertData.fsc_license_issued = body.fsc_license_issued
+    if (body.fsc_license_expiry) insertData.fsc_license_expiry = body.fsc_license_expiry
+    if (body.tax_residency_country) insertData.tax_residency_country = body.tax_residency_country
+    if (body.gbc_activity_main) insertData.gbc_activity_main = body.gbc_activity_main
 
     const { data, error } = await admin.from('societes').insert(insertData).select().single()
 
@@ -188,6 +197,16 @@ export async function PATCH(request: Request) {
     if (body.adresse !== undefined) updateData.adresse = body.adresse || null
     if (body.telephone !== undefined) updateData.telephone = body.telephone || null
     if (body.email !== undefined) updateData.email = body.email || null
+
+    // Phase K — paramétrage régime + monnaie fonctionnelle + FSC (mig 258)
+    if (body.regime !== undefined) updateData.regime = body.regime
+    if (body.devise_fonctionnelle !== undefined) updateData.devise_fonctionnelle = body.devise_fonctionnelle
+    if (body.fsc_license_number !== undefined) updateData.fsc_license_number = body.fsc_license_number || null
+    if (body.fsc_license_type !== undefined) updateData.fsc_license_type = body.fsc_license_type || null
+    if (body.fsc_license_issued !== undefined) updateData.fsc_license_issued = body.fsc_license_issued || null
+    if (body.fsc_license_expiry !== undefined) updateData.fsc_license_expiry = body.fsc_license_expiry || null
+    if (body.tax_residency_country !== undefined) updateData.tax_residency_country = body.tax_residency_country || null
+    if (body.gbc_activity_main !== undefined) updateData.gbc_activity_main = body.gbc_activity_main || null
 
     // Champs facturation (mig 243) + coordonnées bancaires (mig 106) +
     // logo (mig 046 / mig 242) + devise (mig 006). Tous facultatifs.
