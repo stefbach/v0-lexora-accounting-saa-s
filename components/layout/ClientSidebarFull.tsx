@@ -111,7 +111,7 @@ const MENU: MenuSection[] = [
       { href: "/client/contacts", label: "Contacts clients", icon: Users } as any,
       { href: "/client/recurrences", label: "Récurrences", icon: Repeat } as any,
       { href: "/client/relances", label: "Relances", icon: Send } as any,
-      { href: "/comptable/contrats", label: "Contrats Clients", icon: FileText, visibleForRoles: ["client_admin", "direction"] } as any,
+      { href: "/client/contrats", label: "Contrats Clients", icon: FileText, visibleForRoles: ["client_admin", "direction"] } as any,
       { href: "/client/facturation-settings", label: "Paramètres Facturation", labelKey: "inv.settings", icon: SlidersHorizontal },
     ]
   },

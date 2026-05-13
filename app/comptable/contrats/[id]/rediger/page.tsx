@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -47,6 +47,8 @@ interface AnalyseStatus {
 export default function RedigerContratPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const pathname = usePathname() || ""
+  const basePath = pathname.startsWith("/client/") ? "/client/contrats" : "/comptable/contrats"
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -183,7 +185,7 @@ export default function RedigerContratPage() {
       const { data } = await res.json()
       if (data) {
         setContrat(prev => prev ? { ...prev, ...data } : data)
-        router.push(`/comptable/contrats/${id}`)
+        router.push(`${basePath}/${id}`)
       }
     } catch (err) {
       console.error(err)
@@ -220,7 +222,7 @@ export default function RedigerContratPage() {
       {/* Header */}
       <div className="bg-white border-b px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <Link href="/comptable/contrats">
+          <Link href={basePath}>
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
               <ArrowLeft className="w-4 h-4" />
             </Button>
@@ -244,7 +246,7 @@ export default function RedigerContratPage() {
 
         <div className="flex items-center gap-2">
           {contrat?.contenu_html && (
-            <Link href={`/comptable/contrats/${id}`}>
+            <Link href={`${basePath}/${id}`}>
               <Button variant="outline" size="sm" className="text-xs">
                 <Eye className="w-3 h-3 mr-1" />
                 Voir le contrat

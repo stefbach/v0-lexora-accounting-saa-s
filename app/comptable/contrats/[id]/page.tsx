@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -77,6 +77,8 @@ const STATUT_TRANSITIONS: Record<string, string[]> = {
 export default function ContratDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const pathname = usePathname() || ""
+  const basePath = pathname.startsWith("/client/") ? "/client/contrats" : "/comptable/contrats"
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   const [contrat, setContrat] = useState<Contrat | null>(null)
@@ -176,7 +178,7 @@ export default function ContratDetailPage() {
     return (
       <div className="p-6 text-center">
         <p className="text-gray-500">Contrat introuvable</p>
-        <Link href="/comptable/contrats">
+        <Link href={basePath}>
           <Button variant="outline" className="mt-4">Retour</Button>
         </Link>
       </div>
@@ -194,7 +196,7 @@ export default function ContratDetailPage() {
         {/* Header panneau */}
         <div className="p-4 border-b">
           <div className="flex items-center gap-2 mb-3">
-            <Link href="/comptable/contrats">
+            <Link href={basePath}>
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
                 <ArrowLeft className="w-4 h-4" />
               </Button>
@@ -222,7 +224,7 @@ export default function ContratDetailPage() {
 
         {/* Actions */}
         <div className="p-3 border-b space-y-2">
-          <Link href={`/comptable/contrats/${id}/rediger`}>
+          <Link href={`${basePath}/${id}/rediger`}>
             <Button variant="outline" className="w-full text-xs h-8 justify-start">
               <Sparkles className="w-3.5 h-3.5 mr-2 text-blue-600" />
               Continuer avec l'IA
@@ -460,7 +462,7 @@ export default function ContratDetailPage() {
               <p className="text-gray-400 text-sm mb-4">
                 Continuez la conversation avec l'IA pour rédiger le contrat
               </p>
-              <Link href={`/comptable/contrats/${id}/rediger`}>
+              <Link href={`${basePath}/${id}/rediger`}>
                 <Button className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Sparkles className="w-4 h-4 mr-2" />
                   Rédiger avec l'IA

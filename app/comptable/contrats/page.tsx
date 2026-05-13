@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -57,6 +57,11 @@ const STATUT_CONFIG: Record<string, { label: string; color: string; icon: React.
 
 export default function ContratsPage() {
   const router = useRouter()
+  const pathname = usePathname() || ""
+  // Préfixe d'espace : /client/contrats côté client_admin / direction,
+  // /comptable/contrats côté équipe comptable. Permet de garder l'utilisateur
+  // dans son espace lors de la navigation interne (détail, rediger).
+  const basePath = pathname.startsWith("/client/") ? "/client/contrats" : "/comptable/contrats"
   const [contrats, setContrats] = useState<Contrat[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -100,7 +105,7 @@ export default function ContratsPage() {
       })
       const { data } = await res.json()
       if (data?.id) {
-        router.push(`/comptable/contrats/${data.id}/rediger`)
+        router.push(`${basePath}/${data.id}/rediger`)
       }
     } catch (err) {
       console.error(err)
@@ -290,12 +295,12 @@ export default function ContratsPage() {
                       {new Date(contrat.created_at).toLocaleDateString('fr-FR')}
                     </span>
                     <div className="flex gap-1">
-                      <Link href={`/comptable/contrats/${contrat.id}/rediger`}>
+                      <Link href={`${basePath}/${contrat.id}/rediger`}>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                           <PenLine className="w-4 h-4" />
                         </Button>
                       </Link>
-                      <Link href={`/comptable/contrats/${contrat.id}`}>
+                      <Link href={`${basePath}/${contrat.id}`}>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                           <Eye className="w-4 h-4" />
                         </Button>
