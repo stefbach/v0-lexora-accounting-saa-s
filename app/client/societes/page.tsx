@@ -65,7 +65,7 @@ export default function SocietesPage() {
   }
 
   const openEdit = (s: Societe) => {
-    setForm({ nom:s.nom, brn:s.brn||"", ern:s.ern||"", numero_tva_mra:s.numero_tva_mra||"", secteur_activite:s.secteur_activite||"", adresse:s.adresse||"", telephone:s.telephone||"", email:s.email||"", statut_tva:s.statut_tva||false, regime:(s as any).regime||"domestic", devise_fonctionnelle:(s as any).devise_fonctionnelle||"MUR", fsc_license_number:(s as any).fsc_license_number||"", fsc_license_type:(s as any).fsc_license_type||"" })
+    setForm({ nom:s.nom, brn:s.brn||"", ern:s.ern||"", numero_tva_mra:s.numero_tva_mra||"", secteur_activite:s.secteur_activite||"", adresse:s.adresse||"", telephone:s.telephone||"", email:s.email||"", statut_tva:s.statut_tva||false, regime:(s as any).regime||"domestic", devise_fonctionnelle:(s as any).devise_fonctionnelle||"MUR", fsc_license_number:(s as any).fsc_license_number||"", fsc_license_type:(s as any).fsc_license_type||"", tax_residency_country:(s as any).tax_residency_country||"MU" })
     setEditId(s.id); setOpen(true)
   }
 
