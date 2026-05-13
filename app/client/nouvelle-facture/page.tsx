@@ -331,7 +331,18 @@ export default function NouvelleFacturePage() {
             <p className="text-sm text-gray-500">Conforme MRA - Maurice</p>
           </div>
         </div>
-        <Badge className="bg-gray-100 text-gray-600 border border-gray-300">Brouillon</Badge>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push("/client/nouvelle-facture-ia")}
+            className="border-amber-300 text-amber-700 hover:bg-amber-50"
+            title="Créer ta facture en chat avec l'IA — accès au catalogue, contacts, historique"
+          >
+            ✨ Créer avec l'IA
+          </Button>
+          <Badge className="bg-gray-100 text-gray-600 border border-gray-300">Brouillon</Badge>
+        </div>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>}

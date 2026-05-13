@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import {
   Plus,
   Search,
@@ -62,6 +63,10 @@ export default function ContratsPage() {
   // /comptable/contrats côté équipe comptable. Permet de garder l'utilisateur
   // dans son espace lors de la navigation interne (détail, rediger).
   const basePath = pathname.startsWith("/client/") ? "/client/contrats" : "/comptable/contrats"
+  // Société active : on n'affiche QUE les contrats de cette société pour
+  // garder une isolation logique (un contrat appartient à une société,
+  // pas à un utilisateur global).
+  const { societeId } = useSocieteActive()
   const [contrats, setContrats] = useState<Contrat[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -71,9 +76,16 @@ export default function ContratsPage() {
   const [total, setTotal] = useState(0)
 
   const chargerContrats = useCallback(async () => {
+    if (!societeId) {
+      setContrats([])
+      setTotal(0)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const params = new URLSearchParams()
+      params.set('societe_id', societeId)
       if (search) params.set('search', search)
       if (filtreStatut !== 'tous') params.set('statut', filtreStatut)
       if (filtreType !== 'tous') params.set('type_contrat', filtreType)
@@ -88,7 +100,7 @@ export default function ContratsPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, filtreStatut, filtreType])
+  }, [societeId, search, filtreStatut, filtreType])
 
   useEffect(() => {
     const timer = setTimeout(chargerContrats, 300)
@@ -101,7 +113,11 @@ export default function ContratsPage() {
       const res = await fetch('/api/contrats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ titre: 'Nouveau contrat', type_contrat: 'autre' }),
+        body: JSON.stringify({
+          titre: 'Nouveau contrat',
+          type_contrat: 'autre',
+          societe_id: societeId || null,
+        }),
       })
       const { data } = await res.json()
       if (data?.id) {

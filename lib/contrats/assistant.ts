@@ -284,6 +284,8 @@ export async function continuerConversation(params: {
     nom_societe?: string
     email?: string
     nom_cabinet?: string
+    nom_utilisateur?: string
+    email_utilisateur?: string
   }
 }): Promise<string> {
   const messages = [
@@ -294,7 +296,7 @@ export async function continuerConversation(params: {
     {
       role: 'user' as const,
       content: params.contexte_client
-        ? `[Contexte disponible: Client="${params.contexte_client.nom_client || ''}", Société="${params.contexte_client.nom_societe || ''}", Cabinet="${params.contexte_client.nom_cabinet || 'Lexora'}"]
+        ? `[Contexte disponible: Utilisateur connecté="${params.contexte_client.nom_utilisateur || ''}" (${params.contexte_client.email_utilisateur || ''}), Société émettrice="${params.contexte_client.nom_societe || ''}", Client/cocontractant="${params.contexte_client.nom_client || ''}". Quand l'utilisateur ne précise pas l'identité du signataire de la société émettrice, propose-le automatiquement (lui-même = représentant légal par défaut).]
 
 ${params.nouveau_message}`
         : params.nouveau_message,
@@ -323,6 +325,8 @@ export async function* streamConversation(params: {
     nom_societe?: string
     email?: string
     nom_cabinet?: string
+    nom_utilisateur?: string
+    email_utilisateur?: string
   }
 }): AsyncGenerator<string> {
   const messages = [
@@ -333,7 +337,7 @@ export async function* streamConversation(params: {
     {
       role: 'user' as const,
       content: params.contexte_client
-        ? `[Contexte: Client="${params.contexte_client.nom_client || ''}", Société="${params.contexte_client.nom_societe || ''}", Cabinet="${params.contexte_client.nom_cabinet || 'Lexora'}"]
+        ? `[Contexte: Utilisateur connecté="${params.contexte_client.nom_utilisateur || ''}" (${params.contexte_client.email_utilisateur || ''}), Société émettrice="${params.contexte_client.nom_societe || ''}", Client="${params.contexte_client.nom_client || ''}". Propose l'utilisateur comme signataire pour la société émettrice si non précisé.]
 
 ${params.nouveau_message}`
         : params.nouveau_message,
