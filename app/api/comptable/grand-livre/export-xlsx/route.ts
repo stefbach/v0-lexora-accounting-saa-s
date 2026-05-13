@@ -59,7 +59,7 @@ export async function GET(request: Request) {
   })
 
   const { data: societe } = await supabase
-    .from('societes').select('raison_sociale').eq('id', societe_id).single()
+    .from('societes').select('nom').eq('id', societe_id).single()
 
   const sheets: Array<{ name: string; ws: any }> = []
 
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
     name: 'Filtres',
     ws: aoaSheet([
       [cell('Grand-Livre comptable')],
-      [cell('Société'), cell(societe?.raison_sociale || '—')],
+      [cell('Société'), cell(societe?.nom || '—')],
       [cell('Période'), cell(`${dDebut || 'depuis origine'} → ${dFin || 'à ce jour'}`)],
       [cell('Exercice'), cell(exercice || '—')],
       [cell('Exporté le'), cell(new Date(), FMT_DATE)],
@@ -160,9 +160,9 @@ export async function GET(request: Request) {
   }
 
   const buf = buildWorkbook(sheets, {
-    title: `Grand-Livre ${societe?.raison_sociale || ''}`,
+    title: `Grand-Livre ${societe?.nom || ''}`,
     subject: 'Grand-Livre comptable',
   })
-  const fname = `grand-livre_${(societe?.raison_sociale || 'societe').replace(/\s+/g, '_')}_${dDebut || ''}_${dFin || ''}.xlsx`
+  const fname = `grand-livre_${(societe?.nom || 'societe').replace(/\s+/g, '_')}_${dDebut || ''}_${dFin || ''}.xlsx`
   return xlsxResponse(buf, fname)
 }

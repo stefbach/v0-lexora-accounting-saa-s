@@ -130,7 +130,22 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
       { href: "/client/ifrs9-ecl", label: "Provision IFRS 9 (ECL)", icon: Scale },
+      { href: "/client/leases", label: "Contrats IFRS 16", icon: FilePen } as any,
       { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
+    ]
+  },
+  {
+    section: "GBC & Full IFRS",
+    requiredModule: "etats_financiers",
+    items: [
+      { href: "/client/gbc-dashboard", label: "Dashboard GBC", icon: Globe } as any,
+      { href: "/client/gbc-per", label: "PER 80% + FTC", icon: Banknote } as any,
+      { href: "/client/gbc-substance", label: "Substance (CIGA)", icon: Scale } as any,
+      { href: "/client/gbc-transfer-pricing", label: "Transfer Pricing", icon: BarChart3 } as any,
+      { href: "/client/gbc-ubo", label: "Beneficial Owners", icon: Users } as any,
+      { href: "/client/gbc-consolidation", label: "Consolidation IFRS 10", icon: Building2 } as any,
+      { href: "/client/gbc-crs-fatca", label: "CRS / FATCA", icon: FileText } as any,
+      { href: "/client/gbc-pillar-two", label: "BEPS Pillar Two", icon: Globe } as any,
     ]
   },
   {
