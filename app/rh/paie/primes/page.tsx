@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Loader2, Plus, CheckCircle, Pencil, Trash2, Upload, FileSpreadsheet, AlertTriangle, X } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import * as XLSX from "xlsx"
+import { t, getLocale } from "@/lib/i18n"
 import { Switch } from "@/components/ui/switch"
 import { SectionOvertime } from "./_components/section-overtime"
 import { ImportPrimesDialog } from "./_components/import-primes-dialog"
@@ -35,6 +36,7 @@ const STATUT_COLORS: Record<string, string> = {
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) + " MUR" }
 
 export default function PrimesPage() {
+  const locale = getLocale()
   const [tab, setTab] = useState<"catalogue" | "saisie" | "regles">("catalogue")
   const [regles, setRegles] = useState<any[]>([])
   const [regleDialog, setRegleDialog] = useState(false)
@@ -314,7 +316,7 @@ export default function PrimesPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Primes & Bonus</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.a.primes.title', locale)}</h1>
           <p className="text-sm text-gray-500">Catalogue + saisie mensuelle → intégration automatique dans la paie</p>
         </div>
         <div className="flex gap-3 items-center">

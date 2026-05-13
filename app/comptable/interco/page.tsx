@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table'
 import { ArrowLeftRight, Plus, AlertTriangle, Download, RefreshCw } from 'lucide-react'
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ const RECONCILIATION_COLORS: Record<string, string> = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function IntercoPage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [flux, setFlux] = useState<FluxInterco[]>([])
   const [reconciliation, setReconciliation] = useState<ReconciliationPaire[]>([])
@@ -212,10 +214,10 @@ export default function IntercoPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>
-            INTERCO — Consolidation multi-sociétés
+            {t('cab.interco.title', locale)}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Réconciliation des flux entre sociétés du groupe
+            {t('cab.interco.subtitle', locale)}
           </p>
         </div>
         <div className="flex gap-2">
@@ -227,7 +229,7 @@ export default function IntercoPage() {
             <DialogTrigger asChild>
               <Button size="sm" style={{ backgroundColor: '#D4AF37', color: 'white' }}>
                 <Plus className="h-4 w-4 mr-2" />
-                Nouveau flux
+                {t('cab.interco.new_flow', locale)}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">

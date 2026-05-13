@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { PointageActifToggle } from "@/components/rh/PointageActifToggle"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -1198,6 +1199,7 @@ function AuditTab({ societeId }: { societeId: string }) {
 
 // ── MAIN PAGE ──────────────────────────────────────────────────────────────────
 export default function SocieteSettingsPage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societeId, setSocieteId] = useState("")
   const [societe, setSociete] = useState<any>(null)
@@ -1325,9 +1327,9 @@ export default function SocieteSettingsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Fiche Société
+            {t('rha.a.soc.title', locale)}
           </h1>
-          <p className="text-gray-500 text-sm">Configuration complète de votre entreprise</p>
+          <p className="text-gray-500 text-sm">{t('rha.a.soc.subtitle', locale)}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {saveStatus === "ok" && (

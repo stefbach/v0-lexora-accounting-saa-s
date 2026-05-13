@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -86,6 +87,7 @@ function Field({ id, label, type = "text", placeholder, defaultValue = "", requi
 // ─── Main page ───────────────────────────────────────────────────────────────
 
 export default function ComptableEquipePage() {
+  const locale = getLocale()
   const [search, setSearch] = useState("")
   const [allUsers, setAllUsers] = useState<UserProfile[]>([])
   const [dossiers, setDossiers] = useState<Dossier[]>([])
@@ -377,10 +379,10 @@ export default function ComptableEquipePage() {
       <div className="flex-1 overflow-auto p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Mes Assignations
+            {t('cab.equipe.my_assignments', locale)}
           </h1>
           <p className="text-muted-foreground">
-            Clients et sociétés qui vous sont assignés
+            {t('cab.equipe.my_assignments_subtitle', locale)}
           </p>
         </div>
 
@@ -521,7 +523,7 @@ export default function ComptableEquipePage() {
       <div className="flex-1 overflow-auto p-6">
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            Seul le comptable principal peut gérer l&apos;équipe.
+            {t('cab.equipe.admin_only', locale)}
           </CardContent>
         </Card>
       </div>
@@ -539,8 +541,8 @@ export default function ComptableEquipePage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mon Équipe</h1>
-          <p className="text-muted-foreground">Gérez vos comptables dédiés et leurs assignations</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('cab.equipe.title', locale)}</h1>
+          <p className="text-muted-foreground">{t('cab.equipe.subtitle', locale)}</p>
         </div>
 
         {/* ── Create dialog ── */}
@@ -554,7 +556,7 @@ export default function ComptableEquipePage() {
           <DialogTrigger asChild>
             <Button style={{ backgroundColor: NAVY }}>
               <UserPlus className="mr-2 h-4 w-4" />
-              Ajouter un comptable dédié
+              {t('cab.equipe.add_dedie', locale)}
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -643,7 +645,7 @@ export default function ComptableEquipePage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Rechercher par nom ou email…"
+          placeholder={t('cab.equipe.search', locale)}
           className="pl-9"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -659,9 +661,9 @@ export default function ComptableEquipePage() {
         <Card>
           <CardContent className="py-12 text-center">
             <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-lg font-semibold mb-2">Aucun comptable dédié</h2>
+            <h2 className="text-lg font-semibold mb-2">{t('cab.equipe.empty', locale)}</h2>
             <p className="text-muted-foreground mb-4">
-              Ajoutez des membres à votre équipe pour leur assigner des clients.
+              {t('cab.equipe.empty_hint', locale)}
             </p>
           </CardContent>
         </Card>

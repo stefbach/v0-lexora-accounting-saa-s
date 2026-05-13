@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from "@/components/ui/switch"
 import { ChevronDown, ChevronRight, FileText, Calculator, Receipt, Users as UsersIcon, Scale, BarChart3, UserCheck } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 interface ModulesUtilisateur {
   documents?: boolean
@@ -23,14 +24,14 @@ interface ModulesUtilisateur {
 
 interface User { id: string; email: string; full_name: string; role: string; societe_id?: string; created_at: string; modules_utilisateur?: ModulesUtilisateur | null }
 
-const MODULE_DEFS = [
-  { key: "documents", label: "Documents & OCR", icon: FileText },
-  { key: "comptabilite", label: "Comptabilite (Grand Livre, Bilan, Banque, Rapprochement)", icon: Calculator },
-  { key: "facturation", label: "Facturation (Factures, Nouvelle facture)", icon: Receipt },
-  { key: "rh", label: "RH & Paie (Employes, Pointage, Conges, Paie, Primes)", icon: UsersIcon },
-  { key: "fiscal", label: "Fiscal MRA (TVA, IT Form 3, Annual Return)", icon: Scale },
-  { key: "etats_financiers", label: "Etats Financiers (Bilan, Previsionnel, Exercices)", icon: BarChart3 },
-  { key: "employe_portal", label: "Portail Employe (bulletins et conges)", icon: UserCheck },
+const moduleDefs = (locale: Locale) => [
+  { key: "documents", label: t('adm.users.mod_documents', locale), icon: FileText },
+  { key: "comptabilite", label: t('adm.users.mod_accounting', locale), icon: Calculator },
+  { key: "facturation", label: t('adm.users.mod_invoicing', locale), icon: Receipt },
+  { key: "rh", label: t('adm.users.mod_hr', locale), icon: UsersIcon },
+  { key: "fiscal", label: t('adm.users.mod_tax', locale), icon: Scale },
+  { key: "etats_financiers", label: t('adm.users.mod_financial', locale), icon: BarChart3 },
+  { key: "employe_portal", label: t('adm.users.mod_employee_portal', locale), icon: UserCheck },
 ] as const
 
 function getDefaultModules(role: string): ModulesUtilisateur {
@@ -55,24 +56,25 @@ function getDefaultModules(role: string): ModulesUtilisateur {
   }
 }
 
-function PermissionsEditor({ modules, onChange, role }: { modules: ModulesUtilisateur; onChange: (m: ModulesUtilisateur) => void; role: string }) {
+function PermissionsEditor({ modules, onChange, role, locale }: { modules: ModulesUtilisateur; onChange: (m: ModulesUtilisateur) => void; role: string; locale: Locale }) {
   const [open, setOpen] = useState(false)
   const defaults = getDefaultModules(role)
   const isCustom = Object.keys(modules).some(k => (modules as Record<string, boolean>)[k] !== (defaults as Record<string, boolean>)[k])
+  const MODULE_DEFS = moduleDefs(locale)
   return (
     <div className="border rounded-lg">
       <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[#0B0F2E] hover:bg-gray-50 rounded-lg">
         <span className="flex items-center gap-2">
-          Permissions avancees
-          {isCustom && <Badge className="text-[10px] bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30">Personnalise</Badge>}
+          {t('adm.users.adv_permissions', locale)}
+          {isCustom && <Badge className="text-[10px] bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30">{t('adm.users.custom', locale)}</Badge>}
         </span>
         {open ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-2 border-t pt-2">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-gray-500">Modules accessibles pour cet utilisateur</p>
-            <button type="button" onClick={() => onChange(getDefaultModules(role))} className="text-xs text-[#D4AF37] hover:underline">Reinitialiser</button>
+            <p className="text-xs text-gray-500">{t('adm.users.modules_for_user', locale)}</p>
+            <button type="button" onClick={() => onChange(getDefaultModules(role))} className="text-xs text-[#D4AF37] hover:underline">{t('adm.users.reset_perms', locale)}</button>
           </div>
           {MODULE_DEFS.map(({ key, label, icon: Icon }) => (
             <div key={key} className="flex items-center justify-between py-1.5">
@@ -93,19 +95,19 @@ function PermissionsEditor({ modules, onChange, role }: { modules: ModulesUtilis
 }
 interface Societe { id: string; nom: string; brn: string }
 
-const ROLES = [
-  { value: 'admin', label: 'Admin Plateforme', color: 'bg-red-100 text-red-800' },
-  { value: 'super_admin', label: 'Super Admin', color: 'bg-red-200 text-red-900' },
-  { value: 'comptable', label: 'Comptable', color: 'bg-blue-100 text-blue-800' },
-  { value: 'comptable_dedie', label: 'Comptable Dédié', color: 'bg-blue-100 text-blue-800' },
-  { value: 'client_admin', label: 'Client (Dirigeant)', color: 'bg-green-100 text-green-800' },
-  { value: 'client_user', label: 'Client (Utilisateur)', color: 'bg-green-50 text-green-700' },
-  { value: 'rh', label: 'RH', color: 'bg-orange-100 text-orange-800' },
-  { value: 'juridique', label: 'Juridique', color: 'bg-purple-100 text-purple-800' },
-  { value: 'manager', label: 'Manager', color: 'bg-teal-100 text-teal-800' },
-  { value: 'client_assistant', label: 'Assistant (Direction)', color: 'bg-cyan-100 text-cyan-800' },
-  { value: 'direction', label: 'Direction', color: 'bg-indigo-100 text-indigo-800' },
-  { value: 'employe', label: 'Employé', color: 'bg-gray-100 text-gray-700' },
+const buildRoles = (locale: Locale) => [
+  { value: 'admin', label: t('adm.users.role_admin', locale), color: 'bg-red-100 text-red-800' },
+  { value: 'super_admin', label: t('adm.users.role_super_admin', locale), color: 'bg-red-200 text-red-900' },
+  { value: 'comptable', label: t('adm.users.role_accountant', locale), color: 'bg-blue-100 text-blue-800' },
+  { value: 'comptable_dedie', label: t('adm.users.role_dedicated_accountant', locale), color: 'bg-blue-100 text-blue-800' },
+  { value: 'client_admin', label: t('adm.users.role_client_admin', locale), color: 'bg-green-100 text-green-800' },
+  { value: 'client_user', label: t('adm.users.role_client_user', locale), color: 'bg-green-50 text-green-700' },
+  { value: 'rh', label: t('adm.users.role_hr', locale), color: 'bg-orange-100 text-orange-800' },
+  { value: 'juridique', label: t('adm.users.role_legal', locale), color: 'bg-purple-100 text-purple-800' },
+  { value: 'manager', label: t('adm.users.role_manager', locale), color: 'bg-teal-100 text-teal-800' },
+  { value: 'client_assistant', label: t('adm.users.role_assistant', locale), color: 'bg-cyan-100 text-cyan-800' },
+  { value: 'direction', label: t('adm.users.role_direction', locale), color: 'bg-indigo-100 text-indigo-800' },
+  { value: 'employe', label: t('adm.users.role_employee', locale), color: 'bg-gray-100 text-gray-700' },
 ]
 
 const NEEDS_SOCIETE = ['rh', 'juridique', 'employe', 'manager', 'direction', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie']
@@ -114,12 +116,15 @@ function genPassword() {
   return Math.random().toString(36).slice(2, 8).toUpperCase() + Math.random().toString(36).slice(2, 8)
 }
 
-function RoleBadge({ role }: { role: string }) {
+function RoleBadge({ role, locale }: { role: string; locale: Locale }) {
+  const ROLES = buildRoles(locale)
   const r = ROLES.find(r => r.value === role)
   return <Badge className={`text-xs ${r?.color || 'bg-gray-100 text-gray-700'}`}>{r?.label || role}</Badge>
 }
 
 export default function UsersPage() {
+  const locale = getLocale()
+  const ROLES = buildRoles(locale)
   const [users, setUsers] = useState<User[]>([])
   const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
@@ -200,23 +205,23 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Utilisateurs</h1>
-          <p className="text-sm text-gray-500">{users.length} compte{users.length !== 1 ? 's' : ''} au total</p>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('adm.users.title', locale)}</h1>
+          <p className="text-sm text-gray-500">{users.length} {t('adm.users.account_count_suffix', locale)}</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#0B0F2E]">+ Créer un compte</Button>
+            <Button className="bg-[#0B0F2E]">{t('adm.users.create_btn', locale)}</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
-            <DialogHeader><DialogTitle>Créer un compte utilisateur</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t('adm.users.create_title', locale)}</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-2">
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Prénom</Label><Input value={form.prenom} onChange={e => setForm(f => ({...f, prenom: e.target.value}))} placeholder="Jean" /></div>
-                <div><Label>Nom</Label><Input value={form.nom} onChange={e => setForm(f => ({...f, nom: e.target.value}))} placeholder="Dupont" /></div>
+                <div><Label>{t('adm.users.first_name', locale)}</Label><Input value={form.prenom} onChange={e => setForm(f => ({...f, prenom: e.target.value}))} placeholder="Jean" /></div>
+                <div><Label>{t('adm.users.last_name', locale)}</Label><Input value={form.nom} onChange={e => setForm(f => ({...f, nom: e.target.value}))} placeholder="Dupont" /></div>
               </div>
-              <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="jean.dupont@email.com" /></div>
+              <div><Label>{t('adm.users.email', locale)}</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="jean.dupont@email.com" /></div>
               <div>
-                <Label>Rôle</Label>
+                <Label>{t('adm.users.role', locale)}</Label>
                 <Select value={form.role} onValueChange={v => setForm(f => ({...f, role: v, societe_id: '', modules_utilisateur: getDefaultModules(v)}))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -227,7 +232,7 @@ export default function UsersPage() {
               {NEEDS_SOCIETE.includes(form.role) && (
                 <div>
                   <Label>
-                    {['client_assistant'].includes(form.role) ? 'Sociétés à gérer (multi-sélection)' : 'Société à associer'}
+                    {['client_assistant'].includes(form.role) ? t('adm.users.companies_multi', locale) : t('adm.users.company_single', locale)}
                     {['rh','juridique','employe','manager','direction'].includes(form.role) && <span className="text-red-500"> *</span>}
                   </Label>
                   {['client_assistant', 'client_admin'].includes(form.role) && societes.length > 1 ? (
@@ -248,17 +253,17 @@ export default function UsersPage() {
                     </div>
                   ) : (
                     <Select value={form.societe_id} onValueChange={v => setForm(f => ({...f, societe_id: v}))}>
-                      <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t('adm.users.select_company', locale)} /></SelectTrigger>
                       <SelectContent>
                         {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom} {s.brn ? `— ${s.brn}` : ''}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   )}
                   <p className="text-xs text-gray-500 mt-1">
-                    {['client_assistant'].includes(form.role) && "L'assistant pourra numériser des documents pour toutes les sociétés cochées"}
-                    {['client_admin','client_user'].includes(form.role) && "Le client sera lié à cette société via un dossier"}
-                    {['comptable','comptable_dedie'].includes(form.role) && "Le comptable sera assigné à cette société"}
-                    {['rh','juridique','employe','manager','direction'].includes(form.role) && "La société principale de ce collaborateur"}
+                    {['client_assistant'].includes(form.role) && t('adm.users.hint_assistant', locale)}
+                    {['client_admin','client_user'].includes(form.role) && t('adm.users.hint_client', locale)}
+                    {['comptable','comptable_dedie'].includes(form.role) && t('adm.users.hint_accountant', locale)}
+                    {['rh','juridique','employe','manager','direction'].includes(form.role) && t('adm.users.hint_collab', locale)}
                   </p>
                 </div>
               )}
@@ -266,17 +271,18 @@ export default function UsersPage() {
                 modules={form.modules_utilisateur}
                 onChange={m => setForm(f => ({...f, modules_utilisateur: m}))}
                 role={form.role}
+                locale={locale}
               />
               <div>
-                <Label>Mot de passe généré</Label>
+                <Label>{t('adm.users.generated_password', locale)}</Label>
                 <div className="flex gap-2">
                   <Input value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} className="font-mono" />
                   <Button variant="outline" size="sm" onClick={() => setForm(f => ({...f, password: genPassword()}))}>↺</Button>
                 </div>
-                <p className="text-xs text-orange-600 mt-1">⚠️ Notez ce mot de passe — il ne sera plus affiché après création</p>
+                <p className="text-xs text-orange-600 mt-1">{t('adm.users.password_warn', locale)}</p>
               </div>
               <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || (['rh','juridique','employe','manager','direction'].includes(form.role) && !form.societe_id)} className="w-full bg-[#0B0F2E]">
-                {saving ? 'Création...' : 'Créer le compte'}
+                {saving ? t('adm.users.creating', locale) : t('adm.users.create_account', locale)}
               </Button>
             </div>
           </DialogContent>
@@ -287,7 +293,7 @@ export default function UsersPage() {
       {lastPassword && (
         <div className="p-4 bg-yellow-50 border border-yellow-300 rounded-lg flex items-center justify-between">
           <div>
-            <p className="font-semibold text-yellow-800">✅ Compte créé — mot de passe à communiquer :</p>
+            <p className="font-semibold text-yellow-800">{t('adm.users.password_to_share', locale)}</p>
             <p className="font-mono text-lg text-yellow-900 mt-1">{lastPassword}</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => setLastPassword('')}>✕</Button>
@@ -297,7 +303,7 @@ export default function UsersPage() {
       {/* Stats par rôle */}
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setFilterRole('all')} className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${filterRole === 'all' ? 'bg-[#0B0F2E] text-white border-[#0B0F2E]' : 'border-gray-200 hover:border-gray-300'}`}>
-          Tous ({users.length})
+          {t('adm.users.filter_all', locale)} ({users.length})
         </button>
         {stats.filter(s => s.count > 0).map(s => (
           <button key={s.value} onClick={() => setFilterRole(s.value)}
@@ -309,12 +315,12 @@ export default function UsersPage() {
 
       {/* Liste utilisateurs */}
       {loading ? (
-        <div className="text-center text-gray-400 py-12">Chargement...</div>
+        <div className="text-center text-gray-400 py-12">{t('adm.users.loading', locale)}</div>
       ) : filtered.length === 0 ? (
         <Card><CardContent className="p-12 text-center text-gray-400">
           <p className="text-4xl mb-3">👤</p>
-          <p className="font-medium">Aucun utilisateur</p>
-          <p className="text-sm mt-1">Créez votre premier compte avec le bouton ci-dessus.</p>
+          <p className="font-medium">{t('adm.users.none', locale)}</p>
+          <p className="text-sm mt-1">{t('adm.users.none_hint', locale)}</p>
         </CardContent></Card>
       ) : (
         <div className="space-y-2">
@@ -330,7 +336,7 @@ export default function UsersPage() {
                       <p className="font-medium text-sm">{u.full_name || '--'}</p>
                       <p className="text-xs text-gray-400">{u.email}</p>
                     </div>
-                    <RoleBadge role={u.role} />
+                    <RoleBadge role={u.role} locale={locale} />
                   </div>
                   <div className="flex items-center gap-2">
                     <Select value={u.role} onValueChange={v => changeRole(u.id, v)}>
@@ -345,6 +351,7 @@ export default function UsersPage() {
                   modules={u.modules_utilisateur || getDefaultModules(u.role)}
                   onChange={m => savePermissions(u.id, m)}
                   role={u.role}
+                  locale={locale}
                 />
               </CardContent>
             </Card>

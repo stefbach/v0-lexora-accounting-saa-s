@@ -12,6 +12,7 @@ import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, Check
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { PaieValidationPanel } from "@/components/rh/PaieValidationPanel"
+import { t, getLocale } from "@/lib/i18n"
 import {
   calculerPeriodePaieSync,
   DEFAULT_CONFIG as DEFAULT_PERIODE_CFG,
@@ -45,6 +46,7 @@ function last12Months(): string[] {
 }
 
 export default function PaiePage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
   const [periode, setPeriode] = useState("")
@@ -558,7 +560,7 @@ export default function PaiePage() {
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Processus de paie</h1>
+            <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.a.paie.title', locale)}</h1>
             <p className="text-sm text-gray-500">Calcul, validation, verrouillage et exports PAYE · CSG · NSF</p>
           </div>
         </div>

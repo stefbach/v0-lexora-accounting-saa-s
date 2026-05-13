@@ -6,12 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Building2, Users, TrendingUp, AlertTriangle, Download, Brain } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import dynamic from "next/dynamic"
+import { t, getLocale } from "@/lib/i18n"
 
 const CerveauTIBOK = dynamic(() => import("@/components/CerveauTIBOK"), { ssr: false })
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n) }
 
 export default function DirectionPage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [exercice, setExercice] = useState("2024-2025")

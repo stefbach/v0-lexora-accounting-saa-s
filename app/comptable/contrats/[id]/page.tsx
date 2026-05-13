@@ -34,6 +34,7 @@ import {
   ChevronDown,
 } from "lucide-react"
 import { TYPES_CONTRATS, STATUTS_CONTRATS } from "@/lib/contrats/constants"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Version {
   id: string
@@ -75,6 +76,7 @@ const STATUT_TRANSITIONS: Record<string, string[]> = {
 }
 
 export default function ContratDetailPage() {
+  const locale = getLocale()
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -175,9 +177,9 @@ export default function ContratDetailPage() {
   if (!contrat) {
     return (
       <div className="p-6 text-center">
-        <p className="text-gray-500">Contrat introuvable</p>
+        <p className="text-gray-500">{t('cab.contrat.not_found', locale)}</p>
         <Link href="/comptable/contrats">
-          <Button variant="outline" className="mt-4">Retour</Button>
+          <Button variant="outline" className="mt-4">{t('cab.contrat.back', locale)}</Button>
         </Link>
       </div>
     )
@@ -225,7 +227,7 @@ export default function ContratDetailPage() {
           <Link href={`/comptable/contrats/${id}/rediger`}>
             <Button variant="outline" className="w-full text-xs h-8 justify-start">
               <Sparkles className="w-3.5 h-3.5 mr-2 text-blue-600" />
-              Continuer avec l'IA
+              {t('cab.contrat.continue_ai', locale)}
             </Button>
           </Link>
           {contrat.contenu_html && (
@@ -235,7 +237,7 @@ export default function ContratDetailPage() {
               onClick={exporterPDF}
             >
               <Download className="w-3.5 h-3.5 mr-2" />
-              Exporter HTML/PDF
+              {t('cab.contrat.export_html', locale)}
             </Button>
           )}
         </div>
@@ -456,14 +458,14 @@ export default function ContratDetailPage() {
               <div className="w-20 h-20 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
                 <FileText className="w-10 h-10 text-gray-300" />
               </div>
-              <h3 className="text-gray-600 font-medium mb-2">Contrat non encore généré</h3>
+              <h3 className="text-gray-600 font-medium mb-2">{t('cab.contrat.not_generated', locale)}</h3>
               <p className="text-gray-400 text-sm mb-4">
-                Continuez la conversation avec l'IA pour rédiger le contrat
+                {t('cab.contrat.not_generated_hint', locale)}
               </p>
               <Link href={`/comptable/contrats/${id}/rediger`}>
                 <Button className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Sparkles className="w-4 h-4 mr-2" />
-                  Rédiger avec l'IA
+                  {t('cab.contrat.draft_with_ai', locale)}
                 </Button>
               </Link>
             </div>

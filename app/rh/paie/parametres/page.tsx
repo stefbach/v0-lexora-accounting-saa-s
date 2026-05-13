@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Save, Info, RefreshCw, CheckCircle2, AlertTriangle, CalendarClock } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 import {
   calculerPeriodePaieSync,
   formaterPeriodeLibelle,
@@ -692,6 +693,7 @@ function DisturbanceSection() {
 // Main page
 // ---------------------------------------------------------------------------
 export default function ParametresPaiePage() {
+  const locale = getLocale()
   const [params, setParams] = useState({
     csg_seuil_taux_reduit: "50000",
     csg_salarie_taux_reduit: "0.015",
@@ -907,7 +909,7 @@ export default function ParametresPaiePage() {
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-              Paramètres Paie & RH
+              {t('rha.a.paiep.title', locale)}
             </h1>
             {mraStatus === 'ok' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-800 border border-green-200">

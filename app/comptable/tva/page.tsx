@@ -401,8 +401,8 @@ export default function TVAPage() {
           ) : tvaRecords.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <Calculator className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="font-medium">Aucune déclaration TVA</p>
-              <p className="text-sm mt-1">Utilisez le calculateur ci-dessus pour générer vos déclarations</p>
+              <p className="font-medium">{t('cab.tva.empty', locale)}</p>
+              <p className="text-sm mt-1">{t('cab.tva.empty', locale)}</p>
             </div>
           ) : (
             <Table>
