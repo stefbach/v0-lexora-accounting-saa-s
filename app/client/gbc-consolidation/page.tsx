@@ -42,7 +42,10 @@ export default function GbcConsolidationPage() {
       ])
       if (r1.error) throw new Error(r1.error)
       setData(r1)
-      setAllSocietes((r2?.societes || r2 || []).filter((s: any) => s.id !== societeId))
+      // Robust extraction : l'API peut renvoyer { societes: [] }, [...], { error } ou autre
+      const list = Array.isArray(r2?.societes) ? r2.societes
+        : Array.isArray(r2) ? r2 : []
+      setAllSocietes(list.filter((s: any) => s.id !== societeId))
     } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId, exercice])
