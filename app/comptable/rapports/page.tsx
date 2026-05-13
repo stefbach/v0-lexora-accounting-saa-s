@@ -195,21 +195,21 @@ export default function ImmobilisationsPage() {
 
       <Card><CardContent className="p-4">
         <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-          <SelectTrigger className="w-56"><SelectValue placeholder="Toutes les sociétés" /></SelectTrigger>
+          <SelectTrigger className="w-56"><SelectValue placeholder={t('cab.rapports.all_companies', locale)} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Toutes les sociétés</SelectItem>
+            <SelectItem value="all">{t('cab.rapports.all_companies', locale)}</SelectItem>
             {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
           </SelectContent>
         </Select>
       </CardContent></Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-[#0B0F2E]">Registre des immobilisations ({immobilisations.length})</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-[#0B0F2E]">{t('cab.rapports.register', locale)} ({immobilisations.length})</CardTitle></CardHeader>
         <CardContent className="p-0">
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
           ) : immobilisations.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">Aucune immobilisation enregistrée</div>
+            <div className="text-center py-12 text-gray-500">{t('cab.rapports.empty', locale)}</div>
           ) : (
             <Table>
               <TableHeader>

@@ -44,6 +44,7 @@ interface FraisKm {
 }
 
 export default function FraisKmPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
   const [employes, setEmployes] = useState<any[]>([])
@@ -182,8 +183,8 @@ export default function FraisKmPage() {
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Frais Kilométriques</h1>
-          <p className="text-gray-500 text-sm">Gestion des indemnites kilometriques des employes</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.b.fraiskm.title', locale)}</h1>
+          <p className="text-gray-500 text-sm">{t('rha.b.fraiskm.subtitle', locale)}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Input

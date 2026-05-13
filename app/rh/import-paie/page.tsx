@@ -242,25 +242,25 @@ export default function ImportPaiePage() {
           {/* KPIs — indicateurs clés */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
-              <p className="text-xs text-gray-400">Masse salariale brute</p>
+              <p className="text-xs text-gray-400">{t('rha.a.import.masse_brute', locale)}</p>
               <p className="text-2xl font-bold text-blue-600">{fmt(totals.brut)}</p>
-              <p className="text-xs text-gray-400 mt-1">{employes.length} employés • Basic: {fmt(totals.basic)}</p>
+              <p className="text-xs text-gray-400 mt-1">{employes.length} {t('rha.a.common.employes', locale)} • {t('rha.a.common.base', locale)}: {fmt(totals.basic)}</p>
             </CardContent></Card>
             <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-4">
-              <p className="text-xs text-gray-400">Net à payer</p>
+              <p className="text-xs text-gray-400">{t('rha.a.import.net_payer', locale)}</p>
               <p className="text-2xl font-bold text-emerald-600">{fmt(totals.net)}</p>
-              {totals.net === 0 && totals.brut > 0 && <p className="text-xs text-red-500 mt-1">Colonne "NET Pay" non détectée</p>}
-              {totals.net > 0 && <p className="text-xs text-gray-400 mt-1">{Math.round(totals.net / totals.brut * 100)}% du brut</p>}
+              {totals.net === 0 && totals.brut > 0 && <p className="text-xs text-red-500 mt-1">{t('rha.a.import.col_net_pay_missing', locale)}</p>}
+              {totals.net > 0 && <p className="text-xs text-gray-400 mt-1">{Math.round(totals.net / totals.brut * 100)}% {t('rha.a.import.de_brut', locale)}</p>}
             </CardContent></Card>
             <Card className="border-l-4 border-l-red-500"><CardContent className="p-4">
-              <p className="text-xs text-gray-400">Retenues salariales</p>
+              <p className="text-xs text-gray-400">{t('rha.a.import.retenues_salariales', locale)}</p>
               <p className="text-2xl font-bold text-red-600">{fmt(totals.deductions)}</p>
               <p className="text-xs text-gray-400 mt-1">CSG {fmt(totals.csg)} • NSF {fmt(totals.nsf)} • PAYE {fmt(totals.paye)}</p>
             </CardContent></Card>
             <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
-              <p className="text-xs text-gray-400">Charges patronales</p>
+              <p className="text-xs text-gray-400">{t('rha.a.import.charges_patronales', locale)}</p>
               <p className="text-2xl font-bold text-orange-600">{fmt(totals.charges)}</p>
-              <p className="text-xs text-gray-400 mt-1">Coût total: <strong>{fmt(totals.brut + totals.charges)}</strong></p>
+              <p className="text-xs text-gray-400 mt-1">{t('rha.a.import.cout_total', locale)}: <strong>{fmt(totals.brut + totals.charges)}</strong></p>
             </CardContent></Card>
           </div>
 

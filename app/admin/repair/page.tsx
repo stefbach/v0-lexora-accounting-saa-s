@@ -74,9 +74,8 @@ export default function AdminRepairPage() {
   const run = useCallback(async (dryRun: boolean) => {
     if (!societeId || selected.size === 0) return
     if (!dryRun && !confirm(
-      `⚠️ APPLIQUER ${selected.size} action(s) de réparation sur la société ${societeId} ?\n\n` +
-      `Les actions destructrices vont modifier ou supprimer des données.\n` +
-      `Tu as bien lancé le dry-run d'abord ?`
+      `${t('adm.repair.confirm_prefix', locale)} ${selected.size} ${t('adm.repair.confirm_actions', locale)} ${societeId} ?\n\n` +
+      `${t('adm.repair.confirm_warn', locale)}`
     )) return
 
     setLoading(true); setError(null); setResult(null)
@@ -97,7 +96,7 @@ export default function AdminRepairPage() {
       }
       setResult(data)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur réseau")
+      setError(e instanceof Error ? e.message : t('adm.repair.network_err', locale))
     } finally {
       setLoading(false)
     }
@@ -105,10 +104,10 @@ export default function AdminRepairPage() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Réparation société" }]}
-      kicker="Outils admin"
-      title="Réparation société"
-      subtitle="Applique les 6 actions de réparation codifiées pour nettoyer les données comptables d'une société. Dry-run par défaut."
+      breadcrumbs={[{ label: t('adm.repair.breadcrumb', locale), href: "/admin" }, { label: t('adm.repair.breadcrumb_current', locale) }]}
+      kicker={t('adm.repair.kicker', locale)}
+      title={t('adm.repair.title', locale)}
+      subtitle={t('adm.repair.subtitle', locale)}
     >
       <div className="space-y-4">
         {/* Société selector */}

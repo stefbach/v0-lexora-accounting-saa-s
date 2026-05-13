@@ -114,6 +114,8 @@ function mapDbSimulation(row: any, locale: Locale): Simulation {
 
 export default function SimulationsPage() {
   const params = useParams()
+  const locale = getLocale()
+  const typeOptions = getTypeOptions(locale)
   const clientId = params.clientId as string
   const societeId = params.societeId as string
 
@@ -141,7 +143,7 @@ export default function SimulationsPage() {
         .order("created_at", { ascending: false })
 
       if (!error && rows) {
-        setSimulations(rows.map(mapDbSimulation))
+        setSimulations(rows.map((r: any) => mapDbSimulation(r, locale)))
       }
     } catch {
       // API not available, keep empty
@@ -177,20 +179,20 @@ export default function SimulationsPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setSubmitError(data.error || "Erreur lors de la simulation.")
+        setSubmitError(data.error || t('cabclt.sim.error_simulation', locale))
         setSubmitting(false)
         return
       }
 
       // Add the new simulation to the list
       if (data.simulation) {
-        setSimulations(prev => [mapDbSimulation(data.simulation), ...prev])
+        setSimulations(prev => [mapDbSimulation(data.simulation, locale), ...prev])
       }
 
       setNewSim({ titre: "", type: "nouveau_client", description: "", parametres: "" })
       setShowDialog(false)
     } catch {
-      setSubmitError("Erreur de connexion.")
+      setSubmitError(t('cabclt.sim.error_connection', locale))
     } finally {
       setSubmitting(false)
     }
@@ -202,15 +204,15 @@ export default function SimulationsPage() {
       <div className="flex items-center gap-3 mb-2">
         <Link href={`/comptable/clients/${clientId}/${societeId}`}>
           <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Retour
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t('cabclt.sim.back', locale)}
           </Button>
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Simulations
+            {t('cabclt.sim.title', locale)}
           </h1>
           <p className="text-sm text-gray-500">
-            Modelisez l&apos;impact de decisions strategiques sur la tresorerie
+            {t('cabclt.sim.subtitle', locale)}
           </p>
         </div>
         <Button
@@ -218,7 +220,7 @@ export default function SimulationsPage() {
           style={{ background: GOLD, color: NAVY }}
           onClick={() => setShowDialog(true)}
         >
-          <Plus className="w-4 h-4 mr-1" /> Nouvelle simulation
+          <Plus className="w-4 h-4 mr-1" /> {t('cabclt.sim.new_simulation', locale)}
         </Button>
       </div>
 
