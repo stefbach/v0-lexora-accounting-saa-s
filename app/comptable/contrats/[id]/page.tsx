@@ -59,7 +59,7 @@ interface Contrat {
   updated_at: string
   date_signature_client: string | null
   client?: { full_name: string; email: string; phone: string }
-  societe?: { nom: string; numero_registrar: string }
+  societe?: { nom: string; brn: string }
   comptable?: { full_name: string }
   versions?: Version[]
 }
@@ -284,8 +284,8 @@ export default function ContratDetailPage() {
               <Building2 className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-xs font-medium text-gray-800">{contrat.societe.nom}</p>
-                {contrat.societe.numero_registrar && (
-                  <p className="text-xs text-gray-500">BRN: {contrat.societe.numero_registrar}</p>
+                {contrat.societe.brn && (
+                  <p className="text-xs text-gray-500">BRN: {contrat.societe.brn}</p>
                 )}
               </div>
             </div>

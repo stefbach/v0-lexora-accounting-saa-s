@@ -25,7 +25,7 @@ export async function POST(
       .from('contrats_clients')
       .select(`
         *,
-        societe:societes(nom, adresse, numero_registrar),
+        societe:societes(nom, adresse, brn),
         client:profiles!client_id(full_name, email, phone)
       `)
       .eq('id', id)
@@ -105,8 +105,9 @@ export async function POST(
       data: updated,
       contenu_html,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('POST /api/contrats/[id]/generer:', error)
-    return NextResponse.json({ error: 'Erreur génération' }, { status: 500 })
+    const msg = error?.message || 'Erreur génération'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
