@@ -1830,6 +1830,30 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
                 if (tagging.warnings.length > 0) {
                   console.warn('[upload][GBC] warnings:', tagging.warnings)
                 }
+
+                // Phase L.1 — Auto-classification TDS pour factures fournisseur Maurice
+                if (!isFactureClient) {
+                  try {
+                    const { autoClassifyTds, computeTds } = await import('@/lib/accounting/tds')
+                    const cat = autoClassifyTds({
+                      description: (factureData.description as string) || (extraction as any)?.description || null,
+                      numero_compte: compteOCR,
+                      tiers_country: (extraction as any)?.tiers_country_iso || null,
+                    })
+                    if (cat !== 'none') {
+                      const calc = computeTds(Number(factureData.montant_mur) || 0, cat)
+                      if (calc.applies) {
+                        await supabase.from('factures').update({
+                          tds_category: cat, tds_rate_pct: calc.rate, tds_amount_mur: calc.amount,
+                          tds_period: (factureData.date_facture as string)?.slice(0, 7) || null,
+                        }).eq('id', insertedFacture.id)
+                        console.log(`[upload][TDS] auto: ${cat} ${calc.rate}% → ${calc.amount} MUR retenu`)
+                      }
+                    }
+                  } catch (e: any) {
+                    console.warn('[upload][TDS] exception (non bloquant):', e?.message)
+                  }
+                }
               } catch (e: any) {
                 // Ne JAMAIS bloquer le pipeline OCR si tagging GBC échoue.
                 console.warn('[upload][GBC] applyGbcAutoTagging exception (non bloquant):', e?.message)

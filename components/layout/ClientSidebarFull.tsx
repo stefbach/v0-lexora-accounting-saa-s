@@ -156,8 +156,13 @@ const MENU: MenuSection[] = [
     section: "Fiscal MRA", sectionKey: "tax.fiscal_mra",
     requiredModule: "fiscal",
     items: [
+      { href: "/client/mra-hub", label: "MRA Hub (Tax Calendar)", icon: Calendar } as any,
       { href: "/client/tva", label: "TVA MRA", labelKey: "tax.vat", icon: Receipt },
-      { href: "/client/annual-return", label: "Annual Return (ROC)", labelKey: "tax.annual_return", icon: ClipboardList },
+      { href: "/client/mra-tds", label: "TDS (Section 111A)", icon: Banknote } as any,
+      { href: "/client/mra-cit", label: "CIT (Income Tax Return)", icon: Calculator } as any,
+      { href: "/client/mra-roc", label: "ROC Annual Return", icon: Building2 } as any,
+      { href: "/client/mra-sft", label: "SFT (AML/CFT)", icon: ClipboardList } as any,
+      { href: "/client/annual-return", label: "Annual Return (Legacy)", labelKey: "tax.annual_return", icon: ClipboardList },
       { href: "/client/it-form3", label: "IT Form 3 (MRA)", labelKey: "tax.it_form3", icon: FileText },
     ]
   },
