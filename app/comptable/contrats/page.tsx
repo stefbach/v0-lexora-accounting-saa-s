@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { TYPES_CONTRATS, STATUTS_CONTRATS } from "@/lib/contrats/constants"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Contrat {
   id: string
@@ -56,6 +57,7 @@ const STATUT_CONFIG: Record<string, { label: string; color: string; icon: React.
 }
 
 export default function ContratsPage() {
+  const locale = getLocale()
   const router = useRouter()
   const [contrats, setContrats] = useState<Contrat[]>([])
   const [loading, setLoading] = useState(true)
@@ -123,10 +125,10 @@ export default function ContratsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <FilePen className="w-7 h-7 text-blue-600" />
-            Contrats clients
+            {t('cab.contrats.title', locale)}
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Rédigez et gérez vos contrats avec l'assistant IA
+            {t('cab.contrats.subtitle', locale)}
           </p>
         </div>
         <Button
@@ -139,7 +141,7 @@ export default function ContratsPage() {
           ) : (
             <Plus className="w-4 h-4 mr-2" />
           )}
-          Nouveau contrat
+          {t('cab.contrats.new', locale)}
         </Button>
       </div>
 
@@ -152,7 +154,7 @@ export default function ContratsPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900">{stats.brouillons}</p>
-              <p className="text-sm text-gray-500">Brouillons</p>
+              <p className="text-sm text-gray-500">{t('cab.contrats.drafts', locale)}</p>
             </div>
           </CardContent>
         </Card>
@@ -163,7 +165,7 @@ export default function ContratsPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900">{stats.en_cours}</p>
-              <p className="text-sm text-gray-500">En cours</p>
+              <p className="text-sm text-gray-500">{t('cab.contrats.in_progress', locale)}</p>
             </div>
           </CardContent>
         </Card>
@@ -174,7 +176,7 @@ export default function ContratsPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900">{stats.signes}</p>
-              <p className="text-sm text-gray-500">Signés</p>
+              <p className="text-sm text-gray-500">{t('cab.contrats.signed', locale)}</p>
             </div>
           </CardContent>
         </Card>
@@ -185,7 +187,7 @@ export default function ContratsPage() {
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Rechercher..."
+            placeholder={t('cab.contrats.search', locale)}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-9"
@@ -196,7 +198,7 @@ export default function ContratsPage() {
             <SelectValue placeholder="Statut" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="tous">Tous statuts</SelectItem>
+            <SelectItem value="tous">{t('cab.contrats.all_status', locale)}</SelectItem>
             {STATUTS_CONTRATS.map(s => (
               <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
             ))}
@@ -207,7 +209,7 @@ export default function ContratsPage() {
             <SelectValue placeholder="Type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="tous">Tous types</SelectItem>
+            <SelectItem value="tous">{t('cab.contrats.all_types', locale)}</SelectItem>
             {TYPES_CONTRATS.map(t => (
               <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
             ))}
@@ -226,7 +228,7 @@ export default function ContratsPage() {
       ) : contrats.length === 0 ? (
         <div className="text-center py-16">
           <FilePen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">Aucun contrat trouvé</p>
+          <p className="text-gray-500">{t('cab.contrats.empty', locale)}</p>
           <Button
             variant="outline"
             className="mt-4"
@@ -234,7 +236,7 @@ export default function ContratsPage() {
             disabled={creating}
           >
             <Plus className="w-4 h-4 mr-2" />
-            Créer votre premier contrat
+            {t('cab.contrats.create_first', locale)}
           </Button>
         </div>
       ) : (

@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { MraDeadlineAlert } from "@/components/rh/MraDeadlineAlert"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import * as XLSX from "xlsx"
 
 const NAVY = "#0B0F2E"
@@ -69,6 +70,7 @@ interface ExportStatus {
 const initialStatus: ExportStatus = { loading: false, done: false, error: null, summary: null }
 
 export default function ExportPaiePage() {
+  const locale: Locale = getLocale()
   // -- Shared state --
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
@@ -556,8 +558,8 @@ export default function ExportPaiePage() {
       {/* Header + Selectors */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Exports Paie</h1>
-          <p className="text-gray-500 text-sm">Virements bancaires et declarations MRA</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.b.expaie.title', locale)}</h1>
+          <p className="text-gray-500 text-sm">{t('rha.b.expaie.subtitle', locale)}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <Select value={societe} onValueChange={setSociete}>

@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, Play, AlertTriangle, CheckCircle2, XCircle, Wrench } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Action {
   id: string
@@ -42,6 +43,7 @@ interface RepairResponse {
 const NAVY = "#0B0F2E"
 
 export default function AdminRepairPage() {
+  const locale = getLocale()
   const [actions, setActions] = useState<Action[]>([])
   const [societeId, setSocieteId] = useState("")
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -54,7 +56,7 @@ export default function AdminRepairPage() {
     fetch("/api/admin/repair")
       .then(r => r.json())
       .then(d => setActions(d.actions || []))
-      .catch(() => setError("Impossible de charger la liste d'actions"))
+      .catch(() => setError(t('adm.repair.cannot_load', locale)))
   }, [])
 
   const toggle = (id: string) => {

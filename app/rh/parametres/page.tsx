@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { PointageActifToggle } from "@/components/rh/PointageActifToggle"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -36,48 +37,50 @@ interface Section {
 
 // Sprint 5 AMÉLIO 9 — on a retiré la carte "Pointage obligatoire" de la grille
 // car elle est désormais rendue INLINE en fin de page (composant interactif).
-const SECTIONS: Section[] = [
-  {
-    title: "Société",
-    description: "Identité, contact, coordonnées GPS, banque, fiscal, devises actives.",
-    href: "/rh/societe",
-    icon: Building2,
-    bg: "bg-slate-50",
-    border: "border-l-slate-500",
-    accent: "text-slate-700",
-    highlights: ["BRN, TAN, NPF", "Adresse + GPS", "Compte bancaire principal", "Contacts multi (CEO, DRH, DAF)"],
-  },
-  {
-    title: "Paie",
-    description: "Taux MRA (CSG, NSF, PAYE, PRGF), seuils d'exonération, taux de change EUR/MUR.",
-    href: "/rh/paie/parametres",
-    icon: Banknote,
-    bg: "bg-emerald-50",
-    border: "border-l-emerald-500",
-    accent: "text-emerald-700",
-    highlights: ["CSG seuil + taux", "NSF + Training Levy", "PAYE seuils + tranches", "PRGF par jour"],
-  },
-  {
-    title: "Congés",
-    description: "Référentiel WRA 2019, règles AL/SL/MAT/PAT par société, demi-journées + collectif.",
-    href: "/rh/conges/parametres",
-    icon: Calendar,
-    bg: "bg-blue-50",
-    border: "border-l-blue-500",
-    accent: "text-blue-700",
-    highlights: ["22j AL, 15j SL", "98j maternité, 5j paternité", "Toggle demi-journée par type", "Imposable par société"],
-  },
-  {
-    title: "Planning",
-    description: "Règles WRA 2019 : heures hebdo max, repos consécutif, OT, contraintes équipe.",
-    href: "/rh/planning/regles",
-    icon: Shield,
-    bg: "bg-amber-50",
-    border: "border-l-amber-500",
-    accent: "text-amber-700",
-    highlights: ["45h/semaine max", "9h/jour max (5j) ou 8h (6j)", "1 jour repos minimum", "Taux OT 1.5x / 2x"],
-  },
-]
+function buildSections(locale: Locale): Section[] {
+  return [
+    {
+      title: t('rha.a.param.s_societe_title', locale),
+      description: t('rha.a.param.s_societe_desc', locale),
+      href: "/rh/societe",
+      icon: Building2,
+      bg: "bg-slate-50",
+      border: "border-l-slate-500",
+      accent: "text-slate-700",
+      highlights: ["BRN, TAN, NPF", "Adresse + GPS", "Compte bancaire principal", "Contacts multi (CEO, DRH, DAF)"],
+    },
+    {
+      title: t('rha.a.param.s_paie_title', locale),
+      description: t('rha.a.param.s_paie_desc', locale),
+      href: "/rh/paie/parametres",
+      icon: Banknote,
+      bg: "bg-emerald-50",
+      border: "border-l-emerald-500",
+      accent: "text-emerald-700",
+      highlights: ["CSG seuil + taux", "NSF + Training Levy", "PAYE seuils + tranches", "PRGF par jour"],
+    },
+    {
+      title: t('rha.a.param.s_conges_title', locale),
+      description: t('rha.a.param.s_conges_desc', locale),
+      href: "/rh/conges/parametres",
+      icon: Calendar,
+      bg: "bg-blue-50",
+      border: "border-l-blue-500",
+      accent: "text-blue-700",
+      highlights: ["22j AL, 15j SL", "98j maternité, 5j paternité", "Toggle demi-journée par type", "Imposable par société"],
+    },
+    {
+      title: t('rha.a.param.s_planning_title', locale),
+      description: t('rha.a.param.s_planning_desc', locale),
+      href: "/rh/planning/regles",
+      icon: Shield,
+      bg: "bg-amber-50",
+      border: "border-l-amber-500",
+      accent: "text-amber-700",
+      highlights: ["45h/semaine max", "9h/jour max (5j) ou 8h (6j)", "1 jour repos minimum", "Taux OT 1.5x / 2x"],
+    },
+  ]
+}
 
 interface SocieteLite {
   id: string
@@ -86,6 +89,8 @@ interface SocieteLite {
 }
 
 export default function ParametresHubPage() {
+  const locale = getLocale()
+  const SECTIONS = buildSections(locale)
   const [societes, setSocietes] = useState<SocieteLite[]>([])
   const [selectedSocieteId, setSelectedSocieteId] = useState<string>("")
   const [loading, setLoading] = useState(true)
@@ -120,9 +125,9 @@ export default function ParametresHubPage() {
           <Settings className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Paramètres RH</h1>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.a.param.title', locale)}</h1>
           <p className="text-gray-500 text-sm">
-            Tous les paramétrages — société, paie, congés, planning, pointage. Cliquez sur une carte pour ouvrir l'écran dédié.
+            {t('rha.a.param.subtitle', locale)}
           </p>
         </div>
       </div>
@@ -170,27 +175,25 @@ export default function ParametresHubPage() {
       <Card className="rounded-2xl border-l-4 border-l-orange-500">
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-semibold flex items-center gap-2 text-orange-700">
-            <Clock className="w-5 h-5" /> Pointage obligatoire
-            <Badge variant="outline" className="text-[10px] ml-2">par société</Badge>
+            <Clock className="w-5 h-5" /> {t('rha.a.param.pointage_obligatoire', locale)}
+            <Badge variant="outline" className="text-[10px] ml-2">{t('rha.a.param.par_societe', locale)}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-gray-600">
-            Active la déduction automatique des absences depuis les pointages. OFF (défaut) :
-            mode test, aucun impact paie. ON : absences sans pointage ni congé approuvé
-            déduites du net au prochain calcul.
+            {t('rha.a.param.pointage_desc', locale)}
           </p>
 
           {loading && (
             <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Chargement des sociétés…
+              {t('rha.a.param.chargement_societes', locale)}
             </div>
           )}
 
           {!loading && societes.length === 0 && (
             <p className="text-sm text-gray-500 py-2">
-              Aucune société accessible. Configurez d'abord une société dans{" "}
+              {t('rha.a.param.aucune_societe', locale)}{" "}
               <Link href="/rh/societe" className="underline font-medium">/rh/societe</Link>.
             </p>
           )}
@@ -198,10 +201,10 @@ export default function ParametresHubPage() {
           {!loading && societes.length > 0 && (
             <>
               <div className="flex items-center gap-3 flex-wrap">
-                <label className="text-xs text-gray-500 font-medium">Société</label>
+                <label className="text-xs text-gray-500 font-medium">{t('rha.a.common.societe', locale)}</label>
                 <Select value={selectedSocieteId} onValueChange={setSelectedSocieteId}>
                   <SelectTrigger className="w-64 h-10">
-                    <SelectValue placeholder="Sélectionner une société" />
+                    <SelectValue placeholder={t('rha.a.param.selectionner_societe', locale)} />
                   </SelectTrigger>
                   <SelectContent>
                     {societes.map(s => (
@@ -232,11 +235,11 @@ export default function ParametresHubPage() {
       </Card>
 
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
-        <p className="font-medium mb-1">À noter</p>
+        <p className="font-medium mb-1">{t('rha.a.param.a_noter', locale)}</p>
         <ul className="space-y-1 text-blue-800">
-          <li>• Les paramètres s'appliquent <b>par société</b>. Sélectionnez la société dans chaque écran avant de modifier.</li>
-          <li>• Les changements sur Paie, Congés et Planning entrent en vigueur dès le prochain calcul de paie / création de demande.</li>
-          <li>• Le toggle « Pointage obligatoire » est OFF par défaut — la masse salariale n'est jamais déduite tant qu'il n'est pas activé.</li>
+          <li>• {t('rha.a.param.note_1', locale)}</li>
+          <li>• {t('rha.a.param.note_2', locale)}</li>
+          <li>• {t('rha.a.param.note_3', locale)}</li>
         </ul>
       </div>
     </div>

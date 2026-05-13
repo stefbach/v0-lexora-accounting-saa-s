@@ -12,6 +12,7 @@ import {
 import {
   ArrowLeft, FileText, Download, Send, Pencil, CheckCircle2, Landmark,
 } from "lucide-react"
+import { t, getLocale } from '@/lib/i18n'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -28,47 +29,48 @@ function fmt(n: number) {
 // ---------------------------------------------------------------------------
 const exercises = ["2025-2026", "2024-2025", "2023-2024"]
 
-const statuses: Record<string, { label: string; color: string }> = {
-  brouillon: { label: "Brouillon", color: "bg-orange-100 text-orange-700" },
-  finalise: { label: "Finalisé", color: "bg-blue-100 text-blue-700" },
-  audite: { label: "Audité", color: "bg-green-100 text-green-700" },
-}
-
-const actifNonCourant = [
-  { compte: "Immobilisations corporelles", montant: 850000 },
-  { compte: "Immobilisations incorporelles", montant: 350000 },
-  { compte: "Amortissements cumulés", montant: -275000 },
-]
-
-const actifCourant = [
-  { compte: "Créances clients", montant: 396000 },
-  { compte: "Stocks", montant: 124000 },
-  { compte: "Trésorerie et équivalents", montant: 773000 },
-]
-
-const tresorerieDetail = [
-  { banque: "MCB (Mauritius Commercial Bank)", montant: 150000 },
-  { banque: "SBM (State Bank of Mauritius)", montant: 65000 },
-  { banque: "CIC (Compte EUR converti)", montant: 558000 },
-]
-
-const capitauxPropres = [
-  { compte: "Capital social", montant: 100000 },
-  { compte: "Réserves légales", montant: 85000 },
-  { compte: "Report à nouveau", montant: 2800000 },
-]
-
-const passifCourant = [
-  { compte: "Fournisseurs", montant: 228000 },
-  { compte: "TVA à payer", montant: 129000 },
-  { compte: "CSG / NSF à payer", montant: 81000 },
-]
-
 export default function BilanOfficielPage() {
   const params = useParams()
+  const locale = getLocale()
   const clientId = params.clientId as string
   const societeId = params.societeId as string
   const societeName = "TIBOK Ltd"
+
+  const statuses: Record<string, { label: string; color: string }> = {
+    brouillon: { label: t('cabclt.bilan.status_draft', locale), color: "bg-orange-100 text-orange-700" },
+    finalise: { label: t('cabclt.bilan.status_finalized', locale), color: "bg-blue-100 text-blue-700" },
+    audite: { label: t('cabclt.bilan.status_audited', locale), color: "bg-green-100 text-green-700" },
+  }
+
+  const actifNonCourant = [
+    { compte: t('cabclt.bilan.tangible_assets', locale), montant: 850000 },
+    { compte: t('cabclt.bilan.intangible_assets', locale), montant: 350000 },
+    { compte: t('cabclt.bilan.accumulated_depreciation', locale), montant: -275000 },
+  ]
+
+  const actifCourant = [
+    { compte: t('cabclt.bilan.trade_receivables', locale), montant: 396000 },
+    { compte: t('cabclt.bilan.stocks', locale), montant: 124000 },
+    { compte: t('cabclt.bilan.cash_equivalents', locale), montant: 773000 },
+  ]
+
+  const tresorerieDetail = [
+    { banque: "MCB (Mauritius Commercial Bank)", montant: 150000 },
+    { banque: "SBM (State Bank of Mauritius)", montant: 65000 },
+    { banque: t('cabclt.bilan.cic_eur_account', locale), montant: 558000 },
+  ]
+
+  const capitauxPropres = [
+    { compte: t('cabclt.bilan.share_capital', locale), montant: 100000 },
+    { compte: t('cabclt.bilan.legal_reserves', locale), montant: 85000 },
+    { compte: t('cabclt.bilan.retained_earnings', locale), montant: 2800000 },
+  ]
+
+  const passifCourant = [
+    { compte: t('cabclt.bilan.suppliers', locale), montant: 228000 },
+    { compte: t('cabclt.bilan.vat_payable', locale), montant: 129000 },
+    { compte: t('cabclt.bilan.csg_nsf_payable', locale), montant: 81000 },
+  ]
 
   const [selectedExercise, setSelectedExercise] = useState(exercises[0])
   const [status, setStatus] = useState<"brouillon" | "finalise" | "audite">("brouillon")
@@ -89,15 +91,15 @@ export default function BilanOfficielPage() {
       <div className="flex items-center gap-3 mb-2">
         <Link href={`/comptable/clients/${clientId}/${societeId}`}>
           <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Retour
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t('cabclt.bilan.back', locale)}
           </Button>
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Bilan Officiel — {societeName}
+            {t('cabclt.bilan.title', locale)} — {societeName}
           </h1>
           <p className="text-sm text-gray-500">
-            Vue consolidée des actifs et passifs
+            {t('cabclt.bilan.subtitle', locale)}
           </p>
         </div>
         <Badge className={statuses[status].color}>{statuses[status].label}</Badge>
@@ -106,7 +108,7 @@ export default function BilanOfficielPage() {
       {/* Controls */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium" style={{ color: NAVY }}>Exercice :</label>
+          <label className="text-sm font-medium" style={{ color: NAVY }}>{t('cabclt.bilan.fiscal_year_label', locale)}</label>
           <select
             value={selectedExercise}
             onChange={(e) => setSelectedExercise(e.target.value)}
@@ -119,20 +121,20 @@ export default function BilanOfficielPage() {
         </div>
         <div className="flex-1" />
         <Button variant="outline" size="sm" onClick={() => setStatus("brouillon")}>
-          <Pencil className="w-4 h-4 mr-1" /> Modifier
+          <Pencil className="w-4 h-4 mr-1" /> {t('cabclt.bilan.edit', locale)}
         </Button>
         <Button
           size="sm"
           style={{ background: GOLD, color: NAVY }}
           onClick={() => setStatus("finalise")}
         >
-          <CheckCircle2 className="w-4 h-4 mr-1" /> Finaliser
+          <CheckCircle2 className="w-4 h-4 mr-1" /> {t('cabclt.bilan.finalize', locale)}
         </Button>
         <Button size="sm" variant="outline">
-          <Send className="w-4 h-4 mr-1" /> Publier au client
+          <Send className="w-4 h-4 mr-1" /> {t('cabclt.bilan.publish', locale)}
         </Button>
         <Button size="sm" variant="outline">
-          <Download className="w-4 h-4 mr-1" /> Exporter PDF
+          <Download className="w-4 h-4 mr-1" /> {t('cabclt.bilan.export_pdf', locale)}
         </Button>
       </div>
 
@@ -141,7 +143,7 @@ export default function BilanOfficielPage() {
         <div className="flex justify-center">
           <Badge className="bg-green-100 text-green-700 text-base px-4 py-1">
             <CheckCircle2 className="w-4 h-4 mr-2" />
-            Équilibré — Total Actif = Total Passif = {fmt(totalActif)}
+            {t('cabclt.bilan.balanced', locale)} = {fmt(totalActif)}
           </Badge>
         </div>
       )}
@@ -151,19 +153,19 @@ export default function BilanOfficielPage() {
         {/* ACTIF */}
         <Card className="border-t-4" style={{ borderTopColor: NAVY }}>
           <CardHeader>
-            <CardTitle style={{ color: NAVY }}>ACTIF</CardTitle>
+            <CardTitle style={{ color: NAVY }}>{t('cabclt.bilan.assets', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Non-courant */}
             <div>
               <h3 className="font-semibold text-sm mb-2" style={{ color: NAVY }}>
-                Actif non courant
+                {t('cabclt.bilan.non_current_assets', locale)}
               </h3>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Compte</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
+                    <TableHead>{t('cabclt.bilan.col_account', locale)}</TableHead>
+                    <TableHead className="text-right">{t('cabclt.bilan.col_amount', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -178,7 +180,7 @@ export default function BilanOfficielPage() {
                 </TableBody>
                 <TableFooter>
                   <TableRow>
-                    <TableCell className="font-bold">Sous-total</TableCell>
+                    <TableCell className="font-bold">{t('cabclt.bilan.subtotal', locale)}</TableCell>
                     <TableCell className="text-right font-bold">{fmt(totalActifNonCourant)}</TableCell>
                   </TableRow>
                 </TableFooter>
@@ -188,13 +190,13 @@ export default function BilanOfficielPage() {
             {/* Courant */}
             <div>
               <h3 className="font-semibold text-sm mb-2" style={{ color: NAVY }}>
-                Actif courant
+                {t('cabclt.bilan.current_assets', locale)}
               </h3>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Compte</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
+                    <TableHead>{t('cabclt.bilan.col_account', locale)}</TableHead>
+                    <TableHead className="text-right">{t('cabclt.bilan.col_amount', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -207,7 +209,7 @@ export default function BilanOfficielPage() {
                 </TableBody>
                 <TableFooter>
                   <TableRow>
-                    <TableCell className="font-bold">Sous-total</TableCell>
+                    <TableCell className="font-bold">{t('cabclt.bilan.subtotal', locale)}</TableCell>
                     <TableCell className="text-right font-bold">{fmt(totalActifCourant)}</TableCell>
                   </TableRow>
                 </TableFooter>
@@ -217,7 +219,7 @@ export default function BilanOfficielPage() {
             {/* Total Actif */}
             <div className="rounded-lg p-3" style={{ background: NAVY }}>
               <div className="flex justify-between text-white font-bold text-lg">
-                <span>TOTAL ACTIF</span>
+                <span>{t('cabclt.bilan.total_assets', locale)}</span>
                 <span>{fmt(totalActif)}</span>
               </div>
             </div>
@@ -227,19 +229,19 @@ export default function BilanOfficielPage() {
         {/* PASSIF */}
         <Card className="border-t-4" style={{ borderTopColor: GOLD }}>
           <CardHeader>
-            <CardTitle style={{ color: NAVY }}>PASSIF</CardTitle>
+            <CardTitle style={{ color: NAVY }}>{t('cabclt.bilan.liabilities', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Capitaux Propres */}
             <div>
               <h3 className="font-semibold text-sm mb-2" style={{ color: NAVY }}>
-                Capitaux propres
+                {t('cabclt.bilan.equity', locale)}
               </h3>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Compte</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
+                    <TableHead>{t('cabclt.bilan.col_account', locale)}</TableHead>
+                    <TableHead className="text-right">{t('cabclt.bilan.col_amount', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -252,7 +254,7 @@ export default function BilanOfficielPage() {
                 </TableBody>
                 <TableFooter>
                   <TableRow>
-                    <TableCell className="font-bold">Sous-total</TableCell>
+                    <TableCell className="font-bold">{t('cabclt.bilan.subtotal', locale)}</TableCell>
                     <TableCell className="text-right font-bold">{fmt(totalCapitaux)}</TableCell>
                   </TableRow>
                 </TableFooter>
@@ -262,13 +264,13 @@ export default function BilanOfficielPage() {
             {/* Passif courant */}
             <div>
               <h3 className="font-semibold text-sm mb-2" style={{ color: NAVY }}>
-                Passif courant
+                {t('cabclt.bilan.current_liabilities', locale)}
               </h3>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Compte</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
+                    <TableHead>{t('cabclt.bilan.col_account', locale)}</TableHead>
+                    <TableHead className="text-right">{t('cabclt.bilan.col_amount', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -281,7 +283,7 @@ export default function BilanOfficielPage() {
                 </TableBody>
                 <TableFooter>
                   <TableRow>
-                    <TableCell className="font-bold">Sous-total</TableCell>
+                    <TableCell className="font-bold">{t('cabclt.bilan.subtotal', locale)}</TableCell>
                     <TableCell className="text-right font-bold">{fmt(totalPassifCourant)}</TableCell>
                   </TableRow>
                 </TableFooter>
@@ -291,7 +293,7 @@ export default function BilanOfficielPage() {
             {/* Total Passif */}
             <div className="rounded-lg p-3" style={{ background: NAVY }}>
               <div className="flex justify-between text-white font-bold text-lg">
-                <span>TOTAL PASSIF</span>
+                <span>{t('cabclt.bilan.total_liabilities', locale)}</span>
                 <span>{fmt(totalPassif)}</span>
               </div>
             </div>
@@ -304,18 +306,18 @@ export default function BilanOfficielPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
             <Landmark className="w-5 h-5" />
-            Note : Détail de la Trésorerie
+            {t('cabclt.bilan.treasury_note_title', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-gray-600 mb-3">
-            Ventilation du poste &quot;Trésorerie et équivalents&quot; par compte bancaire :
+            {t('cabclt.bilan.treasury_note_desc', locale)}
           </p>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Compte bancaire</TableHead>
-                <TableHead className="text-right">Solde</TableHead>
+                <TableHead>{t('cabclt.bilan.bank_account', locale)}</TableHead>
+                <TableHead className="text-right">{t('cabclt.bilan.balance', locale)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -328,7 +330,7 @@ export default function BilanOfficielPage() {
             </TableBody>
             <TableFooter>
               <TableRow>
-                <TableCell className="font-bold">Total trésorerie</TableCell>
+                <TableCell className="font-bold">{t('cabclt.bilan.total_treasury', locale)}</TableCell>
                 <TableCell className="text-right font-bold">
                   {fmt(tresorerieDetail.reduce((s, r) => s + r.montant, 0))}
                 </TableCell>
@@ -336,7 +338,7 @@ export default function BilanOfficielPage() {
             </TableFooter>
           </Table>
           <p className="text-xs text-gray-400 mt-2">
-            Note : Le compte CIC est libellé en EUR (12 000 EUR). Conversion au taux de 46,50 MUR/EUR.
+            {t('cabclt.bilan.cic_note', locale)}
           </p>
         </CardContent>
       </Card>

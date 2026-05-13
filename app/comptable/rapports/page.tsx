@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Plus, Package, TrendingDown, AlertCircle, Download } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const CATEGORIES = [
   { value: "materiel_informatique", label: "Matériel informatique (50%)" },
@@ -41,6 +42,7 @@ function fmt(n: number) {
 }
 
 export default function ImmobilisationsPage() {
+  const locale = getLocale()
   const [immobilisations, setImmobilisations] = useState<Immo[]>([])
   const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
@@ -105,17 +107,17 @@ export default function ImmobilisationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Immobilisations (FAR)</h1>
-          <p className="text-sm text-gray-500 mt-1">Fixed Asset Register — amortissements calculés automatiquement</p>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('cab.rapports.title', locale)}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('cab.rapports.subtitle', locale)}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> Exporter FAR</Button>
+          <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> {t('cab.rapports.export_far', locale)}</Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-[#0B0F2E] text-white hover:bg-[#2a3a5a]"><Plus className="w-4 h-4 mr-2" /> Nouvelle immobilisation</Button>
+              <Button className="bg-[#0B0F2E] text-white hover:bg-[#2a3a5a]"><Plus className="w-4 h-4 mr-2" /> {t('cab.rapports.new', locale)}</Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
-              <DialogHeader><DialogTitle>Ajouter une immobilisation</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t('cab.rapports.add_dialog_title', locale)}</DialogTitle></DialogHeader>
               <div className="grid gap-3 py-2">
                 {error && <p className="text-sm text-red-600">{error}</p>}
                 <div className="grid grid-cols-2 gap-3">

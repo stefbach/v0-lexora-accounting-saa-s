@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, FileText, Eye, Download, Printer, CheckCircle, XCircle, AlertCircle, Link2, Copy, CheckCheck, Pencil, Save, Upload, ImageIcon } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ContractEditor } from "@/components/rh/ContractEditor"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ function StatutBadge({ statut }: { statut: string }) {
 // ── Composant principal ──────────────────────────────────────────────────────
 
 export default function JuridiquePage() {
+  const locale: Locale = getLocale()
   // ── Données globales ──
   const [societes, setSocietes] = useState<any[]>([])
   const [employes, setEmployes] = useState<any[]>([])
@@ -335,8 +337,8 @@ export default function JuridiquePage() {
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-6 max-w-7xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-[#0B0F2E]">Module Juridique</h1>
-        <p className="text-sm text-gray-500">Contrats de travail — Droit mauricien (WRA 2019, Companies Act 2001)</p>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.b.jur.title', locale)}</h1>
+        <p className="text-sm text-gray-500">{t('rha.b.jur.subtitle', locale)}</p>
       </div>
 
       <Tabs defaultValue="contrats" className="space-y-4">

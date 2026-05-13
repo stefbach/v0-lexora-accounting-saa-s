@@ -9,6 +9,7 @@ import {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { t, getLocale } from '@/lib/i18n'
 
 interface ComptableKPI {
   id: string
@@ -65,6 +66,7 @@ const panelStyle = {
 }
 
 export default function AdminDashboardPage() {
+  const locale = getLocale()
   const [loading, setLoading] = useState(true)
   const [totalUsers, setTotalUsers] = useState(0)
   const [totalClients, setTotalClients] = useState(0)
@@ -180,22 +182,22 @@ export default function AdminDashboardPage() {
   }, [])
 
   const kpiCards = [
-    { titre: 'Total utilisateurs', valeur: totalUsers,      icon: Users,     strong: "#4191FF", dark: "#1D5FC4", href: '/admin/users' },
-    { titre: 'Total clients',      valeur: totalClients,    icon: Briefcase, strong: "#D4AF37", dark: "#A88925", href: '/admin/clients' },
-    { titre: 'Total comptables',   valeur: totalComptables, icon: UserCog,   strong: "#8B5CF6", dark: "#6D3EE0", href: '/admin/comptables' },
-    { titre: 'Total societes',     valeur: totalSocietes,   icon: Building2, strong: "#2ECC8A", dark: "#1F9B68", href: '/admin/societes' },
-    { titre: 'Documents stockes',  valeur: totalDocuments,  icon: FileText,  strong: "#E25555", dark: "#B93B3B", href: '/admin/documents' },
+    { titre: t('adm.dash.kpi_total_users', locale),       valeur: totalUsers,      icon: Users,     strong: "#4191FF", dark: "#1D5FC4", href: '/admin/users' },
+    { titre: t('adm.dash.kpi_total_clients', locale),     valeur: totalClients,    icon: Briefcase, strong: "#D4AF37", dark: "#A88925", href: '/admin/clients' },
+    { titre: t('adm.dash.kpi_total_accountants', locale), valeur: totalComptables, icon: UserCog,   strong: "#8B5CF6", dark: "#6D3EE0", href: '/admin/comptables' },
+    { titre: t('adm.dash.kpi_total_companies', locale),   valeur: totalSocietes,   icon: Building2, strong: "#2ECC8A", dark: "#1F9B68", href: '/admin/societes' },
+    { titre: t('adm.dash.kpi_stored_docs', locale),       valeur: totalDocuments,  icon: FileText,  strong: "#E25555", dark: "#B93B3B", href: '/admin/documents' },
   ]
 
   const now = new Date()
-  const dateFr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const dateFr = now.toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Administration", href: "/admin" }, { label: "Tableau de bord" }]}
-      kicker={`Administration · ${dateFr}`}
-      title="Pilotage de la plateforme"
-      subtitle="Vision consolidée des utilisateurs, cabinets, clients et volumétrie documentaire. Supervisez l'activité globale de Lexora en temps réel."
+      breadcrumbs={[{ label: t('adm.dash.breadcrumb_admin', locale), href: "/admin" }, { label: t('adm.dash.breadcrumb_current', locale) }]}
+      kicker={`${t('adm.dash.kicker', locale)} · ${dateFr}`}
+      title={t('adm.dash.title', locale)}
+      subtitle={t('adm.dash.subtitle', locale)}
     >
       <div className="space-y-6 max-w-[1400px] mx-auto">
         {loading ? (
@@ -298,7 +300,7 @@ export default function AdminDashboardPage() {
                         <UserCog className="h-4 w-4" />
                       </div>
                       <CardTitle className="text-sm font-semibold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
-                        KPI par comptable
+                        {t('adm.dash.kpi_accountant', locale)}
                       </CardTitle>
                     </div>
                     <Badge variant="outline" className="text-xs" style={{ borderColor: "#D8DFED", color: SECONDARY }}>
@@ -308,7 +310,7 @@ export default function AdminDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   {comptableKpis.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">Aucun comptable enregistre</p>
+                    <p className="text-sm text-muted-foreground py-4 text-center">{t('adm.dash.no_accountant', locale)}</p>
                   ) : (
                     <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
                       {comptableKpis.map(c => (
@@ -355,7 +357,7 @@ export default function AdminDashboardPage() {
                         <Briefcase className="h-4 w-4" />
                       </div>
                       <CardTitle className="text-sm font-semibold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
-                        KPI par client
+                        {t('adm.dash.kpi_client', locale)}
                       </CardTitle>
                     </div>
                     <Badge variant="outline" className="text-xs" style={{ borderColor: "#D8DFED", color: SECONDARY }}>
@@ -365,7 +367,7 @@ export default function AdminDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   {clientKpis.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">Aucun client enregistre</p>
+                    <p className="text-sm text-muted-foreground py-4 text-center">{t('adm.dash.no_client', locale)}</p>
                   ) : (
                     <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
                       {clientKpis.map(c => (
@@ -412,13 +414,13 @@ export default function AdminDashboardPage() {
                     <Activity className="h-4 w-4" />
                   </div>
                   <CardTitle className="text-sm font-semibold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
-                    Derniers comptes crees
+                    {t('adm.dash.recent_accounts', locale)}
                   </CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
                 {recentUsers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">Aucun utilisateur</p>
+                  <p className="text-sm text-muted-foreground py-4 text-center">{t('adm.dash.no_user', locale)}</p>
                 ) : (
                   <div className="space-y-2">
                     {recentUsers.map(u => (

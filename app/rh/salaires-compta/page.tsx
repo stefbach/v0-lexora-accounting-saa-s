@@ -115,25 +115,25 @@ export default function SalairesComptaPage() {
       ) : (
         <>
           <Card>
-            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Détail par période</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>{t('rha.b.salcompta.detail_period', locale)}</CardTitle></CardHeader>
             <CardContent className="p-0 overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium" style={{ color: NAVY }}>Période</th>
-                    <th className="px-2 py-2 text-center font-medium">Nb</th>
-                    <th className="px-2 py-2 text-right font-medium bg-blue-50">641 Basic</th>
-                    <th className="px-2 py-2 text-right font-medium bg-blue-50">OT</th>
-                    <th className="px-2 py-2 text-right font-medium bg-blue-50">Primes</th>
-                    <th className="px-2 py-2 text-right font-medium bg-red-50">CSG sal.</th>
-                    <th className="px-2 py-2 text-right font-medium bg-red-50">NSF sal.</th>
-                    <th className="px-2 py-2 text-right font-medium bg-red-50">PAYE</th>
-                    <th className="px-2 py-2 text-right font-medium bg-emerald-50 font-bold">421 Net</th>
-                    <th className="px-2 py-2 text-right font-medium bg-orange-50">CSG pat.</th>
-                    <th className="px-2 py-2 text-right font-medium bg-orange-50">NSF pat.</th>
-                    <th className="px-2 py-2 text-right font-medium bg-orange-50">Levy</th>
-                    <th className="px-2 py-2 text-right font-medium bg-orange-50">PRGF</th>
-                    <th className="px-2 py-2 text-right font-medium bg-orange-50">645 Total</th>
+                    <th className="px-3 py-2 text-left font-medium" style={{ color: NAVY }}>{t('rha.b.salcompta.period', locale)}</th>
+                    <th className="px-2 py-2 text-center font-medium">{t('rha.b.salcompta.nb', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-blue-50">{t('rha.b.salcompta.basic_col', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-blue-50">{t('rha.b.salcompta.ot', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-blue-50">{t('rha.b.salcompta.primes', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-red-50">{t('rha.b.salcompta.csg_sal', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-red-50">{t('rha.b.salcompta.nsf_sal', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-red-50">{t('rha.b.salcompta.paye', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-emerald-50 font-bold">{t('rha.b.salcompta.net_col', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-orange-50">{t('rha.b.salcompta.csg_pat', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-orange-50">{t('rha.b.salcompta.nsf_pat', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-orange-50">{t('rha.b.salcompta.levy', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-orange-50">{t('rha.b.salcompta.prgf', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-orange-50">{t('rha.b.salcompta.total_645', locale)}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -160,7 +160,7 @@ export default function SalairesComptaPage() {
                   })}
                   {periodes.length > 0 && (
                     <tr className="bg-gray-100 font-bold text-xs">
-                      <td className="px-3 py-2">TOTAL</td>
+                      <td className="px-3 py-2">{t('rha.b.salcompta.total', locale)}</td>
                       <td className="px-2 py-2 text-center">{periodes.reduce((s, p) => s + p.nb, 0)}</td>
                       <td className="px-2 py-2 text-right font-mono text-blue-600">{fmt(periodes.reduce((s, p) => s + p.basic, 0))}</td>
                       <td className="px-2 py-2 text-right font-mono">{fmt(periodes.reduce((s, p) => s + p.ot, 0))}</td>
@@ -179,22 +179,22 @@ export default function SalairesComptaPage() {
                 </tbody>
               </table>
               {periodes.length === 0 && (
-                <p className="text-center text-gray-400 py-8">Aucune donnée de salaire. Importez des fichiers de paie depuis le module RH.</p>
+                <p className="text-center text-gray-400 py-8">{t('rha.b.salcompta.no_data', locale)}</p>
               )}
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>Plan comptable — Comptes de personnel</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base" style={{ color: NAVY }}>{t('rha.b.salcompta.chart_title', locale)}</CardTitle></CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {[
-                  { compte: "641100", label: "Salaires de base", debit: periodes.reduce((s, p) => s + p.basic, 0), color: "text-blue-600" },
-                  { compte: "641200", label: "Heures supplémentaires", debit: periodes.reduce((s, p) => s + p.ot, 0), color: "text-blue-500" },
-                  { compte: "641300", label: "Primes et indemnités", debit: periodes.reduce((s, p) => s + p.primes, 0), color: "text-blue-500" },
-                  { compte: "645100", label: "CSG patronale (3%/6%)", debit: totalCSGPat, color: "text-orange-600" },
-                  { compte: "645200", label: "NSF patronal (2.5%)", debit: totalNSFPat, color: "text-orange-500" },
-                  { compte: "645300", label: "Training Levy (1%)", debit: totalLevy, color: "text-orange-500" },
+                  { compte: "641100", label: t('rha.b.salcompta.basic_salaries', locale), debit: periodes.reduce((s, p) => s + p.basic, 0), color: "text-blue-600" },
+                  { compte: "641200", label: t('rha.b.salcompta.overtime', locale), debit: periodes.reduce((s, p) => s + p.ot, 0), color: "text-blue-500" },
+                  { compte: "641300", label: t('rha.b.salcompta.bonus_indem', locale), debit: periodes.reduce((s, p) => s + p.primes, 0), color: "text-blue-500" },
+                  { compte: "645100", label: t('rha.b.salcompta.csg_emp', locale), debit: totalCSGPat, color: "text-orange-600" },
+                  { compte: "645200", label: t('rha.b.salcompta.nsf_emp', locale), debit: totalNSFPat, color: "text-orange-500" },
+                  { compte: "645300", label: t('rha.b.salcompta.training_levy', locale), debit: totalLevy, color: "text-orange-500" },
                   { compte: "645400", label: "PRGF", debit: totalPrgf, color: "text-orange-500" },
                 ].map(c => (
                   <div key={c.compte} className="flex items-center justify-between p-2 border rounded">
@@ -206,12 +206,12 @@ export default function SalairesComptaPage() {
                   </div>
                 ))}
                 <div className="border-t pt-2 mt-2">
-                  <p className="text-xs text-gray-500 font-medium mb-2">Dettes sociales (crédit)</p>
+                  <p className="text-xs text-gray-500 font-medium mb-2">{t('rha.b.salcompta.social_debt', locale)}</p>
                   {[
-                    { compte: "421000", label: "Net à payer", credit: totalNet, color: "text-emerald-600" },
-                    { compte: "431000", label: "CSG à payer", credit: totalCSGSal + totalCSGPat, color: "text-red-600" },
-                    { compte: "444000", label: "PAYE à payer", credit: totalPaye, color: "text-red-500" },
-                    { compte: "432000", label: "Training Levy + PRGF à payer", credit: totalLevy + totalPrgf, color: "text-purple-600" },
+                    { compte: "421000", label: t('rha.b.salcompta.net_payable', locale), credit: totalNet, color: "text-emerald-600" },
+                    { compte: "431000", label: t('rha.b.salcompta.csg_payable', locale), credit: totalCSGSal + totalCSGPat, color: "text-red-600" },
+                    { compte: "444000", label: t('rha.b.salcompta.paye_payable', locale), credit: totalPaye, color: "text-red-500" },
+                    { compte: "432000", label: t('rha.b.salcompta.levy_prgf_payable', locale), credit: totalLevy + totalPrgf, color: "text-purple-600" },
                   ].map(c => (
                     <div key={c.compte} className="flex items-center justify-between p-2 border rounded">
                       <div className="flex items-center gap-3">

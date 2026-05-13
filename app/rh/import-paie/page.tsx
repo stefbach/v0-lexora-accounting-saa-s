@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Download, Users, Banknote, ChevronDown } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -16,6 +17,7 @@ function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractio
 type Step = "upload" | "preview" | "result"
 
 export default function ImportPaiePage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
   const [periode, setPeriode] = useState("")
@@ -62,7 +64,7 @@ export default function ImportPaiePage() {
     setParseError("")
     try {
       if (file.size > 10 * 1024 * 1024) {
-        setParseError("Fichier trop volumineux (max 10 MB)")
+        setParseError(t('rha.a.import.file_too_large', locale))
         return
       }
       const fd = new FormData()
@@ -84,7 +86,7 @@ export default function ImportPaiePage() {
 
       if (data.error) { setParseError(data.error); return }
       if (!data.employes || data.employes.length === 0) {
-        setParseError("Aucun employé détecté dans le fichier. Vérifiez que le fichier contient des colonnes: Basic Salary, Net Pay, CSG, etc.")
+        setParseError(t('rha.a.import.no_employees_detected', locale))
         return
       }
 
@@ -102,9 +104,9 @@ export default function ImportPaiePage() {
   }
 
   const handleImport = async () => {
-    if (!societe) { alert("Veuillez sélectionner une société"); return }
-    if (!periode) { alert("Veuillez sélectionner la période (mois)"); return }
-    if (employes.length === 0) { alert("Aucun employé à importer"); return }
+    if (!societe) { alert(t('rha.a.import.veuillez_societe', locale)); return }
+    if (!periode) { alert(t('rha.a.import.veuillez_periode', locale)); return }
+    if (employes.length === 0) { alert(t('rha.a.import.aucun_employe_importer', locale)); return }
     setImporting(true)
     try {
       const res = await fetch("/api/rh/import-paie", {
@@ -116,7 +118,7 @@ export default function ImportPaiePage() {
       setResult(data)
       setStep("result")
       loadHistory()
-    } catch (e: any) { alert("Erreur réseau: " + (e.message || "")) }
+    } catch (e: any) { alert(t('rha.a.import.erreur_reseau', locale) + " " + (e.message || "")) }
     finally { setImporting(false) }
   }
 
@@ -144,12 +146,12 @@ export default function ImportPaiePage() {
     <div className="space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Import Paie Excel</h1>
-          <p className="text-gray-500 text-sm">Importez vos rapports de paie — alimente RH + comptabilité</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.a.import.title', locale)}</h1>
+          <p className="text-gray-500 text-sm">{t('rha.a.import.subtitle', locale)}</p>
         </div>
         <div className="flex gap-2">
           <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder={t('rha.a.common.societe', locale)} /></SelectTrigger>
             <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
           </Select>
         </div>
@@ -166,12 +168,12 @@ export default function ImportPaiePage() {
               onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('border-[#D4AF37]', 'bg-[#D4AF37]/5'); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
             >
               {parsing ? (
-                <div><Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-[#D4AF37]" /><p className="text-gray-500">Analyse du fichier <strong>{fileName}</strong> en cours...</p></div>
+                <div><Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-[#D4AF37]" /><p className="text-gray-500">{t('rha.a.import.analyzing_prefix', locale)} <strong>{fileName}</strong> {t('rha.a.import.analyzing_suffix', locale)}</p></div>
               ) : (
                 <div>
                   <FileSpreadsheet className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                  <p className="text-lg font-medium" style={{ color: NAVY }}>Glissez votre fichier Excel ici</p>
-                  <p className="text-sm text-gray-400 mt-1">ou utilisez le bouton ci-dessous</p>
+                  <p className="text-lg font-medium" style={{ color: NAVY }}>{t('rha.a.import.dropzone', locale)}</p>
+                  <p className="text-sm text-gray-400 mt-1">{t('rha.a.import.dropzone_or', locale)}</p>
                 </div>
               )}
             </div>
@@ -188,11 +190,11 @@ export default function ImportPaiePage() {
               {fileName && !parsing && <Badge variant="outline">{fileName}</Badge>}
             </div>
 
-            <p className="text-xs text-gray-400 text-center">Format attendu : Payroll Report avec colonnes Basic Salary, CSG, NSF, PAYE, Net Pay (.xlsx, .xls, .csv)</p>
+            <p className="text-xs text-gray-400 text-center">{t('rha.a.import.format_expected', locale)}</p>
 
             {parseError && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-red-600 text-sm font-medium">Erreur</p>
+                <p className="text-red-600 text-sm font-medium">{t('rha.a.import.error_label', locale)}</p>
                 <p className="text-red-500 text-sm mt-1">{parseError}</p>
               </div>
             )}
@@ -206,14 +208,14 @@ export default function ImportPaiePage() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <Badge style={{ backgroundColor: NAVY }} className="text-white">{fileName}</Badge>
-              <Badge variant="outline">{employes.length} employés</Badge>
-              <Badge variant="outline">{columns.length} colonnes</Badge>
+              <Badge variant="outline">{employes.length} {t('rha.a.common.employes', locale)}</Badge>
+              <Badge variant="outline">{columns.length} {t('rha.a.import.colonnes_count', locale)}</Badge>
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-sm font-medium">Période :</Label>
+              <Label className="text-sm font-medium">{t('rha.a.common.periode', locale)} :</Label>
               <select value={periode} onChange={e => setPeriode(e.target.value)}
                 className="border rounded px-3 py-2 text-sm">
-                <option value="">-- Choisir --</option>
+                <option value="">{t('rha.a.common.choisir', locale)}</option>
                 {(() => {
                   const opts = []
                   for (let y = 2026; y >= 2020; y--) {
@@ -227,12 +229,12 @@ export default function ImportPaiePage() {
                   return opts
                 })()}
               </select>
-              <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setColumns([]) }}>Annuler</Button>
+              <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setColumns([]) }}>{t('rha.a.common.annuler', locale)}</Button>
               <Button onClick={handleImport} disabled={importing || !periode || !societe}
                 style={{ backgroundColor: !periode || !societe ? '#999' : NAVY }}
                 className="text-white">
                 {importing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                {!periode ? "Choisir le mois d'abord" : !societe ? "Choisir la société" : `Importer ${employes.length} employés`}
+                {!periode ? t('rha.a.import.choose_month_first', locale) : !societe ? t('rha.a.import.choose_societe', locale) : `${t('rha.a.import.importer_n', locale)} ${employes.length} ${t('rha.a.import.suffix_employes', locale)}`}
               </Button>
             </div>
           </div>

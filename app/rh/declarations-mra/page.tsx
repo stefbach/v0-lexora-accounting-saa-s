@@ -12,6 +12,7 @@ import {
   CheckCircle2, AlertTriangle, FileText, BookOpenCheck,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import {
   formaterMUR, libellePeriode, deadlineMraFromPeriode, firstDayOfMonth,
   STATUT_MRA_LABELS, PRGF_EXEMPTION_LABELS,
@@ -30,6 +31,7 @@ const MOIS_LABELS = [
 ]
 
 export default function DeclarationsMraPage() {
+  const locale: Locale = getLocale()
   const now = new Date()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
@@ -197,11 +199,10 @@ export default function DeclarationsMraPage() {
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" style={{ color: NAVY }}>
-            <BookOpenCheck className="h-6 w-6" style={{ color: GOLD }} /> Déclarations MRA mensuelles
+            <BookOpenCheck className="h-6 w-6" style={{ color: GOLD }} /> {t('rha.b.decmra.title', locale)}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            PAYE + CSG/NSF/Training Levy/PRGF. Un seul virement groupé par mois
-            à la MRA. Deadline : fin du mois suivant.
+            {t('rha.b.decmra.subtitle', locale)}
           </p>
         </div>
 

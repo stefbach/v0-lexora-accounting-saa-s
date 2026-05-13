@@ -15,6 +15,7 @@ import {
   ArrowLeft, Plus, Brain, TrendingUp, TrendingDown, CheckCircle2,
   Clock, X, BarChart3, Loader2,
 } from "lucide-react"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -60,16 +61,16 @@ interface Simulation {
 // ---------------------------------------------------------------------------
 // Type options for the new simulation form
 // ---------------------------------------------------------------------------
-const typeOptions = [
-  { value: "nouveau_client", label: "Nouveau client" },
-  { value: "embauche", label: "Embauche" },
-  { value: "investissement", label: "Investissement" },
-  { value: "emprunt", label: "Emprunt bancaire" },
-  { value: "expansion", label: "Expansion" },
-  { value: "reduction", label: "Reduction de couts" },
+const getTypeOptions = (locale: Locale) => [
+  { value: "nouveau_client", label: t('cabclt.sim.type_new_client', locale) },
+  { value: "embauche", label: t('cabclt.sim.type_hiring', locale) },
+  { value: "investissement", label: t('cabclt.sim.type_investment', locale) },
+  { value: "emprunt", label: t('cabclt.sim.type_loan', locale) },
+  { value: "expansion", label: t('cabclt.sim.type_expansion', locale) },
+  { value: "reduction", label: t('cabclt.sim.type_cost_reduction', locale) },
 ]
 
-function mapDbSimulation(row: any): Simulation {
+function mapDbSimulation(row: any, locale: Locale): Simulation {
   const score = row.score_opportunite || 0
   const isGood = score >= 70
   const optim = row.scenario_optimiste || {}
@@ -78,36 +79,36 @@ function mapDbSimulation(row: any): Simulation {
 
   return {
     id: row.id,
-    titre: row.titre || "Sans titre",
+    titre: row.titre || t('cabclt.sim.no_title', locale),
     type: row.type_simulation || "autre",
     description: row.recommandation || "",
     score,
-    verdict: isGood ? "Viable" : "A evaluer",
+    verdict: isGood ? t('cabclt.sim.verdict_viable', locale) : t('cabclt.sim.verdict_evaluate', locale),
     verdictColor: isGood ? "text-green-700" : "text-orange-700",
     verdictBg: isGood ? "bg-green-100" : "bg-orange-100",
-    date: row.created_at ? new Date(row.created_at).toLocaleDateString("fr-FR") : "--",
+    date: row.created_at ? new Date(row.created_at).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB') : "--",
     impacts: [],
     scenarios: [
       {
-        nom: "Optimiste",
+        nom: t('cabclt.sim.scenario_optimistic', locale),
         probabilite: optim.probabilite || "--",
         impact: optim.impact_tresorerie ? fmt(optim.impact_tresorerie) : optim.description || "--",
         detail: optim.description || "",
       },
       {
-        nom: "Base",
+        nom: t('cabclt.sim.scenario_base', locale),
         probabilite: base.probabilite || "--",
         impact: base.impact_tresorerie ? fmt(base.impact_tresorerie) : base.description || "--",
         detail: base.description || "",
       },
       {
-        nom: "Pessimiste",
+        nom: t('cabclt.sim.scenario_pessimistic', locale),
         probabilite: pessim.probabilite || "--",
         impact: pessim.impact_tresorerie ? fmt(pessim.impact_tresorerie) : pessim.description || "--",
         detail: pessim.description || "",
       },
     ],
-    analyseIA: row.recommandation || "Aucune analyse disponible.",
+    analyseIA: row.recommandation || t('cabclt.sim.no_analysis', locale),
   }
 }
 

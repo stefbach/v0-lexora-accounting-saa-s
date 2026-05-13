@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Download, CreditCard, Building2, AlertTriangle, CheckCircle2, Users, FileText } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const BANQUES_LABELS: Record<string, string> = {
   MCB: "Mauritius Commercial Bank",
@@ -45,6 +46,7 @@ function fmt(n: number) {
 }
 
 export default function ExportVirementPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
   const [periode, setPeriode] = useState(new Date().toISOString().slice(0, 7))
@@ -197,8 +199,8 @@ export default function ExportVirementPage() {
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-bold text-[#0B0F2E]">Export Virements Salaires</h1>
-        <p className="text-sm text-gray-500">Le format du fichier est automatiquement adapté à la banque de l'entreprise</p>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.b.virement.title', locale)}</h1>
+        <p className="text-sm text-gray-500">{t('rha.b.virement.subtitle', locale)}</p>
       </div>
 
       {/* Paramètres */}

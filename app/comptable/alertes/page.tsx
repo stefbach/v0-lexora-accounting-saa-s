@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertTriangle, Bell, Calendar, Shield, Clock, CheckCircle, Loader2, RefreshCw, Search } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Alerte {
   id: string
@@ -61,6 +62,7 @@ function getSeverityIcon(severity: string) {
 }
 
 export default function ComptableAlertesPage() {
+  const locale = getLocale()
   const [data, setData] = useState<AlertesResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -156,10 +158,10 @@ export default function ComptableAlertesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-            Alertes & Surveillance
+            {t('cab.alertes.title', locale)}
           </h1>
           <p className="text-muted-foreground">
-            Surveillance proactive des obligations fiscales, anomalies comptables et obligations sociales
+            {t('cab.alertes.subtitle', locale)}
           </p>
         </div>
         <Button
@@ -170,7 +172,7 @@ export default function ComptableAlertesPage() {
           className="gap-2"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Actualiser
+          {t('cab.alertes.refresh', locale)}
         </Button>
       </div>
 
@@ -184,7 +186,7 @@ export default function ComptableAlertesPage() {
               </div>
               <div>
                 <div className="text-3xl font-bold text-red-600">{liveCounts.critical}</div>
-                <p className="text-sm text-muted-foreground">Alertes critiques</p>
+                <p className="text-sm text-muted-foreground">{t('cab.alertes.kpi_critical', locale)}</p>
               </div>
             </div>
           </CardContent>
@@ -198,7 +200,7 @@ export default function ComptableAlertesPage() {
               </div>
               <div>
                 <div className="text-3xl font-bold text-orange-600">{liveCounts.warning}</div>
-                <p className="text-sm text-muted-foreground">Avertissements</p>
+                <p className="text-sm text-muted-foreground">{t('cab.alertes.kpi_warning', locale)}</p>
               </div>
             </div>
           </CardContent>
@@ -212,7 +214,7 @@ export default function ComptableAlertesPage() {
               </div>
               <div>
                 <div className="text-3xl font-bold text-blue-600">{liveCounts.info}</div>
-                <p className="text-sm text-muted-foreground">Informations</p>
+                <p className="text-sm text-muted-foreground">{t('cab.alertes.kpi_info', locale)}</p>
               </div>
             </div>
           </CardContent>
@@ -226,7 +228,7 @@ export default function ComptableAlertesPage() {
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Rechercher une alerte..."
+                placeholder={t('cab.alertes.search', locale)}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -288,7 +290,7 @@ export default function ComptableAlertesPage() {
       {loading && !data && (
         <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
           <Loader2 className="h-10 w-10 animate-spin" />
-          <p className="font-medium">Analyse des obligations en cours...</p>
+          <p className="font-medium">{t('cab.alertes.analyzing', locale)}</p>
         </div>
       )}
 
@@ -296,11 +298,11 @@ export default function ComptableAlertesPage() {
       {!loading && filteredAlertes.length === 0 && data && (
         <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
           <CheckCircle className="h-12 w-12 text-green-400" />
-          <p className="font-medium text-base">Aucune alerte</p>
+          <p className="font-medium text-base">{t('cab.alertes.none', locale)}</p>
           <p className="text-sm">
             {dismissed.size > 0
-              ? `${dismissed.size} alerte(s) traitee(s). Toutes les obligations sont en ordre.`
-              : "Toutes les obligations fiscales, comptables et sociales sont en ordre."
+              ? `${dismissed.size} ${t('cab.alertes.all_ok', locale)}`
+              : t('cab.alertes.all_ok', locale)
             }
           </p>
         </div>
