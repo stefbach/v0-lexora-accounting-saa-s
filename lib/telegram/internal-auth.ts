@@ -17,6 +17,7 @@ export type TelegramContext = {
   user_id: string
   societe_id: string
   role: TelegramRole
+  capabilities: string[]   // capabilities effectives (override > defaults rôle)
   language_code: 'fr' | 'en'
   telegram_firstname: string | null
   employe_id: string | null   // si l'user est un employé de la société
@@ -86,14 +87,16 @@ export async function resolveTelegramContext(req: NextRequest): Promise<Telegram
     throw NextResponse.json({ error: 'Aucune société active' }, { status: 400 })
   }
 
-  // Récupère le rôle dans la société active
+  // Récupère le rôle + override de capabilities dans la société active
   const { data: us } = await admin
     .from('user_societes')
-    .select('role')
+    .select('role, telegram_capabilities')
     .eq('user_id', tgUser.user_id)
     .eq('societe_id', tgUser.current_societe_id)
     .maybeSingle()
   const role = (us?.role || 'employe') as TelegramRole
+  const override = Array.isArray(us?.telegram_capabilities) ? (us!.telegram_capabilities as string[]) : null
+  const capabilities = override ?? defaultCapabilitiesForRole(role)
 
   // Si employé, on récupère son employe_id
   let employe_id: string | null = null
@@ -123,10 +126,46 @@ export async function resolveTelegramContext(req: NextRequest): Promise<Telegram
     user_id: tgUser.user_id,
     societe_id: tgUser.current_societe_id,
     role,
+    capabilities,
     language_code: (tgUser.language_code as 'fr' | 'en') || 'fr',
     telegram_firstname: tgUser.telegram_firstname,
     employe_id,
     manager_employes,
+  }
+}
+
+/** Vérifie qu'une capability est présente dans les caps effectives du ctx.
+ *  'ALL' chez admin/super_admin matche tout. */
+export function hasCapability(ctx: TelegramContext, cap: string): boolean {
+  if (ctx.capabilities.includes('ALL')) return true
+  return ctx.capabilities.includes(cap)
+}
+
+function defaultCapabilitiesForRole(role: TelegramRole): string[] {
+  const base = ['view_help', 'switch_societe', 'logout']
+  switch (role) {
+    case 'employe':
+      return [...base, 'view_my_payslip', 'view_my_leave_balance', 'request_leave']
+    case 'manager':
+      return [...base, 'view_my_payslip', 'view_my_leave_balance', 'request_leave',
+              'view_team_kpis', 'approve_team_leave', 'view_team_pending']
+    case 'rh':
+      return [...base, 'view_my_payslip', 'view_team_kpis', 'add_ot', 'add_bonus',
+              'compute_payroll', 'export_mra', 'view_employees', 'manage_leave_settings']
+    case 'comptable':
+    case 'comptable_dedie':
+      return [...base, 'view_kpis', 'view_bank', 'create_invoice', 'view_tax_calendar',
+              'export_mra', 'reconcile_bank', 'view_audit_log']
+    case 'direction':
+    case 'client_admin':
+      return [...base, 'view_kpis', 'view_bank', 'view_tax_calendar', 'create_invoice',
+              'compute_payroll', 'approve_payroll', 'export_mra', 'approve_team_leave',
+              'view_audit_log', 'manage_alerts_config']
+    case 'admin':
+    case 'super_admin':
+      return ['ALL']
+    default:
+      return base
   }
 }
 

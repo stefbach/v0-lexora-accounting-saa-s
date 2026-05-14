@@ -1,10 +1,10 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Shield, MessageCircle, AlertCircle, CheckCircle2, XCircle, Activity, Users, Copy, Link2, Trash2 } from "lucide-react"
+import { Loader2, Shield, MessageCircle, AlertCircle, CheckCircle2, XCircle, Activity, Users, Copy, Link2, Trash2, Settings2, RotateCcw } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale } from "@/lib/i18n"
 
@@ -61,11 +61,20 @@ const CAPABILITY_LABELS: Record<string, string> = {
   ALL: "🔓 Tous les droits",
 }
 
+type PermissionsModalState = {
+  user_id: string
+  nom: string
+  role: string
+  selected: Set<string>
+  defaults: string[]
+}
+
 export default function TelegramPermissionsPage() {
   const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [members, setMembers] = useState<any[]>([])
   const [employees, setEmployees] = useState<any[]>([])
+  const [allCapabilities, setAllCapabilities] = useState<string[]>([])
   const [botUsername, setBotUsername] = useState<string>('LexoraBot')
   const [roleMatrix, setRoleMatrix] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
@@ -74,6 +83,8 @@ export default function TelegramPermissionsPage() {
   const [generatingFor, setGeneratingFor] = useState<string | null>(null)
   const [codeModal, setCodeModal] = useState<null | { employe_id: string; nom: string; code: string; deep_link: string; share_message: string }>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [permsModal, setPermsModal] = useState<PermissionsModalState | null>(null)
+  const [savingPerms, setSavingPerms] = useState(false)
   // Rôle souhaité au moment de générer le code (par employé sans compte)
   const [pendingRoleByEmpId, setPendingRoleByEmpId] = useState<Record<string, string>>({})
 
@@ -86,11 +97,70 @@ export default function TelegramPermissionsPage() {
       if (!r.ok) throw new Error(j.error || 'Erreur')
       setMembers(j.members || [])
       setEmployees(j.employees || [])
+      setAllCapabilities(j.all_capabilities || [])
       setRoleMatrix(j.role_matrix || {})
       setBotUsername(j.bot_username || 'LexoraBot')
     } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId])
+
+  // Dédup : un employé déjà membre (auth_user_id présent dans user_societes) est
+  // déjà affiché dans la section Membres → on ne le ré-affiche pas en Employés.
+  const employeesNotYetMembers = useMemo(
+    () => employees.filter(e => !e.is_member),
+    [employees],
+  )
+
+  // Map employé pour enrichir l'affichage Membres (poste, code RH, lien)
+  const employeByUserId = useMemo(() => {
+    const m = new Map<string, any>()
+    for (const e of employees) {
+      if (e.auth_user_id) m.set(e.auth_user_id, e)
+    }
+    return m
+  }, [employees])
+
+  const openPermsModal = (user_id: string, nom: string, role: string, current: string[], defaults: string[]) => {
+    setPermsModal({
+      user_id,
+      nom,
+      role,
+      defaults,
+      selected: new Set(current),
+    })
+  }
+
+  const togglePermCap = (cap: string) => {
+    if (!permsModal) return
+    const next = new Set(permsModal.selected)
+    if (next.has(cap)) next.delete(cap)
+    else next.add(cap)
+    setPermsModal({ ...permsModal, selected: next })
+  }
+
+  const resetPermsToRole = () => {
+    if (!permsModal) return
+    setPermsModal({ ...permsModal, selected: new Set(permsModal.defaults) })
+  }
+
+  const savePerms = async (reset = false) => {
+    if (!permsModal) return
+    setSavingPerms(true); setError(null)
+    try {
+      const r = await fetch(`/api/client/telegram-permissions?societe_id=${societeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: permsModal.user_id,
+          capabilities: reset ? null : Array.from(permsModal.selected),
+        }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Erreur')
+      setPermsModal(null)
+      await load()
+    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSavingPerms(false) }
+  }
 
   const generateCode = async (employe_id: string, nom: string, role: string = 'employe') => {
     setGeneratingFor(employe_id); setError(null)
@@ -205,14 +275,24 @@ export default function TelegramPermissionsPage() {
                     <th className="py-2 px-2">Email</th>
                     <th className="py-2 px-2">Telegram</th>
                     <th className="py-2 px-2">Rôle</th>
-                    <th className="py-2 px-2">Capabilities</th>
+                    <th className="py-2 px-2">Capabilities effectives</th>
                     <th className="py-2 px-2 text-right">Audit (30j)</th>
+                    <th className="py-2 px-2 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {members.map((m: any) => (
+                  {members.map((m: any) => {
+                    const emp = employeByUserId.get(m.user_id)
+                    return (
                     <tr key={m.user_id} className="border-b">
-                      <td className="py-2 px-2 font-medium">{m.full_name}</td>
+                      <td className="py-2 px-2 font-medium">
+                        {m.full_name}
+                        {emp && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            Employé RH {emp.code ? `· ${emp.code}` : ''} {emp.poste ? `· ${emp.poste}` : ''}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-2 px-2 text-xs text-slate-600">{m.email}</td>
                       <td className="py-2 px-2">
                         {m.telegram?.linked ? (
@@ -244,11 +324,12 @@ export default function TelegramPermissionsPage() {
                         {savingUserId === m.user_id && <Loader2 className="inline animate-spin h-3 w-3 ml-2 text-slate-400" />}
                       </td>
                       <td className="py-2 px-2">
-                        <div className="flex flex-wrap gap-1 max-w-md">
-                          {(m.capabilities || []).slice(0, 6).map((c: string) => (
+                        <div className="flex flex-wrap items-center gap-1 max-w-md">
+                          {m.is_custom && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">personnalisé</Badge>}
+                          {(m.effective_capabilities || []).slice(0, 6).map((c: string) => (
                             <span key={c} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">{CAPABILITY_LABELS[c] || c}</span>
                           ))}
-                          {(m.capabilities || []).length > 6 && <span className="text-[10px] text-slate-400">+{m.capabilities.length - 6}</span>}
+                          {(m.effective_capabilities || []).length > 6 && <span className="text-[10px] text-slate-400">+{m.effective_capabilities.length - 6}</span>}
                         </div>
                       </td>
                       <td className="py-2 px-2 text-right">
@@ -262,8 +343,15 @@ export default function TelegramPermissionsPage() {
                           <span className="text-[10px] text-slate-400">aucune action</span>
                         )}
                       </td>
+                      <td className="py-2 px-2 text-right">
+                        <Button
+                          onClick={() => openPermsModal(m.user_id, m.full_name, m.role, m.effective_capabilities || [], m.default_capabilities || [])}
+                          variant="outline" size="sm">
+                          <Settings2 className="h-3 w-3 mr-1" /> Permissions
+                        </Button>
+                      </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
@@ -271,21 +359,22 @@ export default function TelegramPermissionsPage() {
         </CardContent>
       </Card>
 
-      {/* ── Employés RH de la société ── */}
+      {/* ── Employés RH non encore membres ── */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center justify-between">
-            <span className="flex items-center gap-2"><Users className="h-4 w-4 text-blue-600" /> Employés RH ({employees.length})</span>
+            <span className="flex items-center gap-2"><Users className="h-4 w-4 text-blue-600" /> Employés RH non rattachés ({employeesNotYetMembers.length})</span>
             <Button onClick={load} variant="outline" size="sm">Rafraîchir</Button>
           </CardTitle>
           <p className="text-xs text-slate-500 mt-1">
-            Tous les employés actifs de la fiche RH. Génère un code Telegram pour leur permettre de se connecter au bot.
-            Si l'employé n'a pas encore de compte Lexora, il sera créé automatiquement (email requis dans la fiche).
+            Employés actifs de la fiche RH qui ne sont pas encore membres de la société sur Lexora.
+            Génère un code Telegram pour les rattacher (compte Lexora créé automatiquement si email présent).
+            Les employés <em>déjà</em> membres apparaissent dans la table ci-dessus avec un badge "Employé RH".
           </p>
         </CardHeader>
         <CardContent>
-          {employees.length === 0 ? (
-            <div className="text-sm text-slate-500 p-4 text-center">Aucun employé actif dans la fiche RH.</div>
+          {employeesNotYetMembers.length === 0 ? (
+            <div className="text-sm text-slate-500 p-4 text-center">Tous les employés RH actifs sont déjà rattachés (cf. table Membres).</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -302,7 +391,7 @@ export default function TelegramPermissionsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {employees.map((e: any) => {
+                  {employeesNotYetMembers.map((e: any) => {
                     const desiredRole = pendingRoleByEmpId[e.employe_id] || 'employe'
                     return (
                     <tr key={e.employe_id} className="border-b">
@@ -350,12 +439,13 @@ export default function TelegramPermissionsPage() {
                         )}
                       </td>
                       <td className="py-2 px-2">
-                        <div className="flex flex-wrap gap-1 max-w-xs">
-                          {(e.capabilities || []).slice(0, 4).map((c: string) => (
+                        <div className="flex flex-wrap items-center gap-1 max-w-xs">
+                          {e.is_custom && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">personnalisé</Badge>}
+                          {(e.effective_capabilities || []).slice(0, 4).map((c: string) => (
                             <span key={c} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">{CAPABILITY_LABELS[c] || c}</span>
                           ))}
-                          {(e.capabilities || []).length > 4 && <span className="text-[10px] text-slate-400">+{e.capabilities.length - 4}</span>}
-                          {(!e.capabilities || e.capabilities.length === 0) && <span className="text-[10px] text-slate-400">à définir</span>}
+                          {(e.effective_capabilities || []).length > 4 && <span className="text-[10px] text-slate-400">+{e.effective_capabilities.length - 4}</span>}
+                          {(!e.effective_capabilities || e.effective_capabilities.length === 0) && <span className="text-[10px] text-slate-400">à définir au rattachement</span>}
                         </div>
                       </td>
                       <td className="py-2 px-2">
@@ -370,24 +460,33 @@ export default function TelegramPermissionsPage() {
                         )}
                       </td>
                       <td className="py-2 px-2 text-right">
-                        {e.telegram_status === 'linked' ? (
-                          <Button
-                            onClick={() => unlinkEmployee(e.employe_id, e.nom_complet)}
-                            variant="outline" size="sm"
-                            className="text-red-700 border-red-200 hover:bg-red-50">
-                            <Trash2 className="h-3 w-3 mr-1" /> Délier
-                          </Button>
-                        ) : (
-                          <Button
-                            onClick={() => generateCode(e.employe_id, e.nom_complet, desiredRole)}
-                            disabled={generatingFor === e.employe_id || !e.email}
-                            size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                            {generatingFor === e.employe_id
-                              ? <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                              : <Link2 className="h-3 w-3 mr-1" />}
-                            Générer code
-                          </Button>
-                        )}
+                        <div className="flex gap-2 justify-end">
+                          {e.has_auth_user && e.role && (
+                            <Button
+                              onClick={() => openPermsModal(e.auth_user_id, e.nom_complet, e.role, e.effective_capabilities || [], e.default_capabilities || [])}
+                              variant="outline" size="sm">
+                              <Settings2 className="h-3 w-3 mr-1" /> Permissions
+                            </Button>
+                          )}
+                          {e.telegram_status === 'linked' ? (
+                            <Button
+                              onClick={() => unlinkEmployee(e.employe_id, e.nom_complet)}
+                              variant="outline" size="sm"
+                              className="text-red-700 border-red-200 hover:bg-red-50">
+                              <Trash2 className="h-3 w-3 mr-1" /> Délier
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() => generateCode(e.employe_id, e.nom_complet, desiredRole)}
+                              disabled={generatingFor === e.employe_id || !e.email}
+                              size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                              {generatingFor === e.employe_id
+                                ? <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                : <Link2 className="h-3 w-3 mr-1" />}
+                              Générer code
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )})}
@@ -405,6 +504,91 @@ export default function TelegramPermissionsPage() {
           chat_id, user_id, société, intent, résultat, statut (succès/refusé/erreur), durée. Permet la conformité AML/CFT et le débogage.
         </div>
       </div>
+
+      {/* ── Modal Permissions personnalisées ── */}
+      {permsModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setPermsModal(null)}>
+          <div className="bg-white rounded-lg max-w-3xl w-full p-6 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <Settings2 className="h-5 w-5 text-emerald-600" />
+                  Permissions de {permsModal.nom}
+                </h3>
+                <div className="text-xs text-slate-500 mt-1">
+                  Rôle actuel : <Badge className={`${ROLE_COLORS[permsModal.role]} text-xs ml-1`} variant="outline">{ROLE_LABELS[permsModal.role]}</Badge>
+                  <span className="ml-2">{permsModal.selected.size} capabilities cochées</span>
+                </div>
+              </div>
+              <button onClick={() => setPermsModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              <strong>Mode personnalisé :</strong> coche/décoche pour overrider les permissions par défaut du rôle.
+              Les capabilities ici cochées seront <em>les seules</em> autorisées via Telegram pour cet utilisateur.
+              Clique <em>"Réinitialiser au rôle par défaut"</em> pour supprimer l'override et revenir au comportement standard.
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto pr-2 border rounded p-2">
+              {allCapabilities.map(cap => {
+                const checked = permsModal.selected.has(cap)
+                const isDefault = permsModal.defaults.includes(cap)
+                return (
+                  <label
+                    key={cap}
+                    className={`flex items-start gap-2 p-2 rounded border text-xs cursor-pointer ${
+                      checked
+                        ? 'bg-emerald-50 border-emerald-200'
+                        : 'bg-white border-slate-200 hover:bg-slate-50'
+                    }`}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => togglePermCap(cap)}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium flex items-center gap-2">
+                        {CAPABILITY_LABELS[cap] || cap}
+                        {isDefault && <Badge className="bg-slate-100 text-slate-600 border-slate-300 text-[9px]">défaut rôle</Badge>}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-mono">{cap}</div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+
+            <div className="flex items-center justify-between border-t pt-3">
+              <Button
+                onClick={resetPermsToRole}
+                variant="outline" size="sm">
+                <RotateCcw className="h-3 w-3 mr-1" /> Re-cocher défaut rôle
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => savePerms(true)}
+                  disabled={savingPerms}
+                  variant="outline" size="sm" className="text-amber-700 border-amber-200">
+                  Supprimer override
+                </Button>
+                <Button
+                  onClick={() => setPermsModal(null)}
+                  variant="outline" size="sm">
+                  Annuler
+                </Button>
+                <Button
+                  onClick={() => savePerms(false)}
+                  disabled={savingPerms}
+                  size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                  {savingPerms && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                  Enregistrer
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal code généré ── */}
       {codeModal && (
