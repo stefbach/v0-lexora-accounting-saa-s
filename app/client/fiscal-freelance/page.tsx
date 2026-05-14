@@ -11,8 +11,10 @@ import { Badge } from "@/components/ui/badge"
 import { FileText, CalendarClock, AlertTriangle, CheckCircle } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 export default function FiscalFreelancePage() {
+  const locale = getLocale()
   const { profile } = useProfile()
 
   if (profile?.role === "client_user") {
@@ -23,10 +25,10 @@ export default function FiscalFreelancePage() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-          Mes Obligations Fiscales
+          {t('mra.freelance.title', locale)}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Tout ce que vous devez savoir sur vos impôts et déclarations.
+          {t('mra.freelance.subtitle', locale)}
         </p>
       </div>
 
@@ -38,10 +40,10 @@ export default function FiscalFreelancePage() {
               <FileText className="h-5 w-5" style={{ color: "#D4AF37" }} />
             </div>
             <div>
-              <CardTitle style={{ color: "#0B0F2E" }}>Déclaration d&apos;impôt annuelle</CardTitle>
+              <CardTitle style={{ color: "#0B0F2E" }}>{t('mra.freelance.annual_title', locale)}</CardTitle>
               <Badge className="bg-green-100 text-green-700 border-green-200 mt-1">
                 <CheckCircle className="h-3 w-3 mr-1" />
-                Votre comptable s&apos;en occupe
+                {t('mra.freelance.handled_by_accountant', locale)}
               </Badge>
             </div>
           </div>
@@ -49,79 +51,76 @@ export default function FiscalFreelancePage() {
         <CardContent className="space-y-4">
           <div className="rounded-lg p-4" style={{ backgroundColor: "#0B0F2E08" }}>
             <p className="text-sm" style={{ color: "#0B0F2E" }}>
-              Votre déclaration d&apos;impôt annuelle est à soumettre avant le{" "}
-              <strong>30 septembre 2026</strong>.
-              Votre comptable s&apos;en occupe. Vous n&apos;avez rien à faire de votre côté,
-              sauf vous assurer que tous vos documents sont bien envoyés.
+              {t('mra.freelance.annual_text_prefix', locale)}
+              <strong>{t('mra.freelance.deadline_date', locale)}</strong>{t('mra.freelance.annual_text_suffix', locale)}
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <CalendarClock className="h-5 w-5" style={{ color: "#0B0F2E" }} />
             <div>
-              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Date limite</p>
-              <p className="text-sm text-muted-foreground">30 septembre 2026</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{t('mra.freelance.deadline_label', locale)}</p>
+              <p className="text-sm text-muted-foreground">{t('mra.freelance.deadline_date', locale)}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <CheckCircle className="h-5 w-5 text-green-500" />
             <div>
-              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Statut actuel</p>
+              <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{t('mra.freelance.status_label', locale)}</p>
               <p className="text-sm text-muted-foreground">
-                En préparation par votre comptable
+                {t('mra.freelance.status_value', locale)}
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Seuil TVA */}
+      {/* Seuil VAT */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5" style={{ color: "#D4AF37" }} />
-            <CardTitle style={{ color: "#0B0F2E" }}>TVA — Êtes-vous concerné ?</CardTitle>
+            <CardTitle style={{ color: "#0B0F2E" }}>{t('mra.freelance.vat_title', locale)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-lg border p-4 bg-yellow-50/50">
             <p className="text-sm" style={{ color: "#0B0F2E" }}>
-              <strong>Le seuil TVA à Maurice est de 6 000 000 MUR par an.</strong>
+              <strong>{t('mra.freelance.vat_threshold_strong', locale)}</strong>
             </p>
             <p className="text-sm text-muted-foreground mt-2">
-              Si votre chiffre d&apos;affaires dépasse ce montant, vous devez vous enregistrer à la TVA
-              auprès de la MRA. En dessous de ce seuil, l&apos;enregistrement est volontaire.
+              {t('mra.freelance.vat_text', locale)}
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardContent className="py-4">
-                <p className="text-sm text-muted-foreground">Votre chiffre d&apos;affaires estimé</p>
+                <p className="text-sm text-muted-foreground">{t('mra.freelance.estimated_revenue', locale)}</p>
                 <p className="text-2xl font-bold mt-1" style={{ color: "#0B0F2E" }}>
                   3 360 000 MUR
                 </p>
                 <Badge className="bg-green-100 text-green-700 border-green-200 mt-2">
-                  Sous le seuil
+                  {t('mra.freelance.below_threshold', locale)}
                 </Badge>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="py-4">
-                <p className="text-sm text-muted-foreground">Seuil TVA</p>
+                <p className="text-sm text-muted-foreground">{t('mra.freelance.vat_threshold', locale)}</p>
                 <p className="text-2xl font-bold mt-1" style={{ color: "#0B0F2E" }}>
                   6 000 000 MUR
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Vous n&apos;êtes pas obligé de vous enregistrer
+                  {t('mra.freelance.not_required', locale)}
                 </p>
               </CardContent>
             </Card>
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Ces chiffres sont indicatifs. Votre comptable vous conseillera si vous approchez du seuil.
+            {t('mra.freelance.indicative_note', locale)}
           </p>
         </CardContent>
       </Card>
@@ -130,7 +129,7 @@ export default function FiscalFreelancePage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm" style={{ color: "#0B0F2E" }}>
-            Ce que vous devez retenir
+            {t('mra.freelance.remember_title', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -138,19 +137,19 @@ export default function FiscalFreelancePage() {
             <li className="flex items-start gap-3">
               <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
               <p className="text-sm text-muted-foreground">
-                Envoyez vos factures et reçus régulièrement sur Lexora.
+                {t('mra.freelance.tip1', locale)}
               </p>
             </li>
             <li className="flex items-start gap-3">
               <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
               <p className="text-sm text-muted-foreground">
-                Votre comptable prépare et soumet votre déclaration pour vous.
+                {t('mra.freelance.tip2', locale)}
               </p>
             </li>
             <li className="flex items-start gap-3">
               <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
               <p className="text-sm text-muted-foreground">
-                Si vous avez un doute, posez la question à votre comptable via la messagerie.
+                {t('mra.freelance.tip3', locale)}
               </p>
             </li>
           </ul>

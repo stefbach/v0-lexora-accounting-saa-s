@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table'
 import { FileSpreadsheet, RefreshCw, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ const STATUT_COLORS: Record<string, string> = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function EDFPage() {
+  const locale = getLocale()
   const params = useParams()
   // Fonctionne en mode direct /rh/paie/edf OU via /comptable/clients/[clientId]/[societeId]/edf
   const societeIdParam = params?.societeId as string | undefined
@@ -196,10 +198,10 @@ export default function EDFPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>
-            Déclaration EDF Annuelle MRA
+            {t('rha.a.edf.title', locale)}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Employer Declaration Form — Mauritius Revenue Authority
+            {t('rha.a.edf.subtitle', locale)}
           </p>
         </div>
         {declaration && (

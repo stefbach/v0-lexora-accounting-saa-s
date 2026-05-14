@@ -39,6 +39,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import * as XLSX from "xlsx"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -81,6 +82,7 @@ function isForeignSupplier(emetteur: string): boolean {
 }
 
 export default function TVAPage() {
+  const locale = getLocale()
   const { profile, loading } = useProfile()
   const { societeId, societe } = useSocieteActive()
   const [data, setData] = useState<any>(null)
@@ -115,7 +117,10 @@ export default function TVAPage() {
     'T1': [7, 8, 9], 'T2': [10, 11, 12], 'T3': [1, 2, 3], 'T4': [4, 5, 6]
   }
   const QUARTER_LABELS: Record<string, string> = {
-    'T1': 'T1 (Juil-Sep)', 'T2': 'T2 (Oct-Déc)', 'T3': 'T3 (Jan-Mar)', 'T4': 'T4 (Avr-Jun)'
+    'T1': t('mra.tva.q1_label', locale),
+    'T2': t('mra.tva.q2_label', locale),
+    'T3': t('mra.tva.q3_label', locale),
+    'T4': t('mra.tva.q4_label', locale),
   }
 
   function getPeriodDates(): { debut: string; fin: string } {
@@ -354,10 +359,10 @@ export default function TVAPage() {
   }
 
   const summaryCards = [
-    { title: "TVA Collect\u00e9e (ventes)", value: effectiveCollectee, icon: TrendingUp, color: NAVY, bg: "bg-blue-50" },
-    { title: "TVA D\u00e9ductible (local)", value: effectiveDeductible, icon: TrendingDown, color: GOLD, bg: "bg-amber-50" },
-    { title: "TVA Nette \u00e0 payer", value: tvaAPayer, icon: Calculator, color: "#DC2626", bg: "bg-red-50" },
-    { title: "Cr\u00e9dit TVA", value: creditTVA, icon: AlertTriangle, color: "#22C55E", bg: "bg-green-50" },
+    { title: t('mra.tva.card_collected', locale), value: effectiveCollectee, icon: TrendingUp, color: NAVY, bg: "bg-blue-50" },
+    { title: t('mra.tva.card_deductible', locale), value: effectiveDeductible, icon: TrendingDown, color: GOLD, bg: "bg-amber-50" },
+    { title: t('mra.tva.card_net_payable', locale), value: tvaAPayer, icon: Calculator, color: "#DC2626", bg: "bg-red-50" },
+    { title: t('mra.tva.card_credit', locale), value: creditTVA, icon: AlertTriangle, color: "#22C55E", bg: "bg-green-50" },
   ]
 
   return (
@@ -375,10 +380,10 @@ export default function TVAPage() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 no-print">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Ma TVA
+            {t('mra.tva.title', locale)}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Suivi de vos d&eacute;clarations TVA et obligations fiscales aupr&egrave;s de la MRA.
+            {t('mra.tva.subtitle', locale)}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -387,14 +392,14 @@ export default function TVAPage() {
             <CardContent className="py-3 px-4 flex items-center gap-3">
               <CalendarClock className="h-5 w-5" style={{ color: deadline.isOverdue ? "#EF4444" : deadline.isUrgent ? "#F59E0B" : NAVY }} />
               <div>
-                <p className="text-xs text-muted-foreground">Prochaine &eacute;ch&eacute;ance TVA</p>
+                <p className="text-xs text-muted-foreground">{t('mra.tva.next_deadline', locale)}</p>
                 <p className="text-sm font-semibold" style={{ color: deadline.isOverdue ? "#EF4444" : NAVY }}>
                   {deadline.deadlineStr}
                 </p>
                 <p className="text-xs" style={{ color: deadline.isOverdue ? "#EF4444" : deadline.isUrgent ? "#F59E0B" : "#6B7280" }}>
                   {deadline.isOverdue
-                    ? `En retard de ${Math.abs(deadline.daysLeft)} jour(s)`
-                    : `${deadline.daysLeft} jour(s) restant(s)`}
+                    ? `${t('mra.tva.overdue_by', locale)} ${Math.abs(deadline.daysLeft)} ${t('mra.tva.days_overdue_suffix', locale)}`
+                    : `${deadline.daysLeft} ${t('mra.tva.days_left', locale)}`}
                 </p>
               </div>
             </CardContent>
@@ -410,7 +415,7 @@ export default function TVAPage() {
               {(["mensuel", "trimestriel"] as PeriodMode[]).map(mode => (
                 <button key={mode} onClick={() => setPeriodMode(mode)}
                   className={`px-4 py-1.5 text-xs font-medium transition-colors ${periodMode === mode ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
-                  {mode === "mensuel" ? "Mensuel" : "Trimestriel"}
+                  {mode === "mensuel" ? t('mra.tva.monthly', locale) : t('mra.tva.quarterly', locale)}
                 </button>
               ))}
             </div>
@@ -434,13 +439,13 @@ export default function TVAPage() {
             {/* Export dropdown */}
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setExportOpen(!exportOpen)}>
-                <Download className="w-4 h-4 mr-1" /> Exporter
+                <Download className="w-4 h-4 mr-1" /> {t('mra.tva.export', locale)}
               </Button>
               {exportOpen && (
                 <div className="absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg z-10 w-56">
-                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => { handleExport("normale"); setExportOpen(false) }}>TVA normale</button>
-                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => { handleExport("deductible"); setExportOpen(false) }}>TVA déductible</button>
-                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-t" onClick={() => { handleExport("reverse"); setExportOpen(false) }}>TVA reverse charge</button>
+                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => { handleExport("normale"); setExportOpen(false) }}>{t('mra.tva.export_normal', locale)}</button>
+                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={() => { handleExport("deductible"); setExportOpen(false) }}>{t('mra.tva.export_deductible', locale)}</button>
+                  <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-t" onClick={() => { handleExport("reverse"); setExportOpen(false) }}>{t('mra.tva.export_reverse', locale)}</button>
                   <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-t" onClick={async () => {
                     setExportOpen(false)
                     try {
@@ -464,9 +469,9 @@ export default function TVAPage() {
                       URL.revokeObjectURL(url)
                     } catch (err) {
                       console.error('PDF export error:', err)
-                      alert('Erreur génération PDF')
+                      alert(t('mra.tva.pdf_error', locale))
                     }
-                  }}>PDF (Déclaration MRA)</button>
+                  }}>{t('mra.tva.export_pdf_mra', locale)}</button>
                 </div>
               )}
             </div>
@@ -503,15 +508,13 @@ export default function TVAPage() {
               <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-sm font-semibold text-amber-800">
-                  Reverse Charge (R5) applicable sur {reverseChargeFacts.length} facture(s) &eacute;trang&egrave;re(s)
+                  {t('mra.tva.reverse_warning_title', locale)} {reverseChargeFacts.length} {t('mra.tva.reverse_warning_suffix', locale)}
                 </p>
                 <p className="text-xs text-amber-700 mt-1">
-                  Les factures de fournisseurs &eacute;trangers (sans num&eacute;ro TVA MRA) sont soumises au m&eacute;canisme de Reverse Charge :
-                  TVA de sortie 15% (4457) + TVA d&apos;entr&eacute;e 15% (4456) = effet net 0 MUR.
-                  Ces montants ne sont PAS inclus dans la TVA &agrave; payer.
+                  {t('mra.tva.reverse_warning_body', locale)}
                 </p>
                 <p className="text-xs text-amber-700 mt-1 font-medium">
-                  Base Reverse Charge : {formatMUR(totalReverseChargeBase)} — TVA (15%) : {formatMUR(reverseChargeTVA)}
+                  {t('mra.tva.reverse_base', locale)} : {formatMUR(totalReverseChargeBase)} — {t('mra.tva.reverse_tva_label', locale)} : {formatMUR(reverseChargeTVA)}
                 </p>
               </div>
             </div>
@@ -524,75 +527,75 @@ export default function TVAPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2" style={{ color: NAVY }}>
             <FileText className="h-5 w-5" style={{ color: GOLD }} />
-            D&eacute;claration TVA — Format MRA
+            {t('mra.tva.declaration_title', locale)}
           </CardTitle>
-          <p className="text-xs text-muted-foreground">Période : <span className="capitalize">{getPeriodLabel()}</span></p>
+          <p className="text-xs text-muted-foreground">{t('mra.tva.period', locale)} : <span className="capitalize">{getPeriodLabel()}</span></p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b-2" style={{ borderColor: NAVY }}>
-                <th className="text-left py-2 font-semibold" style={{ color: NAVY }}>Box</th>
-                <th className="text-left py-2 font-semibold" style={{ color: NAVY }}>Description</th>
-                <th className="text-right py-2 font-semibold" style={{ color: NAVY }}>Montant (MUR)</th>
+                <th className="text-left py-2 font-semibold" style={{ color: NAVY }}>{t('mra.tva.box', locale)}</th>
+                <th className="text-left py-2 font-semibold" style={{ color: NAVY }}>{t('mra.tva.description', locale)}</th>
+                <th className="text-right py-2 font-semibold" style={{ color: NAVY }}>{t('mra.tva.amount_mur', locale)}</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>1</td>
-                <td className="py-2">Chiffre d&apos;affaires taxable</td>
+                <td className="py-2">{t('mra.tva.box1', locale)}</td>
                 <td className="py-2 text-right font-medium">{formatMUR(facturesClientLocal.reduce((s: number, f: any) => s + (Number(f.montant_ht) || 0), 0))}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>2</td>
-                <td className="py-2">TVA sur ventes (Output Tax)</td>
+                <td className="py-2">{t('mra.tva.box2', locale)}</td>
                 <td className="py-2 text-right font-medium">{formatMUR(effectiveCollectee)}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>3</td>
-                <td className="py-2">Achats locaux taxables</td>
+                <td className="py-2">{t('mra.tva.box3', locale)}</td>
                 <td className="py-2 text-right font-medium">{formatMUR(validLocalInvoices.reduce((s: number, inv: any) => s + (inv.montant_ht_mur ?? inv.montant_ht ?? 0), 0))}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>4</td>
-                <td className="py-2">TVA sur achats locaux (Input Tax)</td>
+                <td className="py-2">{t('mra.tva.box4', locale)}</td>
                 <td className="py-2 text-right font-medium">{formatMUR(effectiveDeductible)}</td>
               </tr>
               <tr className="border-b border-gray-100 bg-amber-50/50">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>R5</td>
                 <td className="py-2">
-                  Reverse Charge — services import&eacute;s
-                  <span className="text-xs text-muted-foreground ml-2">(output + input = net 0)</span>
+                  {t('mra.tva.boxR5', locale)}
+                  <span className="text-xs text-muted-foreground ml-2">{t('mra.tva.boxR5_note', locale)}</span>
                 </td>
                 <td className="py-2 text-right font-medium text-amber-600">{formatMUR(reverseChargeTVA)}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>5</td>
-                <td className="py-2">Cr&eacute;dit TVA report&eacute; du mois pr&eacute;c&eacute;dent</td>
+                <td className="py-2">{t('mra.tva.box5', locale)}</td>
                 <td className="py-2 text-right font-medium">{formatMUR(creditReporte)}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>6</td>
-                <td className="py-2">Total TVA d&eacute;ductible (Box 4 + Box 5)</td>
+                <td className="py-2">{t('mra.tva.box6', locale)}</td>
                 <td className="py-2 text-right font-medium">{formatMUR(effectiveDeductible + creditReporte)}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>7</td>
-                <td className="py-2">TVA nette (Box 2 - Box 6)</td>
+                <td className="py-2">{t('mra.tva.box7', locale)}</td>
                 <td className="py-2 text-right font-medium" style={{ color: effectiveNette >= 0 ? "#EF4444" : "#22C55E" }}>
                   {formatMUR(effectiveNette)}
                 </td>
               </tr>
               <tr className="border-b border-gray-100" style={{ backgroundColor: tvaAPayer > 0 ? "#fef2f2" : "#f0fdf4" }}>
                 <td className="py-2 font-bold" style={{ color: NAVY }}>8</td>
-                <td className="py-2 font-bold">TVA &agrave; payer</td>
+                <td className="py-2 font-bold">{t('mra.tva.box8', locale)}</td>
                 <td className="py-2 text-right font-bold" style={{ color: "#EF4444" }}>
                   {formatMUR(tvaAPayer)}
                 </td>
               </tr>
               <tr style={{ backgroundColor: creditTVA > 0 ? "#f0fdf4" : undefined }}>
                 <td className="py-2 font-bold" style={{ color: NAVY }}>9</td>
-                <td className="py-2 font-bold">Cr&eacute;dit TVA &agrave; reporter</td>
+                <td className="py-2 font-bold">{t('mra.tva.box9', locale)}</td>
                 <td className="py-2 text-right font-bold" style={{ color: "#22C55E" }}>
                   {formatMUR(creditTVA)}
                 </td>
@@ -609,7 +612,7 @@ export default function TVAPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
               <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
-              TVA sur ventes locales ({facturesClientLocal.length})
+              {t('mra.tva.local_sales', locale)} ({facturesClientLocal.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -617,8 +620,8 @@ export default function TVAPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Client</TableHead>
-                    <TableHead className="text-right">TVA</TableHead>
+                    <TableHead>{t('mra.tva.client', locale)}</TableHead>
+                    <TableHead className="text-right">{t('mra.tva.tva_col', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -632,7 +635,7 @@ export default function TVAPage() {
                     <TableRow>
                       <TableCell colSpan={2} className="text-center">
                         <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAllClient(!showAllClient)}>
-                          {showAllClient ? "Voir moins ↑" : `Voir les ${groupedClientInvoices.length - 8} autres →`}
+                          {showAllClient ? t('mra.tva.view_less', locale) : `${t('mra.tva.view_more_prefix', locale)} ${groupedClientInvoices.length - 8} ${t('mra.tva.view_more_suffix', locale)}`}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -641,7 +644,7 @@ export default function TVAPage() {
               </Table>
             ) : (
               <p className="text-sm text-muted-foreground py-4 text-center">
-                Aucune facture client
+                {t('mra.tva.no_client_invoice', locale)}
               </p>
             )}
           </CardContent>
@@ -652,10 +655,10 @@ export default function TVAPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
               <MapPin className="h-5 w-5" style={{ color: GOLD }} />
-              TVA d&eacute;ductible — locaux ({validLocalInvoices.length})
+              {t('mra.tva.deductible_local', locale)} ({validLocalInvoices.length})
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Fournisseurs locaux avec n&deg; TVA MRA valide
+              {t('mra.tva.deductible_local_hint', locale)}
             </p>
           </CardHeader>
           <CardContent>
@@ -663,8 +666,8 @@ export default function TVAPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fournisseur</TableHead>
-                    <TableHead className="text-right">TVA</TableHead>
+                    <TableHead>{t('mra.tva.supplier', locale)}</TableHead>
+                    <TableHead className="text-right">{t('mra.tva.tva_col', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -678,7 +681,7 @@ export default function TVAPage() {
                     <TableRow>
                       <TableCell colSpan={2} className="text-center">
                         <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAllLocal(!showAllLocal)}>
-                          {showAllLocal ? "Voir moins ↑" : `Voir les ${groupedLocalInvoices.length - 8} autres →`}
+                          {showAllLocal ? t('mra.tva.view_less', locale) : `${t('mra.tva.view_more_prefix', locale)} ${groupedLocalInvoices.length - 8} ${t('mra.tva.view_more_suffix', locale)}`}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -687,14 +690,14 @@ export default function TVAPage() {
               </Table>
             ) : (
               <p className="text-sm text-muted-foreground py-4 text-center">
-                Aucune facture locale avec TVA d&eacute;ductible
+                {t('mra.tva.no_local_deductible', locale)}
               </p>
             )}
             {rejectedLocalInvoices.length > 0 && (
               <div className="mt-3 p-2 rounded bg-red-50 border border-red-200">
                 <p className="text-xs text-red-700 flex items-center gap-1">
                   <XCircle className="h-3 w-3" />
-                  {rejectedLocalInvoices.length} facture(s) rejet&eacute;e(s) — informations manquantes
+                  {rejectedLocalInvoices.length} {t('mra.tva.rejected_missing_info', locale)}
                 </p>
               </div>
             )}
@@ -706,10 +709,10 @@ export default function TVAPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
               <Globe className="h-5 w-5" style={{ color: "#F59E0B" }} />
-              Reverse Charge R5 ({reverseChargeFacts.length})
+              {t('mra.tva.reverse_section', locale)} ({reverseChargeFacts.length})
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Fournisseurs &eacute;trangers — TVA net = 0
+              {t('mra.tva.reverse_section_hint', locale)}
             </p>
           </CardHeader>
           <CardContent>
@@ -718,9 +721,9 @@ export default function TVAPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Fournisseur</TableHead>
-                      <TableHead className="text-right">HT (MUR)</TableHead>
-                      <TableHead className="text-right">TVA 15%</TableHead>
+                      <TableHead>{t('mra.tva.supplier', locale)}</TableHead>
+                      <TableHead className="text-right">{t('mra.tva.ht_mur', locale)}</TableHead>
+                      <TableHead className="text-right">{t('mra.tva.tva15', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -738,7 +741,7 @@ export default function TVAPage() {
                       <TableRow>
                         <TableCell colSpan={3} className="text-center">
                           <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowAllForeign(!showAllForeign)}>
-                            {showAllForeign ? "Voir moins ↑" : `Voir les ${reverseChargeFacts.length - 8} autres →`}
+                            {showAllForeign ? t('mra.tva.view_less', locale) : `${t('mra.tva.view_more_prefix', locale)} ${reverseChargeFacts.length - 8} ${t('mra.tva.view_more_suffix', locale)}`}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -748,13 +751,13 @@ export default function TVAPage() {
                 <div className="mt-3 p-2 rounded bg-blue-50 border border-blue-200">
                   <p className="text-xs text-blue-700 flex items-center gap-1">
                     <Info className="h-3 w-3" />
-                    Output TVA (4457) : {formatMUR(reverseChargeTVA)} | Input TVA (4456) : {formatMUR(reverseChargeTVA)} | Net : 0,00 MUR
+                    {t('mra.tva.output_input_info', locale)} : {formatMUR(reverseChargeTVA)} | {t('mra.tva.input_label', locale)} : {formatMUR(reverseChargeTVA)} | {t('mra.tva.net_label', locale)} : 0,00 MUR
                   </p>
                 </div>
               </>
             ) : (
               <p className="text-sm text-muted-foreground py-4 text-center">
-                Aucune facture &eacute;trang&egrave;re
+                {t('mra.tva.no_foreign_invoice', locale)}
               </p>
             )}
           </CardContent>
@@ -767,15 +770,15 @@ export default function TVAPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
               <Info className="h-5 w-5" style={{ color: "#6B7280" }} />
-              Factures non soumises à TVA ({facturesNonTVA.length})
+              {t('mra.tva.non_subject_title', locale)} ({facturesNonTVA.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>N°</TableHead><TableHead>Tiers</TableHead><TableHead className="text-right">Montant HT</TableHead><TableHead>Devise</TableHead><TableHead>Raison</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>{t('mra.tva.col_date', locale)}</TableHead><TableHead>{t('mra.tva.col_num', locale)}</TableHead><TableHead>{t('mra.tva.col_party', locale)}</TableHead><TableHead className="text-right">{t('mra.tva.col_amount_ht', locale)}</TableHead><TableHead>{t('mra.tva.col_currency', locale)}</TableHead><TableHead>{t('mra.tva.col_reason', locale)}</TableHead></TableRow></TableHeader>
               <TableBody>
                 {facturesNonTVA.slice(0, showAllClient ? 100 : 8).map((f: any) => {
-                  const raison = f.devise && f.devise !== 'MUR' && f.type_facture === 'client' ? 'Export — Exonéré' : f.devise && f.devise !== 'MUR' && f.type_facture === 'fournisseur' ? 'Import — Reverse charge possible' : 'Non assujetti à TVA'
+                  const raison = f.devise && f.devise !== 'MUR' && f.type_facture === 'client' ? t('mra.tva.reason_export', locale) : f.devise && f.devise !== 'MUR' && f.type_facture === 'fournisseur' ? t('mra.tva.reason_import', locale) : t('mra.tva.reason_not_subject', locale)
                   return (
                     <TableRow key={f.id}>
                       <TableCell className="text-xs">{f.date_facture ? new Date(f.date_facture).toLocaleDateString('fr-FR') : '—'}</TableCell>
@@ -799,15 +802,15 @@ export default function TVAPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
               <Globe className="h-5 w-5 text-amber-500" />
-              Reverse Charge — Fournisseurs étrangers ({reverseChargeFacts.length})
+              {t('mra.tva.reverse_full_title', locale)} ({reverseChargeFacts.length})
             </CardTitle>
             <p className="text-xs text-gray-500 mt-1">
-              Services importés soumis au mécanisme de reverse charge (R5). TVA auto-déclarée : output + input = net 0.
+              {t('mra.tva.reverse_full_hint', locale)}
             </p>
           </CardHeader>
           <CardContent>
             <Table>
-              <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Fournisseur</TableHead><TableHead>Devise</TableHead><TableHead className="text-right">Base HT</TableHead><TableHead className="text-right">TVA 15% (auto)</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>{t('mra.tva.col_date', locale)}</TableHead><TableHead>{t('mra.tva.supplier', locale)}</TableHead><TableHead>{t('mra.tva.col_currency', locale)}</TableHead><TableHead className="text-right">{t('mra.tva.col_base_ht', locale)}</TableHead><TableHead className="text-right">{t('mra.tva.col_tva_auto', locale)}</TableHead></TableRow></TableHeader>
               <TableBody>
                 {reverseChargeFacts.map((f: any) => {
                   const ht = Number(f.montant_ht) || Number(f.montant_ttc) || 0
@@ -823,13 +826,13 @@ export default function TVAPage() {
                   )
                 })}
                 <TableRow className="bg-amber-50/50 font-bold">
-                  <TableCell colSpan={4} className="text-right text-xs">Total Reverse Charge TVA</TableCell>
+                  <TableCell colSpan={4} className="text-right text-xs">{t('mra.tva.total_reverse', locale)}</TableCell>
                   <TableCell className="text-right text-xs font-mono text-amber-600">{formatMUR(reverseChargeFacts.reduce((s: number, f: any) => s + Math.round((Number(f.montant_ht) || Number(f.montant_ttc) || 0) * 0.15 * 100) / 100, 0))} MUR</TableCell>
                 </TableRow>
               </TableBody>
             </Table>
             <p className="text-xs text-blue-700 mt-2 flex items-center gap-1">
-              <Info className="h-3 w-3" /> Output TVA + Input TVA = effet net 0. Montants à déclarer dans les cases R5 de la déclaration MRA.
+              <Info className="h-3 w-3" /> {t('mra.tva.r5_footer', locale)}
             </p>
           </CardContent>
         </Card>
@@ -839,16 +842,16 @@ export default function TVAPage() {
       {tvaRecords.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle style={{ color: NAVY }}>Historique des d&eacute;clarations TVA</CardTitle>
+            <CardTitle style={{ color: NAVY }}>{t('mra.tva.history_title', locale)}</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>P&eacute;riode</TableHead>
-                  <TableHead className="text-right">TVA Collect&eacute;e</TableHead>
-                  <TableHead className="text-right">TVA D&eacute;ductible</TableHead>
-                  <TableHead className="text-right">TVA Nette</TableHead>
+                  <TableHead>{t('mra.tva.col_period', locale)}</TableHead>
+                  <TableHead className="text-right">{t('mra.tva.col_collected', locale)}</TableHead>
+                  <TableHead className="text-right">{t('mra.tva.col_deductible', locale)}</TableHead>
+                  <TableHead className="text-right">{t('mra.tva.col_net', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

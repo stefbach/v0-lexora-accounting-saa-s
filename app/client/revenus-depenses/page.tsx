@@ -30,6 +30,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface CompteSolde {
   numero_compte: string
@@ -47,6 +48,7 @@ function fmt(n: number): string {
 }
 
 export default function ClientRevenusDepensesPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [comptes, setComptes] = useState<CompteSolde[]>([])
   const [loading, setLoading] = useState(false)
@@ -123,9 +125,9 @@ export default function ClientRevenusDepensesPage() {
                 <Wallet className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-violet-900">Revenus & Dépenses</h1>
+                <h1 className="text-2xl font-bold text-violet-900">{t('acc.rd.title', locale)}</h1>
                 <p className="text-sm text-violet-700/80 mt-0.5">
-                  P&amp;L par compte — exercice {annee}
+                  {t('acc.rd.subtitle', locale)} {annee}
                 </p>
               </div>
             </div>
@@ -144,7 +146,7 @@ export default function ClientRevenusDepensesPage() {
               </Select>
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('common.refresh', locale)}
               </Button>
               <Link href="/client/rapprochement">
                 <Button className="bg-purple-600 hover:bg-purple-700 text-white">
@@ -159,7 +161,7 @@ export default function ClientRevenusDepensesPage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('acc.rd.no_company', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -170,19 +172,19 @@ export default function ClientRevenusDepensesPage() {
           <>
             <div className="grid grid-cols-3 gap-3">
               <KpiCard
-                label="Revenus totaux"
+                label={t('acc.rd.total_revenue', locale)}
                 value={fmt(totalRevenus)}
                 tone="green"
                 icon={<TrendingUp className="h-4 w-4" />}
               />
               <KpiCard
-                label="Dépenses totales"
+                label={t('acc.rd.total_expenses', locale)}
                 value={fmt(totalDepenses)}
                 tone="rose"
                 icon={<TrendingDown className="h-4 w-4" />}
               />
               <KpiCard
-                label="Résultat"
+                label={t('acc.rd.result', locale)}
                 value={fmt(resultat)}
                 tone={resultat >= 0 ? "green" : "rose"}
                 accent
@@ -194,13 +196,13 @@ export default function ClientRevenusDepensesPage() {
                 <CardHeader className="bg-green-50/50 border-b">
                   <CardTitle className="text-base flex items-center gap-2 text-green-900">
                     <TrendingUp className="h-5 w-5 text-green-600" />
-                    Revenus (classe 7) — {fmt(totalRevenus)}
+                    {t('acc.rd.revenue_class7', locale)} — {fmt(totalRevenus)}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   {revenus.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                      Aucun revenu sur l'exercice.
+                      {t('acc.rd.no_revenue', locale)}
                     </p>
                   ) : (
                     <div className="divide-y">
@@ -215,7 +217,7 @@ export default function ClientRevenusDepensesPage() {
                                 {c.numero_compte}
                               </Badge>
                               <span className="text-xs text-muted-foreground">
-                                {c.nb_ecritures} écr.
+                                {c.nb_ecritures} {t('acc.rd.entries_abbr', locale)}
                               </span>
                             </div>
                             <p className="text-sm mt-0.5 break-words">
@@ -236,13 +238,13 @@ export default function ClientRevenusDepensesPage() {
                 <CardHeader className="bg-rose-50/50 border-b">
                   <CardTitle className="text-base flex items-center gap-2 text-rose-900">
                     <TrendingDown className="h-5 w-5 text-rose-600" />
-                    Dépenses (classe 6) — {fmt(totalDepenses)}
+                    {t('acc.rd.expenses_class6', locale)} — {fmt(totalDepenses)}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   {depenses.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                      Aucune dépense sur l'exercice.
+                      {t('acc.rd.no_expense', locale)}
                     </p>
                   ) : (
                     <div className="divide-y">
@@ -257,7 +259,7 @@ export default function ClientRevenusDepensesPage() {
                                 {c.numero_compte}
                               </Badge>
                               <span className="text-xs text-muted-foreground">
-                                {c.nb_ecritures} écr.
+                                {c.nb_ecritures} {t('acc.rd.entries_abbr', locale)}
                               </span>
                             </div>
                             <p className="text-sm mt-0.5 break-words">

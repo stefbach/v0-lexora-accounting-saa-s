@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react"
 import QRCode from "qrcode"
 import { useSearchParams } from "next/navigation"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface LigneFacture {
   id: string; description: string; quantite: number; prix_unitaire: number
@@ -123,6 +124,7 @@ function getDocMeta(type: string | undefined): DocTypeMeta {
 }
 
 function FacturePreviewContent() {
+  const locale = getLocale()
   const searchParams = useSearchParams()
   const [data, setData] = useState<InvoiceData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -240,7 +242,7 @@ function FacturePreviewContent() {
   }, [loading, data, searchParams])
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><p>Chargement...</p></div>
-  if (!data) return <div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">Aucune facture a afficher. Creez une facture depuis le formulaire.</p></div>
+  if (!data) return <div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">{t('inv.pv.no_invoice', locale)}</p></div>
 
   const s = data.settings || {} as InvoiceData["settings"]
   const c = data.client || {} as InvoiceData["client"]
@@ -304,10 +306,10 @@ function FacturePreviewContent() {
             )
           )}
           <button onClick={() => window.print()} className="bg-[#0B0F2E] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#2a3d6b] transition-colors">
-            Imprimer / PDF
+            {t('inv.pv.print_pdf', locale)}
           </button>
           <button onClick={() => window.close()} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">
-            Fermer
+            {t('inv.pv.close', locale)}
           </button>
         </div>
         {mraMsg && (
@@ -326,7 +328,7 @@ function FacturePreviewContent() {
               <img src={data.logo_url || s.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
             )}
             <div>
-              <h2 className="text-xl font-bold" style={{ color: colors.primaire }}>{s.nom || "Votre Entreprise"}</h2>
+              <h2 className="text-xl font-bold" style={{ color: colors.primaire }}>{s.nom || t('inv.pv.your_company', locale)}</h2>
               {s.adresse && <p className="text-sm text-gray-600 whitespace-pre-line">{s.adresse}</p>}
               {s.telephone && <p className="text-sm text-gray-600">{s.telephone}</p>}
               {s.email && <p className="text-sm text-gray-600">{s.email}</p>}
@@ -433,9 +435,9 @@ function FacturePreviewContent() {
               <thead>
                 <tr style={{ backgroundColor: colors.primaire }}>
                   <th className="text-left text-white text-xs font-semibold py-3 px-4 rounded-tl-lg">Description</th>
-                  <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">Qte</th>
+                  <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">{t('inv.pv.qty', locale)}</th>
                   <th className="text-right text-white text-xs font-semibold py-3 px-3 w-32">
-                    Prix unit.{isForeign && <div className="text-[10px] font-normal opacity-80">{data.devise} / MUR</div>}
+                    {t('inv.pv.unit_price_short', locale)}{isForeign && <div className="text-[10px] font-normal opacity-80">{data.devise} / MUR</div>}
                   </th>
                   <th className="text-right text-white text-xs font-semibold py-3 px-3 w-16">TVA</th>
                   <th className="text-right text-white text-xs font-semibold py-3 px-4 rounded-tr-lg w-32">
@@ -553,7 +555,7 @@ function FacturePreviewContent() {
         {/* Terms */}
         {data.termes && (
           <div className="mb-6">
-            <h3 className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: colors.primaire }}>Termes et conditions</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: colors.primaire }}>{t('inv.pv.terms', locale)}</h3>
             <p className="text-xs text-gray-600 whitespace-pre-line">{data.termes}</p>
           </div>
         )}

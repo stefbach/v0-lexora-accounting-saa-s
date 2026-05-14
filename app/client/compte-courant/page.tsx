@@ -12,11 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Plus, Users, ArrowUpRight, ArrowDownLeft, Wallet, RefreshCw, ChevronLeft } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "--" }
 
 export default function CompteCourantPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [loading, setLoading] = useState(true)
   const [comptes, setComptes] = useState<any[]>([])
@@ -158,12 +160,12 @@ export default function CompteCourantPage() {
               <ChevronLeft className="w-4 h-4 mr-1" /> Retour
             </Button>
           )}
-          <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />Actualiser</Button>
+          <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />{t('common.refresh', locale)}</Button>
           <Button onClick={() => setAvanceDialog(true)} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/90">
-            <ArrowUpRight className="w-4 h-4 mr-2" />Avance
+            <ArrowUpRight className="w-4 h-4 mr-2" />{t('acc.cc.advance', locale)}
           </Button>
           <Button onClick={() => setRemboursementDialog(true)} className="bg-[#0B0F2E]">
-            <ArrowDownLeft className="w-4 h-4 mr-2" />Remboursement
+            <ArrowDownLeft className="w-4 h-4 mr-2" />{t('acc.cc.reimbursement', locale)}
           </Button>
         </>
       }
@@ -176,7 +178,7 @@ export default function CompteCourantPage() {
           <CardContent className="p-4 flex items-center gap-3">
             <Users className="w-8 h-8 text-[#0B0F2E]" />
             <div>
-              <p className="text-xs text-gray-500">Comptes ouverts</p>
+              <p className="text-xs text-gray-500">{t('acc.cc.open_accounts', locale)}</p>
               <p className="text-xl font-bold text-[#0B0F2E]">{comptes.length}</p>
             </div>
           </CardContent>
@@ -185,7 +187,7 @@ export default function CompteCourantPage() {
           <CardContent className="p-4 flex items-center gap-3">
             <Wallet className="w-8 h-8" style={{ color: "#D4AF37" }} />
             <div>
-              <p className="text-xs text-gray-500">Solde total du</p>
+              <p className="text-xs text-gray-500">{t('acc.cc.total_balance', locale)}</p>
               <p className="text-xl font-bold text-[#0B0F2E]">{fmt(totalSolde)} MUR</p>
             </div>
           </CardContent>
@@ -194,7 +196,7 @@ export default function CompteCourantPage() {
           <CardContent className="p-4 flex items-center gap-3">
             <ArrowUpRight className="w-8 h-8 text-orange-600" />
             <div>
-              <p className="text-xs text-gray-500">Associes</p>
+              <p className="text-xs text-gray-500">{t('acc.cc.shareholders', locale)}</p>
               <p className="text-xl font-bold text-[#0B0F2E]">{comptes.filter(c => c.type === 'associe').length}</p>
             </div>
           </CardContent>
@@ -203,7 +205,7 @@ export default function CompteCourantPage() {
           <CardContent className="p-4 flex items-center gap-3">
             <Users className="w-8 h-8 text-blue-600" />
             <div>
-              <p className="text-xs text-gray-500">Collaborateurs</p>
+              <p className="text-xs text-gray-500">{t('acc.cc.collaborators', locale)}</p>
               <p className="text-xl font-bold text-[#0B0F2E]">{comptes.filter(c => c.type === 'collaborateur').length}</p>
             </div>
           </CardContent>
@@ -217,27 +219,27 @@ export default function CompteCourantPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
-                <Users className="w-5 h-5" />Comptes courants ({comptes.length})
+                <Users className="w-5 h-5" />{t('acc.cc.title', locale)} ({comptes.length})
               </CardTitle>
               <Button variant="outline" size="sm" onClick={() => setCreateDialog(true)}>
-                <Plus className="w-4 h-4 mr-2" />Nouveau compte
+                <Plus className="w-4 h-4 mr-2" />{t('acc.cc.new_account', locale)}
               </Button>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
               {comptes.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
-                  Aucun compte courant associe. Creez-en un pour commencer.
+                  {t('acc.cc.no_accounts', locale)}
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nom</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Compte PCG</TableHead>
-                      <TableHead className="text-right">Solde du (MUR)</TableHead>
-                      <TableHead>Derniere mise a jour</TableHead>
-                      <TableHead>Action</TableHead>
+                      <TableHead>{t('acc.cc.name', locale)}</TableHead>
+                      <TableHead>{t('acc.cc.type', locale)}</TableHead>
+                      <TableHead>{t('acc.cc.account_pcg', locale)}</TableHead>
+                      <TableHead className="text-right">{t('acc.cc.balance', locale)}</TableHead>
+                      <TableHead>{t('acc.cc.last_update', locale)}</TableHead>
+                      <TableHead>{t('common.actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -246,7 +248,7 @@ export default function CompteCourantPage() {
                         <TableCell className="font-medium">{c.nom}</TableCell>
                         <TableCell>
                           <Badge className={c.type === 'associe' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}>
-                            {c.type === 'associe' ? 'Associe' : 'Collaborateur'}
+                            {c.type === 'associe' ? t('acc.cc.shareholder', locale) : t('acc.cc.collaborator', locale)}
                           </Badge>
                         </TableCell>
                         <TableCell className="font-mono text-sm text-gray-600">
@@ -264,7 +266,7 @@ export default function CompteCourantPage() {
                         <TableCell className="text-sm text-gray-500">{formatDate(c.updated_at)}</TableCell>
                         <TableCell>
                           <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedCompte(c) }}>
-                            Voir detail
+                            {t('acc.cc.view_detail', locale)}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -279,18 +281,18 @@ export default function CompteCourantPage() {
           {mouvements.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-[#0B0F2E]">Derniers mouvements</CardTitle>
+                <CardTitle className="text-[#0B0F2E]">{t('acc.cc.recent_movements', locale)}</CardTitle>
               </CardHeader>
               <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Associe/Collaborateur</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Montant (MUR)</TableHead>
-                      <TableHead>Lettre</TableHead>
+                      <TableHead>{t('common.date', locale)}</TableHead>
+                      <TableHead>{t('acc.cc.shareholder_collab', locale)}</TableHead>
+                      <TableHead>{t('acc.cc.type', locale)}</TableHead>
+                      <TableHead>{t('common.description', locale)}</TableHead>
+                      <TableHead className="text-right">{t('acc.cc.amount_mur', locale)}</TableHead>
+                      <TableHead>{t('acc.cc.letter', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -330,7 +332,7 @@ export default function CompteCourantPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-[#0B0F2E]">Mouvements — {selectedCompte.nom}</CardTitle>
+              <CardTitle className="text-[#0B0F2E]">{t('acc.cc.movements', locale)} — {selectedCompte.nom}</CardTitle>
               <p className="text-sm text-gray-500 mt-1">
                 Solde actuel: <span className="font-bold">{fmt(Number(selectedCompte.solde))}</span> MUR
                 {Number(selectedCompte.solde) > 0 ? " (la societe doit a l'associe)" : Number(selectedCompte.solde) < 0 ? " (l'associe doit a la societe)" : ""}
@@ -338,10 +340,10 @@ export default function CompteCourantPage() {
             </div>
             <div className="flex gap-2">
               <Button size="sm" onClick={() => { setFormAvanceCompte(selectedCompte.id); setAvanceDialog(true) }} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/90">
-                <ArrowUpRight className="w-4 h-4 mr-1" />Avance
+                <ArrowUpRight className="w-4 h-4 mr-1" />{t('acc.cc.advance', locale)}
               </Button>
               <Button size="sm" onClick={() => { setFormRembCompte(selectedCompte.id); setRemboursementDialog(true) }} className="bg-[#0B0F2E]">
-                <ArrowDownLeft className="w-4 h-4 mr-1" />Remboursement
+                <ArrowDownLeft className="w-4 h-4 mr-1" />{t('acc.cc.reimbursement', locale)}
               </Button>
             </div>
           </CardHeader>

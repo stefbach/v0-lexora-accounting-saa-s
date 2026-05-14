@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Users, TrendingUp, Download } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Societe { id: string; nom: string }
 
@@ -22,6 +23,7 @@ function fmtPct(n: number) {
 }
 
 export default function SalairesPage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [selectedSociete, setSelectedSociete] = useState("all")
   const [loading, setLoading] = useState(false)
@@ -65,10 +67,10 @@ export default function SalairesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Salaires & Charges Sociales</h1>
-          <p className="text-sm text-gray-500 mt-1">Masse salariale et charges patronales</p>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('cab.salaires.title', locale)}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('cab.salaires.subtitle', locale)}</p>
         </div>
-        <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> Exporter</Button>
+        <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> {t('cab.salaires.export', locale)}</Button>
       </div>
 
       <Card><CardContent className="p-4 flex flex-wrap gap-3">
@@ -90,7 +92,7 @@ export default function SalairesPage() {
       </CardContent></Card>
 
       {selectedSociete === "all" ? (
-        <Card><CardContent className="text-center py-12 text-gray-500">Sélectionnez une société</CardContent></Card>
+        <Card><CardContent className="text-center py-12 text-gray-500">{t('cab.salaires.select_company', locale)}</CardContent></Card>
       ) : loading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
       ) : (

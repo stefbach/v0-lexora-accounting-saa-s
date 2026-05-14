@@ -17,6 +17,7 @@ import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import Link from "next/link"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -140,6 +141,7 @@ const DEFAULT_DATA: AnnualReturnData = {
 }
 
 export default function AnnualReturnPage() {
+  const locale = getLocale()
   const { profile, loading: profileLoading } = useProfile()
   const { societeId, societe, societes } = useSocieteActive()
   const [annee, setAnnee] = useState<number>(new Date().getFullYear())
@@ -199,12 +201,12 @@ export default function AnnualReturnPage() {
             })
           }
         }
-        setImportMessage("PDF importe avec succes. Verifiez les champs pre-remplis.")
+        setImportMessage(t('mra.annual.import_success', locale))
       } else {
-        setImportMessage("Erreur lors de l'import du PDF.")
+        setImportMessage(t('mra.annual.import_error', locale))
       }
     } catch {
-      setImportMessage("Erreur lors de l'import du PDF.")
+      setImportMessage(t('mra.annual.import_error', locale))
     } finally {
       setImportingPdf(false)
     }
@@ -367,13 +369,13 @@ export default function AnnualReturnPage() {
 
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.error || "Erreur lors de la sauvegarde")
+        throw new Error(err.error || t('mra.annual.save_error', locale))
       }
 
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la sauvegarde")
+      setError(err instanceof Error ? err.message : t('mra.annual.save_error', locale))
     } finally {
       setSaving(false)
     }
@@ -451,13 +453,13 @@ export default function AnnualReturnPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Annual Return (ROC)
+            {t('mra.annual.title', locale)}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Companies Act 2001 — Registrar of Companies, Mauritius
+            {t('mra.annual.subtitle', locale)}
           </p>
           <p className="text-xs text-blue-600 mt-1">
-            L&apos;Annual Return doit être soumis au Registrar dans les 28 jours suivant l&apos;anniversaire d&apos;incorporation.
+            {t('mra.annual.deadline_note', locale)}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -478,7 +480,7 @@ export default function AnnualReturnPage() {
             className="text-white hover:opacity-90"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-            Sauvegarder
+            {t('mra.annual.save', locale)}
           </Button>
           <Button
             onClick={handleExportPDF}
@@ -487,7 +489,7 @@ export default function AnnualReturnPage() {
             className="hover:bg-[#D4AF37]/10"
           >
             <FileDown className="h-4 w-4 mr-2" />
-            Exporter PDF
+            {t('mra.annual.export_pdf', locale)}
           </Button>
         </div>
       </div>
@@ -499,8 +501,8 @@ export default function AnnualReturnPage() {
             <div className="flex items-center gap-2">
               <Upload className="w-5 h-5" style={{ color: GOLD }} />
               <div>
-                <p className="text-sm font-semibold" style={{ color: NAVY }}>Importer PDF officiel</p>
-                <p className="text-xs text-gray-500">Importez votre Annual Return officiel (PDF) pour pré-remplir automatiquement le formulaire</p>
+                <p className="text-sm font-semibold" style={{ color: NAVY }}>{t('mra.annual.import_pdf_title', locale)}</p>
+                <p className="text-xs text-gray-500">{t('mra.annual.import_pdf_hint', locale)}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -523,7 +525,7 @@ export default function AnnualReturnPage() {
                 className="flex items-center gap-2"
               >
                 {importingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                {importingPdf ? "Import en cours..." : "Choisir un PDF"}
+                {importingPdf ? t('mra.annual.importing', locale) : t('mra.annual.choose_pdf', locale)}
               </Button>
             </div>
           </div>
@@ -540,7 +542,7 @@ export default function AnnualReturnPage() {
       {saved && (
         <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
           <CheckCircle className="h-4 w-4" />
-          Annual Return sauvegarde avec succes
+          {t('mra.annual.save_success', locale)}
         </div>
       )}
       {error && (
@@ -566,23 +568,23 @@ export default function AnnualReturnPage() {
           <TabsList className="w-full flex flex-wrap h-auto gap-1 print:hidden">
             <TabsTrigger value="company-info" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <Building2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Infos</span> Societe
+              <span className="hidden sm:inline">{t('mra.annual.tab_company_short', locale)}</span> {t('mra.annual.tab_company', locale)}
             </TabsTrigger>
             <TabsTrigger value="shares" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <DollarSign className="h-3.5 w-3.5" />
-              Actions & Capital
+              {t('mra.annual.tab_shares', locale)}
             </TabsTrigger>
             <TabsTrigger value="capital-details" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <Briefcase className="h-3.5 w-3.5" />
-              Details Capital
+              {t('mra.annual.tab_capital_details', locale)}
             </TabsTrigger>
             <TabsTrigger value="directors" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <Users className="h-3.5 w-3.5" />
-              Dirigeants
+              {t('mra.annual.tab_directors', locale)}
             </TabsTrigger>
             <TabsTrigger value="financial" className="flex items-center gap-1.5 text-xs sm:text-sm">
               <BarChart3 className="h-3.5 w-3.5" />
-              Financier
+              {t('mra.annual.tab_financial', locale)}
             </TabsTrigger>
           </TabsList>
 
@@ -592,13 +594,13 @@ export default function AnnualReturnPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2" style={{ color: NAVY }}>
                   <Building2 className="h-5 w-5" style={{ color: GOLD }} />
-                  Sheet 1 - Company Information
+                  {t('mra.annual.sheet1_title', locale)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Company Name</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.company_name', locale)}</label>
                     <Input
                       value={data.company_name}
                       onChange={e => updateField("company_name", e.target.value)}
@@ -606,7 +608,7 @@ export default function AnnualReturnPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Company Number</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.company_number', locale)}</label>
                     <Input
                       value={data.company_number}
                       onChange={e => updateField("company_number", e.target.value)}
@@ -614,7 +616,7 @@ export default function AnnualReturnPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Type of Company</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.company_type', locale)}</label>
                     <Select
                       value={data.company_type}
                       onValueChange={v => updateField("company_type", v)}
@@ -633,7 +635,7 @@ export default function AnnualReturnPage() {
                     </Select>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Listed on Securities Exchange</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.listed_exchange', locale)}</label>
                     <Select
                       value={data.listed_on_exchange ? "yes" : "no"}
                       onValueChange={v => updateField("listed_on_exchange", v === "yes")}
@@ -648,7 +650,7 @@ export default function AnnualReturnPage() {
                     </Select>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Date of AGM</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.date_agm', locale)}</label>
                     <Input
                       type="date"
                       value={data.date_agm}
@@ -657,7 +659,7 @@ export default function AnnualReturnPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Date of Annual Return</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.date_annual_return', locale)}</label>
                     <Input
                       type="date"
                       value={data.date_annual_return}
@@ -668,7 +670,7 @@ export default function AnnualReturnPage() {
                 </div>
 
                 <div className="border-t pt-4 mt-4">
-                  <h3 className="text-sm font-semibold mb-3" style={{ color: NAVY }}>Registered Office</h3>
+                  <h3 className="text-sm font-semibold mb-3" style={{ color: NAVY }}>{t('mra.annual.registered_office', locale)}</h3>
                   <Input
                     value={data.registered_office}
                     onChange={e => updateField("registered_office", e.target.value)}
@@ -676,7 +678,7 @@ export default function AnnualReturnPage() {
                 </div>
 
                 <div className="border-t pt-4 mt-4">
-                  <h3 className="text-sm font-semibold mb-3" style={{ color: NAVY }}>Postal Address</h3>
+                  <h3 className="text-sm font-semibold mb-3" style={{ color: NAVY }}>{t('mra.annual.postal_address', locale)}</h3>
                   <Input
                     value={data.postal_address}
                     onChange={e => updateField("postal_address", e.target.value)}
@@ -692,29 +694,29 @@ export default function AnnualReturnPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2" style={{ color: NAVY }}>
                   <DollarSign className="h-5 w-5" style={{ color: GOLD }} />
-                  Sheet 2 - Summary of Shares &amp; Stated Capital
+                  {t('mra.annual.sheet2_title', locale)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Par Value Shares */}
                 <div>
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: NAVY }}>
-                    Par Value Shares
+                    {t('mra.annual.par_value_shares', locale)}
                     <Badge variant="secondary" className="text-xs">Section A</Badge>
                   </h3>
                   {data.par_value_shares.length === 0 ? (
                     <div className="text-sm text-gray-400 italic p-4 border border-dashed rounded-lg text-center">
-                      No par value shares issued
+                      {t('mra.annual.no_shares_issued', locale)}
                     </div>
                   ) : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Class</TableHead>
-                          <TableHead>Number</TableHead>
-                          <TableHead>Par Value</TableHead>
-                          <TableHead>Paid Up</TableHead>
-                          <TableHead>Currency</TableHead>
+                          <TableHead>{t('mra.annual.class', locale)}</TableHead>
+                          <TableHead>{t('mra.annual.number', locale)}</TableHead>
+                          <TableHead>{t('mra.annual.par_value', locale)}</TableHead>
+                          <TableHead>{t('mra.annual.paid_up', locale)}</TableHead>
+                          <TableHead>{t('mra.annual.currency', locale)}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -735,17 +737,17 @@ export default function AnnualReturnPage() {
                 {/* No Par Value Shares */}
                 <div>
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: NAVY }}>
-                    No Par Value Shares
+                    {t('mra.annual.no_par_value_shares', locale)}
                     <Badge variant="secondary" className="text-xs">Section B</Badge>
                   </h3>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Class of Shares</TableHead>
-                        <TableHead>Number of Shares</TableHead>
-                        <TableHead>Consideration (other than cash)</TableHead>
-                        <TableHead>Number Paid Up</TableHead>
-                        <TableHead>Currency</TableHead>
+                        <TableHead>{t('mra.annual.class_of_shares', locale)}</TableHead>
+                        <TableHead>{t('mra.annual.number_of_shares', locale)}</TableHead>
+                        <TableHead>{t('mra.annual.consideration', locale)}</TableHead>
+                        <TableHead>{t('mra.annual.number_paid_up', locale)}</TableHead>
+                        <TableHead>{t('mra.annual.currency', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -806,14 +808,14 @@ export default function AnnualReturnPage() {
                       }))
                     }
                   >
-                    + Ajouter une classe
+                    {t('mra.annual.add_class', locale)}
                   </Button>
                 </div>
 
                 {/* Amount & Stated Capital */}
                 <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Amount Received on Issue of Shares (MUR)</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.amount_received', locale)}</label>
                     <Input
                       value={data.amount_received_on_issue}
                       onChange={e => updateField("amount_received_on_issue", e.target.value)}
@@ -821,7 +823,7 @@ export default function AnnualReturnPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Stated Capital (MUR)</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.stated_capital', locale)}</label>
                     <Input
                       value={data.stated_capital}
                       onChange={e => updateField("stated_capital", e.target.value)}
@@ -839,17 +841,17 @@ export default function AnnualReturnPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2" style={{ color: NAVY }}>
                   <Briefcase className="h-5 w-5" style={{ color: GOLD }} />
-                  Sheet 3 - Capital Details
+                  {t('mra.annual.sheet3_title', locale)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
                   <h3 className="text-sm font-semibold mb-3" style={{ color: NAVY }}>
-                    Shares Status
+                    {t('mra.annual.shares_status', locale)}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Shares Forfeited</label>
+                      <label className="text-sm font-medium text-gray-700">{t('mra.annual.shares_forfeited', locale)}</label>
                       <Input
                         type="number"
                         value={data.shares_forfeited}
@@ -858,7 +860,7 @@ export default function AnnualReturnPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Shares Purchased by Company</label>
+                      <label className="text-sm font-medium text-gray-700">{t('mra.annual.shares_purchased', locale)}</label>
                       <Input
                         type="number"
                         value={data.shares_purchased}
@@ -867,7 +869,7 @@ export default function AnnualReturnPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Treasury Shares</label>
+                      <label className="text-sm font-medium text-gray-700">{t('mra.annual.treasury_shares', locale)}</label>
                       <Input
                         type="number"
                         value={data.treasury_shares}
@@ -876,7 +878,7 @@ export default function AnnualReturnPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Shares Redeemed</label>
+                      <label className="text-sm font-medium text-gray-700">{t('mra.annual.shares_redeemed', locale)}</label>
                       <Input
                         type="number"
                         value={data.shares_redeemed}
@@ -889,10 +891,10 @@ export default function AnnualReturnPage() {
 
                 <div className="border-t pt-4">
                   <h3 className="text-sm font-semibold mb-3" style={{ color: NAVY }}>
-                    Indebtedness
+                    {t('mra.annual.indebtedness', locale)}
                   </h3>
                   <div className="max-w-md">
-                    <label className="text-sm font-medium text-gray-700">Total Indebtedness (MUR)</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.total_indebtedness', locale)}</label>
                     <Input
                       value={data.total_indebtedness}
                       onChange={e => updateField("total_indebtedness", e.target.value)}
@@ -904,22 +906,22 @@ export default function AnnualReturnPage() {
                 {/* Summary card */}
                 <div className="border-t pt-4">
                   <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="text-sm font-semibold mb-2" style={{ color: NAVY }}>Summary</h4>
+                    <h4 className="text-sm font-semibold mb-2" style={{ color: NAVY }}>{t('mra.annual.summary', locale)}</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div>
-                        <span className="text-gray-500">Forfeited</span>
+                        <span className="text-gray-500">{t('mra.annual.forfeited', locale)}</span>
                         <p className="font-semibold">{data.shares_forfeited}</p>
                       </div>
                       <div>
-                        <span className="text-gray-500">Purchased</span>
+                        <span className="text-gray-500">{t('mra.annual.purchased', locale)}</span>
                         <p className="font-semibold">{data.shares_purchased}</p>
                       </div>
                       <div>
-                        <span className="text-gray-500">Treasury</span>
+                        <span className="text-gray-500">{t('mra.annual.treasury', locale)}</span>
                         <p className="font-semibold">{data.treasury_shares}</p>
                       </div>
                       <div>
-                        <span className="text-gray-500">Redeemed</span>
+                        <span className="text-gray-500">{t('mra.annual.redeemed', locale)}</span>
                         <p className="font-semibold">{data.shares_redeemed}</p>
                       </div>
                     </div>
@@ -935,7 +937,7 @@ export default function AnnualReturnPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2" style={{ color: NAVY }}>
                   <Users className="h-5 w-5" style={{ color: GOLD }} />
-                  Sheet 4 - Directors
+                  {t('mra.annual.sheet4_title', locale)}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -943,12 +945,12 @@ export default function AnnualReturnPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Full Name</TableHead>
-                        <TableHead>Nationality</TableHead>
-                        <TableHead>Resident</TableHead>
-                        <TableHead>Citizen</TableHead>
-                        <TableHead>Occupation</TableHead>
-                        <TableHead>Other Directorship</TableHead>
+                        <TableHead>{t('mra.annual.full_name', locale)}</TableHead>
+                        <TableHead>{t('mra.annual.nationality', locale)}</TableHead>
+                        <TableHead>{t('mra.annual.resident', locale)}</TableHead>
+                        <TableHead>{t('mra.annual.citizen', locale)}</TableHead>
+                        <TableHead>{t('mra.annual.occupation', locale)}</TableHead>
+                        <TableHead>{t('mra.annual.other_directorship', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1029,7 +1031,7 @@ export default function AnnualReturnPage() {
                     }))
                   }
                 >
-                  + Ajouter un directeur
+                  {t('mra.annual.add_director', locale)}
                 </Button>
               </CardContent>
             </Card>
@@ -1038,13 +1040,13 @@ export default function AnnualReturnPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2" style={{ color: NAVY }}>
                   <Briefcase className="h-5 w-5" style={{ color: GOLD }} />
-                  Secretary
+                  {t('mra.annual.secretary', locale)}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Name</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.name', locale)}</label>
                     <Input
                       value={data.secretary.name}
                       onChange={e => setData(prev => ({
@@ -1055,7 +1057,7 @@ export default function AnnualReturnPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Address</label>
+                    <label className="text-sm font-medium text-gray-700">{t('mra.annual.address', locale)}</label>
                     <Input
                       value={data.secretary.address}
                       onChange={e => setData(prev => ({
@@ -1076,18 +1078,18 @@ export default function AnnualReturnPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2" style={{ color: NAVY }}>
                   <BarChart3 className="h-5 w-5" style={{ color: GOLD }} />
-                  Sheet 5 - Financial Summary
+                  {t('mra.annual.sheet5_title', locale)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Revenue & Expenses */}
                 <div>
                   <h3 className="text-sm font-semibold mb-3" style={{ color: NAVY }}>
-                    Income Statement
+                    {t('mra.annual.income_statement', locale)}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Total Revenue (MUR)</label>
+                      <label className="text-sm font-medium text-gray-700">{t('mra.annual.total_revenue', locale)}</label>
                       <Input
                         type="number"
                         step="0.01"
@@ -1097,7 +1099,7 @@ export default function AnnualReturnPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Total Expenses (MUR)</label>
+                      <label className="text-sm font-medium text-gray-700">{t('mra.annual.total_expenses', locale)}</label>
                       <Input
                         type="number"
                         step="0.01"
@@ -1107,7 +1109,7 @@ export default function AnnualReturnPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Net Profit / (Loss) (MUR)</label>
+                      <label className="text-sm font-medium text-gray-700">{t('mra.annual.net_profit_loss', locale)}</label>
                       <Input
                         type="number"
                         step="0.01"
@@ -1122,11 +1124,11 @@ export default function AnnualReturnPage() {
                 {/* Balance Sheet */}
                 <div className="border-t pt-4">
                   <h3 className="text-sm font-semibold mb-3" style={{ color: NAVY }}>
-                    Balance Sheet
+                    {t('mra.annual.balance_sheet', locale)}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Total Assets (MUR)</label>
+                      <label className="text-sm font-medium text-gray-700">{t('mra.annual.total_assets', locale)}</label>
                       <Input
                         type="number"
                         step="0.01"
@@ -1136,7 +1138,7 @@ export default function AnnualReturnPage() {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-700">Total Liabilities (MUR)</label>
+                      <label className="text-sm font-medium text-gray-700">{t('mra.annual.total_liabilities', locale)}</label>
                       <Input
                         type="number"
                         step="0.01"
@@ -1152,11 +1154,11 @@ export default function AnnualReturnPage() {
                 <div className="border-t pt-4">
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     {[
-                      { label: "Revenue", value: data.total_revenue, prev: priorYear?.total_revenue, color: "#16a34a" },
-                      { label: "Expenses", value: data.total_expenses, prev: priorYear?.total_expenses, color: "#dc2626" },
-                      { label: "Net Profit", value: data.net_profit, prev: priorYear?.net_profit, color: data.net_profit >= 0 ? "#16a34a" : "#dc2626" },
-                      { label: "Assets", value: data.total_assets, prev: priorYear?.total_assets, color: NAVY },
-                      { label: "Liabilities", value: data.total_liabilities, prev: priorYear?.total_liabilities, color: "#9333ea" },
+                      { label: t('mra.annual.kpi_revenue', locale), value: data.total_revenue, prev: priorYear?.total_revenue, color: "#16a34a" },
+                      { label: t('mra.annual.kpi_expenses', locale), value: data.total_expenses, prev: priorYear?.total_expenses, color: "#dc2626" },
+                      { label: t('mra.annual.kpi_net_profit', locale), value: data.net_profit, prev: priorYear?.net_profit, color: data.net_profit >= 0 ? "#16a34a" : "#dc2626" },
+                      { label: t('mra.annual.kpi_assets', locale), value: data.total_assets, prev: priorYear?.total_assets, color: NAVY },
+                      { label: t('mra.annual.kpi_liabilities', locale), value: data.total_liabilities, prev: priorYear?.total_liabilities, color: "#9333ea" },
                     ].map(item => {
                       const variance = (item.prev !== undefined && item.prev !== 0)
                         ? ((item.value - item.prev) / Math.abs(item.prev)) * 100
@@ -1169,7 +1171,7 @@ export default function AnnualReturnPage() {
                           </p>
                           {item.prev !== undefined && (
                             <div className="mt-1">
-                              <p className="text-xs text-gray-400">Prior: {formatMUR(item.prev)}</p>
+                              <p className="text-xs text-gray-400">{t('mra.annual.prior_label', locale)}: {formatMUR(item.prev)}</p>
                               {variance !== null && (
                                 <p className="text-xs font-mono" style={{ color: variance >= 0 ? "#16a34a" : "#dc2626" }}>
                                   {variance >= 0 ? "+" : ""}{variance.toFixed(1)}%

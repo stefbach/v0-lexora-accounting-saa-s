@@ -35,6 +35,7 @@ import {
   ArrowRight,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Societe {
   id: string
@@ -79,9 +80,9 @@ function fmt(n: number, dev = "MUR"): string {
     dev
   )
 }
-function formatDate(d: string | null): string {
+function formatDate(d: string | null, locale: 'fr' | 'en' = 'fr'): string {
   if (!d) return "—"
-  return new Date(d).toLocaleDateString("fr-FR", {
+  return new Date(d).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR', {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -93,6 +94,7 @@ function daysSince(d: string | null): number {
 }
 
 export default function ComptableBanquePage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [selectedSociete, setSelectedSociete] = useState("all")
   const [comptes, setComptes] = useState<CompteBancaire[]>([])
@@ -144,11 +146,11 @@ export default function ComptableBanquePage() {
       setComptes(accounts)
       setReleves(d.releves || d.relevesBancaires || [])
     } catch {
-      showToast("Erreur chargement", "error")
+      showToast(t('cab.banque.err_load', locale), "error")
     } finally {
       setLoading(false)
     }
-  }, [selectedSociete, showToast])
+  }, [selectedSociete, showToast, locale])
   useEffect(() => {
     load()
   }, [load])
@@ -163,13 +165,13 @@ export default function ComptableBanquePage() {
       const res = await fetch("/api/documents/upload", { method: "POST", body: fd })
       const d = await res.json()
       if (!res.ok) {
-        showToast(d?.error || "Erreur upload", "error")
+        showToast(d?.error || t('cab.banque.err_upload', locale), "error")
         return
       }
-      showToast(`Relevé importé — ${d?.nb_transactions || 0} transactions extraites`)
+      showToast(`${t('cab.banque.statement_imported_pre', locale)} ${d?.nb_transactions || 0} ${t('cab.banque.statement_imported_post', locale)}`)
       load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur upload", "error")
+      showToast(e?.message || t('cab.banque.err_upload', locale), "error")
     } finally {
       setUploading(false)
     }
@@ -225,9 +227,9 @@ export default function ComptableBanquePage() {
                 <Landmark className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-blue-900">Comptes bancaires</h1>
+                <h1 className="text-2xl font-bold text-blue-900">{t('cab.banque.title', locale)}</h1>
                 <p className="text-sm text-blue-700/80 mt-0.5">
-                  Comptes & relevés · prérequis pour Lex Banque
+                  {t('cab.banque.subtitle', locale)}
                 </p>
               </div>
             </div>
@@ -239,7 +241,7 @@ export default function ComptableBanquePage() {
                 size="sm"
               >
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('cab.banque.refresh', locale)}
               </Button>
               <label>
                 <input
@@ -263,13 +265,13 @@ export default function ComptableBanquePage() {
                   ) : (
                     <Upload className="h-4 w-4" />
                   )}
-                  Importer un relevé
+                  {t('cab.banque.import_statement', locale)}
                 </span>
               </label>
               <Link href="/comptable/rapprochement">
                 <Button className="bg-purple-600 hover:bg-purple-700 text-white">
                   <Sparkles className="h-4 w-4 mr-1.5" />
-                  Aller à Lex Banque
+                  {t('cab.banque.go_lex_bank', locale)}
                   <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
               </Link>
@@ -282,10 +284,10 @@ export default function ComptableBanquePage() {
           <div className="w-72">
             <Select value={selectedSociete} onValueChange={setSelectedSociete}>
               <SelectTrigger>
-                <SelectValue placeholder="Choisir une société..." />
+                <SelectValue placeholder={t('cab.banque.choose_company', locale)} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">-- Choisir une société --</SelectItem>
+                <SelectItem value="all">{t('cab.banque.choose_company_opt', locale)}</SelectItem>
                 {societes.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.nom}
@@ -299,7 +301,7 @@ export default function ComptableBanquePage() {
         {!canAct ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Sélectionne une société.
+              {t('cab.banque.select_company', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -309,19 +311,19 @@ export default function ComptableBanquePage() {
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard label="Comptes actifs" value={comptes.filter((c) => c.actif).length} />
+              <KpiCard label={t('cab.banque.kpi_active_accounts', locale)} value={comptes.filter((c) => c.actif).length} />
               <KpiCard
-                label="Solde cumulé"
+                label={t('cab.banque.kpi_cumul_balance', locale)}
                 value={fmt(totalSoldes, comptes[0]?.devise || "MUR")}
                 tone="green"
               />
               <KpiCard
-                label="Dernier import"
-                value={lastImport ? formatDate(lastImport) : "—"}
+                label={t('cab.banque.kpi_last_import', locale)}
+                value={lastImport ? formatDate(lastImport, locale) : "—"}
                 tone="blue"
               />
               <KpiCard
-                label="Tx en attente"
+                label={t('cab.banque.kpi_pending_tx', locale)}
                 value={txEnAttente}
                 tone={txEnAttente > 0 ? "amber" : "green"}
                 accent={txEnAttente > 0}
@@ -332,13 +334,13 @@ export default function ComptableBanquePage() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Landmark className="h-5 w-5 text-blue-600" />
-                  Comptes bancaires ({comptes.length})
+                  {t('cab.banque.bank_accounts', locale)} ({comptes.length})
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {comptes.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    Aucun compte bancaire — importe un relevé pour en créer un.
+                    {t('cab.banque.no_account', locale)}
                   </p>
                 ) : (
                   comptes.map((c) => {
@@ -362,12 +364,12 @@ export default function ComptableBanquePage() {
                             </Badge>
                             {c.compte_principal && (
                               <Badge className="text-[10px] bg-blue-100 text-blue-700 border border-blue-300">
-                                Principal
+                                {t('cab.banque.principal', locale)}
                               </Badge>
                             )}
                             {!c.actif && (
                               <Badge variant="outline" className="text-[10px] opacity-60">
-                                Inactif
+                                {t('cab.banque.inactive', locale)}
                               </Badge>
                             )}
                           </div>
@@ -378,18 +380,18 @@ export default function ComptableBanquePage() {
                           )}
                           <div className="flex items-center gap-3 mt-2 flex-wrap text-xs">
                             <span className="text-muted-foreground">
-                              Solde actuel :{" "}
+                              {t('cab.banque.current_balance', locale)} :{" "}
                               <span className="font-mono font-medium text-foreground">
                                 {fmt(c.solde_actuel, c.devise)}
                               </span>
                             </span>
                             <span className="text-muted-foreground">
-                              Dernier relevé : {formatDate(c.date_dernier_releve)}
+                              {t('cab.banque.last_statement', locale)} : {formatDate(c.date_dernier_releve, locale)}
                             </span>
                             {stale && (
                               <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
                                 <AlertTriangle className="h-3 w-3 mr-1" />
-                                Plus de {days}j sans relevé
+                                {t('cab.banque.stale_pre', locale)} {days}{t('cab.banque.stale_post', locale)}
                               </Badge>
                             )}
                           </div>
@@ -397,7 +399,7 @@ export default function ComptableBanquePage() {
                         <Link href="/comptable/rapprochement">
                           <Button size="sm" variant="outline">
                             <Bot className="h-4 w-4 mr-1.5" />
-                            Rapprocher
+                            {t('cab.banque.reconcile', locale)}
                           </Button>
                         </Link>
                       </div>
@@ -411,13 +413,13 @@ export default function ComptableBanquePage() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <FileText className="h-5 w-5 text-blue-600" />
-                  Relevés importés ({releves.length})
+                  {t('cab.banque.statements_imported', locale)} ({releves.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {releves.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    Aucun relevé importé.
+                    {t('cab.banque.no_statement', locale)}
                   </p>
                 ) : (
                   <div className="rounded border bg-card divide-y">
@@ -448,33 +450,33 @@ export default function ComptableBanquePage() {
                                 <h4 className="font-medium text-sm">
                                   {compte
                                     ? `${compte.banque} ${compte.numero_compte}`
-                                    : "Compte inconnu"}
+                                    : t('cab.banque.unknown_account', locale)}
                                 </h4>
                                 <Badge variant="outline" className="text-[10px]">
-                                  {r.periode || formatDate(r.date_debut)}
+                                  {r.periode || formatDate(r.date_debut, locale)}
                                 </Badge>
                                 <span className="text-xs text-muted-foreground">
-                                  {formatDate(r.date_debut)} → {formatDate(r.date_fin)}
+                                  {formatDate(r.date_debut, locale)} → {formatDate(r.date_fin, locale)}
                                 </span>
                               </div>
                               <div className="flex items-center gap-3 mt-1 flex-wrap text-xs">
                                 <span className="text-muted-foreground">
-                                  Solde {fmt(r.solde_ouverture, compte?.devise)} →{" "}
+                                  {t('cab.banque.balance_label', locale)} {fmt(r.solde_ouverture, compte?.devise)} →{" "}
                                   {fmt(r.solde_cloture, compte?.devise)}
                                 </span>
                                 <span className="text-muted-foreground">
-                                  {nbTx} transaction{nbTx > 1 ? "s" : ""}
+                                  {nbTx} {t('cab.banque.transaction', locale)}{nbTx > 1 ? "s" : ""}
                                 </span>
                                 {rapprochees > 0 && (
                                   <Badge className="text-[10px] bg-green-100 text-green-700 border-green-300">
                                     <CheckCircle2 className="h-3 w-3 mr-1" />
-                                    {rapprochees} rapprochée{rapprochees > 1 ? "s" : ""}
+                                    {rapprochees} {t('cab.banque.reconciled', locale)}{rapprochees > 1 ? "s" : ""}
                                   </Badge>
                                 )}
                                 {enAttente > 0 && (
                                   <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
                                     <Clock className="h-3 w-3 mr-1" />
-                                    {enAttente} à valider
+                                    {enAttente} {t('cab.banque.to_validate', locale)}
                                   </Badge>
                                 )}
                               </div>

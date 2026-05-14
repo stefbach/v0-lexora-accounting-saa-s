@@ -36,6 +36,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useProfile } from "@/hooks/use-profile"
+import { t, getLocale } from '@/lib/i18n'
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -76,6 +77,7 @@ interface Assistant {
 }
 
 export default function ComptableDashboardPage() {
+  const locale = getLocale()
   const { profile } = useProfile()
   const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
@@ -193,10 +195,10 @@ export default function ComptableDashboardPage() {
   const totalSocietes = new Set(dossiers.map((d) => d.societe_id)).size
 
   const kpis = [
-    { label: "Clients",              value: clients.length, icon: Users,         strong: "#4191FF", dark: "#1D5FC4" },
-    { label: "Societes gerees",      value: totalSocietes,  icon: Building2,     strong: "#D4AF37", dark: "#A88925" },
-    { label: "Documents en attente", value: pendingDocs,    icon: FileText,      strong: "#2ECC8A", dark: "#1F9B68" },
-    { label: "Alertes critiques",    value: alertCount,     icon: AlertTriangle, strong: "#E25555", dark: "#B93B3B" },
+    { label: t('cab.dashboard.kpi_clients', locale),       value: clients.length, icon: Users,         strong: "#4191FF", dark: "#1D5FC4" },
+    { label: t('cab.dashboard.kpi_companies', locale),     value: totalSocietes,  icon: Building2,     strong: "#D4AF37", dark: "#A88925" },
+    { label: t('cab.dashboard.kpi_docs_pending', locale),  value: pendingDocs,    icon: FileText,      strong: "#2ECC8A", dark: "#1F9B68" },
+    { label: t('cab.dashboard.kpi_alerts', locale),        value: alertCount,     icon: AlertTriangle, strong: "#E25555", dark: "#B93B3B" },
   ]
 
   const now = new Date()
@@ -204,10 +206,10 @@ export default function ComptableDashboardPage() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Cabinet Comptable", href: "/comptable" }, { label: "Tableau de bord" }]}
-      kicker={`${isDedie ? "Assistant Comptable" : "Expert-Comptable"} · ${dateFr}`}
-      title="Cabinet Comptable"
-      subtitle={`${profile?.full_name || "Bienvenue"} — Supervisez votre portefeuille clients, les dossiers en cours et les alertes réglementaires IFRS.`}
+      breadcrumbs={[{ label: t('cab.dashboard.crumb_firm', locale), href: "/comptable" }, { label: t('cab.dashboard.crumb_overview', locale) }]}
+      kicker={`${isDedie ? t('cab.dashboard.role_assistant', locale) : t('cab.dashboard.role_expert', locale)} · ${dateFr}`}
+      title={t('cab.dashboard.title', locale)}
+      subtitle={`${profile?.full_name || t('cab.dashboard.welcome', locale)} ${t('cab.dashboard.subtitle_suffix', locale)}`}
     >
       <div className="space-y-6 max-w-[1400px] mx-auto">
         {/* KPIs — premium pattern */}
@@ -294,7 +296,7 @@ export default function ComptableDashboardPage() {
                 <Users className="h-4 w-4" />
               </div>
               <CardTitle className="text-sm font-semibold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
-                Portefeuille clients
+                {t('cab.dashboard.portfolio', locale)}
               </CardTitle>
             </div>
           </CardHeader>
@@ -303,7 +305,7 @@ export default function ComptableDashboardPage() {
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Rechercher un client..."
+                  placeholder={t('cab.dashboard.search_client', locale)}
                   className="pl-9"
                   style={{ borderColor: "#D8DFED", borderRadius: 10 }}
                   value={search}
@@ -313,11 +315,11 @@ export default function ComptableDashboardPage() {
               {!isDedie && assistants.length > 0 && (
                 <Select value={filterCollab} onValueChange={setFilterCollab}>
                   <SelectTrigger className="w-[220px]" style={{ borderColor: "#D8DFED", borderRadius: 10 }}>
-                    <SelectValue placeholder="Filtrer par collaborateur" />
+                    <SelectValue placeholder={t('cab.dashboard.filter_collab', locale)} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les clients</SelectItem>
-                    <SelectItem value="non_assigne">Non assigne</SelectItem>
+                    <SelectItem value="all">{t('cab.dashboard.all_clients', locale)}</SelectItem>
+                    <SelectItem value="non_assigne">{t('cab.dashboard.unassigned', locale)}</SelectItem>
                     {assistants.map((a) => (
                       <SelectItem key={a.id} value={a.id}>
                         {a.full_name}
@@ -335,19 +337,19 @@ export default function ComptableDashboardPage() {
             ) : filteredClients.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
                 <Users className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                <p className="text-sm">Aucun client trouve.</p>
+                <p className="text-sm">{t('cab.dashboard.no_client', locale)}</p>
               </div>
             ) : (
               <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #E4E9F4" }}>
                 <Table>
                   <TableHeader>
                     <TableRow style={{ background: "linear-gradient(180deg, #F8FAFF 0%, #F1F5FC 100%)" }}>
-                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Client</TableHead>
-                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Email</TableHead>
-                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Societes</TableHead>
-                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Docs en attente</TableHead>
-                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Derniere activite</TableHead>
-                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Assigne a</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>{t('cab.dashboard.col_client', locale)}</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>{t('cab.dashboard.col_email', locale)}</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>{t('cab.dashboard.col_companies', locale)}</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>{t('cab.dashboard.col_docs_pending', locale)}</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>{t('cab.dashboard.col_last_activity', locale)}</TableHead>
+                      <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>{t('cab.dashboard.col_assigned_to', locale)}</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -409,7 +411,7 @@ export default function ComptableDashboardPage() {
                               </Badge>
                             ) : (
                               <span className="text-xs text-muted-foreground">
-                                Non assigne
+                                {t('cab.dashboard.unassigned', locale)}
                               </span>
                             )}
                           </TableCell>

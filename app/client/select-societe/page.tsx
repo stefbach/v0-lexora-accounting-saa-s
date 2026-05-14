@@ -12,11 +12,12 @@ import { Button } from "@/components/ui/button"
  * espace salarié sans devoir choisir une société d'abord.
  */
 function MonEspaceSalarieBouton() {
+  const locale = getLocale()
   return (
     <Link href="/salarie">
       <Button variant="outline" size="sm" className="gap-2">
         <UserCircle className="h-4 w-4" />
-        Mon espace salarié
+        {t('core.sel.my_employee_space', locale)}
       </Button>
     </Link>
   )
@@ -24,6 +25,7 @@ function MonEspaceSalarieBouton() {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ClientPanel, ClientSectionHeader } from "@/components/client/ClientKit"
 import { useSocieteActive, type Societe } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 /**
  * /client/select-societe — écran de choix de la société active.
@@ -38,6 +40,7 @@ import { useSocieteActive, type Societe } from "@/components/client/SocieteActiv
  * absent.
  */
 export default function SelectSocietePage() {
+  const locale = getLocale()
   const router = useRouter()
   const { societes, loading, error, switchSociete } = useSocieteActive()
 
@@ -80,17 +83,17 @@ export default function SelectSocietePage() {
   if (societes.length === 0) {
     return (
       <ClientPageShell
-        breadcrumbs={[{ label: "Espace client", href: "/client/tableau-de-bord" }, { label: "Choix de la société" }]}
-        kicker="Bienvenue"
-        title="Aucune société n'est rattachée à votre compte"
-        subtitle="Créez votre première société pour commencer à utiliser Lexora."
+        breadcrumbs={[{ label: t('core.sel.client_space', locale), href: "/client/tableau-de-bord" }, { label: t('core.sel.choice_company', locale) }]}
+        kicker={t('core.sel.welcome', locale)}
+        title={t('core.sel.no_company_title', locale)}
+        subtitle={t('core.sel.no_company_subtitle', locale)}
         actions={<MonEspaceSalarieBouton />}
       >
         <ClientPanel>
           <div style={{ textAlign: "center", padding: "40px 24px" }}>
             <Building2 size={48} style={{ color: "#D4AF37", margin: "0 auto 16px" }} aria-hidden="true" />
             <p style={{ marginBottom: "20px", color: "#475569", fontSize: "14px" }}>
-              {error ?? "Votre compte ne voit encore aucune société. Cliquez ci-dessous pour en créer une."}
+              {error ?? t('core.sel.no_company_default_msg', locale)}
             </p>
             <Link
               href="/client/societes"
@@ -109,7 +112,7 @@ export default function SelectSocietePage() {
               }}
             >
               <Plus size={16} />
-              Créer ma société
+              {t('core.sel.create_my_company', locale)}
             </Link>
           </div>
         </ClientPanel>
@@ -120,10 +123,10 @@ export default function SelectSocietePage() {
   // ≥ 2 sociétés → grille de choix
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Espace client", href: "/client/tableau-de-bord" }, { label: "Choix de la société" }]}
-      kicker="Espace Client"
-      title="Quelle société souhaitez-vous gérer ?"
-      subtitle={`Vous avez ${societes.length} sociétés rattachées. Sélectionnez celle sur laquelle vous voulez travailler — vous pourrez en changer à tout moment depuis la barre latérale.`}
+      breadcrumbs={[{ label: t('core.sel.client_space', locale), href: "/client/tableau-de-bord" }, { label: t('core.sel.choice_company', locale) }]}
+      kicker={t('core.sel.client_area', locale)}
+      title={t('core.sel.which_company', locale)}
+      subtitle={`${t('core.sel.you_have', locale)} ${societes.length} ${t('core.sel.companies_linked', locale)}`}
       actions={<MonEspaceSalarieBouton />}
     >
       {error && (
@@ -150,14 +153,14 @@ export default function SelectSocietePage() {
         }}
       >
         {societes.map((s) => (
-          <SocieteCard key={s.id} societe={s} onSelect={() => handleSelect(s.id)} />
+          <SocieteCard key={s.id} societe={s} onSelect={() => handleSelect(s.id)} locale={locale} />
         ))}
       </div>
     </ClientPageShell>
   )
 }
 
-function SocieteCard({ societe, onSelect }: { societe: Societe; onSelect: () => void }) {
+function SocieteCard({ societe, onSelect, locale }: { societe: Societe; onSelect: () => void; locale: Locale }) {
   return (
     <ClientPanel padded={false}>
       <div style={{ padding: "22px" }}>
@@ -192,7 +195,7 @@ function SocieteCard({ societe, onSelect }: { societe: Societe; onSelect: () => 
             boxShadow: "0 10px 24px -8px rgba(212,175,55,0.55)",
           }}
         >
-          Sélectionner
+          {t('core.sel.select_btn', locale)}
         </button>
       </div>
     </ClientPanel>

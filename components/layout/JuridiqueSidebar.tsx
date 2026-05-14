@@ -3,17 +3,19 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { t, getLocale } from "@/lib/i18n"
 import { Scale, FileText, Users, ShieldCheck, Settings, LogOut, FileSignature } from "lucide-react"
 
 const LINKS = [
-  { href: '/juridique', label: 'Tableau de bord', icon: Scale, exact: true },
-  { href: '/juridique/contrats', label: 'Générateur de contrats', icon: FileSignature },
-  { href: '/rh/employes', label: 'Employés (lecture)', icon: Users },
+  { href: '/juridique', label: 'Tableau de bord', labelKey: 'comp.legal_sidebar.dashboard', icon: Scale, exact: true },
+  { href: '/juridique/contrats', label: 'Générateur de contrats', labelKey: 'comp.legal_sidebar.contract_generator', icon: FileSignature },
+  { href: '/rh/employes', label: 'Employés (lecture)', labelKey: 'comp.legal_sidebar.employees_readonly', icon: Users },
 ]
 
 export function JuridiqueSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const locale = getLocale()
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href)
@@ -51,7 +53,7 @@ export function JuridiqueSidebar() {
             style={{ background: "linear-gradient(90deg, #D4AF37 0%, transparent 100%)" }}
           />
           <span className="mt-2 inline-block text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#A8AFC7" }}>
-            Module Juridique
+            {t('comp.legal_sidebar.module_title', locale)}
           </span>
         </div>
       </div>
@@ -99,7 +101,7 @@ export function JuridiqueSidebar() {
                 />
               )}
               <Icon className="w-4 h-4 flex-shrink-0 relative" style={{ color: active ? "#0B0F2E" : undefined }} />
-              <span className="relative">{l.label}</span>
+              <span className="relative">{l.labelKey ? t(l.labelKey, locale) : l.label}</span>
             </Link>
           )
         })}
@@ -112,7 +114,7 @@ export function JuridiqueSidebar() {
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(232,234,252,0.06)" }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent" }}
         >
-          <Settings className="w-4 h-4" /><span>Mon profil</span>
+          <Settings className="w-4 h-4" /><span>{t('comp.legal_sidebar.my_profile', locale)}</span>
         </Link>
         <button
           onClick={handleLogout}
@@ -127,7 +129,7 @@ export function JuridiqueSidebar() {
             e.currentTarget.style.color = "#A8AFC7"
           }}
         >
-          <LogOut className="w-4 h-4" /><span>Déconnexion</span>
+          <LogOut className="w-4 h-4" /><span>{t('common.logout', locale)}</span>
         </button>
       </div>
     </aside>

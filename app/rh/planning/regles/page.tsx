@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/tooltip"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ArrowLeft, Save, Shield, Loader2, Plus } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type {
   PlanningShift, PlanningConfig, PlanningRegleLegale, JourCode,
@@ -48,6 +49,7 @@ function genShiftId(): string {
 }
 
 export default function ReglesPlanningPage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState<string>("")
   const [shifts, setShifts] = useState<PlanningShift[]>([])
@@ -217,7 +219,7 @@ export default function ReglesPlanningPage() {
               <Shield className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Règles de planning</h1>
+              <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.a.planr.title', locale)}</h1>
               <p className="text-gray-500 text-sm">Créneaux, jours et règles par société</p>
             </div>
           </div>

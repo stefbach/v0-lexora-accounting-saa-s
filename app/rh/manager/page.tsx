@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Users, Clock, Calendar, AlertTriangle, CheckCircle, UserX, Coffee, TrendingUp, Loader2 } from "lucide-react"
 import MonEspacePersonnel from "@/components/rh/MonEspacePersonnel"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -14,6 +15,7 @@ const GOLD = "#D4AF37"
 function fmtH(h: string | null) { return h ? h.slice(0, 5) : "—" }
 
 export default function ManagerDashboard() {
+  const locale = getLocale()
   const [loading, setLoading] = useState(true)
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
@@ -100,23 +102,23 @@ export default function ManagerDashboard() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "RH · Paie", href: "/rh" }, { label: "Manager" }]}
-      kicker={`Mon équipe · ${employes.length} ${employes.length > 1 ? "collaborateurs" : "collaborateur"}`}
-      title="Tableau de bord Manager"
-      subtitle="Suivi temps réel de votre équipe — présence, pointage, congés, alertes de certificats médicaux et soldes de jours."
+      breadcrumbs={[{ label: t('rha.a.dash.bc_rh', locale), href: "/rh" }, { label: t('rha.a.mgr.bc_manager', locale) }]}
+      kicker={`${t('rha.a.mgr.kicker_mon_equipe', locale)} · ${employes.length} ${employes.length > 1 ? t('rha.a.mgr.collaborateurs', locale) : t('rha.a.mgr.collaborateur', locale)}`}
+      title={t('rha.a.mgr.title', locale)}
+      subtitle={t('rha.a.mgr.subtitle', locale)}
       actions={
         <>
           <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Société" /></SelectTrigger>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder={t('rha.a.common.societe', locale)} /></SelectTrigger>
             <SelectContent>
               {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
           {groupes.length > 0 && (
             <Select value={selectedGroupe} onValueChange={setSelectedGroupe}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Groupe" /></SelectTrigger>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder={t('rha.a.mgr.groupe', locale)} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous ({employes.length})</SelectItem>
+                <SelectItem value="all">{t('rha.a.common.tous', locale)} ({employes.length})</SelectItem>
                 {groupes.map(g => <SelectItem key={g.id} value={g.id}>{g.nom} ({g.nb_membres})</SelectItem>)}
               </SelectContent>
             </Select>
@@ -139,32 +141,32 @@ export default function ManagerDashboard() {
             <Card><CardContent className="p-4 text-center">
               <Users className="h-5 w-5 mx-auto mb-1" style={{ color: NAVY }} />
               <p className="text-2xl font-bold" style={{ color: NAVY }}>{nbEmployes}</p>
-              <p className="text-xs text-gray-500">Équipe</p>
+              <p className="text-xs text-gray-500">{t('rha.a.mgr.kpi_equipe', locale)}</p>
             </CardContent></Card>
             <Card className="border-emerald-200"><CardContent className="p-4 text-center">
               <CheckCircle className="h-5 w-5 mx-auto mb-1 text-emerald-600" />
               <p className="text-2xl font-bold text-emerald-600">{nbPresents}</p>
-              <p className="text-xs text-gray-500">Présents</p>
+              <p className="text-xs text-gray-500">{t('rha.a.mgr.kpi_presents', locale)}</p>
             </CardContent></Card>
             <Card className="border-amber-200"><CardContent className="p-4 text-center">
               <Coffee className="h-5 w-5 mx-auto mb-1 text-amber-600" />
               <p className="text-2xl font-bold text-amber-600">{nbEnPause}</p>
-              <p className="text-xs text-gray-500">En pause</p>
+              <p className="text-xs text-gray-500">{t('rha.a.mgr.kpi_pause', locale)}</p>
             </CardContent></Card>
             <Card className="border-red-200"><CardContent className="p-4 text-center">
               <UserX className="h-5 w-5 mx-auto mb-1 text-red-600" />
               <p className="text-2xl font-bold text-red-600">{nbAbsents}</p>
-              <p className="text-xs text-gray-500">Absents</p>
+              <p className="text-xs text-gray-500">{t('rha.a.mgr.kpi_absents', locale)}</p>
             </CardContent></Card>
             <Card className="border-orange-200"><CardContent className="p-4 text-center">
               <Calendar className="h-5 w-5 mx-auto mb-1 text-orange-600" />
               <p className="text-2xl font-bold text-orange-600">{nbCongesAttente}</p>
-              <p className="text-xs text-gray-500">Congés en attente</p>
+              <p className="text-xs text-gray-500">{t('rha.a.mgr.kpi_conges_attente', locale)}</p>
             </CardContent></Card>
             <Card className="border-purple-200"><CardContent className="p-4 text-center">
               <AlertTriangle className="h-5 w-5 mx-auto mb-1 text-purple-600" />
               <p className="text-2xl font-bold text-purple-600">{nbAlerteSL + nbSLFaible}</p>
-              <p className="text-xs text-gray-500">Alertes</p>
+              <p className="text-xs text-gray-500">{t('rha.a.mgr.kpi_alertes', locale)}</p>
             </CardContent></Card>
           </div>
 
@@ -173,7 +175,7 @@ export default function ManagerDashboard() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base" style={{ color: NAVY }}>
                 <Clock className="inline h-5 w-5 mr-2" style={{ color: GOLD }} />
-                Mon équipe — aujourd'hui
+                {t('rha.a.mgr.mon_equipe_aujourdhui', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -181,14 +183,14 @@ export default function ManagerDashboard() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left font-medium" style={{ color: NAVY }}>Employé</th>
-                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>Entrée</th>
-                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>Pause</th>
-                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>Sortie</th>
-                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>Statut</th>
-                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>AL restant</th>
-                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>SL restant</th>
-                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>Alertes</th>
+                      <th className="px-4 py-2 text-left font-medium" style={{ color: NAVY }}>{t('rha.a.common.employe', locale)}</th>
+                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>{t('rha.a.mgr.col_entree', locale)}</th>
+                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>{t('rha.a.mgr.col_pause', locale)}</th>
+                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>{t('rha.a.mgr.col_sortie', locale)}</th>
+                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>{t('rha.a.common.statut', locale)}</th>
+                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>{t('rha.a.mgr.col_al_restant', locale)}</th>
+                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>{t('rha.a.mgr.col_sl_restant', locale)}</th>
+                      <th className="px-3 py-2 text-center font-medium" style={{ color: NAVY }}>{t('rha.a.mgr.col_alertes', locale)}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -201,17 +203,17 @@ export default function ManagerDashboard() {
                       const hasExit = p?.heure_sortie
                       const onPause = p?.heure_pause_debut && !p?.heure_pause_fin
 
-                      let statut = "Absent"
+                      let statut = t('rha.a.mgr.st_absent', locale)
                       let statutColor = "bg-red-100 text-red-700"
-                      if (hasExit) { statut = "Terminé"; statutColor = "bg-blue-100 text-blue-700" }
-                      else if (onPause) { statut = "En pause"; statutColor = "bg-amber-100 text-amber-700" }
-                      else if (hasEntry) { statut = "Présent"; statutColor = "bg-emerald-100 text-emerald-700" }
+                      if (hasExit) { statut = t('rha.a.mgr.st_termine', locale); statutColor = "bg-blue-100 text-blue-700" }
+                      else if (onPause) { statut = t('rha.a.mgr.st_pause', locale); statutColor = "bg-amber-100 text-amber-700" }
+                      else if (hasEntry) { statut = t('rha.a.mgr.st_present', locale); statutColor = "bg-emerald-100 text-emerald-700" }
 
                       const alertes: string[] = []
-                      if (b?.alerte_certificat) alertes.push("Certificat médical")
-                      if (slSolde <= 3 && slSolde > 0) alertes.push("SL faible")
-                      if (slSolde <= 0) alertes.push("SL épuisé")
-                      if (alSolde <= 3 && alSolde > 0) alertes.push("AL faible")
+                      if (b?.alerte_certificat) alertes.push(t('rha.a.mgr.al_certif', locale))
+                      if (slSolde <= 3 && slSolde > 0) alertes.push(t('rha.a.mgr.al_sl_faible', locale))
+                      if (slSolde <= 0) alertes.push(t('rha.a.mgr.al_sl_epuise', locale))
+                      if (alSolde <= 3 && alSolde > 0) alertes.push(t('rha.a.mgr.al_al_faible', locale))
 
                       return (
                         <tr key={emp.id} className={!hasEntry && !hasExit ? "bg-red-50/30" : ""}>
@@ -261,7 +263,7 @@ export default function ManagerDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm" style={{ color: NAVY }}>Heures du jour</CardTitle>
+                <CardTitle className="text-sm" style={{ color: NAVY }}>{t('rha.a.mgr.heures_du_jour', locale)}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -278,7 +280,7 @@ export default function ManagerDashboard() {
                     )
                   })}
                   {filteredPointages.filter(p => p.heure_entree).length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-4">Aucun pointage aujourd'hui</p>
+                    <p className="text-sm text-gray-400 text-center py-4">{t('rha.a.mgr.aucun_pointage_jour', locale)}</p>
                   )}
                 </div>
               </CardContent>
@@ -286,7 +288,7 @@ export default function ManagerDashboard() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm" style={{ color: NAVY }}>Congés à valider</CardTitle>
+                <CardTitle className="text-sm" style={{ color: NAVY }}>{t('rha.a.mgr.conges_valider', locale)}</CardTitle>
               </CardHeader>
               <CardContent>
                 {nbCongesAttente > 0 ? (
@@ -296,13 +298,13 @@ export default function ManagerDashboard() {
                       return (
                         <div key={b.employe_id} className="flex items-center justify-between text-sm">
                           <span>{emp?.prenom} {emp?.nom}</span>
-                          <Badge className="bg-orange-100 text-orange-700 text-xs">{b.demandes_en_attente} en attente</Badge>
+                          <Badge className="bg-orange-100 text-orange-700 text-xs">{b.demandes_en_attente} {t('rha.a.mgr.en_attente', locale)}</Badge>
                         </div>
                       )
                     })}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-400 text-center py-4">Aucun congé en attente</p>
+                  <p className="text-sm text-gray-400 text-center py-4">{t('rha.a.mgr.aucun_conge_attente', locale)}</p>
                 )}
               </CardContent>
             </Card>

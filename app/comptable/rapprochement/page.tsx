@@ -39,6 +39,7 @@ import {
   CalendarDays,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const AGENT_NAME = "Lex Banque"
 
@@ -116,6 +117,7 @@ interface Facture {
 }
 
 export default function RapprochementPage() {
+  const locale = getLocale()
   // ── État principal ─────────────────────────────────────────────────
   const [societes, setSocietes] = useState<Societe[]>([])
   const [selectedSociete, setSelectedSociete] = useState("all")
@@ -451,11 +453,11 @@ export default function RapprochementPage() {
                 <h1 className="text-2xl font-bold text-purple-900 flex items-center gap-2">
                   {AGENT_NAME}
                   <Badge className="bg-purple-600 text-white text-[10px] uppercase">
-                    Agent IA
+                    {t('cab.rapprochement.ai_agent', locale)}
                   </Badge>
                 </h1>
                 <p className="text-sm text-purple-700/80 mt-0.5">
-                  Rapprochement bancaire intelligent · matching automatique des factures + classifications PCM
+                  {t('cab.rapprochement.subtitle', locale)}
                 </p>
               </div>
             </div>
@@ -467,7 +469,7 @@ export default function RapprochementPage() {
                 size="sm"
               >
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('cab.rapprochement.refresh', locale)}
               </Button>
               <Button
                 onClick={handleRunAgent}
@@ -477,12 +479,12 @@ export default function RapprochementPage() {
                 {runningAgent ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    En cours…
+                    {t('cab.rapprochement.in_progress', locale)}
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Lancer {AGENT_NAME}
+                    {t('cab.rapprochement.run', locale)} {AGENT_NAME}
                   </>
                 )}
               </Button>
@@ -495,10 +497,10 @@ export default function RapprochementPage() {
           <div className="w-64">
             <Select value={selectedSociete} onValueChange={setSelectedSociete}>
               <SelectTrigger>
-                <SelectValue placeholder="Choisir une société..." />
+                <SelectValue placeholder={t('cab.rapprochement.choose_company', locale)} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">-- Choisir une société --</SelectItem>
+                <SelectItem value="all">{t('cab.rapprochement.choose_company_opt', locale)}</SelectItem>
                 {societes.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.nom}
@@ -515,7 +517,7 @@ export default function RapprochementPage() {
             <CalendarDays
               className={`w-4 h-4 ${modeToutes ? "text-amber-600" : "text-blue-600"}`}
             />
-            <span className="text-sm font-medium">Période :</span>
+            <span className="text-sm font-medium">{t('cab.rapprochement.period', locale)}</span>
             <button
               onClick={() => setModeToutes((v) => !v)}
               className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
@@ -524,7 +526,7 @@ export default function RapprochementPage() {
                   : "bg-white text-gray-500 border-gray-300 hover:border-blue-400"
               }`}
             >
-              Toutes
+              {t('cab.rapprochement.all', locale)}
             </button>
             {!modeToutes && (
               <>
@@ -560,7 +562,7 @@ export default function RapprochementPage() {
         {!canAct ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Sélectionne une société pour activer {AGENT_NAME}.
+              {t('cab.rapprochement.select_company_hint', locale)} {AGENT_NAME}.
             </CardContent>
           </Card>
         ) : loading ? (
@@ -571,16 +573,16 @@ export default function RapprochementPage() {
           <>
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <KpiCard label="Total tx" value={total} />
+              <KpiCard label={t('cab.rapprochement.kpi_total', locale)} value={total} />
               <KpiCard
-                label="À valider"
+                label={t('cab.rapprochement.kpi_to_validate', locale)}
                 value={totalSuggestions}
                 tone="amber"
                 accent={totalSuggestions > 0}
               />
-              <KpiCard label="Rapprochées" value={rapprochees.length} tone="green" />
-              <KpiCard label="Orphelines" value={orphelines.length} tone="rose" />
-              <KpiCard label="Taux" value={`${tauxRapproche}%`} tone="blue" />
+              <KpiCard label={t('cab.rapprochement.kpi_reconciled', locale)} value={rapprochees.length} tone="green" />
+              <KpiCard label={t('cab.rapprochement.kpi_orphan', locale)} value={orphelines.length} tone="rose" />
+              <KpiCard label={t('cab.rapprochement.kpi_rate', locale)} value={`${tauxRapproche}%`} tone="blue" />
             </div>
 
             {/* Tabs */}
@@ -591,16 +593,16 @@ export default function RapprochementPage() {
                     value="a-valider"
                     className="data-[state=active]:bg-amber-100 px-3 py-2"
                   >
-                    <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-600" />À valider (
+                    <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-600" />{t('cab.rapprochement.tab_to_validate', locale)} (
                     {totalSuggestions})
                   </TabsTrigger>
                   <TabsTrigger value="rapprochees" className="px-3 py-2">
                     <CheckCircle2 className="h-4 w-4 mr-1.5 text-green-600" />
-                    Rapprochées ({rapprochees.length})
+                    {t('cab.rapprochement.tab_reconciled', locale)} ({rapprochees.length})
                   </TabsTrigger>
                   <TabsTrigger value="orphelines" className="px-3 py-2">
                     <HelpCircle className="h-4 w-4 mr-1.5 text-rose-600" />
-                    Orphelines ({orphelines.length})
+                    {t('cab.rapprochement.tab_orphan', locale)} ({orphelines.length})
                   </TabsTrigger>
                 </TabsList>
 
@@ -608,8 +610,8 @@ export default function RapprochementPage() {
                 <TabsContent value="a-valider" className="p-4 space-y-5 mt-0">
                   {totalSuggestions === 0 ? (
                     <EmptyState
-                      title="Aucune suggestion en attente"
-                      hint={`Clique sur "Lancer ${AGENT_NAME}" en haut de la page pour générer des suggestions.`}
+                      title={t('cab.rapprochement.empty_pending', locale)}
+                      hint={t('cab.rapprochement.empty_pending_hint', locale)}
                     />
                   ) : (
                     groups.map((g) => {
@@ -693,8 +695,8 @@ export default function RapprochementPage() {
                 <TabsContent value="rapprochees" className="p-4 mt-0">
                   {rapprochees.length === 0 ? (
                     <EmptyState
-                      title="Aucune transaction rapprochée"
-                      hint="Valide des suggestions pour qu'elles apparaissent ici (avec écriture BNQ associée)."
+                      title={t('cab.rapprochement.empty_reconciled', locale)}
+                      hint={t('cab.rapprochement.empty_reconciled_hint', locale)}
                     />
                   ) : (
                     <div className="rounded border bg-card divide-y">
@@ -709,8 +711,8 @@ export default function RapprochementPage() {
                 <TabsContent value="orphelines" className="p-4 mt-0">
                   {orphelines.length === 0 ? (
                     <EmptyState
-                      title="Aucune transaction orpheline"
-                      hint="Toutes les transactions ont reçu une suggestion."
+                      title={t('cab.rapprochement.empty_orphan', locale)}
+                      hint={t('cab.rapprochement.empty_orphan_hint', locale)}
                     />
                   ) : (
                     <div className="rounded border bg-card divide-y">

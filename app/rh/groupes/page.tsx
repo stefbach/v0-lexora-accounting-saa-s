@@ -8,11 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Plus, Trash2, Users, UserPlus, X, Check, ChevronRight, Pencil, Crown } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
 export default function GroupesPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
   const [groupes, setGroupes] = useState<any[]>([])
@@ -62,7 +64,7 @@ export default function GroupesPage() {
       }
       setAllEmployes((eRes.employes || []).sort((a: any, b: any) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`)))
     } catch (e: any) {
-      setError(e.message || "Erreur chargement")
+      setError(e.message || t('rha.b.groupes.err_load', locale))
     }
     setLoading(false)
   }, [societe])
@@ -105,7 +107,7 @@ export default function GroupesPage() {
 
   // Supprimer un groupe
   const deleteGroup = async (id: string) => {
-    if (!confirm("Supprimer ce groupe et retirer tous ses membres ?")) return
+    if (!confirm(t('rha.b.groupes.delete_confirm', locale))) return
     await fetch("/api/rh/groupes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -156,11 +158,11 @@ export default function GroupesPage() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Groupes</h1>
-          <p className="text-gray-500 text-sm">Créez des groupes et affectez les employés</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.b.groupes.title', locale)}</h1>
+          <p className="text-gray-500 text-sm">{t('rha.b.groupes.subtitle', locale)}</p>
         </div>
         <Select value={societe} onValueChange={setSociete}>
-          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
+          <SelectTrigger className="w-[200px]"><SelectValue placeholder={t('rha.b.groupes.societe_ph', locale)} /></SelectTrigger>
           <SelectContent>
             {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
           </SelectContent>
@@ -171,7 +173,7 @@ export default function GroupesPage() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
           {error}
           <p className="text-xs mt-1 text-red-500">
-            Si l'erreur mentionne "relation does not exist", exécutez la migration SQL pour créer la table groupes_employes.
+            {t('rha.b.groupes.err_migration', locale)}
           </p>
         </div>
       )}
@@ -185,7 +187,7 @@ export default function GroupesPage() {
             <CardContent className="p-4">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Nom du nouveau groupe (ex: Agents, Cadres, Direction...)"
+                  placeholder={t('rha.b.groupes.new_ph', locale)}
                   value={newGroupName}
                   onChange={e => setNewGroupName(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && createGroup()}
@@ -194,7 +196,7 @@ export default function GroupesPage() {
                 <Button onClick={createGroup} disabled={!newGroupName.trim() || addingGroup}
                   style={{ backgroundColor: NAVY }} className="text-white">
                   {addingGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-                  Créer
+                  {t('rha.b.groupes.create_btn', locale)}
                 </Button>
               </div>
             </CardContent>
@@ -237,7 +239,7 @@ export default function GroupesPage() {
                           </Button>
                         </>
                       )}
-                      <Badge variant="outline" className="text-xs">{membres.length} membre{membres.length !== 1 ? "s" : ""}</Badge>
+                      <Badge variant="outline" className="text-xs">{membres.length} {membres.length !== 1 ? t('rha.b.groupes.member_plural', locale) : t('rha.b.groupes.member_singular', locale)}</Badge>
                       {g.manager_nom && (
                         <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300">
                           <Crown className="h-3 w-3 mr-1" />
@@ -248,7 +250,7 @@ export default function GroupesPage() {
                     <div className="flex gap-1">
                       <Button variant="outline" size="sm" onClick={() => setAssignGroupId(isAssigning ? null : g.id)}>
                         <UserPlus className="h-4 w-4 mr-1" />
-                        {isAssigning ? "Fermer" : "Gérer"}
+                        {isAssigning ? t('rha.b.groupes.close', locale) : t('rha.b.groupes.manage', locale)}
                       </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => deleteGroup(g.id)}>
                         <Trash2 className="h-4 w-4" />
@@ -260,17 +262,17 @@ export default function GroupesPage() {
                   {/* Manager du groupe */}
                   <div className="flex items-center gap-2">
                     <Label className="text-xs text-gray-500 whitespace-nowrap flex items-center gap-1">
-                      <Crown className="h-3 w-3" /> Manager :
+                      <Crown className="h-3 w-3" /> {t('rha.b.groupes.manager', locale)}
                     </Label>
                     <Select
                       value={g.manager_id || "none"}
                       onValueChange={(val) => assignManager(g.id, val === "none" ? "" : val)}
                     >
                       <SelectTrigger className="h-8 text-xs w-[220px]">
-                        <SelectValue placeholder="Aucun manager" />
+                        <SelectValue placeholder={t('rha.b.groupes.no_manager', locale)} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Aucun manager</SelectItem>
+                        <SelectItem value="none">{t('rha.b.groupes.no_manager', locale)}</SelectItem>
                         {allEmployes.map(emp => (
                           <SelectItem key={emp.id} value={emp.id}>
                             {emp.prenom} {emp.nom}{emp.poste ? ` (${emp.poste})` : ""}
@@ -296,13 +298,13 @@ export default function GroupesPage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-400">Aucun membre — cliquez "Gérer" pour ajouter</p>
+                    <p className="text-sm text-gray-400">{t('rha.b.groupes.no_members', locale)}</p>
                   )}
 
                   {/* Mode affectation — liste des employés non assignés à ce groupe */}
                   {isAssigning && (
                     <div className="border-t pt-3 mt-3">
-                      <p className="text-xs font-medium text-gray-500 mb-2">Cliquez pour ajouter au groupe :</p>
+                      <p className="text-xs font-medium text-gray-500 mb-2">{t('rha.b.groupes.click_add', locale)}</p>
                       <div className="flex flex-wrap gap-1">
                         {allEmployes.filter(e => !membreIds.has(e.id)).map(emp => (
                           <button key={emp.id}
@@ -327,7 +329,7 @@ export default function GroupesPage() {
             <Card className="border-dashed border-orange-300">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base text-orange-600">
-                  Sans groupe ({sansGroupe.length})
+                  {t('rha.b.groupes.no_group', locale)} ({sansGroupe.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -345,8 +347,8 @@ export default function GroupesPage() {
           {groupes.length === 0 && !loading && (
             <div className="text-center py-12 text-gray-400">
               <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-              <p className="font-medium">Aucun groupe créé</p>
-              <p className="text-sm mt-1">Tapez un nom ci-dessus et cliquez "Créer"</p>
+              <p className="font-medium">{t('rha.b.groupes.none_created', locale)}</p>
+              <p className="text-sm mt-1">{t('rha.b.groupes.none_hint', locale)}</p>
             </div>
           )}
         </div>

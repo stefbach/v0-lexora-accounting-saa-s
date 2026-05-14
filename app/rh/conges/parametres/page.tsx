@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import type { ConfigConge } from "@/lib/rh/types-conges"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -299,6 +300,7 @@ const TYPES_UI: TypeUI[] = [
 
 // ─── Page ────────────────────────────────────────────────────────────
 export default function CongesParametresPage() {
+  const locale = getLocale()
   const [regles, setRegles] = useState<Record<string, ConfigConge>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -331,7 +333,7 @@ export default function CongesParametresPage() {
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight" style={{ color: NAVY }}>
               <Settings className="inline h-6 w-6 mr-2 -mt-1" style={{ color: GOLD }} />
-              Règles des congés
+              {t('rha.a.congesp.title', locale)}
             </h1>
             <p className="text-gray-500 mt-1 text-sm">
               Guide de référence selon le{" "}

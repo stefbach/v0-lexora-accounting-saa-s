@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, CheckCircle2, AlertTriangle, Calendar, TrendingUp, RefreshCw } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -20,6 +21,7 @@ function fmt(n: number) {
 interface Societe { id: string; nom: string }
 
 export default function CloturePage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [periode, setPeriode] = useState<string>(() => new Date().toISOString().slice(0, 7))
@@ -37,7 +39,7 @@ export default function CloturePage() {
   }, [])
 
   const callApi = async (action: string, extra: Record<string, unknown>) => {
-    if (!societeId) { setError("Sélectionnez une société"); return }
+    if (!societeId) { setError(t('cab.cloture.err_select_company', locale)); return }
     setLoading(true)
     setError(null)
     setResult(null)
@@ -49,12 +51,12 @@ export default function CloturePage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || "Erreur API")
+        setError(data.error || t('cab.cloture.err_api', locale))
       } else {
         setResult(data)
       }
     } catch (e: any) {
-      setError(e?.message || "Erreur réseau")
+      setError(e?.message || t('cab.cloture.err_network', locale))
     } finally {
       setLoading(false)
     }
@@ -64,18 +66,18 @@ export default function CloturePage() {
     <ClientPageShell hideHero disableParticles>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Clôtures comptables</h1>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('cab.cloture.title', locale)}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Provisions IAS 19, ECL IFRS 9, prorata IFRS 15, réévaluation IAS 21, clôture exercice + RAN auto
+            {t('cab.cloture.subtitle', locale)}
           </p>
         </div>
 
         <Card>
           <CardContent className="p-4 flex flex-wrap gap-3 items-end">
             <div>
-              <Label>Société</Label>
+              <Label>{t('cab.cloture.company', locale)}</Label>
               <Select value={societeId} onValueChange={setSocieteId}>
-                <SelectTrigger className="w-72"><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
+                <SelectTrigger className="w-72"><SelectValue placeholder={t('cab.cloture.choose_company', locale)} /></SelectTrigger>
                 <SelectContent>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                 </SelectContent>
@@ -86,25 +88,21 @@ export default function CloturePage() {
 
         <Tabs defaultValue="mensuelle">
           <TabsList className="grid grid-cols-4 w-full max-w-3xl">
-            <TabsTrigger value="mensuelle"><Calendar className="w-4 h-4 mr-1" /> Mensuelle</TabsTrigger>
-            <TabsTrigger value="annuelle"><TrendingUp className="w-4 h-4 mr-1" /> Annuelle</TabsTrigger>
-            <TabsTrigger value="change"><RefreshCw className="w-4 h-4 mr-1" /> Change EOY</TabsTrigger>
-            <TabsTrigger value="immo">IAS 36 Immo</TabsTrigger>
+            <TabsTrigger value="mensuelle"><Calendar className="w-4 h-4 mr-1" /> {t('cab.cloture.tab_monthly', locale)}</TabsTrigger>
+            <TabsTrigger value="annuelle"><TrendingUp className="w-4 h-4 mr-1" /> {t('cab.cloture.tab_annual', locale)}</TabsTrigger>
+            <TabsTrigger value="change"><RefreshCw className="w-4 h-4 mr-1" /> {t('cab.cloture.tab_fx', locale)}</TabsTrigger>
+            <TabsTrigger value="immo">{t('cab.cloture.tab_immo', locale)}</TabsTrigger>
           </TabsList>
 
           {/* Clôture mensuelle */}
           <TabsContent value="mensuelle" className="space-y-3">
             <Card>
-              <CardHeader><CardTitle className="text-base">Clôture mensuelle</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">{t('cab.cloture.monthly_title', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-gray-600">
-                  Génère en une fois : <strong>provisions IAS 19</strong> (PRGF + Severance),
-                  <strong> agrégation TDS</strong> du mois, <strong>prorata IFRS 15</strong> over-time,
-                  et <strong>calcul ECL IFRS 9</strong> sur les créances clients.
-                </p>
+                <p className="text-sm text-gray-600" dangerouslySetInnerHTML={{ __html: t('cab.cloture.monthly_desc_html', locale) }} />
                 <div className="flex gap-3 items-end">
                   <div>
-                    <Label>Période (YYYY-MM)</Label>
+                    <Label>{t('cab.cloture.fld_period', locale)}</Label>
                     <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-44" />
                   </div>
                   <Button
@@ -113,7 +111,7 @@ export default function CloturePage() {
                     style={{ backgroundColor: NAVY, color: "white" }}
                   >
                     {loading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
-                    Lancer la clôture mensuelle
+                    {t('cab.cloture.run_monthly_btn', locale)}
                   </Button>
                 </div>
               </CardContent>
@@ -123,23 +121,18 @@ export default function CloturePage() {
           {/* Clôture annuelle */}
           <TabsContent value="annuelle" className="space-y-3">
             <Card>
-              <CardHeader><CardTitle className="text-base">Clôture exercice + RAN auto</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">{t('cab.cloture.annual_title', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  Solde les comptes 6/7 sur 1200, génère les écritures à-nouveau (AN) au 1er jour
-                  du nouvel exercice, et affecte le résultat sur le compte 119 (Report à nouveau).
+                  {t('cab.cloture.annual_desc', locale)}
                 </p>
                 <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm flex gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <strong>Action irréversible côté audit</strong> — la fonction est idempotente
-                    (re-run autorisé) mais génère beaucoup d'écritures. Faire en fin d'exercice
-                    après contrôle balance + état financier.
-                  </div>
+                  <div dangerouslySetInnerHTML={{ __html: t('cab.cloture.annual_warning_html', locale) }} />
                 </div>
                 <div className="flex gap-3 items-end">
                   <div>
-                    <Label>Exercice</Label>
+                    <Label>{t('cab.cloture.fld_fiscal_year', locale)}</Label>
                     <Select value={exercice} onValueChange={setExercice}>
                       <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -155,7 +148,7 @@ export default function CloturePage() {
                     style={{ backgroundColor: GOLD, color: "white" }}
                   >
                     {loading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
-                    Clôturer l'exercice {exercice}
+                    {t('cab.cloture.close_year_btn', locale)} {exercice}
                   </Button>
                 </div>
               </CardContent>
@@ -165,30 +158,28 @@ export default function CloturePage() {
           {/* Réévaluation change */}
           <TabsContent value="change" className="space-y-3">
             <Card>
-              <CardHeader><CardTitle className="text-base">Réévaluation IAS 21 — fin d'exercice</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">{t('cab.cloture.fx_title', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  Réévalue les soldes 411 (créances clients) et 401 (dettes fournisseurs)
-                  en devise étrangère au taux de clôture. Génère les écritures équilibrées
-                  666N / 766N (gains/pertes de change non réalisés).
+                  {t('cab.cloture.fx_desc', locale)}
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label>Date de clôture</Label>
+                    <Label>{t('cab.cloture.fld_close_date', locale)}</Label>
                     <Input type="date" value={dateCloture} onChange={e => setDateCloture(e.target.value)} />
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <Label>Taux EUR → MUR</Label>
+                    <Label>{t('cab.cloture.fld_rate_eur', locale)}</Label>
                     <Input type="number" step="0.0001" value={tauxEUR} onChange={e => setTauxEUR(e.target.value)} />
                   </div>
                   <div>
-                    <Label>Taux USD → MUR</Label>
+                    <Label>{t('cab.cloture.fld_rate_usd', locale)}</Label>
                     <Input type="number" step="0.0001" value={tauxUSD} onChange={e => setTauxUSD(e.target.value)} />
                   </div>
                   <div>
-                    <Label>Taux GBP → MUR</Label>
+                    <Label>{t('cab.cloture.fld_rate_gbp', locale)}</Label>
                     <Input type="number" step="0.0001" value={tauxGBP} onChange={e => setTauxGBP(e.target.value)} />
                   </div>
                 </div>
@@ -205,7 +196,7 @@ export default function CloturePage() {
                   style={{ backgroundColor: NAVY, color: "white" }}
                 >
                   {loading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
-                  Réévaluer au {dateCloture}
+                  {t('cab.cloture.fx_run_btn', locale)} {dateCloture}
                 </Button>
               </CardContent>
             </Card>
@@ -214,16 +205,13 @@ export default function CloturePage() {
           {/* Test dépréciation immo */}
           <TabsContent value="immo" className="space-y-3">
             <Card>
-              <CardHeader><CardTitle className="text-base">IAS 36 — Test de dépréciation immobilisation</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">{t('cab.cloture.immo_title', locale)}</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600 mb-3">
-                  À utiliser quand un indice de perte de valeur est détecté sur une immobilisation
-                  (vétusté, baisse marché, sinistre…). Saisis la valeur recouvrable (juste valeur
-                  − coûts de cession, OU valeur d'usage). Si elle est inférieure à la VNC, une
-                  écriture de dépréciation 6816 / 291 est générée automatiquement.
+                  {t('cab.cloture.immo_desc', locale)}
                 </p>
                 <p className="text-xs text-gray-500">
-                  Accessible aussi depuis la liste des immobilisations (bouton "Tester valeur").
+                  {t('cab.cloture.immo_hint', locale)}
                 </p>
               </CardContent>
             </Card>
@@ -235,7 +223,7 @@ export default function CloturePage() {
           <Card className="border-red-300 bg-red-50">
             <CardContent className="p-4 flex gap-2 text-sm text-red-800">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-              <div><strong>Erreur :</strong> {error}</div>
+              <div><strong>{t('cab.cloture.error_label', locale)}</strong> {error}</div>
             </CardContent>
           </Card>
         )}
@@ -244,7 +232,7 @@ export default function CloturePage() {
           <Card className="border-green-300 bg-green-50">
             <CardHeader>
               <CardTitle className="text-base text-green-800 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5" /> Résultat — {result.action}
+                <CheckCircle2 className="w-5 h-5" /> {t('cab.cloture.result_label', locale)} — {result.action}
               </CardTitle>
             </CardHeader>
             <CardContent>

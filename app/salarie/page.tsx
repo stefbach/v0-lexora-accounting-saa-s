@@ -8,6 +8,7 @@ import {
   LayoutDashboard, MoreHorizontal, Car, HeartPulse,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 import { NAVY, GOLD, MU_TZ, KNOWN_TABS, type Tab } from "./_components/shared/constants"
 import { timeMauritius, todayFR, todayISO } from "./_components/shared/helpers"
@@ -28,6 +29,7 @@ import { SanteTab } from "./_components/tabs/SanteTab"
 // en sous-composants (app/salarie/_components/tabs/*). Aucun changement
 // fonctionnel : seule la topologie du code a changé.
 export default function EspaceEmployePage() {
+  const locale = getLocale()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -151,7 +153,7 @@ export default function EspaceEmployePage() {
       const data = await res.json()
       if (!res.ok || data.error) setFeedback(data.error || `Erreur ${res.status}`)
       else { setFeedback(`${type} enregistré`); load() }
-    } catch { setFeedback("Erreur réseau") }
+    } catch { setFeedback(t('adm.sal.err_network', locale)) }
     setPunching(false)
   }
 
@@ -159,10 +161,9 @@ export default function EspaceEmployePage() {
   if (!employe) return (
     <div className="flex flex-col items-center justify-center h-screen text-gray-500 p-6 text-center">
       <User className="h-16 w-16 mb-4 text-gray-300" />
-      <h2 className="text-lg font-bold mb-2" style={{ color: NAVY }}>Profil employé non trouvé</h2>
+      <h2 className="text-lg font-bold mb-2" style={{ color: NAVY }}>{t('adm.sal.no_profile_title', locale)}</h2>
       <p className="text-sm text-gray-400 mb-4 max-w-sm">
-        Votre compte n&apos;est pas encore lié à une fiche employé.
-        Contactez votre responsable RH pour activer votre accès.
+        {t('adm.sal.no_profile_desc', locale)}
       </p>
       <Button onClick={async () => {
         const { createClient } = await import("@/lib/supabase/client")
@@ -170,7 +171,7 @@ export default function EspaceEmployePage() {
         await supabase.auth.signOut()
         window.location.href = "/auth/login"
       }} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
-        <LogOut className="h-4 w-4 mr-2" /> Se déconnecter
+        <LogOut className="h-4 w-4 mr-2" /> {t('adm.sal.sign_out', locale)}
       </Button>
     </div>
   )
@@ -189,21 +190,21 @@ export default function EspaceEmployePage() {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h1 className="text-xl md:text-xl font-bold text-white">Bonjour, {employe.prenom} {"👋"}</h1>
+                <h1 className="text-xl md:text-xl font-bold text-white">{t('adm.sal.hello', locale)}, {employe.prenom} {"👋"}</h1>
                 <p className="text-white/60 text-xs md:text-sm">{employe.entreprise_nom || employe.poste || "—"} &middot; {todayFR()}</p>
               </div>
             </div>
             <div className="hidden md:flex items-center gap-4">
               <div className="text-right">
                 <p className="text-3xl font-mono font-bold text-white">{now.toLocaleTimeString("fr-FR", { timeZone: MU_TZ, hour: "2-digit", minute: "2-digit" })}</p>
-                <p className="text-white/40 text-xs">Maurice (UTC+4)</p>
+                <p className="text-white/40 text-xs">{t('adm.sal.timezone', locale)}</p>
               </div>
               <button onClick={async () => {
                 const { createClient } = await import("@/lib/supabase/client")
                 const supabase = createClient()
                 await supabase.auth.signOut()
                 window.location.href = "/auth/login"
-              }} className="h-10 w-10 rounded-xl flex items-center justify-center bg-white/10 hover:bg-red-500/20 transition-colors" title="Déconnexion">
+              }} className="h-10 w-10 rounded-xl flex items-center justify-center bg-white/10 hover:bg-red-500/20 transition-colors" title={t('adm.sal.logout', locale)}>
                 <LogOut className="h-4 w-4 text-white/60 hover:text-red-400" />
               </button>
             </div>
@@ -218,21 +219,21 @@ export default function EspaceEmployePage() {
               to keep the bar readable between 1024px and 1920px. */}
           <div className="hidden md:flex flex-wrap gap-1 bg-white rounded-xl p-1.5 border shadow-sm">
             {([
-              { id: "dashboard" as Tab, label: "Pointage", icon: LayoutDashboard },
-              { id: "profil" as Tab, label: "Ma fiche", icon: User },
-              { id: "bulletins" as Tab, label: "Bulletins", icon: FileText },
-              { id: "planning" as Tab, label: "Planning", icon: Clock },
-              { id: "primes" as Tab, label: "Primes", icon: TrendingUp },
-              { id: "conges" as Tab, label: "Congés", icon: Calendar },
-              { id: "sante" as Tab, label: "Santé TIBOK", icon: HeartPulse },
-              { id: "trajets" as Tab, label: "Trajets", icon: Car },
-              { id: "contrats" as Tab, label: "Contrats", icon: FileText },
-              { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
-            ]).map(t => (
-              <button key={t.id} onClick={() => router.push(`/salarie#${t.id}`)}
-                className={`flex-1 min-w-[96px] flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 whitespace-nowrap ${tab === t.id ? "text-white font-medium shadow-md" : "text-gray-500 hover:bg-gray-50"}`}
-                style={tab === t.id ? { backgroundColor: NAVY } : {}}>
-                <t.icon className="h-4 w-4 flex-shrink-0" />{t.label}
+              { id: "dashboard" as Tab, label: t('adm.sal.tab_punch', locale), icon: LayoutDashboard },
+              { id: "profil" as Tab, label: t('adm.sal.tab_card', locale), icon: User },
+              { id: "bulletins" as Tab, label: t('adm.sal.tab_payslips', locale), icon: FileText },
+              { id: "planning" as Tab, label: t('adm.sal.tab_planning', locale), icon: Clock },
+              { id: "primes" as Tab, label: t('adm.sal.tab_bonuses', locale), icon: TrendingUp },
+              { id: "conges" as Tab, label: t('adm.sal.tab_leave', locale), icon: Calendar },
+              { id: "sante" as Tab, label: t('adm.sal.tab_health', locale), icon: HeartPulse },
+              { id: "trajets" as Tab, label: t('adm.sal.tab_trips', locale), icon: Car },
+              { id: "contrats" as Tab, label: t('adm.sal.tab_contracts', locale), icon: FileText },
+              { id: "documents" as Tab, label: t('adm.sal.tab_docs', locale), icon: FolderOpen },
+            ]).map(tab2 => (
+              <button key={tab2.id} onClick={() => router.push(`/salarie#${tab2.id}`)}
+                className={`flex-1 min-w-[96px] flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 whitespace-nowrap ${tab === tab2.id ? "text-white font-medium shadow-md" : "text-gray-500 hover:bg-gray-50"}`}
+                style={tab === tab2.id ? { backgroundColor: NAVY } : {}}>
+                <tab2.icon className="h-4 w-4 flex-shrink-0" />{tab2.label}
               </button>
             ))}
           </div>
@@ -292,21 +293,21 @@ export default function EspaceEmployePage() {
           <div className="md:hidden fixed inset-0 z-40" onClick={() => setMobileMenuOpen(false)}>
             <div className="absolute inset-0 bg-black/30" />
             <div className="absolute bottom-[72px] left-0 right-0 bg-white rounded-t-2xl shadow-xl p-4 space-y-1 animate-in slide-in-from-bottom" onClick={e => e.stopPropagation()}>
-              <p className="text-xs text-gray-400 uppercase tracking-wider px-3 pb-2">Plus</p>
+              <p className="text-xs text-gray-400 uppercase tracking-wider px-3 pb-2">{t('adm.sal.more', locale)}</p>
               {([
-                { id: "profil" as Tab, label: "Ma fiche", icon: User },
-                { id: "planning" as Tab, label: "Planning", icon: Clock },
-                { id: "primes" as Tab, label: "Primes & OT", icon: TrendingUp },
-                { id: "trajets" as Tab, label: "Trajets km", icon: Car },
-                { id: "documents" as Tab, label: "Documents", icon: FolderOpen },
-              ]).map(t => (
-                <button key={t.id} onClick={() => { router.push(`/salarie#${t.id}`); setMobileMenuOpen(false) }}
+                { id: "profil" as Tab, label: t('adm.sal.tab_card', locale), icon: User },
+                { id: "planning" as Tab, label: t('adm.sal.tab_planning', locale), icon: Clock },
+                { id: "primes" as Tab, label: t('adm.sal.bonuses_ot', locale), icon: TrendingUp },
+                { id: "trajets" as Tab, label: t('adm.sal.trips_km', locale), icon: Car },
+                { id: "documents" as Tab, label: t('adm.sal.tab_docs', locale), icon: FolderOpen },
+              ]).map(tab2 => (
+                <button key={tab2.id} onClick={() => { router.push(`/salarie#${tab2.id}`); setMobileMenuOpen(false) }}
                   className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left transition-all duration-200 active:scale-[0.98]"
-                  style={tab === t.id ? { backgroundColor: `${NAVY}08`, color: NAVY } : { color: "#6b7280" }}>
-                  <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: tab === t.id ? `${GOLD}15` : "#f3f4f6" }}>
-                    <t.icon className="h-5 w-5" style={{ color: tab === t.id ? GOLD : "#9ca3af" }} />
+                  style={tab === tab2.id ? { backgroundColor: `${NAVY}08`, color: NAVY } : { color: "#6b7280" }}>
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: tab === tab2.id ? `${GOLD}15` : "#f3f4f6" }}>
+                    <tab2.icon className="h-5 w-5" style={{ color: tab === tab2.id ? GOLD : "#9ca3af" }} />
                   </div>
-                  <span className="font-medium text-sm">{t.label}</span>
+                  <span className="font-medium text-sm">{tab2.label}</span>
                 </button>
               ))}
               <div className="border-t border-gray-200 mt-2 pt-2">
@@ -320,7 +321,7 @@ export default function EspaceEmployePage() {
                   <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-red-50">
                     <LogOut className="h-5 w-5 text-red-500" />
                   </div>
-                  <span className="font-medium text-sm">Déconnexion</span>
+                  <span className="font-medium text-sm">{t('adm.sal.logout', locale)}</span>
                 </button>
               </div>
             </div>
@@ -331,27 +332,27 @@ export default function EspaceEmployePage() {
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t" style={{ borderColor: "#E2E5F0", paddingBottom: "env(safe-area-inset-bottom)" }}>
           <div className="flex items-center justify-around px-2 h-[68px]">
             {([
-              { id: "dashboard" as Tab, label: "Home", icon: LayoutDashboard },
-              { id: "bulletins" as Tab, label: "Bulletins", icon: FileText },
-              { id: "sante" as Tab, label: "Ma Sante", icon: HeartPulse },
-              { id: "conges" as Tab, label: "Conges", icon: Calendar },
-              { id: "more" as const, label: "Plus", icon: MoreHorizontal },
-            ]).map(t => {
-              const isMore = t.id === "more"
-              const isActive = isMore ? (mobileMenuOpen || ["profil", "primes", "documents"].includes(tab)) : tab === t.id
+              { id: "dashboard" as Tab, label: t('adm.sal.home', locale), icon: LayoutDashboard },
+              { id: "bulletins" as Tab, label: t('adm.sal.tab_payslips', locale), icon: FileText },
+              { id: "sante" as Tab, label: t('adm.sal.my_health', locale), icon: HeartPulse },
+              { id: "conges" as Tab, label: t('adm.sal.tab_leave', locale), icon: Calendar },
+              { id: "more" as const, label: t('adm.sal.more', locale), icon: MoreHorizontal },
+            ]).map(tab2 => {
+              const isMore = tab2.id === "more"
+              const isActive = isMore ? (mobileMenuOpen || ["profil", "primes", "documents"].includes(tab)) : tab === tab2.id
               return (
-                <button key={t.id}
+                <button key={tab2.id}
                   onClick={() => {
                     if (isMore) { setMobileMenuOpen(v => !v) }
-                    else { router.push(`/salarie#${t.id}`); setMobileMenuOpen(false) }
+                    else { router.push(`/salarie#${tab2.id}`); setMobileMenuOpen(false) }
                   }}
                   className="flex flex-col items-center justify-center gap-1 min-w-[56px] py-1.5 transition-all duration-200 active:scale-95"
                 >
                   <div className="relative">
                     {isActive && <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-5 h-[3px] rounded-full" style={{ backgroundColor: GOLD }} />}
-                    <t.icon className="h-6 w-6 transition-colors duration-200" style={{ color: isActive ? GOLD : "#9ca3af" }} />
+                    <tab2.icon className="h-6 w-6 transition-colors duration-200" style={{ color: isActive ? GOLD : "#9ca3af" }} />
                   </div>
-                  <span className="text-[10px] font-medium transition-colors duration-200" style={{ color: isActive ? GOLD : "#9ca3af" }}>{t.label}</span>
+                  <span className="text-[10px] font-medium transition-colors duration-200" style={{ color: isActive ? GOLD : "#9ca3af" }}>{tab2.label}</span>
                 </button>
               )
             })}

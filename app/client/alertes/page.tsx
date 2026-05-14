@@ -27,6 +27,7 @@ import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ClientPanel, ClientEmpty } from "@/components/client/ClientKit"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const FONT = "'Poppins', sans-serif"
 
@@ -56,33 +57,34 @@ function getAlertIcon(type: string) {
   }
 }
 
-function getTypeBadge(type: string) {
+function getTypeBadge(type: string, locale: Locale) {
   switch (type) {
     case "urgent":
-      return <Badge className="bg-red-100 text-red-700 border-red-200">Urgent</Badge>
+      return <Badge className="bg-red-100 text-red-700 border-red-200">{t('core.alr.urgent', locale)}</Badge>
     case "attention":
-      return <Badge className="bg-orange-100 text-orange-700 border-orange-200">Attention requise</Badge>
+      return <Badge className="bg-orange-100 text-orange-700 border-orange-200">{t('core.alr.attention_required', locale)}</Badge>
     case "info":
-      return <Badge className="bg-blue-100 text-blue-700 border-blue-200">Info</Badge>
+      return <Badge className="bg-blue-100 text-blue-700 border-blue-200">{t('core.alr.info', locale)}</Badge>
     default:
       return <Badge variant="secondary">{type}</Badge>
   }
 }
 
-function formatDate(dateStr: string) {
+function formatDate(dateStr: string, locale: Locale) {
   const d = new Date(dateStr)
-  return d.toLocaleDateString("fr-FR", {
+  return d.toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR', {
     day: "2-digit",
     month: "short",
     year: "numeric",
   })
 }
 
-function formatMUR(n: number) {
-  return n.toLocaleString("fr-FR") + " MUR"
+function formatMUR(n: number, locale: Locale) {
+  return n.toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR') + " MUR"
 }
 
 export default function AlertesPage() {
+  const locale = getLocale()
   const { profile } = useProfile()
   const { societeId } = useSocieteActive()
   const [filter, setFilter] = useState("toutes")
@@ -191,7 +193,7 @@ export default function AlertesPage() {
                 >
                   {alert.titre}
                 </h3>
-                {getTypeBadge(alert.type)}
+                {getTypeBadge(alert.type, locale)}
                 {!alert.lue && (
                   <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
                 )}
@@ -199,12 +201,12 @@ export default function AlertesPage() {
               <p className="text-sm text-muted-foreground">{alert.description}</p>
               {alert.montant !== null && (
                 <p className="text-sm font-semibold mt-1" style={{ color: "#0B0F2E" }}>
-                  Montant: {formatMUR(alert.montant)}
+                  {t('core.alr.amount', locale)}: {formatMUR(alert.montant, locale)}
                 </p>
               )}
               {alert.echeance && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Echeance: {formatDate(alert.echeance)}
+                  {t('core.alr.due_date', locale)}: {formatDate(alert.echeance, locale)}
                 </p>
               )}
               <p className="text-xs mt-2 font-medium" style={{ color: "#D4AF37" }}>
@@ -218,7 +220,7 @@ export default function AlertesPage() {
                   size="sm"
                   onClick={() => markAsRead(alert.id)}
                 >
-                  Marquer comme lu
+                  {t('core.alr.mark_as_read', locale)}
                 </Button>
               )}
               {!alert.archivee && (
@@ -253,22 +255,22 @@ export default function AlertesPage() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Alertes" }]}
-      kicker={`${totalCount} ${totalCount > 1 ? "alertes actives" : "alerte active"}`}
-      title="Mes alertes"
-      subtitle="Restez informé de tout ce qui concerne votre comptabilité — échéances, impayés, documents manquants, points de vigilance."
+      breadcrumbs={[{ label: t('core.alr.client_space', locale), href: "/client" }, { label: t('core.alr.alerts', locale) }]}
+      kicker={`${totalCount} ${totalCount > 1 ? t('core.alr.active_many', locale) : t('core.alr.active_one', locale)}`}
+      title={t('core.alr.my_alerts', locale)}
+      subtitle={t('core.alr.subtitle', locale)}
     >
       <div style={{ display: "grid", gap: "18px" }}>
         <ClientPanel padded={false}>
           <div style={{ padding: "14px 18px" }}>
             <Tabs value={filter} onValueChange={setFilter}>
               <TabsList style={{ background: "transparent", padding: 0, gap: "4px", flexWrap: "wrap" }}>
-                <TabsTrigger value="toutes">Toutes</TabsTrigger>
-                <TabsTrigger value="non_lues">Non lues ({nonLuesCount})</TabsTrigger>
-                <TabsTrigger value="urgent">Urgent ({urgentCount})</TabsTrigger>
-                <TabsTrigger value="attention">Attention ({attentionCount})</TabsTrigger>
-                <TabsTrigger value="info">Info ({infoCount})</TabsTrigger>
-                <TabsTrigger value="archives">Archives</TabsTrigger>
+                <TabsTrigger value="toutes">{t('core.alr.tab_all', locale)}</TabsTrigger>
+                <TabsTrigger value="non_lues">{t('core.alr.tab_unread', locale)} ({nonLuesCount})</TabsTrigger>
+                <TabsTrigger value="urgent">{t('core.alr.tab_urgent', locale)} ({urgentCount})</TabsTrigger>
+                <TabsTrigger value="attention">{t('core.alr.tab_attention', locale)} ({attentionCount})</TabsTrigger>
+                <TabsTrigger value="info">{t('core.alr.tab_info', locale)} ({infoCount})</TabsTrigger>
+                <TabsTrigger value="archives">{t('core.alr.tab_archive', locale)}</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -277,14 +279,14 @@ export default function AlertesPage() {
         <div style={{ display: "grid", gap: "16px" }}>
           {showGrouped ? (
             <>
-              {renderGroupedAlerts("Urgent", urgentAlerts, "#EF4444")}
-              {renderGroupedAlerts("Attention requise", attentionAlerts, "#F97316")}
-              {renderGroupedAlerts("Information", infoAlerts, "#3B82F6")}
+              {renderGroupedAlerts(t('core.alr.urgent', locale), urgentAlerts, "#EF4444")}
+              {renderGroupedAlerts(t('core.alr.attention_required', locale), attentionAlerts, "#F97316")}
+              {renderGroupedAlerts(t('core.alr.information', locale), infoAlerts, "#3B82F6")}
               {filteredAlerts.length === 0 && (
                 <ClientEmpty
                   icon={Bell}
-                  title="Aucune alerte"
-                  description="Tout est sous contrôle. Les nouvelles alertes apparaîtront ici dès que votre comptable en créera."
+                  title={t('core.alr.no_alerts', locale)}
+                  description={t('core.alr.all_under_control', locale)}
                   accent="green"
                 />
               )}
@@ -299,8 +301,8 @@ export default function AlertesPage() {
               {filteredAlerts.length === 0 && (
                 <ClientEmpty
                   icon={Bell}
-                  title="Aucune alerte"
-                  description="Aucune alerte ne correspond à ce filtre."
+                  title={t('core.alr.no_alerts', locale)}
+                  description={t('core.alr.no_match_filter', locale)}
                   accent="blue"
                 />
               )}

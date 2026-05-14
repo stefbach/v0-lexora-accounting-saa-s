@@ -13,6 +13,7 @@ import {
   AlertTriangle, CheckCircle2, Users, CreditCard
 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -124,6 +125,7 @@ interface PayeRow {
 // ---------------------------------------------------------------------------
 
 export default function ExportsRHPage() {
+  const locale = getLocale()
   const { societeId, societe: activeSociete } = useSocieteActive()
   const societe = societeId || ""
   const [periode, setPeriode] = useState(new Date().toISOString().slice(0, 7))
@@ -133,9 +135,9 @@ export default function ExportsRHPage() {
   return (
     <div className="p-6 space-y-6 max-w-6xl">
       <div>
-        <h1 className="text-2xl font-bold text-[#0B0F2E]">Exports RH</h1>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('hr.exports.title', locale)}</h1>
         <p className="text-sm text-gray-500">
-          Virements bancaires et declarations MRA
+          {t('hr.exports.subtitle', locale)}
         </p>
       </div>
 
@@ -143,7 +145,7 @@ export default function ExportsRHPage() {
       <Card>
         <CardContent className="p-4">
           <div>
-            <Label>Periode (mois)</Label>
+            <Label>{t('hr.exports.period_month', locale)}</Label>
             <Input
               type="month"
               value={periode}
@@ -157,7 +159,7 @@ export default function ExportsRHPage() {
         <div className="text-center py-16 text-gray-400">
           <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
           <p className="text-sm">
-            Selectionnez une societe et une periode pour commencer
+            {t('hr.exports.select_company_period', locale)}
           </p>
         </div>
       )}
@@ -170,14 +172,14 @@ export default function ExportsRHPage() {
               className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white"
             >
               <CreditCard className="w-4 h-4 mr-2" />
-              Virement bancaire
+              {t('hr.exports.tab_bank_transfer', locale)}
             </TabsTrigger>
             <TabsTrigger
               value="mra"
               className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white"
             >
               <Calculator className="w-4 h-4 mr-2" />
-              Export MRA
+              {t('hr.exports.tab_mra', locale)}
             </TabsTrigger>
           </TabsList>
 
@@ -200,6 +202,7 @@ export default function ExportsRHPage() {
 
 // ---------------------------------------------------------------------------
 // Section 1 -- VIREMENT BANCAIRE
+// TODO i18n: VirementSection and MRASection contain many FR strings (table headers, alerts, descriptions). Top-level page i18n applied; inner sections deferred.
 // ---------------------------------------------------------------------------
 
 function VirementSection({

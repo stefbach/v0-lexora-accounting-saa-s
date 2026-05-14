@@ -16,6 +16,7 @@ import {
   FileText as FileIcon, CheckCircle, AlertTriangle as AlertIcon, Pencil,
   Building2, Eye, Mail, Phone, BookOpen, Scale, Receipt,
 } from "lucide-react"
+import { t, getLocale } from '@/lib/i18n'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -158,6 +159,7 @@ function EmptyTab({ icon: Icon, message, detail }: { icon: React.ComponentType<{
 
 export default function SocieteContextPage() {
   const params = useParams()
+  const locale = getLocale()
   const clientId = params.clientId as string
   const societeId = params.societeId as string
 
@@ -199,8 +201,8 @@ export default function SocieteContextPage() {
           : null
         const resolvedSociete = societe || societeFromDossier
 
-        if (!user) throw new Error("Client introuvable")
-        if (!resolvedSociete) throw new Error("Société introuvable")
+        if (!user) throw new Error(t('cabclt.soc.client_not_found', locale))
+        if (!resolvedSociete) throw new Error(t('cabclt.soc.company_not_found', locale))
 
         setSocieteInfo({ brn: resolvedSociete.brn, statut_tva: resolvedSociete.statut_tva })
         setClientInfo({ email: user.email, phone: user.phone })
@@ -273,10 +275,10 @@ export default function SocieteContextPage() {
           }))
 
         const kpis: KPI[] = [
-          { label: 'Chiffre d\'affaires', value: fin.totalRevenue || 0, green: true },
-          { label: 'Dépenses', value: fin.totalExpenses || 0 },
-          { label: 'Résultat', value: fin.resultat || 0, green: (fin.resultat || 0) > 0 },
-          { label: 'Trésorerie', value: fin.totalBankMUR || 0, green: true },
+          { label: t('cabclt.soc.kpi_revenue', locale), value: fin.totalRevenue || 0, green: true },
+          { label: t('cabclt.soc.kpi_expenses', locale), value: fin.totalExpenses || 0 },
+          { label: t('cabclt.soc.kpi_profit', locale), value: fin.resultat || 0, green: (fin.resultat || 0) > 0 },
+          { label: t('cabclt.soc.kpi_treasury', locale), value: fin.totalBankMUR || 0, green: true },
         ]
 
         // Build bank entries from bankTransactions (individual lines from statements)
@@ -304,10 +306,10 @@ export default function SocieteContextPage() {
 
         // Build TVA rows from tvaRecords or from computed values
         const tvaRows: TVAEntry[] = (fin.tvaRecords || []).length > 0
-          ? (fin.tvaRecords || []).map((t: any) => ({
-              mois: t.periode, collectee: t.tva_collectee || 0, deductible: t.tva_deductible || 0,
-              nette: t.tva_nette || 0, deadline: t.date_limite || '—',
-              statut: t.statut || 'a_declarer', ref: '',
+          ? (fin.tvaRecords || []).map((rec: any) => ({
+              mois: rec.periode, collectee: rec.tva_collectee || 0, deductible: rec.tva_deductible || 0,
+              nette: rec.tva_nette || 0, deadline: rec.date_limite || '—',
+              statut: rec.statut || 'a_declarer', ref: '',
             }))
           : (fin.tvaCollectee || fin.tvaDeductible)
             ? [{
@@ -346,7 +348,7 @@ export default function SocieteContextPage() {
           facturesClients,
           banque: bankEntries,
           salaires: fin.salaires ? [{
-            employe: 'Total masse salariale', brut: fin.salaires, csg: 0, nsf: 0,
+            employe: t('cabclt.soc.total_payroll_mass', locale), brut: fin.salaires, csg: 0, nsf: 0,
             paye: 0, net: fin.salaires, cout: fin.salaires + (fin.chargesSociales || 0),
             statut: 'a_verifier',
           }] : [],
@@ -382,7 +384,7 @@ export default function SocieteContextPage() {
           },
         })
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Une erreur est survenue")
+        setError(err instanceof Error ? err.message : t('cabclt.soc.error_occurred', locale))
       } finally {
         setLoading(false)
       }
@@ -405,13 +407,13 @@ export default function SocieteContextPage() {
         const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
         const respData = await res.json()
         if (res.ok) {
-          setUploadedFiles(prev => [{ name: file.name, status: "En cours de traitement", date: new Date().toLocaleDateString("fr-FR"), type: "Détection..." }, ...prev])
-          setUploadSuccess(`${file.name} uploadé avec succès. Analyse en cours...`)
+          setUploadedFiles(prev => [{ name: file.name, status: t('cabclt.soc.processing', locale), date: new Date().toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB'), type: t('cabclt.soc.detecting', locale) }, ...prev])
+          setUploadSuccess(`${file.name} ${t('cabclt.soc.upload_success', locale)}`)
         } else {
-          setUploadError(respData.error || "Erreur lors de l'upload")
+          setUploadError(respData.error || t('cabclt.soc.upload_error', locale))
         }
       } catch {
-        setUploadError("Erreur de connexion")
+        setUploadError(t('cabclt.soc.connection_error', locale))
       }
     }
     setUploading(false)
@@ -439,18 +441,18 @@ export default function SocieteContextPage() {
     return (
       <div className="flex-1 overflow-auto p-6">
         <div className="flex items-center gap-2 text-sm mb-8">
-          <Link href="/comptable/clients" className="text-muted-foreground hover:text-foreground">Portefeuille</Link>
+          <Link href="/comptable/clients" className="text-muted-foreground hover:text-foreground">{t('cabclt.soc.portfolio', locale)}</Link>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          <Link href={`/comptable/clients/${clientId}`} className="text-muted-foreground hover:text-foreground">Client</Link>
+          <Link href={`/comptable/clients/${clientId}`} className="text-muted-foreground hover:text-foreground">{t('cabclt.soc.client', locale)}</Link>
         </div>
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
             <Building2 className="h-12 w-12 text-muted-foreground/40" />
-            <p className="font-medium text-base">{error || "Société introuvable"}</p>
-            <p className="text-sm">Vérifiez le lien ou retournez à la fiche client.</p>
+            <p className="font-medium text-base">{error || t('cabclt.soc.company_not_found', locale)}</p>
+            <p className="text-sm">{t('cabclt.soc.check_link', locale)}</p>
             <Link href={`/comptable/clients/${clientId}`}>
               <Button variant="outline" className="mt-2 gap-2" style={{ borderColor: NAVY, color: NAVY }}>
-                <ArrowLeft className="h-4 w-4" /> Retour au client
+                <ArrowLeft className="h-4 w-4" /> {t('cabclt.soc.back_to_client', locale)}
               </Button>
             </Link>
           </CardContent>
@@ -467,7 +469,7 @@ export default function SocieteContextPage() {
       {/* Breadcrumb + actions */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 text-sm">
-          <Link href="/comptable/clients" className="text-muted-foreground hover:text-foreground">Portefeuille</Link>
+          <Link href="/comptable/clients" className="text-muted-foreground hover:text-foreground">{t('cabclt.soc.portfolio', locale)}</Link>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
           <Link href={`/comptable/clients/${clientId}`} className="text-muted-foreground hover:text-foreground">{clientName}</Link>
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -475,7 +477,7 @@ export default function SocieteContextPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/comptable/clients/${clientId}`}><ArrowLeft className="mr-1 h-4 w-4" />Retour au client</Link>
+            <Link href={`/comptable/clients/${clientId}`}><ArrowLeft className="mr-1 h-4 w-4" />{t('cabclt.soc.back_to_client', locale)}</Link>
           </Button>
         </div>
       </div>
@@ -494,14 +496,14 @@ export default function SocieteContextPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl font-bold" style={{ color: NAVY }}>{societeName}</h1>
                 {societeInfo?.statut_tva && (
-                  <Badge className="bg-green-50 text-green-700 border-green-200 text-xs">TVA Assujetti</Badge>
+                  <Badge className="bg-green-50 text-green-700 border-green-200 text-xs">{t('cabclt.soc.vat_registered', locale)}</Badge>
                 )}
               </div>
               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                 {societeInfo?.brn && (
                   <span className="flex items-center gap-1">
                     <FileIcon className="h-3.5 w-3.5" />
-                    BRN : <strong>{societeInfo.brn}</strong>
+                    {t('cabclt.soc.brn_label', locale)} <strong>{societeInfo.brn}</strong>
                   </span>
                 )}
                 {clientInfo?.email && (
@@ -522,22 +524,22 @@ export default function SocieteContextPage() {
             <div className="flex flex-wrap gap-2 shrink-0">
               <Link href={`/comptable/clients/${clientId}/${societeId}/grand-livre`}>
                 <Button variant="outline" size="sm" className="gap-1 text-xs" style={{ borderColor: `${NAVY}50`, color: NAVY }}>
-                  <BookOpen className="h-3 w-3" />Grand Livre
+                  <BookOpen className="h-3 w-3" />{t('cabclt.soc.general_ledger', locale)}
                 </Button>
               </Link>
               <Link href={`/comptable/clients/${clientId}/${societeId}/balance`}>
                 <Button variant="outline" size="sm" className="gap-1 text-xs" style={{ borderColor: `${NAVY}50`, color: NAVY }}>
-                  <Scale className="h-3 w-3" />Balance
+                  <Scale className="h-3 w-3" />{t('cabclt.soc.trial_balance', locale)}
                 </Button>
               </Link>
               <Link href={`/comptable/clients/${clientId}/${societeId}/bilan`}>
                 <Button variant="outline" size="sm" className="gap-1 text-xs" style={{ borderColor: `${NAVY}50`, color: NAVY }}>
-                  <TrendingUp className="h-3 w-3" />Bilan &amp; P&amp;L
+                  <TrendingUp className="h-3 w-3" />{t('cabclt.soc.balance_sheet_pl', locale)}
                 </Button>
               </Link>
               <Link href={`/comptable/clients/${clientId}/${societeId}/tva`}>
                 <Button variant="outline" size="sm" className="gap-1 text-xs" style={{ borderColor: `${NAVY}50`, color: NAVY }}>
-                  <Receipt className="h-3 w-3" />TVA
+                  <Receipt className="h-3 w-3" />{t('cabclt.soc.vat', locale)}
                 </Button>
               </Link>
               <Link href={`/comptable/clients/${clientId}/${societeId}/it-form3`}>
@@ -563,12 +565,12 @@ export default function SocieteContextPage() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
-            { label: "CA du mois", icon: TrendingUp },
-            { label: "Charges", icon: TrendingDown },
-            { label: "Résultat", icon: BarChart3 },
-            { label: "TVA nette", icon: Calculator },
-            { label: "Trésorerie", icon: Landmark },
-            { label: "Masse salariale", icon: Wallet },
+            { label: t('cabclt.soc.kpi_revenue_month', locale), icon: TrendingUp },
+            { label: t('cabclt.soc.kpi_expenses', locale), icon: TrendingDown },
+            { label: t('cabclt.soc.kpi_profit', locale), icon: BarChart3 },
+            { label: t('cabclt.soc.kpi_vat_net', locale), icon: Calculator },
+            { label: t('cabclt.soc.kpi_treasury', locale), icon: Landmark },
+            { label: t('cabclt.soc.kpi_payroll_mass', locale), icon: Wallet },
           ].map((k) => (
             <Card key={k.label}><CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground mb-1">{k.label}</p>
@@ -580,37 +582,37 @@ export default function SocieteContextPage() {
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="overview">Vue d&apos;ensemble</TabsTrigger>
-          <TabsTrigger value="fournisseurs">Fournisseurs</TabsTrigger>
-          <TabsTrigger value="clients">Factures Clients</TabsTrigger>
-          <TabsTrigger value="banque">Banque</TabsTrigger>
-          <TabsTrigger value="salaires">Salaires</TabsTrigger>
-          <TabsTrigger value="charges">Charges Sociales</TabsTrigger>
-          <TabsTrigger value="tva">TVA MRA</TabsTrigger>
-          <TabsTrigger value="grand-livre">Grand Livre</TabsTrigger>
-          <TabsTrigger value="etats-financiers">États Financiers</TabsTrigger>
-          <TabsTrigger value="immobilisations">Immobilisations</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="overview">{t('cabclt.soc.tab_overview', locale)}</TabsTrigger>
+          <TabsTrigger value="fournisseurs">{t('cabclt.soc.tab_suppliers', locale)}</TabsTrigger>
+          <TabsTrigger value="clients">{t('cabclt.soc.tab_client_invoices', locale)}</TabsTrigger>
+          <TabsTrigger value="banque">{t('cabclt.soc.tab_bank', locale)}</TabsTrigger>
+          <TabsTrigger value="salaires">{t('cabclt.soc.tab_salaries', locale)}</TabsTrigger>
+          <TabsTrigger value="charges">{t('cabclt.soc.tab_social_charges', locale)}</TabsTrigger>
+          <TabsTrigger value="tva">{t('cabclt.soc.tab_vat_mra', locale)}</TabsTrigger>
+          <TabsTrigger value="grand-livre">{t('cabclt.soc.general_ledger', locale)}</TabsTrigger>
+          <TabsTrigger value="etats-financiers">{t('cabclt.soc.tab_financial_statements', locale)}</TabsTrigger>
+          <TabsTrigger value="immobilisations">{t('cabclt.soc.tab_fixed_assets', locale)}</TabsTrigger>
+          <TabsTrigger value="documents">{t('cabclt.soc.tab_documents', locale)}</TabsTrigger>
           <TabsTrigger value="pnl">P&L</TabsTrigger>
-          <TabsTrigger value="alertes">Alertes</TabsTrigger>
+          <TabsTrigger value="alertes">{t('cabclt.soc.tab_alerts', locale)}</TabsTrigger>
         </TabsList>
 
         {/* Quick links to full pages */}
         <div className="flex flex-wrap gap-2 -mt-2">
           <Link href={`/comptable/clients/${clientId}/${societeId}/tableau-de-bord`}>
-            <Button variant="outline" size="sm" className="text-xs gap-1"><BarChart3 className="h-3 w-3" />Tableau de Bord</Button>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><BarChart3 className="h-3 w-3" />{t('cabclt.soc.dashboard', locale)}</Button>
           </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/grand-livre`}>
-            <Button variant="outline" size="sm" className="text-xs gap-1"><BarChart3 className="h-3 w-3" />Grand Livre</Button>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><BarChart3 className="h-3 w-3" />{t('cabclt.soc.general_ledger', locale)}</Button>
           </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/balance`}>
-            <Button variant="outline" size="sm" className="text-xs gap-1"><Landmark className="h-3 w-3" />Balance</Button>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><Landmark className="h-3 w-3" />{t('cabclt.soc.trial_balance', locale)}</Button>
           </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/bilan`}>
-            <Button variant="outline" size="sm" className="text-xs gap-1"><FileIcon className="h-3 w-3" />Bilan & P&L</Button>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><FileIcon className="h-3 w-3" />{t('cabclt.soc.balance_sheet_pl', locale)}</Button>
           </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/far`}>
-            <Button variant="outline" size="sm" className="text-xs gap-1"><Building2 className="h-3 w-3" />FAR / Immo</Button>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><Building2 className="h-3 w-3" />{t('cabclt.soc.far_immo', locale)}</Button>
           </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/it-form3`}>
             <Button variant="outline" size="sm" className="text-xs gap-1"><FileIcon className="h-3 w-3" />IT Form 3</Button>
@@ -619,10 +621,10 @@ export default function SocieteContextPage() {
             <Button variant="outline" size="sm" className="text-xs gap-1"><FileIcon className="h-3 w-3" />Annual Return</Button>
           </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/previsionnel`}>
-            <Button variant="outline" size="sm" className="text-xs gap-1"><TrendingUp className="h-3 w-3" />Previsionnel</Button>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><TrendingUp className="h-3 w-3" />{t('cabclt.soc.forecast', locale)}</Button>
           </Link>
           <Link href={`/comptable/clients/${clientId}/${societeId}/simulations`}>
-            <Button variant="outline" size="sm" className="text-xs gap-1"><Calculator className="h-3 w-3" />Simulations</Button>
+            <Button variant="outline" size="sm" className="text-xs gap-1"><Calculator className="h-3 w-3" />{t('cabclt.soc.simulations', locale)}</Button>
           </Link>
         </div>
 
@@ -633,81 +635,81 @@ export default function SocieteContextPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Chiffre d&apos;affaires</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{t('cabclt.soc.kpi_revenue', locale)}</CardTitle>
                     <TrendingUp className="h-5 w-5" style={{ color: "#22C55E" }} />
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(fin.totalRevenue)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Comptes classe 7</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('cabclt.soc.class7_accounts', locale)}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Charges</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{t('cabclt.soc.kpi_expenses', locale)}</CardTitle>
                     <TrendingDown className="h-5 w-5" style={{ color: "#EF4444" }} />
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold" style={{ color: "#EF4444" }}>{fmt(fin.totalExpenses)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Comptes classe 6</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('cabclt.soc.class6_accounts', locale)}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Resultat</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{t('cabclt.soc.kpi_profit', locale)}</CardTitle>
                     <BarChart3 className="h-5 w-5" style={{ color: GOLD }} />
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold" style={{ color: fin.resultat >= 0 ? "#22C55E" : "#EF4444" }}>{fmt(fin.resultat)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Revenus - Charges</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('cabclt.soc.revenue_minus_expenses', locale)}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Tresorerie</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{t('cabclt.soc.kpi_treasury', locale)}</CardTitle>
                     <Landmark className="h-5 w-5" style={{ color: NAVY }} />
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(fin.totalBankMUR)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Solde bancaire total</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('cabclt.soc.total_bank_balance', locale)}</p>
                   </CardContent>
                 </Card>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm" style={{ color: NAVY }}>Documents traites</CardTitle>
+                    <CardTitle className="text-sm" style={{ color: NAVY }}>{t('cabclt.soc.documents_processed', locale)}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-bold" style={{ color: GOLD }}>{fin.totalDocuments}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Factures, releves et autres documents importes</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('cabclt.soc.documents_processed_desc', locale)}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm" style={{ color: NAVY }}>Ecritures comptables</CardTitle>
+                    <CardTitle className="text-sm" style={{ color: NAVY }}>{t('cabclt.soc.accounting_entries', locale)}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-bold" style={{ color: GOLD }}>{fin.totalEcritures}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Lignes enregistrees dans le grand livre</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('cabclt.soc.accounting_entries_desc', locale)}</p>
                   </CardContent>
                 </Card>
               </div>
             </>
           ) : (
-            <EmptyTab icon={BarChart3} message="Aucune donnee disponible" detail="Les donnees de synthese apparaitront ici une fois les ecritures saisies." />
+            <EmptyTab icon={BarChart3} message={t('cabclt.soc.empty_overview', locale)} detail={t('cabclt.soc.empty_overview_detail', locale)} />
           )}
         </TabsContent>
 
         {/* Fournisseurs */}
         <TabsContent value="fournisseurs">
           {fournisseurs.length === 0 ? (
-            <EmptyTab icon={FileIcon} message="Aucune facture fournisseur" detail="Les factures fournisseurs apparaîtront ici une fois importées." />
+            <EmptyTab icon={FileIcon} message={t('cabclt.soc.empty_suppliers', locale)} detail={t('cabclt.soc.empty_suppliers_detail', locale)} />
           ) : (
             <Card><CardContent className="p-0">
               <Table><TableHeader><TableRow>
-                <TableHead>Fournisseur</TableHead><TableHead>N°</TableHead><TableHead>Date</TableHead>
-                <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead><TableHead className="text-right">TTC</TableHead>
-                <TableHead>Échéance</TableHead><TableHead>Statut</TableHead><TableHead>Compte</TableHead><TableHead></TableHead>
+                <TableHead>{t('cabclt.soc.col_supplier', locale)}</TableHead><TableHead>{t('cabclt.soc.col_number', locale)}</TableHead><TableHead>{t('cabclt.soc.col_date', locale)}</TableHead>
+                <TableHead className="text-right">{t('cabclt.soc.col_ht', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_vat', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_ttc', locale)}</TableHead>
+                <TableHead>{t('cabclt.soc.col_due', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead>{t('cabclt.soc.col_account', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
               <TableBody>{fournisseurs.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.fournisseur}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell><Badge variant="outline">{f.compte}</Badge></TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
@@ -717,15 +719,15 @@ export default function SocieteContextPage() {
         {/* Factures Clients */}
         <TabsContent value="clients">
           {facturesClients.length === 0 ? (
-            <EmptyTab icon={FileIcon} message="Aucune facture client" detail="Les factures clients apparaîtront ici une fois créées." />
+            <EmptyTab icon={FileIcon} message={t('cabclt.soc.empty_client_invoices', locale)} detail={t('cabclt.soc.empty_client_invoices_detail', locale)} />
           ) : (
             <Card><CardContent className="p-0">
               <Table><TableHeader><TableRow>
-                <TableHead>Client</TableHead><TableHead>N°</TableHead><TableHead>Date</TableHead>
-                <TableHead className="text-right">HT</TableHead><TableHead className="text-right">TVA</TableHead><TableHead className="text-right">TTC</TableHead>
-                <TableHead>Échéance</TableHead><TableHead>Statut</TableHead><TableHead className="text-right">Retard</TableHead><TableHead></TableHead>
+                <TableHead>{t('cabclt.soc.col_client', locale)}</TableHead><TableHead>{t('cabclt.soc.col_number', locale)}</TableHead><TableHead>{t('cabclt.soc.col_date', locale)}</TableHead>
+                <TableHead className="text-right">{t('cabclt.soc.col_ht', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_vat', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_ttc', locale)}</TableHead>
+                <TableHead>{t('cabclt.soc.col_due', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_delay', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
-              <TableBody>{facturesClients.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.client}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell className={`text-right ${f.jours>30?"text-red-600 font-bold":f.jours>0?"text-orange-600":""}`}>{f.jours>0?f.jours+"j":"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              <TableBody>{facturesClients.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.client}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell className={`text-right ${f.jours>30?"text-red-600 font-bold":f.jours>0?"text-orange-600":""}`}>{f.jours>0?f.jours+t('cabclt.soc.days_short', locale):"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
           )}
         </TabsContent>
@@ -733,12 +735,12 @@ export default function SocieteContextPage() {
         {/* Banque */}
         <TabsContent value="banque" className="space-y-4">
           {banque.length === 0 ? (
-            <EmptyTab icon={Landmark} message="Aucune transaction bancaire" detail="Les relevés bancaires apparaîtront ici une fois importés." />
+            <EmptyTab icon={Landmark} message={t('cabclt.soc.empty_bank', locale)} detail={t('cabclt.soc.empty_bank_detail', locale)} />
           ) : (
             <Card><CardContent className="p-0">
               <Table><TableHeader><TableRow>
-                <TableHead>Date</TableHead><TableHead>Libellé</TableHead><TableHead className="text-right">Débit</TableHead><TableHead className="text-right">Crédit</TableHead>
-                <TableHead>Tiers</TableHead><TableHead>Compte</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
+                <TableHead>{t('cabclt.soc.col_date', locale)}</TableHead><TableHead>{t('cabclt.soc.col_label', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_debit', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_credit', locale)}</TableHead>
+                <TableHead>{t('cabclt.soc.col_party', locale)}</TableHead><TableHead>{t('cabclt.soc.col_account', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
               <TableBody>{banque.map((b,i)=>(<TableRow key={i} className={b.statut==="non_identifie"?"bg-red-50":b.statut==="a_verifier"?"bg-orange-50":""}><TableCell>{b.date}</TableCell><TableCell className="font-medium">{b.libelle}</TableCell><TableCell className="text-right text-red-600">{b.debit>0?fmt(b.debit):""}</TableCell><TableCell className="text-right text-green-600">{b.credit>0?fmt(b.credit):""}</TableCell><TableCell>{b.tiers}</TableCell><TableCell><Badge variant="outline">{b.compte}</Badge></TableCell><TableCell>{stBadge(b.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
@@ -748,12 +750,12 @@ export default function SocieteContextPage() {
         {/* Salaires */}
         <TabsContent value="salaires">
           {salaires.length === 0 ? (
-            <EmptyTab icon={Wallet} message="Aucune fiche de paie" detail="Les fiches de paie apparaîtront ici une fois saisies." />
+            <EmptyTab icon={Wallet} message={t('cabclt.soc.empty_payslips', locale)} detail={t('cabclt.soc.empty_payslips_detail', locale)} />
           ) : (
             <Card><CardContent className="p-0">
               <Table><TableHeader><TableRow>
-                <TableHead>Employé</TableHead><TableHead className="text-right">Brut</TableHead><TableHead className="text-right">CSG 3%</TableHead><TableHead className="text-right">NSF 1.5%</TableHead><TableHead className="text-right">PAYE</TableHead>
-                <TableHead className="text-right">Net</TableHead><TableHead className="text-right">Coût empl.</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
+                <TableHead>{t('cabclt.soc.col_employee', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_gross', locale)}</TableHead><TableHead className="text-right">CSG 3%</TableHead><TableHead className="text-right">NSF 1.5%</TableHead><TableHead className="text-right">PAYE</TableHead>
+                <TableHead className="text-right">{t('cabclt.soc.col_net', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_employer_cost', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
               <TableBody>{salaires.map((s,i)=>(<TableRow key={i}><TableCell className="font-medium">{s.employe}</TableCell><TableCell className="text-right">{fmt(s.brut)}</TableCell><TableCell className="text-right">{fmt(s.csg)}</TableCell><TableCell className="text-right">{fmt(s.nsf)}</TableCell><TableCell className="text-right">{fmt(s.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(s.net)}</TableCell><TableCell className="text-right">{fmt(s.cout)}</TableCell><TableCell>{stBadge(s.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
@@ -763,13 +765,13 @@ export default function SocieteContextPage() {
         {/* Charges Sociales */}
         <TabsContent value="charges" className="space-y-4">
           {charges.length === 0 ? (
-            <EmptyTab icon={Calculator} message="Aucune charge sociale" detail="Les charges sociales apparaîtront ici une fois calculées." />
+            <EmptyTab icon={Calculator} message={t('cabclt.soc.empty_social_charges', locale)} detail={t('cabclt.soc.empty_social_charges_detail', locale)} />
           ) : (
             <Card><CardContent className="p-0">
               <Table><TableHeader><TableRow>
-                <TableHead>Période</TableHead><TableHead className="text-right">CSG Empl.</TableHead><TableHead className="text-right">CSG Patr.</TableHead>
-                <TableHead className="text-right">NSF Empl.</TableHead><TableHead className="text-right">NSF Patr.</TableHead><TableHead className="text-right">Training</TableHead><TableHead className="text-right">PAYE</TableHead>
-                <TableHead className="text-right">Total</TableHead><TableHead>Statut</TableHead><TableHead></TableHead>
+                <TableHead>{t('cabclt.soc.col_period', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_csg_e', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_csg_p', locale)}</TableHead>
+                <TableHead className="text-right">{t('cabclt.soc.col_nsf_e', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_nsf_p', locale)}</TableHead><TableHead className="text-right">Training</TableHead><TableHead className="text-right">PAYE</TableHead>
+                <TableHead className="text-right">{t('cabclt.soc.col_total', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
               <TableBody>{charges.map((c,i)=>(<TableRow key={i}><TableCell className="font-medium">{c.periode}</TableCell><TableCell className="text-right">{fmt(c.csg_e)}</TableCell><TableCell className="text-right">{fmt(c.csg_p)}</TableCell><TableCell className="text-right">{fmt(c.nsf_e)}</TableCell><TableCell className="text-right">{fmt(c.nsf_p)}</TableCell><TableCell className="text-right">{fmt(c.training)}</TableCell><TableCell className="text-right">{fmt(c.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(c.total)}</TableCell><TableCell>{stBadge(c.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
@@ -779,12 +781,12 @@ export default function SocieteContextPage() {
         {/* TVA */}
         <TabsContent value="tva" className="space-y-4">
           {tva.length === 0 ? (
-            <EmptyTab icon={Calculator} message="Aucune déclaration TVA" detail="Les déclarations TVA apparaîtront ici une fois générées." />
+            <EmptyTab icon={Calculator} message={t('cabclt.soc.empty_vat', locale)} detail={t('cabclt.soc.empty_vat_detail', locale)} />
           ) : (
             <Card><CardContent className="p-0">
               <Table><TableHeader><TableRow>
-                <TableHead>Mois</TableHead><TableHead className="text-right">Collectée</TableHead><TableHead className="text-right">Déductible</TableHead>
-                <TableHead className="text-right">Nette</TableHead><TableHead>Deadline</TableHead><TableHead>Statut</TableHead><TableHead>Réf</TableHead><TableHead></TableHead>
+                <TableHead>{t('cabclt.soc.col_month', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_collected', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_deductible', locale)}</TableHead>
+                <TableHead className="text-right">{t('cabclt.soc.col_net_vat', locale)}</TableHead><TableHead>Deadline</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead>{t('cabclt.soc.col_ref', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
               <TableBody>{tva.map((t,i)=>(<TableRow key={i}><TableCell className="font-medium">{t.mois}</TableCell><TableCell className="text-right">{fmt(t.collectee)}</TableCell><TableCell className="text-right">{fmt(t.deductible)}</TableCell><TableCell className="text-right font-semibold">{fmt(t.nette)}</TableCell><TableCell>{t.deadline}</TableCell><TableCell>{stBadge(t.statut)}</TableCell><TableCell className="text-xs text-muted-foreground">{t.ref||"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
@@ -794,19 +796,19 @@ export default function SocieteContextPage() {
         {/* Grand Livre */}
         <TabsContent value="grand-livre" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="font-semibold" style={{ color: NAVY }}>Grand Livre — {societeName}</h3>
+            <h3 className="font-semibold" style={{ color: NAVY }}>{t('cabclt.soc.general_ledger', locale)} — {societeName}</h3>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm">Exporter Excel</Button>
-              <Button variant="outline" size="sm">Imprimer</Button>
+              <Button variant="outline" size="sm">{t('cabclt.soc.export_excel', locale)}</Button>
+              <Button variant="outline" size="sm">{t('cabclt.soc.print', locale)}</Button>
             </div>
           </div>
           {(fin.ecritures && fin.ecritures.length > 0) ? (
             <Card><CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Date</TableHead><TableHead>Journal</TableHead><TableHead>N° piece</TableHead>
-                  <TableHead>Compte</TableHead><TableHead>Libelle</TableHead>
-                  <TableHead className="text-right">Debit (MUR)</TableHead><TableHead className="text-right">Credit (MUR)</TableHead>
+                  <TableHead>{t('cabclt.soc.col_date', locale)}</TableHead><TableHead>{t('cabclt.soc.col_journal', locale)}</TableHead><TableHead>{t('cabclt.soc.col_voucher_no', locale)}</TableHead>
+                  <TableHead>{t('cabclt.soc.col_account', locale)}</TableHead><TableHead>{t('cabclt.soc.col_label', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cabclt.soc.col_debit', locale)} (MUR)</TableHead><TableHead className="text-right">{t('cabclt.soc.col_credit', locale)} (MUR)</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {fin.ecritures.map((e, i) => (
@@ -821,7 +823,7 @@ export default function SocieteContextPage() {
                     </TableRow>
                   ))}
                   <TableRow className="bg-muted/30 font-bold">
-                    <TableCell colSpan={5} className="text-right">Total</TableCell>
+                    <TableCell colSpan={5} className="text-right">{t('cabclt.soc.col_total', locale)}</TableCell>
                     <TableCell className="text-right text-red-600">{fmt(fin.ecritures.reduce((s, e) => s + (e.debit || 0), 0))}</TableCell>
                     <TableCell className="text-right text-green-600">{fmt(fin.ecritures.reduce((s, e) => s + (e.credit || 0), 0))}</TableCell>
                   </TableRow>
@@ -832,13 +834,13 @@ export default function SocieteContextPage() {
             grandLivre.map((account) => (
               <Card key={account.compte}>
                 <CardHeader className="py-3" style={{ backgroundColor: `${NAVY}08` }}>
-                  <CardTitle className="text-sm">COMPTE: {account.compte} — {account.nom}</CardTitle>
+                  <CardTitle className="text-sm">{t('cabclt.soc.col_account', locale).toUpperCase()}: {account.compte} — {account.nom}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader><TableRow>
-                      <TableHead>Date</TableHead><TableHead>Ref</TableHead><TableHead>Description</TableHead>
-                      <TableHead className="text-right">Debit (MUR)</TableHead><TableHead className="text-right">Credit (MUR)</TableHead><TableHead className="text-right">Solde (MUR)</TableHead>
+                      <TableHead>{t('cabclt.soc.col_date', locale)}</TableHead><TableHead>{t('cabclt.soc.col_ref', locale)}</TableHead><TableHead>{t('cabclt.soc.col_description', locale)}</TableHead>
+                      <TableHead className="text-right">{t('cabclt.soc.col_debit', locale)} (MUR)</TableHead><TableHead className="text-right">{t('cabclt.soc.col_credit', locale)} (MUR)</TableHead><TableHead className="text-right">{t('cabclt.soc.col_balance', locale)} (MUR)</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
                       {account.entries.map((e, i) => (
@@ -855,7 +857,7 @@ export default function SocieteContextPage() {
               </Card>
             ))
           ) : (
-            <EmptyTab icon={FileIcon} message="Aucune ecriture comptable" detail="Le grand livre sera alimente par les ecritures comptables." />
+            <EmptyTab icon={FileIcon} message={t('cabclt.soc.empty_ledger', locale)} detail={t('cabclt.soc.empty_ledger_detail', locale)} />
           )}
         </TabsContent>
 
@@ -998,7 +1000,7 @@ export default function SocieteContextPage() {
                           ))}
                           {revenueDetails.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucun produit enregistre</TableCell>
+                              <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">{t('cabclt.soc.no_revenue', locale)}</TableCell>
                             </TableRow>
                           )}
                           <TotLine label="TOTAL REVENUE" current={totalRevenue} />
@@ -1009,7 +1011,7 @@ export default function SocieteContextPage() {
                           ))}
                           {allExpenseGroups.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucune charge enregistree</TableCell>
+                              <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">{t('cabclt.soc.no_expense', locale)}</TableCell>
                             </TableRow>
                           )}
                           <TotLine label="TOTAL EXPENSES" current={-totalExpenses} />
@@ -1031,17 +1033,17 @@ export default function SocieteContextPage() {
               </div>
             )
           })() : (
-            <EmptyTab icon={FileIcon} message="Aucun etat financier disponible" detail="Les etats financiers seront generes a la cloture de l'exercice." />
+            <EmptyTab icon={FileIcon} message={t('cabclt.soc.empty_fs', locale)} detail={t('cabclt.soc.empty_fs_detail', locale)} />
           )}
         </TabsContent>
 
         {/* Immobilisations */}
         <TabsContent value="immobilisations" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="font-semibold" style={{ color: NAVY }}>Registre des Immobilisations — {societeName}</h3>
-            <Button size="sm" style={{ backgroundColor: GOLD }}>+ Ajouter un actif</Button>
+            <h3 className="font-semibold" style={{ color: NAVY }}>{t('cabclt.soc.fixed_assets_register', locale)} — {societeName}</h3>
+            <Button size="sm" style={{ backgroundColor: GOLD }}>+ {t('cabclt.soc.add_asset', locale)}</Button>
           </div>
-          <EmptyTab icon={Landmark} message="Aucune immobilisation enregistrée" detail="Les actifs immobilisés apparaîtront ici une fois saisis." />
+          <EmptyTab icon={Landmark} message={t('cabclt.soc.empty_fixed_assets', locale)} detail={t('cabclt.soc.empty_fixed_assets_detail', locale)} />
         </TabsContent>
 
         {/* Documents */}
@@ -1057,14 +1059,14 @@ export default function SocieteContextPage() {
             {uploading ? (
               <div className="flex flex-col items-center gap-2">
                 <Loader2 className="h-8 w-8 animate-spin" style={{ color: GOLD }} />
-                <p className="text-sm text-muted-foreground">Upload en cours...</p>
+                <p className="text-sm text-muted-foreground">{t('cabclt.soc.uploading', locale)}</p>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2">
                 <Upload className="h-8 w-8 text-muted-foreground" />
-                <p className="text-sm font-medium">Glissez-déposez vos fichiers ici</p>
+                <p className="text-sm font-medium">{t('cabclt.soc.drop_files_here', locale)}</p>
                 <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, XLSX — max 10 MB</p>
-                <Button size="sm" variant="outline" className="mt-2" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
+                <Button size="sm" variant="outline" className="mt-2" onClick={() => fileInputRef.current?.click()}>{t('cabclt.soc.browse', locale)}</Button>
               </div>
             )}
           </div>
@@ -1075,10 +1077,10 @@ export default function SocieteContextPage() {
           {/* Uploaded files */}
           {uploadedFiles.length > 0 && (
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base">Documents uploadés</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-base">{t('cabclt.soc.uploaded_documents', locale)}</CardTitle></CardHeader>
               <CardContent className="p-0">
                 <Table>
-                  <TableHeader><TableRow><TableHead>Fichier</TableHead><TableHead>Date</TableHead><TableHead>Type détecté</TableHead><TableHead>Statut</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>{t('cabclt.soc.col_file', locale)}</TableHead><TableHead>{t('cabclt.soc.col_date', locale)}</TableHead><TableHead>{t('cabclt.soc.col_detected_type', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {uploadedFiles.map((f, i) => (
                       <TableRow key={i}>
@@ -1096,12 +1098,12 @@ export default function SocieteContextPage() {
 
           {/* Dossiers */}
           <div>
-            <h3 className="font-semibold mb-3" style={{ color: NAVY }}>Dossiers de la société</h3>
+            <h3 className="font-semibold mb-3" style={{ color: NAVY }}>{t('cabclt.soc.company_folders', locale)}</h3>
             {dossiers.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
                 <FolderOpen className="h-10 w-10 text-muted-foreground/40" />
-                <p className="font-medium">Aucun dossier</p>
-                <p className="text-sm">Les dossiers seront créés automatiquement lors de l&apos;import de documents.</p>
+                <p className="font-medium">{t('cabclt.soc.no_folder', locale)}</p>
+                <p className="text-sm">{t('cabclt.soc.folders_auto_created', locale)}</p>
               </div>
             ) : (
               <div className="grid gap-2">
@@ -1110,10 +1112,10 @@ export default function SocieteContextPage() {
                     <CardContent className="flex items-center justify-between py-3">
                       <div className="flex items-center gap-3">
                         <FolderOpen className="h-5 w-5" style={{ color: GOLD }} />
-                        <div><p className="text-sm font-medium">{d.nom}</p><p className="text-xs text-muted-foreground">{d.count} doc{d.count!==1?"s":""}{d.count===0?" — vide":""}</p></div>
+                        <div><p className="text-sm font-medium">{d.nom}</p><p className="text-xs text-muted-foreground">{d.count} {d.count!==1 ? t('cabclt.soc.docs_plural', locale) : t('cabclt.soc.docs_singular', locale)}{d.count===0 ? ' — ' + t('cabclt.soc.empty_label', locale) : ''}</p></div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {d.anomalies>0&&<Badge className="bg-red-100 text-red-700">{d.anomalies} anomalie{d.anomalies>1?"s":""}</Badge>}
+                        {d.anomalies>0&&<Badge className="bg-red-100 text-red-700">{d.anomalies} {d.anomalies>1 ? t('cabclt.soc.anomalies_plural', locale) : t('cabclt.soc.anomaly_singular', locale)}</Badge>}
                         <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${selectedDossier===d.nom?"rotate-90":""}`} />
                       </div>
                     </CardContent>
@@ -1229,24 +1231,24 @@ export default function SocieteContextPage() {
               </div>
             )
           })() : (
-            <EmptyTab icon={BarChart3} message="Aucun rapport P&L disponible" detail="Le compte de resultat sera genere a partir des ecritures comptables." />
+            <EmptyTab icon={BarChart3} message={t('cabclt.soc.empty_pnl', locale)} detail={t('cabclt.soc.empty_pnl_detail', locale)} />
           )}
         </TabsContent>
 
         {/* Alertes */}
         <TabsContent value="alertes" className="space-y-3">
           {alertes.length === 0 ? (
-            <EmptyTab icon={AlertIcon} message="Aucune alerte" detail="Les alertes fiscales et comptables apparaîtront ici automatiquement." />
+            <EmptyTab icon={AlertIcon} message={t('cabclt.soc.empty_alerts', locale)} detail={t('cabclt.soc.empty_alerts_detail', locale)} />
           ) : (
             alertes.map((a,i)=>(
               <Card key={i}><CardContent className="flex items-start gap-3 py-4">
                 <div className={`mt-1 h-2.5 w-2.5 rounded-full shrink-0 ${a.niveau==="critique"?"bg-red-500":a.niveau==="important"?"bg-orange-500":"bg-blue-500"}`} />
                 <div className="flex-1">
-                  <Badge className={a.niveau==="critique"?"bg-red-100 text-red-800":a.niveau==="important"?"bg-orange-100 text-orange-800":"bg-blue-100 text-blue-800"}>{a.niveau==="critique"?"Critique":a.niveau==="important"?"Important":"Info"}</Badge>
+                  <Badge className={a.niveau==="critique"?"bg-red-100 text-red-800":a.niveau==="important"?"bg-orange-100 text-orange-800":"bg-blue-100 text-blue-800"}>{a.niveau==="critique" ? t('cabclt.soc.lvl_critical', locale) : a.niveau==="important" ? t('cabclt.soc.lvl_important', locale) : t('cabclt.soc.lvl_info', locale)}</Badge>
                   <p className="text-sm font-medium mt-1">{a.titre}</p><p className="text-xs text-muted-foreground">{a.description}</p>
                 </div>
                 <div className="text-right shrink-0"><p className="text-sm font-semibold">{fmt(a.montant)}</p>{a.echeance&&<p className="text-xs text-muted-foreground">{a.echeance}</p>}</div>
-                <Button variant="outline" size="sm">Traiter</Button>
+                <Button variant="outline" size="sm">{t('cabclt.soc.action_process', locale)}</Button>
               </CardContent></Card>
             ))
           )}

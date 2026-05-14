@@ -11,6 +11,7 @@ import {
   BookOpenCheck, RotateCcw, Gift,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import {
   formaterMUREoy, STATUT_EOY_LABELS, MOTIF_NON_ELIGIBLE_EOY, libellePeriodeMois,
   type IAS19EoySnapshot, type IAS19EoyStatut,
@@ -27,6 +28,7 @@ const MOIS_LABELS = [
 ]
 
 export default function ProvisionsEoyPage() {
+  const locale: Locale = getLocale()
   const now = new Date()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
@@ -179,7 +181,7 @@ export default function ProvisionsEoyPage() {
     return (
       <ClientPageShell>
         <div className="flex items-center gap-2 text-slate-500 p-6">
-          <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+          <Loader2 className="h-4 w-4 animate-spin" /> {t('rha.b.proveoy.loading', locale)}
         </div>
       </ClientPageShell>
     )
@@ -191,8 +193,8 @@ export default function ProvisionsEoyPage() {
           <CardContent className="p-6 flex items-start gap-3">
             <ShieldAlert className="h-5 w-5 text-red-600 mt-1" />
             <div>
-              <div className="font-semibold">Accès refusé</div>
-              <div className="text-sm text-slate-600">Cette page est réservée aux rôles admin et rh.</div>
+              <div className="font-semibold">{t('rha.b.proveoy.access_denied', locale)}</div>
+              <div className="text-sm text-slate-600">{t('rha.b.proveoy.access_msg', locale)}</div>
             </div>
           </CardContent>
         </Card>
@@ -205,24 +207,22 @@ export default function ProvisionsEoyPage() {
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" style={{ color: NAVY }}>
-            <Gift className="h-6 w-6" style={{ color: GOLD }} /> Provisions IAS 19 — EOY Bonus
+            <Gift className="h-6 w-6" style={{ color: GOLD }} /> {t('rha.b.proveoy.title', locale)}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Étalement mensuel de la charge 13e mois (janvier-novembre).
-            Compte <strong>64176</strong> (charge) / <strong>4288</strong> (passif). Journal OD.
-            Décembre : paiement réel via <a className="underline" href="/rh/eoy-bonus">EOY Bonus</a>.
+            {t('rha.b.proveoy.subtitle', locale)}
           </p>
         </div>
 
         {/* Sélection */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Mois de provision</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t('rha.b.proveoy.month_title', locale)}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-4 gap-3">
               <div>
-                <Label>Société</Label>
+                <Label>{t('rha.b.proveoy.lbl_societe', locale)}</Label>
                 <Select value={societeId} onValueChange={setSocieteId}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('rha.b.proveoy.select', locale)} /></SelectTrigger>
                   <SelectContent>
                     {societes.map(s => (
                       <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
@@ -231,7 +231,7 @@ export default function ProvisionsEoyPage() {
                 </Select>
               </div>
               <div>
-                <Label>Année</Label>
+                <Label>{t('rha.b.proveoy.lbl_year', locale)}</Label>
                 <Select value={String(annee)} onValueChange={v => setAnnee(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -242,7 +242,7 @@ export default function ProvisionsEoyPage() {
                 </Select>
               </div>
               <div>
-                <Label>Mois</Label>
+                <Label>{t('rha.b.proveoy.lbl_month', locale)}</Label>
                 <Select value={String(mois)} onValueChange={v => setMois(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -258,13 +258,13 @@ export default function ProvisionsEoyPage() {
                 <Button onClick={handleCalculer} disabled={calculating || !societeId}
                   className="gap-2" style={{ backgroundColor: NAVY, color: 'white' }}>
                   {calculating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
-                  Aperçu
+                  {t('rha.b.proveoy.btn_preview', locale)}
                 </Button>
                 {isAdmin && (
                   <Button onClick={handleComptabiliser} disabled={comptabilizing || !societeId}
                     className="gap-2" style={{ backgroundColor: GOLD, color: NAVY }}>
                     {comptabilizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookOpenCheck className="h-4 w-4" />}
-                    Comptabiliser
+                    {t('rha.b.proveoy.btn_book', locale)}
                   </Button>
                 )}
               </div>
@@ -280,32 +280,32 @@ export default function ProvisionsEoyPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
-                Aperçu — {libellePeriodeMois(snapshotCalc.annee, snapshotCalc.mois)}
+                {t('rha.b.proveoy.preview_for', locale)} {libellePeriodeMois(snapshotCalc.annee, snapshotCalc.mois)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid md:grid-cols-4 gap-3">
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">Provision cumulée</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.proveoy.kpi_total', locale)}</div>
                   <div className="text-xl font-semibold" style={{ color: NAVY }}>
                     {formaterMUREoy(snapshotCalc.provision_cumulee_total)}
                   </div>
                 </div>
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">Mois précédent</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.proveoy.kpi_prev_month', locale)}</div>
                   <div className="text-xl font-semibold text-slate-700">
                     {formaterMUREoy(snapshotPrecedent?.provision_cumulee_total || 0)}
                   </div>
                 </div>
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">Delta du mois</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.proveoy.kpi_delta', locale)}</div>
                   <div className="text-xl font-semibold"
                     style={{ color: (delta || 0) >= 0 ? '#166534' : '#b91c1c' }}>
                     {(delta || 0) >= 0 ? '+' : ''}{formaterMUREoy(delta || 0)}
                   </div>
                 </div>
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">Éligibles</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.proveoy.kpi_eligible', locale)}</div>
                   <div className="text-xl font-semibold text-slate-700">
                     {snapshotCalc.nb_employes_eligibles}
                     <span className="text-xs text-slate-500"> / {snapshotCalc.details_par_employe.length}</span>
@@ -314,17 +314,17 @@ export default function ProvisionsEoyPage() {
               </div>
 
               <div>
-                <div className="text-sm font-medium mb-2" style={{ color: NAVY }}>Détail par employé</div>
+                <div className="text-sm font-medium mb-2" style={{ color: NAVY }}>{t('rha.b.proveoy.detail_per_emp', locale)}</div>
                 <div className="overflow-x-auto border rounded">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employé</TableHead>
-                        <TableHead className="text-right">Mois travaillés</TableHead>
-                        <TableHead className="text-right">Earnings cumulés</TableHead>
-                        <TableHead className="text-right">Prov. cumulée</TableHead>
-                        <TableHead className="text-right">Prov. du mois</TableHead>
-                        <TableHead>Statut</TableHead>
+                        <TableHead>{t('rha.b.proveoy.col_employee', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.proveoy.col_months_worked', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.proveoy.col_earnings', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.proveoy.col_provision_cum', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.proveoy.col_provision_month', locale)}</TableHead>
+                        <TableHead>{t('rha.b.proveoy.col_status', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -343,7 +343,7 @@ export default function ProvisionsEoyPage() {
                           <TableCell>
                             {l.eligible ? (
                               <Badge className="bg-green-100 text-green-800 border-green-300 font-normal text-[10px]">
-                                Éligible
+                                {t('rha.b.proveoy.eligible', locale)}
                               </Badge>
                             ) : (
                               <Badge className="bg-slate-100 text-slate-600 border-slate-300 font-normal text-[10px]">
@@ -360,7 +360,7 @@ export default function ProvisionsEoyPage() {
 
               <div className="border rounded p-3 bg-amber-50/50">
                 <div className="text-sm font-medium mb-2" style={{ color: NAVY }}>
-                  Écritures qui seront générées
+                  {t('rha.b.proveoy.entries_to_gen', locale)}
                 </div>
                 <div className="text-xs font-mono space-y-1">
                   <div className="flex justify-between border-b pb-1">
@@ -394,11 +394,11 @@ export default function ProvisionsEoyPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center justify-between">
-              <span>Historique des snapshots</span>
+              <span>{t('rha.b.proveoy.history_title', locale)}</span>
               <Select value={filtreAnnee} onValueChange={setFiltreAnnee}>
                 <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes</SelectItem>
+                  <SelectItem value="all">{t('rha.b.proveoy.all', locale)}</SelectItem>
                   {anneesDisponibles.map(y => (
                     <SelectItem key={y} value={y}>{y}</SelectItem>
                   ))}
@@ -409,22 +409,22 @@ export default function ProvisionsEoyPage() {
           <CardContent>
             {loadingHistorique ? (
               <div className="flex items-center gap-2 text-slate-500 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+                <Loader2 className="h-4 w-4 animate-spin" /> {t('rha.b.proveoy.loading', locale)}
               </div>
             ) : historique.length === 0 ? (
-              <div className="text-sm text-slate-500 italic">Aucun snapshot.</div>
+              <div className="text-sm text-slate-500 italic">{t('rha.b.proveoy.no_snapshot', locale)}</div>
             ) : (
               <div className="overflow-x-auto border rounded">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Période</TableHead>
-                      <TableHead className="text-right">Prov. cumulée</TableHead>
-                      <TableHead className="text-right">Delta</TableHead>
-                      <TableHead className="text-right">Éligibles</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Écritures</TableHead>
-                      {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+                      <TableHead>{t('rha.b.proveoy.col_period', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.proveoy.col_provision_cum', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.proveoy.col_delta', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.proveoy.col_eligible', locale)}</TableHead>
+                      <TableHead>{t('rha.b.proveoy.col_status', locale)}</TableHead>
+                      <TableHead>{t('rha.b.proveoy.col_entries', locale)}</TableHead>
+                      {isAdmin && <TableHead className="text-right">{t('rha.b.proveoy.col_actions', locale)}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -446,7 +446,7 @@ export default function ProvisionsEoyPage() {
                             : <span className="italic">—</span>}
                           {s.ecriture_extourne_debit_id && (
                             <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
-                              <RotateCcw className="h-3 w-3" /> extourné
+                              <RotateCcw className="h-3 w-3" /> {t('rha.b.proveoy.reversed', locale)}
                             </span>
                           )}
                         </TableCell>
@@ -476,7 +476,7 @@ export default function ProvisionsEoyPage() {
         <Card>
           <CardContent className="p-4 text-xs text-slate-600 space-y-1">
             <div className="flex items-center gap-2 font-medium" style={{ color: NAVY }}>
-              <AlertTriangle className="h-3 w-3" /> Rappel IAS 19 (§19-24) — EOY Bonus
+              <AlertTriangle className="h-3 w-3" /> {t('rha.b.proveoy.reminder_title', locale)}
             </div>
             <div>
               La charge du 13e mois est étalée sur les 12 mois. À chaque fin de mois N (1-11),

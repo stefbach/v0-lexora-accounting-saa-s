@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Loader2, ArrowLeft, Calculator, FileText, CheckCircle, Clock, Save } from "lucide-react"
+import { t, getLocale } from '@/lib/i18n'
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -66,6 +67,7 @@ interface ITForm3Data {
 
 export default function ITForm3Page() {
   const params    = useParams()
+  const locale    = getLocale()
   const societeId = params.societeId as string
   const clientId  = params.clientId  as string
 
@@ -196,9 +198,9 @@ export default function ITForm3Page() {
     setForm(prev => ({ ...prev, [field]: num(e.target.value) }))
 
   const statBadge = () => {
-    if (form.statut === "soumis") return <Badge className="bg-green-100 text-green-800 gap-1"><CheckCircle className="w-3 h-3" />Soumis</Badge>
-    if (form.statut === "calcule") return <Badge className="bg-blue-100 text-blue-800 gap-1"><Calculator className="w-3 h-3" />Calculé</Badge>
-    return <Badge className="bg-gray-100 text-gray-600 gap-1"><Clock className="w-3 h-3" />Brouillon</Badge>
+    if (form.statut === "soumis") return <Badge className="bg-green-100 text-green-800 gap-1"><CheckCircle className="w-3 h-3" />{t('cabclt.itf.status_submitted', locale)}</Badge>
+    if (form.statut === "calcule") return <Badge className="bg-blue-100 text-blue-800 gap-1"><Calculator className="w-3 h-3" />{t('cabclt.itf.status_calculated', locale)}</Badge>
+    return <Badge className="bg-gray-100 text-gray-600 gap-1"><Clock className="w-3 h-3" />{t('cabclt.itf.status_draft', locale)}</Badge>
   }
 
   if (loading) {
@@ -211,14 +213,14 @@ export default function ITForm3Page() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href={`/comptable/clients/${clientId}/${societeId}`}>
-            <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Retour</Button>
+            <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />{t('cabclt.itf.back', locale)}</Button>
           </Link>
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: NAVY }}>
               <FileText className="w-6 h-6" style={{ color: GOLD }} />
-              IT Form 3 — Déclaration IS
+              {t('cabclt.itf.title', locale)}
             </h1>
-            <p className="text-sm text-gray-500 mt-0.5">Income Tax return — Companies Act 2001 (Mauritius)</p>
+            <p className="text-sm text-gray-500 mt-0.5">{t('cabclt.itf.subtitle', locale)}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -236,13 +238,13 @@ export default function ITForm3Page() {
 
       {/* Schedule A — Revenus d'affaires */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm" style={{ color: NAVY }}>Schedule A — Business Income</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm" style={{ color: NAVY }}>{t('cabclt.itf.schedule_a', locale)}</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Revenu d'affaires (CA) — 70x</Label>
+              <Label className="text-xs">{t('cabclt.itf.business_income', locale)}</Label>
               <Input type="number" value={fmtInput(form.revenu_affaires)} onChange={up("revenu_affaires")} placeholder="0" className="h-8 text-sm font-mono" />
-              <p className="text-[10px] text-gray-400 mt-0.5">Import automatique depuis P&L</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{t('cabclt.itf.auto_import_pnl', locale)}</p>
             </div>
           </div>
         </CardContent>
@@ -250,27 +252,27 @@ export default function ITForm3Page() {
 
       {/* Schedule B-D — Autres revenus */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm" style={{ color: NAVY }}>Schedules B / C / D — Autres revenus</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm" style={{ color: NAVY }}>{t('cabclt.itf.schedules_bcd', locale)}</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <Label className="text-xs">Schedule B — Revenu emploi</Label>
+              <Label className="text-xs">{t('cabclt.itf.employment_income', locale)}</Label>
               <Input type="number" value={fmtInput(form.revenu_emploi)} onChange={up("revenu_emploi")} placeholder="0" className="h-8 text-sm font-mono" />
             </div>
             <div>
-              <Label className="text-xs">Schedule C — Revenu locatif</Label>
+              <Label className="text-xs">{t('cabclt.itf.rental_income', locale)}</Label>
               <Input type="number" value={fmtInput(form.revenu_locatif)} onChange={up("revenu_locatif")} placeholder="0" className="h-8 text-sm font-mono" />
             </div>
             <div>
-              <Label className="text-xs">Schedule D — Intérêts</Label>
+              <Label className="text-xs">{t('cabclt.itf.interest_income', locale)}</Label>
               <Input type="number" value={fmtInput(form.revenu_interets)} onChange={up("revenu_interets")} placeholder="0" className="h-8 text-sm font-mono" />
             </div>
             <div>
-              <Label className="text-xs">Dividendes reçus</Label>
+              <Label className="text-xs">{t('cabclt.itf.dividends', locale)}</Label>
               <Input type="number" value={fmtInput(form.dividendes)} onChange={up("dividendes")} placeholder="0" className="h-8 text-sm font-mono" />
             </div>
             <div>
-              <Label className="text-xs">Autres revenus</Label>
+              <Label className="text-xs">{t('cabclt.itf.other_income', locale)}</Label>
               <Input type="number" value={fmtInput(form.autres_revenus)} onChange={up("autres_revenus")} placeholder="0" className="h-8 text-sm font-mono" />
             </div>
           </div>
@@ -279,16 +281,16 @@ export default function ITForm3Page() {
 
       {/* Déductions */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm" style={{ color: NAVY }}>Déductions</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm" style={{ color: NAVY }}>{t('cabclt.itf.deductions', locale)}</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Annual Allowance (depuis FAR)</Label>
+              <Label className="text-xs">{t('cabclt.itf.annual_allowance_far', locale)}</Label>
               <Input type="number" value={fmtInput(form.annual_allowance_total)} onChange={up("annual_allowance_total")} placeholder="0" className="h-8 text-sm font-mono" />
-              <p className="text-[10px] text-gray-400 mt-0.5">Import automatique depuis Fixed Asset Register</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{t('cabclt.itf.auto_import_far', locale)}</p>
             </div>
             <div>
-              <Label className="text-xs">Autres déductions admissibles</Label>
+              <Label className="text-xs">{t('cabclt.itf.other_deductions', locale)}</Label>
               <Input type="number" value={fmtInput(form.autres_deductions)} onChange={up("autres_deductions")} placeholder="0" className="h-8 text-sm font-mono" />
             </div>
           </div>
@@ -299,44 +301,44 @@ export default function ITForm3Page() {
       <div className="flex justify-center">
         <Button onClick={calculer} size="lg" className="gap-2 px-8" style={{ backgroundColor: NAVY }}>
           <Calculator className="w-5 h-5" />
-          Calculer IS
+          {t('cabclt.itf.compute_is', locale)}
         </Button>
       </div>
 
       {/* Récapitulatif calculé */}
       <Card className="border-2" style={{ borderColor: GOLD }}>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base" style={{ color: NAVY }}>Récapitulatif — Income Tax Computation</CardTitle>
+          <CardTitle className="text-base" style={{ color: NAVY }}>{t('cabclt.itf.recap_title', locale)}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableBody>
               <TableRow className="border-t">
-                <TableCell className="font-semibold">Total Revenus</TableCell>
+                <TableCell className="font-semibold">{t('cabclt.itf.total_income', locale)}</TableCell>
                 <TableCell className="text-right font-mono text-lg font-bold" style={{ color: NAVY }}>{fmt(form.total_revenus)} MUR</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="text-gray-600 pl-6 text-sm">dont Revenu d'affaires</TableCell>
+                <TableCell className="text-gray-600 pl-6 text-sm">{t('cabclt.itf.of_which_business', locale)}</TableCell>
                 <TableCell className="text-right font-mono text-sm">{fmt(form.revenu_affaires)}</TableCell>
               </TableRow>
               <TableRow className="border-t">
-                <TableCell className="font-semibold text-red-600">Moins : Total Déductions</TableCell>
+                <TableCell className="font-semibold text-red-600">{t('cabclt.itf.less_total_deductions', locale)}</TableCell>
                 <TableCell className="text-right font-mono text-red-600">({fmt(form.total_deductions)}) MUR</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="text-gray-600 pl-6 text-sm">dont Annual Allowance</TableCell>
+                <TableCell className="text-gray-600 pl-6 text-sm">{t('cabclt.itf.of_which_aa', locale)}</TableCell>
                 <TableCell className="text-right font-mono text-sm text-red-500">({fmt(form.annual_allowance_total)})</TableCell>
               </TableRow>
               <TableRow className="bg-blue-50 border-t-2 border-t-blue-200">
-                <TableCell className="font-bold text-base">Revenu Imposable</TableCell>
+                <TableCell className="font-bold text-base">{t('cabclt.itf.taxable_income', locale)}</TableCell>
                 <TableCell className="text-right font-mono font-bold text-xl" style={{ color: NAVY }}>{fmt(form.revenu_imposable)} MUR</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="text-gray-600">Taux IS ({form.taux_is}%)</TableCell>
+                <TableCell className="text-gray-600">{t('cabclt.itf.is_rate', locale)} ({form.taux_is}%)</TableCell>
                 <TableCell className="text-right font-mono text-sm text-gray-500">{form.taux_is}%</TableCell>
               </TableRow>
               <TableRow className="border-t">
-                <TableCell className="font-bold text-orange-700">Impôt calculé</TableCell>
+                <TableCell className="font-bold text-orange-700">{t('cabclt.itf.tax_calculated', locale)}</TableCell>
                 <TableCell className="text-right font-mono font-bold text-orange-700">{fmt(form.impot_calcule)} MUR</TableCell>
               </TableRow>
 
@@ -346,24 +348,24 @@ export default function ITForm3Page() {
                   <TableRow className="bg-purple-50 border-t">
                     <TableCell className="font-semibold text-purple-700 flex items-center gap-1">
                       APS — Advance Payment System
-                      <Badge className="bg-purple-100 text-purple-800 text-[10px]">CA &gt; 10M MUR</Badge>
+                      <Badge className="bg-purple-100 text-purple-800 text-[10px]">{t('cabclt.itf.ca_above_10m', locale)}</Badge>
                     </TableCell>
                     <TableCell></TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="pl-6 text-sm text-gray-600">Q1 — Août</TableCell>
+                    <TableCell className="pl-6 text-sm text-gray-600">{t('cabclt.itf.aps_q1', locale)}</TableCell>
                     <TableCell className="text-right font-mono text-sm">{fmt(form.aps_q1)}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="pl-6 text-sm text-gray-600">Q2 — Novembre</TableCell>
+                    <TableCell className="pl-6 text-sm text-gray-600">{t('cabclt.itf.aps_q2', locale)}</TableCell>
                     <TableCell className="text-right font-mono text-sm">{fmt(form.aps_q2)}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell className="pl-6 text-sm text-gray-600">Q3 — Février</TableCell>
+                    <TableCell className="pl-6 text-sm text-gray-600">{t('cabclt.itf.aps_q3', locale)}</TableCell>
                     <TableCell className="text-right font-mono text-sm">{fmt(form.aps_q3)}</TableCell>
                   </TableRow>
                   <TableRow className="border-t">
-                    <TableCell className="font-semibold text-purple-700">Total APS payés</TableCell>
+                    <TableCell className="font-semibold text-purple-700">{t('cabclt.itf.total_aps_paid', locale)}</TableCell>
                     <TableCell className="text-right font-mono text-purple-700">({fmt(form.total_aps_paye)})</TableCell>
                   </TableRow>
                 </>
@@ -374,7 +376,7 @@ export default function ITForm3Page() {
                 <TableRow className="bg-green-50 border-t">
                   <TableCell className="font-semibold text-green-700 flex items-center gap-1">
                     CSR — 2% Corporate Social Responsibility
-                    <Badge className="bg-green-100 text-green-800 text-[10px]">Profit &gt; 10M MUR</Badge>
+                    <Badge className="bg-green-100 text-green-800 text-[10px]">{t('cabclt.itf.profit_above_10m', locale)}</Badge>
                   </TableCell>
                   <TableCell className="text-right font-mono font-bold text-green-700">{fmt(form.csr_2pct)} MUR</TableCell>
                 </TableRow>
@@ -382,7 +384,7 @@ export default function ITForm3Page() {
 
               {/* Solde dû */}
               <TableRow className="bg-yellow-50 border-t-2 border-t-yellow-300">
-                <TableCell className="font-bold text-xl text-red-700">SOLDE DÛ À LA MRA</TableCell>
+                <TableCell className="font-bold text-xl text-red-700">{t('cabclt.itf.balance_due_mra', locale)}</TableCell>
                 <TableCell className="text-right font-mono font-bold text-2xl text-red-700">{fmt(form.impot_solde)} MUR</TableCell>
               </TableRow>
             </TableBody>
@@ -393,10 +395,10 @@ export default function ITForm3Page() {
       {/* Actions */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          <h3 className="font-semibold text-sm" style={{ color: NAVY }}>Soumission MRA</h3>
+          <h3 className="font-semibold text-sm" style={{ color: NAVY }}>{t('cabclt.itf.mra_submission', locale)}</h3>
           <div className="flex flex-wrap gap-3 items-end">
             <div>
-              <Label className="text-xs">Référence MRA</Label>
+              <Label className="text-xs">{t('cabclt.itf.mra_reference', locale)}</Label>
               <Input
                 value={refMRA}
                 onChange={e => setRefMRA(e.target.value)}
@@ -405,7 +407,7 @@ export default function ITForm3Page() {
               />
             </div>
             <div>
-              <Label className="text-xs">Date soumission</Label>
+              <Label className="text-xs">{t('cabclt.itf.submission_date', locale)}</Label>
               <Input
                 type="date"
                 value={form.date_soumission || ""}
@@ -416,7 +418,7 @@ export default function ITForm3Page() {
             <div className="flex gap-2">
               <Button onClick={handleSave} variant="outline" size="sm" className="gap-1" disabled={saving}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Sauvegarder
+                {t('cabclt.itf.save', locale)}
               </Button>
               <Button
                 onClick={handleSoumettre}
@@ -426,14 +428,14 @@ export default function ITForm3Page() {
                 disabled={saving || form.statut === "soumis"}
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                Marquer soumis
+                {t('cabclt.itf.mark_submitted', locale)}
               </Button>
             </div>
           </div>
           {form.statut === "soumis" && form.date_soumission && (
             <p className="text-sm text-green-600">
-              ✓ Déclaration soumise le {new Date(form.date_soumission).toLocaleDateString("fr-FR")}
-              {form.reference_mra && ` — Réf: ${form.reference_mra}`}
+              ✓ {t('cabclt.itf.submitted_on', locale)} {new Date(form.date_soumission).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB')}
+              {form.reference_mra && ` — ${t('cabclt.itf.ref_short', locale)} ${form.reference_mra}`}
             </p>
           )}
         </CardContent>

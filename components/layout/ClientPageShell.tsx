@@ -17,6 +17,7 @@ import * as React from "react"
 import Link from "next/link"
 import { ChevronRight, Sparkles } from "lucide-react"
 import { ParticleField } from "@/components/ParticleField"
+import { t, getLocale } from "@/lib/i18n"
 
 const FONT = "'Poppins', sans-serif"
 
@@ -56,6 +57,7 @@ export function ClientPageShell({
   className,
   children,
 }: ClientPageShellProps) {
+  const locale = getLocale()
   return (
     <div
       className={className}
@@ -106,7 +108,7 @@ export function ClientPageShell({
           {/* Breadcrumb */}
           {breadcrumbs && breadcrumbs.length > 0 && (
             <nav
-              aria-label="Fil d'Ariane"
+              aria-label={t('comp.page_shell.breadcrumb_aria', locale)}
               style={{
                 display: "flex",
                 alignItems: "center",

@@ -27,6 +27,7 @@ import {
 import { Calculator, FileText, Save, Download, Loader2, Upload, CheckCircle, AlertCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -60,6 +61,7 @@ const ISIC_SECTORS = [
 ]
 
 export default function ITForm3Page() {
+  const locale = getLocale()
   const { societeId, societe } = useSocieteActive()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -247,12 +249,12 @@ export default function ITForm3Page() {
           if (parsed.taux_is !== undefined) setTauxIS(Number(parsed.taux_is) || 15)
           if (parsed.aps_paye !== undefined) setApsPayé(Number(parsed.aps_paye) || 0)
         }
-        setImportMessage("PDF importe avec succes. Verifiez les champs pre-remplis.")
+        setImportMessage(t('mra.itform3.import_success', locale))
       } else {
-        setImportMessage("Erreur lors de l'import du PDF.")
+        setImportMessage(t('mra.itform3.import_error', locale))
       }
     } catch {
-      setImportMessage("Erreur lors de l'import du PDF.")
+      setImportMessage(t('mra.itform3.import_error', locale))
     } finally {
       setImportingPdf(false)
     }
@@ -285,7 +287,7 @@ export default function ITForm3Page() {
   }
 
   const handleSave = async () => {
-    if (!societeId) { alert("Sélectionnez une société"); return }
+    if (!societeId) { alert(t('mra.itform3.select_societe', locale)); return }
     setSaving(true)
     try {
       const yearNum = parseInt(assessmentYear)
@@ -310,10 +312,10 @@ export default function ITForm3Page() {
         accountantName,
       }
       const res = await fetch("/api/comptable/it-form3", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
-      if (res.ok) { alert("IT Form 3 sauvegardé") } else { const err = await res.json(); alert("Erreur: " + (err.error || "Erreur serveur")) }
+      if (res.ok) { alert(t('mra.itform3.save_success', locale)) } else { const err = await res.json(); alert(t('mra.itform3.save_error_prefix', locale) + (err.error || t('mra.itform3.server_error', locale))) }
     } catch (e) {
       console.error("Error saving:", e)
-      alert("Erreur de sauvegarde")
+      alert(t('mra.itform3.save_error', locale))
     } finally {
       setSaving(false)
     }
@@ -323,21 +325,21 @@ export default function ITForm3Page() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Loader2 className="w-8 h-8 animate-spin" style={{ color: GOLD }} />
-        <span className="ml-3 text-lg" style={{ color: NAVY }}>Chargement du formulaire IT Form 3...</span>
+        <span className="ml-3 text-lg" style={{ color: NAVY }}>{t('mra.itform3.loading', locale)}</span>
       </div>
     )
   }
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "IT Form 3" }]}
-      kicker={`Fiscal MRA · Assessment Year ${assessmentYear}`}
-      title="IT Form 3 — Return of Income (Company)"
-      subtitle="Mauritius Revenue Authority — Déclaration d'impôt sur le revenu des sociétés. Exercice juillet-juin, date limite 31 décembre, taux 15%."
+      breadcrumbs={[{ label: t('mra.itform3.breadcrumb_client', locale), href: "/client" }, { label: t('mra.itform3.breadcrumb_itform', locale) }]}
+      kicker={`${t('mra.itform3.kicker_prefix', locale)} ${assessmentYear}`}
+      title={t('mra.itform3.title', locale)}
+      subtitle={t('mra.itform3.subtitle', locale)}
       actions={
         <>
           <Badge className="text-sm px-3 py-1" style={{ backgroundColor: GOLD, color: NAVY }}>
-            Assessment Year {assessmentYear}
+            {t('mra.itform3.assessment_year_badge', locale)} {assessmentYear}
           </Badge>
         </>
       }
@@ -351,8 +353,8 @@ export default function ITForm3Page() {
             <div className="flex items-center gap-2">
               <Upload className="w-5 h-5" style={{ color: GOLD }} />
               <div>
-                <p className="text-sm font-semibold" style={{ color: NAVY }}>Importer PDF officiel</p>
-                <p className="text-xs text-gray-500">Importez votre IT Form 3 officiel (PDF) pour pre-remplir automatiquement le formulaire</p>
+                <p className="text-sm font-semibold" style={{ color: NAVY }}>{t('mra.itform3.import_pdf_title', locale)}</p>
+                <p className="text-xs text-gray-500">{t('mra.itform3.import_pdf_hint', locale)}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -375,7 +377,7 @@ export default function ITForm3Page() {
                 className="flex items-center gap-2"
               >
                 {importingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                {importingPdf ? "Import en cours..." : "Uploader un document"}
+                {importingPdf ? t('mra.itform3.importing', locale) : t('mra.itform3.upload_doc', locale)}
               </Button>
             </div>
           </div>
@@ -390,47 +392,47 @@ export default function ITForm3Page() {
 
       <Tabs defaultValue="form" className="w-full" id="it-form-content">
         <TabsList className="print:hidden">
-          <TabsTrigger value="form">Formulaire</TabsTrigger>
-          <TabsTrigger value="summary">Résumé & Calcul</TabsTrigger>
+          <TabsTrigger value="form">{t('mra.itform3.tab_form', locale)}</TabsTrigger>
+          <TabsTrigger value="summary">{t('mra.itform3.tab_summary', locale)}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="form" className="space-y-6 mt-4">
           {/* Section 1 - Company Details */}
           <Card className="border-t-4" style={{ borderTopColor: NAVY }}>
             <CardHeader>
-              <CardTitle className="text-lg" style={{ color: NAVY }}>Section 1 - Détails de la Société</CardTitle>
+              <CardTitle className="text-lg" style={{ color: NAVY }}>{t('mra.itform3.s1_title', locale)}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Nom complet de la société</Label>
+                <Label>{t('mra.itform3.lbl_company_name', locale)}</Label>
                 <Input value={companyName} onChange={e => setCompanyName(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>BRN (Business Registration Number)</Label>
+                <Label>{t('mra.itform3.lbl_brn', locale)}</Label>
                 <Input value={brn} onChange={e => setBrn(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>TAN (Tax Account Number)</Label>
+                <Label>{t('mra.itform3.lbl_tan', locale)}</Label>
                 <Input value={tan} onChange={e => setTan(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
+                <Label>{t('mra.itform3.lbl_email', locale)}</Label>
                 <Input type="email" value={email} onChange={e => setEmail(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Téléphone</Label>
+                <Label>{t('mra.itform3.lbl_phone', locale)}</Label>
                 <Input value={phone} onChange={e => setPhone(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Mobile</Label>
+                <Label>{t('mra.itform3.lbl_mobile', locale)}</Label>
                 <Input value={mobile} onChange={e => setMobile(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Devise</Label>
+                <Label>{t('mra.itform3.lbl_currency', locale)}</Label>
                 <Input value="MUR" disabled className="bg-gray-50" />
               </div>
               <div className="space-y-2">
-                <Label>Assessment Year</Label>
+                <Label>{t('mra.itform3.lbl_assessment_year', locale)}</Label>
                 <Select value={assessmentYear} onValueChange={setAssessmentYear}>
                   <SelectTrigger>
                     <SelectValue />
@@ -444,7 +446,7 @@ export default function ITForm3Page() {
                 </Select>
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label>Date de clôture des comptes</Label>
+                <Label>{t('mra.itform3.lbl_closing_date', locale)}</Label>
                 <Input type="date" value={closingDate} onChange={e => setClosingDate(e.target.value)} />
               </div>
             </CardContent>
@@ -453,14 +455,14 @@ export default function ITForm3Page() {
           {/* Section 2 - Business Activity */}
           <Card className="border-t-4" style={{ borderTopColor: NAVY }}>
             <CardHeader>
-              <CardTitle className="text-lg" style={{ color: NAVY }}>Section 2 - Activité Commerciale</CardTitle>
+              <CardTitle className="text-lg" style={{ color: NAVY }}>{t('mra.itform3.s2_title', locale)}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2 md:col-span-2">
-                <Label>Secteur (Classification ISIC)</Label>
+                <Label>{t('mra.itform3.lbl_sector', locale)}</Label>
                 <Select value={sector} onValueChange={setSector}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner le secteur" />
+                    <SelectValue placeholder={t('mra.itform3.placeholder_sector', locale)} />
                   </SelectTrigger>
                   <SelectContent>
                     {ISIC_SECTORS.map(s => (
@@ -470,12 +472,12 @@ export default function ITForm3Page() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Type d&apos;activité</Label>
-                <Input value={typeActivity} onChange={e => setTypeActivity(e.target.value)} placeholder="ex: Services informatiques" />
+                <Label>{t('mra.itform3.lbl_type_activity', locale)}</Label>
+                <Input value={typeActivity} onChange={e => setTypeActivity(e.target.value)} placeholder={t('mra.itform3.placeholder_type_activity', locale)} />
               </div>
               <div className="space-y-2">
-                <Label>Détail de l&apos;activité</Label>
-                <Input value={detailActivity} onChange={e => setDetailActivity(e.target.value)} placeholder="ex: Développement logiciel et conseil" />
+                <Label>{t('mra.itform3.lbl_detail_activity', locale)}</Label>
+                <Input value={detailActivity} onChange={e => setDetailActivity(e.target.value)} placeholder={t('mra.itform3.placeholder_detail_activity', locale)} />
               </div>
             </CardContent>
           </Card>
@@ -483,16 +485,16 @@ export default function ITForm3Page() {
           {/* Section 3 - Yes/No Questions */}
           <Card className="border-t-4" style={{ borderTopColor: NAVY }}>
             <CardHeader>
-              <CardTitle className="text-lg" style={{ color: NAVY }}>Section 3 - Questions</CardTitle>
+              <CardTitle className="text-lg" style={{ color: NAVY }}>{t('mra.itform3.s3_title', locale)}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {[
-                { label: "La société était-elle en exploitation durant cette période ?", value: inOperation, setter: setInOperation },
-                { label: "Y a-t-il eu des transactions avec des parties liées ?", value: relatedParty, setter: setRelatedParty },
-                { label: "Les transactions avec parties liées sont-elles à des conditions de pleine concurrence (arm's length) ?", value: armLength, setter: setArmLength },
-                { label: "Des dividendes ont-ils été versés ?", value: dividendsPaid, setter: setDividendsPaid },
-                { label: "La société a-t-elle perçu des revenus de source étrangère ?", value: foreignIncome, setter: setForeignIncome },
-                { label: "Est-ce la première année d'imposition ?", value: firstYear, setter: setFirstYear },
+                { label: t('mra.itform3.q_in_operation', locale), value: inOperation, setter: setInOperation },
+                { label: t('mra.itform3.q_related_party', locale), value: relatedParty, setter: setRelatedParty },
+                { label: t('mra.itform3.q_arm_length', locale), value: armLength, setter: setArmLength },
+                { label: t('mra.itform3.q_dividends_paid', locale), value: dividendsPaid, setter: setDividendsPaid },
+                { label: t('mra.itform3.q_foreign_income', locale), value: foreignIncome, setter: setForeignIncome },
+                { label: t('mra.itform3.q_first_year', locale), value: firstYear, setter: setFirstYear },
               ].map((q, i) => (
                 <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
                   <span className="text-sm text-gray-700">{q.label}</span>
@@ -505,7 +507,7 @@ export default function ITForm3Page() {
                         onChange={() => q.setter(true)}
                         className="accent-[#D4AF37]"
                       />
-                      <span className="text-sm font-medium">Oui</span>
+                      <span className="text-sm font-medium">{t('mra.itform3.yes', locale)}</span>
                     </label>
                     <label className="flex items-center gap-1.5 cursor-pointer">
                       <input
@@ -515,7 +517,7 @@ export default function ITForm3Page() {
                         onChange={() => q.setter(false)}
                         className="accent-[#D4AF37]"
                       />
-                      <span className="text-sm font-medium">Non</span>
+                      <span className="text-sm font-medium">{t('mra.itform3.no', locale)}</span>
                     </label>
                   </div>
                 </div>
@@ -526,16 +528,16 @@ export default function ITForm3Page() {
           {/* Section 4 - Revenue */}
           <Card className="border-t-4" style={{ borderTopColor: GOLD }}>
             <CardHeader>
-              <CardTitle className="text-lg" style={{ color: NAVY }}>Section 4 - Revenus (Schedule A)</CardTitle>
+              <CardTitle className="text-lg" style={{ color: NAVY }}>{t('mra.itform3.s4_title', locale)}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {[
-                { label: "Chiffre d'affaires (Revenu des affaires)", value: revenuAffaires, setter: setRevenuAffaires },
-                { label: "Revenu d'emploi", value: revenuEmploi, setter: setRevenuEmploi },
-                { label: "Revenu locatif", value: revenuLocatif, setter: setRevenuLocatif },
-                { label: "Revenu d'intérêts", value: revenuInterets, setter: setRevenuInterets },
-                { label: "Dividendes", value: dividendes, setter: setDividendes },
-                { label: "Autres revenus", value: autresRevenus, setter: setAutresRevenus },
+                { label: t('mra.itform3.rev_business', locale), value: revenuAffaires, setter: setRevenuAffaires },
+                { label: t('mra.itform3.rev_employment', locale), value: revenuEmploi, setter: setRevenuEmploi },
+                { label: t('mra.itform3.rev_rental', locale), value: revenuLocatif, setter: setRevenuLocatif },
+                { label: t('mra.itform3.rev_interest', locale), value: revenuInterets, setter: setRevenuInterets },
+                { label: t('mra.itform3.rev_dividends', locale), value: dividendes, setter: setDividendes },
+                { label: t('mra.itform3.rev_other', locale), value: autresRevenus, setter: setAutresRevenus },
               ].map((r, i) => (
                 <div key={i} className="flex items-center justify-between gap-4">
                   <Label className="flex-1 text-sm">{r.label}</Label>
@@ -551,7 +553,7 @@ export default function ITForm3Page() {
                 </div>
               ))}
               <div className="flex items-center justify-between gap-4 pt-3 border-t-2" style={{ borderTopColor: NAVY }}>
-                <span className="font-bold text-base" style={{ color: NAVY }}>TOTAL REVENUS</span>
+                <span className="font-bold text-base" style={{ color: NAVY }}>{t('mra.itform3.total_revenues', locale)}</span>
                 <span className="font-bold text-base w-56 text-right" style={{ color: NAVY }}>
                   {formatMUR(totalRevenus)}
                 </span>
@@ -560,23 +562,23 @@ export default function ITForm3Page() {
               {priorYearData && (
                 <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-200">
                   <p className="text-xs font-semibold text-gray-500 mb-2">
-                    Reference: Assessment Year {parseInt(assessmentYear) - 1}
+                    {t('mra.itform3.prior_ref_prefix', locale)} {parseInt(assessmentYear) - 1}
                   </p>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-500">CA (prior year)</span>
+                      <span className="text-gray-500">{t('mra.itform3.prior_ca', locale)}</span>
                       <span className="font-mono text-gray-600">{formatMUR(priorYearData.revenuAffaires)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Total Revenus</span>
+                      <span className="text-gray-500">{t('mra.itform3.prior_total_rev', locale)}</span>
                       <span className="font-mono text-gray-600">{formatMUR(priorYearData.totalRevenus)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Revenu Imposable</span>
+                      <span className="text-gray-500">{t('mra.itform3.prior_chargeable', locale)}</span>
                       <span className="font-mono text-gray-600">{formatMUR(priorYearData.revenuImposable)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Impot Calcule</span>
+                      <span className="text-gray-500">{t('mra.itform3.prior_tax', locale)}</span>
                       <span className="font-mono text-gray-600">{formatMUR(priorYearData.impotCalcule)}</span>
                     </div>
                   </div>
@@ -588,11 +590,11 @@ export default function ITForm3Page() {
           {/* Section 5 - Deductions */}
           <Card className="border-t-4" style={{ borderTopColor: GOLD }}>
             <CardHeader>
-              <CardTitle className="text-lg" style={{ color: NAVY }}>Section 5 - Déductions</CardTitle>
+              <CardTitle className="text-lg" style={{ color: NAVY }}>{t('mra.itform3.s5_title', locale)}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
-                <Label className="flex-1 text-sm">Annual Allowance (Amortissement annuel)</Label>
+                <Label className="flex-1 text-sm">{t('mra.itform3.annual_allowance', locale)}</Label>
                 <div className="w-56">
                   <Input
                     type="number"
@@ -604,7 +606,7 @@ export default function ITForm3Page() {
                 </div>
               </div>
               <div className="flex items-center justify-between gap-4">
-                <Label className="flex-1 text-sm">Autres déductions</Label>
+                <Label className="flex-1 text-sm">{t('mra.itform3.other_deductions', locale)}</Label>
                 <div className="w-56">
                   <Input
                     type="number"
@@ -616,7 +618,7 @@ export default function ITForm3Page() {
                 </div>
               </div>
               <div className="flex items-center justify-between gap-4 pt-3 border-t-2" style={{ borderTopColor: NAVY }}>
-                <span className="font-bold text-base" style={{ color: NAVY }}>TOTAL DEDUCTIONS</span>
+                <span className="font-bold text-base" style={{ color: NAVY }}>{t('mra.itform3.total_deductions', locale)}</span>
                 <span className="font-bold text-base w-56 text-right" style={{ color: NAVY }}>
                   {formatMUR(totalDeductions)}
                 </span>
@@ -627,11 +629,11 @@ export default function ITForm3Page() {
           {/* Section 6 - Tax Rate */}
           <Card className="border-t-4" style={{ borderTopColor: GOLD }}>
             <CardHeader>
-              <CardTitle className="text-lg" style={{ color: NAVY }}>Section 6 - Paramètres de calcul</CardTitle>
+              <CardTitle className="text-lg" style={{ color: NAVY }}>{t('mra.itform3.s6_title', locale)}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Taux IS (%)</Label>
+                <Label>{t('mra.itform3.lbl_tax_rate', locale)}</Label>
                 <Input
                   type="number"
                   value={tauxIS}
@@ -640,7 +642,7 @@ export default function ITForm3Page() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>APS déjà payé</Label>
+                <Label>{t('mra.itform3.lbl_aps_paid', locale)}</Label>
                 <Input
                   type="number"
                   value={apsPayé || ""}
@@ -655,19 +657,19 @@ export default function ITForm3Page() {
           {/* Section 7 - Declaration */}
           <Card className="border-t-4" style={{ borderTopColor: NAVY }}>
             <CardHeader>
-              <CardTitle className="text-lg" style={{ color: NAVY }}>Section 7 - Déclaration</CardTitle>
+              <CardTitle className="text-lg" style={{ color: NAVY }}>{t('mra.itform3.s7_title', locale)}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
-                <Label className="flex-1 text-sm">Nom du comptable</Label>
-                <Input value={accountantName} onChange={e => setAccountantName(e.target.value)} className="w-56 text-right" placeholder="Nom du comptable" />
+                <Label className="flex-1 text-sm">{t('mra.itform3.lbl_accountant', locale)}</Label>
+                <Input value={accountantName} onChange={e => setAccountantName(e.target.value)} className="w-56 text-right" placeholder={t('mra.itform3.placeholder_accountant', locale)} />
               </div>
               <div className="flex items-center justify-between gap-4">
-                <Label className="flex-1 text-sm">Montant d&apos;impôt à payer</Label>
+                <Label className="flex-1 text-sm">{t('mra.itform3.lbl_tax_due', locale)}</Label>
                 <span className="w-56 text-right font-semibold" style={{ color: NAVY }}>{formatMUR(Math.max(0, soldeAPayer))}</span>
               </div>
               <div className="flex items-center justify-between gap-4">
-                <Label className="flex-1 text-sm">Montant à rembourser</Label>
+                <Label className="flex-1 text-sm">{t('mra.itform3.lbl_refund', locale)}</Label>
                 <span className="w-56 text-right font-semibold text-green-600">{formatMUR(Math.max(0, -soldeAPayer))}</span>
               </div>
             </CardContent>
@@ -680,35 +682,35 @@ export default function ITForm3Page() {
             <CardHeader style={{ backgroundColor: NAVY }}>
               <CardTitle className="text-lg text-white flex items-center gap-2">
                 <Calculator className="w-5 h-5" style={{ color: GOLD }} />
-                Résumé du Calcul d&apos;Impôt
+                {t('mra.itform3.summary_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-3">
               <div className="flex justify-between py-2 border-b">
-                <span className="text-gray-600">Total Revenus</span>
+                <span className="text-gray-600">{t('mra.itform3.s_total_rev', locale)}</span>
                 <span className="font-medium">{formatMUR(totalRevenus)}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
-                <span className="text-gray-600">Total Déductions</span>
+                <span className="text-gray-600">{t('mra.itform3.s_total_ded', locale)}</span>
                 <span className="font-medium text-red-600">- {formatMUR(totalDeductions)}</span>
               </div>
               <div className="flex justify-between py-2 border-b-2" style={{ borderColor: NAVY }}>
-                <span className="font-bold" style={{ color: NAVY }}>Revenu Imposable</span>
+                <span className="font-bold" style={{ color: NAVY }}>{t('mra.itform3.s_chargeable', locale)}</span>
                 <span className="font-bold" style={{ color: NAVY }}>{formatMUR(revenuImposable)}</span>
               </div>
               <div className="flex justify-between py-2 border-b">
-                <span className="text-gray-600">Taux IS</span>
+                <span className="text-gray-600">{t('mra.itform3.s_tax_rate', locale)}</span>
                 <span className="font-medium">{tauxIS}%</span>
               </div>
               <div className="flex justify-between py-2 border-b">
-                <span className="font-semibold" style={{ color: NAVY }}>Impôt Calculé</span>
+                <span className="font-semibold" style={{ color: NAVY }}>{t('mra.itform3.s_tax_calc', locale)}</span>
                 <span className="font-semibold" style={{ color: NAVY }}>{formatMUR(impotCalcule)}</span>
               </div>
 
               {apsApplicable && (
                 <div className="rounded-lg p-4 mt-2" style={{ backgroundColor: `${GOLD}15` }}>
                   <p className="text-sm font-semibold mb-2" style={{ color: NAVY }}>
-                    APS Applicable (CA &gt; 10M MUR)
+                    {t('mra.itform3.aps_applicable', locale)}
                   </p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {["Q1", "Q2", "Q3", "Q4"].map(q => (
@@ -723,18 +725,18 @@ export default function ITForm3Page() {
 
               {csrAmount > 0 && (
                 <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-600">CSR 2% (profit &gt; 10M MUR)</span>
+                  <span className="text-gray-600">{t('mra.itform3.csr_label', locale)}</span>
                   <span className="font-medium">{formatMUR(csrAmount)}</span>
                 </div>
               )}
 
               <div className="flex justify-between py-2 border-b">
-                <span className="text-gray-600">APS Payé</span>
+                <span className="text-gray-600">{t('mra.itform3.aps_paid_label', locale)}</span>
                 <span className="font-medium text-green-600">- {formatMUR(apsPayé)}</span>
               </div>
 
               <div className="flex justify-between py-3 rounded-lg px-4 mt-2" style={{ backgroundColor: NAVY }}>
-                <span className="text-white font-bold text-lg">Solde à Payer</span>
+                <span className="text-white font-bold text-lg">{t('mra.itform3.balance_due', locale)}</span>
                 <span className="font-bold text-lg" style={{ color: GOLD }}>{formatMUR(soldeAPayer)}</span>
               </div>
             </CardContent>
@@ -743,15 +745,15 @@ export default function ITForm3Page() {
           {/* Company summary for print */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg" style={{ color: NAVY }}>Informations de la Société</CardTitle>
+              <CardTitle className="text-lg" style={{ color: NAVY }}>{t('mra.itform3.company_info', locale)}</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-gray-500">Société:</span> <span className="font-medium">{companyName}</span></div>
-              <div><span className="text-gray-500">BRN:</span> <span className="font-medium">{brn}</span></div>
-              <div><span className="text-gray-500">TAN:</span> <span className="font-medium">{tan}</span></div>
-              <div><span className="text-gray-500">Assessment Year:</span> <span className="font-medium">{assessmentYear}</span></div>
-              <div><span className="text-gray-500">Comptable:</span> <span className="font-medium">{accountantName || "Non defini"}</span></div>
-              <div><span className="text-gray-500">Clôture:</span> <span className="font-medium">{closingDate || "Non définie"}</span></div>
+              <div><span className="text-gray-500">{t('mra.itform3.company_label', locale)}</span> <span className="font-medium">{companyName}</span></div>
+              <div><span className="text-gray-500">{t('mra.itform3.brn_label', locale)}</span> <span className="font-medium">{brn}</span></div>
+              <div><span className="text-gray-500">{t('mra.itform3.tan_label', locale)}</span> <span className="font-medium">{tan}</span></div>
+              <div><span className="text-gray-500">{t('mra.itform3.assessment_year_label', locale)}</span> <span className="font-medium">{assessmentYear}</span></div>
+              <div><span className="text-gray-500">{t('mra.itform3.accountant_label', locale)}</span> <span className="font-medium">{accountantName || t('mra.itform3.not_defined_m', locale)}</span></div>
+              <div><span className="text-gray-500">{t('mra.itform3.closing_label', locale)}</span> <span className="font-medium">{closingDate || t('mra.itform3.not_defined_f', locale)}</span></div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -765,7 +767,7 @@ export default function ITForm3Page() {
           style={{ backgroundColor: NAVY, color: "white" }}
         >
           <Calculator className="w-4 h-4" />
-          Calculer IS
+          {t('mra.itform3.btn_compute', locale)}
         </Button>
         <Button
           onClick={handleSave}
@@ -774,7 +776,7 @@ export default function ITForm3Page() {
           style={{ backgroundColor: GOLD, color: NAVY }}
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Sauvegarder
+          {t('mra.itform3.btn_save', locale)}
         </Button>
         <Button
           onClick={async () => {
@@ -846,7 +848,7 @@ export default function ITForm3Page() {
               URL.revokeObjectURL(url)
             } catch (err) {
               console.error('PDF generation error:', err)
-              alert('Erreur de génération PDF — essayez Ctrl+P pour imprimer')
+              alert(t('mra.itform3.pdf_error', locale))
             }
           }}
           variant="outline"
@@ -854,7 +856,7 @@ export default function ITForm3Page() {
           style={{ borderColor: NAVY, color: NAVY }}
         >
           <Download className="w-4 h-4" />
-          Télécharger PDF
+          {t('mra.itform3.btn_download_pdf', locale)}
         </Button>
       </div>
       </div>

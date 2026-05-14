@@ -94,7 +94,7 @@ const MENU: MenuSection[] = [
       { href: "/client/tableau-de-bord", label: "Tableau de bord", labelKey: "nav.dashboard", icon: LayoutDashboard },
       { href: "/client/societes", label: "Mes Sociétés", labelKey: "nav.companies", icon: Building2 },
       { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
-      { href: "/client/lex-ocr", label: "Lex OCR (contrôle)", icon: Sparkles } as any,
+      { href: "/client/lex-ocr", label: "Lex OCR (contrôle)", labelKey: "comp.client_sidebar.lex_ocr", icon: Sparkles } as any,
       { href: "/client/utilisateurs", label: "Mon Équipe", labelKey: "nav.team", icon: Users },
       { href: "/client/alertes", label: "Alertes", labelKey: "nav.alerts", icon: Bell },
       { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload, visibleForRoles: ["client_assistant"] } as any,
@@ -105,13 +105,13 @@ const MENU: MenuSection[] = [
     requiredModule: "facturation",
     items: [
       { href: "/client/factures", label: "Mes Factures", labelKey: "inv.my_invoices", icon: Receipt },
-      { href: "/client/lex-factures", label: "Lex Factures (analyse)", icon: Sparkles } as any,
+      { href: "/client/lex-factures", label: "Lex Factures (analyse)", labelKey: "comp.client_sidebar.lex_factures", icon: Sparkles } as any,
       { href: "/client/nouvelle-facture", label: "Nouvelle Facture", labelKey: "inv.new_invoice", icon: FilePlus2 },
       { href: "/client/catalogue", label: "Catalogue services", icon: Package } as any,
       { href: "/client/contacts", label: "Contacts clients", icon: Users } as any,
       { href: "/client/recurrences", label: "Récurrences", icon: Repeat } as any,
       { href: "/client/relances", label: "Relances", icon: Send } as any,
-      { href: "/client/contrats", label: "Contrats Clients", icon: FileText, visibleForRoles: ["client_admin", "direction"] } as any,
+      { href: "/client/contrats", label: "Contrats Clients", labelKey: "comp.client_sidebar.client_contracts", icon: FileText, visibleForRoles: ["client_admin", "direction"] } as any,
       { href: "/client/facturation-settings", label: "Paramètres Facturation", labelKey: "inv.settings", icon: SlidersHorizontal },
     ]
   },
@@ -121,9 +121,9 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/banque", label: "Banque", labelKey: "acc.bank", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
-      { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
-      { href: "/client/plan-comptable", label: "Plan Comptable", icon: BookOpen },
-      { href: "/client/salaires-compta", label: "Salaires", icon: CreditCard },
+      { href: "/client/grand-livre", label: "Grand Livre", labelKey: "comp.client_sidebar.general_ledger", icon: BookOpen },
+      { href: "/client/plan-comptable", label: "Plan Comptable", labelKey: "comp.client_sidebar.chart_accounts", icon: BookOpen },
+      { href: "/client/salaires-compta", label: "Salaires", labelKey: "comp.client_sidebar.salaries", icon: CreditCard },
       { href: "/client/compte-courant", label: "Comptes Courants Associés", labelKey: "acc.current_accounts", icon: Users },
     ]
   },
@@ -170,21 +170,21 @@ const MENU: MenuSection[] = [
     section: "RH & Paie", sectionKey: "hr.hr_payroll",
     requiredModule: "rh",
     items: [
-      { href: "/rh/employes", label: "Employés", icon: Users },
-      { href: "/rh/juridique", label: "Contrats Travail", icon: FilePen, visibleForRoles: ["client_admin", "direction", "rh", "rh_manager"] } as any,
-      { href: "/rh/groupes", label: "Groupes / Équipes", icon: Users },
-      { href: "/rh/planning", label: "Planning", icon: CalendarDays },
-      { href: "/rh/pointage", label: "Pointage", icon: Clock },
-      { href: "/rh/conges", label: "Congés", icon: Scale },
-      { href: "/rh/conges/parametres", label: "Règles congés", icon: Settings },
-      { href: "/rh/paie", label: "Paie & Bulletins", icon: CreditCard },
-      { href: "/rh/paie/validation", label: "Contrôle pré-paie", icon: ClipboardList },
-      { href: "/rh/paie/primes", label: "Primes & OT", icon: Target },
-      { href: "/rh/frais-km", label: "Frais kilométriques", icon: Download },
-      { href: "/rh/paie/exports-mra", label: "Exports MRA", icon: FileSpreadsheet },
-      { href: "/rh/exports/paie", label: "Export Paie & Virements", icon: FileText },
-      { href: "/rh/paie/parametres", label: "Paramètres paie", icon: Settings },
-      { href: "/rh/chat", label: "CLARA — Assistant IA", icon: Lightbulb },
+      { href: "/rh/employes", label: "Employés", labelKey: "hr.employees", icon: Users },
+      { href: "/rh/juridique", label: "Contrats Travail", labelKey: "comp.client_sidebar.work_contracts", icon: FilePen, visibleForRoles: ["client_admin", "direction", "rh", "rh_manager"] } as any,
+      { href: "/rh/groupes", label: "Groupes / Équipes", labelKey: "comp.client_sidebar.groups_teams", icon: Users },
+      { href: "/rh/planning", label: "Planning", labelKey: "hr.planning", icon: CalendarDays },
+      { href: "/rh/pointage", label: "Pointage", labelKey: "hr.time_clock", icon: Clock },
+      { href: "/rh/conges", label: "Congés", labelKey: "hr.leave", icon: Scale },
+      { href: "/rh/conges/parametres", label: "Règles congés", labelKey: "comp.client_sidebar.leave_rules", icon: Settings },
+      { href: "/rh/paie", label: "Paie & Bulletins", labelKey: "hr.payslips", icon: CreditCard },
+      { href: "/rh/paie/validation", label: "Contrôle pré-paie", labelKey: "comp.client_sidebar.prepayroll_check", icon: ClipboardList },
+      { href: "/rh/paie/primes", label: "Primes & OT", labelKey: "rh.bonuses_ot", icon: Target },
+      { href: "/rh/frais-km", label: "Frais kilométriques", labelKey: "comp.client_sidebar.km_expenses", icon: Download },
+      { href: "/rh/paie/exports-mra", label: "Exports MRA", labelKey: "rh.exports_mra", icon: FileSpreadsheet },
+      { href: "/rh/exports/paie", label: "Export Paie & Virements", labelKey: "comp.client_sidebar.export_payroll_transfers", icon: FileText },
+      { href: "/rh/paie/parametres", label: "Paramètres paie", labelKey: "rh.payroll_settings", icon: Settings },
+      { href: "/rh/chat", label: "CLARA — Assistant IA", labelKey: "comp.client_sidebar.clara", icon: Lightbulb },
     ]
   },
   {
@@ -269,9 +269,9 @@ export function ClientSidebarFull() {
   const visibleMenu = isAssistant
     ? [
         {
-          section: "Mon Espace",
+          section: "Mon Espace", sectionKey: "nav.my_space",
           items: [
-            { href: "/client/assistant", label: "Espace Assistant", icon: Upload },
+            { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload },
           ],
         },
       ]
@@ -289,7 +289,7 @@ export function ClientSidebarFull() {
       {/* Mobile hamburger — glassmorphic pill with gold dot indicator */}
       <button
         onClick={() => setMobileOpen(true)}
-        aria-label="Ouvrir la navigation"
+        aria-label={t('comp.sidebar.open_nav', locale)}
         className="fixed top-4 left-4 z-50 md:hidden inline-flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-lg backdrop-blur"
         style={{
           backgroundColor: "rgba(16,24,71,0.85)",
@@ -331,7 +331,7 @@ export function ClientSidebarFull() {
         <button
           onClick={() => setMobileOpen(false)}
           className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10"
-          aria-label="Fermer la navigation"
+          aria-label={t('comp.sidebar.close_nav', locale)}
         >
           <X className="w-5 h-5" />
         </button>
@@ -389,7 +389,7 @@ export function ClientSidebarFull() {
               className="text-[9px] font-bold uppercase mb-1"
               style={{ color: "#D4AF37", letterSpacing: "0.18em" }}
             >
-              Société active
+              {t('comp.client_sidebar.active_company', locale)}
             </div>
             <div
               className="text-sm font-semibold truncate"
@@ -417,7 +417,7 @@ export function ClientSidebarFull() {
                   boxShadow: "0 6px 14px -6px rgba(212,175,55,0.55)",
                 }}
               >
-                Changer de société →
+                {t('comp.client_sidebar.change_company', locale)}
               </button>
             )}
           </div>
@@ -443,7 +443,7 @@ export function ClientSidebarFull() {
                 className="text-[11px] leading-relaxed"
                 style={{ color: "#6B7390" }}
               >
-                Sélectionnez une société pour accéder à l&apos;espace
+                {t('comp.client_sidebar.select_company_prompt', locale)}
               </p>
             </div>
           </div>
@@ -580,7 +580,7 @@ export function ClientSidebarFull() {
               />
             )}
             <UserCircle className="w-4 h-4 flex-shrink-0 relative" style={{ color: pathname?.startsWith("/salarie") ? "#0B0F2E" : undefined }} />
-            <span className="truncate relative">Mon espace</span>
+            <span className="truncate relative">{t('comp.sidebar.my_space_employee', locale)}</span>
           </Link>
         </div>
 

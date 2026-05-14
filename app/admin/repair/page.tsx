@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, Play, AlertTriangle, CheckCircle2, XCircle, Wrench } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Action {
   id: string
@@ -42,6 +43,7 @@ interface RepairResponse {
 const NAVY = "#0B0F2E"
 
 export default function AdminRepairPage() {
+  const locale = getLocale()
   const [actions, setActions] = useState<Action[]>([])
   const [societeId, setSocieteId] = useState("")
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -54,7 +56,7 @@ export default function AdminRepairPage() {
     fetch("/api/admin/repair")
       .then(r => r.json())
       .then(d => setActions(d.actions || []))
-      .catch(() => setError("Impossible de charger la liste d'actions"))
+      .catch(() => setError(t('adm.repair.cannot_load', locale)))
   }, [])
 
   const toggle = (id: string) => {
@@ -72,9 +74,8 @@ export default function AdminRepairPage() {
   const run = useCallback(async (dryRun: boolean) => {
     if (!societeId || selected.size === 0) return
     if (!dryRun && !confirm(
-      `⚠️ APPLIQUER ${selected.size} action(s) de réparation sur la société ${societeId} ?\n\n` +
-      `Les actions destructrices vont modifier ou supprimer des données.\n` +
-      `Tu as bien lancé le dry-run d'abord ?`
+      `${t('adm.repair.confirm_prefix', locale)} ${selected.size} ${t('adm.repair.confirm_actions', locale)} ${societeId} ?\n\n` +
+      `${t('adm.repair.confirm_warn', locale)}`
     )) return
 
     setLoading(true); setError(null); setResult(null)
@@ -95,7 +96,7 @@ export default function AdminRepairPage() {
       }
       setResult(data)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur réseau")
+      setError(e instanceof Error ? e.message : t('adm.repair.network_err', locale))
     } finally {
       setLoading(false)
     }
@@ -103,17 +104,17 @@ export default function AdminRepairPage() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Réparation société" }]}
-      kicker="Outils admin"
-      title="Réparation société"
-      subtitle="Applique les 6 actions de réparation codifiées pour nettoyer les données comptables d'une société. Dry-run par défaut."
+      breadcrumbs={[{ label: t('adm.repair.breadcrumb', locale), href: "/admin" }, { label: t('adm.repair.breadcrumb_current', locale) }]}
+      kicker={t('adm.repair.kicker', locale)}
+      title={t('adm.repair.title', locale)}
+      subtitle={t('adm.repair.subtitle', locale)}
     >
       <div className="space-y-4">
         {/* Société selector */}
         <Card>
-          <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Société cible</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{t('adm.repair.target', locale)}</CardTitle></CardHeader>
           <CardContent>
-            <Label htmlFor="societe-id" className="text-xs">UUID de la société</Label>
+            <Label htmlFor="societe-id" className="text-xs">{t('adm.repair.uuid', locale)}</Label>
             <Input
               id="societe-id"
               placeholder="ex: 1826dde7-7b41-4d14-bc75-d8d22dfc75fb"
@@ -122,7 +123,7 @@ export default function AdminRepairPage() {
               className="mt-1 font-mono text-sm"
             />
             <p className="text-xs text-gray-500 mt-2">
-              Récupérable depuis <code className="bg-gray-100 px-1 rounded">SELECT id FROM societes WHERE nom ILIKE &apos;%...%&apos;</code>
+              {t('adm.repair.uuid_hint', locale)} <code className="bg-gray-100 px-1 rounded">SELECT id FROM societes WHERE nom ILIKE &apos;%...%&apos;</code>
             </p>
           </CardContent>
         </Card>
@@ -131,11 +132,11 @@ export default function AdminRepairPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-[#0B0F2E] text-base">
-              Actions ({selected.size}/{actions.length} sélectionnées)
+              {t('adm.repair.actions_label', locale)} ({selected.size}/{actions.length} {t('adm.repair.selected', locale)})
             </CardTitle>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={selectAll}>Tout</Button>
-              <Button variant="outline" size="sm" onClick={clearAll}>Aucune</Button>
+              <Button variant="outline" size="sm" onClick={selectAll}>{t('adm.repair.all', locale)}</Button>
+              <Button variant="outline" size="sm" onClick={clearAll}>{t('adm.repair.none', locale)}</Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -150,7 +151,7 @@ export default function AdminRepairPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium" style={{ color: NAVY }}>{a.label}</span>
                     <Badge variant={a.severity === "destructive" ? "destructive" : "secondary"} className="text-[10px]">
-                      {a.severity === "destructive" ? "⚠ destructive" : "✓ safe"}
+                      {a.severity === "destructive" ? t('adm.repair.destructive', locale) : t('adm.repair.safe', locale)}
                     </Badge>
                   </div>
                   <code className="text-[10px] text-gray-400 font-mono">{a.id}</code>
@@ -168,7 +169,7 @@ export default function AdminRepairPage() {
             className="bg-violet-600 hover:bg-violet-700 text-white"
           >
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
-            Dry run (simulation)
+            {t('adm.repair.dry_run', locale)}
           </Button>
           <Button
             onClick={() => run(false)}
@@ -176,7 +177,7 @@ export default function AdminRepairPage() {
             variant="destructive"
           >
             {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wrench className="w-4 h-4 mr-2" />}
-            Appliquer pour de bon
+            {t('adm.repair.apply', locale)}
           </Button>
         </div>
 
@@ -186,7 +187,7 @@ export default function AdminRepairPage() {
             <CardContent className="p-4 flex items-start gap-3">
               <XCircle className="w-5 h-5 text-red-600 shrink-0" />
               <div>
-                <p className="font-semibold text-red-800">Erreur</p>
+                <p className="font-semibold text-red-800">{t('adm.repair.error', locale)}</p>
                 <p className="text-sm text-red-700">{error}</p>
               </div>
             </CardContent>
@@ -198,7 +199,7 @@ export default function AdminRepairPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
-                Résultats {result.dry_run && <Badge variant="secondary">DRY-RUN</Badge>}
+                {t('adm.repair.results', locale)} {result.dry_run && <Badge variant="secondary">DRY-RUN</Badge>}
                 <span className="ml-auto text-xs font-normal text-gray-500">
                   {result.duration_ms} ms
                 </span>
@@ -222,14 +223,14 @@ export default function AdminRepairPage() {
                             {r.status.toUpperCase()}
                           </Badge>
                           <span className="text-xs text-gray-500">
-                            {r.affected} ligne(s) affectée(s)
+                            {r.affected} {t('adm.repair.affected', locale)}
                           </span>
                         </div>
                         <p className="text-sm mt-1">{r.message}</p>
                         {r.details && Array.isArray(r.details) && r.details.length > 0 && (
                           <details className="mt-2">
                             <summary className="text-xs text-gray-500 cursor-pointer">
-                              Voir détails ({r.details.length})
+                              {t('adm.repair.view_details', locale)} ({r.details.length})
                             </summary>
                             <pre className="mt-2 p-2 bg-gray-50 rounded text-[10px] font-mono overflow-x-auto">
                               {JSON.stringify(r.details, null, 2)}

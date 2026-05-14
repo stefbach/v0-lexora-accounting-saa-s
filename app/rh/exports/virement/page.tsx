@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Download, CreditCard, Building2, AlertTriangle, CheckCircle2, Users, FileText } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const BANQUES_LABELS: Record<string, string> = {
   MCB: "Mauritius Commercial Bank",
@@ -45,6 +46,7 @@ function fmt(n: number) {
 }
 
 export default function ExportVirementPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
   const [periode, setPeriode] = useState(new Date().toISOString().slice(0, 7))
@@ -197,24 +199,24 @@ export default function ExportVirementPage() {
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-6 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-bold text-[#0B0F2E]">Export Virements Salaires</h1>
-        <p className="text-sm text-gray-500">Le format du fichier est automatiquement adapté à la banque de l'entreprise</p>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.b.virement.title', locale)}</h1>
+        <p className="text-sm text-gray-500">{t('rha.b.virement.subtitle', locale)}</p>
       </div>
 
       {/* Paramètres */}
       <Card>
-        <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><CreditCard className="w-4 h-4"/>Paramètres</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><CreditCard className="w-4 h-4"/>{t('rha.b.virement.params', locale)}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Société *</Label>
+              <Label>{t('rha.b.virement.lbl_societe_req', locale)}</Label>
               <Select value={societe} onValueChange={v => { setSociete(v); setPreview(null); setDownloads([]) }}>
-                <SelectTrigger><SelectValue placeholder="Choisir une société"/></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rha.b.virement.choose_societe_ph', locale)}/></SelectTrigger>
                 <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
-              <Label>Période (mois)</Label>
+              <Label>{t('rha.b.virement.lbl_period_month', locale)}</Label>
               <Input type="month" value={periode} onChange={e => { setPeriode(e.target.value); setPreview(null); setDownloads([]) }}/>
             </div>
           </div>
@@ -222,17 +224,17 @@ export default function ExportVirementPage() {
           {/* Compte émetteur — auto-détecté */}
           {societe && (
             <div className="space-y-2">
-              <Label>Compte bancaire émetteur (débiteur)</Label>
+              <Label>{t('rha.b.virement.lbl_emitter_account', locale)}</Label>
               {comptesDisponibles.length === 0 ? (
                 <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded text-sm text-orange-700">
                   <AlertTriangle className="w-4 h-4 shrink-0"/>
-                  Aucun compte bancaire MUR configuré pour cette société.
-                  <a href="/comptable/banque" className="underline ml-1">Ajouter un compte →</a>
+                  {t('rha.b.virement.no_account_mur', locale)}
+                  <a href="/comptable/banque" className="underline ml-1">{t('rha.b.virement.add_account', locale)}</a>
                 </div>
               ) : (
                 <Select value={compteSelectionne} onValueChange={setCompteSelectionne}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner le compte débiteur"/>
+                    <SelectValue placeholder={t('rha.b.virement.select_debtor', locale)}/>
                   </SelectTrigger>
                   <SelectContent>
                     {comptesDisponibles.map((c: any) => (
@@ -275,7 +277,7 @@ export default function ExportVirementPage() {
       {/* Aperçu par banque bénéficiaire */}
       {loadingPreview && (
         <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Loader2 className="w-4 h-4 animate-spin"/>Chargement de l'aperçu...
+          <Loader2 className="w-4 h-4 animate-spin"/>{t('rha.b.virement.preview_loading', locale)}
         </div>
       )}
 
@@ -285,11 +287,11 @@ export default function ExportVirementPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
                 <Users className="w-4 h-4"/>
-                Récapitulatif — {preview.nb_bulletins_total} bulletins validés
+                {t('rha.b.virement.recap_n_bulletins', locale).replace('{n}', String(preview.nb_bulletins_total))}
               </CardTitle>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-500">
-                  Total MUR : <strong>{fmt(preview.montant_total_mur || 0)}</strong>
+                  {t('rha.b.virement.col_total_amount', locale)} MUR : <strong>{fmt(preview.montant_total_mur || 0)}</strong>
                   {preview.montant_total_eur > 0 && <> + EUR : <strong>{preview.montant_total_eur?.toFixed(2)}</strong></>}
                 </span>
                 <Button
@@ -298,7 +300,7 @@ export default function ExportVirementPage() {
                   className="bg-[#0B0F2E] text-white"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Download className="w-4 h-4 mr-2"/>}
-                  Tout télécharger
+                  {t('rha.b.virement.dl_all', locale)}
                 </Button>
               </div>
             </div>
@@ -307,11 +309,11 @@ export default function ExportVirementPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Banque bénéficiaire</TableHead>
-                  <TableHead className="text-center">Employés</TableHead>
-                  <TableHead className="text-right">Montant total</TableHead>
-                  <TableHead>Format fichier</TableHead>
-                  <TableHead className="text-center">Action</TableHead>
+                  <TableHead>{t('rha.b.virement.col_beneficiary_bank', locale)}</TableHead>
+                  <TableHead className="text-center">{t('rha.b.virement.col_employees', locale)}</TableHead>
+                  <TableHead className="text-right">{t('rha.b.virement.col_total_amount', locale)}</TableHead>
+                  <TableHead>{t('rha.b.virement.col_format', locale)}</TableHead>
+                  <TableHead className="text-center">{t('rha.b.virement.col_action', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -345,7 +347,7 @@ export default function ExportVirementPage() {
                       <TableCell className="text-center">
                         {isDone ? (
                           <span className="flex items-center justify-center gap-1 text-green-600 text-xs">
-                            <CheckCircle2 className="w-4 h-4"/>Téléchargé
+                            <CheckCircle2 className="w-4 h-4"/>{t('rha.b.virement.downloaded', locale)}
                           </span>
                         ) : (
                           <Button
@@ -356,7 +358,7 @@ export default function ExportVirementPage() {
                             title={banqueEmettrice === 'MCB' ? "MCB génère un seul fichier BP-V1 — utiliser 'Tout télécharger'" : ""}
                           >
                             <Download className="w-3 h-3 mr-1"/>
-                            {banqueEmettrice === 'MCB' && f.banque !== 'SANS_BANQUE' ? 'Via BP-V1' : 'Télécharger'}
+                            {banqueEmettrice === 'MCB' && f.banque !== 'SANS_BANQUE' ? t('rha.b.virement.via_bpv1', locale) : t('rha.b.virement.dl', locale)}
                           </Button>
                         )}
                       </TableCell>
@@ -382,8 +384,8 @@ export default function ExportVirementPage() {
             {preview.nb_employes_sans_banque > 0 && (
               <div className="p-4 bg-orange-50 border-t text-sm text-orange-700 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0"/>
-                <strong>{preview.nb_employes_sans_banque} employé(s)</strong> n'ont pas de coordonnées bancaires renseignées.
-                <a href="/rh/employes" className="underline ml-1">Compléter les fiches employés →</a>
+                <strong>{t('rha.b.virement.n_employees_no_bank', locale).replace('{n}', String(preview.nb_employes_sans_banque))}</strong>
+                <a href="/rh/employes" className="underline ml-1">{t('rha.b.virement.complete_emp_files', locale)}</a>
               </div>
             )}
           </CardContent>
@@ -394,7 +396,7 @@ export default function ExportVirementPage() {
       {!societe && (
         <div className="text-center py-16 text-gray-400">
           <CreditCard className="w-12 h-12 mx-auto mb-3 text-gray-300"/>
-          <p className="text-sm">Sélectionnez une société et une période pour générer les fichiers de virement</p>
+          <p className="text-sm">{t('rha.b.virement.empty_hint', locale)}</p>
         </div>
       )}
     </div>

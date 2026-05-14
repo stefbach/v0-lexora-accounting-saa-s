@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Scale, Download, TrendingUp, TrendingDown } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface BalanceLigne {
   compte: string; classe: string
@@ -17,21 +18,23 @@ interface BalanceLigne {
 
 interface Societe { id: string; nom: string }
 
-const NOMS_CLASSES: Record<string, string> = {
-  "1": "Capitaux propres et emprunts",
-  "2": "Immobilisations",
-  "3": "Stocks",
-  "4": "Comptes de tiers",
-  "5": "Comptes financiers",
-  "6": "Charges",
-  "7": "Produits",
-}
+const getNomsClasses = (locale: 'fr' | 'en'): Record<string, string> => ({
+  "1": t('cab.charges.class_1', locale),
+  "2": t('cab.charges.class_2', locale),
+  "3": t('cab.charges.class_3', locale),
+  "4": t('cab.charges.class_4', locale),
+  "5": t('cab.charges.class_5', locale),
+  "6": t('cab.charges.class_6', locale),
+  "7": t('cab.charges.class_7', locale),
+})
 
 function fmt(n: number) {
   return n === 0 ? "—" : new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2 }).format(n)
 }
 
 export default function BalancePage() {
+  const locale = getLocale()
+  const NOMS_CLASSES = getNomsClasses(locale)
   const [societes, setSocietes] = useState<Societe[]>([])
   const [selectedSociete, setSelectedSociete] = useState("all")
   const [balance, setBalance] = useState<BalanceLigne[]>([])
@@ -75,27 +78,27 @@ export default function BalancePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Balance Générale</h1>
-          <p className="text-sm text-gray-500 mt-1">Soldes débiteurs et créditeurs par compte</p>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('cab.charges.title', locale)}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('cab.charges.subtitle', locale)}</p>
         </div>
-        <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> Exporter</Button>
+        <Button variant="outline" className="gap-2"><Download className="w-4 h-4" /> {t('cab.charges.export', locale)}</Button>
       </div>
 
       {/* Filtres */}
       <Card><CardContent className="p-4 flex flex-wrap gap-3">
         <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-          <SelectTrigger className="w-56"><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
+          <SelectTrigger className="w-56"><SelectValue placeholder={t('cab.charges.choose_company', locale)} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">-- Choisir une société --</SelectItem>
+            <SelectItem value="all">{t('cab.charges.choose_company_opt', locale)}</SelectItem>
             {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
           </SelectContent>
         </Select>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Au :</span>
+          <span className="text-sm text-gray-500">{t('cab.charges.at_date', locale)}</span>
           <Input type="date" className="w-40" value={dateFin} onChange={e => setDateFin(e.target.value)} />
         </div>
         {selectedSociete !== "all" && (
-          <Button onClick={fetchData} className="bg-[#0B0F2E] text-white">Actualiser</Button>
+          <Button onClick={fetchData} className="bg-[#0B0F2E] text-white">{t('cab.charges.refresh', locale)}</Button>
         )}
       </CardContent></Card>
 
@@ -103,10 +106,10 @@ export default function BalancePage() {
       {balance.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Total Mouvements Débit", value: fmt(totaux.total_debit), icon: TrendingUp, color: "text-blue-600" },
-            { label: "Total Mouvements Crédit", value: fmt(totaux.total_credit), icon: TrendingDown, color: "text-red-600" },
-            { label: "Soldes Débiteurs", value: fmt(totaux.total_solde_debiteur), icon: Scale, color: "text-blue-700" },
-            { label: "Soldes Créditeurs", value: fmt(totaux.total_solde_crediteur), icon: Scale, color: "text-red-700" },
+            { label: t('cab.charges.kpi_total_debit', locale), value: fmt(totaux.total_debit), icon: TrendingUp, color: "text-blue-600" },
+            { label: t('cab.charges.kpi_total_credit', locale), value: fmt(totaux.total_credit), icon: TrendingDown, color: "text-red-600" },
+            { label: t('cab.charges.kpi_debit_balances', locale), value: fmt(totaux.total_solde_debiteur), icon: Scale, color: "text-blue-700" },
+            { label: t('cab.charges.kpi_credit_balances', locale), value: fmt(totaux.total_solde_crediteur), icon: Scale, color: "text-red-700" },
           ].map(k => (
             <Card key={k.label}><CardContent className="p-4 flex items-center gap-3">
               <k.icon className={`w-7 h-7 ${k.color}`} />
@@ -119,15 +122,15 @@ export default function BalancePage() {
       {/* Balance par classe */}
       <Card>
         <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2">
-          <Scale className="w-5 h-5" /> Balance par classe
+          <Scale className="w-5 h-5" /> {t('cab.charges.balance_by_class', locale)}
         </CardTitle></CardHeader>
         <CardContent className="p-0">
           {selectedSociete === "all" ? (
-            <div className="text-center py-12 text-gray-500">Sélectionnez une société pour afficher la balance</div>
+            <div className="text-center py-12 text-gray-500">{t('cab.charges.select_company', locale)}</div>
           ) : loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
           ) : balance.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">Aucune écriture comptable enregistrée</div>
+            <div className="text-center py-12 text-gray-500">{t('cab.charges.empty', locale)}</div>
           ) : (
             <div className="divide-y">
               {Object.entries(parClasse).sort(([a], [b]) => a.localeCompare(b)).map(([classe, lignes]) => {
@@ -143,14 +146,14 @@ export default function BalancePage() {
                       onClick={() => toggleClasse(classe)}
                     >
                       <span className="font-semibold text-[#0B0F2E] text-sm">
-                        Classe {classe} — {NOMS_CLASSES[classe] || ""}
-                        <span className="ml-2 text-xs font-normal text-gray-500">({lignes.length} compte{lignes.length > 1 ? "s" : ""})</span>
+                        {t('cab.charges.class_label', locale)} {classe} — {NOMS_CLASSES[classe] || ""}
+                        <span className="ml-2 text-xs font-normal text-gray-500">({lignes.length} {t('cab.charges.account_unit', locale)}{lignes.length > 1 ? "s" : ""})</span>
                       </span>
                       <div className="flex gap-6 text-xs text-gray-600">
-                        <span>Débit: <b>{fmt(totalD)}</b></span>
-                        <span>Crédit: <b>{fmt(totalC)}</b></span>
-                        <span className="text-blue-700">SD: <b>{fmt(totalSD)}</b></span>
-                        <span className="text-red-700">SC: <b>{fmt(totalSC)}</b></span>
+                        <span>{t('cab.charges.debit', locale)}: <b>{fmt(totalD)}</b></span>
+                        <span>{t('cab.charges.credit', locale)}: <b>{fmt(totalC)}</b></span>
+                        <span className="text-blue-700">{t('cab.charges.sd', locale)}: <b>{fmt(totalSD)}</b></span>
+                        <span className="text-red-700">{t('cab.charges.sc', locale)}: <b>{fmt(totalSC)}</b></span>
                         <span>{expandedClasses.has(classe) ? "▲" : "▼"}</span>
                       </div>
                     </div>
@@ -159,11 +162,11 @@ export default function BalancePage() {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-gray-50 text-xs">
-                            <TableHead className="w-28">Compte</TableHead>
-                            <TableHead className="text-right">Mvts Débit</TableHead>
-                            <TableHead className="text-right">Mvts Crédit</TableHead>
-                            <TableHead className="text-right">Solde Débiteur</TableHead>
-                            <TableHead className="text-right">Solde Créditeur</TableHead>
+                            <TableHead className="w-28">{t('cab.charges.col_account', locale)}</TableHead>
+                            <TableHead className="text-right">{t('cab.charges.col_debit_mvt', locale)}</TableHead>
+                            <TableHead className="text-right">{t('cab.charges.col_credit_mvt', locale)}</TableHead>
+                            <TableHead className="text-right">{t('cab.charges.col_debit_balance', locale)}</TableHead>
+                            <TableHead className="text-right">{t('cab.charges.col_credit_balance', locale)}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -178,7 +181,7 @@ export default function BalancePage() {
                           ))}
                           {/* Sous-total classe */}
                           <TableRow className="bg-gray-50 font-semibold text-xs border-t">
-                            <TableCell>Total C{classe}</TableCell>
+                            <TableCell>{t('cab.charges.total_class', locale)}{classe}</TableCell>
                             <TableCell className="text-right">{fmt(totalD)}</TableCell>
                             <TableCell className="text-right">{fmt(totalC)}</TableCell>
                             <TableCell className="text-right text-blue-700">{fmt(totalSD)}</TableCell>
@@ -192,12 +195,12 @@ export default function BalancePage() {
               })}
               {/* Ligne TOTAL GÉNÉRAL */}
               <div className="flex items-center justify-between p-4 bg-[#0B0F2E] text-white font-bold text-sm">
-                <span>TOTAL GÉNÉRAL</span>
+                <span>{t('cab.charges.grand_total', locale)}</span>
                 <div className="flex gap-6">
-                  <span>Débit: {fmt(totaux.total_debit)}</span>
-                  <span>Crédit: {fmt(totaux.total_credit)}</span>
-                  <span>SD: {fmt(totaux.total_solde_debiteur)}</span>
-                  <span>SC: {fmt(totaux.total_solde_crediteur)}</span>
+                  <span>{t('cab.charges.debit', locale)}: {fmt(totaux.total_debit)}</span>
+                  <span>{t('cab.charges.credit', locale)}: {fmt(totaux.total_credit)}</span>
+                  <span>{t('cab.charges.sd', locale)}: {fmt(totaux.total_solde_debiteur)}</span>
+                  <span>{t('cab.charges.sc', locale)}: {fmt(totaux.total_solde_crediteur)}</span>
                 </div>
               </div>
             </div>

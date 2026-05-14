@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -86,6 +87,7 @@ function Field({ id, label, type = "text", placeholder, defaultValue = "", requi
 // ─── Main page ───────────────────────────────────────────────────────────────
 
 export default function ComptableEquipePage() {
+  const locale = getLocale()
   const [search, setSearch] = useState("")
   const [allUsers, setAllUsers] = useState<UserProfile[]>([])
   const [dossiers, setDossiers] = useState<Dossier[]>([])
@@ -209,11 +211,11 @@ export default function ComptableEquipePage() {
     const phone = refPhone.current?.value.trim() ?? ""
 
     if (!name || !email || !password) {
-      setCreateError("Veuillez remplir tous les champs obligatoires.")
+      setCreateError(t('cab.equipe.err_required_fields', locale))
       return
     }
     if (password.length < 6) {
-      setCreateError("Le mot de passe doit contenir au moins 6 caractères.")
+      setCreateError(t('cab.equipe.err_password_short', locale))
       return
     }
 
@@ -232,15 +234,15 @@ export default function ComptableEquipePage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setCreateError(data.error || "Erreur lors de la création")
+        setCreateError(data.error || t('cab.equipe.err_create', locale))
         return
       }
-      setSuccess(`Comptable dédié ${name} ajouté à l'équipe !`)
+      setSuccess(`${t('cab.equipe.success_added_pre', locale)} ${name} ${t('cab.equipe.success_added_post', locale)}`)
       resetCreateForm()
       setDialogOpen(false)
       fetchData()
     } catch {
-      setCreateError("Erreur de connexion au serveur")
+      setCreateError(t('cab.equipe.err_connection_server', locale))
     } finally {
       setCreating(false)
     }
@@ -321,7 +323,7 @@ export default function ComptableEquipePage() {
       })
 
       if (societyAssignments.length === 0 && clientAssignments.length === 0) {
-        setSuccess("Aucune modification à enregistrer.")
+        setSuccess(t('cab.equipe.no_changes', locale))
         setAssignDialogOpen(false)
         return
       }
@@ -338,17 +340,17 @@ export default function ComptableEquipePage() {
 
       const data = await res.json()
       if (!res.ok) {
-        setAssignError(data.error || "Erreur lors de l'assignation")
+        setAssignError(data.error || t('cab.equipe.err_assign', locale))
         return
       }
 
       const total = (data.results?.societies_updated || 0) + (data.results?.clients_updated || 0)
-      setSuccess(`${total} assignation(s) mise(s) à jour pour ${assignTarget.full_name} !`)
+      setSuccess(`${total} ${t('cab.equipe.success_updated_for', locale)} ${assignTarget.full_name} !`)
       setAssignDialogOpen(false)
       setAssignTarget(null)
       fetchData()
     } catch {
-      setAssignError("Erreur de connexion")
+      setAssignError(t('cab.equipe.err_connection', locale))
     } finally {
       setAssigning(false)
     }
@@ -377,10 +379,10 @@ export default function ComptableEquipePage() {
       <div className="flex-1 overflow-auto p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Mes Assignations
+            {t('cab.equipe.my_assignments', locale)}
           </h1>
           <p className="text-muted-foreground">
-            Clients et sociétés qui vous sont assignés
+            {t('cab.equipe.my_assignments_subtitle', locale)}
           </p>
         </div>
 
@@ -398,7 +400,7 @@ export default function ComptableEquipePage() {
                     <Building2 className="h-5 w-5" style={{ color: NAVY }} />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Sociétés</p>
+                    <p className="text-xs text-muted-foreground">{t('cab.equipe.kpi_companies', locale)}</p>
                     <p className="text-2xl font-bold" style={{ color: NAVY }}>{myDossiers.length}</p>
                   </div>
                 </CardContent>
@@ -409,7 +411,7 @@ export default function ComptableEquipePage() {
                     <Users className="h-5 w-5" style={{ color: GOLD }} />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Clients directs</p>
+                    <p className="text-xs text-muted-foreground">{t('cab.equipe.kpi_direct_clients', locale)}</p>
                     <p className="text-2xl font-bold" style={{ color: NAVY }}>{myDirectClients.length}</p>
                   </div>
                 </CardContent>
@@ -420,7 +422,7 @@ export default function ComptableEquipePage() {
                     <Users className="h-5 w-5 text-emerald-600" />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Total clients</p>
+                    <p className="text-xs text-muted-foreground">{t('cab.equipe.kpi_total_clients', locale)}</p>
                     <p className="text-2xl font-bold" style={{ color: NAVY }}>{uniqueClientCount}</p>
                   </div>
                 </CardContent>
@@ -433,7 +435,7 @@ export default function ComptableEquipePage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Building2 className="h-4 w-4" style={{ color: GOLD }} />
-                    Sociétés assignées
+                    {t('cab.equipe.assigned_companies', locale)}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -446,16 +448,16 @@ export default function ComptableEquipePage() {
                         <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm truncate">
-                            {d.societe?.nom || "Société inconnue"}
+                            {d.societe?.nom || t('cab.equipe.unknown_company', locale)}
                           </p>
                           {d.client && (
                             <p className="text-xs text-muted-foreground truncate">
-                              Client : {d.client.full_name}
+                              {t('cab.equipe.client_label', locale)} : {d.client.full_name}
                             </p>
                           )}
                         </div>
                         <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 flex-shrink-0">
-                          Assigné
+                          {t('cab.equipe.badge_assigned', locale)}
                         </Badge>
                       </div>
                     ))}
@@ -470,7 +472,7 @@ export default function ComptableEquipePage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Users className="h-4 w-4" style={{ color: GOLD }} />
-                    Clients assignés (sans société)
+                    {t('cab.equipe.clients_no_company', locale)}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -501,9 +503,9 @@ export default function ComptableEquipePage() {
               <Card>
                 <CardContent className="py-12 text-center">
                   <Lock className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <h2 className="text-lg font-semibold mb-2">Aucune assignation</h2>
+                  <h2 className="text-lg font-semibold mb-2">{t('cab.equipe.no_assignment_title', locale)}</h2>
                   <p className="text-muted-foreground">
-                    Aucun client ou société ne vous a encore été assigné. Contactez votre comptable principal.
+                    {t('cab.equipe.no_assignment_desc', locale)}
                   </p>
                 </CardContent>
               </Card>
@@ -521,7 +523,7 @@ export default function ComptableEquipePage() {
       <div className="flex-1 overflow-auto p-6">
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            Seul le comptable principal peut gérer l&apos;équipe.
+            {t('cab.equipe.admin_only', locale)}
           </CardContent>
         </Card>
       </div>
@@ -539,8 +541,8 @@ export default function ComptableEquipePage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Mon Équipe</h1>
-          <p className="text-muted-foreground">Gérez vos comptables dédiés et leurs assignations</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('cab.equipe.title', locale)}</h1>
+          <p className="text-muted-foreground">{t('cab.equipe.subtitle', locale)}</p>
         </div>
 
         {/* ── Create dialog ── */}
@@ -554,29 +556,28 @@ export default function ComptableEquipePage() {
           <DialogTrigger asChild>
             <Button style={{ backgroundColor: NAVY }}>
               <UserPlus className="mr-2 h-4 w-4" />
-              Ajouter un comptable dédié
+              {t('cab.equipe.add_dedie', locale)}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Nouveau comptable dédié</DialogTitle>
+              <DialogTitle>{t('cab.equipe.dialog_create_title', locale)}</DialogTitle>
               <DialogDescription>
-                Ajoutez un collaborateur à votre équipe. Il n&apos;aura accès qu&apos;aux clients et
-                sociétés qui lui seront assignés.
+                {t('cab.equipe.dialog_create_desc', locale)}
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
               <Field
                 id="cd-name"
-                label="Nom complet"
+                label={t('cab.equipe.fld_full_name', locale)}
                 placeholder="Ex : Sophie Laurent"
                 required
                 inputRef={refName}
               />
               <Field
                 id="cd-email"
-                label="Email"
+                label={t('cab.equipe.fld_email', locale)}
                 type="email"
                 placeholder="Ex : sophie@lexora.mu"
                 required
@@ -584,15 +585,15 @@ export default function ComptableEquipePage() {
               />
               <Field
                 id="cd-password"
-                label="Mot de passe"
+                label={t('cab.equipe.fld_password', locale)}
                 type="password"
-                placeholder="Minimum 6 caractères"
+                placeholder={t('cab.equipe.password_placeholder', locale)}
                 required
                 inputRef={refPassword}
               />
               <Field
                 id="cd-phone"
-                label="Téléphone"
+                label={t('cab.equipe.fld_phone', locale)}
                 placeholder="Ex : +230 5234 5678"
                 inputRef={refPhone}
               />
@@ -609,7 +610,7 @@ export default function ComptableEquipePage() {
                 variant="outline"
                 onClick={() => { setDialogOpen(false); resetCreateForm() }}
               >
-                Annuler
+                {t('cab.equipe.cancel', locale)}
               </Button>
               <Button
                 style={{ backgroundColor: GOLD }}
@@ -617,9 +618,9 @@ export default function ComptableEquipePage() {
                 disabled={creating}
               >
                 {creating ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('cab.equipe.creating', locale)}</>
                 ) : (
-                  "Ajouter à l'équipe"
+                  t('cab.equipe.add_to_team_btn', locale)
                 )}
               </Button>
             </DialogFooter>
@@ -643,7 +644,7 @@ export default function ComptableEquipePage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Rechercher par nom ou email…"
+          placeholder={t('cab.equipe.search', locale)}
           className="pl-9"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -659,9 +660,9 @@ export default function ComptableEquipePage() {
         <Card>
           <CardContent className="py-12 text-center">
             <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-lg font-semibold mb-2">Aucun comptable dédié</h2>
+            <h2 className="text-lg font-semibold mb-2">{t('cab.equipe.empty', locale)}</h2>
             <p className="text-muted-foreground mb-4">
-              Ajoutez des membres à votre équipe pour leur assigner des clients.
+              {t('cab.equipe.empty_hint', locale)}
             </p>
           </CardContent>
         </Card>
@@ -696,7 +697,7 @@ export default function ComptableEquipePage() {
                       </div>
                       <div className="min-w-0">
                         <CardTitle className="text-base truncate">{member.full_name}</CardTitle>
-                        <CardDescription className="mt-0.5">Comptable dédié</CardDescription>
+                        <CardDescription className="mt-0.5">{t('cab.equipe.role_dedie', locale)}</CardDescription>
                       </div>
                     </div>
                     <Badge
@@ -706,7 +707,7 @@ export default function ComptableEquipePage() {
                           : "bg-gray-100 text-gray-600 border-gray-200 flex-shrink-0"
                       }
                     >
-                      {isActive ? "Actif" : "Inactif"}
+                      {isActive ? t('cab.equipe.badge_active', locale) : t('cab.equipe.badge_inactive', locale)}
                     </Badge>
                   </div>
                 </CardHeader>
@@ -723,15 +724,15 @@ export default function ComptableEquipePage() {
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span>{info.societeCount} société(s) assignée(s)</span>
+                      <span>{info.societeCount} {t('cab.equipe.companies_assigned_suffix', locale)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Users className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span>{info.clientCount} client(s) sans société</span>
+                      <span>{info.clientCount} {t('cab.equipe.clients_no_company_suffix', locale)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span>Créé le {new Date(member.created_at).toLocaleDateString("fr-FR")}</span>
+                      <span>{t('cab.equipe.created_on', locale)} {new Date(member.created_at).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}</span>
                     </div>
                   </div>
 
@@ -743,7 +744,7 @@ export default function ComptableEquipePage() {
                       onClick={() => openProfile(member)}
                     >
                       <Eye className="mr-1 h-3.5 w-3.5" />
-                      Voir détails
+                      {t('cab.equipe.view_details', locale)}
                     </Button>
                     <Button
                       variant="outline"
@@ -753,7 +754,7 @@ export default function ComptableEquipePage() {
                       onClick={() => openAssignDialog(member)}
                     >
                       <UserPlus className="mr-1 h-3.5 w-3.5" />
-                      Assigner
+                      {t('cab.equipe.assign', locale)}
                     </Button>
                   </div>
                 </CardContent>
@@ -767,7 +768,7 @@ export default function ComptableEquipePage() {
       <Dialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Profil du comptable dédié</DialogTitle>
+            <DialogTitle>{t('cab.equipe.profile_title', locale)}</DialogTitle>
           </DialogHeader>
 
           {selectedMember && (() => {
@@ -783,16 +784,16 @@ export default function ComptableEquipePage() {
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold">{selectedMember.full_name}</h3>
-                    <Badge className="bg-amber-100 text-amber-700">Comptable dédié</Badge>
+                    <Badge className="bg-amber-100 text-amber-700">{t('cab.equipe.role_dedie', locale)}</Badge>
                   </div>
                 </div>
 
                 <div className="grid gap-3 text-sm">
                   {[
-                    { icon: Mail, label: "Email", value: selectedMember.email },
-                    { icon: Phone, label: "Téléphone", value: selectedMember.phone || "Non renseigné" },
-                    { icon: Building2, label: "Sociétés assignées", value: `${info.societeCount} société(s)` },
-                    { icon: Users, label: "Clients sans société", value: `${info.clientCount} client(s)` },
+                    { icon: Mail, label: t('cab.equipe.fld_email', locale), value: selectedMember.email },
+                    { icon: Phone, label: t('cab.equipe.fld_phone', locale), value: selectedMember.phone || t('cab.equipe.not_provided', locale) },
+                    { icon: Building2, label: t('cab.equipe.assigned_companies', locale), value: `${info.societeCount} ${t('cab.equipe.companies_unit', locale)}` },
+                    { icon: Users, label: t('cab.equipe.clients_no_company', locale), value: `${info.clientCount} ${t('cab.equipe.clients_unit', locale)}` },
                   ].map(({ icon: Icon, label, value }) => (
                     <div key={label} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                       <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -806,7 +807,7 @@ export default function ComptableEquipePage() {
 
                 {info.assignedDossiers.length > 0 && (
                   <div>
-                    <p className="text-sm font-semibold mb-2">Sociétés assignées :</p>
+                    <p className="text-sm font-semibold mb-2">{t('cab.equipe.assigned_companies', locale)} :</p>
                     <div className="space-y-1">
                       {info.assignedDossiers.map((d) => (
                         <div key={d.id} className="flex items-center gap-2 text-sm p-2 rounded bg-muted/30">
@@ -823,7 +824,7 @@ export default function ComptableEquipePage() {
 
                 {info.directOnlyClients.length > 0 && (
                   <div>
-                    <p className="text-sm font-semibold mb-2">Clients assignés (sans société) :</p>
+                    <p className="text-sm font-semibold mb-2">{t('cab.equipe.clients_no_company', locale)} :</p>
                     <div className="space-y-1">
                       {info.directOnlyClients.map((c) => (
                         <div key={c.id} className="flex items-center gap-2 text-sm p-2 rounded bg-muted/30">
@@ -838,7 +839,7 @@ export default function ComptableEquipePage() {
 
                 {info.totalItems === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-2">
-                    Aucune assignation pour le moment.
+                    {t('cab.equipe.no_assignment_yet', locale)}
                   </p>
                 )}
               </div>
@@ -847,7 +848,7 @@ export default function ComptableEquipePage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setProfileDialogOpen(false)}>
-              Fermer
+              {t('cab.equipe.close', locale)}
             </Button>
             {selectedMember && (
               <Button
@@ -858,7 +859,7 @@ export default function ComptableEquipePage() {
                 }}
               >
                 <UserPlus className="mr-2 h-4 w-4" />
-                Modifier les assignations
+                {t('cab.equipe.edit_assignments', locale)}
               </Button>
             )}
           </DialogFooter>
@@ -875,10 +876,10 @@ export default function ComptableEquipePage() {
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
           <DialogHeader>
-            <DialogTitle>Assigner des clients et sociétés</DialogTitle>
+            <DialogTitle>{t('cab.equipe.assign_dialog_title', locale)}</DialogTitle>
             {assignTarget && (
               <DialogDescription>
-                Sélectionnez les éléments à assigner à{" "}
+                {t('cab.equipe.assign_dialog_desc', locale)}{" "}
                 <span className="font-medium text-foreground">{assignTarget.full_name}</span>
               </DialogDescription>
             )}
@@ -886,7 +887,7 @@ export default function ComptableEquipePage() {
 
           <div className="py-4 max-h-[400px] overflow-auto space-y-1">
             {clientsWithSocietes.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">Aucun client disponible.</p>
+              <p className="text-center text-muted-foreground py-4">{t('cab.equipe.no_client_available', locale)}</p>
             ) : (
               clientsWithSocietes.map(({ client, dossiers: clientDossiers, hasSocietes }) => {
                 // ── Client without societies ──
@@ -913,12 +914,12 @@ export default function ComptableEquipePage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{client.full_name}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {client.email} — Aucune société
+                          {client.email} — {t('cab.equipe.no_company', locale)}
                         </p>
                       </div>
                       {assignedToOther && (
                         <Badge variant="outline" className="text-xs flex-shrink-0">
-                          Assigné à {assignedToOther}
+                          {t('cab.equipe.assigned_to', locale)} {assignedToOther}
                         </Badge>
                       )}
                     </div>
@@ -947,7 +948,7 @@ export default function ComptableEquipePage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{client.full_name}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {client.email} — {clientDossiers.length} société(s)
+                          {client.email} — {clientDossiers.length} {t('cab.equipe.companies_unit', locale)}
                         </p>
                       </div>
                       {assignedCount > 0 && (
@@ -986,7 +987,7 @@ export default function ComptableEquipePage() {
                               />
                               <Building2 className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                               <span className="text-sm flex-1 truncate">
-                                {d.societe?.nom || "Société inconnue"}
+                                {d.societe?.nom || t('cab.equipe.unknown_company', locale)}
                               </span>
                               {assignedToOther && (
                                 <Badge variant="outline" className="text-xs flex-shrink-0">
@@ -1015,7 +1016,7 @@ export default function ComptableEquipePage() {
               variant="outline"
               onClick={() => setAssignDialogOpen(false)}
             >
-              Annuler
+              {t('cab.equipe.cancel', locale)}
             </Button>
             <Button
               style={{ backgroundColor: GOLD }}
@@ -1023,9 +1024,9 @@ export default function ComptableEquipePage() {
               disabled={assigning}
             >
               {assigning ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enregistrement...</>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('cab.equipe.saving', locale)}</>
               ) : (
-                "Enregistrer les assignations"
+                t('cab.equipe.save_assignments', locale)
               )}
             </Button>
           </DialogFooter>

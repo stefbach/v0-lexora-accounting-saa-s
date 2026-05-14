@@ -16,6 +16,7 @@ import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import { calculerPRGF, calculerNIT, PARAMS_MRA_DEFAUT } from "@/lib/rh/paie"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -79,6 +80,7 @@ function getPeriodeLabel(periode: string): string {
 }
 
 export default function RapportsStatutairesPage() {
+  const locale = getLocale()
   const { profile, loading: profileLoading } = useProfile()
   const { societeId } = useSocieteActive()
   const [selectedPeriode, setSelectedPeriode] = useState(() => {
@@ -292,10 +294,10 @@ export default function RapportsStatutairesPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-            Rapports Statutaires
+            {t('hr.rapports.title', locale)}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            PAYE, PRGF, Emoluments, Bank Report, NIT -- conforme MRA Mauritius
+            {t('hr.rapports.subtitle', locale)}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -312,7 +314,7 @@ export default function RapportsStatutairesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-l-4" style={{ borderLeftColor: "#0B0F2E" }}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Employes</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('hr.rapports.employees', locale)}</CardTitle>
             <Users className="h-5 w-5" style={{ color: "#0B0F2E" }} />
           </CardHeader>
           <CardContent>
@@ -339,7 +341,7 @@ export default function RapportsStatutairesPage() {
         </Card>
         <Card className="border-l-4" style={{ borderLeftColor: "#D4AF37" }}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Masse salariale brute</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('hr.rapports.gross_mass', locale)}</CardTitle>
             <Banknote className="h-5 w-5" style={{ color: "#D4AF37" }} />
           </CardHeader>
           <CardContent>
@@ -356,8 +358,8 @@ export default function RapportsStatutairesPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <FileSpreadsheet className="h-10 w-10 mx-auto mb-3 opacity-40" style={{ color: "#0B0F2E" }} />
-            <p className="text-muted-foreground">Aucun bulletin pour la periode {getPeriodeLabel(selectedPeriode)}.</p>
-            <p className="text-sm text-muted-foreground mt-1">Calculez d&apos;abord la paie dans la section Paie &amp; Bulletins.</p>
+            <p className="text-muted-foreground">{t('hr.rapports.no_payslips', locale)} {getPeriodeLabel(selectedPeriode)}.</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('hr.rapports.calc_first', locale)}</p>
           </CardContent>
         </Card>
       ) : (

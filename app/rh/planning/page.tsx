@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { toast } from "sonner"
+import { t, getLocale } from "@/lib/i18n"
 import Link from "next/link"
 import type { PlanningShift, JourCode } from "@/types/planning"
 import { type Creneau, shiftToCreneau, creneauToShift } from "@/lib/planning/converters"
@@ -112,6 +113,7 @@ const DEFAULT_CRENEAUX: Creneau[] = [
 // ─── Component ──────────────────────────────────────────────────────
 
 export default function PlanningPage() {
+  const locale = getLocale()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
@@ -1073,7 +1075,7 @@ export default function PlanningPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Planning</h1>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('rha.a.plan.title', locale)}</h1>
           <p className="text-gray-500 text-sm">
             Planifiez les horaires de vos collaborateurs pour {MONTH_NAMES[month]} {year}.
             {societe !== "all" && (

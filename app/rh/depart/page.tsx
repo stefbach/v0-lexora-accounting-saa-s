@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
@@ -21,18 +22,21 @@ function fmtDate(d: string | null) {
   return new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  demission: "Démission",
-  licenciement: "Licenciement",
-  fin_contrat: "Fin de contrat",
-  retraite: "Retraite",
-  deces: "Décès",
+function getTypeLabels(locale: Locale): Record<string, string> {
+  return {
+    demission: t('rha.b.depart.type_demission', locale),
+    licenciement: t('rha.b.depart.type_licenciement', locale),
+    fin_contrat: t('rha.b.depart.type_fin_contrat', locale),
+    retraite: t('rha.b.depart.type_retraite', locale),
+    deces: t('rha.b.depart.type_deces', locale),
+  }
 }
 
 // ── Sub-component: Departure Form (isolated state) ──
-function DepartureForm({ societes, onCalculated }: {
+function DepartureForm({ societes, onCalculated, locale }: {
   societes: any[]
   onCalculated: (breakdown: any, formData: any) => void
+  locale: Locale
 }) {
   const [societeId, setSocieteId] = useState("")
   const [employes, setEmployes] = useState<any[]>([])
@@ -83,26 +87,26 @@ function DepartureForm({ societes, onCalculated }: {
       <CardHeader>
         <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
           <UserMinus className="w-5 h-5" />
-          Nouveau départ
+          {t('rha.b.depart.new', locale)}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
-            <Label>Société *</Label>
+            <Label>{t('rha.b.depart.lbl_societe_req', locale)}</Label>
             <Select value={societeId} onValueChange={setSocieteId}>
-              <SelectTrigger><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('rha.b.depart.choose_societe', locale)} /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Employé *</Label>
+            <Label>{t('rha.b.depart.lbl_employee_req', locale)}</Label>
             <Select value={employeId} onValueChange={setEmployeId} disabled={!societeId || loadingEmps}>
               <SelectTrigger>
-                <SelectValue placeholder={loadingEmps ? "Chargement..." : "Choisir un employé..."} />
+                <SelectValue placeholder={loadingEmps ? t('rha.b.depart.loading_emps', locale) : t('rha.b.depart.choose_employee', locale)} />
               </SelectTrigger>
               <SelectContent>
                 {employes.map(e => (
@@ -114,28 +118,28 @@ function DepartureForm({ societes, onCalculated }: {
             </Select>
           </div>
           <div>
-            <Label>Date de départ *</Label>
+            <Label>{t('rha.b.depart.lbl_date_req', locale)}</Label>
             <Input type="date" value={dateDepart} onChange={e => setDateDepart(e.target.value)} />
           </div>
           <div>
-            <Label>Type de départ *</Label>
+            <Label>{t('rha.b.depart.lbl_type_req', locale)}</Label>
             <Select value={typeDepart} onValueChange={setTypeDepart}>
-              <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('rha.b.depart.loading_emps', locale).replace('Chargement', 'Choisir').replace('Loading', 'Choose')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="demission">Démission</SelectItem>
-                <SelectItem value="licenciement">Licenciement</SelectItem>
-                <SelectItem value="fin_contrat">Fin de contrat</SelectItem>
-                <SelectItem value="retraite">Retraite</SelectItem>
-                <SelectItem value="deces">Décès</SelectItem>
+                <SelectItem value="demission">{t('rha.b.depart.type_demission', locale)}</SelectItem>
+                <SelectItem value="licenciement">{t('rha.b.depart.type_licenciement', locale)}</SelectItem>
+                <SelectItem value="fin_contrat">{t('rha.b.depart.type_fin_contrat', locale)}</SelectItem>
+                <SelectItem value="retraite">{t('rha.b.depart.type_retraite', locale)}</SelectItem>
+                <SelectItem value="deces">{t('rha.b.depart.type_deces', locale)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="md:col-span-2">
-            <Label>Motif / Raison</Label>
+            <Label>{t('rha.b.depart.lbl_reason', locale)}</Label>
             <Textarea
               value={raison}
               onChange={e => setRaison(e.target.value)}
-              placeholder="Raison du départ (optionnel)..."
+              placeholder={t('rha.b.depart.reason_ph', locale)}
               rows={2}
             />
           </div>
@@ -163,7 +167,7 @@ function DepartureForm({ societes, onCalculated }: {
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
             <UserMinus className="w-4 h-4 mr-2" />
-            Sortie manuelle (sans solde)
+            {t('rha.b.depart.btn_manual_exit', locale)}
           </Button>
           <Button
             onClick={handleCalculer}
@@ -172,7 +176,7 @@ function DepartureForm({ societes, onCalculated }: {
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
             <Calculator className="w-4 h-4 mr-2" />
-            Calculer le solde de tout compte
+            {t('rha.b.depart.btn_calculate_settlement', locale)}
           </Button>
         </div>
       </CardContent>
@@ -181,12 +185,14 @@ function DepartureForm({ societes, onCalculated }: {
 }
 
 // ── Sub-component: Settlement Breakdown Display ──
-function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
+function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }: {
   breakdown: any
   formData: any
   onConfirm: () => void
   confirming: boolean
+  locale: Locale
 }) {
+  const TYPE_LABELS = getTypeLabels(locale)
   const emp = breakdown.employe
   const anc = breakdown.anciennete
 
@@ -195,7 +201,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
       <CardHeader className="bg-[#0B0F2E] text-white rounded-t-lg">
         <CardTitle className="flex items-center gap-2">
           <Banknote className="w-5 h-5 text-[#D4AF37]" />
-          Solde de tout compte — {emp.prenom} {emp.nom}
+          {t('rha.b.depart.settlement_for', locale)} {emp.prenom} {emp.nom}
         </CardTitle>
         <p className="text-white/70 text-sm">
           {emp.poste || "—"} | Salaire base: {fmt(emp.salaire_base)} | Arrivée: {fmtDate(emp.date_arrivee)}
@@ -206,7 +212,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
         <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
           <Clock className="w-5 h-5 text-blue-600" />
           <div>
-            <p className="font-semibold text-[#0B0F2E]">Ancienneté</p>
+            <p className="font-semibold text-[#0B0F2E]">{t('rha.b.depart.seniority', locale)}</p>
             <p className="text-sm text-gray-600">{anc.label}</p>
           </div>
           <Badge variant="outline" className="ml-auto border-blue-300 text-blue-700">
@@ -218,15 +224,15 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <TableHead className="font-semibold">Élément</TableHead>
-              <TableHead className="text-center">Détails</TableHead>
-              <TableHead className="text-right font-semibold">Montant</TableHead>
+              <TableHead className="font-semibold">{t('rha.b.depart.col_element', locale)}</TableHead>
+              <TableHead className="text-center">{t('rha.b.depart.col_details', locale)}</TableHead>
+              <TableHead className="text-right font-semibold">{t('rha.b.depart.col_amount', locale)}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* Prorata salary */}
             <TableRow>
-              <TableCell className="font-medium">Salaire prorata mois en cours</TableCell>
+              <TableCell className="font-medium">{t('rha.b.depart.row_prorata', locale)}</TableCell>
               <TableCell className="text-center text-sm text-gray-500">
                 {breakdown.salaire_prorata.jours_travailles} / {breakdown.salaire_prorata.jours_mois} jours
               </TableCell>
@@ -235,7 +241,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
 
             {/* AL payout */}
             <TableRow>
-              <TableCell className="font-medium">Congés annuels (AL) restants</TableCell>
+              <TableCell className="font-medium">{t('rha.b.depart.row_al_remain', locale)}</TableCell>
               <TableCell className="text-center text-sm text-gray-500">
                 {breakdown.conges_al.restant} jours ({breakdown.conges_al.droit_prorata} acquis - {breakdown.conges_al.pris} pris) x {fmt(breakdown.conges_al.taux_journalier)}/j
               </TableCell>
@@ -245,9 +251,9 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {/* SL — WRA Art. 48(2) : NON payable à la sortie */}
             <TableRow className="bg-gray-50/50">
               <TableCell className="font-medium text-gray-500">
-                Congés maladie (SL) non utilisés
+                {t('rha.b.depart.row_sl_unused', locale)}
                 <span className="block text-[10px] text-amber-700 mt-0.5">
-                  Non payables à la sortie (WRA Art. 48(2))
+                  {t('rha.b.depart.row_sl_unpaid', locale)}
                 </span>
               </TableCell>
               <TableCell className="text-center text-sm text-gray-400">
@@ -260,7 +266,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
 
             {/* 13th month */}
             <TableRow>
-              <TableCell className="font-medium">13ème mois prorata</TableCell>
+              <TableCell className="font-medium">{t('rha.b.depart.row_13th', locale)}</TableCell>
               <TableCell className="text-center text-sm text-gray-500">
                 ({fmt(breakdown.employe.salaire_base)} / 12) x {breakdown.treizieme_mois.mois_travailles} mois
               </TableCell>
@@ -270,7 +276,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {/* Allocations prorata */}
             {breakdown.allocations_prorata.montant > 0 && (
               <TableRow>
-                <TableCell className="font-medium">Allocations prorata (transport + essence)</TableCell>
+                <TableCell className="font-medium">{t('rha.b.depart.row_allowances', locale)}</TableCell>
                 <TableCell className="text-center text-sm text-gray-500">
                   Transport: {fmt(breakdown.allocations_prorata.transport)} + Essence: {fmt(breakdown.allocations_prorata.petrol)}
                 </TableCell>
@@ -282,7 +288,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {breakdown.preavis.applicable && (
               <TableRow className={breakdown.preavis.montant > 0 ? "bg-orange-50" : ""}>
                 <TableCell className="font-medium">
-                  Indemnité de préavis
+                  {t('rha.b.depart.row_notice', locale)}
                   {!breakdown.preavis.applicable && <span className="text-xs text-gray-400 ml-2">(non applicable)</span>}
                 </TableCell>
                 <TableCell className="text-center text-sm text-gray-500">
@@ -296,7 +302,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {breakdown.indemnite_licenciement.applicable && (
               <TableRow className="bg-red-50">
                 <TableCell className="font-medium text-red-800">
-                  Indemnité de licenciement
+                  {t('rha.b.depart.row_severance', locale)}
                   {/* G12 — lien calculateur dédié WRA S.70 */}
                   {typeof (breakdown as any).employe_id === 'string' && (
                     <a
@@ -318,7 +324,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {/* TOTAL */}
             <TableRow className="bg-[#0B0F2E]">
               <TableCell className="font-bold text-white text-base" colSpan={2}>
-                TOTAL SOLDE DE TOUT COMPTE
+                {t('rha.b.depart.row_total', locale)}
               </TableCell>
               <TableCell className="text-right font-bold text-[#D4AF37] text-lg">
                 {fmt(breakdown.total)}
@@ -331,7 +337,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
         <div className="flex items-center justify-between pt-4 border-t">
           <div className="flex items-center gap-2 text-amber-700 bg-amber-50 p-3 rounded-lg">
             <AlertTriangle className="w-5 h-5" />
-            <p className="text-sm font-medium">Cette action est irréversible. L'employé sera marqué comme "Sorti".</p>
+            <p className="text-sm font-medium">{t('rha.b.depart.irreversible', locale)}</p>
           </div>
           <div className="flex gap-2 print:hidden">
             {/* Sprint 2 — Export PDF via window.print(). Le user sélectionne
@@ -343,7 +349,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
               className="border-[#0B0F2E] text-[#0B0F2E]"
               type="button"
             >
-              📄 Imprimer solde
+              {t('rha.b.depart.btn_print_settlement', locale)}
             </Button>
             {/* Sprint 14 BONUS — Certificat de travail WRA Art. 22(3) */}
             <Button
@@ -352,7 +358,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
               className="border-purple-300 text-purple-700"
               type="button"
             >
-              📜 Certificat de travail
+              {t('rha.b.depart.btn_work_certificate', locale)}
             </Button>
             {/* Sprint 16 FIX 5 — Documents de fin de contrat */}
             <Button
@@ -361,7 +367,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
               className="border-emerald-300 text-emerald-700"
               type="button"
             >
-              💰 Solde de tout compte
+              {t('rha.b.depart.btn_settlement_doc', locale)}
             </Button>
             <Button
               variant="outline"
@@ -369,7 +375,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
               className="border-blue-300 text-blue-700"
               type="button"
             >
-              📋 Attestation fin contrat
+              {t('rha.b.depart.btn_attestation', locale)}
             </Button>
             {/* Sprint 16 FIX 4 — Déclaration Workfare TUB (licenciement économique) */}
             {breakdown?.type_depart === 'licenciement' && (
@@ -379,7 +385,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
                 className="border-red-300 text-red-700"
                 type="button"
               >
-                🏛️ Déclaration Workfare TUB
+                {t('rha.b.depart.btn_workfare', locale)}
               </Button>
             )}
             <Button
@@ -389,7 +395,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             >
               {confirming && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               <CheckCircle className="w-4 h-4 mr-2" />
-              Confirmer le départ
+              {t('rha.b.depart.btn_confirm', locale)}
             </Button>
           </div>
         </div>
@@ -399,7 +405,8 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
 }
 
 // ── Sub-component: Recent Departures List ──
-function RecentDepartures({ refreshKey, onReintegrated }: { refreshKey: number; onReintegrated?: () => void }) {
+function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: number; onReintegrated?: () => void; locale: Locale }) {
+  const TYPE_LABELS = getTypeLabels(locale)
   const [departs, setDeparts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [reintegratingId, setReintegratingId] = useState<string | null>(null)
@@ -438,25 +445,25 @@ function RecentDepartures({ refreshKey, onReintegrated }: { refreshKey: number; 
       <CardHeader>
         <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
           <Clock className="w-4 h-4" />
-          Départs récents
+          {t('rha.b.depart.recent', locale)}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
         ) : departs.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">Aucun départ enregistré</div>
+          <div className="text-center py-8 text-gray-500">{t('rha.b.depart.no_departures', locale)}</div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Employé</TableHead>
-                <TableHead>Poste</TableHead>
-                <TableHead>Date départ</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Ancienneté</TableHead>
-                <TableHead>Raison</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('rha.b.depart.col_employee', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_position', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_date', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_type', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_seniority', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_reason', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_actions', locale)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -499,7 +506,7 @@ function RecentDepartures({ refreshKey, onReintegrated }: { refreshKey: number; 
                         disabled={reintegratingId === d.id}
                       >
                         {reintegratingId === d.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                        Réintégrer
+                        {t('rha.b.depart.btn_reintegrate', locale)}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -515,6 +522,7 @@ function RecentDepartures({ refreshKey, onReintegrated }: { refreshKey: number; 
 
 // ── Main page ──
 export default function DepartPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [breakdown, setBreakdown] = useState<any>(null)
   const [formData, setFormData] = useState<any>(null)
@@ -565,8 +573,8 @@ export default function DepartPage() {
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des départs</h1>
-        <p className="text-sm text-gray-500">Calculer le solde de tout compte et enregistrer les départs</p>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.b.depart.title', locale)}</h1>
+        <p className="text-sm text-gray-500">{t('rha.b.depart.subtitle', locale)}</p>
       </div>
 
       {/* Success message */}
@@ -580,13 +588,13 @@ export default function DepartPage() {
             )}
           </div>
           <Button variant="outline" size="sm" className="ml-auto" onClick={() => setConfirmResult(null)}>
-            Fermer
+            {t('rha.b.expaie.close', locale)}
           </Button>
         </div>
       )}
 
       {/* Form */}
-      <DepartureForm societes={societes} onCalculated={handleCalculated} />
+      <DepartureForm societes={societes} onCalculated={handleCalculated} locale={locale} />
 
       {/* Breakdown */}
       {breakdown && formData && (
@@ -595,11 +603,12 @@ export default function DepartPage() {
           formData={formData}
           onConfirm={handleConfirm}
           confirming={confirming}
+          locale={locale}
         />
       )}
 
       {/* Recent departures */}
-      <RecentDepartures refreshKey={refreshKey} />
+      <RecentDepartures refreshKey={refreshKey} locale={locale} />
     </div>
     </ClientPageShell>
   )

@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Download, CheckCheck } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 const JOURS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
 const JOURS_FERIES_MU = [
@@ -57,6 +58,7 @@ function calcMontantOT(ot: { ot15: number; ot2: number }, salaireBase: number): 
 }
 
 export default function PointageMensuelPage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [employes, setEmployes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
@@ -217,7 +219,7 @@ export default function PointageMensuelPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Pointage Mensuel</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.a.pointm.title', locale)}</h1>
           <p className="text-sm text-gray-500">Corrections, validation OT, absences — source de vérité pour la paie</p>
         </div>
         <div className="flex gap-2 flex-wrap">

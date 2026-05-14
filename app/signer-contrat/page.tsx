@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { CheckCircle, XCircle, FileText, Loader2, AlertTriangle } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -24,6 +25,7 @@ function formatDate(d: string): string {
 }
 
 export default function SignerContratPage() {
+  const locale = getLocale()
   const [statut, setStatut] = useState<StatutPage>("chargement")
   const [contrat, setContrat] = useState<ContratInfo | null>(null)
   const [erreur, setErreur] = useState("")
@@ -36,19 +38,19 @@ export default function SignerContratPage() {
   // Lire params côté client
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const t = params.get("token")
+    const tk = params.get("token")
     const id = params.get("id")
-    setToken(t)
+    setToken(tk)
     setContractId(id)
 
-    if (!t || !id) {
-      setErreur("Lien invalide. Paramètres manquants.")
+    if (!tk || !id) {
+      setErreur(getLocale() === 'en' ? 'Invalid link. Missing parameters.' : 'Lien invalide. Paramètres manquants.')
       setStatut("erreur")
       return
     }
 
     // Vérifier le token
-    fetch(`/api/rh/contrats/${id}/signer?token=${t}`)
+    fetch(`/api/rh/contrats/${id}/signer?token=${tk}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) {
@@ -64,10 +66,10 @@ export default function SignerContratPage() {
         }
       })
       .catch(() => {
-        setErreur("Impossible de vérifier le contrat. Réessayez.")
+        setErreur(t('adm.signer.err_verify', locale))
         setStatut("erreur")
       })
-  }, [])
+  }, [locale])
 
   async function handleSign() {
     if (!checked || !token || !contractId) return
@@ -86,7 +88,7 @@ export default function SignerContratPage() {
         setStatut("signe")
       }
     } catch {
-      setErreur("Erreur réseau. Réessayez.")
+      setErreur(t('adm.signer.err_network', locale))
     } finally {
       setSigning(false)
     }
@@ -98,7 +100,7 @@ export default function SignerContratPage() {
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#f5f5f0" }}>
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="animate-spin" size={36} style={{ color: NAVY }} />
-          <p style={{ color: NAVY, fontFamily: "serif" }}>Vérification du contrat…</p>
+          <p style={{ color: NAVY, fontFamily: "serif" }}>{t('adm.signer.verifying', locale)}</p>
         </div>
       </div>
     )
@@ -110,8 +112,8 @@ export default function SignerContratPage() {
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#f5f5f0" }}>
         <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center">
           <CheckCircle size={56} className="mx-auto mb-4" style={{ color: "#22c55e" }} />
-          <h1 className="text-2xl font-bold mb-2" style={{ color: NAVY }}>Contrat déjà signé</h1>
-          <p className="text-gray-500">Ce contrat a déjà été signé. Aucune action supplémentaire n'est requise.</p>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: NAVY }}>{t('adm.signer.already_signed', locale)}</h1>
+          <p className="text-gray-500">{t('adm.signer.already_signed_desc', locale)}</p>
         </div>
       </div>
     )
@@ -123,9 +125,9 @@ export default function SignerContratPage() {
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#f5f5f0" }}>
         <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center">
           <XCircle size={56} className="mx-auto mb-4" style={{ color: "#ef4444" }} />
-          <h1 className="text-2xl font-bold mb-2" style={{ color: NAVY }}>Lien invalide</h1>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: NAVY }}>{t('adm.signer.invalid_link', locale)}</h1>
           <p className="text-gray-500">{erreur}</p>
-          <p className="text-sm text-gray-400 mt-4">Si vous pensez qu'il s'agit d'une erreur, contactez votre responsable RH.</p>
+          <p className="text-sm text-gray-400 mt-4">{t('adm.signer.invalid_contact', locale)}</p>
         </div>
       </div>
     )
@@ -137,18 +139,14 @@ export default function SignerContratPage() {
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#f5f5f0" }}>
         <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center">
           <CheckCircle size={64} className="mx-auto mb-4" style={{ color: "#22c55e" }} />
-          <h1 className="text-2xl font-bold mb-2" style={{ color: NAVY }}>Contrat signé !</h1>
-          <p className="text-gray-600 mb-2">
-            Votre signature électronique a été enregistrée avec succès.
-          </p>
-          <p className="text-sm text-gray-500 mb-4">
-            La date, l'heure et votre adresse IP ont été enregistrées à titre de preuve.
-          </p>
+          <h1 className="text-2xl font-bold mb-2" style={{ color: NAVY }}>{t('adm.signer.signed_title', locale)}</h1>
+          <p className="text-gray-600 mb-2">{t('adm.signer.signed_desc1', locale)}</p>
+          <p className="text-sm text-gray-500 mb-4">{t('adm.signer.signed_desc2', locale)}</p>
           <div className="p-3 rounded-lg text-sm text-blue-700 bg-blue-50 border border-blue-200 mb-3">
-            ⏳ En attente de la contresignature de votre employeur. Vous recevrez une confirmation une fois le contrat pleinement exécuté.
+            {t('adm.signer.signed_pending', locale)}
           </div>
           <div className="p-3 rounded-lg text-xs text-gray-500" style={{ backgroundColor: "#f9f9f7", border: "1px solid #e0e0d8" }}>
-            ✅ Signature conforme — Valeur juridique selon le droit mauricien (Electronic Transactions Act 2000)
+            {t('adm.signer.signed_legal', locale)}
           </div>
         </div>
       </div>
@@ -169,34 +167,32 @@ export default function SignerContratPage() {
             <FileText size={28} color="white" />
           </div>
           <h1 className="text-3xl font-bold" style={{ color: NAVY, fontFamily: "serif" }}>
-            Signature de contrat
+            {t('adm.signer.title', locale)}
           </h1>
-          <p className="text-gray-500 mt-1">Lexora RH · {soc?.nom}</p>
+          <p className="text-gray-500 mt-1">{t('adm.signer.subtitle_prefix', locale)} · {soc?.nom}</p>
         </div>
 
         {/* Carte contrat */}
         <div className="bg-white rounded-2xl shadow-md p-8 mb-6">
-          <h2 className="text-lg font-bold mb-5" style={{ color: NAVY }}>Détails du contrat</h2>
+          <h2 className="text-lg font-bold mb-5" style={{ color: NAVY }}>{t('adm.signer.details', locale)}</h2>
 
           <div className="space-y-3 text-sm">
-            <Row label="Employé(e)" value={`${emp?.prenom} ${emp?.nom}`} />
-            <Row label="Poste" value={emp?.poste || "—"} />
-            <Row label="Employeur" value={soc?.nom || "—"} />
-            <Row label="Type de contrat" value={contrat?.type_contrat || "—"} />
-            <Row label="Date de début" value={contrat?.date_debut ? formatDate(contrat.date_debut) : "—"} />
+            <Row label={t('adm.signer.row_employee', locale)} value={`${emp?.prenom} ${emp?.nom}`} />
+            <Row label={t('adm.signer.row_position', locale)} value={emp?.poste || "—"} />
+            <Row label={t('adm.signer.row_employer', locale)} value={soc?.nom || "—"} />
+            <Row label={t('adm.signer.row_type', locale)} value={contrat?.type_contrat || "—"} />
+            <Row label={t('adm.signer.row_start', locale)} value={contrat?.date_debut ? formatDate(contrat.date_debut) : "—"} />
           </div>
 
           <div className="mt-6 p-4 rounded-lg text-sm text-gray-600" style={{ backgroundColor: "#fafaf7", border: "1px solid #e8e8e0" }}>
             <AlertTriangle size={16} className="inline mr-2 text-amber-500" />
-            En signant ce document, vous acceptez les termes et conditions du contrat tel qu'il vous a été communiqué.
-            Cette signature électronique a la même valeur juridique qu'une signature manuscrite conformément à l'
-            <strong> Electronic Transactions Act 2000 </strong> de la République de Maurice.
+            {t('adm.signer.warning', locale)}
           </div>
         </div>
 
         {/* Télécharger avant signature */}
         <div className="bg-white rounded-2xl shadow-md p-6 mb-6">
-          <p className="text-sm font-semibold mb-3" style={{ color: NAVY }}>📄 Consulter le contrat complet</p>
+          <p className="text-sm font-semibold mb-3" style={{ color: NAVY }}>{t('adm.signer.consult', locale)}</p>
           <a
             href={`/api/rh/contrats/${contractId}/pdf`}
             target="_blank"
@@ -205,7 +201,7 @@ export default function SignerContratPage() {
             style={{ backgroundColor: NAVY }}
           >
             <FileText size={16} />
-            Télécharger le PDF
+            {t('adm.signer.download_pdf', locale)}
           </a>
         </div>
 
@@ -220,7 +216,7 @@ export default function SignerContratPage() {
               style={{ accentColor: NAVY }}
             />
             <span className="text-sm text-gray-700">
-              J'ai lu et compris le contrat dans son intégralité. Je consens à le signer électroniquement et confirme que les informations sont correctes.
+              {t('adm.signer.consent', locale)}
             </span>
           </label>
 
@@ -237,13 +233,13 @@ export default function SignerContratPage() {
             {signing ? (
               <span className="flex items-center justify-center gap-2">
                 <Loader2 size={18} className="animate-spin" />
-                Signature en cours…
+                {t('adm.signer.signing', locale)}
               </span>
-            ) : "✍️ Signer le contrat"}
+            ) : t('adm.signer.sign_btn', locale)}
           </button>
 
           <p className="text-xs text-center text-gray-400 mt-3">
-            Votre adresse IP et l'horodatage seront enregistrés à titre de preuve.
+            {t('adm.signer.ip_notice', locale)}
           </p>
         </div>
 

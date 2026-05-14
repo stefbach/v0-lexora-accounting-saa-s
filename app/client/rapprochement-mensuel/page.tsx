@@ -11,11 +11,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { FileCheck2, Plus, Lock, CheckCircle2, AlertCircle, Loader2, Trash2, Calendar } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—" }
 
 export default function RapprochementMensuelPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [comptesBancaires, setComptesBancaires] = useState<any[]>([])
   const [compteId, setCompteId] = useState<string>("")
@@ -140,17 +142,17 @@ export default function RapprochementMensuelPage() {
       <div>
         <h1 className="text-2xl font-bold text-[#0B0F2E] flex items-center gap-2">
           <FileCheck2 className="w-7 h-7" style={{ color: "#D4AF37" }} />
-          Rapprochement bancaire mensuel
+          {t('acc.rm.title', locale)}
         </h1>
-        <p className="text-sm text-gray-500">Tableau officiel deux colonnes avec workflow validation DAF</p>
+        <p className="text-sm text-gray-500">{t('acc.rm.subtitle', locale)}</p>
       </div>
 
       {/* Compte */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <Label>Compte bancaire</Label>
+          <Label>{t('acc.rm.bank_account', locale)}</Label>
           <Select value={compteId} onValueChange={setCompteId}>
-            <SelectTrigger><SelectValue placeholder="Choisir un compte..." /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t('acc.rm.choose_account', locale)} /></SelectTrigger>
             <SelectContent>
               {comptesBancaires.map((c: any) => (
                 <SelectItem key={c.id} value={c.id}>{c.banque} — {c.numero_compte} ({c.devise})</SelectItem>
@@ -163,21 +165,21 @@ export default function RapprochementMensuelPage() {
       {/* Nouveau rapprochement */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2"><Plus className="w-5 h-5" />Nouveau rapprochement</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Plus className="w-5 h-5" />{t('acc.rm.new_reconciliation', locale)}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <Label>Fin de période</Label>
+            <Label>{t('acc.rm.period_end', locale)}</Label>
             <Input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} />
           </div>
           <div>
-            <Label>Solde relevé bancaire à la date</Label>
+            <Label>{t('acc.rm.bank_balance_at_date', locale)}</Label>
             <Input type="number" step="0.01" placeholder="0.00" value={bankBalance} onChange={e => setBankBalance(e.target.value)} />
           </div>
           <div className="flex items-end">
             <Button onClick={handleCreate} disabled={loading || !compteId} className="w-full bg-[#0B0F2E]">
               {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-              Créer
+              {t('common.create', locale)}
             </Button>
           </div>
         </CardContent>
@@ -187,16 +189,16 @@ export default function RapprochementMensuelPage() {
       {reconciliations.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Historique ({reconciliations.length})</CardTitle>
+            <CardTitle className="text-base">{t('acc.rm.history', locale)} ({reconciliations.length})</CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Période</TableHead><TableHead>Compte</TableHead>
-                <TableHead className="text-right">Solde relevé</TableHead>
-                <TableHead className="text-right">Solde GL</TableHead>
-                <TableHead className="text-right">Écart résiduel</TableHead>
-                <TableHead>Statut</TableHead>
+                <TableHead>{t('acc.rm.period', locale)}</TableHead><TableHead>{t('acc.rm.account', locale)}</TableHead>
+                <TableHead className="text-right">{t('acc.rm.statement_balance', locale)}</TableHead>
+                <TableHead className="text-right">{t('acc.rm.gl_balance', locale)}</TableHead>
+                <TableHead className="text-right">{t('acc.rm.residual_gap', locale)}</TableHead>
+                <TableHead>{t('common.status', locale)}</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {reconciliations.map((r: any) => {
@@ -233,20 +235,20 @@ export default function RapprochementMensuelPage() {
             <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Calendar className="w-5 h-5" />
-                Rapprochement {formatDate(currentRecon.period_end)}
+                {t('acc.rm.reconciliation', locale)} {formatDate(currentRecon.period_end)}
               </CardTitle>
               <div className="flex gap-2">
                 {!isLocked && !isValidated && (
-                  <Button size="sm" variant="outline" onClick={() => handleAction('submit')}>Soumettre</Button>
+                  <Button size="sm" variant="outline" onClick={() => handleAction('submit')}>{t('acc.rm.submit', locale)}</Button>
                 )}
                 {!isLocked && (
                   <Button size="sm" className="bg-green-600 text-white" onClick={() => handleAction('validate')}>
-                    <CheckCircle2 className="w-4 h-4 mr-1" />Valider
+                    <CheckCircle2 className="w-4 h-4 mr-1" />{t('acc.rm.validate', locale)}
                   </Button>
                 )}
                 {isValidated && !isLocked && (
                   <Button size="sm" className="bg-gray-800 text-white" onClick={() => handleAction('lock')}>
-                    <Lock className="w-4 h-4 mr-1" />Verrouiller
+                    <Lock className="w-4 h-4 mr-1" />{t('acc.rm.lock', locale)}
                   </Button>
                 )}
               </div>
@@ -256,14 +258,14 @@ export default function RapprochementMensuelPage() {
             {/* Soldes de base */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-xs text-blue-600 font-medium mb-1">SOLDE BANQUE</p>
+                <p className="text-xs text-blue-600 font-medium mb-1">{t('acc.rm.bank_balance', locale)}</p>
                 <p className="text-2xl font-bold text-blue-900">{fmt(Number(currentRecon.bank_balance) || 0)}</p>
-                <p className="text-xs text-blue-500 mt-1">au {formatDate(currentRecon.period_end)}</p>
+                <p className="text-xs text-blue-500 mt-1">{t('acc.rm.at', locale)} {formatDate(currentRecon.period_end)}</p>
               </div>
               <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                <p className="text-xs text-purple-600 font-medium mb-1">SOLDE COMPTABILITÉ (512)</p>
+                <p className="text-xs text-purple-600 font-medium mb-1">{t('acc.rm.accounting_balance', locale)}</p>
                 <p className="text-2xl font-bold text-purple-900">{fmt(Number(currentRecon.gl_balance) || 0)}</p>
-                <p className="text-xs text-purple-500 mt-1">calculé depuis les écritures</p>
+                <p className="text-xs text-purple-500 mt-1">{t('acc.rm.computed_from_entries', locale)}</p>
               </div>
             </div>
 
@@ -272,11 +274,11 @@ export default function RapprochementMensuelPage() {
               {/* Côté Banque */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-[#0B0F2E]">Côté BANQUE (non encore en compta)</h3>
+                  <h3 className="text-sm font-bold text-[#0B0F2E]">{t('acc.rm.bank_side', locale)}</h3>
                   {!isLocked && <Button size="sm" variant="outline" onClick={() => setShowAddItem('bank')}><Plus className="w-3 h-3" /></Button>}
                 </div>
                 {bankItems.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic p-4 bg-gray-50 rounded">Aucun élément</p>
+                  <p className="text-xs text-gray-400 italic p-4 bg-gray-50 rounded">{t('acc.rm.no_item', locale)}</p>
                 ) : (
                   bankItems.map((i: any) => (
                     <div key={i.id} className="flex items-center justify-between p-2 border rounded text-sm">
@@ -297,7 +299,7 @@ export default function RapprochementMensuelPage() {
                 )}
                 <div className="pt-2 border-t mt-2">
                   <div className="flex justify-between text-sm font-bold">
-                    <span>SOLDE BANQUE AJUSTÉ</span>
+                    <span>{t('acc.rm.adjusted_bank', locale)}</span>
                     <span className="font-mono text-blue-600">{fmt(Number(currentRecon.adjusted_bank_balance) || 0)}</span>
                   </div>
                 </div>
@@ -306,11 +308,11 @@ export default function RapprochementMensuelPage() {
               {/* Côté Compta */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-[#0B0F2E]">Côté COMPTA (non encore en banque)</h3>
+                  <h3 className="text-sm font-bold text-[#0B0F2E]">{t('acc.rm.compta_side', locale)}</h3>
                   {!isLocked && <Button size="sm" variant="outline" onClick={() => setShowAddItem('compta')}><Plus className="w-3 h-3" /></Button>}
                 </div>
                 {comptaItems.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic p-4 bg-gray-50 rounded">Aucun élément</p>
+                  <p className="text-xs text-gray-400 italic p-4 bg-gray-50 rounded">{t('acc.rm.no_item', locale)}</p>
                 ) : (
                   comptaItems.map((i: any) => (
                     <div key={i.id} className="flex items-center justify-between p-2 border rounded text-sm">
@@ -331,7 +333,7 @@ export default function RapprochementMensuelPage() {
                 )}
                 <div className="pt-2 border-t mt-2">
                   <div className="flex justify-between text-sm font-bold">
-                    <span>SOLDE COMPTA AJUSTÉ</span>
+                    <span>{t('acc.rm.adjusted_compta', locale)}</span>
                     <span className="font-mono text-purple-600">{fmt(Number(currentRecon.adjusted_gl_balance) || 0)}</span>
                   </div>
                 </div>
@@ -343,14 +345,14 @@ export default function RapprochementMensuelPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {isBalanced ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <AlertCircle className="w-5 h-5 text-red-600" />}
-                  <span className="font-bold">{isBalanced ? "Rapprochement équilibré" : "Écart résiduel à justifier"}</span>
+                  <span className="font-bold">{isBalanced ? t('acc.rm.balanced', locale) : t('acc.rm.gap_to_justify', locale)}</span>
                 </div>
                 <span className={`text-2xl font-mono font-bold ${isBalanced ? 'text-green-700' : 'text-red-700'}`}>
                   {fmt(Number(currentRecon.residual_gap) || 0)}
                 </span>
               </div>
               {isLocked && (
-                <p className="text-xs mt-2 text-gray-600">🔒 Période verrouillée le {formatDate(currentRecon.locked_at)}</p>
+                <p className="text-xs mt-2 text-gray-600">🔒 {t('acc.rm.locked_on', locale)} {formatDate(currentRecon.locked_at)}</p>
               )}
             </div>
           </CardContent>
@@ -361,13 +363,13 @@ export default function RapprochementMensuelPage() {
       <Dialog open={!!showAddItem} onOpenChange={(o) => { if (!o) setShowAddItem(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Ajouter un élément côté {showAddItem === 'bank' ? 'BANQUE' : 'COMPTABILITÉ'}</DialogTitle>
+            <DialogTitle>{t('acc.rm.add_item_to', locale)} {showAddItem === 'bank' ? t('acc.rm.bank_uc', locale) : t('acc.rm.accounting_uc', locale)}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>Nature</Label>
+              <Label>{t('acc.rm.nature', locale)}</Label>
               <Select value={newItem.nature} onValueChange={v => setNewItem({ ...newItem, nature: v })}>
-                <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('acc.rm.choose', locale)} /></SelectTrigger>
                 <SelectContent>
                   {showAddItem === 'bank' ? (
                     <>
@@ -388,20 +390,20 @@ export default function RapprochementMensuelPage() {
               </Select>
             </div>
             <div>
-              <Label>Montant (positif = ajouter, négatif = soustraire)</Label>
+              <Label>{t('acc.rm.amount_help', locale)}</Label>
               <Input type="number" step="0.01" value={newItem.amount} onChange={e => setNewItem({ ...newItem, amount: e.target.value })} />
             </div>
             <div>
-              <Label>Date opération</Label>
+              <Label>{t('acc.rm.operation_date', locale)}</Label>
               <Input type="date" value={newItem.date_operation} onChange={e => setNewItem({ ...newItem, date_operation: e.target.value })} />
             </div>
             <div>
-              <Label>Description</Label>
+              <Label>{t('common.description', locale)}</Label>
               <Input value={newItem.description} onChange={e => setNewItem({ ...newItem, description: e.target.value })} />
             </div>
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowAddItem(null)}>Annuler</Button>
-              <Button onClick={handleAddItem} className="bg-[#0B0F2E]">Ajouter</Button>
+              <Button variant="outline" onClick={() => setShowAddItem(null)}>{t('common.cancel', locale)}</Button>
+              <Button onClick={handleAddItem} className="bg-[#0B0F2E]">{t('acc.rm.add', locale)}</Button>
             </div>
           </div>
         </DialogContent>

@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, RefreshCw, AlertCircle, Shield, TrendingUp, Info } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 type EclRow = {
   tiers: string
@@ -53,13 +54,19 @@ function fmtMUR(n: number | null | undefined): string {
   return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n))
 }
 
-const STAGE_LABEL: Record<number, { label: string; color: string }> = {
-  1: { label: 'Stage 1 — Performing', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-  2: { label: 'Stage 2 — SICR',       color: 'bg-amber-100 text-amber-800 border-amber-200' },
-  3: { label: 'Stage 3 — Default',    color: 'bg-red-100 text-red-800 border-red-200' },
+const STAGE_COLOR: Record<number, string> = {
+  1: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  2: 'bg-amber-100 text-amber-800 border-amber-200',
+  3: 'bg-red-100 text-red-800 border-red-200',
 }
 
 export default function Ifrs9EclPage() {
+  const locale = getLocale()
+  const STAGE_LABEL: Record<number, { label: string; color: string }> = {
+    1: { label: t('ifrs9.stage1', locale), color: STAGE_COLOR[1] },
+    2: { label: t('ifrs9.stage2', locale), color: STAGE_COLOR[2] },
+    3: { label: t('ifrs9.stage3', locale), color: STAGE_COLOR[3] },
+  }
   const { societeId } = useSocieteActive()
   const [data, setData] = useState<EclResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -86,7 +93,7 @@ export default function Ifrs9EclPage() {
   useEffect(() => { load(false) }, [load])
 
   const overrideStage = async (tiers: string, stage: number) => {
-    const reason = window.prompt(`Override Stage IFRS 9 pour "${tiers}" → Stage ${stage}\n\nRaison (audit trail) :`)
+    const reason = window.prompt(`${t('ifrs9.override.prompt_prefix', locale)}${tiers}${t('ifrs9.override.prompt_mid', locale)}${stage}${t('ifrs9.override.prompt_suffix', locale)}`)
     if (!reason) return
     try {
       const res = await fetch('/api/comptable/ifrs9/ecl', {
@@ -97,19 +104,19 @@ export default function Ifrs9EclPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       await load(false)
     } catch (e: any) {
-      setError(e?.message || 'Override échoué')
+      setError(e?.message || t('ifrs9.override.failed', locale))
     }
   }
 
   if (loading && !data) {
-    return <div className="p-8 flex items-center gap-2 text-slate-600"><Loader2 className="animate-spin h-5 w-5" /> Chargement IFRS 9…</div>
+    return <div className="p-8 flex items-center gap-2 text-slate-600"><Loader2 className="animate-spin h-5 w-5" /> {t('ifrs9.loading', locale)}</div>
   }
 
   if (!societeId) {
     return (
       <div className="p-8">
         <div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <strong>Aucune société sélectionnée.</strong> Choisis une société dans la barre supérieure pour calculer son ECL IFRS 9.
+          <strong>{t('ifrs9.no_societe_strong', locale)}</strong>{t('ifrs9.no_societe_text', locale)}
         </div>
       </div>
     )
@@ -119,12 +126,12 @@ export default function Ifrs9EclPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Shield className="h-6 w-6 text-indigo-600" /> Provision IFRS 9 — ECL</h1>
-          <p className="text-sm text-slate-500">Expected Credit Loss avec Stages 1/2/3, SICR automatique, PD/LGD paramétrables, ajustement forward-looking.</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Shield className="h-6 w-6 text-indigo-600" /> {t('ifrs9.title', locale)}</h1>
+          <p className="text-sm text-slate-500">{t('ifrs9.subtitle', locale)}</p>
         </div>
         <Button onClick={() => load(true)} disabled={refreshing} variant="outline">
           {refreshing ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-          Refresh stages
+          {t('ifrs9.refresh', locale)}
         </Button>
       </div>
 
@@ -138,22 +145,22 @@ export default function Ifrs9EclPage() {
         <>
           {/* KPIs */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">Exposure total</CardTitle></CardHeader>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">{t('ifrs9.kpi.exposure', locale)}</CardTitle></CardHeader>
               <CardContent><div className="text-2xl font-bold">{fmtMUR(data.totals.exposure_total_mur)}</div><div className="text-xs text-slate-500">MUR</div></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">ECL base</CardTitle></CardHeader>
-              <CardContent><div className="text-2xl font-bold">{fmtMUR(data.totals.ecl_base_total_mur)}</div><div className="text-xs text-slate-500">EAD × PD × LGD</div></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">ECL forward-looking</CardTitle></CardHeader>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">{t('ifrs9.kpi.ecl_base', locale)}</CardTitle></CardHeader>
+              <CardContent><div className="text-2xl font-bold">{fmtMUR(data.totals.ecl_base_total_mur)}</div><div className="text-xs text-slate-500">{t('ifrs9.kpi.ecl_base_hint', locale)}</div></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">{t('ifrs9.kpi.ecl_fwd', locale)}</CardTitle></CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-indigo-700">{fmtMUR(data.totals.ecl_with_macro_total_mur)}</div>
-                <div className="text-xs text-slate-500 flex items-center gap-1"><TrendingUp className="h-3 w-3" /> impact macro : {fmtMUR(data.totals.macro_impact_mur)}</div>
+                <div className="text-xs text-slate-500 flex items-center gap-1"><TrendingUp className="h-3 w-3" /> {t('ifrs9.kpi.macro_impact_prefix', locale)}{fmtMUR(data.totals.macro_impact_mur)}</div>
               </CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">Taux couverture</CardTitle></CardHeader>
-              <CardContent><div className="text-2xl font-bold">{data.totals.coverage_ratio_pct.toFixed(2)}%</div><div className="text-xs text-slate-500">ECL / exposure</div></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-slate-500">{t('ifrs9.kpi.coverage', locale)}</CardTitle></CardHeader>
+              <CardContent><div className="text-2xl font-bold">{data.totals.coverage_ratio_pct.toFixed(2)}%</div><div className="text-xs text-slate-500">{t('ifrs9.kpi.coverage_hint', locale)}</div></CardContent></Card>
           </div>
 
           {/* Disclosure IFRS 7 par stage */}
           <Card>
-            <CardHeader><CardTitle className="text-base">Disclosure IFRS 7 — exposition par stage</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">{t('ifrs9.disclosure.title', locale)}</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[1, 2, 3].map(stage => {
@@ -162,7 +169,7 @@ export default function Ifrs9EclPage() {
                     <div key={stage} className={`rounded border p-4 ${STAGE_LABEL[stage].color}`}>
                       <div className="text-xs font-medium uppercase tracking-wide">{STAGE_LABEL[stage].label}</div>
                       <div className="mt-2 text-xl font-bold">{fmtMUR(row?.exposure_total_mur || 0)} MUR</div>
-                      <div className="text-xs mt-1">{row?.nb_contreparties || 0} contreparties · {row?.nb_factures || 0} factures</div>
+                      <div className="text-xs mt-1">{row?.nb_contreparties || 0}{t('ifrs9.disclosure.counterparties', locale)}{row?.nb_factures || 0}{t('ifrs9.disclosure.invoices', locale)}</div>
                     </div>
                   )
                 })}
@@ -172,23 +179,23 @@ export default function Ifrs9EclPage() {
 
           {/* Table détaillée par contrepartie */}
           <Card>
-            <CardHeader><CardTitle className="text-base">Détail par contrepartie</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">{t('ifrs9.detail.title', locale)}</CardTitle></CardHeader>
             <CardContent className="overflow-x-auto">
               {data.ecl_by_counterparty.length === 0 ? (
-                <div className="text-sm text-slate-500 p-4 text-center">Aucune créance client non payée. ECL = 0.</div>
+                <div className="text-sm text-slate-500 p-4 text-center">{t('ifrs9.detail.empty', locale)}</div>
               ) : (
                 <table className="w-full text-sm">
                   <thead className="border-b">
                     <tr className="text-left text-xs font-medium text-slate-500 uppercase">
-                      <th className="py-2 px-2">Contrepartie</th>
-                      <th className="py-2 px-2">Stage</th>
-                      <th className="py-2 px-2 text-right">Exposure</th>
-                      <th className="py-2 px-2 text-right">PD %</th>
-                      <th className="py-2 px-2 text-right">LGD %</th>
-                      <th className="py-2 px-2 text-right">Macro ×</th>
-                      <th className="py-2 px-2 text-right">ECL base</th>
-                      <th className="py-2 px-2 text-right">ECL ajustée</th>
-                      <th className="py-2 px-2 text-center">Override</th>
+                      <th className="py-2 px-2">{t('ifrs9.col.counterparty', locale)}</th>
+                      <th className="py-2 px-2">{t('ifrs9.col.stage', locale)}</th>
+                      <th className="py-2 px-2 text-right">{t('ifrs9.col.exposure', locale)}</th>
+                      <th className="py-2 px-2 text-right">{t('ifrs9.col.pd', locale)}</th>
+                      <th className="py-2 px-2 text-right">{t('ifrs9.col.lgd', locale)}</th>
+                      <th className="py-2 px-2 text-right">{t('ifrs9.col.macro', locale)}</th>
+                      <th className="py-2 px-2 text-right">{t('ifrs9.col.ecl_base', locale)}</th>
+                      <th className="py-2 px-2 text-right">{t('ifrs9.col.ecl_adj', locale)}</th>
+                      <th className="py-2 px-2 text-center">{t('ifrs9.col.override', locale)}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -206,7 +213,7 @@ export default function Ifrs9EclPage() {
                           <div className="flex gap-1 justify-center">
                             {[1, 2, 3].filter(s => s !== r.stage).map(s => (
                               <button key={s} onClick={() => overrideStage(r.tiers, s)}
-                                className="text-xs px-1.5 py-0.5 rounded border hover:bg-slate-100" title={`Forcer Stage ${s}`}>
+                                className="text-xs px-1.5 py-0.5 rounded border hover:bg-slate-100" title={`${t('ifrs9.override.force_prefix', locale)}${s}`}>
                                 {s}
                               </button>
                             ))}
@@ -223,10 +230,7 @@ export default function Ifrs9EclPage() {
           <div className="text-xs text-slate-500 flex items-start gap-2 p-3 rounded bg-slate-50 border border-slate-200">
             <Info className="h-4 w-4 mt-0.5" />
             <div>
-              <strong>Méthodologie :</strong> ECL = EAD × PD × LGD × Macro_adj.
-              PD 12 mois si Stage 1, PD lifetime si Stage 2/3. SICR auto : retard &gt; 30j → Stage 2, &gt; 90j → Stage 3.
-              Override manuel possible (audit trail dans <code>ifrs9_stage_history</code>).
-              Conforme IFRS 9 §5.5 et IFRS 7 §35M.
+              <strong>{t('ifrs9.methodology', locale)}</strong>{t('ifrs9.methodology_text', locale)}
             </div>
           </div>
         </>

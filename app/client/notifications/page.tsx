@@ -15,6 +15,7 @@ import { MessageSquare, Mail, Bell, CheckCircle, AlertCircle, Clock } from "luci
 import { useProfile } from "@/hooks/use-profile"
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import Link from "next/link"
+import { t, getLocale } from "@/lib/i18n"
 
 interface NotificationItem {
   id: string
@@ -37,27 +38,27 @@ function formatDateTime(dateStr: string) {
   })
 }
 
-function getStatutBadge(statut: string) {
+function getStatutBadge(statut: string, locale: 'fr' | 'en') {
   switch (statut) {
     case "sent":
       return (
         <Badge className="bg-green-100 text-green-700 border-green-200">
           <CheckCircle className="h-3 w-3 mr-1" />
-          Envoyé
+          {t('core.notif.sent', locale)}
         </Badge>
       )
     case "pending":
       return (
         <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200">
           <Clock className="h-3 w-3 mr-1" />
-          En attente
+          {t('core.notif.pending', locale)}
         </Badge>
       )
     case "failed":
       return (
         <Badge className="bg-red-100 text-red-700 border-red-200">
           <AlertCircle className="h-3 w-3 mr-1" />
-          Échoué
+          {t('core.notif.failed', locale)}
         </Badge>
       )
     default:
@@ -81,6 +82,7 @@ function getTypeIcon(type: "whatsapp" | "email") {
 }
 
 export default function NotificationsPage() {
+  const locale = getLocale()
   const { profile } = useProfile()
   const [filter, setFilter] = useState("tous")
 
@@ -102,10 +104,10 @@ export default function NotificationsPage() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-          Notifications
+          {t('core.notif.title', locale)}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Historique de vos notifications WhatsApp et email.
+          {t('core.notif.subtitle', locale)}
         </p>
       </div>
 
@@ -114,7 +116,7 @@ export default function NotificationsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total notifications
+              {t('core.notif.total', locale)}
             </CardTitle>
             <Bell className="h-5 w-5" style={{ color: "#0B0F2E" }} />
           </CardHeader>
@@ -153,7 +155,7 @@ export default function NotificationsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              En attente
+              {t('core.notif.pending', locale)}
             </CardTitle>
             <Clock className="h-5 w-5" style={{ color: "#D4AF37" }} />
           </CardHeader>
@@ -170,13 +172,13 @@ export default function NotificationsPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <CardTitle style={{ color: "#0B0F2E" }}>Toutes les notifications</CardTitle>
-              <CardDescription>Filtrez par type de notification</CardDescription>
+              <CardTitle style={{ color: "#0B0F2E" }}>{t('core.notif.all_notifications', locale)}</CardTitle>
+              <CardDescription>{t('core.notif.filter_by_type', locale)}</CardDescription>
             </div>
             <Tabs value={filter} onValueChange={setFilter}>
               <TabsList>
                 <TabsTrigger value="tous">
-                  Tous ({totalCount})
+                  {t('core.notif.tab_all', locale)} ({totalCount})
                 </TabsTrigger>
                 <TabsTrigger value="whatsapp">
                   WhatsApp ({whatsappCount})
@@ -205,15 +207,15 @@ export default function NotificationsPage() {
                   </p>
                 </div>
                 <div className="shrink-0">
-                  {getStatutBadge(notification.statut)}
+                  {getStatutBadge(notification.statut, locale)}
                 </div>
               </div>
             ))}
             {filteredNotifications.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
                 <Bell className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                <p>Aucune notification pour le moment.</p>
-                <p className="text-xs mt-1">Vos notifications WhatsApp et email apparaîtront ici.</p>
+                <p>{t('core.notif.no_notifications', locale)}</p>
+                <p className="text-xs mt-1">{t('core.notif.appear_here', locale)}</p>
               </div>
             )}
           </div>
