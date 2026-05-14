@@ -104,6 +104,15 @@ export async function POST(request: Request) {
     }
     if (body.ern) insertData.ern = body.ern
     if (body.secteur_activite) insertData.secteur_activite = body.secteur_activite
+    // Phase K — paramétrage régime + monnaie fonctionnelle + FSC
+    if (body.regime) insertData.regime = body.regime
+    if (body.devise_fonctionnelle) insertData.devise_fonctionnelle = body.devise_fonctionnelle
+    if (body.fsc_license_number) insertData.fsc_license_number = body.fsc_license_number
+    if (body.fsc_license_type) insertData.fsc_license_type = body.fsc_license_type
+    if (body.fsc_license_issued) insertData.fsc_license_issued = body.fsc_license_issued
+    if (body.fsc_license_expiry) insertData.fsc_license_expiry = body.fsc_license_expiry
+    if (body.tax_residency_country) insertData.tax_residency_country = body.tax_residency_country
+    if (body.gbc_activity_main) insertData.gbc_activity_main = body.gbc_activity_main
 
     const { data, error } = await admin.from('societes').insert(insertData).select().single()
 
@@ -188,7 +197,100 @@ export async function PATCH(request: Request) {
     if (body.adresse !== undefined) updateData.adresse = body.adresse || null
     if (body.telephone !== undefined) updateData.telephone = body.telephone || null
     if (body.email !== undefined) updateData.email = body.email || null
-    const { data, error } = await admin.from('societes').update(updateData).eq('id', id).select().single()
+
+    // Phase K — paramétrage régime + monnaie fonctionnelle + FSC (mig 258)
+    if (body.regime !== undefined) updateData.regime = body.regime
+    if (body.devise_fonctionnelle !== undefined) updateData.devise_fonctionnelle = body.devise_fonctionnelle
+    if (body.fsc_license_number !== undefined) updateData.fsc_license_number = body.fsc_license_number || null
+    if (body.fsc_license_type !== undefined) updateData.fsc_license_type = body.fsc_license_type || null
+    if (body.fsc_license_issued !== undefined) updateData.fsc_license_issued = body.fsc_license_issued || null
+    if (body.fsc_license_expiry !== undefined) updateData.fsc_license_expiry = body.fsc_license_expiry || null
+    if (body.tax_residency_country !== undefined) updateData.tax_residency_country = body.tax_residency_country || null
+    if (body.gbc_activity_main !== undefined) updateData.gbc_activity_main = body.gbc_activity_main || null
+
+    // Champs facturation (mig 243) + coordonnées bancaires (mig 106) +
+    // logo (mig 046 / mig 242) + devise (mig 006). Tous facultatifs.
+    if (body.website !== undefined) updateData.website = body.website || null
+    if (body.logo_url !== undefined) updateData.logo_url = body.logo_url || null
+    if (body.devise_principale !== undefined) updateData.devise_principale = body.devise_principale || 'MUR'
+    if (body.bank_name !== undefined) updateData.bank_name = body.bank_name || null
+    if (body.bank_account_number !== undefined) updateData.bank_account_number = body.bank_account_number || null
+    if (body.iban !== undefined) updateData.iban = body.iban || null
+    if (body.banque_swift !== undefined) updateData.banque_swift = body.banque_swift || null
+    if (body.facture_prefixe !== undefined) updateData.facture_prefixe = body.facture_prefixe || 'INV-'
+    if (body.facture_prochain_numero !== undefined) {
+      const n = Number(body.facture_prochain_numero)
+      updateData.facture_prochain_numero = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1
+    }
+    if (body.facture_conditions_paiement !== undefined) {
+      const n = Number(body.facture_conditions_paiement)
+      updateData.facture_conditions_paiement = Number.isFinite(n) && n >= 0 && n <= 365 ? Math.floor(n) : 30
+    }
+    if (body.facture_footer_text !== undefined) updateData.facture_footer_text = body.facture_footer_text || null
+    if (body.facture_mention_legale !== undefined) updateData.facture_mention_legale = body.facture_mention_legale || null
+
+    // Numérotation devis / avoir / note de débit (mig 247) — même
+    // pattern que facture_*, avec préfixe + compteur. Le retry défensif
+    // plus bas filtre les colonnes manquantes si mig 247 pas appliquée.
+    if (body.devis_prefixe !== undefined) updateData.devis_prefixe = body.devis_prefixe || 'DEV-'
+    if (body.devis_prochain_numero !== undefined) {
+      const n = Number(body.devis_prochain_numero)
+      updateData.devis_prochain_numero = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1
+    }
+    if (body.avoir_prefixe !== undefined) updateData.avoir_prefixe = body.avoir_prefixe || 'AV-'
+    if (body.avoir_prochain_numero !== undefined) {
+      const n = Number(body.avoir_prochain_numero)
+      updateData.avoir_prochain_numero = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1
+    }
+    if (body.note_debit_prefixe !== undefined) updateData.note_debit_prefixe = body.note_debit_prefixe || 'ND-'
+    if (body.note_debit_prochain_numero !== undefined) {
+      const n = Number(body.note_debit_prochain_numero)
+      updateData.note_debit_prochain_numero = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1
+    }
+
+    // Tentative initiale d'update. Si elle échoue à cause d'une colonne
+    // qui n'existe pas en DB (typique : mig 243/106/046 pas appliquée),
+    // on retire la colonne fautive et on retry. Boucle bornée pour
+    // éviter un infinite loop sur erreur non-schema.
+    //
+    // Code d'erreur Postgres "42703" = undefined_column. Le message
+    // Supabase contient typiquement "Could not find the 'xxx' column".
+    let updateRes = await admin.from('societes').update(updateData).eq('id', id).select().single()
+    let safety = 20
+    while (updateRes.error && safety > 0) {
+      const msg = updateRes.error.message || ''
+      const code = (updateRes.error as any).code
+      // Extrait le nom de la colonne manquante du message d'erreur PostgREST
+      // Pattern: Could not find the 'XYZ' column of 'societes' in the schema cache
+      const colMatch = msg.match(/['"]([a-z_]+)['"][\s_]*column/i)
+        || msg.match(/column ['"]?([a-z_]+)['"]? does not exist/i)
+        || msg.match(/column "([a-z_]+)"/i)
+      const missingCol = colMatch?.[1]
+      const isSchemaError = code === '42703' || /column.*(not exist|schema cache)/i.test(msg)
+      if (!isSchemaError || !missingCol || !(missingCol in updateData)) {
+        // Pas une erreur de colonne manquante → on abandonne avec un
+        // message clair pour l'UI au lieu de crasher silencieusement.
+        return NextResponse.json(
+          {
+            error: `Erreur sauvegarde : ${msg}`,
+            hint: `Migrations 243-246 sans doute pas appliquées. Lance le SQL des migrations sur ta DB Supabase.`,
+            details: msg,
+          },
+          { status: 500 },
+        )
+      }
+      console.warn(`[client/societes] PATCH : colonne "${missingCol}" manquante en DB, retrait et retry`)
+      delete updateData[missingCol]
+      if (Object.keys(updateData).length === 0) {
+        return NextResponse.json(
+          { error: 'Aucun champ valide à sauvegarder. Vérifie que les migrations DB sont appliquées.' },
+          { status: 500 },
+        )
+      }
+      updateRes = await admin.from('societes').update(updateData).eq('id', id).select().single()
+      safety -= 1
+    }
+    const { data, error } = updateRes
     if (error) throw error
     return NextResponse.json({ societe: data })
   } catch (e: unknown) {

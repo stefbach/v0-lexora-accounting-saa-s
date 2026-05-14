@@ -13,10 +13,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Building2, Users, Package, Layout, Save, Plus, Pencil, Trash2, Check, X, Eye, Palette,
-  Shield, Wifi, WifiOff, Info, Loader2
+  Shield, Wifi, WifiOff, Info, Loader2, Download
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
-import { t as tr, getLocale, type Locale } from '@/lib/i18n'
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { LogoUploader } from "@/components/client/LogoUploader"
+import { inferSwiftFromIban, inferSwiftWithDiagnostic } from "@/lib/banque/iban-swift"
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -32,7 +34,12 @@ interface CompanySettings {
   nom: string; brn: string; vat_number: string; logo_url: string
   adresse: string; telephone: string; email: string; website: string
   banque_nom: string; banque_compte: string; banque_iban: string; banque_swift: string
-  devise_defaut: string; prefixe_facture: string; prochain_numero: number
+  devise_defaut: string
+  // Numérotation par type de document (mig 243 + mig 247)
+  prefixe_facture: string; prochain_numero: number
+  devis_prefixe: string; devis_prochain_numero: number
+  avoir_prefixe: string; avoir_prochain_numero: number
+  note_debit_prefixe: string; note_debit_prochain_numero: number
   conditions_paiement: number; footer_text: string; mention_legale: string
 }
 interface InvoiceClient {
@@ -54,7 +61,11 @@ const DEFAULT_SETTINGS: CompanySettings = {
   nom: "", brn: "", vat_number: "", logo_url: "",
   adresse: "", telephone: "", email: "", website: "",
   banque_nom: "", banque_compte: "", banque_iban: "", banque_swift: "",
-  devise_defaut: "MUR", prefixe_facture: "INV-", prochain_numero: 1,
+  devise_defaut: "MUR",
+  prefixe_facture: "INV-", prochain_numero: 1,
+  devis_prefixe: "DEV-", devis_prochain_numero: 1,
+  avoir_prefixe: "AV-", avoir_prochain_numero: 1,
+  note_debit_prefixe: "ND-", note_debit_prochain_numero: 1,
   conditions_paiement: 30, footer_text: "Thank you for your business",
   mention_legale: "VAT Reg No: XXXXX | BRN: XXXXX",
 }
@@ -67,9 +78,84 @@ const TEMPLATES: InvoiceTemplate[] = [
 
 function genId() { return crypto.randomUUID() }
 
+/**
+ * Construit la mention légale obligatoire à partir des identifiants
+ * fiscaux de la société (VAT MRA + BRN). Affichée en bas des factures.
+ *
+ * Format Maurice : "VAT Reg No: 12345 | BRN: C12345678"
+ * Si l'une des deux valeurs manque, on n'affiche que celle qui est là.
+ * Si les deux manquent, retourne chaîne vide → l'utilisateur sait
+ * qu'il doit renseigner BRN/VAT plus haut.
+ */
+function buildMentionLegale(brn: string | null | undefined, vat: string | null | undefined): string {
+  const parts: string[] = []
+  const v = (vat || "").trim()
+  const b = (brn || "").trim()
+  if (v) parts.push(`VAT Reg No: ${v}`)
+  if (b) parts.push(`BRN: ${b}`)
+  return parts.join(" | ")
+}
+
+/**
+ * Mappe la société DB (colonnes Supabase) → CompanySettings du form.
+ * Privilégie les valeurs DB, fallback sur les valeurs déjà saisies en
+ * localStorage pour ne rien perdre lors de la première migration.
+ */
+function mapSocieteToSettings(societe: any, legacy: Partial<CompanySettings>): CompanySettings {
+  return {
+    nom:                 societe?.nom                          ?? legacy.nom                 ?? "",
+    brn:                 societe?.brn                          ?? legacy.brn                 ?? "",
+    vat_number:          societe?.numero_tva_mra               ?? legacy.vat_number          ?? "",
+    logo_url:            societe?.logo_url                     ?? legacy.logo_url            ?? "",
+    adresse:             societe?.adresse                      ?? legacy.adresse             ?? "",
+    telephone:           societe?.telephone                    ?? legacy.telephone           ?? "",
+    email:               societe?.email                        ?? legacy.email               ?? "",
+    website:             societe?.website                      ?? legacy.website             ?? "",
+    banque_nom:          societe?.bank_name                    ?? legacy.banque_nom          ?? "",
+    banque_compte:       societe?.bank_account_number          ?? legacy.banque_compte       ?? "",
+    banque_iban:         societe?.iban                         ?? legacy.banque_iban         ?? "",
+    banque_swift:        societe?.banque_swift                 ?? legacy.banque_swift        ?? "",
+    devise_defaut:       societe?.devise_principale            ?? legacy.devise_defaut       ?? "MUR",
+    prefixe_facture:     societe?.facture_prefixe              ?? legacy.prefixe_facture     ?? "INV-",
+    prochain_numero:     Number(societe?.facture_prochain_numero ?? legacy.prochain_numero ?? 1),
+    devis_prefixe:       societe?.devis_prefixe                 ?? legacy.devis_prefixe       ?? "DEV-",
+    devis_prochain_numero: Number(societe?.devis_prochain_numero ?? legacy.devis_prochain_numero ?? 1),
+    avoir_prefixe:       societe?.avoir_prefixe                 ?? legacy.avoir_prefixe       ?? "AV-",
+    avoir_prochain_numero: Number(societe?.avoir_prochain_numero ?? legacy.avoir_prochain_numero ?? 1),
+    note_debit_prefixe:  societe?.note_debit_prefixe            ?? legacy.note_debit_prefixe  ?? "ND-",
+    note_debit_prochain_numero: Number(societe?.note_debit_prochain_numero ?? legacy.note_debit_prochain_numero ?? 1),
+    conditions_paiement: Number(societe?.facture_conditions_paiement ?? legacy.conditions_paiement ?? 30),
+    footer_text:         societe?.facture_footer_text          ?? legacy.footer_text         ?? "",
+    // Auto-génère la mention légale depuis BRN/VAT si l'utilisateur n'a
+    // rien saisi (ni en DB, ni en localStorage). Si la valeur stockée
+    // ressemble au placeholder par défaut, on la régénère aussi.
+    mention_legale:      (() => {
+      const stored = societe?.facture_mention_legale ?? legacy.mention_legale ?? ""
+      if (!stored || stored === "VAT Reg No: XXXXX | BRN: XXXXX") {
+        return buildMentionLegale(societe?.brn, societe?.numero_tva_mra)
+      }
+      return stored
+    })(),
+  }
+}
+
+interface CompteBancaireBrief {
+  id: string
+  banque: string | null
+  nom_compte: string | null
+  numero_compte: string | null
+  iban: string | null
+  swift: string | null
+  devise: string | null
+  compte_principal: boolean
+}
+
 export default function FacturationSettingsPage() {
-  const locale = getLocale()
+  const { societeId, societe, refresh } = useSocieteActive()
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS)
+  const [persisting, setPersisting] = useState(false)
+  const [persistError, setPersistError] = useState<string | null>(null)
+  const [comptesBancaires, setComptesBancaires] = useState<CompteBancaireBrief[]>([])
   const [clients, setClients] = useState<InvoiceClient[]>([])
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState("standard")
@@ -108,11 +194,15 @@ export default function FacturationSettingsPage() {
   const [catTva, setCatTva] = useState(true)
   const [catCategorie, setCatCategorie] = useState("")
 
-  // Load from localStorage
+  // Charge depuis la DB (société active) en priorité, fallback localStorage
+  // pour les utilisateurs legacy qui n'ont pas encore migré vers la mig 243.
+  // Le mapping est fait par mapSocieteToSettings → toutes les colonnes DB
+  // pertinentes (nom, BRN, adresse, banque, etc.) auto-remplissent le form.
   useEffect(() => {
+    let legacy: Partial<CompanySettings> = {}
     try {
       const s = localStorage.getItem("lexora_invoice_settings")
-      if (s) setSettings(JSON.parse(s))
+      if (s) legacy = JSON.parse(s) as Partial<CompanySettings>
       const c = localStorage.getItem("lexora_invoice_clients")
       if (c) setClients(JSON.parse(c))
       const cat = localStorage.getItem("lexora_invoice_catalogue")
@@ -131,9 +221,29 @@ export default function FacturationSettingsPage() {
         setMraApiUrl(m.api_url || "https://sandboxifp.mra.mu/api/v1")
       }
     } catch { /* ignore */ }
-  }, [])
+    // DB > legacy localStorage. Si pas de société chargée encore, on
+    // pose au moins le legacy pour que le user voie ses anciennes valeurs.
+    setSettings(mapSocieteToSettings(societe, legacy))
+  }, [societe])
 
-  const saveAll = useCallback(() => {
+  // Charge les comptes bancaires de la société active (mig 010 + 043)
+  // pour permettre le pré-remplissage 1-clic des coordonnées bancaires.
+  useEffect(() => {
+    if (!societeId) {
+      setComptesBancaires([])
+      return
+    }
+    fetch(`/api/client/comptes-bancaires?societe_id=${societeId}`)
+      .then((r) => r.json())
+      .then((d) => setComptesBancaires(d?.comptes || []))
+      .catch(() => setComptesBancaires([]))
+  }, [societeId])
+
+  const saveAll = useCallback(async () => {
+    // 1. localStorage : conserve les paramètres pas encore migrés en DB
+    //    (clients legacy, catalogue legacy, template choisi, MRA). Quand
+    //    le composant catalogue / contacts DB sera la source unique, on
+    //    pourra retirer ces lignes.
     localStorage.setItem("lexora_invoice_settings", JSON.stringify(settings))
     localStorage.setItem("lexora_invoice_clients", JSON.stringify(clients))
     localStorage.setItem("lexora_invoice_catalogue", JSON.stringify(catalogue))
@@ -143,9 +253,55 @@ export default function FacturationSettingsPage() {
       active: mraActive, ebs_id: mraEbsId, api_key: mraApiKey,
       environment: mraEnvironment, api_url: mraApiUrl,
     }))
+
+    // 2. PATCH société : pousse les colonnes mappables en DB (mig 243+)
+    if (societeId) {
+      setPersisting(true)
+      setPersistError(null)
+      try {
+        const body = {
+          nom:                          settings.nom,
+          brn:                          settings.brn,
+          numero_tva_mra:               settings.vat_number,
+          adresse:                      settings.adresse,
+          telephone:                    settings.telephone,
+          email:                        settings.email,
+          website:                      settings.website,
+          devise_principale:            settings.devise_defaut,
+          bank_name:                    settings.banque_nom,
+          bank_account_number:          settings.banque_compte,
+          iban:                         settings.banque_iban,
+          banque_swift:                 settings.banque_swift,
+          facture_prefixe:              settings.prefixe_facture,
+          facture_prochain_numero:      settings.prochain_numero,
+          devis_prefixe:                settings.devis_prefixe,
+          devis_prochain_numero:        settings.devis_prochain_numero,
+          avoir_prefixe:                settings.avoir_prefixe,
+          avoir_prochain_numero:        settings.avoir_prochain_numero,
+          note_debit_prefixe:           settings.note_debit_prefixe,
+          note_debit_prochain_numero:   settings.note_debit_prochain_numero,
+          facture_conditions_paiement:  settings.conditions_paiement,
+          facture_footer_text:          settings.footer_text,
+          facture_mention_legale:       settings.mention_legale,
+        }
+        const res = await fetch(`/api/client/societes?id=${societeId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data?.error || "Erreur enregistrement")
+        await refresh()
+      } catch (e: any) {
+        setPersistError(e?.message || "Erreur enregistrement DB")
+      } finally {
+        setPersisting(false)
+      }
+    }
+
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
-  }, [settings, clients, catalogue, selectedTemplate, templateColors, mraActive, mraEbsId, mraApiKey, mraEnvironment, mraApiUrl])
+  }, [settings, clients, catalogue, selectedTemplate, templateColors, mraActive, mraEbsId, mraApiKey, mraEnvironment, mraApiUrl, societeId, refresh])
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -222,14 +378,27 @@ export default function FacturationSettingsPage() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: tr('inv.fs.client_area', locale), href: "/client" }, { label: tr('inv.fs.title', locale) }]}
-      kicker={tr('inv.invoicing', locale)}
-      title={tr('inv.fs.title', locale)}
-      subtitle={tr('inv.fs.subtitle', locale)}
+      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Paramètres Facturation" }]}
+      kicker="Facturation"
+      title="Paramètres de Facturation"
+      subtitle="Configuration MRA (ERN, IRN, TVA, devise par défaut) pour toutes vos factures émises."
       actions={
-        <Button onClick={saveAll} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
-          {saved ? <><Check className="w-4 h-4 mr-2" />{tr('inv.fs.saved', locale)}</> : <><Save className="w-4 h-4 mr-2" />{tr('inv.fs.save_all', locale)}</>}
-        </Button>
+        <div className="flex items-center gap-3">
+          {persistError && (
+            <span className="text-xs text-red-600 max-w-xs truncate" title={persistError}>
+              ⚠ {persistError}
+            </span>
+          )}
+          <Button onClick={saveAll} disabled={persisting} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
+            {persisting ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enregistrement…</>
+            ) : saved ? (
+              <><Check className="w-4 h-4 mr-2" />Sauvegardé !</>
+            ) : (
+              <><Save className="w-4 h-4 mr-2" />Sauvegarder tout</>
+            )}
+          </Button>
+        </div>
       }
     >
       <div className="space-y-6">
@@ -238,10 +407,10 @@ export default function FacturationSettingsPage() {
 
       <Tabs defaultValue="entreprise" className="space-y-4">
         <TabsList className="grid grid-cols-5 w-full max-w-3xl">
-          <TabsTrigger value="entreprise" className="flex items-center gap-1.5"><Building2 className="w-4 h-4" />{tr('inv.fs.tab_company', locale)}</TabsTrigger>
-          <TabsTrigger value="clients" className="flex items-center gap-1.5"><Users className="w-4 h-4" />{tr('inv.fs.tab_clients', locale)}</TabsTrigger>
-          <TabsTrigger value="catalogue" className="flex items-center gap-1.5"><Package className="w-4 h-4" />{tr('inv.fs.tab_catalogue', locale)}</TabsTrigger>
-          <TabsTrigger value="modeles" className="flex items-center gap-1.5"><Layout className="w-4 h-4" />{tr('inv.fs.tab_templates', locale)}</TabsTrigger>
+          <TabsTrigger value="entreprise" className="flex items-center gap-1.5"><Building2 className="w-4 h-4" />Mon Entreprise</TabsTrigger>
+          <TabsTrigger value="clients" className="flex items-center gap-1.5"><Users className="w-4 h-4" />Clients</TabsTrigger>
+          <TabsTrigger value="catalogue" className="flex items-center gap-1.5"><Package className="w-4 h-4" />Services/Produits</TabsTrigger>
+          <TabsTrigger value="modeles" className="flex items-center gap-1.5"><Layout className="w-4 h-4" />Modeles</TabsTrigger>
           <TabsTrigger value="mra" className="flex items-center gap-1.5"><Shield className="w-4 h-4" />MRA e-Invoicing</TabsTrigger>
         </TabsList>
 
@@ -250,20 +419,50 @@ export default function FacturationSettingsPage() {
           <div className="grid grid-cols-2 gap-4">
             {/* Company identity */}
             <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{tr('inv.fs.company_identity', locale)}</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Identite de l&apos;entreprise</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div><Label>Nom de l&apos;entreprise</Label><Input value={settings.nom} onChange={e => setSettings(s => ({ ...s, nom: e.target.value }))} placeholder="DDS Consulting Ltd" /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>BRN</Label><Input value={settings.brn} onChange={e => setSettings(s => ({ ...s, brn: e.target.value }))} placeholder="C12345678" /></div>
-                  <div><Label>N. TVA / VAT</Label><Input value={settings.vat_number} onChange={e => setSettings(s => ({ ...s, vat_number: e.target.value }))} placeholder="VAT12345678" /></div>
+                  <div><Label>BRN</Label><Input value={settings.brn} onChange={e => {
+                    // Si la mention légale courante a été auto-générée
+                    // depuis l'ancien BRN/VAT, on la régénère avec la nouvelle
+                    // valeur de BRN. Sinon on respecte l'édition manuelle.
+                    const newBrn = e.target.value
+                    setSettings(s => {
+                      const auto = buildMentionLegale(s.brn, s.vat_number)
+                      const isAuto = !s.mention_legale || s.mention_legale === auto
+                      return {
+                        ...s,
+                        brn: newBrn,
+                        mention_legale: isAuto ? buildMentionLegale(newBrn, s.vat_number) : s.mention_legale,
+                      }
+                    })
+                  }} placeholder="C12345678" /></div>
+                  <div><Label>N. TVA / VAT</Label><Input value={settings.vat_number} onChange={e => {
+                    const newVat = e.target.value
+                    setSettings(s => {
+                      const auto = buildMentionLegale(s.brn, s.vat_number)
+                      const isAuto = !s.mention_legale || s.mention_legale === auto
+                      return {
+                        ...s,
+                        vat_number: newVat,
+                        mention_legale: isAuto ? buildMentionLegale(s.brn, newVat) : s.mention_legale,
+                      }
+                    })
+                  }} placeholder="VAT12345678" /></div>
                 </div>
                 <div>
-                  <Label>Logo</Label>
-                  <div className="flex items-center gap-4 mt-1">
-                    {(logoPreview || settings.logo_url) && (
-                      <img src={logoPreview || settings.logo_url} alt="Logo" className="w-16 h-16 object-contain rounded border" />
-                    )}
-                    <Input type="file" accept="image/*" onChange={handleLogoChange} className="max-w-xs" />
+                  <Label>Logo société</Label>
+                  <div className="mt-2">
+                    <LogoUploader
+                      societeId={societeId}
+                      initialLogoUrl={settings.logo_url || undefined}
+                      onChange={(url) => {
+                        // Synchronise localStorage pour rétrocompat (lecture
+                        // par nouvelle-facture jusqu'à la prochaine refonte).
+                        setSettings(s => ({ ...s, logo_url: url || "" }))
+                      }}
+                    />
                   </div>
                 </div>
                 <div><Label>Adresse</Label><Textarea value={settings.adresse} onChange={e => setSettings(s => ({ ...s, adresse: e.target.value }))} placeholder="Port Louis, Mauritius" rows={2} /></div>
@@ -278,19 +477,94 @@ export default function FacturationSettingsPage() {
             {/* Bank details & invoicing */}
             <div className="space-y-4">
               <Card>
-                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{tr('inv.nf.bank_details', locale)}</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Coordonnees bancaires</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
+                  {/* Importer depuis un compte bancaire existant (mig 010/043).
+                      L'utilisateur a souvent déjà saisi ses RIB via la page
+                      /client/banque : pas la peine de les retaper ici. */}
+                  {comptesBancaires.length > 0 && (
+                    <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+                      <div className="text-xs text-emerald-900 font-medium">
+                        💡 {comptesBancaires.length} compte(s) bancaire(s) trouvé(s) en base. Cliquez pour pré-remplir :
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {comptesBancaires.map((c) => (
+                          <Button
+                            key={c.id}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSettings(s => ({
+                                ...s,
+                                banque_nom: c.banque || s.banque_nom,
+                                banque_compte: c.numero_compte || s.banque_compte,
+                                banque_iban: c.iban || s.banque_iban,
+                                banque_swift: c.swift || s.banque_swift,
+                              }))
+                            }}
+                            className="text-xs h-8 border-emerald-300 hover:bg-emerald-100"
+                          >
+                            {c.compte_principal && '⭐ '}
+                            {c.banque}
+                            {c.nom_compte && ` — ${c.nom_compte}`}
+                            {c.devise && c.devise !== 'MUR' && ` (${c.devise})`}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div><Label>Nom de la banque</Label><Input value={settings.banque_nom} onChange={e => setSettings(s => ({ ...s, banque_nom: e.target.value }))} placeholder="MCB / SBM / AfrAsia" /></div>
                   <div><Label>Numero de compte</Label><Input value={settings.banque_compte} onChange={e => setSettings(s => ({ ...s, banque_compte: e.target.value }))} /></div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><Label>IBAN</Label><Input value={settings.banque_iban} onChange={e => setSettings(s => ({ ...s, banque_iban: e.target.value }))} /></div>
-                    <div><Label>SWIFT / BIC</Label><Input value={settings.banque_swift} onChange={e => setSettings(s => ({ ...s, banque_swift: e.target.value }))} /></div>
+                    <div>
+                      <Label>IBAN</Label>
+                      <Input
+                        value={settings.banque_iban}
+                        onChange={e => {
+                          const newIban = e.target.value
+                          setSettings(s => {
+                            // Auto-déduit le SWIFT si on n'en a pas déjà saisi
+                            // un manuellement. Le helper retourne null si la
+                            // banque n'est pas reconnue → on laisse l'existant.
+                            const auto = inferSwiftFromIban(newIban)
+                            const next = { ...s, banque_iban: newIban }
+                            if (auto && !s.banque_swift) next.banque_swift = auto
+                            return next
+                          })
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <Label>SWIFT / BIC</Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const diag = inferSwiftWithDiagnostic(settings.banque_iban)
+                            if (diag.swift) {
+                              setSettings(s => ({ ...s, banque_swift: diag.swift! }))
+                            } else {
+                              alert(diag.message)
+                            }
+                          }}
+                          disabled={!settings.banque_iban}
+                          className="h-6 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                          title="Déduit le SWIFT à partir du code banque de l'IBAN"
+                        >
+                          ↻ Déduire depuis IBAN
+                        </Button>
+                      </div>
+                      <Input value={settings.banque_swift} onChange={e => setSettings(s => ({ ...s, banque_swift: e.target.value }))} />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{tr('inv.fs.invoicing_settings', locale)}</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Parametres de facturation</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -301,23 +575,135 @@ export default function FacturationSettingsPage() {
                       </Select>
                     </div>
                     <div>
-                      <Label>Conditions de paiement</Label>
-                      <Select value={String(settings.conditions_paiement)} onValueChange={v => setSettings(s => ({ ...s, conditions_paiement: parseInt(v) }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="30">30 jours</SelectItem>
-                          <SelectItem value="60">60 jours</SelectItem>
-                          <SelectItem value="90">90 jours</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label>Conditions de paiement par défaut (jours)</Label>
+                      {/* Input libre 0..365 avec datalist pour suggérer les
+                          valeurs courantes. L'utilisateur peut taper
+                          n'importe quoi (1, 2, 5, 21, 75…) — le Select
+                          précédent était trop restrictif. */}
+                      <Input
+                        type="number"
+                        min={0}
+                        max={365}
+                        step={1}
+                        list="conditions-paiement-suggestions"
+                        value={settings.conditions_paiement}
+                        onChange={e => {
+                          const v = e.target.value
+                          // Permet le champ vide pendant la saisie (Backspace)
+                          if (v === '') {
+                            setSettings(s => ({ ...s, conditions_paiement: 0 }))
+                            return
+                          }
+                          const n = parseInt(v, 10)
+                          if (Number.isFinite(n) && n >= 0 && n <= 365) {
+                            setSettings(s => ({ ...s, conditions_paiement: n }))
+                          }
+                        }}
+                      />
+                      <datalist id="conditions-paiement-suggestions">
+                        <option value="0" label="À réception" />
+                        <option value="1" />
+                        <option value="7" />
+                        <option value="14" />
+                        <option value="15" />
+                        <option value="30" />
+                        <option value="45" />
+                        <option value="60" />
+                        <option value="90" />
+                      </datalist>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        Valeur pré-remplie à chaque création de facture (0 à 365 jours).
+                        <strong> 0 = "À réception"</strong> (date d'échéance = date de facture).
+                        Tu peux taper n'importe quelle valeur (1, 2, 5, 21, etc.).
+                      </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><Label>Prefixe facture</Label><Input value={settings.prefixe_facture} onChange={e => setSettings(s => ({ ...s, prefixe_facture: e.target.value }))} placeholder="INV-" /></div>
-                    <div><Label>Prochain numero</Label><Input type="number" min={1} value={settings.prochain_numero} onChange={e => setSettings(s => ({ ...s, prochain_numero: parseInt(e.target.value) || 1 }))} /></div>
+                  {/* Numérotation automatique : préfixe + compteur par
+                      type de document (facture, devis, avoir, note débit).
+                      Une fois paramétré ici, le numéro est généré et
+                      incrémenté automatiquement à chaque création. */}
+                  <div className="space-y-3 border-t pt-3 mt-1">
+                    <Label className="text-sm font-semibold text-[#0B0F2E]">
+                      Numérotation automatique
+                    </Label>
+                    <p className="text-[11px] text-gray-500 -mt-2">
+                      Préfixe + prochain numéro pour chaque type de document.
+                      Le numéro est généré et incrémenté automatiquement à
+                      chaque création — plus besoin de le saisir manuellement.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Préfixe facture</Label>
+                        <Input value={settings.prefixe_facture}
+                          onChange={e => setSettings(s => ({ ...s, prefixe_facture: e.target.value }))}
+                          placeholder="INV-" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Prochain numéro facture</Label>
+                        <Input type="number" min={1} value={settings.prochain_numero}
+                          onChange={e => setSettings(s => ({ ...s, prochain_numero: parseInt(e.target.value) || 1 }))} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Préfixe devis</Label>
+                        <Input value={settings.devis_prefixe}
+                          onChange={e => setSettings(s => ({ ...s, devis_prefixe: e.target.value }))}
+                          placeholder="DEV-" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Prochain numéro devis</Label>
+                        <Input type="number" min={1} value={settings.devis_prochain_numero}
+                          onChange={e => setSettings(s => ({ ...s, devis_prochain_numero: parseInt(e.target.value) || 1 }))} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Préfixe avoir</Label>
+                        <Input value={settings.avoir_prefixe}
+                          onChange={e => setSettings(s => ({ ...s, avoir_prefixe: e.target.value }))}
+                          placeholder="AV-" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Prochain numéro avoir</Label>
+                        <Input type="number" min={1} value={settings.avoir_prochain_numero}
+                          onChange={e => setSettings(s => ({ ...s, avoir_prochain_numero: parseInt(e.target.value) || 1 }))} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Préfixe note de débit</Label>
+                        <Input value={settings.note_debit_prefixe}
+                          onChange={e => setSettings(s => ({ ...s, note_debit_prefixe: e.target.value }))}
+                          placeholder="ND-" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Prochain numéro note de débit</Label>
+                        <Input type="number" min={1} value={settings.note_debit_prochain_numero}
+                          onChange={e => setSettings(s => ({ ...s, note_debit_prochain_numero: parseInt(e.target.value) || 1 }))} />
+                      </div>
+                    </div>
                   </div>
                   <div><Label>Texte de pied de page</Label><Input value={settings.footer_text} onChange={e => setSettings(s => ({ ...s, footer_text: e.target.value }))} /></div>
-                  <div><Label>Mention legale MRA</Label><Input value={settings.mention_legale} onChange={e => setSettings(s => ({ ...s, mention_legale: e.target.value }))} placeholder="VAT Reg No: XXXXX | BRN: XXXXX" /></div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label>Mention légale MRA</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSettings(s => ({ ...s, mention_legale: buildMentionLegale(s.brn, s.vat_number) }))}
+                        disabled={!settings.brn && !settings.vat_number}
+                        className="h-6 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                        title="Régénère la mention à partir du BRN et du N° TVA renseignés ci-dessus"
+                      >
+                        ↻ Régénérer depuis BRN/VAT
+                      </Button>
+                    </div>
+                    <Input
+                      value={settings.mention_legale}
+                      onChange={e => setSettings(s => ({ ...s, mention_legale: e.target.value }))}
+                      placeholder={buildMentionLegale(settings.brn, settings.vat_number) || "VAT Reg No: XXXXX | BRN: XXXXX"}
+                    />
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Auto-générée depuis BRN + N° TVA. Modifie l'un des deux ci-dessus → mise à jour automatique.
+                      Tu peux aussi la personnaliser manuellement.
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -326,14 +712,59 @@ export default function FacturationSettingsPage() {
 
         {/* ══════════ TAB: Clients ══════════ */}
         <TabsContent value="clients" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">{tr('inv.fs.clients_db', locale)}</p>
-            <Button onClick={openNewClient} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />{tr('inv.fs.new_client', locale)}</Button>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm text-gray-500">Base de donnees clients pour la facturation</p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  if (!societeId) return
+                  if (!confirm("Importer automatiquement les clients déjà connus du système (historique de facturation + annuaire OCR) dans votre carnet de contacts ?")) return
+                  try {
+                    const res = await fetch(`/api/client/factures-contacts/import-existing`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ societe_id: societeId }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) throw new Error(data?.error || "Erreur")
+                    // Détail des sources pour diagnostic — l'API renvoie
+                    // source_counts depuis le PR fix-conditions-paiement.
+                    const counts = data.source_counts || {}
+                    const detail = [
+                      `Annuaire OCR : ${counts.tiers_annuaire ?? 0} client(s) trouvé(s)`,
+                      `Historique factures : ${counts.factures_historique ?? 0} nom(s) distinct(s)`,
+                    ].join("\n")
+                    if (data.inserted > 0) {
+                      alert(`✓ Import terminé : ${data.inserted} nouveau(x) client(s) ajouté(s) sur ${data.candidats} candidat(s).\n\n${detail}`)
+                      // Recharger la page pour voir les contacts importés
+                      window.location.reload()
+                    } else if (data.message) {
+                      // Cas spécial : aucun candidat → diagnostic détaillé du serveur
+                      alert(data.message)
+                    } else {
+                      alert(`Aucun client à importer (tout est déjà dans ton carnet).\n\n${detail}`)
+                    }
+                  } catch (e: any) {
+                    alert(e?.message || "Erreur import")
+                  }
+                }}
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Importer mes clients existants
+              </Button>
+              <Button onClick={openNewClient} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />Nouveau client</Button>
+            </div>
           </div>
+          <p className="text-xs text-gray-500 -mt-2">
+            💡 <strong>Importer mes clients existants</strong> récupère vos clients depuis l'historique de facturation et l'annuaire OCR (factures fournisseur scannées) pour pré-remplir votre carnet sans saisie manuelle.
+          </p>
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               {clients.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">{tr('inv.fs.no_clients', locale)}</div>
+                <div className="text-center py-12 text-gray-500">Aucun client. Ajoutez votre premier client de facturation.</div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -394,7 +825,13 @@ export default function FacturationSettingsPage() {
                     <Select value={String(cConditions)} onValueChange={v => setCConditions(parseInt(v))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="30">30</SelectItem><SelectItem value="60">60</SelectItem><SelectItem value="90">90</SelectItem>
+                        <SelectItem value="0">À réception</SelectItem>
+                        <SelectItem value="7">7</SelectItem>
+                        <SelectItem value="14">14</SelectItem>
+                        <SelectItem value="30">30</SelectItem>
+                        <SelectItem value="45">45</SelectItem>
+                        <SelectItem value="60">60</SelectItem>
+                        <SelectItem value="90">90</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

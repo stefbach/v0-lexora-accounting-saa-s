@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import {
   Plus,
   Search,
@@ -59,6 +60,15 @@ const STATUT_CONFIG: Record<string, { label: string; color: string; icon: React.
 export default function ContratsPage() {
   const locale = getLocale()
   const router = useRouter()
+  const pathname = usePathname() || ""
+  // Préfixe d'espace : /client/contrats côté client_admin / direction,
+  // /comptable/contrats côté équipe comptable. Permet de garder l'utilisateur
+  // dans son espace lors de la navigation interne (détail, rediger).
+  const basePath = pathname.startsWith("/client/") ? "/client/contrats" : "/comptable/contrats"
+  // Société active : on n'affiche QUE les contrats de cette société pour
+  // garder une isolation logique (un contrat appartient à une société,
+  // pas à un utilisateur global).
+  const { societeId } = useSocieteActive()
   const [contrats, setContrats] = useState<Contrat[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -68,9 +78,16 @@ export default function ContratsPage() {
   const [total, setTotal] = useState(0)
 
   const chargerContrats = useCallback(async () => {
+    if (!societeId) {
+      setContrats([])
+      setTotal(0)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const params = new URLSearchParams()
+      params.set('societe_id', societeId)
       if (search) params.set('search', search)
       if (filtreStatut !== 'tous') params.set('statut', filtreStatut)
       if (filtreType !== 'tous') params.set('type_contrat', filtreType)
@@ -85,7 +102,7 @@ export default function ContratsPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, filtreStatut, filtreType])
+  }, [societeId, search, filtreStatut, filtreType])
 
   useEffect(() => {
     const timer = setTimeout(chargerContrats, 300)
@@ -98,11 +115,15 @@ export default function ContratsPage() {
       const res = await fetch('/api/contrats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ titre: 'Nouveau contrat', type_contrat: 'autre' }),
+        body: JSON.stringify({
+          titre: 'Nouveau contrat',
+          type_contrat: 'autre',
+          societe_id: societeId || null,
+        }),
       })
       const { data } = await res.json()
       if (data?.id) {
-        router.push(`/comptable/contrats/${data.id}/rediger`)
+        router.push(`${basePath}/${data.id}/rediger`)
       }
     } catch (err) {
       console.error(err)
@@ -292,12 +313,12 @@ export default function ContratsPage() {
                       {new Date(contrat.created_at).toLocaleDateString('fr-FR')}
                     </span>
                     <div className="flex gap-1">
-                      <Link href={`/comptable/contrats/${contrat.id}/rediger`}>
+                      <Link href={`${basePath}/${contrat.id}/rediger`}>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                           <PenLine className="w-4 h-4" />
                         </Button>
                       </Link>
-                      <Link href={`/comptable/contrats/${contrat.id}`}>
+                      <Link href={`${basePath}/${contrat.id}`}>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                           <Eye className="w-4 h-4" />
                         </Button>

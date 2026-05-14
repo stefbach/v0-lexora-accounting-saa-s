@@ -15,7 +15,7 @@ import {
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
-  Sparkles
+  Sparkles, Package, Send, Repeat
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -27,6 +27,9 @@ interface MenuSection {
   section: string
   sectionKey?: string
   requiredModule?: ModuleKey
+  /** Affichage conditionnel selon régime de la société active (mig 258).
+   *  Si défini, la section apparaît UNIQUEMENT pour ces régimes. */
+  requiredRegime?: ('gbc1' | 'authorised_company' | 'holding' | 'branch_foreign_pe' | 'domestic')[]
   items: { href: string; label: string; labelKey?: string; icon: any }[]
 }
 
@@ -104,7 +107,11 @@ const MENU: MenuSection[] = [
       { href: "/client/factures", label: "Mes Factures", labelKey: "inv.my_invoices", icon: Receipt },
       { href: "/client/lex-factures", label: "Lex Factures (analyse)", labelKey: "comp.client_sidebar.lex_factures", icon: Sparkles } as any,
       { href: "/client/nouvelle-facture", label: "Nouvelle Facture", labelKey: "inv.new_invoice", icon: FilePlus2 },
-      { href: "/comptable/contrats", label: "Contrats Clients", labelKey: "comp.client_sidebar.client_contracts", icon: FileText, visibleForRoles: ["client_admin", "direction"] } as any,
+      { href: "/client/catalogue", label: "Catalogue services", icon: Package } as any,
+      { href: "/client/contacts", label: "Contacts clients", icon: Users } as any,
+      { href: "/client/recurrences", label: "Récurrences", icon: Repeat } as any,
+      { href: "/client/relances", label: "Relances", icon: Send } as any,
+      { href: "/client/contrats", label: "Contrats Clients", labelKey: "comp.client_sidebar.client_contracts", icon: FileText, visibleForRoles: ["client_admin", "direction"] } as any,
       { href: "/client/facturation-settings", label: "Paramètres Facturation", labelKey: "inv.settings", icon: SlidersHorizontal },
     ]
   },
@@ -125,15 +132,37 @@ const MENU: MenuSection[] = [
     requiredModule: "etats_financiers",
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
+      { href: "/client/ifrs9-ecl", label: "Provision IFRS 9 (ECL)", icon: Scale },
+      { href: "/client/leases", label: "Contrats IFRS 16", icon: FilePen } as any,
       { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
+    ]
+  },
+  {
+    section: "GBC & Full IFRS",
+    requiredModule: "etats_financiers",
+    requiredRegime: ['gbc1', 'authorised_company', 'holding', 'branch_foreign_pe'],
+    items: [
+      { href: "/client/gbc-dashboard", label: "Dashboard GBC", icon: Globe } as any,
+      { href: "/client/gbc-per", label: "PER 80% + FTC", icon: Banknote } as any,
+      { href: "/client/gbc-substance", label: "Substance (CIGA)", icon: Scale } as any,
+      { href: "/client/gbc-transfer-pricing", label: "Transfer Pricing", icon: BarChart3 } as any,
+      { href: "/client/gbc-ubo", label: "Beneficial Owners", icon: Users } as any,
+      { href: "/client/gbc-consolidation", label: "Consolidation IFRS 10", icon: Building2 } as any,
+      { href: "/client/gbc-crs-fatca", label: "CRS / FATCA", icon: FileText } as any,
+      { href: "/client/gbc-pillar-two", label: "BEPS Pillar Two", icon: Globe } as any,
     ]
   },
   {
     section: "Fiscal MRA", sectionKey: "tax.fiscal_mra",
     requiredModule: "fiscal",
     items: [
+      { href: "/client/mra-hub", label: "MRA Hub (Tax Calendar)", icon: Calendar } as any,
       { href: "/client/tva", label: "TVA MRA", labelKey: "tax.vat", icon: Receipt },
-      { href: "/client/annual-return", label: "Annual Return (ROC)", labelKey: "tax.annual_return", icon: ClipboardList },
+      { href: "/client/mra-tds", label: "TDS (Section 111A)", icon: Banknote } as any,
+      { href: "/client/mra-cit", label: "CIT (Income Tax Return)", icon: Calculator } as any,
+      { href: "/client/mra-roc", label: "ROC Annual Return", icon: Building2 } as any,
+      { href: "/client/mra-sft", label: "SFT (AML/CFT)", icon: ClipboardList } as any,
+      { href: "/client/annual-return", label: "Annual Return (Legacy)", labelKey: "tax.annual_return", icon: ClipboardList },
       { href: "/client/it-form3", label: "IT Form 3 (MRA)", labelKey: "tax.it_form3", icon: FileText },
     ]
   },
@@ -247,8 +276,12 @@ export function ClientSidebarFull() {
         },
       ]
     : MENU.filter(section => {
-        if (!section.requiredModule) return true
-        return activeModules[section.requiredModule]
+        if (section.requiredModule && !activeModules[section.requiredModule]) return false
+        if (section.requiredRegime && section.requiredRegime.length > 0) {
+          const currentRegime = (societe as any)?.regime || 'domestic'
+          if (!section.requiredRegime.includes(currentRegime as any)) return false
+        }
+        return true
       })
 
   return (

@@ -22,28 +22,45 @@ export async function POST(
       return NextResponse.json({ error: 'Message vide' }, { status: 400 })
     }
 
-    // Charger le contrat et son contexte
-    const { data: contrat, error: contratError } = await supabase
-      .from('contrats_clients')
-      .select(`
-        *,
-        societe:societes(nom),
-        client:profiles!client_id(full_name, email)
-      `)
-      .eq('id', id)
-      .single()
+    // Charger le contrat + société + profil de l'utilisateur connecté.
+    // On charge en parallèle pour gagner un round-trip.
+    const [contratRes, profileRes] = await Promise.all([
+      supabase
+        .from('contrats_clients')
+        .select(`
+          *,
+          societe:societes(nom, brn),
+          client:profiles!client_id(full_name, email)
+        `)
+        .eq('id', id)
+        .single(),
+      supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', user.id)
+        .maybeSingle(),
+    ])
 
+    const contrat = contratRes.data
+    const contratError = contratRes.error
+    const userProfile = profileRes.data
     if (contratError || !contrat) {
       return NextResponse.json({ error: 'Contrat introuvable' }, { status: 404 })
     }
 
     const historique: MessageConversation[] = contrat.conversation_ia || []
 
-    // Contexte client pour l'IA
+    // Contexte enrichi pour l'IA :
+    //  - nom_utilisateur : la personne connectée (signataire côté société émettrice)
+    //    → l'IA peut le proposer comme représentant par défaut
+    //  - nom_societe : société émettrice (extrait du contrat, plus "Lexora" hardcodé)
+    //  - nom_cabinet : conservé pour rétro-compat (cas cabinet comptable)
     const contexte_client = {
       nom_client: contrat.client?.full_name,
       nom_societe: contrat.societe?.nom,
-      nom_cabinet: 'Lexora',
+      nom_cabinet: contrat.societe?.nom || 'votre société',
+      nom_utilisateur: userProfile?.full_name || user.email || undefined,
+      email_utilisateur: userProfile?.email || user.email || undefined,
     }
 
     // Stream SSE
