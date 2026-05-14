@@ -590,12 +590,9 @@ export default function PointagePage() {
         <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900 flex items-start gap-3">
           <span className="text-lg leading-none">⚠️</span>
           <div>
-            <p className="font-medium">Le pointage est en mode test.</p>
+            <p className="font-medium">{t('rha.a.point.test_title', locale)}</p>
             <p className="text-xs text-orange-800 mt-0.5">
-              Les pointages sont enregistrés mais <b>n'impactent pas encore la paie</b>.
-              Activez le pointage obligatoire dans{' '}
-              <a href="/rh/societe" className="underline font-medium">Paramètres société → Pointage</a>{' '}
-              quand vous êtes prêt.
+              {t('rha.a.point.test_hint', locale)}
             </p>
           </div>
         </div>
@@ -604,9 +601,9 @@ export default function PointagePage() {
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex items-start gap-3">
           <span className="text-lg leading-none">✅</span>
           <div>
-            <p className="font-medium">Pointage actif — les absences impactent la paie.</p>
+            <p className="font-medium">{t('rha.a.point.active_title', locale)}</p>
             <p className="text-xs text-emerald-800 mt-0.5">
-              Tout employé sans pointage ni congé approuvé sur un jour ouvré est compté absent au prochain calcul de paie.
+              {t('rha.a.point.active_hint', locale)}
             </p>
           </div>
         </div>
@@ -619,11 +616,11 @@ export default function PointagePage() {
           <div className="flex items-center justify-center gap-3 mb-2">
             <Clock className="w-8 h-8 text-[#D4AF37]" />
             <span className="text-5xl md:text-7xl font-mono font-bold tracking-wider">
-              {now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              {now.toLocaleTimeString(locale === 'en' ? 'en-GB' : 'fr-FR', { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </span>
           </div>
           <p className="text-lg text-gray-300 capitalize">{frenchDate(now)}</p>
-          <p className="text-sm text-[#D4AF37] mt-1">Heure Maurice (UTC+4)</p>
+          <p className="text-sm text-[#D4AF37] mt-1">{t('rha.a.point.tz', locale)}</p>
         </div>
 
         <CardContent className="p-6 space-y-5">
@@ -631,11 +628,11 @@ export default function PointagePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
-                Societe
+                {t('rha.a.point.lbl_societe', locale)}
               </label>
               <Select value={societeId} onValueChange={(v) => { setSocieteId(v); setEmployeId("") }}>
                 <SelectTrigger className="h-12 text-base">
-                  <SelectValue placeholder="Choisir une societe..." />
+                  <SelectValue placeholder={t('rha.a.point.ph_societe', locale)} />
                 </SelectTrigger>
                 <SelectContent>
                   {societes.map((s) => (
@@ -646,11 +643,11 @@ export default function PointagePage() {
             </div>
             <div>
               <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">
-                Employe
+                {t('rha.a.point.lbl_employe', locale)}
               </label>
               <Select value={employeId} onValueChange={setEmployeId} disabled={!societeId}>
                 <SelectTrigger className="h-12 text-base">
-                  <SelectValue placeholder={societeId ? "Choisir un employe..." : "Selectionnez d'abord une societe"} />
+                  <SelectValue placeholder={societeId ? t('rha.a.point.ph_employe', locale) : t('rha.a.point.ph_employe_disabled', locale)} />
                 </SelectTrigger>
                 <SelectContent>
                   {employes.map((e) => (
@@ -670,28 +667,28 @@ export default function PointagePage() {
               disabled={!employeId || doingPointage || !canClockIn}
               className="h-16 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white rounded-xl shadow-md transition-all active:scale-95"
             >
-              <LogIn className="w-5 h-5 mr-2" /> Entree
+              <LogIn className="w-5 h-5 mr-2" /> {t('rha.a.point.entree', locale)}
             </Button>
             <Button
               onClick={() => doPointage("pause_debut")}
               disabled={!employeId || doingPointage || !canClockOut}
               className="h-16 text-base font-semibold bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white rounded-xl shadow-md transition-all active:scale-95"
             >
-              <Coffee className="w-5 h-5 mr-2" /> Debut Pause
+              <Coffee className="w-5 h-5 mr-2" /> {t('rha.a.point.pause_debut', locale)}
             </Button>
             <Button
               onClick={() => doPointage("pause_fin")}
               disabled={!employeId || doingPointage}
               className="h-16 text-base font-semibold bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded-xl shadow-md transition-all active:scale-95"
             >
-              <Coffee className="w-5 h-5 mr-2" /> Fin Pause
+              <Coffee className="w-5 h-5 mr-2" /> {t('rha.a.point.pause_fin', locale)}
             </Button>
             <Button
               onClick={() => doPointage("sortie")}
               disabled={!employeId || doingPointage || !canClockOut}
               className="h-16 text-base font-semibold bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-xl shadow-md transition-all active:scale-95"
             >
-              <LogOut className="w-5 h-5 mr-2" /> Sortie
+              <LogOut className="w-5 h-5 mr-2" /> {t('rha.a.point.sortie', locale)}
             </Button>
           </div>
 
@@ -723,7 +720,7 @@ export default function PointagePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
               <Clock className="w-5 h-5 text-[#D4AF37]" />
-              Statut du jour
+              {t('rha.a.point.statut_jour', locale)}
               {(() => {
                 const emp = employes.find((e) => e.id === employeId)
                 return emp ? ` -- ${emp.prenom} ${emp.nom}` : ""
@@ -735,25 +732,25 @@ export default function PointagePage() {
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
                   <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Entree</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t('rha.a.point.entree', locale)}</p>
                     <p className="text-2xl font-mono font-semibold text-emerald-700">
                       {fmtHeure(selectedEmployeePointage.heure_entree)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Sortie</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t('rha.a.point.sortie', locale)}</p>
                     <p className="text-2xl font-mono font-semibold text-red-600">
                       {fmtHeure(selectedEmployeePointage.heure_sortie)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Duree</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t('rha.a.point.lbl_duree', locale)}</p>
                     <p className="text-2xl font-mono font-semibold text-[#0B0F2E]">
                       {dureeFmt(selectedEmployeePointage.duree_minutes)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">H. Sup</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{t('rha.a.point.lbl_hs', locale)}</p>
                     <p className="text-2xl font-mono font-semibold text-[#D4AF37]">
                       {selectedEmployeePointage.heures_sup
                         ? `${selectedEmployeePointage.heures_sup.toFixed(1)}h`
@@ -775,9 +772,9 @@ export default function PointagePage() {
             ) : (
               <div className="text-center py-4">
                 <span className={`inline-block px-4 py-2 rounded-full text-sm font-semibold border ${BADGE_CLASSES.none}`}>
-                  Non pointe
+                  {t('rha.a.point.non_pointe', locale)}
                 </span>
-                <p className="text-sm text-gray-400 mt-2">Aucun pointage enregistre aujourd'hui</p>
+                <p className="text-sm text-gray-400 mt-2">{t('rha.a.point.no_today', locale)}</p>
               </div>
             )}
           </CardContent>
@@ -790,7 +787,7 @@ export default function PointagePage() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
               <Users className="w-5 h-5 text-[#D4AF37]" />
-              Tous les employes -- Aujourd'hui
+              {t('rha.a.point.tous_today', locale)}
             </CardTitle>
             <Button
               variant="outline"
@@ -799,7 +796,7 @@ export default function PointagePage() {
               className="text-[#0B0F2E] border-[#0B0F2E]/20"
             >
               <Calendar className="w-4 h-4 mr-2" />
-              {showCalendar ? "Masquer calendrier" : "Vue mensuelle"}
+              {showCalendar ? t('rha.a.point.hide_cal', locale) : t('rha.a.point.show_cal', locale)}
             </Button>
           </div>
         </CardHeader>

@@ -638,7 +638,7 @@ export default function ClientRapprochementPage() {
       mode: "facture" | "pcm",
       payload: { facture_id?: string; classification?: string; compte_charge?: string }
     ): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
-      if (!societeId) return { ok: false, error: "société manquante" }
+      if (!societeId) return { ok: false, error: t('acc.rap.company_missing', locale) }
       const body: any = {
         societe_id: societeId,
         transaction_id: tx.id,
@@ -651,7 +651,7 @@ export default function ClientRapprochementPage() {
         body.classification = payload.classification || "manuel"
         body.compte_charge = payload.compte_charge
       } else {
-        return { ok: false, error: "paramètres invalides" }
+        return { ok: false, error: t('acc.rap.params_invalid', locale) }
       }
       try {
         const res = await fetch("/api/comptable/rapprochement", {
@@ -663,10 +663,10 @@ export default function ClientRapprochementPage() {
         if (!res.ok) return { ok: false, error: d?.error || `HTTP ${res.status}` }
         return { ok: true, lettre: d?.lettre }
       } catch (e: any) {
-        return { ok: false, error: e?.message || "Erreur réseau" }
+        return { ok: false, error: e?.message || t('acc.rap.network_error', locale) }
       }
     },
-    [societeId]
+    [societeId, locale]
   )
 
   const handleRejectOne = async (tx: BankTx) => {
@@ -683,16 +683,16 @@ export default function ClientRapprochementPage() {
         }),
       })
       const d = await res.json()
-      if (!res.ok) return showToast(d?.error || "Rejet impossible", "error")
-      showToast("Suggestion rejetée")
+      if (!res.ok) return showToast(d?.error || t('acc.rap.reject_impossible', locale), "error")
+      showToast(t('acc.rap.suggestion_rejected', locale))
       load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur rejet", "error")
+      showToast(e?.message || t('acc.rap.error_reject', locale), "error")
     }
   }
 
   const handleValidateBatch = async (items: BankTx[]) => {
-    if (items.length === 0) return showToast("Rien de coché", "error")
+    if (items.length === 0) return showToast(t('acc.rap.nothing_checked', locale), "error")
     setValidating(true)
     let ok = 0
     const errors: string[] = []
@@ -703,8 +703,8 @@ export default function ClientRapprochementPage() {
     }
     setValidating(false)
     setSelectedTxIds(new Set())
-    if (errors.length === 0) showToast(`${ok} validation(s) — écritures BNQ créées`)
-    else showToast(`${ok} OK / ${errors.length} échec — ${errors[0]}`, "error")
+    if (errors.length === 0) showToast(t('acc.rap.batch_ok', locale).replace('{n}', String(ok)))
+    else showToast(t('acc.rap.batch_mixed', locale).replace('{ok}', String(ok)).replace('{ko}', String(errors.length)).replace('{first}', errors[0]), "error")
     load()
   }
 
@@ -739,6 +739,7 @@ export default function ClientRapprochementPage() {
           onAffect={handleAffectManual}
           showToast={showToast}
           onReload={load}
+          locale={locale}
         />
         {toast && (
           <div
@@ -821,7 +822,7 @@ export default function ClientRapprochementPage() {
             <CalendarDays
               className={`w-4 h-4 ${modeToutes ? "text-amber-600" : "text-blue-600"}`}
             />
-            <span className="text-sm font-medium">Période :</span>
+            <span className="text-sm font-medium">{t('acc.rap.period', locale)} :</span>
             <button
               onClick={() => setModeToutes((v) => !v)}
               className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
@@ -830,7 +831,7 @@ export default function ClientRapprochementPage() {
                   : "bg-white text-gray-500 border-gray-300 hover:border-blue-400"
               }`}
             >
-              Toutes
+              {t('acc.rap.all', locale)}
             </button>
             {!modeToutes && (
               <>
@@ -839,7 +840,7 @@ export default function ClientRapprochementPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {MOIS.map((m) => (
+                    {getMois(locale).map((m) => (
                       <SelectItem key={m.val} value={m.val}>
                         {m.label}
                       </SelectItem>
@@ -868,24 +869,24 @@ export default function ClientRapprochementPage() {
           <CardContent className="p-4 space-y-3">
             <div className="text-sm text-amber-900/90 space-y-1.5">
               <p>
-                <span className="font-medium">Comment fonctionne cette page&nbsp;:</span> les transactions de tes relevés bancaires sont rapprochées avec tes factures (clients & fournisseurs) ou classées dans le bon compte PCM (frais bancaires, salaires, etc.).
+                <span className="font-medium">{t('acc.rap.how_works_title', locale)}</span> {t('acc.rap.how_works_desc', locale)}
               </p>
               <p>
-                <span className="font-medium">3 façons d'agir&nbsp;:</span>
+                <span className="font-medium">{t('acc.rap.three_ways', locale)}</span>
               </p>
               <ul className="list-disc pl-5 space-y-0.5">
                 <li>
-                  <span className="font-medium text-purple-700">Lex Banque (IA)</span> — l'agent rapproche tout en un clic, gère les libellés ambigus et les multi-devises.
+                  <span className="font-medium text-purple-700">{t('acc.rap.way_lex_banque', locale)}</span> — {t('acc.rap.way_lex_banque_desc', locale)}
                 </li>
                 <li>
-                  <span className="font-medium text-blue-700">Lettrage automatique</span> — moteur d'algorithmes (8 stratégies cascadées) sans IA, plus rapide pour les volumes simples.
+                  <span className="font-medium text-blue-700">{t('acc.rap.way_auto', locale)}</span> — {t('acc.rap.way_auto_desc', locale)}
                 </li>
                 <li>
-                  <span className="font-medium text-green-700">Classification</span> — applique les règles R01-R06 (frais bancaires, salaires bulk, MRA…) sur les transactions orphelines sans matcher de facture.
+                  <span className="font-medium text-green-700">{t('acc.rap.way_classif', locale)}</span> — {t('acc.rap.way_classif_desc', locale)}
                 </li>
               </ul>
               <p>
-                Les suggestions apparaissent dans l'onglet <span className="font-medium">À valider</span>. Tu peux ensuite tout valider en lot ou cas par cas. Filtre par tiers / banque / période ci-dessous pour zoomer.
+                {t('acc.rap.suggestions_in_tab', locale)} <span className="font-medium">{t('acc.rap.to_validate_tab', locale)}</span>{t('acc.rap.suggestions_tail', locale)}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -900,7 +901,7 @@ export default function ClientRapprochementPage() {
                 ) : (
                   <Wand2 className="h-4 w-4 mr-1.5" />
                 )}
-                Lettrage automatique
+                {t('acc.rap.auto_match_btn', locale)}
               </Button>
               <Button
                 onClick={handleReclassify}
@@ -914,7 +915,7 @@ export default function ClientRapprochementPage() {
                 ) : (
                   <Wrench className="h-4 w-4 mr-1.5" />
                 )}
-                Classification (R01-R06)
+                {t('acc.rap.classification_btn', locale)}
               </Button>
             </div>
           </CardContent>
@@ -929,7 +930,7 @@ export default function ClientRapprochementPage() {
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Libellé, tiers, montant, lettre, PCM…"
+                  placeholder={t('acc.rap.search_placeholder', locale)}
                   className="pl-8 h-9 w-72"
                 />
               </div>
@@ -941,18 +942,18 @@ export default function ClientRapprochementPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous (clients & fournisseurs)</SelectItem>
-                  <SelectItem value="client">Clients (entrées)</SelectItem>
-                  <SelectItem value="fournisseur">Fournisseurs (sorties)</SelectItem>
+                  <SelectItem value="all">{t('acc.rap.sens_all', locale)}</SelectItem>
+                  <SelectItem value="client">{t('acc.rap.sens_clients', locale)}</SelectItem>
+                  <SelectItem value="fournisseur">{t('acc.rap.sens_suppliers', locale)}</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={filtreCompte} onValueChange={setFiltreCompte}>
                 <SelectTrigger className="h-9 w-52">
                   <Landmark className="h-3.5 w-3.5 mr-1.5" />
-                  <SelectValue placeholder="Compte bancaire" />
+                  <SelectValue placeholder={t('acc.rap.bank_account_ph', locale)} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les banques</SelectItem>
+                  <SelectItem value="all">{t('acc.rap.all_banks', locale)}</SelectItem>
                   {comptesUniques.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.label}
@@ -962,20 +963,20 @@ export default function ClientRapprochementPage() {
               </Select>
               <Select value={filtreTiers} onValueChange={setFiltreTiers}>
                 <SelectTrigger className="h-9 w-56">
-                  <SelectValue placeholder="Tiers" />
+                  <SelectValue placeholder={t('acc.rap.tiers_ph', locale)} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les tiers</SelectItem>
-                  {tiersList.slice(0, 100).map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t.length > 50 ? t.slice(0, 47) + "…" : t}
+                  <SelectItem value="all">{t('acc.rap.all_tiers', locale)}</SelectItem>
+                  {tiersList.slice(0, 100).map((tr) => (
+                    <SelectItem key={tr} value={tr}>
+                      {tr.length > 50 ? tr.slice(0, 47) + "…" : tr}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {hasFilter && (
                 <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs">
-                  Réinitialiser
+                  {t('acc.rap.reset', locale)}
                 </Button>
               )}
             </div>
@@ -985,7 +986,7 @@ export default function ClientRapprochementPage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('acc.rap.no_company', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -995,16 +996,16 @@ export default function ClientRapprochementPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <KpiCard label="Total tx" value={total} />
+              <KpiCard label={t('acc.rap.kpi_total_tx', locale)} value={total} />
               <KpiCard
-                label="À valider"
+                label={t('acc.rap.kpi_to_validate', locale)}
                 value={totalSuggestions}
                 tone="amber"
                 accent={totalSuggestions > 0}
               />
-              <KpiCard label="Rapprochées" value={rapprochees.length} tone="green" />
-              <KpiCard label="Orphelines" value={orphelines.length} tone="rose" />
-              <KpiCard label="Taux" value={`${tauxRapproche}%`} tone="blue" />
+              <KpiCard label={t('acc.rap.kpi_reconciled', locale)} value={rapprochees.length} tone="green" />
+              <KpiCard label={t('acc.rap.kpi_orphans', locale)} value={orphelines.length} tone="rose" />
+              <KpiCard label={t('acc.rap.kpi_rate', locale)} value={`${tauxRapproche}%`} tone="blue" />
             </div>
 
             <Card>
@@ -1014,33 +1015,33 @@ export default function ClientRapprochementPage() {
                     value="a-valider"
                     className="data-[state=active]:bg-amber-100 px-3 py-2"
                   >
-                    <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-600" />À valider (
+                    <AlertTriangle className="h-4 w-4 mr-1.5 text-amber-600" />{t('acc.rap.tab_to_validate', locale)} (
                     {totalSuggestions})
                   </TabsTrigger>
                   <TabsTrigger value="rapprochees" className="px-3 py-2">
                     <CheckCircle2 className="h-4 w-4 mr-1.5 text-green-600" />
-                    Rapprochées ({rapprochees.length})
+                    {t('acc.rap.tab_reconciled', locale)} ({rapprochees.length})
                   </TabsTrigger>
                   <TabsTrigger value="orphelines" className="px-3 py-2">
                     <HelpCircle className="h-4 w-4 mr-1.5 text-rose-600" />
-                    Orphelines ({orphelines.length})
+                    {t('acc.rap.tab_orphans', locale)} ({orphelines.length})
                   </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="a-valider" className="p-4 space-y-5 mt-0">
                   {totalSuggestions === 0 ? (
                     <EmptyState
-                      title="Aucune suggestion en attente"
-                      hint={`Clique sur "Lancer ${AGENT_NAME}" en haut de la page pour générer des suggestions.`}
+                      title={t('acc.rap.empty_no_pending_title', locale)}
+                      hint={t('acc.rap.empty_no_pending_hint', locale).replace('{agent}', AGENT_NAME)}
                     />
                   ) : (
                     groups.map((g) => {
-                      const selectedCount = g.items.filter((t) => selectedTxIds.has(t.id)).length
+                      const selectedCount = g.items.filter((tx) => selectedTxIds.has(tx.id)).length
                       const allChecked =
                         selectedCount === g.items.length && g.items.length > 0
                       // Total montant du groupe (en devise principale, agrégé en valeur absolue)
                       const totalGroupAmount = g.items.reduce(
-                        (s, t) => s + Math.max(t.debit || 0, t.credit || 0),
+                        (s, tx) => s + Math.max(tx.debit || 0, tx.credit || 0),
                         0
                       )
                       return (
@@ -1068,7 +1069,7 @@ export default function ClientRapprochementPage() {
                                   size="sm"
                                   onClick={() =>
                                     handleValidateBatch(
-                                      g.items.filter((t) => selectedTxIds.has(t.id))
+                                      g.items.filter((tx) => selectedTxIds.has(tx.id))
                                     )
                                   }
                                   disabled={validating}
@@ -1079,7 +1080,7 @@ export default function ClientRapprochementPage() {
                                   ) : (
                                     <CheckCircle2 className="h-4 w-4 mr-1.5" />
                                   )}
-                                  Valider {selectedCount}
+                                  {t('acc.rap.validate_n', locale).replace('{n}', String(selectedCount))}
                                 </Button>
                               ) : (
                                 <Button
@@ -1089,7 +1090,7 @@ export default function ClientRapprochementPage() {
                                   disabled={validating}
                                 >
                                   <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                                  Tout valider ({g.items.length})
+                                  {t('acc.rap.validate_all_n', locale).replace('{n}', String(g.items.length))}
                                 </Button>
                               )}
                             </div>
@@ -1105,6 +1106,7 @@ export default function ClientRapprochementPage() {
                                 onValidate={() => handleValidateOne(tx)}
                                 onReject={() => handleRejectOne(tx)}
                                 facturesById={facturesById}
+                                locale={locale}
                               />
                             ))}
                           </div>
@@ -1117,8 +1119,8 @@ export default function ClientRapprochementPage() {
                 <TabsContent value="rapprochees" className="p-4 mt-0">
                   {rapprochees.length === 0 ? (
                     <EmptyState
-                      title="Aucune transaction rapprochée"
-                      hint="Valide des suggestions pour qu'elles apparaissent ici (avec écriture BNQ associée)."
+                      title={t('acc.rap.empty_no_reconciled_title', locale)}
+                      hint={t('acc.rap.empty_no_reconciled_hint', locale)}
                     />
                   ) : (
                     <div className="rounded border bg-card divide-y">
@@ -1127,6 +1129,7 @@ export default function ClientRapprochementPage() {
                           key={tx.id}
                           tx={tx}
                           facturesById={facturesById}
+                          locale={locale}
                           onModifier={async () => {
                             // 1) délettre
                             try {
@@ -1143,17 +1146,17 @@ export default function ClientRapprochementPage() {
                               })
                               if (!res.ok) {
                                 const d = await res.json().catch(() => null)
-                                showToast(d?.error || "Délettrage impossible", "error")
+                                showToast(d?.error || t('acc.rap.delettrage_failed', locale), "error")
                                 return
                               }
                             } catch (e: any) {
-                              showToast(e?.message || "Erreur réseau", "error")
+                              showToast(e?.message || t('acc.rap.network_error', locale), "error")
                               return
                             }
                             // 2) ouvre le dialog Imputer pour re-affecter
                             await load()
                             setAffectTx(tx)
-                            showToast("Rapprochement annulé — réaffecte cette tx")
+                            showToast(t('acc.rap.recon_cancelled', locale))
                           }}
                         />
                       ))}
@@ -1164,13 +1167,13 @@ export default function ClientRapprochementPage() {
                 <TabsContent value="orphelines" className="p-4 mt-0">
                   {orphelines.length === 0 ? (
                     <EmptyState
-                      title="Aucune transaction orpheline"
-                      hint="Toutes les transactions ont reçu une suggestion."
+                      title={t('acc.rap.empty_no_orphan_title', locale)}
+                      hint={t('acc.rap.empty_no_orphan_hint', locale)}
                     />
                   ) : (
                     <div className="rounded border bg-card divide-y">
                       {orphelines.map((tx) => (
-                        <TxRow key={tx.id} tx={tx} facturesById={facturesById} onImputer={() => setAffectTx(tx)} />
+                        <TxRow key={tx.id} tx={tx} facturesById={facturesById} locale={locale} onImputer={() => setAffectTx(tx)} />
                       ))}
                     </div>
                   )}
@@ -1270,6 +1273,7 @@ function SuggestionRow({
   onValidate,
   onReject,
   facturesById,
+  locale,
 }: {
   tx: BankTx
   type: "match" | "classification"
@@ -1278,6 +1282,7 @@ function SuggestionRow({
   onValidate: () => void
   onReject: () => void
   facturesById: Map<string, Facture>
+  locale: Locale
 }) {
   const [expanded, setExpanded] = useState(false)
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
@@ -1307,7 +1312,7 @@ function SuggestionRow({
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
+              <p className="text-xs text-muted-foreground">{formatDate(tx.date, locale)}</p>
               <p className="font-medium text-sm break-words">{tx.libelle}</p>
             </div>
             <p
@@ -1325,7 +1330,7 @@ function SuggestionRow({
               {factures.length > 0 ? (
                 factures.map((f, i) => (
                   <span key={f.id}>
-                    Facture <span className="font-mono">{f.numero_facture || f.id.slice(0, 8)}</span>
+                    {t('acc.rap.invoice', locale)} <span className="font-mono">{f.numero_facture || f.id.slice(0, 8)}</span>
                     {f.tiers && (
                       <span className="text-muted-foreground"> · {f.tiers.slice(0, 50)}</span>
                     )}
@@ -1339,12 +1344,12 @@ function SuggestionRow({
                   </span>
                 ))
               ) : (
-                <span className="italic text-muted-foreground">facture introuvable</span>
+                <span className="italic text-muted-foreground">{t('acc.rap.invoice_unfound', locale)}</span>
               )}
             </p>
           ) : (
             <p className="text-xs">
-              <span className="text-muted-foreground">→ Compte PCM </span>
+              <span className="text-muted-foreground">{t('acc.rap.pcm_arrow', locale)} </span>
               <Badge variant="outline" className="font-mono text-[10px]">
                 {tx.compte_comptable || "?"}
               </Badge>
@@ -1366,7 +1371,7 @@ function SuggestionRow({
             )}
             {tx.rapprochement_multi && (
               <Badge className="text-[10px] bg-blue-100 text-blue-700 border-blue-300">
-                {tx.nb_factures}× factures
+                {tx.nb_factures}{t('acc.rap.invoices_x', locale)}
               </Badge>
             )}
             {type === "match" && ecart > 0.01 && (
@@ -1377,11 +1382,11 @@ function SuggestionRow({
                     : "bg-amber-100 text-amber-700 border-amber-300"
                 }`}
               >
-                écart {fmt(ecart)} ({ecartPct.toFixed(1)}%)
+                {t('acc.rap.gap_short', locale)} {fmt(ecart)} ({ecartPct.toFixed(1)}%)
               </Badge>
             )}
             <span className="ml-auto text-[10px] text-muted-foreground italic">
-              {expanded ? "▼ détail" : "▶ détail"}
+              {expanded ? t('acc.rap.detail_open', locale) : t('acc.rap.detail_closed', locale)}
             </span>
           </div>
         </button>
@@ -1392,7 +1397,7 @@ function SuggestionRow({
             className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
           >
             <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-            Valider
+            {t('acc.rap.validate', locale)}
           </Button>
           <Button
             size="sm"
@@ -1401,7 +1406,7 @@ function SuggestionRow({
             className="h-7 text-xs text-muted-foreground hover:text-rose-700 hover:bg-rose-50"
           >
             <XCircle className="h-3.5 w-3.5 mr-1" />
-            Rejeter
+            {t('acc.rap.reject', locale)}
           </Button>
         </div>
       </div>
@@ -1411,33 +1416,33 @@ function SuggestionRow({
         <div className="px-4 pb-4 pt-1 bg-blue-50/30 text-xs space-y-2 border-t">
           {/* Pièce bancaire */}
           <div className="rounded border bg-white p-3">
-            <p className="font-medium text-blue-900 mb-1.5">📑 Écriture bancaire (raw)</p>
+            <p className="font-medium text-blue-900 mb-1.5">{t('acc.rap.bank_entry_raw', locale)}</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 font-mono">
-              <Detail label="Date" value={formatDate(tx.date)} />
-              <Detail label="Devise" value={tx.devise || "MUR"} />
+              <Detail label={t('acc.rap.detail_date', locale)} value={formatDate(tx.date, locale)} />
+              <Detail label={t('acc.rap.detail_currency', locale)} value={tx.devise || "MUR"} />
               <Detail
-                label="Débit"
+                label={t('acc.rap.detail_debit', locale)}
                 value={tx.debit > 0 ? fmt(tx.debit) : "—"}
                 tone={tx.debit > 0 ? "rose" : undefined}
               />
               <Detail
-                label="Crédit"
+                label={t('acc.rap.detail_credit', locale)}
                 value={tx.credit > 0 ? fmt(tx.credit) : "—"}
                 tone={tx.credit > 0 ? "green" : undefined}
               />
             </div>
             <div className="mt-2 break-words">
-              <span className="text-muted-foreground">Libellé complet : </span>
+              <span className="text-muted-foreground">{t('acc.rap.full_label', locale)} </span>
               <span className="font-mono">{tx.libelle}</span>
             </div>
             {tx.tiers_detecte && (
               <p className="mt-1">
-                <span className="text-muted-foreground">Tiers détecté : </span>
+                <span className="text-muted-foreground">{t('acc.rap.detected_party', locale)} </span>
                 <span className="font-medium">{tx.tiers_detecte}</span>
               </p>
             )}
             {tx.note && (
-              <p className="mt-1 italic text-muted-foreground">Raisonnement : {tx.note}</p>
+              <p className="mt-1 italic text-muted-foreground">{t('acc.rap.reasoning', locale)} {tx.note}</p>
             )}
           </div>
 
@@ -1445,7 +1450,7 @@ function SuggestionRow({
           {type === "match" && factures.length > 0 && (
             <div className="rounded border bg-white p-3">
               <p className="font-medium text-emerald-900 mb-1.5">
-                📄 Facture{factures.length > 1 ? "s" : ""} liée{factures.length > 1 ? "s" : ""} ({factures.length})
+                📄 {factures.length > 1 ? t('acc.rap.invoices_linked', locale) : t('acc.rap.invoice_linked', locale)} ({factures.length})
               </p>
               <div className="space-y-1.5">
                 {factures.map((f) => (
@@ -1466,13 +1471,13 @@ function SuggestionRow({
                               : "bg-rose-50 text-rose-700 border-rose-300"
                           }`}
                         >
-                          {f.type_facture === "client" ? "Client" : "Fournisseur"}
+                          {f.type_facture === "client" ? t('acc.rap.client_lc', locale) : t('acc.rap.supplier_lc', locale)}
                         </Badge>
                       </p>
                       {f.tiers && <p className="text-muted-foreground">{f.tiers}</p>}
                       <p className="text-[11px] text-muted-foreground">
-                        {f.date_facture && `Émise ${formatDate(f.date_facture)}`}
-                        {f.date_echeance && ` · Échéance ${formatDate(f.date_echeance)}`}
+                        {f.date_facture && `${t('acc.rap.issued', locale)} ${formatDate(f.date_facture, locale)}`}
+                        {f.date_echeance && ` · ${t('acc.rap.due', locale)} ${formatDate(f.date_echeance, locale)}`}
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0">
@@ -1489,9 +1494,9 @@ function SuggestionRow({
                 ))}
                 {ecart > 0.01 && (
                   <p className="pt-1 border-t mt-1 text-[11px]">
-                    <span className="text-muted-foreground">Total factures : </span>
+                    <span className="text-muted-foreground">{t('acc.rap.invoice_total', locale)} </span>
                     <span className="font-mono font-medium">{fmt(factureTotal)} MUR</span>
-                    <span className="text-muted-foreground"> · Écart : </span>
+                    <span className="text-muted-foreground"> · {t('acc.rap.gap_label', locale)} </span>
                     <span
                       className={`font-mono font-medium ${
                         ecartPct > 5 ? "text-red-700" : "text-amber-700"
@@ -1508,15 +1513,15 @@ function SuggestionRow({
           {/* Classification PCM */}
           {type === "classification" && tx.compte_comptable && (
             <div className="rounded border bg-white p-3">
-              <p className="font-medium text-purple-900 mb-1.5">📚 Classification proposée</p>
+              <p className="font-medium text-purple-900 mb-1.5">{t('acc.rap.classification_proposed', locale)}</p>
               <p>
-                Compte PCM :{" "}
+                {t('acc.rap.pcm_account', locale)}{" "}
                 <Badge variant="outline" className="font-mono">
                   {tx.compte_comptable}
                 </Badge>
                 {tx.classification && (
                   <span className="ml-2 text-muted-foreground">
-                    catégorie : <span className="font-medium">{tx.classification}</span>
+                    {t('acc.rap.category_label', locale)} <span className="font-medium">{tx.classification}</span>
                   </span>
                 )}
               </p>
@@ -1534,14 +1539,14 @@ function SuggestionRow({
               href={`/client/ecritures?search=${encodeURIComponent(tx.libelle.slice(0, 30))}`}
               className="text-[11px] text-blue-700 hover:underline"
             >
-              → Voir les écritures liées
+              {t('acc.rap.view_linked_entries', locale)}
             </Link>
             {factures[0] && (
               <Link
                 href={`/client/factures?search=${encodeURIComponent(factures[0].numero_facture || factures[0].id.slice(0, 8))}`}
                 className="text-[11px] text-blue-700 hover:underline"
               >
-                → Voir la facture
+                {t('acc.rap.view_invoice', locale)}
               </Link>
             )}
           </div>
@@ -1579,17 +1584,19 @@ function TxRow({
   facturesById,
   onImputer,
   onModifier,
+  locale,
 }: {
   tx: BankTx
   facturesById: Map<string, Facture>
   onImputer?: () => void
   onModifier?: () => void
+  locale: Locale
 }) {
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
   return (
     <div className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20">
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
+        <p className="text-xs text-muted-foreground">{formatDate(tx.date, locale)}</p>
         <p className="font-medium text-sm break-words">{tx.libelle}</p>
         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
           {tx.lettre && (
@@ -1604,7 +1611,7 @@ function TxRow({
           )}
           {tx.facture_id && (
             <Badge variant="outline" className="text-[10px]">
-              Facture {facturesById.get(tx.facture_id)?.numero_facture || tx.facture_id.slice(0, 8)}
+              {t('acc.rap.invoice', locale)} {facturesById.get(tx.facture_id)?.numero_facture || tx.facture_id.slice(0, 8)}
             </Badge>
           )}
           {tx.matched_strategy && (
@@ -1626,7 +1633,7 @@ function TxRow({
         {onImputer && (
           <Button size="sm" variant="outline" onClick={onImputer} className="h-7 text-xs">
             <Edit3 className="h-3.5 w-3.5 mr-1" />
-            Imputer
+            {t('acc.rap.impute', locale)}
           </Button>
         )}
         {onModifier && (
@@ -1635,10 +1642,10 @@ function TxRow({
             variant="outline"
             onClick={onModifier}
             className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
-            title="Annuler ce rapprochement et le refaire (ex: si la facture liée est fausse)"
+            title={t('acc.rap.modify_title', locale)}
           >
             <Edit3 className="h-3.5 w-3.5 mr-1" />
-            Modifier
+            {t('acc.rap.modify', locale)}
           </Button>
         )}
       </div>
@@ -1678,6 +1685,7 @@ function AffectDialog({
   onAffect,
   showToast,
   onReload,
+  locale,
 }: {
   tx: BankTx | null
   factures: Facture[]
@@ -1690,6 +1698,7 @@ function AffectDialog({
   ) => Promise<{ ok: boolean; error?: string; lettre?: string }>
   showToast: (msg: string, type?: "success" | "error") => void
   onReload: () => void
+  locale: Locale
 }) {
   const [tab, setTab] = useState<"facture" | "pcm" | "interne">("facture")
   const [search, setSearch] = useState("")
@@ -1744,15 +1753,15 @@ function AffectDialog({
     setBusy(true)
     const r = await onAffect(tx, "facture", { facture_id: factureId })
     setBusy(false)
-    if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
-    showToast(`Imputée sur facture (${r.lettre || "—"})`)
+    if (!r.ok) return showToast(`${t('acc.rap.fail', locale)} : ${r.error}`, "error")
+    showToast(t('acc.rap.imputed_facture', locale).replace('{l}', r.lettre || "—"))
     onClose()
     onReload()
   }
 
   const handleApplyPcm = async () => {
     const compte = pcmCustom.trim() || pcmPreset
-    if (!compte) return showToast("Choisis un compte PCM", "error")
+    if (!compte) return showToast(t('acc.rap.choose_pcm_error', locale), "error")
     const preset = PCM_PRESETS.find((p) => p.value === pcmPreset)
     const classif = preset?.classification || "manuel"
     setBusy(true)
@@ -1761,8 +1770,8 @@ function AffectDialog({
       classification: classif,
     })
     setBusy(false)
-    if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
-    showToast(`Imputée sur PCM ${compte} (${r.lettre || "—"})`)
+    if (!r.ok) return showToast(`${t('acc.rap.fail', locale)} : ${r.error}`, "error")
+    showToast(t('acc.rap.imputed_pcm', locale).replace('{c}', compte).replace('{l}', r.lettre || "—"))
 
     // ── Propagation : cherche les tx similaires non encore imputées ──
     // Critères de similarité (souples) :
@@ -1777,26 +1786,26 @@ function AffectDialog({
       .split(/\s+/)
       .slice(0, 4)
       .join(" ")
-    const similar = allTransactions.filter((t) => {
-      if (t.id === tx.id) return false
+    const similar = allTransactions.filter((tr) => {
+      if (tr.id === tx.id) return false
       if (
-        t.statut !== "non_identifie" &&
-        t.statut !== "a_verifier" &&
-        t.statut
+        tr.statut !== "non_identifie" &&
+        tr.statut !== "a_verifier" &&
+        tr.statut
       )
         return false
       if (
-        t.facture_id ||
-        (Array.isArray(t.facture_ids) && t.facture_ids.length > 0)
+        tr.facture_id ||
+        (Array.isArray(tr.facture_ids) && tr.facture_ids.length > 0)
       )
         return false
-      if (t.compte_comptable) return false
+      if (tr.compte_comptable) return false
       // Match sur tiers détecté
-      if (tiersTx && (t.tiers_detecte || "").toLowerCase().trim() === tiersTx)
+      if (tiersTx && (tr.tiers_detecte || "").toLowerCase().trim() === tiersTx)
         return true
       // Match sur 4 premiers mots du libellé
       if (libWords) {
-        const tWords = (t.libelle || "")
+        const tWords = (tr.libelle || "")
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, " ")
           .trim()
@@ -1820,24 +1829,24 @@ function AffectDialog({
   }
 
   const handlePropagate = async () => {
-    const items = propagationCandidates.filter((t) => propagationSelected.has(t.id))
-    if (items.length === 0) return showToast("Rien sélectionné", "error")
+    const items = propagationCandidates.filter((tr) => propagationSelected.has(tr.id))
+    if (items.length === 0) return showToast(t('acc.rap.nothing_selected', locale), "error")
     setBusy(true)
     let ok = 0
     const errors: string[] = []
-    for (const t of items) {
-      const r = await onAffect(t, "pcm", {
+    for (const tr of items) {
+      const r = await onAffect(tr, "pcm", {
         compte_charge: propagationCompte,
         classification: propagationClassif,
       })
       if (r.ok) ok++
-      else errors.push(`${t.libelle.slice(0, 40)} : ${r.error}`)
+      else errors.push(`${tr.libelle.slice(0, 40)} : ${r.error}`)
     }
     setBusy(false)
     if (errors.length === 0) {
-      showToast(`Propagation : ${ok} tx imputées sur ${propagationCompte}`)
+      showToast(t('acc.rap.propag_done', locale).replace('{n}', String(ok)).replace('{compte}', propagationCompte))
     } else {
-      showToast(`${ok} OK / ${errors.length} échec — ${errors[0]}`, "error")
+      showToast(t('acc.rap.batch_mixed', locale).replace('{ok}', String(ok)).replace('{ko}', String(errors.length)).replace('{first}', errors[0]), "error")
     }
     setPropagationCandidates([])
     setPropagationSelected(new Set())
@@ -1856,9 +1865,9 @@ function AffectDialog({
     <Dialog open={!!tx} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Imputer cette transaction</DialogTitle>
+          <DialogTitle>{t('acc.rap.dialog_title', locale)}</DialogTitle>
           <DialogDescription>
-            <span className="font-mono">{formatDate(tx.date)}</span> ·{" "}
+            <span className="font-mono">{formatDate(tx.date, locale)}</span> ·{" "}
             <span className="font-mono">{tx.libelle}</span>
             <br />
             <span className="font-mono font-medium">
@@ -1874,25 +1883,21 @@ function AffectDialog({
             <div className="rounded border-2 border-blue-300 bg-blue-50 p-3">
               <h4 className="font-medium text-sm text-blue-900 flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4" />
-                Imputation enregistrée. {propagationCandidates.length} transaction
-                {propagationCandidates.length > 1 ? "s" : ""} similaire
-                {propagationCandidates.length > 1 ? "s" : ""} détectée
-                {propagationCandidates.length > 1 ? "s" : ""}.
+                {t('acc.rap.imputation_recorded', locale)} {propagationCandidates.length} {t('acc.rap.similar_detected', locale)}
               </h4>
               <p className="text-xs text-blue-800/80 mt-1">
-                Veux-tu propager la même imputation (PCM{" "}
+                {t('acc.rap.propagate_question', locale)}{" "}
                 <span className="font-mono">{propagationCompte}</span>{" "}
-                <span className="opacity-70">— {propagationClassif}</span>) à ces
-                transactions ?
+                <span className="opacity-70">— {propagationClassif}</span>) {t('acc.rap.propagate_to_these', locale)}
               </p>
             </div>
             <div className="rounded border bg-card divide-y max-h-72 overflow-y-auto">
-              {propagationCandidates.map((t) => {
-                const checked = propagationSelected.has(t.id)
-                const m = t.debit > 0 ? -t.debit : t.credit
+              {propagationCandidates.map((tr) => {
+                const checked = propagationSelected.has(tr.id)
+                const m = tr.debit > 0 ? -tr.debit : tr.credit
                 return (
                   <label
-                    key={t.id}
+                    key={tr.id}
                     className="flex items-start gap-2 p-2 hover:bg-muted/30 cursor-pointer"
                   >
                     <Checkbox
@@ -1900,16 +1905,16 @@ function AffectDialog({
                       onCheckedChange={() => {
                         setPropagationSelected((prev) => {
                           const next = new Set(prev)
-                          if (next.has(t.id)) next.delete(t.id)
-                          else next.add(t.id)
+                          if (next.has(tr.id)) next.delete(tr.id)
+                          else next.add(tr.id)
                           return next
                         })
                       }}
                       className="mt-0.5"
                     />
                     <div className="flex-1 min-w-0 text-xs">
-                      <p className="text-muted-foreground">{formatDate(t.date)}</p>
-                      <p className="break-words">{t.libelle}</p>
+                      <p className="text-muted-foreground">{formatDate(tr.date, locale)}</p>
+                      <p className="break-words">{tr.libelle}</p>
                     </div>
                     <p
                       className={`font-mono text-xs flex-shrink-0 ${
@@ -1917,7 +1922,7 @@ function AffectDialog({
                       }`}
                     >
                       {m >= 0 ? "+" : ""}
-                      {fmt(m)} {t.devise || "MUR"}
+                      {fmt(m)} {tr.devise || "MUR"}
                     </p>
                   </label>
                 )
@@ -1925,7 +1930,7 @@ function AffectDialog({
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" onClick={handleSkipPropagation} disabled={busy}>
-                Non merci
+                {t('acc.rap.no_thanks', locale)}
               </Button>
               <Button
                 onClick={handlePropagate}
@@ -1937,7 +1942,7 @@ function AffectDialog({
                 ) : (
                   <CheckCircle2 className="h-4 w-4 mr-2" />
                 )}
-                Propager à {propagationSelected.size} tx
+                {t('acc.rap.propagate_to_n', locale).replace('{n}', String(propagationSelected.size))}
               </Button>
             </div>
           </div>
@@ -1946,15 +1951,15 @@ function AffectDialog({
           <TabsList className="w-full">
             <TabsTrigger value="facture" className="flex-1">
               <Link2 className="h-3.5 w-3.5 mr-1.5" />
-              Lier à une facture
+              {t('acc.rap.tab_facture', locale)}
             </TabsTrigger>
             <TabsTrigger value="pcm" className="flex-1">
               <Wrench className="h-3.5 w-3.5 mr-1.5" />
-              Compte PCM
+              {t('acc.rap.tab_pcm', locale)}
             </TabsTrigger>
             <TabsTrigger value="interne" className="flex-1">
               <Landmark className="h-3.5 w-3.5 mr-1.5" />
-              Compte à compte
+              {t('acc.rap.tab_interne', locale)}
             </TabsTrigger>
           </TabsList>
 
@@ -1964,13 +1969,13 @@ function AffectDialog({
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Recherche facture (n°, tiers…)"
+                placeholder={t('acc.rap.search_invoice_ph', locale)}
                 className="pl-8 h-9"
               />
             </div>
             {filteredFactures.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                Aucune facture trouvée.
+                {t('acc.rap.no_invoice_found', locale)}
               </p>
             ) : (
               <div className="rounded border bg-card divide-y max-h-80 overflow-y-auto">
