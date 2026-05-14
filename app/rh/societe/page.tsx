@@ -17,7 +17,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { PointageActifToggle } from "@/components/rh/PointageActifToggle"
-import { t, getLocale } from "@/lib/i18n"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -75,7 +75,7 @@ function TabBtn({ id, label, icon, active, onClick }: TabBtnProps) {
 }
 
 // ── DETAILS TAB ────────────────────────────────────────────────────────────────
-function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
+function DetailsTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; locale: Locale }) {
   const f = useRef({ ...data })
   const u = (k: string, v: any) => { f.current[k] = v }
   const [tva, setTva] = useState<boolean>(!!data.statut_tva)
@@ -95,12 +95,12 @@ function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
               )}
             </div>
             <div className="space-y-2 flex-1">
-              <p className="text-sm font-medium" style={{ color: NAVY }}>Logo de la société</p>
-              <p className="text-xs text-gray-500">Apparaît sur les bulletins de paie et documents officiels</p>
+              <p className="text-sm font-medium" style={{ color: NAVY }}>{t('rha.a.soc.logo_title', locale)}</p>
+              <p className="text-xs text-gray-500">{t('rha.a.soc.logo_hint', locale)}</p>
               <div className="flex items-center gap-3">
                 <Input
                   type="url"
-                  placeholder="https://exemple.com/logo.png"
+                  placeholder={t('rha.a.soc.logo_ph', locale)}
                   defaultValue={data.logo_url || ""}
                   className="h-11 text-sm flex-1"
                   onBlur={e => {
@@ -132,7 +132,7 @@ function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
                     input.click()
                   }}
                 >
-                  <Upload className="h-4 w-4 mr-1" /> Choisir
+                  <Upload className="h-4 w-4 mr-1" /> {t('rha.a.soc.logo_pick', locale)}
                 </Button>
               </div>
             </div>
@@ -144,17 +144,17 @@ function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
       <Card className="rounded-2xl border-l-4" style={{ borderLeftColor: NAVY }}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2" style={{ color: NAVY }}>
-            <Building2 className="h-4 w-4" /> Identification
+            <Building2 className="h-4 w-4" /> {t('rha.a.soc.section_identification', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <Field label="Nom de la société" name="nom" defaultValue={data.nom} required onChange={u} />
-            <Field label="Nom court" name="short_name" defaultValue={data.short_name} placeholder="Ex: DDS" onChange={u} />
-            <Field label="ERN (Employer Registration Number)" name="ern" defaultValue={data.ern} placeholder="Ex: 02276097" onChange={u} />
-            <Field label="BRN (Business Registration Number)" name="brn" defaultValue={data.brn} placeholder="Ex: C20173522" onChange={u} />
-            <Field label="NPF No." name="npf_number" defaultValue={data.npf_number} placeholder="Ex: 02276097" onChange={u} />
-            <Field label="Date d'incorporation" name="date_incorporation" type="date" defaultValue={data.date_incorporation} onChange={u} />
+            <Field label={t('rha.a.soc.f_nom', locale)} name="nom" defaultValue={data.nom} required onChange={u} />
+            <Field label={t('rha.a.soc.f_short_name', locale)} name="short_name" defaultValue={data.short_name} placeholder={t('rha.a.soc.ph_short_name', locale)} onChange={u} />
+            <Field label={t('rha.a.soc.f_ern', locale)} name="ern" defaultValue={data.ern} placeholder={t('rha.a.soc.ph_ern', locale)} onChange={u} />
+            <Field label={t('rha.a.soc.f_brn', locale)} name="brn" defaultValue={data.brn} placeholder={t('rha.a.soc.ph_brn', locale)} onChange={u} />
+            <Field label={t('rha.a.soc.f_npf', locale)} name="npf_number" defaultValue={data.npf_number} placeholder={t('rha.a.soc.ph_ern', locale)} onChange={u} />
+            <Field label={t('rha.a.soc.f_date_inc', locale)} name="date_incorporation" type="date" defaultValue={data.date_incorporation} onChange={u} />
           </div>
         </CardContent>
       </Card>
@@ -163,15 +163,15 @@ function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
       <Card className="rounded-2xl border-l-4 border-l-blue-500">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-blue-700">
-            <FileText className="h-4 w-4" /> Numéros fiscaux
+            <FileText className="h-4 w-4" /> {t('rha.a.soc.section_fiscal_nums', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <Field label="PAYE Number (MRA)" name="paye_number" defaultValue={data.paye_number} placeholder="Ex: P1234567" onChange={u} />
-            <Field label="CSG Number" name="csg_number" defaultValue={data.csg_number} placeholder="Ex: CSG123456" onChange={u} />
-            <Field label="NSF Number" name="nsf_number" defaultValue={data.nsf_number} placeholder="Ex: NSF789012" onChange={u} />
-            <Field label="Numéro TVA MRA" name="numero_tva_mra" defaultValue={data.numero_tva_mra} onChange={u} />
+            <Field label={t('rha.a.soc.f_paye', locale)} name="paye_number" defaultValue={data.paye_number} placeholder={t('rha.a.soc.ph_paye', locale)} onChange={u} />
+            <Field label={t('rha.a.soc.f_csg', locale)} name="csg_number" defaultValue={data.csg_number} placeholder={t('rha.a.soc.ph_csg', locale)} onChange={u} />
+            <Field label={t('rha.a.soc.f_nsf', locale)} name="nsf_number" defaultValue={data.nsf_number} placeholder={t('rha.a.soc.ph_nsf', locale)} onChange={u} />
+            <Field label={t('rha.a.soc.f_tva_mra', locale)} name="numero_tva_mra" defaultValue={data.numero_tva_mra} onChange={u} />
           </div>
         </CardContent>
       </Card>
@@ -180,19 +180,19 @@ function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
       <Card className="rounded-2xl border-l-4 border-l-emerald-500">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2 text-emerald-700">
-            <Settings className="h-4 w-4" /> Activité
+            <Settings className="h-4 w-4" /> {t('rha.a.soc.section_activity', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <Field label="Nature of Business" name="nature_business" defaultValue={data.nature_business} placeholder="Ex: BPO, Télémedecine" onChange={u} />
-            <Field label="Secteur d'activité" name="secteur_activite" defaultValue={data.secteur_activite} onChange={u} />
+            <Field label={t('rha.a.soc.f_nature_business', locale)} name="nature_business" defaultValue={data.nature_business} placeholder={t('rha.a.soc.ph_nature_business', locale)} onChange={u} />
+            <Field label={t('rha.a.soc.f_secteur', locale)} name="secteur_activite" defaultValue={data.secteur_activite} onChange={u} />
             <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border">
               <Switch
                 checked={tva}
                 onCheckedChange={v => { setTva(v); u("statut_tva", v) }}
               />
-              <Label className="cursor-pointer">Assujetti à la TVA</Label>
+              <Label className="cursor-pointer">{t('rha.a.soc.lbl_tva', locale)}</Label>
             </div>
           </div>
         </CardContent>
@@ -203,7 +203,7 @@ function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
         style={{ backgroundColor: NAVY }}
         className="text-white hover:opacity-90"
       >
-        <Save className="h-4 w-4 mr-2" /> Enregistrer les détails
+        <Save className="h-4 w-4 mr-2" /> {t('rha.a.soc.btn_save_details', locale)}
       </Button>
     </div>
   )
@@ -223,10 +223,12 @@ function ContactsEditor({
   initial,
   societeId,
   onChange,
+  locale,
 }: {
   initial: Contact[]
   societeId: string
   onChange: (contacts: Contact[]) => void
+  locale: Locale
 }) {
   const [contacts, setContacts] = useState<Contact[]>(
     Array.isArray(initial) && initial.length > 0 ? initial : [],
@@ -283,7 +285,7 @@ function ContactsEditor({
   // On PUT toute la société avec les contacts mis à jour.
   const saveContactsToDb = async (nextContacts: Contact[], idxTouched: number, op: 'save' | 'delete' = 'save') => {
     if (!societeId) {
-      if (op === 'save') toast.error('ID société manquant')
+      if (op === 'save') toast.error(t('rha.a.soc.contacts_id_missing', locale))
       return
     }
     if (op === 'save') setSavingIdx(idxTouched)
@@ -295,21 +297,21 @@ function ContactsEditor({
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        toast.error(`Erreur : ${d.error || res.statusText}`)
+        toast.error(t('rha.a.soc.contacts_err_prefix', locale) + (d.error || res.statusText))
         return
       }
       if (op === 'save') {
-        toast.success('Contact enregistré ✅')
+        toast.success(t('rha.a.soc.contacts_saved', locale))
         setEditingIdx(prev => {
           const s = new Set(prev)
           s.delete(idxTouched)
           return s
         })
       } else {
-        toast.success('Contact supprimé')
+        toast.success(t('rha.a.soc.contacts_deleted', locale))
       }
     } catch (e: any) {
-      toast.error(`Erreur réseau : ${e?.message || ''}`)
+      toast.error(t('rha.a.soc.contacts_network_err', locale) + (e?.message || ''))
     } finally {
       if (op === 'save') setSavingIdx(null)
     }
@@ -319,7 +321,7 @@ function ContactsEditor({
     // Validation minimale : nom ou prénom requis
     const c = contacts[i]
     if (!c.nom?.trim() && !c.prenom?.trim()) {
-      toast.error('Nom ou prénom requis')
+      toast.error(t('rha.a.soc.contacts_name_required', locale))
       return
     }
     void saveContactsToDb(contacts, i, 'save')
@@ -329,7 +331,7 @@ function ContactsEditor({
     <Card className="rounded-2xl border-l-4" style={{ borderLeftColor: NAVY }}>
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
-          Personnes de contact
+          {t('rha.a.soc.contacts_title', locale)}
         </CardTitle>
         <Button
           size="sm"
@@ -337,14 +339,13 @@ function ContactsEditor({
           onClick={addContact}
           className="h-8"
         >
-          <Plus className="h-3.5 w-3.5 mr-1" /> Ajouter
+          <Plus className="h-3.5 w-3.5 mr-1" /> {t('rha.a.soc.contacts_add', locale)}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {contacts.length === 0 && (
           <p className="text-sm text-gray-500 py-4 text-center">
-            Aucun contact renseigné. Cliquez sur « Ajouter » pour créer
-            un contact (CEO, DRH, DAF, etc.).
+            {t('rha.a.soc.contacts_empty', locale)}
           </p>
         )}
         {contacts.map((c, i) => {
@@ -363,7 +364,7 @@ function ContactsEditor({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold" style={{ color: NAVY }}>
-                        {[c.prenom, c.nom].filter(Boolean).join(' ') || <span className="italic text-gray-400">Sans nom</span>}
+                        {[c.prenom, c.nom].filter(Boolean).join(' ') || <span className="italic text-gray-400">{t('rha.a.soc.contacts_no_name', locale)}</span>}
                         {c.poste && <span className="font-normal text-gray-600"> — {c.poste}</span>}
                       </p>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-600">
@@ -382,7 +383,7 @@ function ContactsEditor({
                       </div>
                       {c.principal && (
                         <Badge className="mt-2 bg-amber-100 text-amber-800 hover:bg-amber-100">
-                          <Star className="h-3 w-3 mr-1 fill-current" /> Contact principal
+                          <Star className="h-3 w-3 mr-1 fill-current" /> {t('rha.a.soc.contacts_principal', locale)}
                         </Badge>
                       )}
                     </div>
@@ -399,7 +400,7 @@ function ContactsEditor({
                             )
                           }}
                           className="h-7 text-xs text-gray-500 hover:text-amber-700"
-                          title="Définir comme principal"
+                          title={t('rha.a.soc.contacts_set_principal_tip', locale)}
                         >
                           <Star className="h-3.5 w-3.5" />
                         </Button>
@@ -410,7 +411,7 @@ function ContactsEditor({
                         onClick={() => startEdit(i)}
                         className="h-7 text-xs text-gray-600 hover:text-[#0B0F2E]"
                       >
-                        <span aria-hidden>✏️</span> Modifier
+                        <span aria-hidden>✏️</span> {t('rha.a.soc.contacts_edit', locale)}
                       </Button>
                       <Button
                         size="sm"
@@ -418,7 +419,7 @@ function ContactsEditor({
                         onClick={() => removeContact(i)}
                         className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> {t('rha.a.soc.contacts_delete', locale)}
                       </Button>
                     </div>
                   </div>
@@ -432,7 +433,7 @@ function ContactsEditor({
                     <div className="flex items-center gap-2">
                       {c.principal ? (
                         <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
-                          <Star className="h-3 w-3 mr-1 fill-current" /> Contact principal
+                          <Star className="h-3 w-3 mr-1 fill-current" /> {t('rha.a.soc.contacts_principal', locale)}
                         </Badge>
                       ) : (
                         <Button
@@ -441,7 +442,7 @@ function ContactsEditor({
                           onClick={() => setPrincipal(i)}
                           className="h-7 text-xs text-gray-500 hover:text-amber-700"
                         >
-                          <Star className="h-3 w-3 mr-1" /> Définir comme principal
+                          <Star className="h-3 w-3 mr-1" /> {t('rha.a.soc.contacts_define_principal', locale)}
                         </Button>
                       )}
                     </div>
@@ -451,54 +452,54 @@ function ContactsEditor({
                       onClick={() => removeContact(i)}
                       className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
                     >
-                      <Trash2 className="h-3 w-3 mr-1" /> Supprimer
+                      <Trash2 className="h-3 w-3 mr-1" /> {t('rha.a.soc.contacts_delete', locale)}
                     </Button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs text-gray-600 mb-1 block">Nom</Label>
+                      <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.f_nom2', locale)}</Label>
                       <Input
                         defaultValue={c.nom || ""}
                         onBlur={e => update(i, { nom: e.target.value })}
                         className="h-10 text-sm"
-                        placeholder="DUPONT"
+                        placeholder={t('rha.a.soc.ph_nom2', locale)}
                       />
                     </div>
                     <div>
-                      <Label className="text-xs text-gray-600 mb-1 block">Prénom</Label>
+                      <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.f_prenom', locale)}</Label>
                       <Input
                         defaultValue={c.prenom || ""}
                         onBlur={e => update(i, { prenom: e.target.value })}
                         className="h-10 text-sm"
-                        placeholder="Jean"
+                        placeholder={t('rha.a.soc.ph_prenom', locale)}
                       />
                     </div>
                     <div>
-                      <Label className="text-xs text-gray-600 mb-1 block">Poste</Label>
+                      <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.f_poste', locale)}</Label>
                       <Input
                         defaultValue={c.poste || ""}
                         onBlur={e => update(i, { poste: e.target.value })}
                         className="h-10 text-sm"
-                        placeholder="CEO, DRH, DAF..."
+                        placeholder={t('rha.a.soc.ph_poste', locale)}
                       />
                     </div>
                     <div>
-                      <Label className="text-xs text-gray-600 mb-1 block">Email</Label>
+                      <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.f_email', locale)}</Label>
                       <Input
                         type="email"
                         defaultValue={c.email || ""}
                         onBlur={e => update(i, { email: e.target.value })}
                         className="h-10 text-sm"
-                        placeholder="jean@example.mu"
+                        placeholder={t('rha.a.soc.ph_email', locale)}
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <Label className="text-xs text-gray-600 mb-1 block">Téléphone</Label>
+                      <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.f_phone', locale)}</Label>
                       <Input
                         defaultValue={c.telephone || ""}
                         onBlur={e => update(i, { telephone: e.target.value })}
                         className="h-10 text-sm"
-                        placeholder="+230 5123 4567"
+                        placeholder={t('rha.a.soc.ph_phone', locale)}
                       />
                     </div>
                   </div>
@@ -511,7 +512,7 @@ function ContactsEditor({
                       className="text-white hover:opacity-90"
                     >
                       {isSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                      Enregistrer
+                      {t('rha.a.soc.contacts_save', locale)}
                     </Button>
                   </div>
                 </>
@@ -525,46 +526,46 @@ function ContactsEditor({
 }
 
 // ── CONTACT TAB ────────────────────────────────────────────────────────────────
-function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
+function ContactTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; locale: Locale }) {
   const f = useRef({ ...data })
   const u = (k: string, v: any) => { f.current[k] = v }
 
   return (
     <div className="space-y-6">
-      {/* Sprint 5 AMÉLIO 8 — Éditeur multi-contacts (mig 140 contacts JSONB).
-          Sprint 6 FIX 3 — mode lecture/édition par contact + save DB par contact. */}
+      {/* Sprint 5 AMÉLIO 8 — Éditeur multi-contacts (mig 140 contacts JSONB). */}
       <ContactsEditor
         initial={Array.isArray(data.contacts) ? data.contacts : []}
         societeId={data.id}
         onChange={(contacts) => { f.current.contacts = contacts }}
+        locale={locale}
       />
 
       <Card className="rounded-2xl border-l-4 border-l-blue-500">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold text-blue-700">Coordonnées</CardTitle>
+          <CardTitle className="text-sm font-semibold text-blue-700">{t('rha.a.soc.section_coords', locale)}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Adresse" name="adresse" defaultValue={data.adresse} placeholder="Bourdet Road" onChange={u} />
-          <Field label="Téléphone" name="telephone" defaultValue={data.telephone} placeholder="52503644" onChange={u} />
-          <Field label="Adresse (ligne 2)" name="adresse2" defaultValue={data.adresse2} onChange={u} />
-          <Field label="Fax" name="fax" defaultValue={data.fax} onChange={u} />
-          <Field label="Ville" name="ville" defaultValue={data.ville} placeholder="Grand Baie" onChange={u} />
-          <Field label="Email" name="email" type="email" defaultValue={data.email} onChange={u} />
-          <Field label="Email DCO (Data Controller)" name="email_dco" type="email" defaultValue={data.email_dco} onChange={u} />
-          <Field label="Site web" name="website" defaultValue={data.website} placeholder="https://www.example.mu" onChange={u} />
+          <Field label={t('rha.a.soc.f_adresse', locale)} name="adresse" defaultValue={data.adresse} placeholder={t('rha.a.soc.ph_adresse', locale)} onChange={u} />
+          <Field label={t('rha.a.soc.f_telephone', locale)} name="telephone" defaultValue={data.telephone} placeholder={t('rha.a.soc.ph_telephone', locale)} onChange={u} />
+          <Field label={t('rha.a.soc.f_adresse2', locale)} name="adresse2" defaultValue={data.adresse2} onChange={u} />
+          <Field label={t('rha.a.soc.f_fax', locale)} name="fax" defaultValue={data.fax} onChange={u} />
+          <Field label={t('rha.a.soc.f_ville', locale)} name="ville" defaultValue={data.ville} placeholder={t('rha.a.soc.ph_ville', locale)} onChange={u} />
+          <Field label={t('rha.a.soc.f_email2', locale)} name="email" type="email" defaultValue={data.email} onChange={u} />
+          <Field label={t('rha.a.soc.f_email_dco', locale)} name="email_dco" type="email" defaultValue={data.email_dco} onChange={u} />
+          <Field label={t('rha.a.soc.f_website', locale)} name="website" defaultValue={data.website} placeholder={t('rha.a.soc.ph_website', locale)} onChange={u} />
         </CardContent>
       </Card>
 
       <Card className="rounded-2xl border-l-4 border-l-emerald-500">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold text-emerald-700 flex items-center gap-2">
-            <MapPin className="h-4 w-4" /> Localisation GPS (pour pointage)
+            <MapPin className="h-4 w-4" /> {t('rha.a.soc.section_gps', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Field label="Latitude" name="latitude" type="number" step="any" defaultValue={data.latitude} onChange={u} />
-          <Field label="Longitude" name="longitude" type="number" step="any" defaultValue={data.longitude} onChange={u} />
-          <Field label="Rayon pointage (mètres)" name="distance_pointage" type="number" defaultValue={data.distance_pointage ?? 50} onChange={u} />
+          <Field label={t('rha.a.soc.f_latitude', locale)} name="latitude" type="number" step="any" defaultValue={data.latitude} onChange={u} />
+          <Field label={t('rha.a.soc.f_longitude', locale)} name="longitude" type="number" step="any" defaultValue={data.longitude} onChange={u} />
+          <Field label={t('rha.a.soc.f_rayon', locale)} name="distance_pointage" type="number" defaultValue={data.distance_pointage ?? 50} onChange={u} />
         </CardContent>
       </Card>
 
@@ -572,7 +573,7 @@ function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
       <PointageActifToggle societeId={data.id} initial={data.pointage_actif === true} onSaved={(v) => { f.current.pointage_actif = v }} />
 
       <Button onClick={() => onSave(f.current)} style={{ backgroundColor: NAVY }} className="text-white hover:opacity-90">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer les coordonnées
+        <Save className="h-4 w-4 mr-2" /> {t('rha.a.soc.btn_save_coords', locale)}
       </Button>
     </div>
   )
@@ -583,7 +584,7 @@ function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
 // /rh/parametres (inline, sans redirection vers /rh/societe).
 
 // ── BANKING TAB ────────────────────────────────────────────────────────────────
-function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
+function BankTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; locale: Locale }) {
   const f = useRef({ ...data })
   const u = (k: string, v: any) => { f.current[k] = v }
   const [bankAccounts, setBankAccounts] = useState<any[]>([])
@@ -613,23 +614,23 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
     <div className="space-y-6">
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-gray-600">Coordonnées bancaires principales</CardTitle>
+          <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.bank_main_title', locale)}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Field label="Nom de la banque" name="bank_name" defaultValue={data.bank_name} placeholder="MCB, SBM, ABC…" onChange={u} />
-          <Field label="Numéro de compte" name="bank_account_number" defaultValue={data.bank_account_number} placeholder="000000000000" onChange={u} />
-          <Field label="IBAN" name="iban" defaultValue={data.iban} placeholder="MU12MCBL0100…" onChange={u} />
+          <Field label={t('rha.a.soc.f_bank_name', locale)} name="bank_name" defaultValue={data.bank_name} placeholder={t('rha.a.soc.ph_bank_name', locale)} onChange={u} />
+          <Field label={t('rha.a.soc.f_bank_account', locale)} name="bank_account_number" defaultValue={data.bank_account_number} placeholder={t('rha.a.soc.ph_bank_account', locale)} onChange={u} />
+          <Field label={t('rha.a.soc.f_iban', locale)} name="iban" defaultValue={data.iban} placeholder={t('rha.a.soc.ph_iban', locale)} onChange={u} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-gray-600">Comptes bancaires (relevés importés)</CardTitle>
+          <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.bank_accounts_title', locale)}</CardTitle>
         </CardHeader>
         <CardContent>
           {bankAccounts.length === 0 ? (
             <p className="text-gray-400 text-sm py-4 text-center">
-              Aucun compte bancaire. Les comptes sont créés automatiquement lors de l'import d'un relevé.
+              {t('rha.a.soc.bank_no_accounts', locale)}
             </p>
           ) : (
             <div className="space-y-3">
@@ -640,13 +641,13 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
                     <Badge variant="outline">{b.devise}</Badge>
                   </div>
                   <div className="mt-2 text-sm space-y-1">
-                    <p><span className="text-gray-500">Compte:</span> {b.numero_compte || "—"}</p>
-                    <p><span className="text-gray-500">IBAN:</span> {b.iban || "—"}</p>
+                    <p><span className="text-gray-500">{t('rha.a.soc.bank_lbl_compte', locale)}</span> {b.numero_compte || "—"}</p>
+                    <p><span className="text-gray-500">{t('rha.a.soc.bank_lbl_iban', locale)}</span> {b.iban || "—"}</p>
                     {b.solde_actuel != null && (
                       <p>
-                        <span className="text-gray-500">Solde:</span>{" "}
+                        <span className="text-gray-500">{t('rha.a.soc.bank_lbl_solde', locale)}</span>{" "}
                         <span className="font-mono font-medium">
-                          {Number(b.solde_actuel).toLocaleString("fr-FR")} {b.devise}
+                          {Number(b.solde_actuel).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR')} {b.devise}
                         </span>
                       </p>
                     )}
@@ -660,7 +661,7 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-gray-600">Devises activées</CardTitle>
+          <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.devises_title', locale)}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
@@ -680,14 +681,14 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
       </Card>
 
       <Button onClick={() => onSave(f.current)} style={{ backgroundColor: NAVY }} className="text-white hover:opacity-90">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer les données bancaires
+        <Save className="h-4 w-4 mr-2" /> {t('rha.a.soc.btn_save_bank', locale)}
       </Button>
     </div>
   )
 }
 
 // ── RH PARAMETERS TAB ─────────────────────────────────────────────────────────
-function RhTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
+function RhTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; locale: Locale }) {
   const f = useRef({ ...data })
   const u = (k: string, v: any) => { f.current[k] = v }
   const uSelect = (k: string) => (v: string) => { f.current[k] = v }

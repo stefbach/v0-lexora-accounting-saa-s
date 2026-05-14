@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import type { ConfigConge } from "@/lib/rh/types-conges"
-import { t, getLocale } from "@/lib/i18n"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -38,7 +38,7 @@ interface TypeUI {
   }
   // "16" pour MAT, "22" pour AL, "Variable" pour JUR/INT/CRT/Special…
   formatValue: (c: ConfigConge | null) => { value: string; unit: string }
-  puces: (c: ConfigConge | null) => string[]
+  puces: (c: ConfigConge | null, locale: Locale) => string[]
 }
 
 const TONES = {
@@ -136,11 +136,13 @@ const TYPES_UI: TypeUI[] = [
       value: String(c?.jours_par_cycle ?? 22),
       unit: "jours ouvrables / an",
     }),
-    puces: c => [
-      `${c?.jours_par_cycle ?? 22} jours ouvrables après ${c?.anciennete_min_mois ?? 12} mois d'emploi continu`,
-      "Weekends et jours fériés exclus",
-      "Cycle basé sur la date anniversaire (pas année civile)",
-      "Solde non pris : paiement compensatoire obligatoire",
+    puces: (c, locale) => [
+      t('rha.a.congesp.puce_AL_1', locale)
+        .replace('{n}', String(c?.jours_par_cycle ?? 22))
+        .replace('{m}', String(c?.anciennete_min_mois ?? 12)),
+      t('rha.a.congesp.puce_AL_2', locale),
+      t('rha.a.congesp.puce_AL_3', locale),
+      t('rha.a.congesp.puce_AL_4', locale),
     ],
   },
   {
@@ -154,11 +156,11 @@ const TYPES_UI: TypeUI[] = [
       value: String(c?.jours_par_cycle ?? 15),
       unit: "jours / an",
     }),
-    puces: c => [
-      `${c?.jours_par_cycle ?? 15} jours par an après 12 mois`,
-      "Accrual 1 j/mois de M7 à M12 (plafond 6)",
-      "Certificat médical si ≥ 3 jours consécutifs",
-      "Cumul possible jusqu'à 90 jours",
+    puces: (c, locale) => [
+      t('rha.a.congesp.puce_SL_1', locale).replace('{n}', String(c?.jours_par_cycle ?? 15)),
+      t('rha.a.congesp.puce_SL_2', locale),
+      t('rha.a.congesp.puce_SL_3', locale),
+      t('rha.a.congesp.puce_SL_4', locale),
     ],
   },
   {
@@ -172,11 +174,11 @@ const TYPES_UI: TypeUI[] = [
       value: String(c?.jours_par_cycle ?? 30),
       unit: "jours / 5 ans",
     }),
-    puces: c => [
-      `${c?.jours_par_cycle ?? 30} jours payés par cycle de 5 ans`,
-      `Workers uniquement (basic ≤ ${(c?.basic_salary_max ?? 50000).toLocaleString("fr-FR")} MUR/mois)`,
-      "Migrant workers exclus",
-      "Si refus employeur : cash-in-lieu obligatoire",
+    puces: (c, locale) => [
+      t('rha.a.congesp.puce_VL_1', locale).replace('{n}', String(c?.jours_par_cycle ?? 30)),
+      t('rha.a.congesp.puce_VL_2', locale).replace('{amt}', (c?.basic_salary_max ?? 50000).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR')),
+      t('rha.a.congesp.puce_VL_3', locale),
+      t('rha.a.congesp.puce_VL_4', locale),
     ],
   },
   {
@@ -190,11 +192,11 @@ const TYPES_UI: TypeUI[] = [
       value: String(c?.jours_par_cycle ?? 10),
       unit: "jours / an",
     }),
-    puces: c => [
-      `${c?.jours_par_cycle ?? 10} j/an pour parent/enfant/grand-parent malade`,
-      `Workers uniquement (basic ≤ ${(c?.basic_salary_max ?? 50000).toLocaleString("fr-FR")} MUR/mois)`,
-      `Déductible au choix de ${(c?.deductible_de?.length ? c.deductible_de.join(", ") : "AL, SL ou VL")}`,
-      "Certificat médical + lien de parenté requis",
+    puces: (c, locale) => [
+      t('rha.a.congesp.puce_FML_1', locale).replace('{n}', String(c?.jours_par_cycle ?? 10)),
+      t('rha.a.congesp.puce_FML_2', locale).replace('{amt}', (c?.basic_salary_max ?? 50000).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR')),
+      t('rha.a.congesp.puce_FML_3', locale).replace('{types}', c?.deductible_de?.length ? c.deductible_de.join(", ") : t('rha.a.congesp.fml_default_types', locale)),
+      t('rha.a.congesp.puce_FML_4', locale),
     ],
   },
   {
@@ -209,13 +211,13 @@ const TYPES_UI: TypeUI[] = [
       const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 16
       return { value: String(weeks), unit: "semaines" }
     },
-    puces: c => {
+    puces: (c, locale) => {
       const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 16
       return [
-        `${weeks} semaines après ${c?.anciennete_min_mois ?? 12} mois de service`,
-        `${weeks + 2} semaines si naissance multiple / prématurée`,
-        "Allocation 3 000 MUR (forfait non-imposable)",
-        "Protection absolue contre le licenciement (S.64)",
+        t('rha.a.congesp.puce_MAT_1', locale).replace('{n}', String(weeks)).replace('{m}', String(c?.anciennete_min_mois ?? 12)),
+        t('rha.a.congesp.puce_MAT_2', locale).replace('{n}', String(weeks + 2)),
+        t('rha.a.congesp.puce_MAT_3', locale),
+        t('rha.a.congesp.puce_MAT_4', locale),
       ]
     },
   },
@@ -230,12 +232,12 @@ const TYPES_UI: TypeUI[] = [
       const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 4
       return { value: String(weeks), unit: "semaines" }
     },
-    puces: c => {
+    puces: (c, locale) => {
       const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 4
       return [
-        `${weeks} semaines consécutives (FMPA 2024)`,
-        `Payé si ≥ ${c?.anciennete_min_mois ?? 12} mois service`,
-        `Non payé si < ${c?.anciennete_min_mois ?? 12} mois`,
+        t('rha.a.congesp.puce_PAT_1', locale).replace('{n}', String(weeks)),
+        t('rha.a.congesp.puce_PAT_2', locale).replace('{m}', String(c?.anciennete_min_mois ?? 12)),
+        t('rha.a.congesp.puce_PAT_3', locale).replace('{m}', String(c?.anciennete_min_mois ?? 12)),
       ]
     },
   },
@@ -247,11 +249,11 @@ const TYPES_UI: TypeUI[] = [
     icon: Heart,
     tone: TONES.amber,
     formatValue: () => ({ value: "Variable", unit: "selon événement" }),
-    puces: () => [
-      "Mariage salarié : 6 jours (une fois carrière)",
-      "Mariage enfant : 3 jours",
-      "Décès famille proche : 3 jours",
-      "Après 12 mois, justificatifs requis",
+    puces: (_c, locale) => [
+      t('rha.a.congesp.puce_SPECIAL_1', locale),
+      t('rha.a.congesp.puce_SPECIAL_2', locale),
+      t('rha.a.congesp.puce_SPECIAL_3', locale),
+      t('rha.a.congesp.puce_SPECIAL_4', locale),
     ],
   },
   {
@@ -262,10 +264,10 @@ const TYPES_UI: TypeUI[] = [
     icon: Gavel,
     tone: TONES.gray,
     formatValue: () => ({ value: "Variable", unit: "durée du service" }),
-    puces: () => [
-      "Tous les salariés (pas de seuil)",
-      "Durée service juré (Courts Act 1945)",
-      "Payé intégralement",
+    puces: (_c, locale) => [
+      t('rha.a.congesp.puce_JUR_1', locale),
+      t('rha.a.congesp.puce_JUR_2', locale),
+      t('rha.a.congesp.puce_JUR_3', locale),
     ],
   },
   {
@@ -276,10 +278,10 @@ const TYPES_UI: TypeUI[] = [
     icon: Trophy,
     tone: TONES.indigo,
     formatValue: () => ({ value: "Variable", unit: "durée de l'événement" }),
-    puces: () => [
-      "Tous les salariés",
-      "Durée de l'événement international",
-      "Documentation officielle requise",
+    puces: (_c, locale) => [
+      t('rha.a.congesp.puce_INT_1', locale),
+      t('rha.a.congesp.puce_INT_2', locale),
+      t('rha.a.congesp.puce_INT_3', locale),
     ],
   },
   {
@@ -290,10 +292,10 @@ const TYPES_UI: TypeUI[] = [
     icon: Scale,
     tone: TONES.slate,
     formatValue: () => ({ value: "Variable", unit: "temps nécessaire" }),
-    puces: () => [
-      "Tous les salariés",
-      "Temps nécessaire à la démarche judiciaire",
-      "Payé intégralement",
+    puces: (_c, locale) => [
+      t('rha.a.congesp.puce_CRT_1', locale),
+      t('rha.a.congesp.puce_CRT_2', locale),
+      t('rha.a.congesp.puce_CRT_3', locale),
     ],
   },
 ]
@@ -314,7 +316,7 @@ export default function CongesParametresPage() {
       const data = await res.json()
       setRegles((data?.regles as Record<string, ConfigConge>) || {})
     } catch (e: any) {
-      setError(e?.message || "Impossible de charger les règles")
+      setError(e?.message || t('rha.a.congesp.err_load', locale))
       setRegles({})
     } finally {
       setLoading(false)
@@ -453,7 +455,7 @@ export default function CongesParametresPage() {
                       <span className="text-sm text-gray-500">{localizedUnit}</span>
                     </div>
                     <ul className="space-y-1.5 text-xs text-gray-700">
-                      {tx.puces(cfg).map((p, i) => (
+                      {tx.puces(cfg, locale).map((p, i) => (
                         <li key={i} className="flex items-start gap-2">
                           <CheckCircle2
                             className={`h-3 w-3 mt-0.5 shrink-0 ${tx.tone.accent}`}
