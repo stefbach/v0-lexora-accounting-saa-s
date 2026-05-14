@@ -75,6 +75,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  // Résout le rôle de l'utilisateur dans la société active (pour propagation à n8n)
+  const admin = getAdminClient()
+  const { data: usRow } = await admin
+    .from('user_societes')
+    .select('role')
+    .eq('user_id', ctx.user_id)
+    .eq('societe_id', ctx.current_societe_id)
+    .maybeSingle()
+  const role = usRow?.role || 'employe'
+
   // --- Forward to n8n AI Agent webhook -----------------------------------------
   const N8N_AGENT_WEBHOOK = process.env.N8N_TELEGRAM_AGENT_WEBHOOK
   if (!N8N_AGENT_WEBHOOK) {
@@ -90,6 +100,7 @@ export async function POST(req: NextRequest) {
         chat_id: chatId,
         user_id: ctx.user_id,
         societe_id: ctx.current_societe_id,
+        role,
         locale: ctx.language_code,
         first_name: ctx.telegram_firstname,
         message: update.message || update.callback_query,

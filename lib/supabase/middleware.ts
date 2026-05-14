@@ -86,8 +86,13 @@ export async function updateSession(request: NextRequest) {
     '/api/telegram/log',
     '/api/telegram/memory',
   ]
+  // Internal Telegram tool endpoints — all auth via X-Internal-Token
+  const publicApiInternalPrefixes = [
+    '/api/telegram/internal/',
+  ]
   const isPublicApi =
     publicApiPrefixes.some((p) => pathname.startsWith(p)) ||
+    publicApiInternalPrefixes.some((p) => pathname.startsWith(p)) ||
     publicApiExact.includes(pathname)
 
   const isPublicRoute = publicRoutes.some(

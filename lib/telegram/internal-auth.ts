@@ -1,0 +1,189 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getAdminClient } from '@/lib/supabase/admin'
+
+/**
+ * Auth pour les endpoints /api/telegram/internal/*.
+ *
+ * Sécurité multi-couches :
+ * 1. Header X-Internal-Token === process.env.INTERNAL_API_TOKEN
+ * 2. chat_id passé en query ou body → résolu en user_id + role + societe_id
+ *    via la table telegram_users + user_societes
+ * 3. Le role retourné est utilisé par chaque endpoint pour vérifier la permission
+ *
+ * Returns { ctx } if OK, throws Response otherwise.
+ */
+export type TelegramContext = {
+  chat_id: number
+  user_id: string
+  societe_id: string
+  role: TelegramRole
+  language_code: 'fr' | 'en'
+  telegram_firstname: string | null
+  employe_id: string | null   // si l'user est un employé de la société
+  manager_employes: string[]  // si manager : liste des employe_id sous sa responsabilité
+}
+
+export type TelegramRole =
+  | 'employe'
+  | 'manager'
+  | 'rh'
+  | 'comptable'
+  | 'comptable_dedie'
+  | 'direction'
+  | 'client_admin'
+  | 'admin'
+  | 'super_admin'
+
+/** Hierarchie de permissions */
+export const ROLE_LEVEL: Record<TelegramRole, number> = {
+  employe: 10,
+  manager: 30,
+  rh: 50,
+  comptable: 50,
+  comptable_dedie: 50,
+  direction: 70,
+  client_admin: 70,
+  admin: 90,
+  super_admin: 100,
+}
+
+export function hasRole(ctx: TelegramContext, min: TelegramRole): boolean {
+  return ROLE_LEVEL[ctx.role] >= ROLE_LEVEL[min]
+}
+
+export async function resolveTelegramContext(req: NextRequest): Promise<TelegramContext> {
+  const internalToken = req.headers.get('x-internal-token')
+  if (!internalToken || internalToken !== process.env.INTERNAL_API_TOKEN) {
+    throw NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // chat_id peut être dans query string ou body
+  let chatIdRaw = req.nextUrl.searchParams.get('chat_id')
+  if (!chatIdRaw && req.method !== 'GET') {
+    try {
+      const body = await req.clone().json()
+      chatIdRaw = body?.chat_id ?? null
+    } catch {}
+  }
+  if (!chatIdRaw) {
+    throw NextResponse.json({ error: 'chat_id requis' }, { status: 400 })
+  }
+  const chatId = Number(chatIdRaw)
+  if (Number.isNaN(chatId)) {
+    throw NextResponse.json({ error: 'chat_id invalide' }, { status: 400 })
+  }
+
+  const admin = getAdminClient()
+  const { data: tgUser, error: e1 } = await admin
+    .from('telegram_users')
+    .select('chat_id, user_id, current_societe_id, telegram_firstname, language_code, verified')
+    .eq('chat_id', chatId)
+    .eq('verified', true)
+    .maybeSingle()
+  if (e1) throw NextResponse.json({ error: e1.message }, { status: 500 })
+  if (!tgUser) throw NextResponse.json({ error: 'Chat non vérifié' }, { status: 401 })
+  if (!tgUser.current_societe_id) {
+    throw NextResponse.json({ error: 'Aucune société active' }, { status: 400 })
+  }
+
+  // Récupère le rôle dans la société active
+  const { data: us } = await admin
+    .from('user_societes')
+    .select('role')
+    .eq('user_id', tgUser.user_id)
+    .eq('societe_id', tgUser.current_societe_id)
+    .maybeSingle()
+  const role = (us?.role || 'employe') as TelegramRole
+
+  // Si employé, on récupère son employe_id
+  let employe_id: string | null = null
+  if (role === 'employe' || role === 'manager') {
+    const { data: emp } = await admin
+      .from('employes')
+      .select('id')
+      .eq('societe_id', tgUser.current_societe_id)
+      .eq('user_id', tgUser.user_id)
+      .maybeSingle()
+    employe_id = emp?.id || null
+  }
+
+  // Si manager, on récupère la liste de ses subordonnés
+  let manager_employes: string[] = []
+  if (role === 'manager' && employe_id) {
+    const { data: subs } = await admin
+      .from('employes')
+      .select('id')
+      .eq('societe_id', tgUser.current_societe_id)
+      .eq('manager_id', employe_id)
+    manager_employes = (subs || []).map((s: any) => s.id)
+  }
+
+  return {
+    chat_id: chatId,
+    user_id: tgUser.user_id,
+    societe_id: tgUser.current_societe_id,
+    role,
+    language_code: (tgUser.language_code as 'fr' | 'en') || 'fr',
+    telegram_firstname: tgUser.telegram_firstname,
+    employe_id,
+    manager_employes,
+  }
+}
+
+/**
+ * Wrapper de handler : injecte le context Telegram + role, et log l'action
+ * automatiquement (telegram_actions). Renvoie un middleware-style runner.
+ */
+export async function withTelegramAuth(
+  req: NextRequest,
+  intent: string,
+  handler: (ctx: TelegramContext, body: any) => Promise<{ result: any; status?: 'success' | 'denied' | 'error'; error_msg?: string }>,
+): Promise<NextResponse> {
+  let ctx: TelegramContext
+  try {
+    ctx = await resolveTelegramContext(req)
+  } catch (resp: any) {
+    return resp instanceof Response ? (resp as NextResponse) : NextResponse.json({ error: 'Auth error' }, { status: 500 })
+  }
+
+  let body: any = null
+  if (req.method !== 'GET') {
+    try { body = await req.clone().json() } catch {}
+  }
+
+  const t0 = Date.now()
+  const admin = getAdminClient()
+  let status: 'success' | 'denied' | 'error' = 'success'
+  let result: any = null
+  let error_msg: string | undefined
+
+  try {
+    const out = await handler(ctx, body)
+    result = out.result
+    status = out.status || 'success'
+    error_msg = out.error_msg
+  } catch (e: any) {
+    status = 'error'
+    error_msg = e?.message || String(e)
+    result = null
+  }
+
+  const duration_ms = Date.now() - t0
+
+  // Audit log (best-effort, non-blocking)
+  admin.from('telegram_actions').insert({
+    chat_id: ctx.chat_id,
+    user_id: ctx.user_id,
+    societe_id: ctx.societe_id,
+    intent,
+    payload: body,
+    result,
+    status,
+    error_msg,
+    duration_ms,
+  }).then(() => {}, () => {})
+
+  if (status === 'error') return NextResponse.json({ error: error_msg }, { status: 500 })
+  if (status === 'denied') return NextResponse.json({ error: error_msg || 'Permission refusée' }, { status: 403 })
+  return NextResponse.json(result)
+}
