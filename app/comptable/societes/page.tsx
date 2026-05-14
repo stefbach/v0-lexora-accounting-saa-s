@@ -146,7 +146,7 @@ export default function ComptableSocietesPage() {
 
   const handleCreate = async () => {
     setError(null)
-    if (!formNom) { setError("Le nom de la société est requis."); return }
+    if (!formNom) { setError(t('cab.societes.err_name_required', locale)); return }
 
     setCreating(true)
     try {
@@ -170,7 +170,7 @@ export default function ComptableSocietesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || "Erreur lors de la création"); return }
+      if (!res.ok) { setError(data.error || t('cab.societes.err_create', locale)); return }
 
       const newSocieteId = data.societe?.id
 
@@ -191,10 +191,10 @@ export default function ComptableSocietesPage() {
         )
       }
 
-      setSuccess(`Société ${formNom} créée avec succès !`)
+      setSuccess(`${t('cab.societes.success_created_pre', locale)} ${formNom} ${t('cab.societes.success_created_post', locale)}`)
       resetForm(); setDialogOpen(false); fetchData()
     } catch {
-      setError("Erreur de connexion au serveur")
+      setError(t('cab.societes.err_connection', locale))
     } finally {
       setCreating(false)
     }
@@ -202,7 +202,7 @@ export default function ComptableSocietesPage() {
 
   const handleLinkClient = async () => {
     setLinkError(null)
-    if (!linkClientId || !linkSocieteId) { setLinkError("Veuillez sélectionner un client."); return }
+    if (!linkClientId || !linkSocieteId) { setLinkError(t('cab.societes.err_select_client', locale)); return }
 
     setLinking(true)
     try {
