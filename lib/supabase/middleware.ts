@@ -66,6 +66,10 @@ export async function updateSession(request: NextRequest) {
   //   /api/contact   → formulaire de support (lead-capture)
   //   /api/auth/*    → callbacks / endpoints Supabase auth
   //   /api/health    → probes infrastructure (liveness / readiness)
+  //   /api/telegram/webhook       → reçu de Telegram (auth via X-Telegram-Bot-Api-Secret-Token)
+  //   /api/telegram/send          → server-side internal (X-Internal-Token)
+  //   /api/telegram/societe       → server-side internal (X-Internal-Token)
+  //   /api/telegram/cron-alerts   → cron (X-Internal-Token)
   const publicApiPrefixes = [
     '/api/cron/',
     '/api/agent/',
@@ -75,6 +79,10 @@ export async function updateSession(request: NextRequest) {
   const publicApiExact = [
     '/api/contact',
     '/api/health',
+    '/api/telegram/webhook',
+    '/api/telegram/send',
+    '/api/telegram/societe',
+    '/api/telegram/cron-alerts',
   ]
   const isPublicApi =
     publicApiPrefixes.some((p) => pathname.startsWith(p)) ||
