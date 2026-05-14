@@ -46,14 +46,14 @@ type Role = "expert" | "entreprise" | "unknown"
 
 type Needs = Record<string, boolean>
 
-const MODULES: { key: string; label: string; icon: LucideIcon; accent: "blue" | "gold" | "green" }[] = [
-  { key: "ocr",       label: "OCR & Documents IA",       icon: FileSearch,  accent: "blue" },
-  { key: "compta",    label: "Comptabilité",             icon: BookOpen,    accent: "gold" },
-  { key: "facturation", label: "Facturation MRA",        icon: FileText,    accent: "blue" },
-  { key: "rh",        label: "RH & Paie",                icon: Users,       accent: "gold" },
-  { key: "juridique", label: "Juridique & Contrats",     icon: Scale,       accent: "blue" },
-  { key: "fiscal",    label: "Fiscal MRA",               icon: Landmark,    accent: "gold" },
-  { key: "sante",     label: "TIBOK · Santé salariés",   icon: HeartPulse,  accent: "green" },
+const buildModules = (locale: Locale): { key: string; label: string; icon: LucideIcon; accent: "blue" | "gold" | "green" }[] => [
+  { key: "ocr",       label: t('adm.inscription.mod_ocr', locale),         icon: FileSearch,  accent: "blue" },
+  { key: "compta",    label: t('adm.inscription.mod_compta', locale),      icon: BookOpen,    accent: "gold" },
+  { key: "facturation", label: t('adm.inscription.mod_facturation', locale), icon: FileText,    accent: "blue" },
+  { key: "rh",        label: t('adm.inscription.mod_rh', locale),          icon: Users,       accent: "gold" },
+  { key: "juridique", label: t('adm.inscription.mod_juridique', locale),   icon: Scale,       accent: "blue" },
+  { key: "fiscal",    label: t('adm.inscription.mod_fiscal', locale),      icon: Landmark,    accent: "gold" },
+  { key: "sante",     label: t('adm.inscription.mod_sante', locale),       icon: HeartPulse,  accent: "green" },
 ]
 
 const ACCENTS = {
@@ -65,6 +65,8 @@ const ACCENTS = {
 const FONT = "'Poppins', sans-serif"
 
 function InscriptionPageInner() {
+  const locale = getLocale()
+  const MODULES = buildModules(locale)
   const prefersReducedMotion = useReducedMotion()
   const params = useSearchParams()
   const roleParam = params?.get("role") ?? null
@@ -111,7 +113,7 @@ function InscriptionPageInner() {
     e.preventDefault()
     setError(null)
     if (!firstName || !email || !agree) {
-      setError("Prénom, e-mail et consentement sont obligatoires.")
+      setError(t('adm.inscription.req_required', locale))
       return
     }
     setSending(true)
@@ -157,12 +159,12 @@ function InscriptionPageInner() {
         }
       )
       if (!res.ok) {
-        setError("Erreur lors de l'envoi. Veuillez réessayer.")
+        setError(t('adm.inscription.err_send', locale))
         return
       }
       setSent(true)
     } catch {
-      setError("Erreur de connexion. Veuillez réessayer.")
+      setError(t('adm.inscription.err_connection', locale))
     } finally {
       setSending(false)
     }
@@ -213,7 +215,7 @@ function InscriptionPageInner() {
             }}
           >
             <ArrowLeft size={14} aria-hidden="true" />
-            Retour
+            {t('adm.inscription.back', locale)}
           </Link>
         </div>
       </header>

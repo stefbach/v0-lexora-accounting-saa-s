@@ -663,12 +663,12 @@ export default function JuridiquePage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
               <Link2 className="w-5 h-5 text-[#D4AF37]" />
-              Lien de signature généré
+              {t('rha.b.jur.signature_link_title', locale)}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <p className="text-sm text-gray-600">
-              Envoyez ce lien à l'employé par email ou WhatsApp. Le lien est à usage unique et sera invalidé après signature.
+              {t('rha.b.jur.signature_link_intro', locale)}
             </p>
             <div className="flex gap-2">
               <input
@@ -681,7 +681,7 @@ export default function JuridiquePage() {
                 onClick={copierLien}
                 className="shrink-0 bg-[#0B0F2E] text-white hover:bg-[#0B0F2E]/80"
               >
-                {copied ? <><CheckCheck className="w-4 h-4 mr-1" />Copié</> : <><Copy className="w-4 h-4 mr-1" />Copier</>}
+                {copied ? <><CheckCheck className="w-4 h-4 mr-1" />{t('rha.b.jur.btn_copied', locale)}</> : <><Copy className="w-4 h-4 mr-1" />{t('rha.b.jur.btn_copy', locale)}</>}
               </Button>
             </div>
             {lienSignature?.whatsapp ? (
@@ -690,11 +690,11 @@ export default function JuridiquePage() {
               </div>
             ) : (
               <div className="text-sm p-3 bg-amber-50 text-amber-800 rounded-lg border border-amber-200">
-                ⚠️ Aucun téléphone enregistré — envoyez le lien manuellement.
+                {t('rha.b.jur.no_phone', locale)}
               </div>
             )}
             <div className="text-xs text-gray-400 p-3 bg-gray-50 rounded-lg">
-              ✅ Conforme Electronic Transactions Act 2000 — La signature enregistre l'IP, la date et l'heure de l'employé.
+              {t('rha.b.jur.compliance_eta', locale)}
             </div>
           </div>
         </DialogContent>
@@ -716,12 +716,12 @@ export default function JuridiquePage() {
         <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>
-              Contrat — {viewContrat?.employe?.prenom} {viewContrat?.employe?.nom}
+              {t('rha.b.jur.contract_for', locale)} {viewContrat?.employe?.prenom} {viewContrat?.employe?.nom}
               <StatutBadge statut={viewContrat?.statut ?? "brouillon"} />
             </DialogTitle>
           </DialogHeader>
           <div className="flex items-center gap-2 flex-wrap border-b pb-3">
-            <span className="text-sm text-gray-500">Changer statut :</span>
+            <span className="text-sm text-gray-500">{t('rha.b.jur.change_status', locale)}</span>
             {Object.entries(STATUT_LABELS).map(([v, l]) => (
               <Button
                 key={v}

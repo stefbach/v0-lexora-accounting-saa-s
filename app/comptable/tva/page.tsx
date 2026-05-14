@@ -453,12 +453,12 @@ export default function TVAPage() {
                             className="text-xs h-6 px-2"
                             onClick={() => handleDeclarer(r)}
                           >
-                            Marquer déclaré
+                            {t('cab.tva.mark_declared', locale)}
                           </Button>
                         )}
                         {r.statut_declaration === 'declare' && (
                           <span className="text-xs text-gray-400">
-                            {r.date_soumission ? `Déclaré le ${new Date(r.date_soumission).toLocaleDateString("fr-FR")}` : "Déclaré"}
+                            {r.date_soumission ? `${t('cab.tva.declared_on', locale)} ${new Date(r.date_soumission).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}` : t('cab.tva.status_declared', locale)}
                           </span>
                         )}
                       </TableCell>
@@ -467,7 +467,7 @@ export default function TVAPage() {
                 })}
                 {/* Total */}
                 <TableRow className="bg-gray-100 font-bold border-t-2">
-                  <TableCell colSpan={2}>TOTAL</TableCell>
+                  <TableCell colSpan={2}>{t('cab.tva.total', locale)}</TableCell>
                   <TableCell className="text-right font-mono text-red-600">{fmt(totaux.collectee)}</TableCell>
                   <TableCell className="text-right font-mono text-green-600">{fmt(totaux.deductible)}</TableCell>
                   <TableCell className={`text-right font-mono font-bold ${totaux.nette >= 0 ? "text-red-600" : "text-green-600"}`}>
