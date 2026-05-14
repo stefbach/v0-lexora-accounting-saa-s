@@ -21,6 +21,7 @@ import {
   Pencil, Save, ChevronDown, ChevronUp,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -60,21 +61,21 @@ interface SocieteWithClients {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const MODULE_LABELS: Record<keyof ModulesConfig, string> = {
-  comptabilite: "Comptabilite",
-  rh: "RH & Paie",
-  juridique: "Juridique",
-  facturation: "Facturation",
-  documents: "Documents OCR",
-}
+const moduleLabels = (locale: Locale): Record<keyof ModulesConfig, string> => ({
+  comptabilite: t('adm.services.mod_comptabilite', locale),
+  rh: t('adm.services.mod_rh', locale),
+  juridique: t('adm.services.mod_juridique', locale),
+  facturation: t('adm.services.mod_facturation', locale),
+  documents: t('adm.services.mod_documents', locale),
+})
 
-const MODULE_DETAILS: Record<keyof ModulesConfig, string> = {
-  comptabilite: "Documents OCR, Banque, Rapprochement, Grand Livre, Bilan, Factures, TVA",
-  rh: "Employes, Pointage, Conges, Paie, Exports MRA",
-  juridique: "Contrats, Documents legaux",
-  facturation: "Creation et gestion de factures",
-  documents: "Telechargement et OCR de documents",
-}
+const moduleDetails = (locale: Locale): Record<keyof ModulesConfig, string> => ({
+  comptabilite: t('adm.services.mod_comptabilite_desc', locale),
+  rh: t('adm.services.mod_rh_desc', locale),
+  juridique: t('adm.services.mod_juridique_desc', locale),
+  facturation: t('adm.services.mod_facturation_desc', locale),
+  documents: t('adm.services.mod_documents_desc', locale),
+})
 
 const PLAN_COLORS: Record<string, string> = {
   premium: "#D4AF37",
@@ -97,6 +98,9 @@ const DEFAULT_MODULES: ModulesConfig = {
 /* ------------------------------------------------------------------ */
 
 export default function AdminServicesPage() {
+  const locale = getLocale()
+  const MODULE_LABELS = moduleLabels(locale)
+  const MODULE_DETAILS = moduleDetails(locale)
   const [loading, setLoading] = useState(true)
   const [plans, setPlans] = useState<ServicePlan[]>([])
   const [societes, setSocietes] = useState<SocieteWithClients[]>([])
@@ -134,11 +138,11 @@ export default function AdminServicesPage() {
     try {
       const res = await fetch("/api/admin/services")
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur")
+      if (!res.ok) throw new Error(data.error || t('adm.services.error', locale))
       setPlans(data.plans || [])
       setSocietes(data.societes || [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur de chargement")
+      setError(err instanceof Error ? err.message : t('adm.services.load_err', locale))
     } finally {
       setLoading(false)
     }
@@ -173,13 +177,13 @@ export default function AdminServicesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur")
-      setSuccess(`Plan "${editingPlan.nom}" mis a jour`)
+      if (!res.ok) throw new Error(data.error || t('adm.services.error', locale))
+      setSuccess(t('adm.services.plan_updated', locale).replace('{name}', editingPlan.nom))
       setEditPlanDialog(false)
       setEditingPlan(null)
       fetchData()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur")
+      setError(err instanceof Error ? err.message : t('adm.services.error', locale))
     } finally {
       setSavingPlan(false)
     }
@@ -208,13 +212,13 @@ export default function AdminServicesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur")
-      setSuccess(`Plan attribue a "${assignSociete.nom}"`)
+      if (!res.ok) throw new Error(data.error || t('adm.services.error', locale))
+      setSuccess(t('adm.services.plan_assigned', locale).replace('{name}', assignSociete.nom))
       setAssignDialog(false)
       setAssignSociete(null)
       fetchData()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur")
+      setError(err instanceof Error ? err.message : t('adm.services.error', locale))
     } finally {
       setAssignSaving(false)
     }
@@ -243,13 +247,13 @@ export default function AdminServicesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur")
-      setSuccess(`Modules personnalises pour "${customSociete.nom}"`)
+      if (!res.ok) throw new Error(data.error || t('adm.services.error', locale))
+      setSuccess(t('adm.services.custom_saved', locale).replace('{name}', customSociete.nom))
       setCustomDialog(false)
       setCustomSociete(null)
       fetchData()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur")
+      setError(err instanceof Error ? err.message : t('adm.services.error', locale))
     } finally {
       setCustomSaving(false)
     }
@@ -266,7 +270,7 @@ export default function AdminServicesPage() {
   const noPlanCount = societes.filter(s => !s.plan_code || !plans.some(p => p.code === s.plan_code) && s.plan_code !== "custom").length
 
   const getPlanBadge = (code: string | null) => {
-    if (!code) return <Badge variant="outline" className="text-xs">Non defini</Badge>
+    if (!code) return <Badge variant="outline" className="text-xs">{t('adm.services.plan_undefined', locale)}</Badge>
     const plan = plans.find(p => p.code === code)
     const color = PLAN_COLORS[code] || "#6b7280"
     return (
@@ -274,7 +278,7 @@ export default function AdminServicesPage() {
         className="text-xs text-white"
         style={{ backgroundColor: color }}
       >
-        {plan?.nom || (code === "custom" ? "Personnalise" : code)}
+        {plan?.nom || (code === "custom" ? t('adm.services.plan_custom', locale) : code)}
       </Badge>
     )
   }
@@ -286,8 +290,8 @@ export default function AdminServicesPage() {
     return (
       <div className="p-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Services & Plans</h1>
-          <p className="text-muted-foreground mt-1">Chargement...</p>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('adm.services.title', locale)}</h1>
+          <p className="text-muted-foreground mt-1">{t('adm.services.loading', locale)}</p>
         </div>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#0B0F2E" }} />
@@ -304,9 +308,9 @@ export default function AdminServicesPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Services & Plans</h1>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('adm.services.title', locale)}</h1>
         <p className="text-muted-foreground mt-1">
-          Gestion des plans de service et attribution aux societes
+          {t('adm.services.subtitle', locale)}
         </p>
       </div>
 
@@ -333,7 +337,7 @@ export default function AdminServicesPage() {
           >
             <div className="flex items-center gap-2">
               <Settings className="h-5 w-5" style={{ color: "#D4AF37" }} />
-              <CardTitle style={{ color: "#0B0F2E" }}>Plans disponibles</CardTitle>
+              <CardTitle style={{ color: "#0B0F2E" }}>{t('adm.services.section_plans', locale)}</CardTitle>
             </div>
             {section1Open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </button>
@@ -356,7 +360,7 @@ export default function AdminServicesPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => openEditPlan(plan)}
-                          title="Modifier le plan"
+                          title={t('adm.services.edit_plan_tooltip', locale)}
                         >
                           <Pencil className="h-3.5 w-3.5" style={{ color: "#D4AF37" }} />
                         </Button>
@@ -380,13 +384,13 @@ export default function AdminServicesPage() {
                       </div>
                       <div className="pt-2 border-t">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">Prix mensuel</span>
+                          <span className="text-xs text-muted-foreground">{t('adm.services.monthly_price', locale)}</span>
                           <span className="font-semibold text-sm" style={{ color: "#0B0F2E" }}>
-                            {plan.prix_mensuel > 0 ? `Rs ${Number(plan.prix_mensuel).toLocaleString("fr-FR")}` : "Sur devis"}
+                            {plan.prix_mensuel > 0 ? `Rs ${Number(plan.prix_mensuel).toLocaleString(locale === 'fr' ? "fr-FR" : "en-GB")}` : t('adm.services.on_quote', locale)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs text-muted-foreground">Societes</span>
+                          <span className="text-xs text-muted-foreground">{t('adm.services.societes', locale)}</span>
                           <Badge variant="outline" className="text-xs">
                             {planStats.find(p => p.id === plan.id)?.count || 0}
                           </Badge>
@@ -412,10 +416,10 @@ export default function AdminServicesPage() {
           >
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5" style={{ color: "#D4AF37" }} />
-              <CardTitle style={{ color: "#0B0F2E" }}>Attribution par societe</CardTitle>
+              <CardTitle style={{ color: "#0B0F2E" }}>{t('adm.services.section_assign', locale)}</CardTitle>
             </div>
             <div className="flex items-center gap-2">
-              <CardDescription>{societes.length} societe(s)</CardDescription>
+              <CardDescription>{societes.length} {t('adm.services.societe_suffix', locale)}</CardDescription>
               {section2Open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
             </div>
           </button>
@@ -425,13 +429,13 @@ export default function AdminServicesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Societe</TableHead>
-                  <TableHead>BRN</TableHead>
-                  <TableHead>Client(s)</TableHead>
-                  <TableHead>Plan actuel</TableHead>
-                  <TableHead>Modules actifs</TableHead>
-                  <TableHead>Date creation</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t('adm.services.col_societe', locale)}</TableHead>
+                  <TableHead>{t('adm.services.col_brn', locale)}</TableHead>
+                  <TableHead>{t('adm.services.col_clients', locale)}</TableHead>
+                  <TableHead>{t('adm.services.col_current_plan', locale)}</TableHead>
+                  <TableHead>{t('adm.services.col_active_modules', locale)}</TableHead>
+                  <TableHead>{t('adm.services.col_created', locale)}</TableHead>
+                  <TableHead className="text-right">{t('adm.services.col_actions', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -450,16 +454,16 @@ export default function AdminServicesPage() {
                                   {c.full_name}
                                 </Badge>
                               ))
-                            : <span className="text-xs text-muted-foreground">Aucun</span>
+                            : <span className="text-xs text-muted-foreground">{t('adm.services.none', locale)}</span>
                           }
                         </div>
                       </TableCell>
                       <TableCell>{getPlanBadge(soc.plan_code)}</TableCell>
                       <TableCell>
-                        <span className="text-xs text-muted-foreground">{activeCount}/5 modules</span>
+                        <span className="text-xs text-muted-foreground">{t('adm.services.modules_count', locale).replace('{n}', String(activeCount))}</span>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {new Date(soc.created_at).toLocaleDateString("fr-FR")}
+                        {new Date(soc.created_at).toLocaleDateString(locale === 'fr' ? "fr-FR" : "en-GB")}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -469,7 +473,7 @@ export default function AdminServicesPage() {
                             className="text-xs"
                             onClick={() => openAssignDialog(soc)}
                           >
-                            Changer de plan
+                            {t('adm.services.change_plan', locale)}
                           </Button>
                           <Button
                             variant="ghost"
@@ -478,7 +482,7 @@ export default function AdminServicesPage() {
                             style={{ color: "#D4AF37" }}
                             onClick={() => openCustomDialog(soc)}
                           >
-                            Personnaliser
+                            {t('adm.services.customize', locale)}
                           </Button>
                         </div>
                       </TableCell>
@@ -488,7 +492,7 @@ export default function AdminServicesPage() {
                 {societes.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      Aucune societe enregistree.
+                      {t('adm.services.no_societe', locale)}
                     </TableCell>
                   </TableRow>
                 )}
@@ -509,7 +513,7 @@ export default function AdminServicesPage() {
           >
             <div className="flex items-center gap-2">
               <CreditCard className="h-5 w-5" style={{ color: "#D4AF37" }} />
-              <CardTitle style={{ color: "#0B0F2E" }}>Statistiques</CardTitle>
+              <CardTitle style={{ color: "#0B0F2E" }}>{t('adm.services.section_stats', locale)}</CardTitle>
             </div>
             {section3Open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </button>
@@ -522,7 +526,7 @@ export default function AdminServicesPage() {
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4" style={{ color: "#D4AF37" }} />
-                    <CardTitle className="text-sm">Societes par plan</CardTitle>
+                    <CardTitle className="text-sm">{t('adm.services.stats_societes_by_plan', locale)}</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -533,7 +537,7 @@ export default function AdminServicesPage() {
                       <div key={ps.id} className="space-y-1">
                         <div className="flex items-center justify-between text-sm">
                           <span style={{ color: "#0B0F2E" }}>{ps.nom}</span>
-                          <span className="font-medium">{ps.count} societe(s)</span>
+                          <span className="font-medium">{ps.count} {t('adm.services.societe_suffix', locale)}</span>
                         </div>
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                           <div
@@ -547,8 +551,8 @@ export default function AdminServicesPage() {
                   {customCount > 0 && (
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span style={{ color: "#0B0F2E" }}>Personnalise</span>
-                        <span className="font-medium">{customCount} societe(s)</span>
+                        <span style={{ color: "#0B0F2E" }}>{t('adm.services.plan_custom', locale)}</span>
+                        <span className="font-medium">{customCount} {t('adm.services.societe_suffix', locale)}</span>
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div
@@ -561,8 +565,8 @@ export default function AdminServicesPage() {
                   {noPlanCount > 0 && (
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Non defini</span>
-                        <span className="font-medium">{noPlanCount} societe(s)</span>
+                        <span className="text-muted-foreground">{t('adm.services.plan_undefined', locale)}</span>
+                        <span className="font-medium">{noPlanCount} {t('adm.services.societe_suffix', locale)}</span>
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div
@@ -580,7 +584,7 @@ export default function AdminServicesPage() {
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <CreditCard className="h-4 w-4" style={{ color: "#D4AF37" }} />
-                    <CardTitle className="text-sm">Revenue estimatif par plan</CardTitle>
+                    <CardTitle className="text-sm">{t('adm.services.stats_revenue', locale)}</CardTitle>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">

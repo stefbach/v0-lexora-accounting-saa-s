@@ -215,11 +215,11 @@ export default function DeclarationsMraPage() {
 
         {/* Sélection période */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Période</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t('rha.b.decmra.section_period', locale)}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-5 gap-3">
               <div>
-                <Label>Société</Label>
+                <Label>{t('rha.b.decmra.lbl_societe', locale)}</Label>
                 <Select value={societeId} onValueChange={setSocieteId}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -228,7 +228,7 @@ export default function DeclarationsMraPage() {
                 </Select>
               </div>
               <div>
-                <Label>Année</Label>
+                <Label>{t('rha.b.decmra.lbl_year', locale)}</Label>
                 <Select value={String(annee)} onValueChange={v => setAnnee(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -238,7 +238,7 @@ export default function DeclarationsMraPage() {
                 </Select>
               </div>
               <div>
-                <Label>Mois</Label>
+                <Label>{t('rha.b.decmra.lbl_month', locale)}</Label>
                 <Select value={String(mois)} onValueChange={v => setMois(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -248,25 +248,25 @@ export default function DeclarationsMraPage() {
                 </Select>
               </div>
               <div>
-                <Label>ERN employeur</Label>
+                <Label>{t('rha.b.decmra.lbl_ern', locale)}</Label>
                 <Input value={ern} onChange={e => setErn(e.target.value)} placeholder="E12345678" />
               </div>
               <div className="flex items-end gap-2">
                 <Button onClick={handleCalculer} disabled={calculating || !societeId}
                   className="gap-2" style={{ backgroundColor: NAVY, color: 'white' }}>
                   {calculating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
-                  Calculer
+                  {t('rha.b.decmra.btn_calculate', locale)}
                 </Button>
               </div>
             </div>
             <div className="mt-3 text-xs text-slate-600 flex items-center gap-2">
               <AlertTriangle className="h-3 w-3 text-amber-600" />
               <span>
-                Période : <strong>{periodeLabel}</strong> · Deadline :
+                {t('rha.b.decmra.period_label', locale)} : <strong>{periodeLabel}</strong> · {t('rha.b.decmra.deadline', locale)} :
                 <strong> {deadline}</strong>
                 {joursRestants >= 0
-                  ? <span className="text-amber-700"> (dans {joursRestants} j)</span>
-                  : <span className="text-red-700"> (dépassée de {-joursRestants} j)</span>}
+                  ? <span className="text-amber-700"> ({t('rha.b.decmra.in_x_days', locale).replace('{n}', String(joursRestants))})</span>
+                  : <span className="text-red-700"> ({t('rha.b.decmra.overdue_x_days', locale).replace('{n}', String(-joursRestants))})</span>}
               </span>
             </div>
             {feedback && <div className="mt-3 text-sm px-3 py-2 rounded border bg-slate-50">{feedback}</div>}
@@ -278,41 +278,41 @@ export default function DeclarationsMraPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center justify-between">
-                <span>Récapitulatif — {periodeLabel}</span>
+                <span>{t('rha.b.decmra.recap_title', locale)} — {periodeLabel}</span>
                 <Button size="sm" variant="outline"
                   onClick={() => setShowDetails(v => !v)}>
-                  {showDetails ? 'Masquer détail' : 'Voir détail employés'}
+                  {showDetails ? t('rha.b.decmra.hide_detail', locale) : t('rha.b.decmra.show_detail', locale)}
                 </Button>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid md:grid-cols-3 gap-3">
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">Employés</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.decmra.kpi_employees', locale)}</div>
                   <div className="text-xl font-semibold" style={{ color: NAVY }}>{recap.nb_employes}</div>
                 </div>
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">Masse salariale</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.decmra.kpi_payroll', locale)}</div>
                   <div className="text-xl font-semibold" style={{ color: NAVY }}>
                     {formaterMUR(recap.masse_salariale)}
                   </div>
                 </div>
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">PRGF éligibles</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.decmra.kpi_prgf_eligible', locale)}</div>
                   <div className="text-xl font-semibold text-slate-700">{recap.nb_prgf_eligibles}</div>
                 </div>
               </div>
 
               <div className="border rounded p-3 space-y-1 font-mono text-xs">
-                <div className="flex justify-between"><span>PAYE (salarié)</span><span>{formaterMUR(recap.total_paye)}</span></div>
-                <div className="flex justify-between"><span>CSG salarié</span><span>{formaterMUR(recap.total_csg_salarie)}</span></div>
-                <div className="flex justify-between"><span>CSG patronal</span><span>{formaterMUR(recap.total_csg_patronal)}</span></div>
-                <div className="flex justify-between"><span>NSF salarié</span><span>{formaterMUR(recap.total_nsf_salarie)}</span></div>
-                <div className="flex justify-between"><span>NSF patronal</span><span>{formaterMUR(recap.total_nsf_patronal)}</span></div>
-                <div className="flex justify-between"><span>Training Levy</span><span>{formaterMUR(recap.total_training_levy)}</span></div>
-                <div className="flex justify-between"><span>PRGF ({recap.nb_prgf_eligibles} éligibles)</span><span>{formaterMUR(recap.total_prgf)}</span></div>
+                <div className="flex justify-between"><span>{t('rha.b.decmra.row_paye', locale)}</span><span>{formaterMUR(recap.total_paye)}</span></div>
+                <div className="flex justify-between"><span>{t('rha.b.decmra.row_csg_emp', locale)}</span><span>{formaterMUR(recap.total_csg_salarie)}</span></div>
+                <div className="flex justify-between"><span>{t('rha.b.decmra.row_csg_empr', locale)}</span><span>{formaterMUR(recap.total_csg_patronal)}</span></div>
+                <div className="flex justify-between"><span>{t('rha.b.decmra.row_nsf_emp', locale)}</span><span>{formaterMUR(recap.total_nsf_salarie)}</span></div>
+                <div className="flex justify-between"><span>{t('rha.b.decmra.row_nsf_empr', locale)}</span><span>{formaterMUR(recap.total_nsf_patronal)}</span></div>
+                <div className="flex justify-between"><span>{t('rha.b.decmra.row_levy', locale)}</span><span>{formaterMUR(recap.total_training_levy)}</span></div>
+                <div className="flex justify-between"><span>{t('rha.b.decmra.row_prgf_n_eligible', locale).replace('{n}', String(recap.nb_prgf_eligibles))}</span><span>{formaterMUR(recap.total_prgf)}</span></div>
                 <div className="flex justify-between pt-2 border-t-2 border-slate-800 font-sans">
-                  <span className="font-semibold">TOTAL À REMETTRE MRA</span>
+                  <span className="font-semibold">{t('rha.b.decmra.row_total_mra', locale)}</span>
                   <span className="font-bold text-lg" style={{ color: NAVY }}>
                     {formaterMUR(recap.total_a_remettre_mra)}
                   </span>
@@ -323,21 +323,21 @@ export default function DeclarationsMraPage() {
                 <Button size="sm" onClick={handleSauvegarder} disabled={saving || recap.nb_employes === 0}
                   className="gap-2" style={{ backgroundColor: NAVY, color: 'white' }}>
                   {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <BookOpenCheck className="h-3 w-3" />}
-                  Sauvegarder
+                  {t('rha.b.decmra.btn_save', locale)}
                 </Button>
                 {declsMois.paye && (
                   <>
                     <a href={`/api/rh/declarations-mra/${declsMois.paye.id}/csv-paye`}
                       target="_blank" rel="noreferrer">
                       <Button size="sm" variant="outline" className="gap-2">
-                        <FileDown className="h-3 w-3" /> CSV PAYE
+                        <FileDown className="h-3 w-3" /> {t('rha.b.decmra.btn_csv_paye', locale)}
                       </Button>
                     </a>
                     {declsMois.csg && (
                       <a href={`/api/rh/declarations-mra/${declsMois.csg.id}/csv-csg`}
                         target="_blank" rel="noreferrer">
                         <Button size="sm" variant="outline" className="gap-2">
-                          <FileDown className="h-3 w-3" /> CSV CSG/NSF/PRGF
+                          <FileDown className="h-3 w-3" /> {t('rha.b.decmra.btn_csv_csg', locale)}
                         </Button>
                       </a>
                     )}
@@ -346,7 +346,7 @@ export default function DeclarationsMraPage() {
                 {isAdmin && declsMois.paye && declsMois.csg && declsMois.csg.statut !== 'paye' && (
                   <Button size="sm" onClick={handleOuvrirPay}
                     className="gap-2" style={{ backgroundColor: GOLD, color: NAVY }}>
-                    <BanknoteArrowDown className="h-3 w-3" /> Marquer payé
+                    <BanknoteArrowDown className="h-3 w-3" /> {t('rha.b.decmra.btn_mark_paid', locale)}
                   </Button>
                 )}
               </div>
@@ -356,17 +356,17 @@ export default function DeclarationsMraPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employé</TableHead>
-                        <TableHead>NIC</TableHead>
-                        <TableHead className="text-right">Basic</TableHead>
-                        <TableHead className="text-right">OT</TableHead>
-                        <TableHead className="text-right">PAYE</TableHead>
-                        <TableHead className="text-right">CSG s</TableHead>
-                        <TableHead className="text-right">CSG p</TableHead>
-                        <TableHead className="text-right">NSF s</TableHead>
-                        <TableHead className="text-right">NSF p</TableHead>
-                        <TableHead className="text-right">HRDC</TableHead>
-                        <TableHead className="text-right">PRGF</TableHead>
+                        <TableHead>{t('rha.b.decmra.col_employee', locale)}</TableHead>
+                        <TableHead>{t('rha.b.decmra.col_nic', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.decmra.col_basic', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.decmra.col_ot', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.decmra.col_paye', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.decmra.col_csg_s', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.decmra.col_csg_p', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.decmra.col_nsf_s', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.decmra.col_nsf_p', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.decmra.col_hrdc', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.decmra.col_prgf', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -386,7 +386,7 @@ export default function DeclarationsMraPage() {
                             {d.prgf_eligible
                               ? formaterMUR(d.prgf)
                               : <span className="text-xs text-slate-500 italic">
-                                  {PRGF_EXEMPTION_LABELS[d.prgf_motif_exemption || ''] || 'exempt'}
+                                  {PRGF_EXEMPTION_LABELS[d.prgf_motif_exemption || ''] || t('rha.b.decmra.col_exempt', locale)}
                                 </span>}
                           </TableCell>
                         </TableRow>
@@ -402,20 +402,20 @@ export default function DeclarationsMraPage() {
         {/* Dialog paiement */}
         {showPayDialog && (
           <Card className="border-2" style={{ borderColor: GOLD }}>
-            <CardHeader><CardTitle className="text-base">Marquer payé à la MRA</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">{t('rha.b.decmra.pay_dialog_title', locale)}</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="grid md:grid-cols-2 gap-3">
                 <div>
-                  <Label>Date paiement</Label>
+                  <Label>{t('rha.b.decmra.lbl_pay_date', locale)}</Label>
                   <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} />
                 </div>
                 <div>
-                  <Label>Référence bancaire</Label>
+                  <Label>{t('rha.b.decmra.lbl_bank_ref', locale)}</Label>
                   <Input value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="VIR-XXXX" />
                 </div>
               </div>
               <div className="text-xs text-slate-600">
-                Cette action va générer 3 paires d'écritures comptables (journal BNQ) :
+                {t('rha.b.decmra.entries_intro', locale)}
                 <ul className="list-disc pl-5 mt-1">
                   <li>PAYE : D 444 / C 512</li>
                   <li>CSG + NSF : D 431 / C 512</li>
@@ -426,9 +426,9 @@ export default function DeclarationsMraPage() {
                 <Button size="sm" onClick={handleValiderPay} disabled={paying}
                   style={{ backgroundColor: GOLD, color: NAVY }} className="gap-2">
                   {paying ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                  Valider le paiement
+                  {t('rha.b.decmra.btn_validate_pay', locale)}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setShowPayDialog(false)}>Annuler</Button>
+                <Button size="sm" variant="outline" onClick={() => setShowPayDialog(false)}>{t('rha.b.decmra.btn_cancel', locale)}</Button>
               </div>
             </CardContent>
           </Card>
@@ -436,26 +436,26 @@ export default function DeclarationsMraPage() {
 
         {/* Historique */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Historique {annee}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t('rha.b.decmra.history_title', locale).replace('{year}', String(annee))}</CardTitle></CardHeader>
           <CardContent>
             {loadingHist ? (
               <div className="flex items-center gap-2 text-slate-500 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+                <Loader2 className="h-4 w-4 animate-spin" /> {t('rha.b.decmra.loading', locale)}
               </div>
             ) : payeHist.length === 0 && csgHist.length === 0 ? (
-              <div className="text-sm text-slate-500 italic">Aucune déclaration sauvegardée pour {annee}.</div>
+              <div className="text-sm text-slate-500 italic">{t('rha.b.decmra.no_history', locale).replace('{year}', String(annee))}</div>
             ) : (
               <div className="overflow-x-auto border rounded">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Mois</TableHead>
-                      <TableHead className="text-right">PAYE</TableHead>
-                      <TableHead className="text-right">CSG+NSF+HRDC+PRGF</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Deadline</TableHead>
-                      <TableHead>Payé le</TableHead>
+                      <TableHead>{t('rha.b.decmra.col_month', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.decmra.col_paye', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.decmra.col_csg_full', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.decmra.col_total', locale)}</TableHead>
+                      <TableHead>{t('rha.b.decmra.col_status', locale)}</TableHead>
+                      <TableHead>{t('rha.b.decmra.col_deadline', locale)}</TableHead>
+                      <TableHead>{t('rha.b.decmra.col_paid_on', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -491,13 +491,10 @@ export default function DeclarationsMraPage() {
         <Card>
           <CardContent className="p-4 text-xs text-slate-600 space-y-1">
             <div className="flex items-center gap-2 font-medium" style={{ color: NAVY }}>
-              <FileText className="h-3 w-3" /> Rappel MRA
+              <FileText className="h-3 w-3" /> {t('rha.b.decmra.reminder_title', locale)}
             </div>
             <div>
-              La MRA exige 2 déclarations mensuelles distinctes : <strong>PAYE Monthly Return</strong>
-              et <strong>CSG/NSF/PRGF Monthly Return</strong>. Le paiement peut être groupé
-              en un seul virement. Deadline : fin du mois suivant. Pénalités de retard
-              applicables (S.150 Income Tax Act + S.39 SCA).
+              {t('rha.b.decmra.reminder_body', locale)}
             </div>
           </CardContent>
         </Card>

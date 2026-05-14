@@ -38,19 +38,19 @@ export default function SignerContratPage() {
   // Lire params côté client
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const t = params.get("token")
+    const tk = params.get("token")
     const id = params.get("id")
-    setToken(t)
+    setToken(tk)
     setContractId(id)
 
-    if (!t || !id) {
+    if (!tk || !id) {
       setErreur(getLocale() === 'en' ? 'Invalid link. Missing parameters.' : 'Lien invalide. Paramètres manquants.')
       setStatut("erreur")
       return
     }
 
     // Vérifier le token
-    fetch(`/api/rh/contrats/${id}/signer?token=${t}`)
+    fetch(`/api/rh/contrats/${id}/signer?token=${tk}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) {

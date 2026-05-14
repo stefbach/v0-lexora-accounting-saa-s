@@ -876,10 +876,10 @@ export default function ComptableEquipePage() {
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
           <DialogHeader>
-            <DialogTitle>Assigner des clients et sociétés</DialogTitle>
+            <DialogTitle>{t('cab.equipe.assign_dialog_title', locale)}</DialogTitle>
             {assignTarget && (
               <DialogDescription>
-                Sélectionnez les éléments à assigner à{" "}
+                {t('cab.equipe.assign_dialog_desc', locale)}{" "}
                 <span className="font-medium text-foreground">{assignTarget.full_name}</span>
               </DialogDescription>
             )}
@@ -887,7 +887,7 @@ export default function ComptableEquipePage() {
 
           <div className="py-4 max-h-[400px] overflow-auto space-y-1">
             {clientsWithSocietes.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">Aucun client disponible.</p>
+              <p className="text-center text-muted-foreground py-4">{t('cab.equipe.no_client_available', locale)}</p>
             ) : (
               clientsWithSocietes.map(({ client, dossiers: clientDossiers, hasSocietes }) => {
                 // ── Client without societies ──
@@ -914,12 +914,12 @@ export default function ComptableEquipePage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{client.full_name}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {client.email} — Aucune société
+                          {client.email} — {t('cab.equipe.no_company', locale)}
                         </p>
                       </div>
                       {assignedToOther && (
                         <Badge variant="outline" className="text-xs flex-shrink-0">
-                          Assigné à {assignedToOther}
+                          {t('cab.equipe.assigned_to', locale)} {assignedToOther}
                         </Badge>
                       )}
                     </div>
@@ -948,7 +948,7 @@ export default function ComptableEquipePage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{client.full_name}</p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {client.email} — {clientDossiers.length} société(s)
+                          {client.email} — {clientDossiers.length} {t('cab.equipe.companies_unit', locale)}
                         </p>
                       </div>
                       {assignedCount > 0 && (
@@ -987,7 +987,7 @@ export default function ComptableEquipePage() {
                               />
                               <Building2 className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                               <span className="text-sm flex-1 truncate">
-                                {d.societe?.nom || "Société inconnue"}
+                                {d.societe?.nom || t('cab.equipe.unknown_company', locale)}
                               </span>
                               {assignedToOther && (
                                 <Badge variant="outline" className="text-xs flex-shrink-0">
@@ -1016,7 +1016,7 @@ export default function ComptableEquipePage() {
               variant="outline"
               onClick={() => setAssignDialogOpen(false)}
             >
-              Annuler
+              {t('cab.equipe.cancel', locale)}
             </Button>
             <Button
               style={{ backgroundColor: GOLD }}
@@ -1024,9 +1024,9 @@ export default function ComptableEquipePage() {
               disabled={assigning}
             >
               {assigning ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Enregistrement...</>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('cab.equipe.saving', locale)}</>
               ) : (
-                "Enregistrer les assignations"
+                t('cab.equipe.save_assignments', locale)
               )}
             </Button>
           </DialogFooter>

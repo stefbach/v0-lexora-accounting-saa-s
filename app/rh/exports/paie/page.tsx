@@ -564,7 +564,7 @@ export default function ExportPaiePage() {
         <div className="flex items-center gap-3 flex-wrap">
           <Select value={societe} onValueChange={setSociete}>
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Selectionner une societe" />
+              <SelectValue placeholder={t('rha.b.expaie.choose_societe', locale)} />
             </SelectTrigger>
             <SelectContent>
               {societes.map(s => (
@@ -590,9 +590,9 @@ export default function ExportPaiePage() {
               <Users className="w-6 h-6" style={{ color: BLUE }} />
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Total employes</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">{t('rha.b.expaie.kpi_total_emp', locale)}</p>
               <p className="text-2xl font-bold" style={{ color: NAVY }}>{employes.length}</p>
-              <p className="text-xs text-gray-400">{bulletins.length} bulletin(s) genere(s)</p>
+              <p className="text-xs text-gray-400">{t('rha.b.expaie.kpi_bulletins_gen', locale).replace('{n}', String(bulletins.length))}</p>
             </div>
           </CardContent>
         </Card>
@@ -603,7 +603,7 @@ export default function ExportPaiePage() {
               <Wallet className="w-6 h-6" style={{ color: GOLD }} />
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Masse salariale nette</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">{t('rha.b.expaie.kpi_net_mass', locale)}</p>
               <p className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(totalNet)} <span className="text-sm font-normal text-gray-400">MUR</span></p>
             </div>
           </CardContent>
@@ -615,24 +615,24 @@ export default function ExportPaiePage() {
               <FileCheck className="w-6 h-6 text-green-600" />
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Bulletins valides</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">{t('rha.b.expaie.kpi_valid_bulletins', locale)}</p>
               <p className="text-2xl font-bold" style={{ color: NAVY }}>{bulletinsValides.length}</p>
-              <p className="text-xs text-gray-400">sur {bulletins.length} bulletin(s)</p>
+              <p className="text-xs text-gray-400">{t('rha.b.expaie.kpi_on_x', locale).replace('{n}', String(bulletins.length))}</p>
             </div>
           </CardContent>
         </Card>
 
         <Card className="rounded-2xl shadow-sm">
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Bulk MCB</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">{t('rha.b.expaie.kpi_bulk_mcb', locale)}</p>
             <p className="text-xl font-bold text-green-600">{empBulk.length}</p>
-            <p className="text-xs text-gray-400">virement bancaire</p>
+            <p className="text-xs text-gray-400">{t('rha.b.expaie.kpi_bank_transfer', locale)}</p>
           </CardContent>
         </Card>
 
         <Card className="rounded-2xl shadow-sm">
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Espèces / Indiv.</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">{t('rha.b.expaie.kpi_cash_indiv', locale)}</p>
             <p className="text-xl font-bold text-red-600">{empCash.length + empIndiv.length}</p>
             <p className="text-xs text-gray-400">{empCash.length} cash · {empIndiv.length} indiv.</p>
           </CardContent>
@@ -644,11 +644,11 @@ export default function ExportPaiePage() {
         <TabsList className="grid w-full grid-cols-2 mb-4">
           <TabsTrigger value="virements" className="flex items-center gap-2">
             <Banknote className="h-4 w-4" />
-            Virements bancaires
+            {t('rha.b.expaie.tab_transfers', locale)}
           </TabsTrigger>
           <TabsTrigger value="mra" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
-            Exports MRA
+            {t('rha.b.expaie.tab_mra', locale)}
           </TabsTrigger>
         </TabsList>
 
@@ -666,7 +666,7 @@ export default function ExportPaiePage() {
                 ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 : <Banknote className="h-4 w-4 mr-2" />
               }
-              Exporter fichier virement MCB BP-V1
+              {t('rha.b.expaie.btn_export_mcb', locale)}
             </Button>
 
             <Button
@@ -679,7 +679,7 @@ export default function ExportPaiePage() {
                 ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 : <Download className="h-4 w-4 mr-2" />
               }
-              Exporter Excel
+              {t('rha.b.expaie.btn_export_excel', locale)}
             </Button>
 
             <div className="flex items-center gap-2 ml-2">
@@ -692,24 +692,24 @@ export default function ExportPaiePage() {
           {virementStatus.summary && (
             <Card className="rounded-2xl shadow-sm border-l-4" style={{ borderLeftColor: GOLD }}>
               <CardContent className="p-4">
-                <p className="text-sm font-medium mb-2" style={{ color: NAVY }}>Recap virement</p>
+                <p className="text-sm font-medium mb-2" style={{ color: NAVY }}>{t('rha.b.expaie.recap_transfer', locale)}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   <div>
-                    <span className="text-gray-500">Bulletins:</span>{" "}
+                    <span className="text-gray-500">{t('rha.b.expaie.bulletins', locale)}</span>{" "}
                     <strong>{virementStatus.summary.nb_bulletins_total}</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500">Total MUR:</span>{" "}
+                    <span className="text-gray-500">{t('rha.b.expaie.total_mur', locale)}</span>{" "}
                     <strong>{fmt(virementStatus.summary.montant_total_mur || 0)}</strong>
                   </div>
                   {virementStatus.summary.montant_total_eur > 0 && (
                     <div>
-                      <span className="text-gray-500">Total EUR:</span>{" "}
+                      <span className="text-gray-500">{t('rha.b.expaie.total_eur', locale)}</span>{" "}
                       <strong>{fmt(virementStatus.summary.montant_total_eur)}</strong>
                     </div>
                   )}
                   <div>
-                    <span className="text-gray-500">Banques:</span>{" "}
+                    <span className="text-gray-500">{t('rha.b.expaie.banks', locale)}</span>{" "}
                     <strong>{virementStatus.summary.nb_banques}</strong>
                   </div>
                   {virementStatus.summary.nb_employes_sans_banque > 0 && (
@@ -732,7 +732,7 @@ export default function ExportPaiePage() {
             <Card className="rounded-2xl shadow-sm">
               <CardContent className="p-8 text-center text-gray-500">
                 <Users className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                <p>Aucun employe trouve pour cette societe.</p>
+                <p>{t('rha.b.expaie.no_employees', locale)}</p>
               </CardContent>
             </Card>
           ) : (
@@ -740,7 +740,7 @@ export default function ExportPaiePage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                   <FileText className="w-4 h-4" />
-                  Employes et virements ({employes.length})
+                  {t('rha.b.expaie.employees_n', locale).replace('{n}', String(employes.length))}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
@@ -748,13 +748,13 @@ export default function ExportPaiePage() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b">
                       <tr>
-                        <th className="px-4 py-3 text-left font-medium" style={{ color: NAVY }}>Nom</th>
-                        <th className="px-4 py-3 text-left font-medium" style={{ color: NAVY }}>Banque</th>
-                        <th className="px-4 py-3 text-left font-medium" style={{ color: NAVY }}>Compte</th>
-                        <th className="px-4 py-3 text-center font-medium" style={{ color: NAVY }}>Mode paiement</th>
-                        <th className="px-4 py-3 text-center font-medium" style={{ color: NAVY }}>MRA</th>
-                        <th className="px-4 py-3 text-right font-medium" style={{ color: NAVY }}>Net a payer</th>
-                        <th className="px-4 py-3 text-center font-medium" style={{ color: NAVY }}>Statut</th>
+                        <th className="px-4 py-3 text-left font-medium" style={{ color: NAVY }}>{t('rha.b.expaie.col_name', locale)}</th>
+                        <th className="px-4 py-3 text-left font-medium" style={{ color: NAVY }}>{t('rha.b.expaie.col_bank', locale)}</th>
+                        <th className="px-4 py-3 text-left font-medium" style={{ color: NAVY }}>{t('rha.b.expaie.col_account', locale)}</th>
+                        <th className="px-4 py-3 text-center font-medium" style={{ color: NAVY }}>{t('rha.b.expaie.col_pay_mode', locale)}</th>
+                        <th className="px-4 py-3 text-center font-medium" style={{ color: NAVY }}>{t('rha.b.expaie.col_mra', locale)}</th>
+                        <th className="px-4 py-3 text-right font-medium" style={{ color: NAVY }}>{t('rha.b.expaie.col_net_to_pay', locale)}</th>
+                        <th className="px-4 py-3 text-center font-medium" style={{ color: NAVY }}>{t('rha.b.expaie.col_status', locale)}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">

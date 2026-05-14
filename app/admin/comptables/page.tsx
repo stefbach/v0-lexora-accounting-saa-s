@@ -330,14 +330,14 @@ export default function AdminComptablesPage() {
       <Dialog open={typeEditOpen} onOpenChange={setTypeEditOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Type de comptable — {typeEditName}</DialogTitle>
+            <DialogTitle>{t('adm.cabs.type_title', locale)} — {typeEditName}</DialogTitle>
           </DialogHeader>
           {typeLoading ? (
-            <p className="text-sm text-gray-500 py-4 text-center">Chargement…</p>
+            <p className="text-sm text-gray-500 py-4 text-center">{t('adm.cabs.loading_dots', locale)}</p>
           ) : (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-sm font-semibold">Type</Label>
+                <Label className="text-sm font-semibold">{t('adm.cabs.type_label', locale)}</Label>
 
                 <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                   <input
@@ -349,9 +349,9 @@ export default function AdminComptablesPage() {
                     className="mt-0.5"
                   />
                   <div className="flex-1">
-                    <div className="font-medium text-sm">🧑‍💼 Employé interne</div>
+                    <div className="font-medium text-sm">{t('adm.cabs.type_internal', locale)}</div>
                     <div className="text-xs text-gray-500">
-                      Lié à une fiche employé de la société. Accès espace salarié activé (MonEspacePersonnel visible).
+                      {t('adm.cabs.type_internal_desc', locale)}
                     </div>
                   </div>
                 </label>
@@ -366,9 +366,9 @@ export default function AdminComptablesPage() {
                     className="mt-0.5"
                   />
                   <div className="flex-1">
-                    <div className="font-medium text-sm">🏢 Prestataire externe</div>
+                    <div className="font-medium text-sm">{t('adm.cabs.type_external', locale)}</div>
                     <div className="text-xs text-gray-500">
-                      Cabinet comptable externe. Sera traité comme fournisseur (compte 401). Pas d'accès espace salarié.
+                      {t('adm.cabs.type_external_desc', locale)}
                     </div>
                   </div>
                 </label>
@@ -383,9 +383,9 @@ export default function AdminComptablesPage() {
                     className="mt-0.5"
                   />
                   <div className="flex-1">
-                    <div className="font-medium text-sm">🔐 Accès Lexora dédié</div>
+                    <div className="font-medium text-sm">{t('adm.cabs.type_dedicated', locale)}</div>
                     <div className="text-xs text-gray-500">
-                      Comptable uniquement sur la plateforme, sans lien contractuel. Pas d'accès espace salarié.
+                      {t('adm.cabs.type_dedicated_desc', locale)}
                     </div>
                   </div>
                 </label>
@@ -394,11 +394,11 @@ export default function AdminComptablesPage() {
               {/* Conditional fields */}
               {typeValue === 'interne' && (
                 <div>
-                  <Label className="text-sm">Employé lié</Label>
+                  <Label className="text-sm">{t('adm.cabs.linked_employee', locale)}</Label>
                   <Select value={typeEmployeId || 'none'} onValueChange={v => setTypeEmployeId(v === 'none' ? '' : v)}>
-                    <SelectTrigger><SelectValue placeholder="Choisir un employé…" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('adm.cabs.choose_employee', locale)} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">— Non lié —</SelectItem>
+                      <SelectItem value="none">{t('adm.cabs.not_linked', locale)}</SelectItem>
                       {allEmployes.map(e => (
                         <SelectItem key={e.id} value={e.id}>
                           {e.prenom} {e.nom}
@@ -407,29 +407,29 @@ export default function AdminComptablesPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-gray-500 mt-1">
-                    MonEspacePersonnel apparaîtra automatiquement dans /rh et /comptable pour ce user.
+                    {t('adm.cabs.internal_hint', locale)}
                   </p>
                 </div>
               )}
 
               {typeValue === 'externe' && (
                 <div>
-                  <Label className="text-sm">Nom du cabinet / société</Label>
+                  <Label className="text-sm">{t('adm.cabs.cabinet_name', locale)}</Label>
                   <Textarea
                     value={typeCabinet}
                     onChange={e => setTypeCabinet(e.target.value)}
-                    placeholder="Ex : PWC Mauritius, EY Maurice, Cabinet Duval & Associés…"
+                    placeholder={t('adm.cabs.cabinet_placeholder', locale)}
                     rows={2}
                   />
                 </div>
               )}
 
               <div>
-                <Label className="text-sm">Notes (optionnel)</Label>
+                <Label className="text-sm">{t('adm.cabs.notes_label', locale)}</Label>
                 <Textarea
                   value={typeNotes}
                   onChange={e => setTypeNotes(e.target.value)}
-                  placeholder="Ex : ne gère que la TVA, responsable exercice 2026…"
+                  placeholder={t('adm.cabs.notes_placeholder2', locale)}
                   rows={2}
                 />
               </div>
@@ -443,14 +443,14 @@ export default function AdminComptablesPage() {
           )}
           <div className="flex justify-end gap-2 pt-3 border-t">
             <Button variant="outline" onClick={() => setTypeEditOpen(false)} disabled={typeSaving}>
-              Annuler
+              {t('adm.cabs.cancel', locale)}
             </Button>
             <Button
               onClick={saveTypeComptable}
               disabled={typeSaving || typeLoading}
               className="bg-[#0B0F2E] text-white"
             >
-              {typeSaving ? 'Enregistrement…' : 'Enregistrer'}
+              {typeSaving ? t('adm.cabs.save_dots', locale) : t('adm.cabs.save', locale)}
             </Button>
           </div>
         </DialogContent>
