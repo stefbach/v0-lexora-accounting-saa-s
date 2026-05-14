@@ -210,10 +210,10 @@ export default function ClientRapprochementPage() {
   // Liste des comptes bancaires uniques (pour filtre)
   const comptesUniques = useMemo(() => {
     const map = new Map<string, { id: string; label: string; devise: string }>()
-    for (const t of transactions) {
-      const id = (t as any).releve_id || ""
-      const banque = (t as any).banque || ""
-      const devise = (t as any).devise || "MUR"
+    for (const tx of transactions) {
+      const id = (tx as any).releve_id || ""
+      const banque = (tx as any).banque || ""
+      const devise = (tx as any).devise || "MUR"
       if (!map.has(banque + "|" + devise) && banque) {
         map.set(banque + "|" + devise, {
           id: banque + "|" + devise,
@@ -228,8 +228,8 @@ export default function ClientRapprochementPage() {
   // Liste des tiers détectés (pour filtre)
   const tiersList = useMemo(() => {
     const set = new Set<string>()
-    for (const t of transactions) {
-      if (t.tiers_detecte) set.add(t.tiers_detecte)
+    for (const tx of transactions) {
+      if (tx.tiers_detecte) set.add(tx.tiers_detecte)
     }
     for (const f of factures) {
       if (f.tiers) set.add(f.tiers)
@@ -241,17 +241,17 @@ export default function ClientRapprochementPage() {
   function applyFilters(list: BankTx[]): BankTx[] {
     let out = list
     if (filtreSens !== "all") {
-      out = out.filter((t) => {
+      out = out.filter((tx) => {
         const fids =
-          Array.isArray(t.facture_ids) && t.facture_ids.length > 0
-            ? t.facture_ids
-            : t.facture_id
-              ? [t.facture_id]
+          Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0
+            ? tx.facture_ids
+            : tx.facture_id
+              ? [tx.facture_id]
               : []
         if (fids.length === 0) {
           // Pour les classifications ou orphelines, sens = signe du montant
-          if (filtreSens === "client") return t.credit > 0 // entrée
-          if (filtreSens === "fournisseur") return t.debit > 0 // sortie
+          if (filtreSens === "client") return tx.credit > 0 // entrée
+          if (filtreSens === "fournisseur") return tx.debit > 0 // sortie
           return true
         }
         // Sinon on vérifie le type des factures liées
@@ -260,20 +260,20 @@ export default function ClientRapprochementPage() {
       })
     }
     if (filtreCompte !== "all") {
-      out = out.filter((t) => {
-        const banque = (t as any).banque || ""
-        const devise = (t as any).devise || "MUR"
+      out = out.filter((tx) => {
+        const banque = (tx as any).banque || ""
+        const devise = (tx as any).devise || "MUR"
         return banque + "|" + devise === filtreCompte
       })
     }
     if (filtreTiers !== "all") {
-      out = out.filter((t) => {
-        if (t.tiers_detecte === filtreTiers) return true
+      out = out.filter((tx) => {
+        if (tx.tiers_detecte === filtreTiers) return true
         const fids =
-          Array.isArray(t.facture_ids) && t.facture_ids.length > 0
-            ? t.facture_ids
-            : t.facture_id
-              ? [t.facture_id]
+          Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0
+            ? tx.facture_ids
+            : tx.facture_id
+              ? [tx.facture_id]
               : []
         const linked = fids.map((id) => factures.find((f) => f.id === id)).filter(Boolean) as Facture[]
         return linked.some((f) => f.tiers === filtreTiers)
@@ -282,34 +282,34 @@ export default function ClientRapprochementPage() {
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       out = out.filter(
-        (t) =>
-          t.libelle.toLowerCase().includes(q) ||
-          t.tiers_detecte?.toLowerCase().includes(q) ||
-          t.compte_comptable?.includes(q) ||
-          t.lettre?.toLowerCase().includes(q) ||
-          String(t.debit).includes(q) ||
-          String(t.credit).includes(q)
+        (tx) =>
+          tx.libelle.toLowerCase().includes(q) ||
+          tx.tiers_detecte?.toLowerCase().includes(q) ||
+          tx.compte_comptable?.includes(q) ||
+          tx.lettre?.toLowerCase().includes(q) ||
+          String(tx.debit).includes(q) ||
+          String(tx.credit).includes(q)
       )
     }
     return out
   }
 
   const proposes = useMemo(
-    () => applyFilters(transactions.filter((t) => t.statut === "propose")),
+    () => applyFilters(transactions.filter((tx) => tx.statut === "propose")),
     [transactions, search, filtreSens, filtreCompte, filtreTiers, factures]
   )
   const aVerifier = useMemo(
-    () => applyFilters(transactions.filter((t) => t.statut === "a_verifier")),
+    () => applyFilters(transactions.filter((tx) => tx.statut === "a_verifier")),
     [transactions, search, filtreSens, filtreCompte, filtreTiers, factures]
   )
   const rapprochees = useMemo(
     () =>
       applyFilters(
         transactions.filter(
-          (t) =>
-            t.statut === "rapproche" ||
-            (!t.statut &&
-              (t.facture_id || (Array.isArray(t.facture_ids) && t.facture_ids.length > 0)))
+          (tx) =>
+            tx.statut === "rapproche" ||
+            (!tx.statut &&
+              (tx.facture_id || (Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0)))
         )
       ),
     [transactions, search, filtreSens, filtreCompte, filtreTiers, factures]
@@ -318,11 +318,11 @@ export default function ClientRapprochementPage() {
     () =>
       applyFilters(
         transactions.filter(
-          (t) =>
-            (t.statut === "non_identifie" || !t.statut) &&
-            !t.facture_id &&
-            !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0) &&
-            !t.compte_comptable
+          (tx) =>
+            (tx.statut === "non_identifie" || !tx.statut) &&
+            !tx.facture_id &&
+            !(Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0) &&
+            !tx.compte_comptable
         )
       ),
     [transactions, search, filtreSens, filtreCompte, filtreTiers, factures]
@@ -349,7 +349,7 @@ export default function ClientRapprochementPage() {
   //   - virements_internes    : virement interne / transfert interne
   //   - autres                : tout le reste (typiquement matches IA cross)
   function classifyBucket(
-    t: BankTx
+    tx: BankTx
   ):
     | "encaissements_client"
     | "paiements_fournisseur"
@@ -358,24 +358,24 @@ export default function ClientRapprochementPage() {
     | "mra"
     | "virements_internes"
     | "autres" {
-    const cls = (t.classification || t.classification_suggestion?.type || "").toLowerCase()
+    const cls = (tx.classification || tx.classification_suggestion?.type || "").toLowerCase()
     if (cls === "frais_bancaires" || cls === "interets" || cls === "agios") return "frais_bancaires"
     if (cls === "salaire_bulk" || cls === "salaire_individuel" || cls === "reversal_salaire") return "salaires"
     if (cls === "paiement_mra" || cls === "charges_sociales") return "mra"
     if (cls === "virement_interne" || cls === "transfert_interne") return "virements_internes"
     const fids =
-      Array.isArray(t.facture_ids) && t.facture_ids.length > 0
-        ? t.facture_ids
-        : t.facture_id
-          ? [t.facture_id]
+      Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0
+        ? tx.facture_ids
+        : tx.facture_id
+          ? [tx.facture_id]
           : []
     if (fids.length > 0) {
       const linked = fids.map((id) => factures.find((f) => f.id === id)).filter(Boolean) as Facture[]
       if (linked.some((f) => f.type_facture === "client")) return "encaissements_client"
       if (linked.some((f) => f.type_facture === "fournisseur")) return "paiements_fournisseur"
       // Fallback sur le sens du montant
-      if (t.credit > 0) return "encaissements_client"
-      if (t.debit > 0) return "paiements_fournisseur"
+      if (tx.credit > 0) return "encaissements_client"
+      if (tx.debit > 0) return "paiements_fournisseur"
     }
     return "autres"
   }
@@ -717,10 +717,10 @@ export default function ClientRapprochementPage() {
   const toggleAllInGroup = (items: BankTx[]) =>
     setSelectedTxIds((prev) => {
       const n = new Set(prev)
-      const all = items.every((t) => n.has(t.id))
-      for (const t of items) {
-        if (all) n.delete(t.id)
-        else n.add(t.id)
+      const all = items.every((tx) => n.has(tx.id))
+      for (const tx of items) {
+        if (all) n.delete(tx.id)
+        else n.add(tx.id)
       }
       return n
     })
@@ -2003,7 +2003,7 @@ function AffectDialog({
                                 : "bg-rose-50 text-rose-700 border-rose-300"
                             }`}
                           >
-                            {f.type_facture === "client" ? "Client" : "Fournisseur"}
+                            {f.type_facture === "client" ? t('acc.rap.client_lc', locale) : t('acc.rap.supplier_lc', locale)}
                           </Badge>
                           <Badge variant="outline" className="text-[10px]">
                             {f.statut}
@@ -2011,8 +2011,8 @@ function AffectDialog({
                         </div>
                         <p className="text-xs mt-0.5 break-words">{f.tiers || "—"}</p>
                         <p className="text-[11px] text-muted-foreground">
-                          Émise {formatDate(f.date_facture)} · Échéance{" "}
-                          {formatDate(f.date_echeance)}
+                          {t('acc.rap.issued', locale)} {formatDate(f.date_facture, locale)} · {t('acc.rap.due', locale)}{" "}
+                          {formatDate(f.date_echeance, locale)}
                         </p>
                       </div>
                       <div className="text-right flex-shrink-0">
@@ -2025,7 +2025,7 @@ function AffectDialog({
                               ecartPct > 5 ? "text-red-700" : "text-amber-700"
                             }`}
                           >
-                            écart {ecartPct.toFixed(1)}%
+                            {t('acc.rap.gap_short', locale)} {ecartPct.toFixed(1)}%
                           </p>
                         )}
                       </div>
@@ -2039,11 +2039,11 @@ function AffectDialog({
           <TabsContent value="pcm" className="mt-3 space-y-3">
             <div>
               <label className="text-xs font-medium text-muted-foreground">
-                Compte PCM courant
+                {t('acc.rap.current_pcm', locale)}
               </label>
               <Select value={pcmPreset} onValueChange={setPcmPreset}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Choisir un compte PCM courant…" />
+                  <SelectValue placeholder={t('acc.rap.choose_current_pcm', locale)} />
                 </SelectTrigger>
                 <SelectContent>
                   {PCM_PRESETS.map((p) => (
@@ -2056,7 +2056,7 @@ function AffectDialog({
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground">
-                Ou saisir un autre compte PCM (4-digits)
+                {t('acc.rap.or_enter_other_pcm', locale)}
               </label>
               <Input
                 value={pcmCustom}
@@ -2075,21 +2075,22 @@ function AffectDialog({
               ) : (
                 <CheckCircle2 className="h-4 w-4 mr-2" />
               )}
-              Imputer sur {pcmCustom.trim() || pcmPreset || "…"}
+              {t('acc.rap.impute_on', locale)} {pcmCustom.trim() || pcmPreset || "…"}
             </Button>
             <p className="text-[11px] text-muted-foreground italic">
-              L'écriture comptable BNQ correspondante sera créée automatiquement.
+              {t('acc.rap.bnq_auto_create', locale)}
             </p>
           </TabsContent>
 
           <TabsContent value="interne" className="mt-3 space-y-3">
             <p className="text-xs text-muted-foreground">
-              Cherche la transaction miroir sur tes autres comptes (sens inverse, montant proche, ±10 jours). Imputation au compte PCM <span className="font-mono">5811 — Virements internes en cours</span>.
+              {t('acc.rap.search_mirror_help', locale)} <span className="font-mono">{t('acc.rap.virements_internes_label', locale)}</span>.
             </p>
             <InterneCompteSection
               tx={tx}
               allTransactions={allTransactions}
               busy={busy}
+              locale={locale}
               onApplyMirror={async (mirrorTx) => {
                 setBusy(true)
                 // Lettre les 2 tx (la courante + la miroir) sur 5811
@@ -2099,7 +2100,7 @@ function AffectDialog({
                 })
                 if (!r1.ok) {
                   setBusy(false)
-                  return showToast(`Échec côté ${tx.libelle.slice(0, 30)} : ${r1.error}`, "error")
+                  return showToast(t('acc.rap.fail_side', locale).replace('{side}', tx.libelle.slice(0, 30)).replace('{err}', r1.error || ''), "error")
                 }
                 const r2 = await onAffect(mirrorTx, "pcm", {
                   classification: "virement_interne",
@@ -2108,11 +2109,11 @@ function AffectDialog({
                 setBusy(false)
                 if (!r2.ok) {
                   return showToast(
-                    `Côté A imputé, mais échec côté B : ${r2.error}`,
+                    t('acc.rap.fail_side_b', locale).replace('{err}', r2.error || ''),
                     "error"
                   )
                 }
-                showToast("Virement interne lettré sur les 2 comptes")
+                showToast(t('acc.rap.virement_5811_letter', locale))
                 onClose()
                 onReload()
               }}
@@ -2123,8 +2124,8 @@ function AffectDialog({
                   compte_charge: "5811",
                 })
                 setBusy(false)
-                if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
-                showToast("Imputée 5811 (virement interne)")
+                if (!r.ok) return showToast(`${t('acc.rap.fail', locale)} : ${r.error}`, "error")
+                showToast(t('acc.rap.imputed_5811', locale))
                 onClose()
                 onReload()
               }}
@@ -2143,12 +2144,14 @@ function InterneCompteSection({
   busy,
   onApplyMirror,
   onApplyAlone,
+  locale,
 }: {
   tx: BankTx
   allTransactions: BankTx[]
   busy: boolean
   onApplyMirror: (mirror: BankTx) => Promise<void>
   onApplyAlone: () => Promise<void>
+  locale: Locale
 }) {
   const targetAmt = Math.max(tx.debit, tx.credit)
   const txDate = tx.date ? new Date(tx.date).getTime() : 0
@@ -2158,18 +2161,18 @@ function InterneCompteSection({
   // mais devise différente), sens INVERSE, montant proche (±5%), date ±10 jours.
   const candidates = useMemo(() => {
     return allTransactions
-      .filter((t) => t.id !== tx.id)
-      .filter((t) => {
-        const otherCompte = (t as any).banque || ""
+      .filter((tr) => tr.id !== tx.id)
+      .filter((tr) => {
+        const otherCompte = (tr as any).banque || ""
         // Autre tx (peu importe le compte, on prend tout sauf la même tx)
-        if (!t.date) return false
-        const dt = Math.abs(new Date(t.date).getTime() - txDate) / 86400000
+        if (!tr.date) return false
+        const dt = Math.abs(new Date(tr.date).getTime() - txDate) / 86400000
         if (dt > 10) return false
         // Sens inverse : si tx est sortie (debit), miroir est entrée (credit) et inverse
         const sameSide =
-          (tx.debit > 0 && t.debit > 0) || (tx.credit > 0 && t.credit > 0)
+          (tx.debit > 0 && tr.debit > 0) || (tx.credit > 0 && tr.credit > 0)
         if (sameSide) return false
-        const tAmt = Math.max(t.debit, t.credit)
+        const tAmt = Math.max(tr.debit, tr.credit)
         const ratio = targetAmt > 0 ? Math.abs(tAmt - targetAmt) / targetAmt : 999
         if (ratio > 0.05) return false
         return true
@@ -2186,12 +2189,12 @@ function InterneCompteSection({
     <div className="space-y-3">
       {candidates.length === 0 ? (
         <p className="py-4 text-sm text-muted-foreground italic">
-          Aucune tx miroir détectée automatiquement.
+          {t('acc.rap.no_mirror', locale)}
         </p>
       ) : (
         <>
           <p className="text-xs font-medium">
-            Transactions miroirs candidates ({candidates.length})
+            {t('acc.rap.mirror_candidates', locale).replace('{n}', String(candidates.length))}
           </p>
           <div className="rounded border bg-card divide-y max-h-72 overflow-y-auto">
             {candidates.map((m) => {
@@ -2212,7 +2215,7 @@ function InterneCompteSection({
                         {mCompte} ({m.devise || "MUR"})
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        {formatDate(m.date)}
+                        {formatDate(m.date, locale)}
                       </span>
                     </div>
                     <p className="text-xs mt-0.5 break-words">{m.libelle}</p>
@@ -2226,7 +2229,7 @@ function InterneCompteSection({
                     </p>
                     {ratio > 0.005 && (
                       <p className="text-[10px] font-mono text-amber-700">
-                        écart {(ratio * 100).toFixed(2)}%
+                        {t('acc.rap.gap_short', locale)} {(ratio * 100).toFixed(2)}%
                       </p>
                     )}
                   </div>
@@ -2235,7 +2238,7 @@ function InterneCompteSection({
             })}
           </div>
           <p className="text-[11px] text-muted-foreground italic">
-            Cliquer sur une miroir lettre les 2 tx via PCM 5811 (virements internes).
+            {t('acc.rap.click_mirror_letter', locale)}
           </p>
         </>
       )}
@@ -2251,7 +2254,7 @@ function InterneCompteSection({
           ) : (
             <Wrench className="h-4 w-4 mr-2" />
           )}
-          Imputer cette tx seule sur 5811 (sans miroir)
+          {t('acc.rap.impute_alone_5811', locale)}
         </Button>
       </div>
     </div>

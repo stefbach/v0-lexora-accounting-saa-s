@@ -2177,7 +2177,6 @@ const partA_fr: Record<string, string> = {
   'rha.a.emp.compte_create_title': 'Créer le compte Lexora',
   'rha.a.emp.delete_title': 'Supprimer',
   'rha.a.emp.new_dialog_title': 'Nouvel employé',
-  'rha.a.emp.new': 'Nouvel employé',
 
   // ─── /rh/employes/[id] (detail) ─────────────────────────────
   'rha.a.empd.tab_identite': 'Identité',
@@ -2222,7 +2221,6 @@ const partA_fr: Record<string, string> = {
   'rha.a.conges.cette_semaine': 'Congés cette semaine',
   'rha.a.conges.autres': 'autres',
   'rha.a.conges.tab_dashboard': 'Tableau de bord',
-  'rha.a.conges.tab_calendrier': 'Vue calendrier',
   'rha.a.conges.tab_absents': "Absences aujourd'hui",
   'rha.a.conges.tab_historique': 'Historique',
   'rha.a.conges.tab_cash': 'Cash-in-lieu',
@@ -2234,7 +2232,6 @@ const partA_fr: Record<string, string> = {
   'rha.a.conges.history_title': 'Historique des congés',
   'rha.a.conges.search_ph': 'Rechercher…',
   'rha.a.conges.filter_type': 'Filtrer par type',
-  'rha.a.conges.tab_demandes': 'Demandes',
 
   // ─── /rh/conges/parametres ──────────────────────────────────
   'rha.a.congesp.title': 'Paramètres Congés',
@@ -2812,7 +2809,6 @@ const partA_en: Record<string, string> = {
   'rha.a.emp.compte_create_title': 'Create Lexora account',
   'rha.a.emp.delete_title': 'Delete',
   'rha.a.emp.new_dialog_title': 'New employee',
-  'rha.a.emp.new': 'New employee',
 
   // ─── /rh/employes/[id] (detail) ─────────────────────────────
   'rha.a.empd.tab_identite': 'Identity',
@@ -2857,7 +2853,6 @@ const partA_en: Record<string, string> = {
   'rha.a.conges.cette_semaine': 'Leave this week',
   'rha.a.conges.autres': 'others',
   'rha.a.conges.tab_dashboard': 'Dashboard',
-  'rha.a.conges.tab_calendrier': 'Calendar view',
   'rha.a.conges.tab_absents': 'Absences today',
   'rha.a.conges.tab_historique': 'History',
   'rha.a.conges.tab_cash': 'Cash-in-lieu',
@@ -2869,7 +2864,6 @@ const partA_en: Record<string, string> = {
   'rha.a.conges.history_title': 'Leave history',
   'rha.a.conges.search_ph': 'Search…',
   'rha.a.conges.filter_type': 'Filter by type',
-  'rha.a.conges.tab_demandes': 'Requests',
 
   // ─── /rh/conges/parametres ──────────────────────────────────
   'rha.a.congesp.title': 'Leave Settings',
