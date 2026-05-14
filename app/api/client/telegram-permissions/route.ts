@@ -37,13 +37,34 @@ export async function GET(req: NextRequest) {
 
   const admin = getAdminClient()
 
-  // Membres (user_societes) avec override de capabilities
-  const { data: members, error } = await admin
-    .from('user_societes')
-    .select('user_id, role, telegram_capabilities, profiles!inner(id, full_name, email)')
-    .eq('societe_id', societeId)
-    .order('role')
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Membres (user_societes) avec override de capabilities.
+  // Si la colonne telegram_capabilities n'a pas encore été migrée (migration 266
+  // pas appliquée), on retombe gracieusement sur le SELECT sans cette colonne :
+  // les overrides ne fonctionneront pas mais l'UI reste utilisable.
+  let members: any[] | null = null
+  let capsColumnAvailable = true
+  let membersErr: any = null
+  {
+    const res = await admin
+      .from('user_societes')
+      .select('user_id, role, telegram_capabilities, profiles!inner(id, full_name, email)')
+      .eq('societe_id', societeId)
+      .order('role')
+    if (res.error && /telegram_capabilities/i.test(res.error.message || '')) {
+      capsColumnAvailable = false
+      const fallback = await admin
+        .from('user_societes')
+        .select('user_id, role, profiles!inner(id, full_name, email)')
+        .eq('societe_id', societeId)
+        .order('role')
+      members = fallback.data as any[]
+      membersErr = fallback.error
+    } else {
+      members = res.data as any[]
+      membersErr = res.error
+    }
+  }
+  if (membersErr) return NextResponse.json({ error: membersErr.message }, { status: 500 })
 
   const userIds = (members || []).map((m: any) => m.user_id)
   const { data: tgUsers } = await admin
@@ -118,12 +139,19 @@ export async function GET(req: NextRequest) {
       .select('user_id, chat_id, telegram_username, telegram_firstname, verified, verification_code, verification_expires_at')
       .in('user_id', employeeUserIds)
     tgByEmpUser = new Map((empTg || []).map((t: any) => [t.user_id, t]))
-    const { data: empUs } = await admin
-      .from('user_societes')
-      .select('user_id, role, telegram_capabilities')
-      .eq('societe_id', societeId)
-      .in('user_id', employeeUserIds)
-    usMapByEmpUser = new Map((empUs || []).map((r: any) => [r.user_id, r]))
+    // Fallback identique : on évite la colonne si elle n'est pas migrée
+    const empUsRes = capsColumnAvailable
+      ? await admin
+          .from('user_societes')
+          .select('user_id, role, telegram_capabilities')
+          .eq('societe_id', societeId)
+          .in('user_id', employeeUserIds)
+      : await admin
+          .from('user_societes')
+          .select('user_id, role')
+          .eq('societe_id', societeId)
+          .in('user_id', employeeUserIds)
+    usMapByEmpUser = new Map((empUsRes.data || []).map((r: any) => [r.user_id, r]))
   }
 
   const enrichedEmployes = (employes || []).map((e: any) => {
@@ -163,6 +191,8 @@ export async function GET(req: NextRequest) {
     role_matrix: ROLE_MATRIX,
     all_capabilities: ALL_CAPABILITIES,
     bot_username: process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'LexoraBot',
+    // Informe l'UI si les overrides de caps sont opérationnels (migration 266)
+    capabilities_override_supported: capsColumnAvailable,
   })
 }
 
@@ -233,7 +263,14 @@ export async function PATCH(req: NextRequest) {
     .update(updates)
     .eq('user_id', body.user_id)
     .eq('societe_id', societeId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    if (/telegram_capabilities/i.test(error.message || '')) {
+      return NextResponse.json({
+        error: 'La colonne user_societes.telegram_capabilities n\'existe pas encore. Exécute la migration supabase/migrations/266_user_telegram_capabilities.sql sur la DB pour activer les permissions personnalisées.',
+      }, { status: 500 })
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   await admin.from('telegram_actions').insert({
     chat_id: 0,
