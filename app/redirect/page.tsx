@@ -46,7 +46,7 @@ export default function RedirectPage() {
         const effectiveRole = (!profile?.role && profile?.employe_id) ? 'employe' : role
 
         // Auto-link employe on login (fire and forget — don't block redirect)
-        if (['employe', 'salarie', 'rh', 'manager', 'rh_manager'].includes(effectiveRole)) {
+        if (['employe', 'salarie', 'rh', 'manager', 'team_leader', 'rh_manager'].includes(effectiveRole)) {
           fetch('/api/rh/employes/me').catch(() => {})
         }
 
