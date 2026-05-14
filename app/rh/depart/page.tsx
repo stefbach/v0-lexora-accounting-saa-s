@@ -185,12 +185,14 @@ function DepartureForm({ societes, onCalculated, locale }: {
 }
 
 // ── Sub-component: Settlement Breakdown Display ──
-function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
+function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }: {
   breakdown: any
   formData: any
   onConfirm: () => void
   confirming: boolean
+  locale: Locale
 }) {
+  const TYPE_LABELS = getTypeLabels(locale)
   const emp = breakdown.employe
   const anc = breakdown.anciennete
 
@@ -199,7 +201,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
       <CardHeader className="bg-[#0B0F2E] text-white rounded-t-lg">
         <CardTitle className="flex items-center gap-2">
           <Banknote className="w-5 h-5 text-[#D4AF37]" />
-          Solde de tout compte — {emp.prenom} {emp.nom}
+          {t('rha.b.depart.settlement_for', locale)} {emp.prenom} {emp.nom}
         </CardTitle>
         <p className="text-white/70 text-sm">
           {emp.poste || "—"} | Salaire base: {fmt(emp.salaire_base)} | Arrivée: {fmtDate(emp.date_arrivee)}
@@ -210,7 +212,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
         <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
           <Clock className="w-5 h-5 text-blue-600" />
           <div>
-            <p className="font-semibold text-[#0B0F2E]">Ancienneté</p>
+            <p className="font-semibold text-[#0B0F2E]">{t('rha.b.depart.seniority', locale)}</p>
             <p className="text-sm text-gray-600">{anc.label}</p>
           </div>
           <Badge variant="outline" className="ml-auto border-blue-300 text-blue-700">
@@ -222,15 +224,15 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <TableHead className="font-semibold">Élément</TableHead>
-              <TableHead className="text-center">Détails</TableHead>
-              <TableHead className="text-right font-semibold">Montant</TableHead>
+              <TableHead className="font-semibold">{t('rha.b.depart.col_element', locale)}</TableHead>
+              <TableHead className="text-center">{t('rha.b.depart.col_details', locale)}</TableHead>
+              <TableHead className="text-right font-semibold">{t('rha.b.depart.col_amount', locale)}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* Prorata salary */}
             <TableRow>
-              <TableCell className="font-medium">Salaire prorata mois en cours</TableCell>
+              <TableCell className="font-medium">{t('rha.b.depart.row_prorata', locale)}</TableCell>
               <TableCell className="text-center text-sm text-gray-500">
                 {breakdown.salaire_prorata.jours_travailles} / {breakdown.salaire_prorata.jours_mois} jours
               </TableCell>
@@ -239,7 +241,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
 
             {/* AL payout */}
             <TableRow>
-              <TableCell className="font-medium">Congés annuels (AL) restants</TableCell>
+              <TableCell className="font-medium">{t('rha.b.depart.row_al_remain', locale)}</TableCell>
               <TableCell className="text-center text-sm text-gray-500">
                 {breakdown.conges_al.restant} jours ({breakdown.conges_al.droit_prorata} acquis - {breakdown.conges_al.pris} pris) x {fmt(breakdown.conges_al.taux_journalier)}/j
               </TableCell>
@@ -249,9 +251,9 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {/* SL — WRA Art. 48(2) : NON payable à la sortie */}
             <TableRow className="bg-gray-50/50">
               <TableCell className="font-medium text-gray-500">
-                Congés maladie (SL) non utilisés
+                {t('rha.b.depart.row_sl_unused', locale)}
                 <span className="block text-[10px] text-amber-700 mt-0.5">
-                  Non payables à la sortie (WRA Art. 48(2))
+                  {t('rha.b.depart.row_sl_unpaid', locale)}
                 </span>
               </TableCell>
               <TableCell className="text-center text-sm text-gray-400">
@@ -264,7 +266,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
 
             {/* 13th month */}
             <TableRow>
-              <TableCell className="font-medium">13ème mois prorata</TableCell>
+              <TableCell className="font-medium">{t('rha.b.depart.row_13th', locale)}</TableCell>
               <TableCell className="text-center text-sm text-gray-500">
                 ({fmt(breakdown.employe.salaire_base)} / 12) x {breakdown.treizieme_mois.mois_travailles} mois
               </TableCell>
@@ -274,7 +276,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {/* Allocations prorata */}
             {breakdown.allocations_prorata.montant > 0 && (
               <TableRow>
-                <TableCell className="font-medium">Allocations prorata (transport + essence)</TableCell>
+                <TableCell className="font-medium">{t('rha.b.depart.row_allowances', locale)}</TableCell>
                 <TableCell className="text-center text-sm text-gray-500">
                   Transport: {fmt(breakdown.allocations_prorata.transport)} + Essence: {fmt(breakdown.allocations_prorata.petrol)}
                 </TableCell>
@@ -286,7 +288,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {breakdown.preavis.applicable && (
               <TableRow className={breakdown.preavis.montant > 0 ? "bg-orange-50" : ""}>
                 <TableCell className="font-medium">
-                  Indemnité de préavis
+                  {t('rha.b.depart.row_notice', locale)}
                   {!breakdown.preavis.applicable && <span className="text-xs text-gray-400 ml-2">(non applicable)</span>}
                 </TableCell>
                 <TableCell className="text-center text-sm text-gray-500">
@@ -300,7 +302,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {breakdown.indemnite_licenciement.applicable && (
               <TableRow className="bg-red-50">
                 <TableCell className="font-medium text-red-800">
-                  Indemnité de licenciement
+                  {t('rha.b.depart.row_severance', locale)}
                   {/* G12 — lien calculateur dédié WRA S.70 */}
                   {typeof (breakdown as any).employe_id === 'string' && (
                     <a
@@ -322,7 +324,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             {/* TOTAL */}
             <TableRow className="bg-[#0B0F2E]">
               <TableCell className="font-bold text-white text-base" colSpan={2}>
-                TOTAL SOLDE DE TOUT COMPTE
+                {t('rha.b.depart.row_total', locale)}
               </TableCell>
               <TableCell className="text-right font-bold text-[#D4AF37] text-lg">
                 {fmt(breakdown.total)}
@@ -335,7 +337,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
         <div className="flex items-center justify-between pt-4 border-t">
           <div className="flex items-center gap-2 text-amber-700 bg-amber-50 p-3 rounded-lg">
             <AlertTriangle className="w-5 h-5" />
-            <p className="text-sm font-medium">Cette action est irréversible. L'employé sera marqué comme "Sorti".</p>
+            <p className="text-sm font-medium">{t('rha.b.depart.irreversible', locale)}</p>
           </div>
           <div className="flex gap-2 print:hidden">
             {/* Sprint 2 — Export PDF via window.print(). Le user sélectionne
@@ -347,7 +349,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
               className="border-[#0B0F2E] text-[#0B0F2E]"
               type="button"
             >
-              📄 Imprimer solde
+              {t('rha.b.depart.btn_print_settlement', locale)}
             </Button>
             {/* Sprint 14 BONUS — Certificat de travail WRA Art. 22(3) */}
             <Button
@@ -356,7 +358,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
               className="border-purple-300 text-purple-700"
               type="button"
             >
-              📜 Certificat de travail
+              {t('rha.b.depart.btn_work_certificate', locale)}
             </Button>
             {/* Sprint 16 FIX 5 — Documents de fin de contrat */}
             <Button
@@ -365,7 +367,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
               className="border-emerald-300 text-emerald-700"
               type="button"
             >
-              💰 Solde de tout compte
+              {t('rha.b.depart.btn_settlement_doc', locale)}
             </Button>
             <Button
               variant="outline"
@@ -373,7 +375,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
               className="border-blue-300 text-blue-700"
               type="button"
             >
-              📋 Attestation fin contrat
+              {t('rha.b.depart.btn_attestation', locale)}
             </Button>
             {/* Sprint 16 FIX 4 — Déclaration Workfare TUB (licenciement économique) */}
             {breakdown?.type_depart === 'licenciement' && (
@@ -383,7 +385,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
                 className="border-red-300 text-red-700"
                 type="button"
               >
-                🏛️ Déclaration Workfare TUB
+                {t('rha.b.depart.btn_workfare', locale)}
               </Button>
             )}
             <Button
@@ -393,7 +395,7 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
             >
               {confirming && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               <CheckCircle className="w-4 h-4 mr-2" />
-              Confirmer le départ
+              {t('rha.b.depart.btn_confirm', locale)}
             </Button>
           </div>
         </div>
@@ -403,7 +405,8 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming }: {
 }
 
 // ── Sub-component: Recent Departures List ──
-function RecentDepartures({ refreshKey, onReintegrated }: { refreshKey: number; onReintegrated?: () => void }) {
+function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: number; onReintegrated?: () => void; locale: Locale }) {
+  const TYPE_LABELS = getTypeLabels(locale)
   const [departs, setDeparts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [reintegratingId, setReintegratingId] = useState<string | null>(null)
