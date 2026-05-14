@@ -8,6 +8,7 @@ import { comptableChunk } from './i18n/comptable'
 import { rhAdminChunk } from './i18n/rh_admin'
 import { adminChunk } from './i18n/admin'
 import { publicChunk } from './i18n/public'
+import { componentsChunk } from './i18n/components'
 
 export type Locale = 'fr' | 'en'
 
@@ -621,6 +622,7 @@ const translations: Record<Locale, Record<string, string>> = {
     ...rhAdminChunk.fr,
     ...adminChunk.fr,
     ...publicChunk.fr,
+    ...componentsChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -634,6 +636,7 @@ const translations: Record<Locale, Record<string, string>> = {
     ...rhAdminChunk.en,
     ...adminChunk.en,
     ...publicChunk.en,
+    ...componentsChunk.en,
   },
 }
 
