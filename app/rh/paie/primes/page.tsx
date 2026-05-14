@@ -317,13 +317,13 @@ export default function PrimesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.a.primes.title', locale)}</h1>
-          <p className="text-sm text-gray-500">Catalogue + saisie mensuelle → intégration automatique dans la paie</p>
+          <p className="text-sm text-gray-500">{t('rha.a.primes.subtitle2', locale)}</p>
         </div>
         <div className="flex gap-3 items-center">
           <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="Société" /></SelectTrigger>
+            <SelectTrigger className="w-48"><SelectValue placeholder={t('rha.a.primes.societe_ph', locale)} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes sociétés</SelectItem>
+              <SelectItem value="all">{t('rha.a.primes.toutes_societes', locale)}</SelectItem>
               {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -333,13 +333,13 @@ export default function PrimesPage() {
       {/* Onglets */}
       <div className="flex gap-1 border-b border-gray-200">
         {([
-          { id: "catalogue", label: "Catalogue des primes" },
-          { id: "regles", label: "Regles automatiques" },
-          { id: "saisie", label: "Saisie du mois" },
-        ] as { id: "catalogue" | "saisie" | "regles"; label: string }[]).map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? "border-[#0B0F2E] text-[#0B0F2E]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-            {t.label}
+          { id: "catalogue", label: t('rha.a.primes.tab_catalogue', locale) },
+          { id: "regles", label: t('rha.a.primes.tab_regles', locale) },
+          { id: "saisie", label: t('rha.a.primes.tab_saisie', locale) },
+        ] as { id: "catalogue" | "saisie" | "regles"; label: string }[]).map(tx => (
+          <button key={tx.id} onClick={() => setTab(tx.id)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === tx.id ? "border-[#0B0F2E] text-[#0B0F2E]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+            {tx.label}
           </button>
         ))}
       </div>
@@ -349,22 +349,22 @@ export default function PrimesPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-[#0B0F2E]">Catalogue primes ({catalogue.filter(p => p.actif !== false).length} actives)</CardTitle>
+              <CardTitle className="text-[#0B0F2E]">{t('rha.a.primes.cat_title', locale)} ({catalogue.filter(p => p.actif !== false).length} {t('rha.a.primes.actives', locale)})</CardTitle>
               <Button onClick={() => setCatDialog(true)} className="bg-[#0B0F2E] text-white">
-                <Plus className="w-4 h-4 mr-2" />Nouvelle prime
+                <Plus className="w-4 h-4 mr-2" />{t('rha.a.primes.new', locale)}
               </Button>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
-              : catalogue.length === 0 ? <div className="text-center py-12 text-gray-500">Aucune prime dans le catalogue</div>
+              : catalogue.length === 0 ? <div className="text-center py-12 text-gray-500">{t('rha.a.primes.cat_empty', locale)}</div>
               : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Code</TableHead><TableHead>Libellé</TableHead>
-                      <TableHead>Type</TableHead><TableHead>Valeur</TableHead>
-                      <TableHead>Période</TableHead><TableHead>Actif</TableHead><TableHead>Actions</TableHead>
+                      <TableHead>{t('rha.a.primes.col_code', locale)}</TableHead><TableHead>{t('rha.a.primes.col_libelle', locale)}</TableHead>
+                      <TableHead>{t('rha.a.primes.col_type', locale)}</TableHead><TableHead>{t('rha.a.primes.col_valeur', locale)}</TableHead>
+                      <TableHead>{t('rha.a.primes.col_periode', locale)}</TableHead><TableHead>{t('rha.a.primes.col_actif', locale)}</TableHead><TableHead>{t('rha.a.primes.col_actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -403,11 +403,11 @@ export default function PrimesPage() {
         <div className="space-y-4">
           <div className="flex gap-3 items-center">
             <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-36" />
-            <Button onClick={loadSaisies} variant="outline">Afficher</Button>
+            <Button onClick={loadSaisies} variant="outline">{t('rha.a.primes.show', locale)}</Button>
             <div className="ml-auto flex items-center gap-3">
               {totalSaisies > 0 && (
                 <div className="bg-green-50 border border-green-200 px-4 py-2 rounded-lg text-sm">
-                  Total approuvé : <strong className="text-green-700">{fmt(totalSaisies)}</strong>
+                  {t('rha.a.primes.total_approuve', locale)} : <strong className="text-green-700">{fmt(totalSaisies)}</strong>
                 </div>
               )}
               <ImportPrimesDialog
@@ -416,25 +416,25 @@ export default function PrimesPage() {
                 onImportSuccess={loadSaisies}
               />
               <Button onClick={() => setSaisieDialog(true)} disabled={societe === "all"} className="bg-[#0B0F2E] text-white">
-                <Plus className="w-4 h-4 mr-2" />Saisir une prime
+                <Plus className="w-4 h-4 mr-2" />{t('rha.a.primes.saisir', locale)}
               </Button>
             </div>
           </div>
 
-          {societe === "all" && <p className="text-sm text-gray-500">Sélectionnez une société pour saisir des primes</p>}
+          {societe === "all" && <p className="text-sm text-gray-500">{t('rha.a.primes.saisie_pick_societe', locale)}</p>}
 
           <Card>
-            <CardHeader><CardTitle className="text-[#0B0F2E]">Primes de {periode} ({saisies.length})</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-[#0B0F2E]">{t('rha.a.primes.primes_de', locale)} {periode} ({saisies.length})</CardTitle></CardHeader>
             <CardContent className="p-0">
               {loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
-                : saisies.length === 0 ? <div className="text-center py-12 text-gray-500">Aucune prime saisie pour cette période</div>
+                : saisies.length === 0 ? <div className="text-center py-12 text-gray-500">{t('rha.a.primes.saisie_empty', locale)}</div>
                 : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employé</TableHead><TableHead>Prime</TableHead>
-                        <TableHead>Quantité</TableHead><TableHead className="text-right">Montant</TableHead>
-                        <TableHead>Notes</TableHead><TableHead>Statut</TableHead><TableHead>Actions</TableHead>
+                        <TableHead>{t('rha.a.primes.col_employe', locale)}</TableHead><TableHead>{t('rha.a.primes.col_prime', locale)}</TableHead>
+                        <TableHead>{t('rha.a.primes.col_quantite', locale)}</TableHead><TableHead className="text-right">{t('rha.a.primes.col_montant', locale)}</TableHead>
+                        <TableHead>{t('rha.a.primes.col_notes', locale)}</TableHead><TableHead>{t('rha.a.primes.col_statut', locale)}</TableHead><TableHead>{t('rha.a.primes.col_actions', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -452,13 +452,13 @@ export default function PrimesPage() {
                           <TableCell className="text-sm text-gray-500 max-w-32 truncate">{s.notes || "—"}</TableCell>
                           <TableCell>
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${s.integre_paie ? "bg-blue-100 text-blue-700" : s.approuve ? STATUT_COLORS.approuve : STATUT_COLORS.brouillon}`}>
-                              {s.integre_paie ? "✓ Intégré paie" : s.approuve ? "✓ Approuvé" : "Brouillon"}
+                              {s.integre_paie ? t('rha.a.primes.statut_integre', locale) : s.approuve ? t('rha.a.primes.statut_approuve', locale) : t('rha.a.primes.statut_brouillon', locale)}
                             </span>
                           </TableCell>
                           <TableCell>
                             {!s.approuve && (
                               <Button size="sm" variant="ghost" className="text-green-600 h-7" onClick={() => approuverPrime(s.id)}>
-                                <CheckCircle className="w-4 h-4 mr-1" />Approuver
+                                <CheckCircle className="w-4 h-4 mr-1" />{t('rha.a.primes.approuver', locale)}
                               </Button>
                             )}
                           </TableCell>
@@ -478,38 +478,38 @@ export default function PrimesPage() {
       {tab === "regles" && (
         <div className="space-y-4">
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-            <p className="text-sm text-amber-800 font-medium">Les regles automatiques generent des primes lors du calcul de paie selon les conditions definies.</p>
-            <p className="text-xs text-amber-600 mt-1">Exemple : Meal Allowance = 200 MUR automatique si l&apos;employe a fait des heures supplementaires.</p>
+            <p className="text-sm text-amber-800 font-medium">{t('rha.a.primes.regles_info1', locale)}</p>
+            <p className="text-xs text-amber-600 mt-1">{t('rha.a.primes.regles_info2', locale)}</p>
           </div>
 
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-[#0B0F2E]">Regles ({regles.filter(r => r.actif !== false).length} actives)</CardTitle>
+                <CardTitle className="text-[#0B0F2E]">{t('rha.a.primes.regles_title', locale)} ({regles.filter(r => r.actif !== false).length} {t('rha.a.primes.actives', locale)})</CardTitle>
                 <Button onClick={() => setRegleDialog(true)} disabled={societe === "all"} className="bg-[#0B0F2E] text-white">
-                  <Plus className="w-4 h-4 mr-2" />Nouvelle regle
+                  <Plus className="w-4 h-4 mr-2" />{t('rha.a.primes.regles_new', locale)}
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {societe === "all" ? <p className="text-center text-gray-500 py-8">Selectionnez une societe</p>
+              {societe === "all" ? <p className="text-center text-gray-500 py-8">{t('rha.a.primes.regles_pick_societe', locale)}</p>
                 : loading ? <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
                 : regles.length === 0 ? (
                   <div className="text-center py-12 text-gray-500">
-                    <p>Aucune regle definie</p>
-                    <p className="text-xs mt-2">Creez des regles pour appliquer automatiquement des primes</p>
+                    <p>{t('rha.a.primes.regles_empty', locale)}</p>
+                    <p className="text-xs mt-2">{t('rha.a.primes.regles_empty_hint', locale)}</p>
                   </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Nom</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Montant</TableHead>
-                        <TableHead>Condition</TableHead>
-                        <TableHead>Scope</TableHead>
-                        <TableHead>Actif</TableHead>
-                        <TableHead>Actions</TableHead>
+                        <TableHead>{t('rha.a.primes.col_nom', locale)}</TableHead>
+                        <TableHead>{t('rha.a.primes.col_type', locale)}</TableHead>
+                        <TableHead>{t('rha.a.primes.col_montant', locale)}</TableHead>
+                        <TableHead>{t('rha.a.primes.col_condition', locale)}</TableHead>
+                        <TableHead>{t('rha.a.primes.col_scope', locale)}</TableHead>
+                        <TableHead>{t('rha.a.primes.col_actif', locale)}</TableHead>
+                        <TableHead>{t('rha.a.primes.col_actions', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

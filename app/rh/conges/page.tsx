@@ -1100,32 +1100,32 @@ export default function CongesPage() {
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.a.conges.title', locale)}</h1>
           <p className="text-sm text-gray-500">
-            Gestion des conges - Workers&apos; Rights Act 2019 (Maurice)
+            {t('rha.a.conges.subtitle2', locale)}
           </p>
         </div>
         <div className="flex gap-2">
           <Select value={societe} onValueChange={setSociete}>
             <SelectTrigger className="w-52">
-              <SelectValue placeholder="Toutes societes" />
+              <SelectValue placeholder={t('rha.a.conges.toutes_societes_ph', locale)} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les societes</SelectItem>
+              <SelectItem value="all">{t('rha.a.conges.toutes_societes', locale)}</SelectItem>
               {societes.map((s: any) => (
                 <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Button onClick={() => { setDialogOpen(true); setFormError(null) }} className="bg-[#0B0F2E] text-white">
-            <Plus className="w-4 h-4 mr-2" />Nouvelle demande
+            <Plus className="w-4 h-4 mr-2" />{t('rha.a.conges.new_demande', locale)}
           </Button>
           {canImposeCollectif && (
             <Button
               onClick={openCollectifModal}
               variant="outline"
               className="border-amber-500 text-amber-700 hover:bg-amber-50"
-              title="Imposer une période de congé à tous les employés (ou à un groupe)"
+              title={t('rha.a.conges.imposer_title', locale)}
             >
-              <Megaphone className="w-4 h-4 mr-2" />Imposer congé collectif
+              <Megaphone className="w-4 h-4 mr-2" />{t('rha.a.conges.imposer', locale)}
             </Button>
           )}
         </div>
@@ -1140,8 +1140,8 @@ export default function CongesPage() {
                 <Calendar className="w-5 h-5 text-[#4191FF]" />
               </div>
               <div>
-                <p className="text-xs text-gray-500" title="Somme des AL pris dans la periode anniversaire courante de chaque employe">AL pris (periode courante)</p>
-                <p className="text-xl font-bold text-[#4191FF]">{kpis.total_al_taken}<span className="text-sm font-normal text-gray-400"> jours</span></p>
+                <p className="text-xs text-gray-500" title="Somme des AL pris dans la periode anniversaire courante de chaque employe">{t('rha.a.conges.kpi_al_pris', locale)}</p>
+                <p className="text-xl font-bold text-[#4191FF]">{kpis.total_al_taken}<span className="text-sm font-normal text-gray-400"> {t('rha.a.conges.kpi_jours', locale)}</span></p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -1149,8 +1149,8 @@ export default function CongesPage() {
                 <Thermometer className="w-5 h-5 text-orange-500" />
               </div>
               <div>
-                <p className="text-xs text-gray-500" title="Somme des SL pris dans la periode anniversaire courante de chaque employe">SL pris (periode courante)</p>
-                <p className="text-xl font-bold text-orange-600">{kpis.total_sl_taken}<span className="text-sm font-normal text-gray-400"> jours</span></p>
+                <p className="text-xs text-gray-500" title="Somme des SL pris dans la periode anniversaire courante de chaque employe">{t('rha.a.conges.kpi_sl_pris', locale)}</p>
+                <p className="text-xl font-bold text-orange-600">{kpis.total_sl_taken}<span className="text-sm font-normal text-gray-400"> {t('rha.a.conges.kpi_jours', locale)}</span></p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -1158,8 +1158,8 @@ export default function CongesPage() {
                 <Users className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">AL restants (global)</p>
-                <p className="text-xl font-bold text-emerald-600">{totalAlRemaining}<span className="text-sm font-normal text-gray-400"> jours</span></p>
+                <p className="text-xs text-gray-500">{t('rha.a.conges.kpi_al_rest', locale)}</p>
+                <p className="text-xl font-bold text-emerald-600">{totalAlRemaining}<span className="text-sm font-normal text-gray-400"> {t('rha.a.conges.kpi_jours', locale)}</span></p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -1172,8 +1172,8 @@ export default function CongesPage() {
                 )}
               </div>
               <div>
-                <p className="text-xs text-gray-500">En attente</p>
-                <p className="text-xl font-bold text-yellow-600">{kpis.pending_requests}<span className="text-sm font-normal text-gray-400"> demandes</span></p>
+                <p className="text-xs text-gray-500">{t('rha.a.conges.kpi_attente', locale)}</p>
+                <p className="text-xl font-bold text-yellow-600">{kpis.pending_requests}<span className="text-sm font-normal text-gray-400"> {t('rha.a.conges.kpi_demandes', locale)}</span></p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -1181,14 +1181,14 @@ export default function CongesPage() {
                 <ShieldAlert className="w-5 h-5 text-red-500" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">Alertes certificat</p>
+                <p className="text-xs text-gray-500">{t('rha.a.conges.kpi_alertes', locale)}</p>
                 <p className="text-xl font-bold text-red-600">{kpis.alerts}</p>
               </div>
             </div>
           </div>
           {upcomingLeavesThisWeek.length > 0 && (
             <div className="mt-3 pt-3 border-t border-gray-100">
-              <p className="text-xs font-medium text-[#0B0F2E] mb-1.5">Conges cette semaine ({upcomingLeavesThisWeek.length})</p>
+              <p className="text-xs font-medium text-[#0B0F2E] mb-1.5">{t('rha.a.conges.cette_semaine', locale)} ({upcomingLeavesThisWeek.length})</p>
               <div className="flex flex-wrap gap-2">
                 {upcomingLeavesThisWeek.slice(0, 8).map(c => (
                   <div key={c.id} className="flex items-center gap-1.5 bg-white border rounded-md px-2 py-1">
@@ -1198,7 +1198,7 @@ export default function CongesPage() {
                   </div>
                 ))}
                 {upcomingLeavesThisWeek.length > 8 && (
-                  <span className="text-[10px] text-gray-400 self-center">+{upcomingLeavesThisWeek.length - 8} autres</span>
+                  <span className="text-[10px] text-gray-400 self-center">+{upcomingLeavesThisWeek.length - 8} {t('rha.a.conges.autres', locale)}</span>
                 )}
               </div>
             </div>
@@ -1209,9 +1209,9 @@ export default function CongesPage() {
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="dashboard">Tableau de bord</TabsTrigger>
+          <TabsTrigger value="dashboard">{t('rha.a.conges.tab_dashboard', locale)}</TabsTrigger>
           <TabsTrigger value="demandes" className="relative">
-            Demandes
+            {t('rha.a.conges.tab_demandes', locale)}
             {kpis.pending_requests > 0 && (
               <Badge variant="destructive" className="ml-2 h-5 px-1.5 text-xs">
                 {kpis.pending_requests}
@@ -1219,12 +1219,12 @@ export default function CongesPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="calendrier">
-            <Calendar className="w-3.5 h-3.5 mr-1" />Vue calendrier
+            <Calendar className="w-3.5 h-3.5 mr-1" />{t('rha.a.conges.tab_calendrier', locale)}
           </TabsTrigger>
-          <TabsTrigger value="absents">Absences aujourd&apos;hui</TabsTrigger>
-          <TabsTrigger value="historique">Historique</TabsTrigger>
+          <TabsTrigger value="absents">{t('rha.a.conges.tab_absents', locale)}</TabsTrigger>
+          <TabsTrigger value="historique">{t('rha.a.conges.tab_historique', locale)}</TabsTrigger>
           <TabsTrigger value="cash-in-lieu" className="text-purple-700">
-            Cash-in-lieu
+            {t('rha.a.conges.tab_cash', locale)}
           </TabsTrigger>
         </TabsList>
 
@@ -1234,7 +1234,7 @@ export default function CongesPage() {
             <CardHeader>
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <CardTitle className="text-[#0B0F2E]">
-                  Soldes de conges par employe (periode anniversaire)
+                  {t('rha.a.conges.dashboard_title', locale)}
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   {/* G3 — Filtre statut WRA */}
@@ -1243,13 +1243,13 @@ export default function CongesPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Tous (worker + hors WRA)</SelectItem>
-                      <SelectItem value="worker">Workers uniquement</SelectItem>
-                      <SelectItem value="hors_wra">Hors WRA uniquement</SelectItem>
+                      <SelectItem value="all">{t('rha.a.conges.f_all', locale)}</SelectItem>
+                      <SelectItem value="worker">{t('rha.a.conges.f_worker', locale)}</SelectItem>
+                      <SelectItem value="hors_wra">{t('rha.a.conges.f_horswra', locale)}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Input
-                    placeholder="Rechercher un employe..."
+                    placeholder={t('rha.a.conges.search_emp_ph', locale)}
                     value={searchBal}
                     onChange={e => setSearchBal(e.target.value)}
                     className="w-56"
@@ -1770,7 +1770,7 @@ export default function CongesPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-[#0B0F2E]">Historique des conges</CardTitle>
+                <CardTitle className="text-[#0B0F2E]">{t('rha.a.conges.history_title', locale)}</CardTitle>
                 <div className="flex gap-2">
                   <Input
                     placeholder="Rechercher..."

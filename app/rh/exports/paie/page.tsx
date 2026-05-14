@@ -715,7 +715,7 @@ export default function ExportPaiePage() {
                   {virementStatus.summary.nb_employes_sans_banque > 0 && (
                     <div className="text-orange-600">
                       <AlertTriangle className="inline w-3 h-3 mr-1" />
-                      {virementStatus.summary.nb_employes_sans_banque} employe(s) sans coordonnees bancaires
+                      {virementStatus.summary.nb_employes_sans_banque} {t('rha.b.expaie.no_bank_alert', locale)}
                     </div>
                   )}
                 </div>
@@ -825,12 +825,12 @@ export default function ExportPaiePage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <Building2 className="w-4 h-4" />
-                PACO MRA — fichier officiel à uploader
+                {t('rha.b.expaie.paco_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-700">
-                Génère le fichier <code>paco&lt;YYYYMMDD&gt;.csv</code> au format <strong>Joint PACO Dec 2024</strong> (CSG + NSF + PAYE consolidés). C'est le SEUL fichier à uploader sur le portail MRA e-Services.
+                {t('rha.b.expaie.paco_desc', locale)}
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <Button
@@ -850,28 +850,28 @@ export default function ExportPaiePage() {
               {pacoStatus.summary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
                   <div>
-                    <span className="text-gray-500 block text-xs">Employés inclus</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_emp_inclus', locale)}</span>
                     <strong>{pacoStatus.summary.employes_inclus || 0}</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total Wage Bill</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_wage', locale)}</span>
                     <strong>{fmt(pacoStatus.summary.total_wage_bill || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total CSG</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_csg', locale)}</span>
                     <strong>{fmt(pacoStatus.summary.total_csg || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total NSF</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_nsf', locale)}</span>
                     <strong>{fmt(pacoStatus.summary.total_nsf || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total PAYE</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_paye', locale)}</span>
                     <strong>{fmt(pacoStatus.summary.total_paye || 0)} MUR</strong>
                   </div>
                   {pacoStatus.summary.employes_exclus_mra > 0 && (
                     <div>
-                      <span className="text-gray-500 block text-xs">Exclus MRA</span>
+                      <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_excl_mra', locale)}</span>
                       <strong>{pacoStatus.summary.employes_exclus_mra}</strong>
                     </div>
                   )}
@@ -885,12 +885,12 @@ export default function ExportPaiePage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <Building2 className="w-4 h-4" />
-                PRGF Monthly Return — fichier officiel à uploader
+                {t('rha.b.expaie.prgf_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-700">
-                Génère le fichier <code>prgf&lt;YYYYMMDD&gt;.csv</code> au format MRA pour upload sur le portail PRGF (séparé du PACO). URL portail : <code>https://eservices14.mra.mu/prgfcontribution</code>.
+                {t('rha.b.expaie.prgf_desc', locale)} <code>https://eservices14.mra.mu/prgfcontribution</code>.
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <Button
@@ -910,24 +910,24 @@ export default function ExportPaiePage() {
               {prgfStatus.summary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
                   <div>
-                    <span className="text-gray-500 block text-xs">Employés inclus</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_emp_inclus', locale)}</span>
                     <strong>{prgfStatus.summary.employes_inclus || 0}</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total Basic</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_basic', locale)}</span>
                     <strong>{fmt(prgfStatus.summary.total_basic || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total Allowances</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_allow', locale)}</span>
                     <strong>{fmt(prgfStatus.summary.total_allowances || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total PRGF</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_prgf', locale)}</span>
                     <strong>{fmt(prgfStatus.summary.total_prgf || 0)} MUR</strong>
                   </div>
                   {Array.isArray(prgfStatus.summary.employes_exclus) && prgfStatus.summary.employes_exclus.length > 0 && (
                     <div className="col-span-2 md:col-span-4 text-xs text-gray-500">
-                      Exclus : {prgfStatus.summary.employes_exclus.length} (voir console pour détail)
+                      {t('rha.b.expaie.lbl_excl_n', locale)} : {prgfStatus.summary.employes_exclus.length} {t('rha.b.expaie.lbl_excl_hint', locale)}
                     </div>
                   )}
                 </div>
@@ -940,7 +940,7 @@ export default function ExportPaiePage() {
               correspondent PAS au format MRA officiel et ne doivent PAS être
               uploadées sur le portail. Utiliser PACO + PRGF ci-dessus. */}
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            ℹ️ Les 2 exports ci-dessous (CSG/NSF + PAYE) sont des <strong>rapports internes</strong> au format Lexora — utiles pour audit/contrôle visuel. Ils ne sont <strong>plus uploadés au MRA</strong>. Utilisez PACO + PRGF ci-dessus.
+            ℹ️ {t('rha.b.expaie.legacy_warn', locale)}
           </div>
 
           {/* CSG / NSF Card */}
@@ -948,12 +948,12 @@ export default function ExportPaiePage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <Building2 className="w-4 h-4" />
-                CSG / NSF (rapport interne)
+                {t('rha.b.expaie.csg_card_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-500">
-                Genere la declaration CSG/NSF mensuelle avec recap et detail par employe (2 fichiers CSV — format Lexora interne, pas MRA).
+                {t('rha.b.expaie.csg_card_desc', locale)}
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <Button
@@ -975,31 +975,31 @@ export default function ExportPaiePage() {
               {csgStatus.summary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
                   <div>
-                    <span className="text-gray-500 block text-xs">Masse salariale</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_masse_sal', locale)}</span>
                     <strong>{fmt(csgStatus.summary.total_masse_salariale || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">CSG salarie</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_csg_sal', locale)}</span>
                     <strong>{fmt(csgStatus.summary.total_csg_sal || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">CSG patronal</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_csg_pat', locale)}</span>
                     <strong>{fmt(csgStatus.summary.total_csg_pat || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">NSF (sal + pat)</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_nsf_combined', locale)}</span>
                     <strong>{fmt((csgStatus.summary.total_nsf_sal || 0) + (csgStatus.summary.total_nsf_pat || 0))} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Training Levy</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_training', locale)}</span>
                     <strong>{fmt(csgStatus.summary.total_training || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">PRGF</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_prgf', locale)}</span>
                     <strong>{fmt(csgStatus.summary.total_prgf || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total MRA</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_mra', locale)}</span>
                     <strong className="text-lg" style={{ color: BLUE }}>{fmt(csgStatus.summary.total_mra || 0)} MUR</strong>
                   </div>
                 </div>
@@ -1012,12 +1012,12 @@ export default function ExportPaiePage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <FileText className="w-4 h-4" />
-                PAYE Return (rapport interne)
+                {t('rha.b.expaie.paye_card_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-500">
-                Genere le PAYE Return mensuel avec recap et detail par employe (2 fichiers CSV — format Lexora interne, pas MRA).
+                {t('rha.b.expaie.paye_card_desc', locale)}
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <Button
@@ -1039,15 +1039,15 @@ export default function ExportPaiePage() {
               {payeStatus.summary && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
                   <div>
-                    <span className="text-gray-500 block text-xs">Total salaires bruts</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_brut', locale)}</span>
                     <strong>{fmt(payeStatus.summary.total_salaires_bruts || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total PAYE retenu</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_paye_ret', locale)}</span>
                     <strong>{fmt(payeStatus.summary.total_paye_retenu || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Employes</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_employes', locale)}</span>
                     <strong>{payeStatus.summary.nb_employes || 0}</strong>
                   </div>
                 </div>
@@ -1072,7 +1072,7 @@ export default function ExportPaiePage() {
                   </div>
                   <div>
                     <p className="font-medium text-sm">CSG</p>
-                    <p className="text-xs text-gray-500">15 du mois suivant</p>
+                    <p className="text-xs text-gray-500">{t('rha.b.expaie.deadline_csg_sub', locale)}</p>
                     <p className={`text-xs font-medium mt-1 ${isLate(deadlineCsg) ? "text-red-600" : "text-gray-600"}`}>
                       {formatDeadline(deadlineCsg)}
                       {isLate(deadlineCsg) && ` -- ${t('rha.b.expaie.late', locale)}`}
@@ -1087,7 +1087,7 @@ export default function ExportPaiePage() {
                   </div>
                   <div>
                     <p className="font-medium text-sm">PAYE</p>
-                    <p className="text-xs text-gray-500">20 du mois suivant</p>
+                    <p className="text-xs text-gray-500">{t('rha.b.expaie.deadline_paye_sub', locale)}</p>
                     <p className={`text-xs font-medium mt-1 ${isLate(deadlinePaye) ? "text-red-600" : "text-gray-600"}`}>
                       {formatDeadline(deadlinePaye)}
                       {isLate(deadlinePaye) && ` -- ${t('rha.b.expaie.late', locale)}`}
@@ -1102,7 +1102,7 @@ export default function ExportPaiePage() {
                   </div>
                   <div>
                     <p className="font-medium text-sm">NSF</p>
-                    <p className="text-xs text-gray-500">Fin du mois</p>
+                    <p className="text-xs text-gray-500">{t('rha.b.expaie.deadline_nsf_sub', locale)}</p>
                     <p className={`text-xs font-medium mt-1 ${isLate(deadlineNsf) ? "text-red-600" : "text-gray-600"}`}>
                       {formatDeadline(deadlineNsf)}
                       {isLate(deadlineNsf) && ` -- ${t('rha.b.expaie.late', locale)}`}

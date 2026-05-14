@@ -15,7 +15,7 @@ import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 
 function fmt(n: number) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-function formatDate(d: string) { return d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "--" }
+function formatDate(d: string, locale: Locale = 'fr') { return d ? new Date(d).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR', { day: "2-digit", month: "short", year: "numeric" }) : "--" }
 
 export default function CompteCourantPage() {
   const locale = getLocale()
@@ -143,21 +143,21 @@ export default function CompteCourantPage() {
   return (
     <ClientPageShell
       breadcrumbs={[
-        { label: "Espace client", href: "/client" },
-        { label: "Comptes Courants" },
+        { label: t('acc.cc.client_area', locale), href: "/client" },
+        { label: t('acc.cc.cc_breadcrumb', locale) },
       ]}
-      kicker="Comptabilité"
-      title={selectedCompte ? `Compte Courant — ${selectedCompte.nom}` : "Comptes Courants Associés"}
+      kicker={t('acc.cc.accounting', locale)}
+      title={selectedCompte ? `${t('acc.cc.title_detail', locale)} — ${selectedCompte.nom}` : t('acc.cc.title_main', locale)}
       subtitle={
         selectedCompte
-          ? `${selectedCompte.type === 'associe' ? 'Associé' : 'Collaborateur'} — Compte ${selectedCompte.type === 'associe' ? '455' : '467'}`
-          : "Suivi des avances associés et collaborateurs."
+          ? `${selectedCompte.type === 'associe' ? t('acc.cc.shareholder', locale) : t('acc.cc.collaborator', locale)} — ${t('acc.cc.account_pcg', locale)} ${selectedCompte.type === 'associe' ? '455' : '467'}`
+          : t('acc.cc.subtitle_main', locale)
       }
       actions={
         <>
           {selectedCompte && (
             <Button variant="ghost" size="sm" onClick={() => setSelectedCompte(null)}>
-              <ChevronLeft className="w-4 h-4 mr-1" /> Retour
+              <ChevronLeft className="w-4 h-4 mr-1" /> {t('acc.cc.back', locale)}
             </Button>
           )}
           <Button variant="outline" onClick={load}><RefreshCw className="w-4 h-4 mr-2" />{t('common.refresh', locale)}</Button>
@@ -263,7 +263,7 @@ export default function CompteCourantPage() {
                             <span className="text-gray-400">0,00</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-sm text-gray-500">{formatDate(c.updated_at)}</TableCell>
+                        <TableCell className="text-sm text-gray-500">{formatDate(c.updated_at, locale)}</TableCell>
                         <TableCell>
                           <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedCompte(c) }}>
                             {t('acc.cc.view_detail', locale)}
@@ -300,11 +300,11 @@ export default function CompteCourantPage() {
                       const compte = comptes.find(c => c.id === m.compte_courant_id)
                       return (
                         <TableRow key={m.id}>
-                          <TableCell className="text-sm">{formatDate(m.date_mouvement)}</TableCell>
+                          <TableCell className="text-sm">{formatDate(m.date_mouvement, locale)}</TableCell>
                           <TableCell className="font-medium">{compte?.nom || "--"}</TableCell>
                           <TableCell>
                             <Badge className={m.type === 'avance' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}>
-                              {m.type}
+                              {m.type === 'avance' ? t('acc.cc.advance', locale) : m.type === 'remboursement' ? t('acc.cc.reimbursement', locale) : m.type}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-sm max-w-[200px] truncate">{m.description || "--"}</TableCell>
@@ -334,8 +334,8 @@ export default function CompteCourantPage() {
             <div>
               <CardTitle className="text-[#0B0F2E]">{t('acc.cc.movements', locale)} — {selectedCompte.nom}</CardTitle>
               <p className="text-sm text-gray-500 mt-1">
-                Solde actuel: <span className="font-bold">{fmt(Number(selectedCompte.solde))}</span> MUR
-                {Number(selectedCompte.solde) > 0 ? " (la societe doit a l'associe)" : Number(selectedCompte.solde) < 0 ? " (l'associe doit a la societe)" : ""}
+                {t('acc.cc.current_balance_inline', locale)}: <span className="font-bold">{fmt(Number(selectedCompte.solde))}</span> MUR
+                {Number(selectedCompte.solde) > 0 ? ` ${t('acc.cc.balance_owed_to_partner', locale)}` : Number(selectedCompte.solde) < 0 ? ` ${t('acc.cc.balance_owed_to_company', locale)}` : ""}
               </p>
             </div>
             <div className="flex gap-2">
@@ -350,23 +350,23 @@ export default function CompteCourantPage() {
           {/* Factures payées par cet associé */}
           {factures.length === 0 && (
             <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">
-              Toutes les factures non assignées sont pour cet associé. Utilisez "Enregistrer une avance" pour lier une facture fournisseur.
+              {t('acc.cc.all_unassigned_for_partner', locale)}
             </div>
           )}
 
           <CardContent className="p-0 overflow-x-auto">
             {filteredMouvements.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">Aucun mouvement enregistre pour ce compte.</div>
+              <div className="text-center py-12 text-gray-500">{t('acc.cc.no_movement_for_account', locale)}</div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Montant (MUR)</TableHead>
-                    <TableHead className="text-right">Solde (MUR)</TableHead>
-                    <TableHead>Lettre</TableHead>
+                    <TableHead>{t('common.date', locale)}</TableHead>
+                    <TableHead>{t('acc.cc.type', locale)}</TableHead>
+                    <TableHead>{t('common.description', locale)}</TableHead>
+                    <TableHead className="text-right">{t('acc.cc.amount_mur', locale)}</TableHead>
+                    <TableHead className="text-right">{t('acc.cc.col_balance_mur', locale)}</TableHead>
+                    <TableHead>{t('acc.cc.letter', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -385,10 +385,10 @@ export default function CompteCourantPage() {
                     withBalance.reverse()
                     return withBalance.map((m: any) => (
                       <TableRow key={m.id}>
-                        <TableCell className="text-sm">{formatDate(m.date_mouvement)}</TableCell>
+                        <TableCell className="text-sm">{formatDate(m.date_mouvement, locale)}</TableCell>
                         <TableCell>
                           <Badge className={m.type === 'avance' ? 'bg-orange-100 text-orange-700' : m.type === 'remboursement' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}>
-                            {m.type}
+                            {m.type === 'avance' ? t('acc.cc.advance', locale) : m.type === 'remboursement' ? t('acc.cc.reimbursement', locale) : m.type}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm">{m.description || "--"}</TableCell>
@@ -420,27 +420,27 @@ export default function CompteCourantPage() {
       {/* Dialog: Creer compte */}
       <Dialog open={createDialog} onOpenChange={setCreateDialog}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Nouveau compte courant</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('acc.cc.dialog_new_title', locale)}</DialogTitle></DialogHeader>
           <div className="grid gap-3 py-2">
             <div>
-              <Label>Nom *</Label>
-              <Input value={formNom} onChange={e => setFormNom(e.target.value)} placeholder="Nom de l'associe ou collaborateur" />
+              <Label>{t('acc.cc.field_name_required', locale)}</Label>
+              <Input value={formNom} onChange={e => setFormNom(e.target.value)} placeholder={t('acc.cc.placeholder_name', locale)} />
             </div>
             <div>
-              <Label>Type *</Label>
+              <Label>{t('acc.cc.field_type_required', locale)}</Label>
               <Select value={formType} onValueChange={setFormType}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="associe">Associe (compte 455)</SelectItem>
-                  <SelectItem value="collaborateur">Collaborateur (compte 467)</SelectItem>
+                  <SelectItem value="associe">{t('acc.cc.opt_associe_455', locale)}</SelectItem>
+                  <SelectItem value="collaborateur">{t('acc.cc.opt_collab_467', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialog(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setCreateDialog(false)}>{t('acc.cc.cancel', locale)}</Button>
             <Button onClick={handleCreateCompte} disabled={saving || !formNom} className="bg-[#0B0F2E]">
-              {saving ? "Creation..." : "Creer"}
+              {saving ? t('acc.cc.creating', locale) : t('acc.cc.create', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -449,43 +449,43 @@ export default function CompteCourantPage() {
       {/* Dialog: Enregistrer avance */}
       <Dialog open={avanceDialog} onOpenChange={setAvanceDialog}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Enregistrer une avance</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('acc.cc.dialog_advance_title', locale)}</DialogTitle></DialogHeader>
           <p className="text-sm text-gray-500">
-            L'associe ou collaborateur a paye une depense de la societe avec ses fonds personnels.
+            {t('acc.cc.advance_explanation', locale)}
           </p>
           <div className="grid gap-3 py-2">
             <div>
-              <Label>Associe / Collaborateur *</Label>
+              <Label>{t('acc.cc.field_partner_required', locale)}</Label>
               <Select value={formAvanceCompte} onValueChange={setFormAvanceCompte}>
-                <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('acc.cc.choose', locale)} /></SelectTrigger>
                 <SelectContent>
                   {comptes.map(c => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.nom} ({c.type === 'associe' ? 'Associe' : 'Collaborateur'})
+                      {c.nom} ({c.type === 'associe' ? t('acc.cc.shareholder', locale) : t('acc.cc.collaborator', locale)})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label>Montant (MUR) *</Label>
+              <Label>{t('acc.cc.field_amount_required', locale)}</Label>
               <Input type="number" value={formAvanceMontant} onChange={e => setFormAvanceMontant(e.target.value)} placeholder="0.00" />
             </div>
             <div>
-              <Label>Date</Label>
+              <Label>{t('acc.cc.field_date', locale)}</Label>
               <Input type="date" value={formAvanceDate} onChange={e => setFormAvanceDate(e.target.value)} />
             </div>
             <div>
-              <Label>Description</Label>
-              <Input value={formAvanceDesc} onChange={e => setFormAvanceDesc(e.target.value)} placeholder="Ex: Achat fournitures bureau" />
+              <Label>{t('acc.cc.field_description', locale)}</Label>
+              <Input value={formAvanceDesc} onChange={e => setFormAvanceDesc(e.target.value)} placeholder={t('acc.cc.placeholder_advance_desc', locale)} />
             </div>
             {factures.length > 0 && (
               <div>
-                <Label>Lier a une facture fournisseur (optionnel)</Label>
+                <Label>{t('acc.cc.link_to_supplier_invoice', locale)}</Label>
                 <Select value={formAvanceFacture} onValueChange={setFormAvanceFacture}>
-                  <SelectTrigger><SelectValue placeholder="Aucune facture" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('acc.cc.no_invoice', locale)} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Aucune</SelectItem>
+                    <SelectItem value="">{t('acc.cc.opt_none', locale)}</SelectItem>
                     {factures.map(f => (
                       <SelectItem key={f.id} value={f.id}>
                         {f.numero_facture || f.tiers || "--"} — {fmt(Number(f.montant_ttc))} {f.devise}
@@ -497,9 +497,9 @@ export default function CompteCourantPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAvanceDialog(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setAvanceDialog(false)}>{t('acc.cc.cancel', locale)}</Button>
             <Button onClick={handleAvance} disabled={saving || !formAvanceCompte || !formAvanceMontant} className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#D4AF37]/90">
-              {saving ? "Enregistrement..." : "Enregistrer l'avance"}
+              {saving ? t('acc.cc.saving', locale) : t('acc.cc.save_advance', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -508,41 +508,41 @@ export default function CompteCourantPage() {
       {/* Dialog: Enregistrer remboursement */}
       <Dialog open={remboursementDialog} onOpenChange={setRemboursementDialog}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Enregistrer un remboursement</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('acc.cc.dialog_reimb_title', locale)}</DialogTitle></DialogHeader>
           <p className="text-sm text-gray-500">
-            La societe rembourse l'associe ou collaborateur via la banque.
+            {t('acc.cc.reimb_explanation', locale)}
           </p>
           <div className="grid gap-3 py-2">
             <div>
-              <Label>Associe / Collaborateur *</Label>
+              <Label>{t('acc.cc.field_partner_required', locale)}</Label>
               <Select value={formRembCompte} onValueChange={setFormRembCompte}>
-                <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('acc.cc.choose', locale)} /></SelectTrigger>
                 <SelectContent>
                   {comptes.filter(c => Number(c.solde) > 0).map(c => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.nom} — solde: {fmt(Number(c.solde))} MUR
+                      {c.nom} — {t('acc.cc.balance_label_inline', locale)}: {fmt(Number(c.solde))} MUR
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label>Montant (MUR) *</Label>
+              <Label>{t('acc.cc.field_amount_required', locale)}</Label>
               <Input type="number" value={formRembMontant} onChange={e => setFormRembMontant(e.target.value)} placeholder="0.00" />
             </div>
             <div>
-              <Label>Date</Label>
+              <Label>{t('acc.cc.field_date', locale)}</Label>
               <Input type="date" value={formRembDate} onChange={e => setFormRembDate(e.target.value)} />
             </div>
             <div>
-              <Label>Description</Label>
-              <Input value={formRembDesc} onChange={e => setFormRembDesc(e.target.value)} placeholder="Ex: Virement remboursement avances mars" />
+              <Label>{t('acc.cc.field_description', locale)}</Label>
+              <Input value={formRembDesc} onChange={e => setFormRembDesc(e.target.value)} placeholder={t('acc.cc.placeholder_reimb_desc', locale)} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRemboursementDialog(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setRemboursementDialog(false)}>{t('acc.cc.cancel', locale)}</Button>
             <Button onClick={handleRemboursement} disabled={saving || !formRembCompte || !formRembMontant} className="bg-[#0B0F2E]">
-              {saving ? "Enregistrement..." : "Enregistrer le remboursement"}
+              {saving ? t('acc.cc.saving', locale) : t('acc.cc.save_reimb', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

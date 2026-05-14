@@ -67,8 +67,15 @@ const COLORS = [
 function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate() }
 function isWeekend(year: number, month: number, day: number) { const d = new Date(year, month, day); return d.getDay() === 0 || d.getDay() === 6 }
 
-const MONTH_NAMES = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
-const DAY_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
+const MONTH_NAMES_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+const MONTH_NAMES_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+const DAY_NAMES_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
+const DAY_NAMES_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+function getMonthNames(loc: string) { return loc === 'en' ? MONTH_NAMES_EN : MONTH_NAMES_FR }
+function getDayNames(loc: string) { return loc === 'en' ? DAY_NAMES_EN : DAY_NAMES_FR }
+// Backward-compat aliases (FR fallback for any code outside the component)
+const MONTH_NAMES = MONTH_NAMES_FR
+const DAY_NAMES = DAY_NAMES_FR
 
 const REPOS_CRENEAU: Creneau = {
   id: "repos", nom: "Repos", code: "R",
@@ -1077,17 +1084,17 @@ export default function PlanningPage() {
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('rha.a.plan.title', locale)}</h1>
           <p className="text-gray-500 text-sm">
-            Planifiez les horaires de vos collaborateurs pour {MONTH_NAMES[month]} {year}.
+            {t('rha.a.plan.subtitle2_prefix', locale)} {getMonthNames(locale)[month]} {year}.
             {societe !== "all" && (
-              <span className="ml-2 text-xs">· Limite hebdo : <b>{weeklyLimit}h</b></span>
+              <span className="ml-2 text-xs">· {t('rha.a.plan.weekly_limit', locale)} <b>{weeklyLimit}h</b></span>
             )}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder={t('rha.a.plan.societe_ph', locale)} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes</SelectItem>
+              <SelectItem value="all">{t('rha.a.plan.toutes', locale)}</SelectItem>
               {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -1114,19 +1121,19 @@ export default function PlanningPage() {
                 return (g?.membres || []).some((m: any) => m.employe_id === e.id)
               }))
             }}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Groupe" /></SelectTrigger>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder={t('rha.a.plan.groupe_ph', locale)} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous les groupes</SelectItem>
+                <SelectItem value="all">{t('rha.a.plan.all_groups', locale)}</SelectItem>
                 {groupes.map((g: any) => <SelectItem key={g.id} value={g.id}>{g.nom} ({g.nb_membres})</SelectItem>)}
-                <SelectItem value="sans_groupe">Sans groupe</SelectItem>
+                <SelectItem value="sans_groupe">{t('rha.a.plan.no_group', locale)}</SelectItem>
               </SelectContent>
             </Select>
           )}
           <Button variant="outline" size="sm" onClick={() => setEmpFilterOpen(true)}>
-            <Users className="h-4 w-4 mr-1" /> Collaborateurs ({employes.length}/{allEmployes.length})
+            <Users className="h-4 w-4 mr-1" /> {t('rha.a.plan.collabs', locale)} ({employes.length}/{allEmployes.length})
           </Button>
           <Button variant="outline" size="sm" onClick={() => { setEditingCreneau(null); setCreneauConfigOpen(true) }}>
-            <Clock className="h-4 w-4 mr-1" /> Créneaux
+            <Clock className="h-4 w-4 mr-1" /> {t('rha.a.plan.creneaux', locale)}
           </Button>
         </div>
       </div>
@@ -1141,23 +1148,23 @@ export default function PlanningPage() {
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-sm font-semibold" style={{ color: "#0B0F2E" }}>
-                    Créneaux de {societeNom}
+                    {t('rha.a.plan.creneaux_of', locale)} {societeNom}
                   </CardTitle>
                   <Badge variant="outline" className="text-[10px]">
-                    {creneaux.length} actif{creneaux.length > 1 ? "s" : ""}
+                    {creneaux.length} {creneaux.length > 1 ? t('rha.a.plan.actifs', locale) : t('rha.a.plan.actif', locale)}
                   </Badge>
                 </div>
                 <Link href="/rh/planning/regles" className="text-xs font-medium text-blue-600 hover:underline">
-                  Modifier →
+                  {t('rha.a.plan.edit', locale)}
                 </Link>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
               {creneaux.length === 0 ? (
                 <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-dashed border-gray-300 bg-gray-50">
-                  <span className="text-sm text-gray-500">Aucun créneau configuré.</span>
+                  <span className="text-sm text-gray-500">{t('rha.a.plan.no_creneau', locale)}</span>
                   <Link href="/rh/planning/regles">
-                    <Button size="sm" variant="outline">Configurer</Button>
+                    <Button size="sm" variant="outline">{t('rha.a.plan.configurer', locale)}</Button>
                   </Link>
                 </div>
               ) : (
@@ -1182,10 +1189,10 @@ export default function PlanningPage() {
                     )
                   })}
                   <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-gray-200 text-gray-600 self-start">
-                    <span className="font-bold">R</span> Repos
+                    <span className="font-bold">R</span> {t('rha.a.plan.repos', locale)}
                   </div>
                   <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-emerald-100 text-emerald-700 self-start">
-                    <span className="font-bold">C</span> Congé
+                    <span className="font-bold">C</span> {t('rha.a.plan.conge', locale)}
                   </div>
                 </div>
               )}
@@ -1211,17 +1218,17 @@ export default function PlanningPage() {
                 </div>
                 <div className="flex-1">
                   <h4 className="font-semibold text-blue-900">
-                    Prêt à créer le planning de {MONTH_NAMES[month]} {year} ?
+                    {t('rha.a.plan.ready_prefix', locale)} {getMonthNames(locale)[month]} {year} ?
                   </h4>
                   <p className="text-sm text-blue-800 mt-1">
-                    Utilisez un générateur rapide, ou cliquez directement sur une case.
+                    {t('rha.a.plan.ready_hint', locale)}
                   </p>
                   <div className="flex gap-2 mt-3 flex-wrap">
                     <Button size="sm" onClick={generateStandard}>
-                      Appliquer le créneau standard
+                      {t('rha.a.plan.apply_standard', locale)}
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
-                      Affectation multiple
+                      {t('rha.a.plan.bulk_affect', locale)}
                     </Button>
                   </div>
                 </div>
@@ -1343,14 +1350,14 @@ export default function PlanningPage() {
             <div className="flex items-center gap-3">
               <Button variant="outline" size="icon" onClick={prevMonth}><ChevronLeft className="h-4 w-4" /></Button>
               <CardTitle className="text-lg" style={{ color: "#0B0F2E" }}>
-                <Calendar className="inline h-5 w-5 mr-2" />{MONTH_NAMES[month]} {year}
+                <Calendar className="inline h-5 w-5 mr-2" />{getMonthNames(locale)[month]} {year}
               </CardTitle>
               <Button variant="outline" size="icon" onClick={nextMonth}><ChevronRight className="h-4 w-4" /></Button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               {published
-                ? <Badge className="bg-green-100 text-green-700">Publié</Badge>
-                : <Badge className="bg-amber-100 text-amber-700">Brouillon</Badge>}
+                ? <Badge className="bg-green-100 text-green-700">{t('rha.a.plan.publie', locale)}</Badge>
+                : <Badge className="bg-amber-100 text-amber-700">{t('rha.a.plan.brouillon', locale)}</Badge>}
               {/* View toggle */}
               <div className="inline-flex rounded-lg border overflow-hidden">
                 <button
@@ -1358,14 +1365,14 @@ export default function PlanningPage() {
                   style={viewMode === "monthly" ? { backgroundColor: "#0B0F2E" } : {}}
                   onClick={() => setViewMode("monthly")}
                 >
-                  <Calendar className="inline h-3.5 w-3.5 mr-1" />Mensuel
+                  <Calendar className="inline h-3.5 w-3.5 mr-1" />{t('rha.a.plan.mensuel', locale)}
                 </button>
                 <button
                   className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "weekly" ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
                   style={viewMode === "weekly" ? { backgroundColor: "#0B0F2E" } : {}}
                   onClick={() => { setViewMode("weekly"); setWeekOffset(0) }}
                 >
-                  <Eye className="inline h-3.5 w-3.5 mr-1" />Hebdomadaire
+                  <Eye className="inline h-3.5 w-3.5 mr-1" />{t('rha.a.plan.hebdo', locale)}
                 </button>
               </div>
               {/* Dropdown "Remplir" — regroupe Standard, 3×8, Copier semaine,
@@ -1779,7 +1786,7 @@ export default function PlanningPage() {
             <DialogTitle style={{ color: "#0B0F2E" }}>Collaborateurs dans le planning</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <Input placeholder="Rechercher un collaborateur..." value={empSearch} onChange={e => setEmpSearch(e.target.value)} />
+            <Input placeholder={t('rha.a.plan.search_collab', locale)} value={empSearch} onChange={e => setEmpSearch(e.target.value)} />
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setIncludedEmpIds(new Set(allEmployes.map(e => e.id)))}>
                 Tout sélectionner
