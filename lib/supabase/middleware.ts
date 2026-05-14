@@ -81,6 +81,7 @@ export async function updateSession(request: NextRequest) {
     '/api/health',
     '/api/telegram/webhook',
     '/api/telegram/send',
+    '/api/telegram/send-with-buttons',
     '/api/telegram/societe',
     '/api/telegram/cron-alerts',
     '/api/telegram/log',
