@@ -9,6 +9,7 @@ import {
 } from '@/lib/telegram/auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { ingestTelegramDocument } from '@/lib/telegram/document-ingest'
+import { memoryRecall, formatMemoriesForPrompt } from '@/lib/telegram/memory'
 
 /**
  * POST /api/telegram/webhook
@@ -114,6 +115,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  // Pré-charge les mémoires pertinentes (best-effort, ne bloque pas le forward)
+  let memoryContext: string | null = null
+  try {
+    const memories = await memoryRecall({
+      societe_id: ctx.current_societe_id,
+      user_id: ctx.user_id,
+      query: text || null,
+      top_k: 6,
+    })
+    memoryContext = formatMemoriesForPrompt(memories)
+  } catch (e: any) {
+    console.warn('[webhook] memory recall failed:', e?.message)
+  }
+
   try {
     await fetch(N8N_AGENT_WEBHOOK, {
       method: 'POST',
@@ -126,6 +141,7 @@ export async function POST(req: NextRequest) {
         locale: ctx.language_code,
         first_name: ctx.telegram_firstname,
         message: update.message,
+        memory_context: memoryContext, // injecté dans le system prompt côté n8n
       }),
     })
   } catch (e: any) {
