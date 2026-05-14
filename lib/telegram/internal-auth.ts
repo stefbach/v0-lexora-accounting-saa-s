@@ -87,13 +87,29 @@ export async function resolveTelegramContext(req: NextRequest): Promise<Telegram
     throw NextResponse.json({ error: 'Aucune société active' }, { status: 400 })
   }
 
-  // Récupère le rôle + override de capabilities dans la société active
-  const { data: us } = await admin
-    .from('user_societes')
-    .select('role, telegram_capabilities')
-    .eq('user_id', tgUser.user_id)
-    .eq('societe_id', tgUser.current_societe_id)
-    .maybeSingle()
+  // Récupère le rôle + override de capabilities dans la société active.
+  // Si la colonne telegram_capabilities n'a pas été migrée (mig 266), on
+  // retombe gracieusement sur le SELECT minimal et on utilise les defaults.
+  let us: any = null
+  {
+    const res = await admin
+      .from('user_societes')
+      .select('role, telegram_capabilities')
+      .eq('user_id', tgUser.user_id)
+      .eq('societe_id', tgUser.current_societe_id)
+      .maybeSingle()
+    if (res.error && /telegram_capabilities/i.test(res.error.message || '')) {
+      const fallback = await admin
+        .from('user_societes')
+        .select('role')
+        .eq('user_id', tgUser.user_id)
+        .eq('societe_id', tgUser.current_societe_id)
+        .maybeSingle()
+      us = fallback.data
+    } else {
+      us = res.data
+    }
+  }
   const role = (us?.role || 'employe') as TelegramRole
   const override = Array.isArray(us?.telegram_capabilities) ? (us!.telegram_capabilities as string[]) : null
   const capabilities = override ?? defaultCapabilitiesForRole(role)

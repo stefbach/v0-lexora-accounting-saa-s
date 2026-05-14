@@ -75,6 +75,7 @@ export default function TelegramPermissionsPage() {
   const [members, setMembers] = useState<any[]>([])
   const [employees, setEmployees] = useState<any[]>([])
   const [allCapabilities, setAllCapabilities] = useState<string[]>([])
+  const [capsOverrideSupported, setCapsOverrideSupported] = useState<boolean>(true)
   const [botUsername, setBotUsername] = useState<string>('LexoraBot')
   const [roleMatrix, setRoleMatrix] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
@@ -98,6 +99,7 @@ export default function TelegramPermissionsPage() {
       setMembers(j.members || [])
       setEmployees(j.employees || [])
       setAllCapabilities(j.all_capabilities || [])
+      setCapsOverrideSupported(j.capabilities_override_supported !== false)
       setRoleMatrix(j.role_matrix || {})
       setBotUsername(j.bot_username || 'LexoraBot')
     } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
@@ -235,6 +237,17 @@ export default function TelegramPermissionsPage() {
       </div>
 
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" />{error}</div>}
+
+      {!capsOverrideSupported && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 mt-0.5" />
+          <div>
+            <strong>Migration DB manquante :</strong> les permissions personnalisées par utilisateur ne sont pas encore actives.
+            Exécute <code className="bg-amber-100 px-1 rounded">supabase/migrations/266_user_telegram_capabilities.sql</code> sur la base Supabase pour activer le bouton "Permissions".
+            En attendant, les rôles fonctionnent normalement avec leurs capabilities par défaut.
+          </div>
+        </div>
+      )}
 
       {/* ── Matrice rôles → capabilities ── */}
       <Card>

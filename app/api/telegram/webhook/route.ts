@@ -99,9 +99,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Résout le rôle + capabilities + nom société (pour propagation à n8n).
-  // Permet à l'agent d'utiliser des labels lisibles dans le welcome message.
+  // SELECT tolérant à la migration 266 manquante.
   const admin = getAdminClient()
-  const [{ data: usRow }, { data: socRow }] = await Promise.all([
+  const [usRes, socRes] = await Promise.all([
     admin
       .from('user_societes')
       .select('role, telegram_capabilities')
@@ -114,6 +114,17 @@ export async function POST(req: NextRequest) {
       .eq('id', ctx.current_societe_id)
       .maybeSingle(),
   ])
+  let usRow: any = usRes.data
+  if (usRes.error && /telegram_capabilities/i.test(usRes.error.message || '')) {
+    const fallback = await admin
+      .from('user_societes')
+      .select('role')
+      .eq('user_id', ctx.user_id)
+      .eq('societe_id', ctx.current_societe_id)
+      .maybeSingle()
+    usRow = fallback.data
+  }
+  const socRow = socRes.data
   const role = (usRow?.role || 'employe') as keyof typeof ROLE_LABELS
   const capabilities = Array.isArray(usRow?.telegram_capabilities)
     ? (usRow!.telegram_capabilities as string[])
