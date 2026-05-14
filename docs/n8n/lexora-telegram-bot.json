@@ -1,0 +1,198 @@
+{
+  "name": "Lexora Telegram Bot — AI Agent (multi-tenant)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lexora-telegram-agent",
+        "responseMode": "responseNode",
+        "options": { "rawBody": false }
+      },
+      "id": "wh1",
+      "name": "Webhook — Telegram payload from Lexora",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO telegram_sessions (chat_id, societe_id, role, content) VALUES ($1, $2, 'user', $3) RETURNING id",
+        "options": {
+          "queryReplacement": "={{ $json.body.chat_id }},{{ $json.body.societe_id }},{{ $json.body.message.text || '[document]' }}"
+        }
+      },
+      "id": "log1",
+      "name": "Postgres — log user message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [420, 220],
+      "credentials": { "postgres": { "id": "supabase_pg", "name": "Supabase Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT role, content, tool_name, tool_input, tool_output FROM telegram_sessions WHERE chat_id = $1 ORDER BY created_at DESC LIMIT 20",
+        "options": { "queryReplacement": "={{ $json.body.chat_id }}" }
+      },
+      "id": "mem1",
+      "name": "Postgres — load conversation memory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [420, 380],
+      "credentials": { "postgres": { "id": "supabase_pg", "name": "Supabase Postgres" } }
+    },
+    {
+      "parameters": {
+        "agent": "toolsAgent",
+        "promptType": "define",
+        "text": "={{ $node['Webhook — Telegram payload from Lexora'].json.body.message.text || 'L\\'utilisateur a envoyé un fichier.' }}",
+        "options": {
+          "systemMessage": "={{ $node['Load System Prompt'].json.prompt }}",
+          "maxIterations": 6
+        }
+      },
+      "id": "agent1",
+      "name": "AI Agent — Claude Sonnet 4.6",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [780, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-6",
+        "options": { "maxTokens": 2048, "temperature": 0.2 }
+      },
+      "id": "llm1",
+      "name": "Anthropic Chat — Sonnet 4.6",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [780, 480],
+      "credentials": { "anthropicApi": { "id": "anthropic_key", "name": "Anthropic API" } }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.body.chat_id }}",
+        "contextWindowLength": 20
+      },
+      "id": "mem2",
+      "name": "Window Memory (per chat_id)",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [620, 480]
+    },
+
+    { "parameters": { "toolDescription": "Récupère KPIs financiers du mois courant (CA, dépenses, résultat, trésorerie) pour la société active.", "url": "={{ $env.LEXORA_API_BASE }}/api/client/financial?societe_id={{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "options": {} }, "id": "tool_kpis", "name": "tool: kpis_get_month", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 100] },
+
+    { "parameters": { "toolDescription": "Liste les échéances MRA à venir (VAT, PAYE, CIT, ROC, etc.).", "url": "={{ $env.LEXORA_API_BASE }}/api/comptable/mra/tax-calendar?societe_id={{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}&days_ahead={daysAhead}", "method": "GET", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "placeholderDefinitions": { "values": [{ "name": "daysAhead", "description": "Jours en avant (défaut 30)", "type": "number" }] } }, "id": "tool_tax", "name": "tool: tax_calendar_get", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 180] },
+
+    { "parameters": { "toolDescription": "Crée une facture client. Champs requis : client_name, lines (array {description, qty, unit_price}), currency, vat_rate, notes optionnel.", "url": "={{ $env.LEXORA_API_BASE }}/api/client/factures-ia/generer", "method": "POST", "sendBody": true, "specifyBody": "json", "jsonBody": "={\n  \"societe_id\": \"{{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}\",\n  \"prompt\": \"{prompt}\"\n}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "placeholderDefinitions": { "values": [{ "name": "prompt", "description": "Description libre de la facture", "type": "string" }] } }, "id": "tool_inv_create", "name": "tool: invoice_create", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 260] },
+
+    { "parameters": { "toolDescription": "Soumet une demande de congé.", "url": "={{ $env.LEXORA_API_BASE }}/api/rh/demandes-rh", "method": "POST", "sendBody": true, "specifyBody": "json", "jsonBody": "={\n  \"societe_id\": \"{{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}\",\n  \"user_id\": \"{{ $node['Webhook — Telegram payload from Lexora'].json.body.user_id }}\",\n  \"type\": \"leave\",\n  \"date_debut\": \"{date_debut}\",\n  \"date_fin\": \"{date_fin}\",\n  \"type_conge\": \"{type_conge}\",\n  \"motif\": \"{motif}\"\n}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "placeholderDefinitions": { "values": [{ "name": "date_debut", "type": "string" }, { "name": "date_fin", "type": "string" }, { "name": "type_conge", "type": "string" }, { "name": "motif", "type": "string" }] } }, "id": "tool_leave_req", "name": "tool: leave_request", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 340] },
+
+    { "parameters": { "toolDescription": "Approuve ou refuse une demande de congé (manager/direction).", "url": "={{ $env.LEXORA_API_BASE }}/api/rh/demandes-rh/{demande_id}/decision", "method": "POST", "sendBody": true, "specifyBody": "json", "jsonBody": "={\n  \"decision\": \"{decision}\",\n  \"commentaire\": \"{commentaire}\"\n}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "placeholderDefinitions": { "values": [{ "name": "demande_id", "type": "string" }, { "name": "decision", "type": "string", "description": "approve ou reject" }, { "name": "commentaire", "type": "string" }] } }, "id": "tool_leave_appr", "name": "tool: leave_approve", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 420] },
+
+    { "parameters": { "toolDescription": "Ajoute des heures supplémentaires à un employé pour une période.", "url": "={{ $env.LEXORA_API_BASE }}/api/rh/paie/heures-sup", "method": "POST", "sendBody": true, "specifyBody": "json", "jsonBody": "={\n  \"societe_id\": \"{{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}\",\n  \"employe_id\": \"{employe_id}\",\n  \"periode\": \"{periode}\",\n  \"heures\": {heures},\n  \"taux\": {taux}\n}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "placeholderDefinitions": { "values": [{ "name": "employe_id", "type": "string" }, { "name": "periode", "type": "string", "description": "YYYY-MM" }, { "name": "heures", "type": "number" }, { "name": "taux", "type": "number", "description": "1.5 ou 2" }] } }, "id": "tool_ot", "name": "tool: payroll_overtime_add", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 500] },
+
+    { "parameters": { "toolDescription": "Ajoute une prime à un employé.", "url": "={{ $env.LEXORA_API_BASE }}/api/rh/paie/primes", "method": "POST", "sendBody": true, "specifyBody": "json", "jsonBody": "={\n  \"societe_id\": \"{{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}\",\n  \"employe_id\": \"{employe_id}\",\n  \"periode\": \"{periode}\",\n  \"montant\": {montant},\n  \"motif\": \"{motif}\"\n}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "placeholderDefinitions": { "values": [{ "name": "employe_id", "type": "string" }, { "name": "periode", "type": "string" }, { "name": "montant", "type": "number" }, { "name": "motif", "type": "string" }] } }, "id": "tool_bonus", "name": "tool: payroll_bonus_add", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 580] },
+
+    { "parameters": { "toolDescription": "Calcule la paie de la période donnée.", "url": "={{ $env.LEXORA_API_BASE }}/api/rh/paie/calculer", "method": "POST", "sendBody": true, "specifyBody": "json", "jsonBody": "={\n  \"societe_id\": \"{{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}\",\n  \"periode\": \"{periode}\"\n}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "placeholderDefinitions": { "values": [{ "name": "periode", "type": "string" }] } }, "id": "tool_pay_calc", "name": "tool: payroll_compute", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 660] },
+
+    { "parameters": { "toolDescription": "Valide (verrouille) la paie d'une période (direction/RH).", "url": "={{ $env.LEXORA_API_BASE }}/api/rh/paie/validation", "method": "POST", "sendBody": true, "specifyBody": "json", "jsonBody": "={\n  \"societe_id\": \"{{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}\",\n  \"periode\": \"{periode}\"\n}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "placeholderDefinitions": { "values": [{ "name": "periode", "type": "string" }] } }, "id": "tool_pay_appr", "name": "tool: payroll_approve", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 740] },
+
+    { "parameters": { "toolDescription": "Génère un export MRA (paye, csg_nsf, tds, it3) et renvoie l'URL du fichier.", "url": "={{ $env.LEXORA_API_BASE }}/api/comptable/mra/{type}", "method": "POST", "sendBody": true, "specifyBody": "json", "jsonBody": "={\n  \"societe_id\": \"{{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}\",\n  \"periode\": \"{periode}\"\n}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "placeholderDefinitions": { "values": [{ "name": "type", "type": "string", "description": "paye | csg-nsf | tds | it-form3" }, { "name": "periode", "type": "string" }] } }, "id": "tool_mra_exp", "name": "tool: payroll_export_mra", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 820] },
+
+    { "parameters": { "toolDescription": "Récupère solde(s) bancaire(s) actuels.", "url": "={{ $env.LEXORA_API_BASE }}/api/client/comptes-bancaires?societe_id={{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}", "method": "GET", "authentication": "genericCredentialType", "genericAuthType": "headerAuth" }, "id": "tool_bank", "name": "tool: bank_balance", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 900] },
+
+    { "parameters": { "toolDescription": "Lance le rapprochement bancaire intelligent (Lex Banque).", "url": "={{ $env.LEXORA_API_BASE }}/api/client/lex-banque/run", "method": "POST", "sendBody": true, "specifyBody": "json", "jsonBody": "={\n  \"societe_id\": \"{{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}\"\n}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth" }, "id": "tool_lex_bank", "name": "tool: bank_reconcile_run", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 980] },
+
+    { "parameters": { "toolDescription": "Ingère un fichier (photo/PDF) reçu via Telegram dans l'OCR Lexora. Le fichier est récupéré via Telegram getFile puis envoyé à l'API.", "url": "={{ $env.LEXORA_API_BASE }}/api/client/documents/upload-from-telegram", "method": "POST", "sendBody": true, "specifyBody": "json", "jsonBody": "={\n  \"societe_id\": \"{{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }}\",\n  \"telegram_file_id\": \"{file_id}\",\n  \"doc_type\": \"{doc_type}\"\n}", "authentication": "genericCredentialType", "genericAuthType": "headerAuth", "placeholderDefinitions": { "values": [{ "name": "file_id", "type": "string" }, { "name": "doc_type", "type": "string", "description": "auto | facture | releve | contrat" }] } }, "id": "tool_ocr", "name": "tool: ocr_ingest_document", "type": "@n8n/n8n-nodes-langchain.toolHttpRequest", "typeVersion": 1.2, "position": [980, 1060] },
+
+    {
+      "parameters": {
+        "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": {{ $node['Webhook — Telegram payload from Lexora'].json.body.chat_id }},\n  \"text\": \"{{ $json.output.replace(/\"/g, '\\\\\"') }}\",\n  \"parse_mode\": \"HTML\"\n}"
+      },
+      "id": "tg_send",
+      "name": "Telegram — send reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO telegram_sessions (chat_id, societe_id, role, content) VALUES ($1, $2, 'assistant', $3)",
+        "options": {
+          "queryReplacement": "={{ $node['Webhook — Telegram payload from Lexora'].json.body.chat_id }},{{ $node['Webhook — Telegram payload from Lexora'].json.body.societe_id }},{{ $node['AI Agent — Claude Sonnet 4.6'].json.output }}"
+        }
+      },
+      "id": "log2",
+      "name": "Postgres — log assistant reply",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1400, 480],
+      "credentials": { "postgres": { "id": "supabase_pg", "name": "Supabase Postgres" } }
+    },
+    {
+      "parameters": { "respondWith": "json", "responseBody": "={ \"ok\": true }" },
+      "id": "resp1",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [1620, 300]
+    },
+    {
+      "parameters": {
+        "operation": "fileExists",
+        "filePath": "=/data/lexora-system-prompt.md"
+      },
+      "id": "prompt1",
+      "name": "Load System Prompt",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [620, 200],
+      "notes": "Charge le fichier docs/telegram/SYSTEM_PROMPT.md monté en volume n8n. Alternative: utilise un node Set avec le prompt inline."
+    }
+  ],
+  "connections": {
+    "Webhook — Telegram payload from Lexora": {
+      "main": [[
+        { "node": "Postgres — log user message", "type": "main", "index": 0 },
+        { "node": "Postgres — load conversation memory", "type": "main", "index": 0 },
+        { "node": "Load System Prompt", "type": "main", "index": 0 }
+      ]]
+    },
+    "Postgres — load conversation memory": { "main": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "main", "index": 0 }]] },
+    "Load System Prompt": { "main": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "main", "index": 0 }]] },
+    "Anthropic Chat — Sonnet 4.6": { "ai_languageModel": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_languageModel", "index": 0 }]] },
+    "Window Memory (per chat_id)": { "ai_memory": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_memory", "index": 0 }]] },
+    "tool: kpis_get_month":         { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: tax_calendar_get":       { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: invoice_create":         { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: leave_request":          { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: leave_approve":          { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: payroll_overtime_add":   { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: payroll_bonus_add":      { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: payroll_compute":        { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: payroll_approve":        { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: payroll_export_mra":     { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: bank_balance":           { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: bank_reconcile_run":     { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "tool: ocr_ingest_document":    { "ai_tool": [[{ "node": "AI Agent — Claude Sonnet 4.6", "type": "ai_tool", "index": 0 }]] },
+    "AI Agent — Claude Sonnet 4.6": {
+      "main": [[
+        { "node": "Telegram — send reply", "type": "main", "index": 0 },
+        { "node": "Postgres — log assistant reply", "type": "main", "index": 0 }
+      ]]
+    },
+    "Telegram — send reply": { "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "lexora" }, { "name": "telegram" }, { "name": "ai-agent" }]
+}
