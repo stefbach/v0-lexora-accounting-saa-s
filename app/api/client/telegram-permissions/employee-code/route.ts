@@ -31,7 +31,15 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   const societeId: string | undefined = body?.societe_id
   const employeId: string | undefined = body?.employe_id
-  const desiredRole: string | undefined = body?.role // optionnel : role à attribuer dans user_societes
+  const desiredRole: string | undefined = body?.role
+  // Capabilities personnalisées à appliquer à l'INSERT/UPDATE user_societes.
+  // null/undefined → utilise les caps par défaut du rôle.
+  const desiredCaps: string[] | null | undefined =
+    body?.capabilities === null
+      ? null
+      : Array.isArray(body?.capabilities)
+        ? body.capabilities.map((c: any) => String(c))
+        : undefined
 
   if (!societeId || !employeId) {
     return NextResponse.json({ error: 'societe_id et employe_id requis' }, { status: 400 })
@@ -110,23 +118,46 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. S'assurer que l'utilisateur est listé dans user_societes pour cette société
+  // + appliquer le rôle et les capabilities pré-configurées par l'admin.
   const { data: existingMembership } = await admin
     .from('user_societes')
     .select('role')
     .eq('user_id', authUserId)
     .eq('societe_id', societeId)
     .maybeSingle()
+
+  const insertOrUpdatePayload: Record<string, unknown> = {}
+  if (desiredRole) insertOrUpdatePayload.role = desiredRole
+  // capabilities seulement si on a un override explicite. desiredCaps === undefined
+  // signifie "ne touche pas" — on garde le défaut (NULL = caps du rôle).
+  if (desiredCaps !== undefined) insertOrUpdatePayload.telegram_capabilities = desiredCaps
+
   if (!existingMembership) {
-    const initialRole = desiredRole || 'employe'
-    await admin.from('user_societes').insert({
+    const insertBase: Record<string, unknown> = {
       user_id: authUserId,
       societe_id: societeId,
-      role: initialRole,
-    }).then(() => {}, () => {})
-  } else if (desiredRole && existingMembership.role !== desiredRole) {
-    await admin.from('user_societes').update({ role: desiredRole })
+      role: desiredRole || 'employe',
+    }
+    if (desiredCaps !== undefined) insertBase.telegram_capabilities = desiredCaps
+    const ins = await admin.from('user_societes').insert(insertBase)
+    if (ins.error && /telegram_capabilities/i.test(ins.error.message || '')) {
+      // Migration 266 non appliquée → fallback sans la colonne (le rôle seul est attribué)
+      delete insertBase.telegram_capabilities
+      await admin.from('user_societes').insert(insertBase).then(() => {}, () => {})
+    }
+  } else if (Object.keys(insertOrUpdatePayload).length > 0) {
+    const upd = await admin.from('user_societes').update(insertOrUpdatePayload)
       .eq('user_id', authUserId)
       .eq('societe_id', societeId)
+    if (upd.error && /telegram_capabilities/i.test(upd.error.message || '')) {
+      const cleaned = { ...insertOrUpdatePayload }
+      delete cleaned.telegram_capabilities
+      if (Object.keys(cleaned).length > 0) {
+        await admin.from('user_societes').update(cleaned)
+          .eq('user_id', authUserId)
+          .eq('societe_id', societeId)
+      }
+    }
   }
 
   // 3. Vérifier que l'employé n'est pas déjà lié et vérifié

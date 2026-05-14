@@ -34,6 +34,28 @@ const ROLE_COLORS: Record<string, string> = {
 
 const ALL_ROLES = ['employe', 'manager', 'rh', 'comptable', 'comptable_dedie', 'direction', 'client_admin', 'admin']
 
+// Capabilities par défaut par rôle (synchro avec lib/telegram/internal-auth.ts).
+// Utilisé côté UI uniquement pour pré-cocher le modal Permissions en mode pending
+// (avant que l'employé ait un user_societes record).
+const DEFAULT_CAPS_BY_ROLE: Record<string, string[]> = {
+  employe: ['view_help', 'switch_societe', 'logout', 'view_my_payslip', 'view_my_leave_balance', 'request_leave'],
+  manager: ['view_help', 'switch_societe', 'logout', 'view_my_payslip', 'view_my_leave_balance', 'request_leave',
+            'view_team_kpis', 'approve_team_leave', 'view_team_pending'],
+  rh: ['view_help', 'switch_societe', 'logout', 'view_my_payslip', 'view_team_kpis', 'add_ot', 'add_bonus',
+       'compute_payroll', 'export_mra', 'view_employees', 'manage_leave_settings'],
+  comptable: ['view_help', 'switch_societe', 'logout', 'view_kpis', 'view_bank', 'create_invoice',
+              'view_tax_calendar', 'export_mra', 'reconcile_bank', 'view_audit_log'],
+  comptable_dedie: ['view_help', 'switch_societe', 'logout', 'view_kpis', 'view_bank', 'create_invoice',
+                    'view_tax_calendar', 'export_mra', 'reconcile_bank', 'view_audit_log'],
+  direction: ['view_help', 'switch_societe', 'logout', 'view_kpis', 'view_bank', 'view_tax_calendar',
+              'create_invoice', 'compute_payroll', 'approve_payroll', 'export_mra', 'approve_team_leave',
+              'view_audit_log', 'manage_alerts_config'],
+  client_admin: ['view_help', 'switch_societe', 'logout', 'view_kpis', 'view_bank', 'view_tax_calendar',
+                 'create_invoice', 'compute_payroll', 'approve_payroll', 'export_mra', 'approve_team_leave',
+                 'view_audit_log', 'manage_alerts_config'],
+  admin: ['ALL'],
+}
+
 const CAPABILITY_LABELS: Record<string, string> = {
   view_help: "Voir l'aide",
   switch_societe: "Changer de société",
@@ -62,7 +84,9 @@ const CAPABILITY_LABELS: Record<string, string> = {
 }
 
 type PermissionsModalState = {
-  user_id: string
+  mode: 'live' | 'pending'
+  user_id: string | null     // null en mode pending
+  employe_id?: string         // présent en mode pending
   nom: string
   role: string
   selected: Set<string>
@@ -88,6 +112,8 @@ export default function TelegramPermissionsPage() {
   const [savingPerms, setSavingPerms] = useState(false)
   // Rôle souhaité au moment de générer le code (par employé sans compte)
   const [pendingRoleByEmpId, setPendingRoleByEmpId] = useState<Record<string, string>>({})
+  // Capabilities pré-configurées avant rattachement (par employé sans compte)
+  const [pendingCapsByEmpId, setPendingCapsByEmpId] = useState<Record<string, string[]>>({})
 
   const load = async () => {
     if (!societeId) return
@@ -124,7 +150,26 @@ export default function TelegramPermissionsPage() {
 
   const openPermsModal = (user_id: string, nom: string, role: string, current: string[], defaults: string[]) => {
     setPermsModal({
+      mode: 'live',
       user_id,
+      nom,
+      role,
+      defaults,
+      selected: new Set(current),
+    })
+  }
+
+  // Modal en mode "pending" : pour un employé pas encore rattaché.
+  // L'enregistrement met à jour pendingCapsByEmpId — les caps seront appliquées
+  // au moment du Générer code (POST employee-code body.capabilities).
+  const openPendingPermsModal = (employe_id: string, nom: string) => {
+    const role = pendingRoleByEmpId[employe_id] || 'employe'
+    const defaults = DEFAULT_CAPS_BY_ROLE[role] || []
+    const current = pendingCapsByEmpId[employe_id] ?? defaults
+    setPermsModal({
+      mode: 'pending',
+      user_id: null,
+      employe_id,
       nom,
       role,
       defaults,
@@ -147,6 +192,24 @@ export default function TelegramPermissionsPage() {
 
   const savePerms = async (reset = false) => {
     if (!permsModal) return
+
+    // Mode pending : on stocke localement, l'application se fait au Générer code.
+    if (permsModal.mode === 'pending' && permsModal.employe_id) {
+      setPendingCapsByEmpId(prev => {
+        const next = { ...prev }
+        if (reset) {
+          delete next[permsModal.employe_id!]
+        } else {
+          next[permsModal.employe_id!] = Array.from(permsModal.selected)
+        }
+        return next
+      })
+      setPermsModal(null)
+      return
+    }
+
+    // Mode live : PATCH user_societes
+    if (!permsModal.user_id) return
     setSavingPerms(true); setError(null)
     try {
       const r = await fetch(`/api/client/telegram-permissions?societe_id=${societeId}`, {
@@ -166,15 +229,28 @@ export default function TelegramPermissionsPage() {
 
   const generateCode = async (employe_id: string, nom: string, role: string = 'employe') => {
     setGeneratingFor(employe_id); setError(null)
+    const customCaps = pendingCapsByEmpId[employe_id]
     try {
       const r = await fetch('/api/client/telegram-permissions/employee-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ societe_id: societeId, employe_id, role }),
+        body: JSON.stringify({
+          societe_id: societeId,
+          employe_id,
+          role,
+          // Transmis SEULEMENT si l'admin a configuré des caps custom dans le modal pending
+          ...(customCaps ? { capabilities: customCaps } : {}),
+        }),
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Erreur')
       setCodeModal({ employe_id, nom, code: j.code, deep_link: j.deep_link, share_message: j.share_message })
+      // Nettoie l'état pending pour cet employé (les caps sont maintenant en DB)
+      setPendingCapsByEmpId(prev => {
+        const next = { ...prev }
+        delete next[employe_id]
+        return next
+      })
       await load()
     } catch (e: any) { setError(e?.message || 'Erreur') } finally { setGeneratingFor(null) }
   }
@@ -453,12 +529,22 @@ export default function TelegramPermissionsPage() {
                       </td>
                       <td className="py-2 px-2">
                         <div className="flex flex-wrap items-center gap-1 max-w-xs">
-                          {e.is_custom && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">personnalisé</Badge>}
-                          {(e.effective_capabilities || []).slice(0, 4).map((c: string) => (
-                            <span key={c} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">{CAPABILITY_LABELS[c] || c}</span>
-                          ))}
-                          {(e.effective_capabilities || []).length > 4 && <span className="text-[10px] text-slate-400">+{e.effective_capabilities.length - 4}</span>}
-                          {(!e.effective_capabilities || e.effective_capabilities.length === 0) && <span className="text-[10px] text-slate-400">à définir au rattachement</span>}
+                          {(() => {
+                            const pendingCaps = pendingCapsByEmpId[e.employe_id]
+                            const effective = pendingCaps ?? (e.effective_capabilities || (DEFAULT_CAPS_BY_ROLE[desiredRole] || []))
+                            const isCustom = !!pendingCaps || e.is_custom
+                            return (
+                              <>
+                                {pendingCaps && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">pré-configuré</Badge>}
+                                {!pendingCaps && e.is_custom && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">personnalisé</Badge>}
+                                {effective.slice(0, 4).map((c: string) => (
+                                  <span key={c} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">{CAPABILITY_LABELS[c] || c}</span>
+                                ))}
+                                {effective.length > 4 && <span className="text-[10px] text-slate-400">+{effective.length - 4}</span>}
+                                {effective.length === 0 && <span className="text-[10px] text-slate-400">aucune</span>}
+                              </>
+                            )
+                          })()}
                         </div>
                       </td>
                       <td className="py-2 px-2">
@@ -474,11 +560,19 @@ export default function TelegramPermissionsPage() {
                       </td>
                       <td className="py-2 px-2 text-right">
                         <div className="flex gap-2 justify-end">
-                          {e.has_auth_user && e.role && (
+                          {/* Bouton Permissions : live si user_societes existe, pending sinon */}
+                          {e.has_auth_user && e.role ? (
                             <Button
                               onClick={() => openPermsModal(e.auth_user_id, e.nom_complet, e.role, e.effective_capabilities || [], e.default_capabilities || [])}
                               variant="outline" size="sm">
                               <Settings2 className="h-3 w-3 mr-1" /> Permissions
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() => openPendingPermsModal(e.employe_id, e.nom_complet)}
+                              variant="outline" size="sm">
+                              <Settings2 className="h-3 w-3 mr-1" />
+                              Permissions {pendingCapsByEmpId[e.employe_id] && '✓'}
                             </Button>
                           )}
                           {e.telegram_status === 'linked' ? (
@@ -537,9 +631,19 @@ export default function TelegramPermissionsPage() {
             </div>
 
             <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-              <strong>Mode personnalisé :</strong> coche/décoche pour overrider les permissions par défaut du rôle.
-              Les capabilities ici cochées seront <em>les seules</em> autorisées via Telegram pour cet utilisateur.
-              Clique <em>"Réinitialiser au rôle par défaut"</em> pour supprimer l'override et revenir au comportement standard.
+              {permsModal.mode === 'pending' ? (
+                <>
+                  <strong>Pré-configuration :</strong> cet employé n'a pas encore de compte Lexora. Les capabilities cochées
+                  ici seront appliquées au moment où tu cliqueras sur <em>"Générer code"</em>. Tu peux aussi laisser les
+                  defaults du rôle <strong>{ROLE_LABELS[permsModal.role]}</strong> et changer après-coup.
+                </>
+              ) : (
+                <>
+                  <strong>Mode personnalisé :</strong> coche/décoche pour overrider les permissions par défaut du rôle.
+                  Les capabilities ici cochées seront <em>les seules</em> autorisées via Telegram pour cet utilisateur.
+                  Clique <em>"Supprimer override"</em> pour revenir aux caps par défaut du rôle.
+                </>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto pr-2 border rounded p-2">
@@ -583,7 +687,7 @@ export default function TelegramPermissionsPage() {
                   onClick={() => savePerms(true)}
                   disabled={savingPerms}
                   variant="outline" size="sm" className="text-amber-700 border-amber-200">
-                  Supprimer override
+                  {permsModal.mode === 'pending' ? 'Réinitialiser' : 'Supprimer override'}
                 </Button>
                 <Button
                   onClick={() => setPermsModal(null)}
@@ -595,7 +699,7 @@ export default function TelegramPermissionsPage() {
                   disabled={savingPerms}
                   size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                   {savingPerms && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-                  Enregistrer
+                  {permsModal.mode === 'pending' ? 'Mémoriser pour rattachement' : 'Enregistrer'}
                 </Button>
               </div>
             </div>
