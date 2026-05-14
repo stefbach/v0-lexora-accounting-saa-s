@@ -10,6 +10,7 @@ import {
   ClipboardList, CheckCircle, XCircle, Clock, Users, MapPin, CreditCard, Calendar,
   ArrowRight, Loader2, Filter
 } from "lucide-react"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -31,25 +32,24 @@ interface HRRequest {
   status: RequestStatus
 }
 
-const TYPE_LABELS: Record<RequestType, string> = {
-  address_update: "Changement adresse",
-  bank_update: "Changement banque",
-  leave_request: "Demande de conge",
-}
-
 const TYPE_ICONS: Record<RequestType, React.ComponentType<{ className?: string }>> = {
   address_update: MapPin,
   bank_update: CreditCard,
   leave_request: Calendar,
 }
 
-const STATUS_CONFIG: Record<RequestStatus, { label: string; color: string; bg: string }> = {
-  pending: { label: "En attente", color: "text-amber-700", bg: "bg-amber-100" },
-  approved: { label: "Approuve", color: "text-green-700", bg: "bg-green-100" },
-  rejected: { label: "Refuse", color: "text-red-700", bg: "bg-red-100" },
-}
-
 export default function DemandesRHPage() {
+  const locale = getLocale()
+  const TYPE_LABELS: Record<RequestType, string> = {
+    address_update: t('hr.demandes.type_address', locale),
+    bank_update: t('hr.demandes.type_bank', locale),
+    leave_request: t('hr.demandes.type_leave', locale),
+  }
+  const STATUS_CONFIG: Record<RequestStatus, { label: string; color: string; bg: string }> = {
+    pending: { label: t('hr.demandes.status_pending', locale), color: "text-amber-700", bg: "bg-amber-100" },
+    approved: { label: t('hr.demandes.status_approved', locale), color: "text-green-700", bg: "bg-green-100" },
+    rejected: { label: t('hr.demandes.status_rejected', locale), color: "text-red-700", bg: "bg-red-100" },
+  }
   const [requests, setRequests] = useState<HRRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState<string>("all")
@@ -180,12 +180,12 @@ export default function DemandesRHPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Demandes RH</h1>
-          <p className="text-sm text-gray-500 mt-1">Demandes employes en attente d&apos;approbation</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('hr.demandes.title', locale)}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('hr.demandes.subtitle', locale)}</p>
         </div>
         {pendingCount > 0 && (
           <Badge className="text-sm px-3 py-1" style={{ backgroundColor: GOLD, color: NAVY }}>
-            {pendingCount} en attente
+            {pendingCount} {t('hr.demandes.pending_count', locale)}
           </Badge>
         )}
       </div>
@@ -193,10 +193,10 @@ export default function DemandesRHPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total demandes", value: String(requests.length), icon: ClipboardList, color: "text-blue-600", bg: "bg-blue-50" },
-          { label: "En attente", value: String(pendingCount), icon: Clock, color: "text-amber-600", bg: "bg-amber-50" },
-          { label: "Approuvees", value: String(requests.filter(r => r.status === "approved").length), icon: CheckCircle, color: "text-green-600", bg: "bg-green-50" },
-          { label: "Refusees", value: String(requests.filter(r => r.status === "rejected").length), icon: XCircle, color: "text-red-600", bg: "bg-red-50" },
+          { label: t('hr.demandes.kpi_total', locale), value: String(requests.length), icon: ClipboardList, color: "text-blue-600", bg: "bg-blue-50" },
+          { label: t('hr.demandes.kpi_pending', locale), value: String(pendingCount), icon: Clock, color: "text-amber-600", bg: "bg-amber-50" },
+          { label: t('hr.demandes.kpi_approved', locale), value: String(requests.filter(r => r.status === "approved").length), icon: CheckCircle, color: "text-green-600", bg: "bg-green-50" },
+          { label: t('hr.demandes.kpi_rejected', locale), value: String(requests.filter(r => r.status === "rejected").length), icon: XCircle, color: "text-red-600", bg: "bg-red-50" },
         ].map(k => (
           <Card key={k.label} className="border border-gray-200">
             <CardContent className="p-4 overflow-x-auto">
@@ -217,24 +217,24 @@ export default function DemandesRHPage() {
         <Filter className="w-4 h-4 text-gray-400" />
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-[200px] h-9">
-            <SelectValue placeholder="Type de demande" />
+            <SelectValue placeholder={t('hr.demandes.filter_type_ph', locale)} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tous les types</SelectItem>
-            <SelectItem value="address_update">Changement adresse</SelectItem>
-            <SelectItem value="bank_update">Changement banque</SelectItem>
-            <SelectItem value="leave_request">Demande de conge</SelectItem>
+            <SelectItem value="all">{t('hr.demandes.all_types', locale)}</SelectItem>
+            <SelectItem value="address_update">{t('hr.demandes.type_address', locale)}</SelectItem>
+            <SelectItem value="bank_update">{t('hr.demandes.type_bank', locale)}</SelectItem>
+            <SelectItem value="leave_request">{t('hr.demandes.type_leave', locale)}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-[200px] h-9">
-            <SelectValue placeholder="Statut" />
+            <SelectValue placeholder={t('hr.demandes.status', locale)} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="pending">En attente</SelectItem>
-            <SelectItem value="approved">Approuve</SelectItem>
-            <SelectItem value="rejected">Refuse</SelectItem>
+            <SelectItem value="all">{t('hr.demandes.all_statuses', locale)}</SelectItem>
+            <SelectItem value="pending">{t('hr.demandes.status_pending', locale)}</SelectItem>
+            <SelectItem value="approved">{t('hr.demandes.status_approved', locale)}</SelectItem>
+            <SelectItem value="rejected">{t('hr.demandes.status_rejected', locale)}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -243,7 +243,7 @@ export default function DemandesRHPage() {
       <Card className="border border-gray-200">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
-            Demandes ({filtered.length})
+            {t('hr.demandes.requests', locale)} ({filtered.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -254,18 +254,18 @@ export default function DemandesRHPage() {
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>Aucune demande correspondante.</p>
+              <p>{t('hr.demandes.no_requests', locale)}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employe</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Details</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t('hr.demandes.employee', locale)}</TableHead>
+                  <TableHead>{t('hr.demandes.date', locale)}</TableHead>
+                  <TableHead>{t('hr.demandes.type', locale)}</TableHead>
+                  <TableHead>{t('hr.demandes.details', locale)}</TableHead>
+                  <TableHead>{t('hr.demandes.status', locale)}</TableHead>
+                  <TableHead>{t('hr.demandes.actions', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -286,7 +286,7 @@ export default function DemandesRHPage() {
                         {r.type === "leave_request" ? (
                           <div className="text-sm">
                             <p>{r.leaveType}: {r.leaveDates}</p>
-                            <p className="text-xs text-gray-400">{r.leaveDays} jour(s)</p>
+                            <p className="text-xs text-gray-400">{r.leaveDays} {t('hr.demandes.days', locale)}</p>
                           </div>
                         ) : (
                           <div className="text-sm">
@@ -313,7 +313,7 @@ export default function DemandesRHPage() {
                               variant="ghost"
                               onClick={() => handleAction(r.id, "approved")}
                               className="h-8 px-2 hover:bg-green-50"
-                              title="Approuver"
+                              title={t('hr.demandes.approve', locale)}
                             >
                               <CheckCircle className="w-4 h-4 text-green-600" />
                             </Button>
@@ -322,7 +322,7 @@ export default function DemandesRHPage() {
                               variant="ghost"
                               onClick={() => handleAction(r.id, "rejected")}
                               className="h-8 px-2 hover:bg-red-50"
-                              title="Refuser"
+                              title={t('hr.demandes.reject', locale)}
                             >
                               <XCircle className="w-4 h-4 text-red-500" />
                             </Button>

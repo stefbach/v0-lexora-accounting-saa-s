@@ -11,6 +11,7 @@ import {
   Loader2, Download, Printer, CheckCircle, Users, FileText, Building2
 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -58,6 +59,7 @@ interface DeclarationRow {
 }
 
 export default function DeclarationsSocialesPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [periode, setPeriode] = useState(() => {
     const now = new Date()
@@ -144,8 +146,8 @@ export default function DeclarationsSocialesPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Declarations Sociales</h1>
-          <p className="text-sm text-gray-500 mt-1">NSF / CSG / Training Levy -- Declaration mensuelle</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('mra.decl_soc.title', locale)}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('mra.decl_soc.subtitle', locale)}</p>
         </div>
         <div className="flex items-center gap-3">
           <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="h-9 w-[160px]" />
@@ -155,11 +157,11 @@ export default function DeclarationsSocialesPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
-          { label: "Nb employes", value: String(rows.length), icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
-          { label: "Total basic wage", value: fmt(totalBasicWage) + " MUR", icon: FileText, color: "text-green-600", bg: "bg-green-50" },
-          { label: "Total payable", value: fmt(totalPayable) + " MUR", icon: Building2, color: "text-purple-600", bg: "bg-purple-50" },
-          { label: "NPF", value: fmt(npfTotal) + " MUR", icon: FileText, color: "text-amber-600", bg: "bg-amber-50" },
-          { label: "CSG", value: fmt(totalCSG) + " MUR", icon: FileText, color: "text-red-600", bg: "bg-red-50" },
+          { label: t('mra.decl_soc.kpi_employees', locale), value: String(rows.length), icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+          { label: t('mra.decl_soc.kpi_basic_wage', locale), value: fmt(totalBasicWage) + " MUR", icon: FileText, color: "text-green-600", bg: "bg-green-50" },
+          { label: t('mra.decl_soc.kpi_payable', locale), value: fmt(totalPayable) + " MUR", icon: Building2, color: "text-purple-600", bg: "bg-purple-50" },
+          { label: t('mra.decl_soc.kpi_npf', locale), value: fmt(npfTotal) + " MUR", icon: FileText, color: "text-amber-600", bg: "bg-amber-50" },
+          { label: t('mra.decl_soc.kpi_csg', locale), value: fmt(totalCSG) + " MUR", icon: FileText, color: "text-red-600", bg: "bg-red-50" },
         ].map(k => (
           <Card key={k.label} className="border border-gray-200">
             <CardContent className="p-4">
@@ -178,28 +180,28 @@ export default function DeclarationsSocialesPage() {
       {/* Contributions Summary */}
       <Card className="border border-gray-200">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>Resume des contributions</CardTitle>
+          <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>{t('mra.decl_soc.contributions_summary', locale)}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-500">NPF (NSF)</p>
+              <p className="text-xs text-gray-500">{t('mra.decl_soc.npf_nsf', locale)}</p>
               <p className="font-bold" style={{ color: NAVY }}>{fmt(npfTotal)} MUR</p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-500">CSG</p>
+              <p className="text-xs text-gray-500">{t('mra.decl_soc.csg', locale)}</p>
               <p className="font-bold" style={{ color: NAVY }}>{fmt(totalCSG)} MUR</p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-500">NSF</p>
+              <p className="text-xs text-gray-500">{t('mra.decl_soc.nsf', locale)}</p>
               <p className="font-bold" style={{ color: NAVY }}>{fmt(totalNSF)} MUR</p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-500">Levy (HRDC)</p>
+              <p className="text-xs text-gray-500">{t('mra.decl_soc.levy_hrdc', locale)}</p>
               <p className="font-bold" style={{ color: NAVY }}>{fmt(totalLevy)} MUR</p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-500">CSG Bonus</p>
+              <p className="text-xs text-gray-500">{t('mra.decl_soc.csg_bonus', locale)}</p>
               <p className="font-bold" style={{ color: NAVY }}>{fmt(totalCSGBonus)} MUR</p>
             </div>
           </div>
@@ -215,13 +217,13 @@ export default function DeclarationsSocialesPage() {
           className="text-white"
         >
           {validated ? <CheckCircle className="w-4 h-4 mr-2" /> : null}
-          {validated ? "Valide" : "Valider"}
+          {validated ? t('mra.decl_soc.valid', locale) : t('mra.decl_soc.validate', locale)}
         </Button>
         <Button variant="outline" onClick={exportCSV} disabled={rows.length === 0}>
-          <Download className="w-4 h-4 mr-2" /> Export CSV
+          <Download className="w-4 h-4 mr-2" /> {t('mra.decl_soc.export_csv', locale)}
         </Button>
         <Button variant="outline" onClick={() => window.print()} disabled={rows.length === 0}>
-          <Printer className="w-4 h-4 mr-2" /> Imprimer
+          <Printer className="w-4 h-4 mr-2" /> {t('mra.decl_soc.print', locale)}
         </Button>
       </div>
 
@@ -229,7 +231,7 @@ export default function DeclarationsSocialesPage() {
       <Card className="border border-gray-200">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
-            Detail par employe -- {periode}
+            {t('mra.decl_soc.detail_by_employee', locale)} -- {periode}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -240,7 +242,7 @@ export default function DeclarationsSocialesPage() {
           ) : rows.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>Aucun bulletin pour cette periode. Calculez la paie d&apos;abord.</p>
+              <p>{t('mra.decl_soc.no_bulletin', locale)}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -248,16 +250,16 @@ export default function DeclarationsSocialesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">#</TableHead>
-                    <TableHead>NID</TableHead>
-                    <TableHead>Nom</TableHead>
-                    <TableHead>Prenom</TableHead>
-                    <TableHead className="text-center">Code Rate</TableHead>
-                    <TableHead className="text-center">Periode</TableHead>
-                    <TableHead className="text-right">Salaire</TableHead>
-                    <TableHead className="text-right">NSF</TableHead>
-                    <TableHead className="text-right">CSG</TableHead>
-                    <TableHead className="text-right">CSG Bonus</TableHead>
-                    <TableHead className="text-right">Levy</TableHead>
+                    <TableHead>{t('mra.decl_soc.col_nid', locale)}</TableHead>
+                    <TableHead>{t('mra.decl_soc.col_nom', locale)}</TableHead>
+                    <TableHead>{t('mra.decl_soc.col_prenom', locale)}</TableHead>
+                    <TableHead className="text-center">{t('mra.decl_soc.col_rate_code', locale)}</TableHead>
+                    <TableHead className="text-center">{t('mra.decl_soc.col_period', locale)}</TableHead>
+                    <TableHead className="text-right">{t('mra.decl_soc.col_salary', locale)}</TableHead>
+                    <TableHead className="text-right">{t('mra.decl_soc.col_nsf', locale)}</TableHead>
+                    <TableHead className="text-right">{t('mra.decl_soc.col_csg', locale)}</TableHead>
+                    <TableHead className="text-right">{t('mra.decl_soc.col_csg_bonus', locale)}</TableHead>
+                    <TableHead className="text-right">{t('mra.decl_soc.col_levy', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -282,7 +284,7 @@ export default function DeclarationsSocialesPage() {
                   ))}
                   {/* Totals row */}
                   <TableRow className="border-t-2 border-gray-300 font-bold">
-                    <TableCell colSpan={6} className="text-right" style={{ color: NAVY }}>TOTAL</TableCell>
+                    <TableCell colSpan={6} className="text-right" style={{ color: NAVY }}>{t('mra.decl_soc.total', locale)}</TableCell>
                     <TableCell className="text-right font-mono" style={{ color: NAVY }}>{fmt(totalBasicWage)}</TableCell>
                     <TableCell className="text-right font-mono" style={{ color: NAVY }}>{fmt(totalNSF)}</TableCell>
                     <TableCell className="text-right font-mono" style={{ color: NAVY }}>{fmt(totalCSG)}</TableCell>

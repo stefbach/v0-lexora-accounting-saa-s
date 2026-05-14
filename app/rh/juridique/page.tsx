@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, FileText, Eye, Download, Printer, CheckCircle, XCircle, AlertCircle, Link2, Copy, CheckCheck, Pencil, Save, Upload, ImageIcon } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ContractEditor } from "@/components/rh/ContractEditor"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -35,18 +36,21 @@ const STATUT_COLORS: Record<string, string> = {
   resilie:       "bg-red-100 text-red-700",
 }
 
-const STATUT_LABELS: Record<string, string> = {
-  brouillon:     "Brouillon",
-  signe_employe: "Signé par employé",
-  signe:         "Signé ✓✓",
-  expire:        "Expiré",
-  resilie:       "Résilié",
+function getStatutLabels(locale: Locale): Record<string, string> {
+  return {
+    brouillon:     t('rha.b.jur.status_brouillon', locale),
+    signe_employe: t('rha.b.jur.status_signe_employe', locale),
+    signe:         t('rha.b.jur.status_signe', locale),
+    expire:        t('rha.b.jur.status_expire', locale),
+    resilie:       t('rha.b.jur.status_resilie', locale),
+  }
 }
 
-function StatutBadge({ statut }: { statut: string }) {
+function StatutBadge({ statut, locale }: { statut: string; locale: Locale }) {
+  const labels = getStatutLabels(locale)
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUT_COLORS[statut] ?? "bg-gray-100 text-gray-600"}`}>
-      {STATUT_LABELS[statut] ?? statut}
+      {labels[statut] ?? statut}
     </span>
   )
 }
@@ -54,6 +58,7 @@ function StatutBadge({ statut }: { statut: string }) {
 // ── Composant principal ──────────────────────────────────────────────────────
 
 export default function JuridiquePage() {
+  const locale: Locale = getLocale()
   // ── Données globales ──
   const [societes, setSocietes] = useState<any[]>([])
   const [employes, setEmployes] = useState<any[]>([])
@@ -335,15 +340,15 @@ export default function JuridiquePage() {
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-6 max-w-7xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-[#0B0F2E]">Module Juridique</h1>
-        <p className="text-sm text-gray-500">Contrats de travail — Droit mauricien (WRA 2019, Companies Act 2001)</p>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.b.jur.title', locale)}</h1>
+        <p className="text-sm text-gray-500">{t('rha.b.jur.subtitle', locale)}</p>
       </div>
 
       <Tabs defaultValue="contrats" className="space-y-4">
         <TabsList className="bg-white border">
-          <TabsTrigger value="contrats">📋 Contrats existants</TabsTrigger>
-          <TabsTrigger value="generer">✨ Générer un contrat</TabsTrigger>
-          <TabsTrigger value="verifier">🔍 Vérifier un contrat</TabsTrigger>
+          <TabsTrigger value="contrats">{t('rha.b.jur.tab_existing', locale)}</TabsTrigger>
+          <TabsTrigger value="generer">{t('rha.b.jur.tab_generate', locale)}</TabsTrigger>
+          <TabsTrigger value="verifier">{t('rha.b.jur.tab_verify', locale)}</TabsTrigger>
         </TabsList>
 
         {/* ══════════════════════════════════════════════════════════
@@ -353,24 +358,24 @@ export default function JuridiquePage() {
           <Card>
             <CardContent className="p-4 flex gap-3 flex-wrap">
               <Select value={filtSociete} onValueChange={setFiltSociete}>
-                <SelectTrigger className="w-48"><SelectValue placeholder="Toutes sociétés" /></SelectTrigger>
+                <SelectTrigger className="w-48"><SelectValue placeholder={t('rha.b.jur.filter_all_societes', locale)} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes sociétés</SelectItem>
+                  <SelectItem value="all">{t('rha.b.jur.filter_all_societes', locale)}</SelectItem>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filtType} onValueChange={setFiltType}>
-                <SelectTrigger className="w-40"><SelectValue placeholder="Type contrat" /></SelectTrigger>
+                <SelectTrigger className="w-40"><SelectValue placeholder={t('rha.b.jur.filter_contract_type', locale)} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous types</SelectItem>
-                  {TYPES_CONTRAT.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  <SelectItem value="all">{t('rha.b.jur.filter_all_types', locale)}</SelectItem>
+                  {TYPES_CONTRAT.map(tc => <SelectItem key={tc} value={tc}>{tc}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filtStatut} onValueChange={setFiltStatut}>
-                <SelectTrigger className="w-36"><SelectValue placeholder="Statut" /></SelectTrigger>
+                <SelectTrigger className="w-36"><SelectValue placeholder={t('rha.b.jur.filter_status', locale)} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous statuts</SelectItem>
-                  {Object.entries(STATUT_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                  <SelectItem value="all">{t('rha.b.jur.filter_all_status', locale)}</SelectItem>
+                  {Object.entries(getStatutLabels(locale)).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                 </SelectContent>
               </Select>
             </CardContent>
@@ -381,19 +386,19 @@ export default function JuridiquePage() {
               {loadingContrats ? (
                 <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
               ) : contrats.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">Aucun contrat trouvé</div>
+                <div className="text-center py-12 text-gray-500">{t('rha.b.jur.no_contract', locale)}</div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employé</TableHead>
-                      <TableHead>Société</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Poste</TableHead>
-                      <TableHead>Date début</TableHead>
-                      <TableHead>Date fin</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>{t('rha.b.jur.col_employee', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_societe', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_type', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_position', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_start', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_end', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_status', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -404,17 +409,17 @@ export default function JuridiquePage() {
                         <TableCell><Badge variant="outline" className="text-xs">{c.type_contrat}</Badge></TableCell>
                         <TableCell className="text-sm">{c.employe?.poste ?? "—"}</TableCell>
                         <TableCell className="text-sm font-mono">{c.date_debut ?? "—"}</TableCell>
-                        <TableCell className="text-sm font-mono">{c.date_fin ?? <span className="text-gray-400">Indéterminée</span>}</TableCell>
-                        <TableCell><StatutBadge statut={c.statut} /></TableCell>
+                        <TableCell className="text-sm font-mono">{c.date_fin ?? <span className="text-gray-400">{t('rha.b.jur.indeterminate', locale)}</span>}</TableCell>
+                        <TableCell><StatutBadge statut={c.statut} locale={locale} /></TableCell>
                         <TableCell>
                           <div className="flex gap-1 flex-wrap">
                             <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setViewContrat(c)}>
-                              <Eye className="w-3 h-3 mr-1" />Voir
+                              <Eye className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_view', locale)}
                             </Button>
                             {c.id && (
                               <a href={`/api/rh/contrats/${c.id}/pdf`} target="_blank" rel="noopener noreferrer">
                                 <Button size="sm" variant="outline" className="h-7 text-xs px-2">
-                                  <Download className="w-3 h-3 mr-1" />PDF
+                                  <Download className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_pdf', locale)}
                                 </Button>
                               </a>
                             )}
@@ -433,7 +438,7 @@ export default function JuridiquePage() {
                               >
                                 {genLienLoading === c.id
                                   ? <Loader2 className="w-3 h-3 animate-spin" />
-                                  : <><Link2 className="w-3 h-3 mr-1" />Signer</>
+                                  : <><Link2 className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_sign', locale)}</>
                                 }
                               </Button>
                             )}
@@ -455,34 +460,34 @@ export default function JuridiquePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
-                <FileText className="w-4 h-4" /> Générer un contrat de travail
+                <FileText className="w-4 h-4" /> {t('rha.b.jur.gen_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
-                  <Label>Société *</Label>
+                  <Label>{t('rha.b.jur.lbl_societe_req', locale)}</Label>
                   <Select value={genSociete} onValueChange={setGenSociete}>
-                    <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('rha.b.jur.choose', locale)} /></SelectTrigger>
                     <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Employé *</Label>
+                  <Label>{t('rha.b.jur.lbl_employee_req', locale)}</Label>
                   <Select value={genForm.employe_id} onValueChange={v => setGenForm(f => ({ ...f, employe_id: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('rha.b.jur.choose', locale)} /></SelectTrigger>
                     <SelectContent>{employes.map(e => <SelectItem key={e.id} value={e.id}>{e.prenom} {e.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Type de contrat</Label>
+                  <Label>{t('rha.b.jur.lbl_contract_type', locale)}</Label>
                   <Select value={genForm.type} onValueChange={v => setGenForm(f => ({ ...f, type: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{TYPES_CONTRAT.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    <SelectContent>{TYPES_CONTRAT.map(tc => <SelectItem key={tc} value={tc}>{tc}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Secteur</Label>
+                  <Label>{t('rha.b.jur.lbl_sector', locale)}</Label>
                   <Select value={genForm.secteur} onValueChange={v => setGenForm(f => ({ ...f, secteur: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{SECTEURS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
@@ -490,30 +495,30 @@ export default function JuridiquePage() {
                 </div>
                 {/* Sprint 6 FIX 4 — Poste éditable (pré-rempli depuis fiche employé) */}
                 <div>
-                  <Label>Poste *</Label>
+                  <Label>{t('rha.b.jur.lbl_position_req', locale)}</Label>
                   <Input
                     value={genForm.poste}
                     onChange={e => setGenForm(f => ({ ...f, poste: e.target.value }))}
-                    placeholder="Ex: Développeur, Comptable..."
+                    placeholder={t('rha.b.jur.position_ph', locale)}
                   />
                 </div>
                 <div>
-                  <Label>Date de début *</Label>
+                  <Label>{t('rha.b.jur.lbl_start_req', locale)}</Label>
                   <Input type="date" value={genForm.date_debut} onChange={e => setGenForm(f => ({ ...f, date_debut: e.target.value }))} />
                 </div>
                 {(genForm.type === "CDD" || genForm.type === "Stage") && (
                   <div>
-                    <Label>Date de fin</Label>
+                    <Label>{t('rha.b.jur.lbl_end_date', locale)}</Label>
                     <Input type="date" value={genForm.date_fin} onChange={e => setGenForm(f => ({ ...f, date_fin: e.target.value }))} />
                   </div>
                 )}
                 <div>
-                  <Label>Salaire brut (MUR) *</Label>
+                  <Label>{t('rha.b.jur.lbl_gross_req', locale)}</Label>
                   <Input type="number" value={genForm.salaire} onChange={e => setGenForm(f => ({ ...f, salaire: e.target.value }))} placeholder="Ex: 45000" />
                 </div>
                 {/* Sprint 6 FIX 4 — Horaires semaine */}
                 <div>
-                  <Label>Heures / semaine</Label>
+                  <Label>{t('rha.b.jur.lbl_hours_week', locale)}</Label>
                   <Input
                     type="number"
                     min={1}
@@ -534,11 +539,11 @@ export default function JuridiquePage() {
                     onChange={e => setGenForm(f => ({ ...f, periode_essai_oui: e.target.checked }))}
                     className="h-4 w-4"
                   />
-                  <span className="font-medium text-[#0B0F2E]">Période d'essai</span>
+                  <span className="font-medium text-[#0B0F2E]">{t('rha.b.jur.lbl_trial_period', locale)}</span>
                 </label>
                 {genForm.periode_essai_oui && (
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs text-gray-600">Durée :</Label>
+                    <Label className="text-xs text-gray-600">{t('rha.b.jur.duration', locale)}</Label>
                     <Input
                       type="number"
                       min={1}
@@ -547,8 +552,8 @@ export default function JuridiquePage() {
                       onChange={e => setGenForm(f => ({ ...f, periode_essai_jours: e.target.value }))}
                       className="w-24 h-9"
                     />
-                    <span className="text-xs text-gray-600">jours</span>
-                    <span className="text-xs text-gray-400">(défaut 90j — WRA 2019 max 180j)</span>
+                    <span className="text-xs text-gray-600">{t('rha.b.jur.days', locale)}</span>
+                    <span className="text-xs text-gray-400">{t('rha.b.jur.trial_default', locale)}</span>
                   </div>
                 )}
               </div>
@@ -558,19 +563,19 @@ export default function JuridiquePage() {
                 disabled={generating || !genForm.employe_id || !genForm.date_debut || !genForm.salaire}
                 className="bg-[#0B0F2E] text-white"
               >
-                {generating ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Génération en cours...</> : "✨ Générer avec IA"}
+                {generating ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />{t('rha.b.jur.btn_generating', locale)}</> : t('rha.b.jur.btn_generate_ai', locale)}
               </Button>
 
               {genResult && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-[#0B0F2E]">Contrat généré</p>
+                    <p className="text-sm font-semibold text-[#0B0F2E]">{t('rha.b.jur.contract_generated', locale)}</p>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => imprimerContrat(genResult)}>
-                        <Printer className="w-4 h-4 mr-1" />Imprimer / PDF
+                        <Printer className="w-4 h-4 mr-1" />{t('rha.b.jur.btn_print_pdf', locale)}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => telechargerHTML(genResult, "contrat_nouveau")}>
-                        <Download className="w-4 h-4 mr-1" />Télécharger .html
+                        <Download className="w-4 h-4 mr-1" />{t('rha.b.jur.btn_dl_html', locale)}
                       </Button>
                       <Button
                         size="sm"
@@ -579,7 +584,7 @@ export default function JuridiquePage() {
                         disabled={saving || !!savedId}
                       >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-                        {savedId ? "✅ Sauvegardé" : "💾 Sauvegarder"}
+                        {savedId ? t('rha.b.jur.btn_saved', locale) : t('rha.b.jur.btn_save', locale)}
                       </Button>
                     </div>
                   </div>
@@ -599,16 +604,16 @@ export default function JuridiquePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
-                🔍 Vérification de conformité (WRA 2019)
+                {t('rha.b.jur.verify_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label>Collez le texte ou HTML du contrat à analyser</Label>
+                <Label>{t('rha.b.jur.verify_lbl', locale)}</Label>
                 <Textarea
                   value={verifyText}
                   onChange={e => setVerifyText(e.target.value)}
-                  placeholder="Collez ici le contenu du contrat..."
+                  placeholder={t('rha.b.jur.verify_ph', locale)}
                   rows={10}
                   className="mt-1 font-mono text-xs"
                 />
@@ -618,12 +623,12 @@ export default function JuridiquePage() {
                 disabled={verifying || !verifyText.trim()}
                 className="bg-[#0B0F2E] text-white"
               >
-                {verifying ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Analyse en cours...</> : "🔍 Analyser avec IA"}
+                {verifying ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />{t('rha.b.jur.btn_analyzing', locale)}</> : t('rha.b.jur.btn_analyze_ai', locale)}
               </Button>
 
               {verifyResult && (
                 <div className="space-y-2 mt-4">
-                  <p className="text-sm font-semibold text-[#0B0F2E]">Résultats de conformité</p>
+                  <p className="text-sm font-semibold text-[#0B0F2E]">{t('rha.b.jur.compliance_results', locale)}</p>
                   <div className="space-y-1.5">
                     {verifyResult.map((point: any, i: number) => {
                       const isOk = point.statut === "ok" || point.texte?.startsWith("✅")
@@ -661,12 +666,12 @@ export default function JuridiquePage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
               <Link2 className="w-5 h-5 text-[#D4AF37]" />
-              Lien de signature généré
+              {t('rha.b.jur.signature_link_title', locale)}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <p className="text-sm text-gray-600">
-              Envoyez ce lien à l'employé par email ou WhatsApp. Le lien est à usage unique et sera invalidé après signature.
+              {t('rha.b.jur.signature_link_intro', locale)}
             </p>
             <div className="flex gap-2">
               <input
@@ -679,7 +684,7 @@ export default function JuridiquePage() {
                 onClick={copierLien}
                 className="shrink-0 bg-[#0B0F2E] text-white hover:bg-[#0B0F2E]/80"
               >
-                {copied ? <><CheckCheck className="w-4 h-4 mr-1" />Copié</> : <><Copy className="w-4 h-4 mr-1" />Copier</>}
+                {copied ? <><CheckCheck className="w-4 h-4 mr-1" />{t('rha.b.jur.btn_copied', locale)}</> : <><Copy className="w-4 h-4 mr-1" />{t('rha.b.jur.btn_copy', locale)}</>}
               </Button>
             </div>
             {lienSignature?.whatsapp ? (
@@ -688,11 +693,11 @@ export default function JuridiquePage() {
               </div>
             ) : (
               <div className="text-sm p-3 bg-amber-50 text-amber-800 rounded-lg border border-amber-200">
-                ⚠️ Aucun téléphone enregistré — envoyez le lien manuellement.
+                {t('rha.b.jur.no_phone', locale)}
               </div>
             )}
             <div className="text-xs text-gray-400 p-3 bg-gray-50 rounded-lg">
-              ✅ Conforme Electronic Transactions Act 2000 — La signature enregistre l'IP, la date et l'heure de l'employé.
+              {t('rha.b.jur.compliance_eta', locale)}
             </div>
           </div>
         </DialogContent>
@@ -714,13 +719,13 @@ export default function JuridiquePage() {
         <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>
-              Contrat — {viewContrat?.employe?.prenom} {viewContrat?.employe?.nom}
-              <StatutBadge statut={viewContrat?.statut ?? "brouillon"} />
+              {t('rha.b.jur.contract_for', locale)} {viewContrat?.employe?.prenom} {viewContrat?.employe?.nom}
+              <StatutBadge statut={viewContrat?.statut ?? "brouillon"} locale={locale} />
             </DialogTitle>
           </DialogHeader>
           <div className="flex items-center gap-2 flex-wrap border-b pb-3">
-            <span className="text-sm text-gray-500">Changer statut :</span>
-            {Object.entries(STATUT_LABELS).map(([v, l]) => (
+            <span className="text-sm text-gray-500">{t('rha.b.jur.change_status', locale)}</span>
+            {Object.entries(getStatutLabels(locale)).map(([v, l]) => (
               <Button
                 key={v}
                 size="sm"
@@ -747,7 +752,7 @@ export default function JuridiquePage() {
                   className="h-7 text-xs"
                   onClick={() => imprimerContrat(viewContrat.html_content_modified || viewContrat.html_content)}
                 >
-                  <Printer className="w-3 h-3 mr-1" />Imprimer
+                  <Printer className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_print', locale)}
                 </Button>
               )}
               {/* Sprint 5 AMÉLIO F — bouton Modifier / Enregistrer */}
@@ -765,7 +770,7 @@ export default function JuridiquePage() {
                     setEditMode(true)
                   }}
                 >
-                  <Pencil className="w-3 h-3 mr-1" />Modifier
+                  <Pencil className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_modify', locale)}
                 </Button>
               ) : (
                 <>
@@ -776,7 +781,7 @@ export default function JuridiquePage() {
                     disabled={savingEdit}
                     onClick={() => { setEditMode(false); setEditedHtml(""); setSigNom(""); setSigImage("") }}
                   >
-                    Annuler
+                    {t('rha.b.jur.btn_cancel', locale)}
                   </Button>
                   <Button
                     size="sm"
@@ -808,7 +813,7 @@ export default function JuridiquePage() {
                     }}
                   >
                     {savingEdit ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}
-                    Enregistrer
+                    {t('rha.b.jur.btn_save_short', locale)}
                   </Button>
                 </>
               )}
@@ -823,7 +828,7 @@ export default function JuridiquePage() {
                     ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
                     : <Link2 className="w-3 h-3 mr-1" />
                   }
-                  Envoyer à l'employé
+                  {t('rha.b.jur.btn_send_employee', locale)}
                 </Button>
               )}
               {viewContrat?.statut === "signe_employe" && !editMode && (
@@ -835,7 +840,7 @@ export default function JuridiquePage() {
                 >
                   {contresignant
                     ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                    : "✍️ Contresigner"
+                    : t('rha.b.jur.btn_countersign', locale)
                   }
                 </Button>
               )}
@@ -849,15 +854,14 @@ export default function JuridiquePage() {
 
                 <div className="rounded-xl border p-4 bg-amber-50/40 space-y-3">
                   <h3 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4" /> Signature du dirigeant
+                    <ImageIcon className="w-4 h-4" /> {t('rha.b.jur.signature_dirigeant', locale)}
                   </h3>
                   <p className="text-xs text-amber-800">
-                    Le nom et l'image seront rendus au bas du contrat. Visible à l'employé
-                    au moment de la signature.
+                    {t('rha.b.jur.signature_dirigeant_hint', locale)}
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs">Nom du signataire</Label>
+                      <Label className="text-xs">{t('rha.b.jur.signer_name', locale)}</Label>
                       <Input
                         value={sigNom}
                         onChange={e => setSigNom(e.target.value)}
@@ -866,7 +870,7 @@ export default function JuridiquePage() {
                       />
                     </div>
                     <div>
-                      <Label className="text-xs">Image signature (PNG/JPG)</Label>
+                      <Label className="text-xs">{t('rha.b.jur.signature_image', locale)}</Label>
                       <Input
                         type="file"
                         accept="image/png,image/jpeg"
@@ -889,7 +893,7 @@ export default function JuridiquePage() {
                     <div className="flex items-center gap-3">
                       <img src={sigImage} alt="Signature" className="h-16 border rounded bg-white p-1" />
                       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSigImage("")}>
-                        <XCircle className="w-3 h-3 mr-1" />Retirer
+                        <XCircle className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_remove', locale)}
                       </Button>
                     </div>
                   )}
@@ -906,7 +910,7 @@ export default function JuridiquePage() {
                 {/* Bloc signature dirigeant rendu en bas du contrat */}
                 {(viewContrat?.signature_nom_complet || viewContrat?.signature_image_dirigeant_url) && (
                   <div className="mx-4 mt-6 mb-4 p-4 border-t bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-500 mb-2">Signature de l'employeur</p>
+                    <p className="text-xs text-gray-500 mb-2">{t('rha.b.jur.employer_signature', locale)}</p>
                     {viewContrat.signature_image_dirigeant_url && (
                       <img
                         src={viewContrat.signature_image_dirigeant_url}
@@ -922,7 +926,7 @@ export default function JuridiquePage() {
               </>
             ) : (
               <div className="p-6 text-center text-gray-500">
-                <p>Aucun contenu HTML disponible.</p>
+                <p>{t('rha.b.jur.no_html', locale)}</p>
                 <p className="text-xs mt-1 text-gray-400">Type : {viewContrat?.type_contrat} | Secteur : {viewContrat?.secteur}</p>
               </div>
             )}

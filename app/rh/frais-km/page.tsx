@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Car, Plus, CheckCircle, Edit2, Save, DollarSign } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -24,10 +25,12 @@ const STATUT_COLORS: Record<string, string> = {
   approuve: "bg-green-100 text-green-800",
   refuse: "bg-red-100 text-red-800",
 }
-const STATUT_LABELS: Record<string, string> = {
-  en_attente: "En attente",
-  approuve: "Approuvé",
-  refuse: "Refusé",
+function getStatutLabels(locale: Locale): Record<string, string> {
+  return {
+    en_attente: t('rha.b.fraiskm.status_pending', locale),
+    approuve: t('rha.b.fraiskm.status_approved', locale),
+    refuse: t('rha.b.fraiskm.status_refused', locale),
+  }
 }
 
 interface FraisKm {
@@ -43,6 +46,7 @@ interface FraisKm {
 }
 
 export default function FraisKmPage() {
+  const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("all")
   const [employes, setEmployes] = useState<any[]>([])
@@ -181,8 +185,8 @@ export default function FraisKmPage() {
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Frais Kilométriques</h1>
-          <p className="text-gray-500 text-sm">Gestion des indemnites kilometriques des employes</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.b.fraiskm.title', locale)}</h1>
+          <p className="text-gray-500 text-sm">{t('rha.b.fraiskm.subtitle', locale)}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Input
@@ -193,10 +197,10 @@ export default function FraisKmPage() {
           />
           <Select value={societe} onValueChange={setSociete}>
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Toutes les societes" />
+              <SelectValue placeholder={t('rha.b.fraiskm.all_societes', locale)} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les societes</SelectItem>
+              <SelectItem value="all">{t('rha.b.fraiskm.all_societes', locale)}</SelectItem>
               {societes.map(s => (
                 <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
               ))}
@@ -210,7 +214,7 @@ export default function FraisKmPage() {
         <Card className="border-2" style={{ borderColor: GOLD }}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500 flex items-center gap-2">
-              <Car className="h-4 w-4" /> Tarif / km
+              <Car className="h-4 w-4" /> {t('rha.b.fraiskm.tariff_per_km', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -242,7 +246,7 @@ export default function FraisKmPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Total km</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-500">{t('rha.b.fraiskm.total_km', locale)}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold" style={{ color: NAVY }}>{totalKm.toLocaleString("fr-FR")} km</p>
@@ -251,7 +255,7 @@ export default function FraisKmPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Montant total</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-500">{t('rha.b.fraiskm.total_amount', locale)}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold" style={{ color: GOLD }}>{fmt(totalMontant)}</p>
@@ -260,7 +264,7 @@ export default function FraisKmPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Approuves</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-500">{t('rha.b.fraiskm.approved', locale)}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-green-600">{nbApprouves} / {frais.length}</p>
@@ -274,10 +278,10 @@ export default function FraisKmPage() {
           <div className="flex items-center justify-between">
             <CardTitle style={{ color: NAVY }}>
               <DollarSign className="inline h-5 w-5 mr-2" />
-              Frais kilometriques - {periode}
+              {t('rha.b.fraiskm.table_title', locale).replace('{period}', periode)}
             </CardTitle>
             <Button onClick={openAddDialog} style={{ backgroundColor: GOLD }} className="text-white hover:opacity-90">
-              <Plus className="h-4 w-4 mr-1" /> Ajouter
+              <Plus className="h-4 w-4 mr-1" /> {t('rha.b.fraiskm.btn_add', locale)}
             </Button>
           </div>
         </CardHeader>
@@ -287,19 +291,19 @@ export default function FraisKmPage() {
               <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
             </div>
           ) : frais.length === 0 ? (
-            <p className="text-center text-gray-400 py-12">Aucun frais kilometrique pour cette periode.</p>
+            <p className="text-center text-gray-400 py-12">{t('rha.b.fraiskm.no_data', locale)}</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Employe</TableHead>
-                    <TableHead>Periode</TableHead>
-                    <TableHead className="text-right">Km parcourus</TableHead>
-                    <TableHead className="text-right">Tarif</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t('rha.b.fraiskm.col_employee', locale)}</TableHead>
+                    <TableHead>{t('rha.b.fraiskm.col_period', locale)}</TableHead>
+                    <TableHead className="text-right">{t('rha.b.fraiskm.col_km', locale)}</TableHead>
+                    <TableHead className="text-right">{t('rha.b.fraiskm.col_tariff', locale)}</TableHead>
+                    <TableHead className="text-right">{t('rha.b.fraiskm.col_amount', locale)}</TableHead>
+                    <TableHead>{t('rha.b.fraiskm.col_status', locale)}</TableHead>
+                    <TableHead className="text-right">{t('rha.b.fraiskm.col_actions', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -314,7 +318,7 @@ export default function FraisKmPage() {
                       <TableCell className="text-right font-semibold">{fmt(f.montant)}</TableCell>
                       <TableCell>
                         <Badge className={STATUT_COLORS[f.statut] || "bg-gray-100 text-gray-700"}>
-                          {STATUT_LABELS[f.statut] || f.statut}
+                          {getStatutLabels(locale)[f.statut] || f.statut}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -329,7 +333,7 @@ export default function FraisKmPage() {
                               className="text-green-700 border-green-300 hover:bg-green-50"
                               onClick={() => approveFrais(f.id)}
                             >
-                              <CheckCircle className="h-3 w-3 mr-1" /> Approuver
+                              <CheckCircle className="h-3 w-3 mr-1" /> {t('rha.b.fraiskm.btn_approve', locale)}
                             </Button>
                           )}
                         </div>
@@ -348,15 +352,15 @@ export default function FraisKmPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle style={{ color: NAVY }}>
-              {editingFrais ? "Modifier les km" : "Ajouter des frais km"}
+              {editingFrais ? t('rha.b.fraiskm.dialog_edit', locale) : t('rha.b.fraiskm.dialog_add', locale)}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Employe</Label>
+              <Label>{t('rha.b.fraiskm.lbl_employee', locale)}</Label>
               <Select value={formEmploye} onValueChange={setFormEmploye} disabled={!!editingFrais}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Selectionner un employe" />
+                  <SelectValue placeholder={t('rha.b.fraiskm.select_employee', locale)} />
                 </SelectTrigger>
                 <SelectContent>
                   {employes.map(emp => (
@@ -368,7 +372,7 @@ export default function FraisKmPage() {
               </Select>
             </div>
             <div>
-              <Label>Kilometres parcourus</Label>
+              <Label>{t('rha.b.fraiskm.lbl_km', locale)}</Label>
               <Input
                 type="number"
                 step="0.1"
@@ -381,11 +385,11 @@ export default function FraisKmPage() {
             </div>
             <div className="bg-gray-50 rounded p-3">
               <p className="text-sm text-gray-600">
-                Montant estime: <strong style={{ color: GOLD }}>
+                {t('rha.b.fraiskm.estimated', locale)} <strong style={{ color: GOLD }}>
                   {fmt((parseFloat(formKm) || 0) * tarif)}
                 </strong>
               </p>
-              <p className="text-xs text-gray-400 mt-1">Tarif applique: {tarif} Rs/km</p>
+              <p className="text-xs text-gray-400 mt-1">{t('rha.b.fraiskm.tariff_applied', locale).replace('{n}', String(tarif))}</p>
             </div>
             <Button
               className="w-full text-white"
@@ -394,7 +398,7 @@ export default function FraisKmPage() {
               disabled={saving || !formEmploye || !formKm}
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {editingFrais ? "Mettre a jour" : "Enregistrer"}
+              {editingFrais ? t('rha.b.fraiskm.btn_update', locale) : t('rha.b.fraiskm.btn_save', locale)}
             </Button>
           </div>
         </DialogContent>

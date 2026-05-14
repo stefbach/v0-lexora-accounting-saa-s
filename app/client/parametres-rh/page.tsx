@@ -10,6 +10,7 @@ import {
   Plus, Trash2, Pencil, Save, X, Building2, MapPin, Calendar,
   Users, Clock, ChevronLeft, ChevronRight
 } from "lucide-react"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -159,6 +160,7 @@ function InlineActions({ editing, onEdit, onSave, onCancel, onDelete }: {
 // Main Page
 // ---------------------------------------------------------------------------
 export default function ParametresRHPage() {
+  const locale = getLocale()
   // Departments
   const [departments, setDepartments] = useState<Department[]>([])
   const [editDeptId, setEditDeptId] = useState<string | null>(null)
@@ -214,7 +216,7 @@ export default function ParametresRHPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
-          <Building2 className="w-5 h-5" /> Departements
+          <Building2 className="w-5 h-5" /> {t('hr.params.departments', locale)}
         </CardTitle>
         <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
           onClick={() => {
@@ -223,7 +225,7 @@ export default function ParametresRHPage() {
             setEditDeptId(d.id)
             setDraftDept(d)
           }}>
-          <Plus className="w-4 h-4 mr-1" /> Ajouter
+          <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
         </Button>
       </CardHeader>
       <CardContent>
@@ -231,10 +233,10 @@ export default function ParametresRHPage() {
           <table className="w-full text-sm">
             <thead className="bg-[#0B0F2E] text-white">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">Code</th>
-                <th className="px-4 py-2 text-left font-medium">Nom</th>
-                <th className="px-4 py-2 text-left font-medium">Responsable</th>
-                <th className="px-4 py-2 text-right font-medium w-24">Actions</th>
+                <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
+                <th className="px-4 py-2 text-left font-medium">{t('hr.params.name', locale)}</th>
+                <th className="px-4 py-2 text-left font-medium">{t('hr.params.manager', locale)}</th>
+                <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
               </tr>
             </thead>
             <tbody>
@@ -263,7 +265,7 @@ export default function ParametresRHPage() {
                 )
               })}
               {departments.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">Aucun departement</td></tr>
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_departments', locale)}</td></tr>
               )}
             </tbody>
           </table>
@@ -279,7 +281,7 @@ export default function ParametresRHPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
-          <MapPin className="w-5 h-5" /> Bureaux / Sites
+          <MapPin className="w-5 h-5" /> {t('hr.params.offices', locale)}
         </CardTitle>
         <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
           onClick={() => {
@@ -288,7 +290,7 @@ export default function ParametresRHPage() {
             setEditOffId(o.id)
             setDraftOff(o)
           }}>
-          <Plus className="w-4 h-4 mr-1" /> Ajouter
+          <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
         </Button>
       </CardHeader>
       <CardContent>
@@ -296,10 +298,10 @@ export default function ParametresRHPage() {
           <table className="w-full text-sm">
             <thead className="bg-[#0B0F2E] text-white">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">Code</th>
-                <th className="px-4 py-2 text-left font-medium">Nom</th>
-                <th className="px-4 py-2 text-left font-medium">Adresse</th>
-                <th className="px-4 py-2 text-right font-medium w-24">Actions</th>
+                <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
+                <th className="px-4 py-2 text-left font-medium">{t('hr.params.name', locale)}</th>
+                <th className="px-4 py-2 text-left font-medium">{t('hr.params.address', locale)}</th>
+                <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
               </tr>
             </thead>
             <tbody>
@@ -328,7 +330,7 @@ export default function ParametresRHPage() {
                 )
               })}
               {offices.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">Aucun bureau</td></tr>
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_offices', locale)}</td></tr>
               )}
             </tbody>
           </table>
@@ -344,7 +346,7 @@ export default function ParametresRHPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
-          <Calendar className="w-5 h-5" /> Types de conges
+          <Calendar className="w-5 h-5" /> {t('hr.params.leave_types', locale)}
         </CardTitle>
         <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
           onClick={() => {
@@ -353,7 +355,7 @@ export default function ParametresRHPage() {
             setEditLtId(lt.id)
             setDraftLt(lt)
           }}>
-          <Plus className="w-4 h-4 mr-1" /> Ajouter
+          <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
         </Button>
       </CardHeader>
       <CardContent>
@@ -361,12 +363,12 @@ export default function ParametresRHPage() {
           <table className="w-full text-sm">
             <thead className="bg-[#0B0F2E] text-white">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">Code</th>
-                <th className="px-4 py-2 text-left font-medium">Nom</th>
-                <th className="px-4 py-2 text-center font-medium">Jours/an</th>
-                <th className="px-4 py-2 text-center font-medium">Certificat</th>
-                <th className="px-4 py-2 text-center font-medium">Paye</th>
-                <th className="px-4 py-2 text-right font-medium w-24">Actions</th>
+                <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
+                <th className="px-4 py-2 text-left font-medium">{t('hr.params.name', locale)}</th>
+                <th className="px-4 py-2 text-center font-medium">{t('hr.params.days_per_year', locale)}</th>
+                <th className="px-4 py-2 text-center font-medium">{t('hr.params.certificate', locale)}</th>
+                <th className="px-4 py-2 text-center font-medium">{t('hr.params.paid', locale)}</th>
+                <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
               </tr>
             </thead>
             <tbody>
@@ -387,14 +389,14 @@ export default function ParametresRHPage() {
                       {editing ? (
                         <Switch checked={draftLt.requiresCertificate ?? false} onCheckedChange={v => setDraftLt(p => ({ ...p, requiresCertificate: v }))} />
                       ) : (
-                        lt.requiresCertificate ? <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Oui</span> : <span className="text-xs text-gray-400">Non</span>
+                        lt.requiresCertificate ? <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">{t('hr.params.yes', locale)}</span> : <span className="text-xs text-gray-400">{t('hr.params.no', locale)}</span>
                       )}
                     </td>
                     <td className="px-4 py-2 text-center">
                       {editing ? (
                         <Switch checked={draftLt.paid ?? true} onCheckedChange={v => setDraftLt(p => ({ ...p, paid: v }))} />
                       ) : (
-                        lt.paid ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Paye</span> : <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">Non paye</span>
+                        lt.paid ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">{t('hr.params.paid_yes', locale)}</span> : <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">{t('hr.params.paid_no', locale)}</span>
                       )}
                     </td>
                     <td className="px-4 py-2 text-right">
@@ -409,12 +411,12 @@ export default function ParametresRHPage() {
                 )
               })}
               {leaveTypes.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Aucun type de conge</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_leave_types', locale)}</td></tr>
               )}
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-400 mt-3">MAT = 14 semaines (98 jours). Les jours sont calcules selon le calendrier de travail de l'employe.</p>
+        <p className="text-xs text-gray-400 mt-3">{t('hr.params.leave_types_note', locale)}</p>
       </CardContent>
     </Card>
   )
@@ -428,7 +430,7 @@ export default function ParametresRHPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
-          <Calendar className="w-5 h-5" /> Jours feries Maurice
+          <Calendar className="w-5 h-5" /> {t('hr.params.holidays_title', locale)}
         </CardTitle>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => setHolidayYear(y => y - 1)} className="h-8 w-8 p-0">
@@ -446,7 +448,7 @@ export default function ParametresRHPage() {
             <div key={h.id} className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-100">
               <div>
                 <p className="text-sm font-medium text-[#0B0F2E]">{h.label}</p>
-                <p className="text-xs text-gray-500">{new Date(h.date + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" })}</p>
+                <p className="text-xs text-gray-500">{new Date(h.date + "T12:00:00").toLocaleDateString(locale === 'fr' ? "fr-FR" : "en-US", { weekday: "short", day: "numeric", month: "long" })}</p>
               </div>
               <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-600 h-8 w-8 p-0"
                 onClick={() => {
@@ -458,20 +460,20 @@ export default function ParametresRHPage() {
             </div>
           ))}
           {currentHolidays.length === 0 && (
-            <p className="text-gray-400 text-sm col-span-3 text-center py-6">Aucun jour ferie pour {holidayYear}</p>
+            <p className="text-gray-400 text-sm col-span-3 text-center py-6">{t('hr.params.no_holidays', locale)} {holidayYear}</p>
           )}
         </div>
 
         <div className="border-t pt-4">
-          <p className="text-sm font-medium text-[#0B0F2E] mb-2">Ajouter un jour ferie</p>
+          <p className="text-sm font-medium text-[#0B0F2E] mb-2">{t('hr.params.add_holiday', locale)}</p>
           <div className="flex gap-2 items-end">
             <div className="flex-1">
-              <Label className="text-xs">Date</Label>
+              <Label className="text-xs">{t('hr.params.date', locale)}</Label>
               <Input type="date" value={newHoliday.date} onChange={e => setNewHoliday(p => ({ ...p, date: e.target.value }))} className="h-9" />
             </div>
             <div className="flex-[2]">
-              <Label className="text-xs">Libelle</Label>
-              <Input value={newHoliday.label} onChange={e => setNewHoliday(p => ({ ...p, label: e.target.value }))} placeholder="Nom du jour ferie" className="h-9" />
+              <Label className="text-xs">{t('hr.params.label', locale)}</Label>
+              <Input value={newHoliday.label} onChange={e => setNewHoliday(p => ({ ...p, label: e.target.value }))} placeholder={t('hr.params.holiday_name_ph', locale)} className="h-9" />
             </div>
             <Button size="sm" className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#b89a42] h-9"
               disabled={!newHoliday.date || !newHoliday.label}
@@ -481,12 +483,12 @@ export default function ParametresRHPage() {
                 saveHols(updated)
                 setNewHoliday({ date: "", label: "" })
               }}>
-              <Plus className="w-4 h-4 mr-1" /> Ajouter
+              <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
             </Button>
           </div>
         </div>
 
-        <p className="text-xs text-gray-400">Les jours feries sont utilises pour le calcul des heures supplementaires (toutes heures x2) et le decompte des conges.</p>
+        <p className="text-xs text-gray-400">{t('hr.params.holidays_note', locale)}</p>
       </CardContent>
     </Card>
   )
@@ -498,7 +500,7 @@ export default function ParametresRHPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
-          <Users className="w-5 h-5" /> Groupes de paie
+          <Users className="w-5 h-5" /> {t('hr.params.pay_groups', locale)}
         </CardTitle>
         <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
           onClick={() => {
@@ -507,7 +509,7 @@ export default function ParametresRHPage() {
             setEditPgId(pg.id)
             setDraftPg(pg)
           }}>
-          <Plus className="w-4 h-4 mr-1" /> Ajouter
+          <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
         </Button>
       </CardHeader>
       <CardContent>
@@ -515,10 +517,10 @@ export default function ParametresRHPage() {
           <table className="w-full text-sm">
             <thead className="bg-[#0B0F2E] text-white">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">Code</th>
-                <th className="px-4 py-2 text-left font-medium">Nom du groupe</th>
-                <th className="px-4 py-2 text-center font-medium">Employes</th>
-                <th className="px-4 py-2 text-right font-medium w-24">Actions</th>
+                <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
+                <th className="px-4 py-2 text-left font-medium">{t('hr.params.group_name', locale)}</th>
+                <th className="px-4 py-2 text-center font-medium">{t('hr.params.employees', locale)}</th>
+                <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
               </tr>
             </thead>
             <tbody>
@@ -533,7 +535,7 @@ export default function ParametresRHPage() {
                       {editing ? <Input value={draftPg.name || ""} onChange={e => setDraftPg(p => ({ ...p, name: e.target.value }))} className="h-8" /> : pg.name}
                     </td>
                     <td className="px-4 py-2 text-center">
-                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{pg.employees.length} employe(s)</span>
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{pg.employees.length} {t('hr.params.employees_count', locale)}</span>
                     </td>
                     <td className="px-4 py-2 text-right">
                       <InlineActions editing={editing}
@@ -547,12 +549,12 @@ export default function ParametresRHPage() {
                 )
               })}
               {payGroups.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">Aucun groupe de paie</td></tr>
+                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_pay_groups', locale)}</td></tr>
               )}
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-400 mt-3">L'affectation des employes aux groupes se fait depuis la fiche employe ou par import.</p>
+        <p className="text-xs text-gray-400 mt-3">{t('hr.params.pay_groups_note', locale)}</p>
       </CardContent>
     </Card>
   )
@@ -564,7 +566,7 @@ export default function ParametresRHPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
-          <Clock className="w-5 h-5" /> Calendriers de travail
+          <Clock className="w-5 h-5" /> {t('hr.params.calendars', locale)}
         </CardTitle>
         <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
           onClick={() => {
@@ -573,7 +575,7 @@ export default function ParametresRHPage() {
             setEditCalId(c.id)
             setDraftCal(c)
           }}>
-          <Plus className="w-4 h-4 mr-1" /> Ajouter
+          <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -584,7 +586,7 @@ export default function ParametresRHPage() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex-1">
                   {editing ? (
-                    <Input value={draftCal.name || ""} onChange={e => setDraftCal(p => ({ ...p, name: e.target.value }))} className="h-8 font-semibold" placeholder="Nom du calendrier" />
+                    <Input value={draftCal.name || ""} onChange={e => setDraftCal(p => ({ ...p, name: e.target.value }))} className="h-8 font-semibold" placeholder={t('hr.params.calendar_name_ph', locale)} />
                   ) : (
                     <p className="font-semibold text-[#0B0F2E]">{cal.name}</p>
                   )}
@@ -597,7 +599,7 @@ export default function ParametresRHPage() {
                 />
               </div>
               <div className="flex gap-2 items-center">
-                <span className="text-xs text-gray-500 mr-2">Jours :</span>
+                <span className="text-xs text-gray-500 mr-2">{t('hr.params.days', locale)}</span>
                 {ALL_DAYS.map(day => {
                   const active = editing ? (draftCal.days || []).includes(day) : cal.days.includes(day)
                   return (
@@ -621,7 +623,7 @@ export default function ParametresRHPage() {
                     </button>
                   )
                 })}
-                <span className="text-xs text-gray-500 ml-4 mr-2">Heures/jour :</span>
+                <span className="text-xs text-gray-500 ml-4 mr-2">{t('hr.params.hours_per_day', locale)}</span>
                 {editing ? (
                   <Input type="number" value={draftCal.hoursPerDay ?? 9} onChange={e => setDraftCal(p => ({ ...p, hoursPerDay: Number(e.target.value) }))} className="h-8 w-16" />
                 ) : (
@@ -632,9 +634,9 @@ export default function ParametresRHPage() {
           )
         })}
         {calendars.length === 0 && (
-          <p className="text-gray-400 text-sm text-center py-8">Aucun calendrier de travail</p>
+          <p className="text-gray-400 text-sm text-center py-8">{t('hr.params.no_calendars', locale)}</p>
         )}
-        <p className="text-xs text-gray-400">Le calendrier est affecte a chaque employe et determine le calcul des heures normales, OT, et decompte des conges.</p>
+        <p className="text-xs text-gray-400">{t('hr.params.calendars_note', locale)}</p>
       </CardContent>
     </Card>
   )
@@ -645,29 +647,29 @@ export default function ParametresRHPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#0B0F2E]">Parametres RH</h1>
-        <p className="text-sm text-gray-500">Configuration des departements, conges, jours feries, groupes de paie et calendriers</p>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('hr.params.title', locale)}</h1>
+        <p className="text-sm text-gray-500">{t('hr.params.subtitle', locale)}</p>
       </div>
 
       <Tabs defaultValue="departments">
         <TabsList className="bg-[#0B0F2E]/5 border">
           <TabsTrigger value="departments" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
-            Departements
+            {t('hr.params.departments', locale)}
           </TabsTrigger>
           <TabsTrigger value="offices" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
-            Bureaux/Sites
+            {t('hr.params.offices', locale)}
           </TabsTrigger>
           <TabsTrigger value="leave-types" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
-            Types de conges
+            {t('hr.params.leave_types', locale)}
           </TabsTrigger>
           <TabsTrigger value="holidays" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
-            Jours feries
+            {t('hr.params.holidays', locale)}
           </TabsTrigger>
           <TabsTrigger value="pay-groups" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
-            Groupes de paie
+            {t('hr.params.pay_groups', locale)}
           </TabsTrigger>
           <TabsTrigger value="calendars" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
-            Calendriers
+            {t('hr.params.calendars', locale)}
           </TabsTrigger>
         </TabsList>
 

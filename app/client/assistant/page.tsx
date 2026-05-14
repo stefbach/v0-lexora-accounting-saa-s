@@ -24,6 +24,7 @@ import {
   User,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -47,28 +48,32 @@ interface Folder {
   readOnly: boolean
 }
 
-const FOLDERS: Folder[] = [
-  { key: "recent", label: "Envois Récents", readOnly: false },
-  { key: "facture_fournisseur", label: "Factures Fournisseurs", readOnly: false },
-  { key: "facture_client", label: "Factures Clients", readOnly: false },
-  { key: "releve_bancaire", label: "Relevés Bancaires", readOnly: false },
-  { key: "fiche_paie", label: "Fiches de Paie", readOnly: false },
-  { key: "charges_sociales", label: "Cotisations Sociales", readOnly: false },
-  { key: "contrat", label: "Contrats", readOnly: false },
-  { key: "rapport", label: "Rapports Mensuels", readOnly: true },
-  { key: "autre", label: "Autres Documents", readOnly: false },
-]
+function getFolders(locale: Locale): Folder[] {
+  return [
+    { key: "recent", label: t('core.doc.folder_recent', locale), readOnly: false },
+    { key: "facture_fournisseur", label: t('core.doc.folder_supplier_invoices', locale), readOnly: false },
+    { key: "facture_client", label: t('core.doc.folder_client_invoices', locale), readOnly: false },
+    { key: "releve_bancaire", label: t('core.doc.folder_bank_statements', locale), readOnly: false },
+    { key: "fiche_paie", label: t('core.doc.folder_payslips', locale), readOnly: false },
+    { key: "charges_sociales", label: t('core.doc.folder_social_charges', locale), readOnly: false },
+    { key: "contrat", label: t('core.doc.folder_contracts', locale), readOnly: false },
+    { key: "rapport", label: t('core.doc.folder_monthly_reports', locale), readOnly: true },
+    { key: "autre", label: t('core.doc.folder_other', locale), readOnly: false },
+  ]
+}
 
-const DOCUMENT_TYPES = [
-  { value: "facture_fournisseur", label: "Facture fournisseur" },
-  { value: "facture_client", label: "Facture client" },
-  { value: "releve_bancaire", label: "Relevé bancaire" },
-  { value: "fiche_paie", label: "Fiche de paie" },
-  { value: "payroll_report", label: "Rapport paie (Excel)" },
-  { value: "charges_sociales", label: "Charges sociales" },
-  { value: "contrat", label: "Contrat" },
-  { value: "autre", label: "Autre" },
-]
+function getDocumentTypes(locale: Locale) {
+  return [
+    { value: "facture_fournisseur", label: t('core.doc.type_supplier_invoice', locale) },
+    { value: "facture_client", label: t('core.doc.type_client_invoice', locale) },
+    { value: "releve_bancaire", label: t('core.doc.type_bank_statement', locale) },
+    { value: "fiche_paie", label: t('core.doc.type_payslip', locale) },
+    { value: "payroll_report", label: t('core.doc.type_payroll_excel', locale) },
+    { value: "charges_sociales", label: t('core.doc.type_social_charges', locale) },
+    { value: "contrat", label: t('core.doc.type_contract', locale) },
+    { value: "autre", label: t('core.doc.type_other', locale) },
+  ]
+}
 
 function getSocieteBadgeStyle(name?: string | null): Record<string, string> {
   if (!name) return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' }
@@ -92,10 +97,10 @@ function normalizeSocieteName(detected: string | null, knownSocietes: { nom: str
   return detected
 }
 
-function statutBadge(s: string) {
-  if (s === "traite") return <Badge className="bg-green-100 text-green-700">Traité</Badge>
-  if (s === "en_cours" || s === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Clock className="h-3 w-3 mr-1" />Analyse en cours...</Badge>
-  if (s === "erreur") return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />Erreur</Badge>
+function statutBadge(s: string, locale: Locale) {
+  if (s === "traite") return <Badge className="bg-green-100 text-green-700">{t('core.doc.status_processed', locale)}</Badge>
+  if (s === "en_cours" || s === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Clock className="h-3 w-3 mr-1" />{t('core.doc.status_analyzing', locale)}</Badge>
+  if (s === "erreur") return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />{t('core.doc.status_error', locale)}</Badge>
   return <Badge variant="outline">{s}</Badge>
 }
 
@@ -122,6 +127,9 @@ function getDocsForFolder(docs: Document[], folderKey: string): Document[] {
 }
 
 export default function AssistantPage() {
+  const locale = getLocale()
+  const FOLDERS = getFolders(locale)
+  const DOCUMENT_TYPES = getDocumentTypes(locale)
   const isAssistantMode = true
   const { profile } = useProfile()
   const [documents, setDocuments] = useState<Document[]>([])
@@ -188,7 +196,7 @@ export default function AssistantPage() {
     if (!files || files.length === 0) return
 
     if (!societeId) {
-      setUploadError("Aucune société active.")
+      setUploadError(t('core.doc.no_active_company', locale))
       setTimeout(() => setUploadError(null), 5000)
       return
     }
@@ -214,7 +222,7 @@ export default function AssistantPage() {
           if (data.needs_confirmation) {
             setConfirmSocDoc({ id: doc.id, filename: file.name, detected: data.societe_detectee })
             setConfirmSocId(societes.length > 0 ? societes[0].id : "")
-            setUploadSuccess(`${file.name} envoyé — veuillez confirmer la société.`)
+            setUploadSuccess(`${file.name} ${t('core.doc.sent_confirm_company', locale)}`)
           } else if (doc.statut === "traite" && doc.type_document) {
             const folderLabel = FOLDERS.find(f => f.key === doc.type_document)?.label || doc.type_document
 
@@ -227,18 +235,18 @@ export default function AssistantPage() {
               if (!matched) {
                 // Show reassignment dialog
                 setReassignDoc({ id: doc.id, nom_fichier: file.name })
-                setUploadSuccess(`${file.name} classé dans "${folderLabel}". Société détectée : "${detectedSociete}" — veuillez confirmer la société.`)
+                setUploadSuccess(`${file.name} ${t('core.doc.classified_in', locale)} "${folderLabel}". ${t('core.doc.company_detected', locale)} : "${detectedSociete}" — ${t('core.doc.sent_confirm_company', locale)}`)
               } else {
-                setUploadSuccess(`${file.name} classé dans "${folderLabel}" pour ${matched.nom}`)
+                setUploadSuccess(`${file.name} ${t('core.doc.classified_in', locale)} "${folderLabel}" — ${matched.nom}`)
               }
             } else {
-              setUploadSuccess(`${file.name} analysé et classé dans "${folderLabel}" !`)
+              setUploadSuccess(`${file.name} ${t('core.doc.analyzed_classified_in', locale)} "${folderLabel}" !`)
             }
           // Auto-reanalyze "autre" documents with low confidence
           if (doc.type_document === "autre") {
             const conf = doc.confiance_type ?? doc.n8n_result?.routing?.confiance_type ?? 100
             if (conf < 70) {
-              setUploadSuccess(`${file.name} — Type non reconnu. Nouvelle analyse en cours...`)
+              setUploadSuccess(`${file.name} — ${t('core.doc.unrecognized_type_reanalyze', locale)}`)
               fetch(`/api/documents/${doc.id}/reanalyze`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({}),
@@ -246,9 +254,9 @@ export default function AssistantPage() {
             }
           }
           } else if (doc.statut === "erreur") {
-            setUploadError(`${file.name} : erreur d'analyse. Utilisez Réessayer.`)
+            setUploadError(`${file.name} : ${t('core.doc.error_analyze_retry', locale)}`)
           } else {
-            setUploadSuccess(`${file.name} envoyé !`)
+            setUploadSuccess(`${file.name} ${t('core.doc.sent', locale)}`)
           }
         } else {
           if (res.status === 409 && data.doublon) {
@@ -256,14 +264,14 @@ export default function AssistantPage() {
               // Show reprocess confirmation dialog for erreur/en_attente docs
               setReprocessDoc({ id: data.existingId, filename: file.name })
             } else {
-              setUploadError(`⚠️ Ce document a déjà été importé : "${file.name}"`)
+              setUploadError(`⚠️ ${t('core.doc.already_imported', locale)} : "${file.name}"`)
             }
           } else {
-            setUploadError(data.error || "Erreur lors de l'envoi")
+            setUploadError(data.error || t('core.doc.error_uploading', locale))
           }
         }
       } catch {
-        setUploadError("Erreur de connexion au serveur")
+        setUploadError(t('core.doc.connection_error_server', locale))
       }
     }
     await fetchDocuments()
@@ -293,16 +301,16 @@ export default function AssistantPage() {
           }),
         })
         if (patchRes.ok) {
-          setUploadSuccess(`Document réassigné avec succès à la société sélectionnée.`)
+          setUploadSuccess(t('core.doc.doc_reassigned_success', locale))
         } else {
           const errData = await patchRes.json()
-          setUploadError(errData.error || "Erreur lors de la réassignation")
+          setUploadError(errData.error || t('core.doc.error_reassign', locale))
         }
       } else {
-        setUploadError("Dossier introuvable pour cette société")
+        setUploadError(t('core.doc.error_reassign', locale))
       }
     } catch {
-      setUploadError("Erreur lors de la réassignation")
+      setUploadError(t('core.doc.error_reassign', locale))
     }
     setReassignDoc(null)
     setReassignSocieteId("")
@@ -342,9 +350,9 @@ export default function AssistantPage() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Espace Assistant</h1>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('core.ast.title', locale)}</h1>
           <p className="text-sm text-muted-foreground">
-            Numérisation et envoi de documents
+            {t('core.ast.subtitle', locale)}
           </p>
         </div>
         {/* Double-access link — takes client-assistants who also have an
@@ -358,7 +366,7 @@ export default function AssistantPage() {
             className="gap-2 border-[#0B0F2E] text-[#0B0F2E] hover:bg-[#0B0F2E] hover:text-white"
           >
             <User className="h-4 w-4" />
-            Mon espace salarié
+            {t('core.ast.my_employee_space', locale)}
             <ChevronRight className="h-3.5 w-3.5 opacity-60" />
           </Button>
         </Link>
@@ -373,7 +381,7 @@ export default function AssistantPage() {
         <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
           <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm" style={{ color: NAVY }}>
-            Upload sur : <strong>{societe.nom}</strong>
+            {t('core.doc.upload_on', locale)} : <strong>{societe.nom}</strong>
           </span>
         </div>
       )}
@@ -389,19 +397,19 @@ export default function AssistantPage() {
         {uploading ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: GOLD }} />
-            <p className="text-sm text-muted-foreground">Analyse en cours...</p>
-            <p className="text-xs text-muted-foreground">Votre document sera classé automatiquement dans le bon dossier</p>
+            <p className="text-sm text-muted-foreground">{t('core.doc.status_analyzing', locale)}</p>
+            <p className="text-xs text-muted-foreground">{t('core.doc.your_doc_auto_classed', locale)}</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
             <Upload className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm font-medium">Glissez-déposez vos fichiers ici</p>
-            <p className="text-xs text-muted-foreground">PDF, JPEG, PNG, XLSX — max 20 MB</p>
-            <p className="text-xs text-muted-foreground mt-1">Le système analyse et classe automatiquement dans le bon dossier</p>
+            <p className="text-sm font-medium">{t('core.doc.drop_files', locale)}</p>
+            <p className="text-xs text-muted-foreground">{t('core.doc.file_types', locale)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('core.doc.system_classifies', locale)}</p>
             <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleUpload(e.target.files)} />
             <div className="flex gap-2 mt-2">
-              <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>Parcourir</Button>
-              <Button size="sm" variant="outline" onClick={() => cameraInputRef.current?.click()}><Camera className="h-4 w-4 mr-1" />Prendre une photo</Button>
+              <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>{t('core.doc.browse', locale)}</Button>
+              <Button size="sm" variant="outline" onClick={() => cameraInputRef.current?.click()}><Camera className="h-4 w-4 mr-1" />{t('core.doc.take_photo', locale)}</Button>
             </div>
           </div>
         )}
@@ -420,12 +428,12 @@ export default function AssistantPage() {
 
       {/* Document counter */}
       <div className="text-xs text-gray-400 px-2">
-        {filteredDocuments.length} document(s)
+        {filteredDocuments.length} {t('core.doc.documents_count', locale)}
       </div>
 
       {/* Folder list */}
       <div>
-        <h3 className="font-semibold mb-3" style={{ color: NAVY }}>Mes Dossiers</h3>
+        <h3 className="font-semibold mb-3" style={{ color: NAVY }}>{t('core.doc.my_folders', locale)}</h3>
         <div className="grid gap-2">
           {FOLDERS.map((folder) => {
             const count = getDocsForFolder(filteredDocuments, folder.key).length
@@ -446,15 +454,15 @@ export default function AssistantPage() {
                         {folder.readOnly && <Lock className="h-3 w-3 text-muted-foreground" />}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {count} document{count !== 1 ? "s" : ""}{count === 0 ? " — vide" : ""}
-                        {folder.readOnly ? " — rempli par votre comptable" : ""}
+                        {count} {t('core.doc.documents_word', locale)}{count === 0 ? t('core.doc.empty_suffix', locale) : ""}
+                        {folder.readOnly ? t('core.doc.filled_by_accountant', locale) : ""}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {folder.key === "recent" && documents.some(d => d.statut === "en_attente" || d.statut === "en_cours") && (
                       <Badge className="bg-blue-100 text-blue-700 text-xs">
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />En cours
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />{t('core.doc.in_progress', locale)}
                       </Badge>
                     )}
                     <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isSelected ? "rotate-90" : ""}`} />
@@ -477,7 +485,7 @@ export default function AssistantPage() {
             </CardTitle>
             {!currentFolder.readOnly && (
               <Button size="sm" style={{ backgroundColor: GOLD }} onClick={() => fileInputRef.current?.click()}>
-                <Upload className="mr-1 h-4 w-4" />Uploader ici
+                <Upload className="mr-1 h-4 w-4" />{t('core.doc.upload_here', locale)}
               </Button>
             )}
           </div>
@@ -485,19 +493,19 @@ export default function AssistantPage() {
         <div className="flex flex-wrap items-center gap-3 px-4 pb-3">
           <div className="relative flex-1 min-w-[180px] max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Rechercher par nom de fichier..." className="pl-9 h-8 text-sm" value={docSearch} onChange={(e) => setDocSearch(e.target.value)} />
+            <Input placeholder={t('core.doc.search_filename', locale)} className="pl-9 h-8 text-sm" value={docSearch} onChange={(e) => setDocSearch(e.target.value)} />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[140px] h-8 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous statuts</SelectItem>
-              <SelectItem value="traite">Traité</SelectItem>
-              <SelectItem value="en_cours">En cours</SelectItem>
-              <SelectItem value="erreur">Erreur</SelectItem>
+              <SelectItem value="all">{t('core.doc.all_statuses', locale)}</SelectItem>
+              <SelectItem value="traite">{t('core.doc.processed', locale)}</SelectItem>
+              <SelectItem value="en_cours">{t('core.doc.in_progress_filter', locale)}</SelectItem>
+              <SelectItem value="erreur">{t('core.doc.error', locale)}</SelectItem>
             </SelectContent>
           </Select>
           {(docSearch || statusFilter !== "all") && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all") }}>Effacer</Button>
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setDocSearch(""); setStatusFilter("all") }}>{t('core.doc.clear', locale)}</Button>
           )}
         </div>
         <CardContent className="p-0">
@@ -505,13 +513,13 @@ export default function AssistantPage() {
           <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Fichier</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Société</TableHead>
-                <TableHead>Type détecté</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Confiance IA</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('core.doc.col_file', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_date', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_company', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_type_detected', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_status', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_ai_confidence', locale)}</TableHead>
+                <TableHead>{t('core.doc.col_actions', locale)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -530,7 +538,7 @@ export default function AssistantPage() {
                       {doc.nom_fichier}
                     </Link>
                   </TableCell>
-                  <TableCell>{new Date(doc.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                  <TableCell>{new Date(doc.created_at).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}</TableCell>
                   <TableCell>
                     {reassigningSocDocId === doc.id ? (
                       <div className="flex items-center gap-1">
@@ -546,7 +554,7 @@ export default function AssistantPage() {
                           } catch { /* silent */ }
                           setReassigningSocDocId(null)
                         }}>
-                          <SelectTrigger className="h-7 text-xs w-[160px]"><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                          <SelectTrigger className="h-7 text-xs w-[160px]"><SelectValue placeholder={t('core.doc.choose', locale)} /></SelectTrigger>
                           <SelectContent>
                             {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                           </SelectContent>
@@ -562,7 +570,7 @@ export default function AssistantPage() {
                             {normalizeSocieteName(doc.societe_detectee, societes)}
                           </Badge>
                         ) : (
-                          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">Non assignée</Badge>
+                          <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{t('core.doc.unassigned_badge', locale)}</Badge>
                         )}
                         <button className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setReassigningSocDocId(doc.id); setReassigningSocValue("") }}>
                           <Pencil className="h-3 w-3 text-muted-foreground hover:text-[#0B0F2E]" />
@@ -576,11 +584,11 @@ export default function AssistantPage() {
                         {FOLDERS.find(f => f.key === doc.type_document)?.label || doc.type_document}
                       </Badge>
                     ) : (
-                      <span className="text-xs text-muted-foreground italic">En attente...</span>
+                      <span className="text-xs text-muted-foreground italic">{t('core.doc.pending_dots', locale)}</span>
                     )}
                   </TableCell>
                   <TableCell>
-                    {statutBadge(doc.statut)}
+                    {statutBadge(doc.statut, locale)}
                     {doc.statut === "erreur" && doc.n8n_result?.error && (
                       <p className="text-xs text-red-500 mt-1">{doc.n8n_result.error}</p>
                     )}
@@ -591,7 +599,7 @@ export default function AssistantPage() {
                   <TableCell>
                     <div className="flex gap-1">
                       {doc.storage_path && (
-                        <Button variant="ghost" size="sm" title="Télécharger"
+                        <Button variant="ghost" size="sm" title={t('core.doc.download', locale)}
                           onClick={() => window.open(`/api/documents/${doc.id}/download`, '_blank')}
                         >
                           <Download className="h-3.5 w-3.5" />
@@ -601,9 +609,9 @@ export default function AssistantPage() {
                         <Button
                           variant="ghost" size="sm" className="text-xs"
                           style={{ color: doc.statut === "traite" ? undefined : GOLD }}
-                          title={doc.statut === "traite" ? "Réanalyser" : "Réessayer"}
+                          title={doc.statut === "traite" ? t('core.doc.reanalyze', locale) : t('core.doc.retry', locale)}
                           onClick={async () => {
-                            if (doc.statut === "traite" && !confirm("Ce document a déjà été traité. Voulez-vous relancer l'analyse ? Les écritures comptables seront recalculées.")) return
+                            if (doc.statut === "traite" && !confirm(t('core.doc.confirm_reanalyze_processed', locale))) return
                             setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, statut: "en_cours" } : d))
                             try {
                               await fetch(`/api/documents/${doc.id}/reanalyze`, {
@@ -615,10 +623,10 @@ export default function AssistantPage() {
                           }}
                         >
                           <RefreshCw className="h-3 w-3 mr-1" />
-                          {doc.statut === "traite" ? "Réanalyser" : "Réessayer"}
+                          {doc.statut === "traite" ? t('core.doc.reanalyze', locale) : t('core.doc.retry', locale)}
                         </Button>
                       )}
-                      <Button variant="ghost" size="sm" title="Changer catégorie"
+                      <Button variant="ghost" size="sm" title={t('core.doc.change_category', locale)}
                         onClick={() => { setChangeCatDoc(doc); setChangeCatType(doc.type_document || "autre"); setChangeCatHint("") }}
                       >
                         <Pencil className="h-3 w-3" />
@@ -626,14 +634,14 @@ export default function AssistantPage() {
                       <Button
                         variant="ghost" size="sm"
                         className="text-red-400 hover:text-red-600 hover:bg-red-50"
-                        title="Supprimer"
+                        title={t('core.doc.delete', locale)}
                         onClick={async () => {
-                          if (!confirm(`Supprimer "${doc.nom_fichier}" ? Cette action est irréversible.`)) return
+                          if (!confirm(`${t('core.doc.confirm_delete_one_a', locale)} "${doc.nom_fichier}" ? ${t('core.doc.confirm_delete_one_b', locale)}`)) return
                           try {
                             const res = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
                             if (res.ok) { setDocuments(prev => prev.filter(d => d.id !== doc.id)) }
-                            else { const d = await res.json(); alert(d.error || 'Erreur suppression') }
-                          } catch { alert('Erreur de connexion') }
+                            else { const d = await res.json(); alert(d.error || t('core.doc.delete_error', locale)) }
+                          } catch { alert(t('core.doc.connection_error', locale)) }
                         }}
                       >
                         🗑️
@@ -647,7 +655,7 @@ export default function AssistantPage() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12">
                     <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                    <p className="text-muted-foreground">Aucun document dans ce dossier.</p>
+                    <p className="text-muted-foreground">{t('core.doc.no_docs_folder', locale)}</p>
                   </TableCell>
                 </TableRow>
               )}
@@ -660,36 +668,36 @@ export default function AssistantPage() {
       {/* Pagination */}
       {allCurrentDocs.length > visibleCount && (
         <div className="text-center py-2">
-          <p className="text-xs text-muted-foreground mb-2">Affichage {visibleCount} sur {allCurrentDocs.length} documents</p>
+          <p className="text-xs text-muted-foreground mb-2">{t('core.doc.display_of', locale)} {visibleCount} {t('core.doc.of', locale)} {allCurrentDocs.length} {t('core.doc.documents_word', locale)}</p>
           <Button variant="outline" size="sm" onClick={() => setVisibleCount(v => v + pageSize)}>
-            Charger plus
+            {t('core.doc.load_more', locale)}
           </Button>
         </div>
       )}
       {allCurrentDocs.length > 0 && allCurrentDocs.length <= visibleCount && (
-        <p className="text-xs text-muted-foreground text-center">{allCurrentDocs.length} document{allCurrentDocs.length > 1 ? "s" : ""}</p>
+        <p className="text-xs text-muted-foreground text-center">{allCurrentDocs.length} {t('core.doc.documents_word', locale)}</p>
       )}
 
       {/* Société confirmation dialog */}
       <Dialog open={!!confirmSocDoc} onOpenChange={(o) => { if (!o) setConfirmSocDoc(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Confirmer la société du document</DialogTitle>
+            <DialogTitle>{t('core.doc.confirm_company_doc', locale)}</DialogTitle>
             <DialogDescription>
-              Le document &quot;{confirmSocDoc?.filename}&quot; n&apos;a pas pu être automatiquement associé à une société.
-              {confirmSocDoc?.detected && <><br />Société détectée : <strong>{confirmSocDoc.detected}</strong></>}
+              {t('core.doc.confirm_company_msg_a', locale)} &quot;{confirmSocDoc?.filename}&quot; {t('core.doc.confirm_company_msg_b', locale)}
+              {confirmSocDoc?.detected && <><br />{t('core.doc.company_detected', locale)} : <strong>{confirmSocDoc.detected}</strong></>}
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
             <Select value={confirmSocId} onValueChange={setConfirmSocId}>
-              <SelectTrigger><SelectValue placeholder="Sélectionner la société..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('core.doc.select_company_dots', locale)} /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmSocDoc(null)}>Ignorer</Button>
+            <Button variant="outline" onClick={() => setConfirmSocDoc(null)}>{t('core.doc.ignore', locale)}</Button>
             <Button
               disabled={!confirmSocId || confirmSocSaving}
               style={{ backgroundColor: NAVY }}
@@ -718,7 +726,7 @@ export default function AssistantPage() {
                 setConfirmSocDoc(null)
               }}
             >
-              {confirmSocSaving ? "Traitement..." : "Confirmer et traiter"}
+              {confirmSocSaving ? t('core.doc.processing', locale) : t('core.doc.confirm_and_process', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -728,22 +736,22 @@ export default function AssistantPage() {
       <Dialog open={!!reassignDoc} onOpenChange={(o) => { if (!o) { setReassignDoc(null); setReassignSocieteId("") } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmer la société</DialogTitle>
+            <DialogTitle>{t('core.doc.confirm_company', locale)}</DialogTitle>
             <DialogDescription>
-              Le document &quot;{reassignDoc?.nom_fichier}&quot; a été analysé mais la société n&apos;a pas pu être identifiée automatiquement. Veuillez sélectionner la société concernée.
+              {t('core.doc.confirm_company_msg_a', locale)} &quot;{reassignDoc?.nom_fichier}&quot; {t('core.doc.confirm_company_undet', locale)}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-3">
             <Select value={reassignSocieteId} onValueChange={setReassignSocieteId}>
-              <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('core.doc.select_company', locale)} /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setReassignDoc(null); setReassignSocieteId("") }}>Ignorer</Button>
-            <Button style={{ backgroundColor: GOLD }} onClick={handleReassign} disabled={!reassignSocieteId}>Confirmer</Button>
+            <Button variant="outline" onClick={() => { setReassignDoc(null); setReassignSocieteId("") }}>{t('core.doc.ignore', locale)}</Button>
+            <Button style={{ backgroundColor: GOLD }} onClick={handleReassign} disabled={!reassignSocieteId}>{t('core.doc.confirm', locale)}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -751,7 +759,7 @@ export default function AssistantPage() {
       <Dialog open={!!changeCatDoc} onOpenChange={(o) => { if (!o) setChangeCatDoc(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Changer le type de document</DialogTitle>
+            <DialogTitle>{t('core.doc.change_doc_type', locale)}</DialogTitle>
             <DialogDescription>
               {changeCatDoc?.nom_fichier}
             </DialogDescription>
@@ -764,13 +772,13 @@ export default function AssistantPage() {
               </SelectContent>
             </Select>
             <Input
-              placeholder="Indice pour l'IA (optionnel)"
+              placeholder={t('core.doc.ai_hint_optional', locale)}
               value={changeCatHint}
               onChange={(e) => setChangeCatHint(e.target.value)}
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setChangeCatDoc(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setChangeCatDoc(null)}>{t('core.doc.cancel', locale)}</Button>
             <Button
               disabled={changeCatSaving}
               style={{ backgroundColor: NAVY }}
@@ -788,7 +796,7 @@ export default function AssistantPage() {
                 setChangeCatDoc(null)
               }}
             >
-              {changeCatSaving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Analyse...</> : "Confirmer"}
+              {changeCatSaving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />{t('core.doc.analyzing', locale)}</> : t('core.doc.confirm', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -798,13 +806,13 @@ export default function AssistantPage() {
       <Dialog open={!!reprocessDoc} onOpenChange={(o) => { if (!o) setReprocessDoc(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Document existant avec erreurs</DialogTitle>
+            <DialogTitle>{t('core.doc.existing_doc_with_errors', locale)}</DialogTitle>
             <DialogDescription>
-              &quot;{reprocessDoc?.filename}&quot; a déjà été importé mais contient des erreurs. Voulez-vous le retraiter ?
+              &quot;{reprocessDoc?.filename}&quot; {t('core.doc.already_imported_reprocess', locale)}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReprocessDoc(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setReprocessDoc(null)}>{t('core.doc.cancel', locale)}</Button>
             <Button
               style={{ backgroundColor: GOLD, color: NAVY }}
               onClick={async () => {
@@ -819,7 +827,7 @@ export default function AssistantPage() {
                 setReprocessDoc(null)
               }}
             >
-              Retraiter
+              {t('core.doc.reprocess', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

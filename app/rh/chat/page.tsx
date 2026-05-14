@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Send, Loader2, Bot, User, Trash2 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -58,8 +59,9 @@ function renderMarkdown(text: string): string {
 }
 
 export default function ChatCLARAPage() {
+  const locale: Locale = getLocale()
   const [messages, setMessages] = useState<Array<{role:"user"|"assistant",content:string}>>([
-    {role:"assistant", content:"Bonjour, je suis CLARA, votre assistante RH specialisee en droit du travail mauricien (Workers' Rights Act 2019, MRA, CSG/PAYE). Comment puis-je vous aider ?"}
+    {role:"assistant", content: t('rha.b.chat.greeting', locale)}
   ])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
@@ -85,22 +87,22 @@ export default function ChatCLARAPage() {
       })
       const data = await res.json()
       if (data.conversation_id) setConvId(data.conversation_id)
-      setMessages(m => [...m, {role:"assistant", content:data.reply || data.message || "Pas de reponse"}])
-    } catch { setMessages(m=>[...m,{role:"assistant",content:"Une erreur s'est produite. Veuillez reessayer."}]) }
+      setMessages(m => [...m, {role:"assistant", content:data.reply || data.message || t('rha.b.chat.no_reply', locale)}])
+    } catch { setMessages(m=>[...m,{role:"assistant",content: t('rha.b.chat.error', locale)}]) }
     finally { setLoading(false) }
   }
 
   const clearChat = () => {
-    setMessages([{role:"assistant", content:"Bonjour, je suis CLARA. Comment puis-je vous aider ?"}])
+    setMessages([{role:"assistant", content: t('rha.b.chat.greeting_short', locale)}])
     setConvId(null)
   }
 
   const suggestions = [
-    "Combien de jours de conge annuel pour 4 ans d'anciennete ?",
-    "Quels sont les taux CSG/NSF en vigueur ?",
-    "Calcul du PAYE pour un salaire de 45 000 MUR",
-    "Regles de licenciement selon le WRA 2019",
-    "Droits maternite a Maurice",
+    t('rha.b.chat.sugg1', locale),
+    t('rha.b.chat.sugg2', locale),
+    t('rha.b.chat.sugg3', locale),
+    t('rha.b.chat.sugg4', locale),
+    t('rha.b.chat.sugg5', locale),
   ]
 
   return (
@@ -110,12 +112,12 @@ export default function ChatCLARAPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: NAVY }}>
             <Bot className="w-6 h-6" style={{ color: GOLD }}/>
-            Assistant RH — CLARA
+            {t('rha.b.chat.title', locale)}
           </h1>
-          <p className="text-sm text-gray-500">Droit du travail mauricien, paie, conges, contrats</p>
+          <p className="text-sm text-gray-500">{t('rha.b.chat.subtitle', locale)}</p>
         </div>
         <Button variant="outline" size="sm" onClick={clearChat} className="gap-1">
-          <Trash2 className="w-4 h-4"/>Nouveau chat
+          <Trash2 className="w-4 h-4"/>{t('rha.b.chat.new_chat', locale)}
         </Button>
       </div>
 
@@ -151,7 +153,7 @@ export default function ChatCLARAPage() {
               <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-gray-500"/>
-                  <span className="text-sm text-gray-500">CLARA analyse votre question...</span>
+                  <span className="text-sm text-gray-500">{t('rha.b.chat.analyzing', locale)}</span>
                 </div>
               </div>
             </div>
@@ -162,7 +164,7 @@ export default function ChatCLARAPage() {
         {/* Suggestions (only show when few messages) */}
         {messages.length <= 2 && (
           <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/50">
-            <p className="text-xs text-gray-400 mb-2">Suggestions :</p>
+            <p className="text-xs text-gray-400 mb-2">{t('rha.b.chat.suggestions', locale)}</p>
             <div className="flex flex-wrap gap-2">
               {suggestions.map((s, i) => (
                 <button key={i} onClick={() => { setInput(s); }} className="text-xs px-3 py-1.5 rounded-full border border-gray-200 hover:border-amber-300 hover:bg-amber-50 text-gray-600 transition-colors">
@@ -178,7 +180,7 @@ export default function ChatCLARAPage() {
             value={input}
             onChange={e=>setInput(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&send()}
-            placeholder="Posez votre question RH (conges, paie, contrats, droit du travail)..."
+            placeholder={t('rha.b.chat.placeholder', locale)}
             className="flex-1"
           />
           <Button onClick={send} disabled={loading||!input.trim()} style={{ backgroundColor: NAVY }} className="text-white">

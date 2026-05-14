@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Facture {
   id: string
@@ -61,6 +62,7 @@ function daysUntil(d: string | null): number | null {
 }
 
 export default function ClientEcheancesPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [factures, setFactures] = useState<Facture[]>([])
   const [loading, setLoading] = useState(false)
@@ -151,21 +153,21 @@ export default function ClientEcheancesPage() {
                 <Calendar className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-amber-900">Échéances</h1>
+                <h1 className="text-2xl font-bold text-amber-900">{t('mra.echeances.title', locale)}</h1>
                 <p className="text-sm text-amber-700/80 mt-0.5">
-                  Factures impayées · à payer ou à encaisser
+                  {t('mra.echeances.subtitle', locale)}
                 </p>
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('mra.echeances.refresh', locale)}
               </Button>
               <Link href="/client/rapprochement">
                 <Button className="bg-purple-600 hover:bg-purple-700 text-white">
                   <Sparkles className="h-4 w-4 mr-1.5" />
-                  Lex Banque
+                  {t('mra.echeances.lex_bank', locale)}
                   <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
               </Link>
@@ -176,7 +178,7 @@ export default function ClientEcheancesPage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('mra.echeances.no_societe', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -187,14 +189,14 @@ export default function ClientEcheancesPage() {
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <KpiCard
-                label="En retard"
+                label={t('mra.echeances.kpi_overdue', locale)}
                 value={enRetard.length}
                 tone={enRetard.length > 0 ? "rose" : "green"}
                 accent={enRetard.length > 0}
               />
-              <KpiCard label="Montant en retard" value={fmt(totalRetard)} tone="rose" />
-              <KpiCard label="Cette semaine" value={`${dansSemaine.length} · ${fmt(totalSemaine)}`} tone="amber" />
-              <KpiCard label="Ce mois-ci" value={`${dansMois.length} · ${fmt(totalMois)}`} tone="blue" />
+              <KpiCard label={t('mra.echeances.kpi_overdue_amount', locale)} value={fmt(totalRetard)} tone="rose" />
+              <KpiCard label={t('mra.echeances.kpi_week', locale)} value={`${dansSemaine.length} · ${fmt(totalSemaine)}`} tone="amber" />
+              <KpiCard label={t('mra.echeances.kpi_month', locale)} value={`${dansMois.length} · ${fmt(totalMois)}`} tone="blue" />
             </div>
 
             <Card>
@@ -202,32 +204,32 @@ export default function ClientEcheancesPage() {
                 <TabsList className="px-4 pt-2 bg-transparent border-b rounded-none w-full justify-start gap-1 h-auto">
                   <TabsTrigger value="retard" className="px-3 py-2">
                     <AlertTriangle className="h-4 w-4 mr-1.5 text-rose-600" />
-                    En retard ({enRetard.length})
+                    {t('mra.echeances.tab_overdue', locale)} ({enRetard.length})
                   </TabsTrigger>
                   <TabsTrigger value="semaine" className="px-3 py-2">
                     <Clock className="h-4 w-4 mr-1.5 text-amber-600" />
-                    Sous 7j ({dansSemaine.length})
+                    {t('mra.echeances.tab_under_7', locale)} ({dansSemaine.length})
                   </TabsTrigger>
                   <TabsTrigger value="mois" className="px-3 py-2">
                     <Calendar className="h-4 w-4 mr-1.5 text-blue-600" />
-                    Sous 30j ({dansMois.length})
+                    {t('mra.echeances.tab_under_30', locale)} ({dansMois.length})
                   </TabsTrigger>
                   <TabsTrigger value="tout" className="px-3 py-2">
-                    Toutes ({impayees.length})
+                    {t('mra.echeances.tab_all', locale)} ({impayees.length})
                   </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="retard" className="mt-0 p-0">
-                  <FactureList factures={sorted} />
+                  <FactureList factures={sorted} locale={locale} />
                 </TabsContent>
                 <TabsContent value="semaine" className="mt-0 p-0">
-                  <FactureList factures={sorted} />
+                  <FactureList factures={sorted} locale={locale} />
                 </TabsContent>
                 <TabsContent value="mois" className="mt-0 p-0">
-                  <FactureList factures={sorted} />
+                  <FactureList factures={sorted} locale={locale} />
                 </TabsContent>
                 <TabsContent value="tout" className="mt-0 p-0">
-                  <FactureList factures={sorted} />
+                  <FactureList factures={sorted} locale={locale} />
                 </TabsContent>
               </Tabs>
             </Card>
@@ -238,11 +240,11 @@ export default function ClientEcheancesPage() {
   )
 }
 
-function FactureList({ factures }: { factures: Facture[] }) {
+function FactureList({ factures, locale }: { factures: Facture[]; locale: 'fr' | 'en' }) {
   if (factures.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
-        Aucune échéance pour ce filtre.
+        {t('mra.echeances.empty', locale)}
       </p>
     )
   }
@@ -272,24 +274,24 @@ function FactureList({ factures }: { factures: Facture[] }) {
                   ) : (
                     <TrendingDown className="h-3 w-3 mr-0.5" />
                   )}
-                  {isClient ? "Client" : "Fournisseur"}
+                  {isClient ? t('mra.echeances.client', locale) : t('mra.echeances.supplier', locale)}
                 </Badge>
                 {overdue ? (
                   <Badge className="text-[10px] bg-red-100 text-red-700 border-red-300">
                     <AlertTriangle className="h-3 w-3 mr-1" />
-                    Échue depuis {Math.abs(days!)}j
+                    {t('mra.echeances.overdue_since', locale)} {Math.abs(days!)}{t('mra.echeances.days_short', locale)}
                   </Badge>
                 ) : days !== null ? (
                   <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
                     <Clock className="h-3 w-3 mr-1" />
-                    Dans {days}j
+                    {t('mra.echeances.due_in', locale)} {days}{t('mra.echeances.days_short', locale)}
                   </Badge>
                 ) : null}
               </div>
               <p className="text-sm mt-1 break-words">{f.tiers || "—"}</p>
               <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-muted-foreground">
-                <span>Émise : {formatDate(f.date_facture)}</span>
-                <span>Échéance : {formatDate(f.date_echeance)}</span>
+                <span>{t('mra.echeances.issued', locale)} : {formatDate(f.date_facture)}</span>
+                <span>{t('mra.echeances.due', locale)} : {formatDate(f.date_echeance)}</span>
               </div>
             </div>
             <div className="text-right flex-shrink-0">

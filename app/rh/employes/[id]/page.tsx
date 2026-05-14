@@ -25,6 +25,7 @@ import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 import { createClient } from "@/lib/supabase/client"
 import { ProtectionLegalePanel } from "./_components/ProtectionLegalePanel"
 import { DocumentsTabRH } from "./_components/DocumentsTabRH"
+import { t, getLocale } from "@/lib/i18n"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
@@ -66,6 +67,7 @@ const DAYS = [
 ]
 
 export default function EmployeDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const locale = getLocale()
   const { id } = use(params)
   const router = useRouter()
 
@@ -271,7 +273,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
     return (
       <div className="p-6 space-y-4">
         <Button variant="ghost" onClick={() => router.push("/rh/employes")} className="text-[#0B0F2E]">
-          <ArrowLeft className="w-4 h-4 mr-2" />Retour
+          <ArrowLeft className="w-4 h-4 mr-2" />{t('rha.a.empd.back', locale)}
         </Button>
         <Card><CardContent className="py-12 text-center">
           <AlertCircle className="w-10 h-10 mx-auto text-red-400 mb-3" />

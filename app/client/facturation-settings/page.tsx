@@ -19,6 +19,7 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { LogoUploader } from "@/components/client/LogoUploader"
 import { inferSwiftFromIban, inferSwiftWithDiagnostic } from "@/lib/banque/iban-swift"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -151,6 +152,7 @@ interface CompteBancaireBrief {
 }
 
 export default function FacturationSettingsPage() {
+  const locale = getLocale()
   const { societeId, societe, refresh } = useSocieteActive()
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS)
   const [persisting, setPersisting] = useState(false)
@@ -378,10 +380,10 @@ export default function FacturationSettingsPage() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Paramètres Facturation" }]}
+      breadcrumbs={[{ label: t('inv.fs.client_area', locale), href: "/client" }, { label: t('inv.fs.title', locale) }]}
       kicker="Facturation"
-      title="Paramètres de Facturation"
-      subtitle="Configuration MRA (ERN, IRN, TVA, devise par défaut) pour toutes vos factures émises."
+      title={t('inv.fs.title', locale)}
+      subtitle={t('inv.fs.subtitle', locale)}
       actions={
         <div className="flex items-center gap-3">
           {persistError && (
@@ -393,9 +395,9 @@ export default function FacturationSettingsPage() {
             {persisting ? (
               <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enregistrement…</>
             ) : saved ? (
-              <><Check className="w-4 h-4 mr-2" />Sauvegardé !</>
+              <><Check className="w-4 h-4 mr-2" />{t('inv.fs.saved', locale)}</>
             ) : (
-              <><Save className="w-4 h-4 mr-2" />Sauvegarder tout</>
+              <><Save className="w-4 h-4 mr-2" />{t('inv.fs.save_all', locale)}</>
             )}
           </Button>
         </div>
@@ -407,10 +409,10 @@ export default function FacturationSettingsPage() {
 
       <Tabs defaultValue="entreprise" className="space-y-4">
         <TabsList className="grid grid-cols-5 w-full max-w-3xl">
-          <TabsTrigger value="entreprise" className="flex items-center gap-1.5"><Building2 className="w-4 h-4" />Mon Entreprise</TabsTrigger>
-          <TabsTrigger value="clients" className="flex items-center gap-1.5"><Users className="w-4 h-4" />Clients</TabsTrigger>
-          <TabsTrigger value="catalogue" className="flex items-center gap-1.5"><Package className="w-4 h-4" />Services/Produits</TabsTrigger>
-          <TabsTrigger value="modeles" className="flex items-center gap-1.5"><Layout className="w-4 h-4" />Modeles</TabsTrigger>
+          <TabsTrigger value="entreprise" className="flex items-center gap-1.5"><Building2 className="w-4 h-4" />{t('inv.fs.tab_company', locale)}</TabsTrigger>
+          <TabsTrigger value="clients" className="flex items-center gap-1.5"><Users className="w-4 h-4" />{t('inv.fs.tab_clients', locale)}</TabsTrigger>
+          <TabsTrigger value="catalogue" className="flex items-center gap-1.5"><Package className="w-4 h-4" />{t('inv.fs.tab_catalogue', locale)}</TabsTrigger>
+          <TabsTrigger value="modeles" className="flex items-center gap-1.5"><Layout className="w-4 h-4" />{t('inv.fs.tab_templates', locale)}</TabsTrigger>
           <TabsTrigger value="mra" className="flex items-center gap-1.5"><Shield className="w-4 h-4" />MRA e-Invoicing</TabsTrigger>
         </TabsList>
 
@@ -419,7 +421,7 @@ export default function FacturationSettingsPage() {
           <div className="grid grid-cols-2 gap-4">
             {/* Company identity */}
             <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Identite de l&apos;entreprise</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{t('inv.fs.company_identity', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div><Label>Nom de l&apos;entreprise</Label><Input value={settings.nom} onChange={e => setSettings(s => ({ ...s, nom: e.target.value }))} placeholder="DDS Consulting Ltd" /></div>
                 <div className="grid grid-cols-2 gap-3">
@@ -713,7 +715,7 @@ export default function FacturationSettingsPage() {
         {/* ══════════ TAB: Clients ══════════ */}
         <TabsContent value="clients" className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm text-gray-500">Base de donnees clients pour la facturation</p>
+            <p className="text-sm text-gray-500">{t('inv.fs.clients_db', locale)}</p>
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -755,7 +757,7 @@ export default function FacturationSettingsPage() {
                 <Download className="w-4 h-4 mr-2" />
                 Importer mes clients existants
               </Button>
-              <Button onClick={openNewClient} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />Nouveau client</Button>
+              <Button onClick={openNewClient} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />{t('inv.fs.new_client', locale)}</Button>
             </div>
           </div>
           <p className="text-xs text-gray-500 -mt-2">
@@ -764,7 +766,7 @@ export default function FacturationSettingsPage() {
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               {clients.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">Aucun client. Ajoutez votre premier client de facturation.</div>
+                <div className="text-center py-12 text-gray-500">{t('inv.fs.no_clients', locale)}</div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -933,16 +935,16 @@ export default function FacturationSettingsPage() {
         <TabsContent value="modeles" className="space-y-4">
           <p className="text-sm text-gray-500">Choisissez et personnalisez votre modele de facture</p>
           <div className="grid grid-cols-3 gap-4">
-            {TEMPLATES.map(t => (
-              <Card key={t.id} className={`cursor-pointer transition-all ${selectedTemplate === t.id ? "ring-2 ring-[#D4AF37] shadow-lg" : "hover:shadow-md"}`}
-                onClick={() => { setSelectedTemplate(t.id); setTemplateColors(t.style.couleur_primaire ? { primaire: t.style.couleur_primaire, secondaire: t.style.couleur_secondaire } : templateColors) }}>
+            {TEMPLATES.map(tpl => (
+              <Card key={tpl.id} className={`cursor-pointer transition-all ${selectedTemplate === tpl.id ? "ring-2 ring-[#D4AF37] shadow-lg" : "hover:shadow-md"}`}
+                onClick={() => { setSelectedTemplate(tpl.id); setTemplateColors(tpl.style.couleur_primaire ? { primaire: tpl.style.couleur_primaire, secondaire: tpl.style.couleur_secondaire } : templateColors) }}>
                 <CardContent className="p-4">
                   {/* Template Preview */}
                   <div className="border rounded-lg p-3 mb-3 bg-white min-h-[180px]">
                     <div className="flex justify-between items-start mb-3">
-                      <div className="w-10 h-10 rounded" style={{ backgroundColor: t.style.couleur_primaire }} />
+                      <div className="w-10 h-10 rounded" style={{ backgroundColor: tpl.style.couleur_primaire }} />
                       <div className="text-right">
-                        <div className="text-[10px] font-bold" style={{ color: t.style.couleur_primaire }}>FACTURE</div>
+                        <div className="text-[10px] font-bold" style={{ color: tpl.style.couleur_primaire }}>FACTURE</div>
                         <div className="text-[8px] text-gray-400">INV-001</div>
                       </div>
                     </div>
@@ -953,23 +955,23 @@ export default function FacturationSettingsPage() {
                     <div className="border-t pt-2 space-y-1">
                       <div className="flex justify-between">
                         <div className="h-1.5 rounded bg-gray-200 w-1/3" />
-                        <div className="h-1.5 rounded w-1/6" style={{ backgroundColor: t.style.couleur_secondaire }} />
+                        <div className="h-1.5 rounded w-1/6" style={{ backgroundColor: tpl.style.couleur_secondaire }} />
                       </div>
                       <div className="flex justify-between">
                         <div className="h-1.5 rounded bg-gray-200 w-2/5" />
-                        <div className="h-1.5 rounded w-1/6" style={{ backgroundColor: t.style.couleur_secondaire }} />
+                        <div className="h-1.5 rounded w-1/6" style={{ backgroundColor: tpl.style.couleur_secondaire }} />
                       </div>
                     </div>
                     <div className="border-t mt-2 pt-2 flex justify-end">
-                      <div className="h-2 rounded w-1/4" style={{ backgroundColor: t.style.couleur_primaire }} />
+                      <div className="h-2 rounded w-1/4" style={{ backgroundColor: tpl.style.couleur_primaire }} />
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-semibold text-[#0B0F2E]">{t.nom}</h3>
-                      <p className="text-xs text-gray-500">{t.description}</p>
+                      <h3 className="font-semibold text-[#0B0F2E]">{tpl.nom}</h3>
+                      <p className="text-xs text-gray-500">{tpl.description}</p>
                     </div>
-                    {selectedTemplate === t.id && <Check className="w-5 h-5 text-[#D4AF37]" />}
+                    {selectedTemplate === tpl.id && <Check className="w-5 h-5 text-[#D4AF37]" />}
                   </div>
                 </CardContent>
               </Card>

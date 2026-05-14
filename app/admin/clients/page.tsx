@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select"
 import { Plus, Search, Loader2, Users, Building2, Link } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 interface UserProfile {
   id: string
@@ -49,6 +50,7 @@ interface Dossier {
 }
 
 export default function AdminClientsPage() {
+  const locale = getLocale()
   const [search, setSearch] = useState("")
   const [users, setUsers] = useState<UserProfile[]>([])
   const [societes, setSocietes] = useState<Societe[]>([])
@@ -135,8 +137,8 @@ export default function AdminClientsPage() {
 
   const handleCreateClient = async () => {
     setError(null)
-    if (!formName || !formEmail || !formPassword) { setError("Champs obligatoires manquants."); return }
-    if (formPassword.length < 6) { setError("Mot de passe : 6 caractères minimum."); return }
+    if (!formName || !formEmail || !formPassword) { setError(t('adm.clients.required_missing', locale)); return }
+    if (formPassword.length < 6) { setError(t('adm.clients.password_min', locale)); return }
     setCreating(true)
     try {
       const res = await fetch("/api/admin/users", {
@@ -144,7 +146,7 @@ export default function AdminClientsPage() {
         body: JSON.stringify({ email: formEmail, password: formPassword, full_name: formName, role: formRole, phone: formPhone || null }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || "Erreur"); return }
+      if (!res.ok) { setError(data.error || t('adm.clients.error', locale)); return }
 
       const newUserId = data.user?.id
 
@@ -159,13 +161,13 @@ export default function AdminClientsPage() {
             })
           })
         )
-        setSuccess(`Client ${formName} créé et lié à ${formSocieteIds.length} société(s) !`)
+        setSuccess(t('adm.clients.client_created_linked', locale).replace('{name}', formName).replace('{n}', String(formSocieteIds.length)))
       } else if (newUserId) {
         // Auto-create a personal société + dossier for individual clients
         const socRes = await fetch("/api/admin/societes", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            nom: `${formName} — Personnel`,
+            nom: `${formName} — ${t('adm.clients.personal_suffix', locale)}`,
             brn: formBrnClient || null,
             numero_tva_mra: formTvaClient || null,
             statut_tva: formStatutTvaClient === "true",
@@ -179,16 +181,16 @@ export default function AdminClientsPage() {
             body: JSON.stringify({ client_id: newUserId, societe_id: socData.societe.id, comptable_id: null }),
           })
         }
-        setSuccess(`Client ${formName} créé avec un dossier personnel !`)
+        setSuccess(t('adm.clients.client_created_personal', locale).replace('{name}', formName))
       }
 
       resetClientForm(); setClientDialog(false); fetchData()
-    } catch { setError("Erreur de connexion") } finally { setCreating(false) }
+    } catch { setError(t('adm.clients.connection_err', locale)) } finally { setCreating(false) }
   }
 
   const handleCreateSociete = async () => {
     setSocieteError(null)
-    if (!formNom) { setSocieteError("Le nom est requis."); return }
+    if (!formNom) { setSocieteError(t('adm.clients.name_required', locale)); return }
     setCreatingSociete(true)
     try {
       const res = await fetch("/api/admin/societes", {
@@ -196,7 +198,7 @@ export default function AdminClientsPage() {
         body: JSON.stringify({ nom: formNom, brn: formBrn || null, numero_tva_mra: formTva || null, statut_tva: formStatutTva === "true" }),
       })
       const data = await res.json()
-      if (!res.ok) { setSocieteError(data.error || "Erreur"); return }
+      if (!res.ok) { setSocieteError(data.error || t('adm.clients.error', locale)); return }
 
       const newSociete = data.societe
 
@@ -210,13 +212,13 @@ export default function AdminClientsPage() {
             })
           )
         )
-        setSuccess(`Société ${formNom} créée et liée à ${formClientIds.length} client(s) !`)
+        setSuccess(t('adm.clients.societe_created_linked', locale).replace('{name}', formNom).replace('{n}', String(formClientIds.length)))
       } else {
-        setSuccess(`Société ${formNom} créée !`)
+        setSuccess(t('adm.clients.societe_created', locale).replace('{name}', formNom))
       }
 
       resetSocieteForm(); setSocieteDialog(false); fetchData()
-    } catch { setSocieteError("Erreur de connexion") } finally { setCreatingSociete(false) }
+    } catch { setSocieteError(t('adm.clients.connection_err', locale)) } finally { setCreatingSociete(false) }
   }
 
   // Link societies to an existing client
@@ -244,28 +246,28 @@ export default function AdminClientsPage() {
             })
           })
         )
-        setSuccess(`${toAdd.length} société(s) liée(s) à ${linkClient.full_name} !`)
+        setSuccess(t('adm.clients.linked_n', locale).replace('{n}', String(toAdd.length)).replace('{name}', linkClient.full_name))
       } else {
-        setSuccess("Aucune nouvelle société à lier.")
+        setSuccess(t('adm.clients.no_new_link', locale))
       }
 
       setLinkDialog(false); setLinkClient(null); setLinkSocieteIds([]); fetchData()
-    } catch { setError("Erreur lors de la liaison") } finally { setLinking(false) }
+    } catch { setError(t('adm.clients.link_err', locale)) } finally { setLinking(false) }
   }
 
   return (
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Clients</h1>
-        <p className="text-muted-foreground">Gestion des clients et sociétés de la plateforme</p>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('adm.clients.title', locale)}</h1>
+        <p className="text-muted-foreground">{t('adm.clients.subtitle', locale)}</p>
       </div>
 
       {success && <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">{success}</div>}
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Rechercher..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input placeholder={t('adm.clients.search', locale)} className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       {loading ? (
@@ -273,41 +275,41 @@ export default function AdminClientsPage() {
       ) : (
         <Tabs defaultValue="clients">
           <TabsList>
-            <TabsTrigger value="clients" className="gap-1.5"><Users className="h-4 w-4" />Clients ({filteredClients.length})</TabsTrigger>
-            <TabsTrigger value="societes" className="gap-1.5"><Building2 className="h-4 w-4" />Sociétés ({filteredSocietes.length})</TabsTrigger>
+            <TabsTrigger value="clients" className="gap-1.5"><Users className="h-4 w-4" />{t('adm.clients.tab_clients', locale)} ({filteredClients.length})</TabsTrigger>
+            <TabsTrigger value="societes" className="gap-1.5"><Building2 className="h-4 w-4" />{t('adm.clients.tab_societes', locale)} ({filteredSocietes.length})</TabsTrigger>
           </TabsList>
 
           {/* CLIENTS TAB */}
           <TabsContent value="clients" className="space-y-4">
             <div className="flex justify-end">
               <Dialog open={clientDialog} onOpenChange={(o) => { setClientDialog(o); if (!o) resetClientForm() }}>
-                <DialogTrigger asChild><Button style={{ backgroundColor: "#0B0F2E" }}><Plus className="mr-2 h-4 w-4" />Ajouter un client</Button></DialogTrigger>
+                <DialogTrigger asChild><Button style={{ backgroundColor: "#0B0F2E" }}><Plus className="mr-2 h-4 w-4" />{t('adm.clients.add_client', locale)}</Button></DialogTrigger>
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
-                  <DialogHeader><DialogTitle>Nouveau client</DialogTitle><DialogDescription>Créez un compte client.</DialogDescription></DialogHeader>
+                  <DialogHeader><DialogTitle>{t('adm.clients.new_client', locale)}</DialogTitle><DialogDescription>{t('adm.clients.new_client_desc', locale)}</DialogDescription></DialogHeader>
                   <div className="space-y-4 py-4">
-                    <div className="space-y-2"><Label>Nom complet *</Label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
-                    <div className="space-y-2"><Label>Email *</Label><Input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></div>
-                    <div className="space-y-2"><Label>Mot de passe *</Label><Input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} /></div>
-                    <div className="space-y-2"><Label>Téléphone</Label><Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} /></div>
-                    <div className="space-y-2"><Label>Type *</Label>
+                    <div className="space-y-2"><Label>{t('adm.clients.full_name_required', locale)}</Label><Input value={formName} onChange={(e) => setFormName(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>{t('adm.clients.email_required', locale)}</Label><Input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>{t('adm.clients.password_required', locale)}</Label><Input type="password" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>{t('adm.clients.phone', locale)}</Label><Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>{t('adm.clients.type_required', locale)}</Label>
                       <Select value={formRole} onValueChange={setFormRole}><SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="client_admin">Client Admin</SelectItem><SelectItem value="client_user">Client Utilisateur</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="client_admin">{t('adm.clients.role_client_admin', locale)}</SelectItem><SelectItem value="client_user">{t('adm.clients.role_client_user', locale)}</SelectItem></SelectContent>
                       </Select>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2"><Label>BRN</Label><Input placeholder="Ex: C07012345" value={formBrnClient} onChange={(e) => setFormBrnClient(e.target.value)} /></div>
-                      <div className="space-y-2"><Label>N° TVA MRA</Label><Input placeholder="Ex: VAT-20260001" value={formTvaClient} onChange={(e) => setFormTvaClient(e.target.value)} /></div>
+                      <div className="space-y-2"><Label>{t('adm.clients.brn', locale)}</Label><Input placeholder="Ex: C07012345" value={formBrnClient} onChange={(e) => setFormBrnClient(e.target.value)} /></div>
+                      <div className="space-y-2"><Label>{t('adm.clients.tva_number', locale)}</Label><Input placeholder="Ex: VAT-20260001" value={formTvaClient} onChange={(e) => setFormTvaClient(e.target.value)} /></div>
                     </div>
-                    <div className="space-y-2"><Label>Adresse</Label><Input placeholder="Ex: Port Louis, Mauritius" value={formAdresse} onChange={(e) => setFormAdresse(e.target.value)} /></div>
-                    <div className="space-y-2"><Label>Statut TVA</Label>
+                    <div className="space-y-2"><Label>{t('adm.clients.address', locale)}</Label><Input placeholder="Ex: Port Louis, Mauritius" value={formAdresse} onChange={(e) => setFormAdresse(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>{t('adm.clients.tva_status', locale)}</Label>
                       <Select value={formStatutTvaClient} onValueChange={setFormStatutTvaClient}><SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="true">Assujetti</SelectItem><SelectItem value="false">Non assujetti</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="true">{t('adm.clients.tva_subject', locale)}</SelectItem><SelectItem value="false">{t('adm.clients.tva_not_subject', locale)}</SelectItem></SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Société(s) à lier</Label>
+                      <Label>{t('adm.clients.societes_to_link', locale)}</Label>
                       {societes.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Aucune société disponible.</p>
+                        <p className="text-sm text-muted-foreground">{t('adm.clients.no_societe_avail', locale)}</p>
                       ) : (
                         <div className="max-h-40 overflow-y-auto rounded-md border p-3 space-y-2">
                           {societes.map(s => (
@@ -328,9 +330,9 @@ export default function AdminClientsPage() {
                     {error && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>}
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => { setClientDialog(false); resetClientForm() }}>Annuler</Button>
+                    <Button variant="outline" onClick={() => { setClientDialog(false); resetClientForm() }}>{t('adm.clients.cancel', locale)}</Button>
                     <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleCreateClient} disabled={creating}>
-                      {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer"}
+                      {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('adm.clients.creating', locale)}</> : t('adm.clients.create', locale)}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -339,8 +341,8 @@ export default function AdminClientsPage() {
             <Card><CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Nom</TableHead><TableHead>Email</TableHead><TableHead>Téléphone</TableHead>
-                  <TableHead>Rôle</TableHead><TableHead>Société(s)</TableHead><TableHead>Statut</TableHead><TableHead>Date création</TableHead><TableHead>Actions</TableHead>
+                  <TableHead>{t('adm.clients.col_name', locale)}</TableHead><TableHead>{t('adm.clients.col_email', locale)}</TableHead><TableHead>{t('adm.clients.col_phone', locale)}</TableHead>
+                  <TableHead>{t('adm.clients.col_role', locale)}</TableHead><TableHead>{t('adm.clients.col_societes', locale)}</TableHead><TableHead>{t('adm.clients.col_status', locale)}</TableHead><TableHead>{t('adm.clients.col_created', locale)}</TableHead><TableHead>{t('adm.clients.col_actions', locale)}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredClients.map(c => (
@@ -348,25 +350,25 @@ export default function AdminClientsPage() {
                       <TableCell className="font-medium">{c.full_name}</TableCell>
                       <TableCell>{c.email}</TableCell>
                       <TableCell>{c.phone || "—"}</TableCell>
-                      <TableCell><Badge variant="outline" className={c.role === "client_admin" ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-600"}>{c.role === "client_admin" ? "Admin" : "Utilisateur"}</Badge></TableCell>
+                      <TableCell><Badge variant="outline" className={c.role === "client_admin" ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-600"}>{c.role === "client_admin" ? t('adm.clients.role_admin_short', locale) : t('adm.clients.role_user_short', locale)}</Badge></TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {getClientSocietes(c.id).length > 0
                             ? getClientSocietes(c.id).map((s, i) => <Badge key={i} variant="outline" style={{ borderColor: "#D4AF37", color: "#0B0F2E" }}>{s}</Badge>)
-                            : <span className="text-muted-foreground text-sm">Aucune</span>}
+                            : <span className="text-muted-foreground text-sm">{t('adm.clients.none', locale)}</span>}
                         </div>
                       </TableCell>
-                      <TableCell><Badge className={c.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>{c.is_active ? "Actif" : "Inactif"}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(c.created_at).toLocaleDateString("fr-FR")}</TableCell>
+                      <TableCell><Badge className={c.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>{c.is_active ? t('adm.clients.active', locale) : t('adm.clients.inactive', locale)}</Badge></TableCell>
+                      <TableCell className="text-muted-foreground">{new Date(c.created_at).toLocaleDateString(locale === 'fr' ? "fr-FR" : "en-GB")}</TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="sm" title="Lier des sociétés" onClick={() => openLinkDialog(c)}>
+                        <Button variant="ghost" size="sm" title={t('adm.clients.link_societes_tooltip', locale)} onClick={() => openLinkDialog(c)}>
                           <Link className="h-4 w-4 mr-1" style={{ color: "#D4AF37" }} />
-                          <span className="text-xs">Lier</span>
+                          <span className="text-xs">{t('adm.clients.link_societes_btn', locale)}</span>
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filteredClients.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Aucun client trouvé.</TableCell></TableRow>}
+                  {filteredClients.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t('adm.clients.no_client_found', locale)}</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </CardContent></Card>
@@ -376,24 +378,24 @@ export default function AdminClientsPage() {
           <TabsContent value="societes" className="space-y-4">
             <div className="flex justify-end">
               <Dialog open={societeDialog} onOpenChange={(o) => { setSocieteDialog(o); if (!o) resetSocieteForm() }}>
-                <DialogTrigger asChild><Button style={{ backgroundColor: "#0B0F2E" }}><Plus className="mr-2 h-4 w-4" />Ajouter une société</Button></DialogTrigger>
+                <DialogTrigger asChild><Button style={{ backgroundColor: "#0B0F2E" }}><Plus className="mr-2 h-4 w-4" />{t('adm.clients.add_societe', locale)}</Button></DialogTrigger>
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
-                  <DialogHeader><DialogTitle>Nouvelle société</DialogTitle></DialogHeader>
+                  <DialogHeader><DialogTitle>{t('adm.clients.new_societe', locale)}</DialogTitle></DialogHeader>
                   <div className="space-y-4 py-4">
-                    <div className="space-y-2"><Label>Nom *</Label><Input value={formNom} onChange={(e) => setFormNom(e.target.value)} /></div>
+                    <div className="space-y-2"><Label>{t('adm.clients.full_name_required', locale)}</Label><Input value={formNom} onChange={(e) => setFormNom(e.target.value)} /></div>
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2"><Label>BRN</Label><Input value={formBrn} onChange={(e) => setFormBrn(e.target.value)} /></div>
-                      <div className="space-y-2"><Label>N° TVA MRA</Label><Input value={formTva} onChange={(e) => setFormTva(e.target.value)} /></div>
+                      <div className="space-y-2"><Label>{t('adm.clients.brn', locale)}</Label><Input value={formBrn} onChange={(e) => setFormBrn(e.target.value)} /></div>
+                      <div className="space-y-2"><Label>{t('adm.clients.tva_number', locale)}</Label><Input value={formTva} onChange={(e) => setFormTva(e.target.value)} /></div>
                     </div>
-                    <div className="space-y-2"><Label>Statut TVA</Label>
+                    <div className="space-y-2"><Label>{t('adm.clients.tva_status', locale)}</Label>
                       <Select value={formStatutTva} onValueChange={setFormStatutTva}><SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="true">Assujetti</SelectItem><SelectItem value="false">Non assujetti</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="true">{t('adm.clients.tva_subject', locale)}</SelectItem><SelectItem value="false">{t('adm.clients.tva_not_subject', locale)}</SelectItem></SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Client(s) à lier</Label>
+                      <Label>{t('adm.clients.clients_to_link', locale)}</Label>
                       {clients.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Aucun client disponible.</p>
+                        <p className="text-sm text-muted-foreground">{t('adm.clients.no_client_avail', locale)}</p>
                       ) : (
                         <div className="max-h-40 overflow-y-auto rounded-md border p-3 space-y-2">
                           {clients.map(c => (
@@ -414,9 +416,9 @@ export default function AdminClientsPage() {
                     {societeError && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{societeError}</div>}
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => { setSocieteDialog(false); resetSocieteForm() }}>Annuler</Button>
+                    <Button variant="outline" onClick={() => { setSocieteDialog(false); resetSocieteForm() }}>{t('adm.clients.cancel', locale)}</Button>
                     <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleCreateSociete} disabled={creatingSociete}>
-                      {creatingSociete ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer"}
+                      {creatingSociete ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('adm.clients.creating', locale)}</> : t('adm.clients.create', locale)}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -425,8 +427,8 @@ export default function AdminClientsPage() {
             <Card><CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Nom</TableHead><TableHead>BRN</TableHead><TableHead>N° TVA MRA</TableHead>
-                  <TableHead>Statut TVA</TableHead><TableHead>Client(s)</TableHead>
+                  <TableHead>{t('adm.clients.col_name', locale)}</TableHead><TableHead>{t('adm.clients.col_brn', locale)}</TableHead><TableHead>{t('adm.clients.col_tva', locale)}</TableHead>
+                  <TableHead>{t('adm.clients.col_tva_status', locale)}</TableHead><TableHead>{t('adm.clients.col_clients', locale)}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {filteredSocietes.map(s => (
@@ -434,17 +436,17 @@ export default function AdminClientsPage() {
                       <TableCell className="font-medium">{s.nom}</TableCell>
                       <TableCell>{s.brn || "—"}</TableCell>
                       <TableCell>{s.numero_tva_mra || "—"}</TableCell>
-                      <TableCell><Badge className={s.statut_tva ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>{s.statut_tva ? "Active" : "Inactive"}</Badge></TableCell>
+                      <TableCell><Badge className={s.statut_tva ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>{s.statut_tva ? t('adm.clients.active_f', locale) : t('adm.clients.inactive_f', locale)}</Badge></TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {getSocieteClients(s.id).length > 0
                             ? getSocieteClients(s.id).map(c => <Badge key={c.id} variant="outline" style={{ borderColor: "#D4AF37", color: "#0B0F2E" }}>{c.full_name}</Badge>)
-                            : <span className="text-muted-foreground text-sm">Aucun</span>}
+                            : <span className="text-muted-foreground text-sm">{t('adm.clients.none_m', locale)}</span>}
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filteredSocietes.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Aucune société trouvée.</TableCell></TableRow>}
+                  {filteredSocietes.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t('adm.clients.no_societe_found', locale)}</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </CardContent></Card>
@@ -456,14 +458,14 @@ export default function AdminClientsPage() {
       <Dialog open={linkDialog} onOpenChange={(o) => { setLinkDialog(o); if (!o) { setLinkClient(null); setLinkSocieteIds([]) } }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
           <DialogHeader>
-            <DialogTitle>Lier des sociétés</DialogTitle>
+            <DialogTitle>{t('adm.clients.link_societes_title', locale)}</DialogTitle>
             <DialogDescription>
-              {linkClient && `Sélectionnez les sociétés à lier à ${linkClient.full_name}`}
+              {linkClient && `${t('adm.clients.select_societes_for', locale)} ${linkClient.full_name}`}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 max-h-[400px] overflow-auto space-y-2">
             {societes.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">Aucune société disponible.</p>
+              <p className="text-center text-muted-foreground py-4">{t('adm.clients.no_societe_avail', locale)}</p>
             ) : (
               societes.map(s => {
                 const isLinked = linkClient ? getClientSocieteIds(linkClient.id).includes(s.id) : false
@@ -477,18 +479,18 @@ export default function AdminClientsPage() {
                     <Checkbox checked={isSelected} disabled={isLinked} onCheckedChange={() => { if (!isLinked) toggleSocieteSelection(s.id, linkSocieteIds, setLinkSocieteIds) }} />
                     <div className="flex-1">
                       <p className="font-medium text-sm">{s.nom}</p>
-                      <p className="text-xs text-muted-foreground">{s.brn || "Pas de BRN"}</p>
+                      <p className="text-xs text-muted-foreground">{s.brn || t('adm.clients.no_brn', locale)}</p>
                     </div>
-                    {isLinked && <Badge variant="outline" className="text-xs">Déjà liée</Badge>}
+                    {isLinked && <Badge variant="outline" className="text-xs">{t('adm.clients.already_linked', locale)}</Badge>}
                   </div>
                 )
               })
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setLinkDialog(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setLinkDialog(false)}>{t('adm.clients.cancel', locale)}</Button>
             <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleLinkSocietes} disabled={linking || societes.length === 0}>
-              {linking ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Liaison...</> : "Enregistrer"}
+              {linking ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('adm.clients.linking', locale)}</> : t('adm.clients.save', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

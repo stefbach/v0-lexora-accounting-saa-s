@@ -36,6 +36,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface ComptePCM {
   id: string
@@ -89,6 +90,7 @@ const colorMap: Record<string, { bg: string; border: string; text: string; bgLig
 }
 
 export default function PlanComptablePage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [comptes, setComptes] = useState<ComptePCM[]>([])
   const [usage, setUsage] = useState<Map<string, CompteUsage>>(new Map())
@@ -203,15 +205,15 @@ export default function PlanComptablePage() {
                 <BookOpen className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">Plan Comptable Mauricien</h1>
+                <h1 className="text-2xl font-bold text-slate-900">{t('acc.pcm.title', locale)}</h1>
                 <p className="text-sm text-slate-700/80 mt-0.5">
-                  Référentiel des {comptes.length} comptes officiels — 7 classes
+                  {t('acc.pcm.subtitle_prefix', locale)} {comptes.length} {t('acc.pcm.subtitle_suffix', locale)}
                 </p>
               </div>
             </div>
             <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
               <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-              Actualiser
+              {t('common.refresh', locale)}
             </Button>
           </div>
         </div>
@@ -219,7 +221,7 @@ export default function PlanComptablePage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('acc.pcm.no_company', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -236,7 +238,7 @@ export default function PlanComptablePage() {
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Rechercher (n° compte, libellé)…"
+                    placeholder={t('acc.pcm.search_placeholder', locale)}
                     className="pl-8 h-9"
                   />
                 </div>
@@ -245,14 +247,14 @@ export default function PlanComptablePage() {
                     onClick={() => setOpenClasses(new Set([1, 2, 3, 4, 5, 6, 7]))}
                     className="text-xs text-blue-700 hover:underline"
                   >
-                    Tout déplier
+                    {t('acc.pcm.expand_all', locale)}
                   </button>
                   <span className="text-xs text-muted-foreground">·</span>
                   <button
                     onClick={() => setOpenClasses(new Set())}
                     className="text-xs text-blue-700 hover:underline"
                   >
-                    Tout replier
+                    {t('acc.pcm.collapse_all', locale)}
                   </button>
                 </div>
               </CardContent>
@@ -277,7 +279,7 @@ export default function PlanComptablePage() {
                         </div>
                         <div className="min-w-0">
                           <h3 className={`font-bold ${cls.text}`}>
-                            Classe {cl.num} — {cl.label}
+                            {t('acc.pcm.class', locale)} {cl.num} — {cl.label}
                           </h3>
                           <p className="text-xs text-muted-foreground">{cl.desc}</p>
                         </div>
@@ -285,7 +287,7 @@ export default function PlanComptablePage() {
                       <div className="flex items-center gap-3 flex-shrink-0">
                         <div className="text-right">
                           <div className="text-[10px] text-muted-foreground uppercase">
-                            Comptes
+                            {t('acc.pcm.accounts', locale)}
                           </div>
                           <div className={`font-bold ${cls.text}`}>
                             {arr.length}
@@ -306,8 +308,8 @@ export default function PlanComptablePage() {
                         {arr.length === 0 ? (
                           <p className="py-4 text-center text-xs text-muted-foreground italic">
                             {search.trim()
-                              ? "Aucun compte ne correspond à la recherche dans cette classe"
-                              : "Classe vide"}
+                              ? t('acc.pcm.no_match', locale)
+                              : t('acc.pcm.empty_class', locale)}
                           </p>
                         ) : (
                           <div className="divide-y">
@@ -384,7 +386,7 @@ function PCMRow({
             </Badge>
             {c.sens_normal && (
               <Badge variant="outline" className="text-[10px]">
-                Sens {c.sens_normal === "D" ? "Débit" : "Crédit"}
+                {t('acc.pcm.direction', getLocale())} {c.sens_normal === "D" ? t('acc.pcm.debit', getLocale()) : t('acc.pcm.credit', getLocale())}
               </Badge>
             )}
             {c.type_compte && (
@@ -394,22 +396,22 @@ function PCMRow({
             )}
             {isOverride && (
               <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
-                Personnalisé société
+                {t('acc.pcm.custom_company', getLocale())}
               </Badge>
             )}
             {!c.actif && (
               <Badge variant="outline" className="text-[10px] opacity-60">
-                Inactif
+                {t('acc.pcm.inactive', getLocale())}
               </Badge>
             )}
             {c.est_analytique && (
               <Badge variant="outline" className="text-[10px]">
-                Analytique
+                {t('acc.pcm.analytical', getLocale())}
               </Badge>
             )}
             {c.compte_parent && (
               <span className="text-[10px] text-muted-foreground font-mono">
-                ↳ parent {c.compte_parent}
+                ↳ {t('acc.pcm.parent', getLocale())} {c.compte_parent}
               </span>
             )}
           </div>
@@ -420,7 +422,7 @@ function PCMRow({
           {hasUsage ? (
             <>
               <div className="text-[10px] text-muted-foreground uppercase">
-                {usage!.nb_ecritures} écr.
+                {usage!.nb_ecritures} {t('acc.pcm.entries_abbr', getLocale())}
               </div>
               <div className="text-[11px] text-muted-foreground">
                 D {fmt(usage!.total_debit)}
@@ -437,26 +439,26 @@ function PCMRow({
               </div>
             </>
           ) : (
-            <div className="text-[10px] text-muted-foreground italic">non utilisé</div>
+            <div className="text-[10px] text-muted-foreground italic">{t('acc.pcm.not_used', getLocale())}</div>
           )}
         </div>
       </button>
       {isOpen && hasUsage && (
         <div className="bg-slate-50 border-t border-b">
           <div className="px-4 py-2 text-[11px] text-muted-foreground border-b">
-            {usage!.nb_ecritures} écriture(s) sur le compte{" "}
+            {usage!.nb_ecritures} {t('acc.pcm.entries_on_account', getLocale())}{" "}
             <span className="font-mono">{c.compte}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-slate-100">
                 <tr>
-                  <th className="px-2 py-1.5 text-left font-medium">Date</th>
-                  <th className="px-2 py-1.5 text-left font-medium">Journal</th>
-                  <th className="px-2 py-1.5 text-left font-medium">Libellé</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Débit</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Crédit</th>
-                  <th className="px-2 py-1.5 text-left font-medium">Lettre</th>
+                  <th className="px-2 py-1.5 text-left font-medium">{t('common.date', getLocale())}</th>
+                  <th className="px-2 py-1.5 text-left font-medium">{t('acc.pcm.journal', getLocale())}</th>
+                  <th className="px-2 py-1.5 text-left font-medium">{t('acc.pcm.label', getLocale())}</th>
+                  <th className="px-2 py-1.5 text-right font-medium">{t('acc.pcm.debit', getLocale())}</th>
+                  <th className="px-2 py-1.5 text-right font-medium">{t('acc.pcm.credit', getLocale())}</th>
+                  <th className="px-2 py-1.5 text-left font-medium">{t('acc.pcm.letter', getLocale())}</th>
                 </tr>
               </thead>
               <tbody>

@@ -14,6 +14,7 @@ import { Plus, Trash2, Eye, Save, Lock, Download, ArrowLeft, FileText, User, Lis
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { CatalogueSelectorDialog, type CatalogueItem as CatalogueDialogItem } from "@/components/client/CatalogueSelectorDialog"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface LigneFacture { id: string; description: string; unite: string; quantite: number; prix_unitaire: number; taux_tva: number; montant_ht: number }
 interface InvoiceClient { id: string; nom: string; entreprise: string; adresse: string; email: string; telephone: string; vat_number: string; devise: string; conditions_paiement: number; offshore: boolean; isDb?: boolean }
@@ -52,6 +53,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export default function NouvelleFacturePage() {
+  const locale = getLocale()
   const router = useRouter()
   const { societeId } = useSocieteActive()
   const [settings, setSettings] = useState<CompanySettings | null>(null)
@@ -238,20 +240,20 @@ export default function NouvelleFacturePage() {
   const handleTemplateSelect = (id: string) => {
     setTemplateId(id)
     if (!id || id === "none") return
-    const t = templates.find(t => t.id === id)
-    if (!t) return
-    if (t.couleur_primaire) setAccentColor(t.couleur_primaire)
-    if (t.devise_defaut) setDevise(t.devise_defaut)
-    if (t.tva_defaut !== undefined) setTvaDef(t.tva_defaut)
-    if (t.conditions_paiement) { setEcheancePreset(t.conditions_paiement); setDateEcheance(addDays(dateFacture, t.conditions_paiement)) }
-    if (t.mentions_legales) setNotesVisibles(t.mentions_legales)
+    const tpl = templates.find(tp => tp.id === id)
+    if (!tpl) return
+    if (tpl.couleur_primaire) setAccentColor(tpl.couleur_primaire)
+    if (tpl.devise_defaut) setDevise(tpl.devise_defaut)
+    if (tpl.tva_defaut !== undefined) setTvaDef(tpl.tva_defaut)
+    if (tpl.conditions_paiement) { setEcheancePreset(tpl.conditions_paiement); setDateEcheance(addDays(dateFacture, tpl.conditions_paiement)) }
+    if (tpl.mentions_legales) setNotesVisibles(tpl.mentions_legales)
     // Générer numéro selon format_numero du template
-    if (t.format_numero) {
+    if (tpl.format_numero) {
       const now = new Date()
       const yyyy = now.getFullYear().toString()
       const mm = String(now.getMonth() + 1).padStart(2, "0")
       const nnn = String(settings?.prochain_numero || 1).padStart(3, "0")
-      const generated = t.format_numero.replace("{YYYY}", yyyy).replace("{MM}", mm).replace("{NNN}", nnn)
+      const generated = tpl.format_numero.replace("{YYYY}", yyyy).replace("{MM}", mm).replace("{NNN}", nnn)
       setNumeroFacture(generated)
     }
   }
@@ -326,9 +328,9 @@ export default function NouvelleFacturePage() {
           <Button variant="ghost" size="sm" onClick={() => router.push("/client/factures")}><ArrowLeft className="w-4 h-4 mr-1" />Retour</Button>
           <div>
             <h1 className="text-2xl font-bold" style={{ color: typeDocument === "avoir" ? "#DC2626" : "#0B0F2E" }}>
-              {typeDocument === "avoir" ? "Nouvel Avoir" : typeDocument === "note_debit" ? "Nouvelle Note de Debit" : typeDocument === "devis" ? "Nouveau Devis" : "Nouvelle Facture"}
+              {typeDocument === "avoir" ? t('inv.nf.new_credit_note', locale) : typeDocument === "note_debit" ? t('inv.nf.new_debit_note', locale) : typeDocument === "devis" ? t('inv.nf.new_quote', locale) : "Nouvelle Facture"}
             </h1>
-            <p className="text-sm text-gray-500">Conforme MRA - Maurice</p>
+            <p className="text-sm text-gray-500">{t('inv.nf.mra_compliant', locale)}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -349,7 +351,7 @@ export default function NouvelleFacturePage() {
 
       {/* Document type selector */}
       <Card className={`border-t-4 ${typeDocument === "avoir" ? "border-t-red-500" : typeDocument === "note_debit" ? "border-t-orange-500" : "border-t-[#0B0F2E]"}`}>
-        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Type de document</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />{t('inv.nf.document_type', locale)}</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-3">
             <button
@@ -392,7 +394,7 @@ export default function NouvelleFacturePage() {
             >
               <FileText className={`w-5 h-5 ${typeDocument === "devis" ? "text-blue-600" : "text-gray-400"}`} />
               <div className="text-left">
-                <p className={`font-medium text-sm ${typeDocument === "devis" ? "text-blue-700" : "text-gray-700"}`}>Devis</p>
+                <p className={`font-medium text-sm ${typeDocument === "devis" ? "text-blue-700" : "text-gray-700"}`}>{t('inv.nf.quote', locale)}</p>
                 <p className="text-xs text-gray-400">Quote — pas de comptabilité</p>
               </div>
             </button>
@@ -428,19 +430,19 @@ export default function NouvelleFacturePage() {
               <div className="flex-1 min-w-[220px]">
                 <Sel value={templateId || "none"} onValueChange={handleTemplateSelect} placeholder="Choisir un template...">
                   <SelectItem value="none">— Aucun template (défaut) —</SelectItem>
-                  {templates.map(t => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.nom} {t.devise_defaut ? `· ${t.devise_defaut}` : ""} {t.tva_defaut !== undefined ? `· TVA ${t.tva_defaut}%` : ""}
+                  {templates.map(tpl => (
+                    <SelectItem key={tpl.id} value={tpl.id}>
+                      {tpl.nom} {tpl.devise_defaut ? `· ${tpl.devise_defaut}` : ""} {tpl.tva_defaut !== undefined ? `· TVA ${tpl.tva_defaut}%` : ""}
                     </SelectItem>
                   ))}
                 </Sel>
               </div>
               {templateId && templateId !== "none" && (() => {
-                const t = templates.find(t => t.id === templateId)
-                return t ? (
+                const tpl = templates.find(tp => tp.id === templateId)
+                return tpl ? (
                   <div className="flex items-center gap-3 text-sm text-gray-600">
-                    {t.couleur_primaire && <span className="flex items-center gap-1.5"><span className="w-4 h-4 rounded-full inline-block border" style={{ backgroundColor: t.couleur_primaire }} />{t.couleur_primaire}</span>}
-                    {t.format_numero && <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{t.format_numero}</span>}
+                    {tpl.couleur_primaire && <span className="flex items-center gap-1.5"><span className="w-4 h-4 rounded-full inline-block border" style={{ backgroundColor: tpl.couleur_primaire }} />{tpl.couleur_primaire}</span>}
+                    {tpl.format_numero && <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{tpl.format_numero}</span>}
                   </div>
                 ) : null
               })()}
@@ -452,17 +454,17 @@ export default function NouvelleFacturePage() {
 
       {/* 1. Invoice header fields */}
       <Card className="border-t-4 border-t-[#0B0F2E]">
-        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Informations facture</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />{t('inv.nf.invoice_info', locale)}</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Field label="N. Facture"><Input value={numeroFacture} onChange={e => setNumeroFacture(e.target.value)} className="font-mono" /></Field>
-            <Field label="Date facture"><Input type="date" value={dateFacture} onChange={e => {
+            <Field label={t('inv.nf.invoice_date', locale)}><Input type="date" value={dateFacture} onChange={e => {
               setDateFacture(e.target.value)
               if (echeancePreset === 0) setDateEcheance(e.target.value)
               else if (echeancePreset > 0) setDateEcheance(addDays(e.target.value, echeancePreset))
             }} /></Field>
             <Field label="Date echeance"><Input type="date" value={dateEcheance} onChange={e => { setDateEcheance(e.target.value); setEcheancePreset(-1) }} /></Field>
-            <Field label="Reference"><Input value={reference} onChange={e => setReference(e.target.value)} placeholder="Ref. / PO" /></Field>
+            <Field label={t('inv.nf.reference', locale)}><Input value={reference} onChange={e => setReference(e.target.value)} placeholder="Ref. / PO" /></Field>
           </div>
         </CardContent>
       </Card>
@@ -472,26 +474,26 @@ export default function NouvelleFacturePage() {
         <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><User className="w-4 h-4" />Client</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Selectionner un client">
-              <Sel value={selectedClientId} onValueChange={handleClientSelect} placeholder="Choisir ou saisie manuelle...">
-                <SelectItem value="manual">-- Saisie manuelle --</SelectItem>
+            <Field label={t('inv.nf.select_client', locale)}>
+              <Sel value={selectedClientId} onValueChange={handleClientSelect} placeholder={t('inv.nf.choose_or_manual', locale)}>
+                <SelectItem value="manual">{t('inv.nf.manual_entry', locale)}</SelectItem>
                 {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nom}{c.entreprise ? ` (${c.entreprise})` : ""}</SelectItem>)}
               </Sel>
             </Field>
-            <Field label="Type de client">
+            <Field label={t('inv.nf.client_type', locale)}>
               <Sel value={clientOffshore ? "offshore" : "local"} onValueChange={v => handleOffshoreToggle(v === "offshore")}>
-                <SelectItem value="local">Local Maurice - TVA 15%</SelectItem>
-                <SelectItem value="offshore">Offshore / Export - TVA 0%</SelectItem>
+                <SelectItem value="local">{t('inv.nf.client_local', locale)}</SelectItem>
+                <SelectItem value="offshore">{t('inv.nf.client_offshore', locale)}</SelectItem>
               </Sel>
             </Field>
           </div>
           <div className="grid grid-cols-3 gap-4">
-            <Field label="Nom"><Input value={clientNom} onChange={e => setClientNom(e.target.value)} placeholder="Nom du contact" /></Field>
-            <Field label="Entreprise"><Input value={clientEntreprise} onChange={e => setClientEntreprise(e.target.value)} placeholder="Nom de la societe" /></Field>
-            <Field label="N. TVA"><Input value={clientVat} onChange={e => setClientVat(e.target.value)} placeholder="VAT number" /></Field>
+            <Field label={t('inv.nf.name', locale)}><Input value={clientNom} onChange={e => setClientNom(e.target.value)} placeholder={t('inv.nf.contact_name', locale)} /></Field>
+            <Field label={t('inv.nf.company', locale)}><Input value={clientEntreprise} onChange={e => setClientEntreprise(e.target.value)} placeholder={t('inv.nf.company_name', locale)} /></Field>
+            <Field label={t('inv.nf.vat_number_label', locale)}><Input value={clientVat} onChange={e => setClientVat(e.target.value)} placeholder="VAT number" /></Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Adresse"><Input value={clientAdresse} onChange={e => setClientAdresse(e.target.value)} placeholder="Adresse complete" /></Field>
+            <Field label={t('inv.nf.address', locale)}><Input value={clientAdresse} onChange={e => setClientAdresse(e.target.value)} placeholder={t('inv.nf.full_address', locale)} /></Field>
             <Field label="Email"><Input value={clientEmail} onChange={e => setClientEmail(e.target.value)} type="email" placeholder="email@exemple.com" /></Field>
           </div>
           {clientOffshore && <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">Client offshore / export : TVA a 0% (zero-rated) appliquee automatiquement sur toutes les lignes.</div>}
@@ -500,9 +502,9 @@ export default function NouvelleFacturePage() {
 
       {/* 3. Descriptif */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />Descriptif</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />{t('inv.nf.description', locale)}</CardTitle></CardHeader>
         <CardContent>
-          <Textarea value={descriptif} onChange={e => setDescriptif(e.target.value)} placeholder="Objet de la facture / description generale des prestations..." rows={3} className="resize-y" />
+          <Textarea value={descriptif} onChange={e => setDescriptif(e.target.value)} placeholder={t('inv.nf.description_placeholder', locale)} rows={3} className="resize-y" />
         </CardContent>
       </Card>
 
@@ -510,7 +512,7 @@ export default function NouvelleFacturePage() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><ListOrdered className="w-4 h-4" />Lignes de facture</CardTitle>
+            <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><ListOrdered className="w-4 h-4" />{t('inv.nf.invoice_lines', locale)}</CardTitle>
             <div className="flex gap-2">
               {/* Bouton dialog catalogue — visible même si le catalogue est
                   vide (le dialog explique alors comment en créer). Plus
@@ -525,7 +527,7 @@ export default function NouvelleFacturePage() {
                 <Package className="w-4 h-4 mr-1" />
                 Choisir du catalogue
               </Button>
-              <Button onClick={addLigne} variant="outline" size="sm" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"><Plus className="w-4 h-4 mr-1" />Ajouter une ligne vide</Button>
+              <Button onClick={addLigne} variant="outline" size="sm" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"><Plus className="w-4 h-4 mr-1" />{t('inv.nf.add_line', locale)}</Button>
             </div>
           </div>
           {devise !== "MUR" && tauxChange > 1.0001 && (
@@ -541,11 +543,11 @@ export default function NouvelleFacturePage() {
             <TableHeader>
               <TableRow className="bg-[#0B0F2E]/5">
                 <TableHead className="w-[4%] text-center">#</TableHead>
-                <TableHead className="w-[26%]">Description</TableHead>
-                <TableHead className="w-[10%]">Unite</TableHead>
-                <TableHead className="text-right w-[9%]">Quantite</TableHead>
+                <TableHead className="w-[26%]">{t('inv.nf.description', locale)}</TableHead>
+                <TableHead className="w-[10%]">{t('inv.nf.unit', locale)}</TableHead>
+                <TableHead className="text-right w-[9%]">{t('inv.nf.quantity', locale)}</TableHead>
                 <TableHead className="text-right w-[17%]">
-                  Prix unitaire
+                  {t('inv.nf.unit_price', locale)}
                   {devise !== "MUR" && (
                     <div className="text-[10px] font-normal text-gray-500 mt-0.5">
                       Saisie en {devise} ou MUR
@@ -553,13 +555,13 @@ export default function NouvelleFacturePage() {
                   )}
                 </TableHead>
                 <TableHead className="text-right w-[7%]">TVA %</TableHead>
-                <TableHead className="text-right w-[13%]">Montant HT</TableHead>
+                <TableHead className="text-right w-[13%]">{t('inv.nf.amount_ht', locale)}</TableHead>
                 <TableHead className="w-[4%]" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {lignes.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-400">Aucune ligne. Cliquez sur &quot;Ajouter une ligne&quot; pour commencer.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-10 text-gray-400">{t('inv.nf.no_lines', locale)}</TableCell></TableRow>
               ) : lignes.map((l, idx) => (
                 <TableRow key={l.id} className="group">
                   <TableCell className="text-center text-gray-400 text-sm">{idx + 1}</TableCell>
@@ -645,7 +647,7 @@ export default function NouvelleFacturePage() {
         <div className="space-y-4">
           {/* Discount */}
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Calculator className="w-4 h-4" />Remise</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Calculator className="w-4 h-4" />{t('inv.nf.discount', locale)}</CardTitle></CardHeader>
             <CardContent>
               <div className="flex items-end gap-3">
                 <Field label="Type">
@@ -697,7 +699,7 @@ export default function NouvelleFacturePage() {
           <CardContent className="p-5 space-y-3">
             <div className="flex justify-between text-sm"><span className="text-gray-600">Sous-total HT</span><span className="font-mono">{fmt(sousTotal)} {devise}</span></div>
             {remiseMontant > 0 && <div className="flex justify-between text-sm text-red-600"><span>Remise{remiseType === "pct" ? ` (${remiseValue}%)` : ""}</span><span className="font-mono">-{fmt(remiseMontant)} {devise}</span></div>}
-            <div className="flex justify-between text-sm"><span className="text-gray-600">Total HT apres remise</span><span className="font-mono">{fmt(totalHTApresRemise)} {devise}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-600">{t('inv.nf.total_ht_after_discount', locale)}</span><span className="font-mono">{fmt(totalHTApresRemise)} {devise}</span></div>
             <div className="flex justify-between text-sm"><span className="text-gray-600">TVA {clientOffshore ? "(zero-rated)" : "15%"}</span><span className="font-mono">{fmt(totalTVA)} {devise}</span></div>
             <div className="border-t-2 border-[#0B0F2E] pt-3 flex justify-between font-bold text-xl">
               <span className="text-[#0B0F2E]">TOTAL TTC</span><span className="text-[#0B0F2E] font-mono">{fmt(totalTTC)} {devise}</span>
@@ -714,16 +716,16 @@ export default function NouvelleFacturePage() {
 
       {/* 7. Payment */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><CreditCard className="w-4 h-4" />Paiement</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><CreditCard className="w-4 h-4" />{t('inv.nf.payment', locale)}</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Field label="Mode de paiement"><Sel value={modePaiement} onValueChange={setModePaiement}>{MODES_PAIEMENT.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</Sel></Field>
+            <Field label={t('inv.nf.payment_mode', locale)}><Sel value={modePaiement} onValueChange={setModePaiement}>{MODES_PAIEMENT.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</Sel></Field>
             <Field label="Echeance"><Sel value={String(echeancePreset)} onValueChange={handleEcheancePreset}>{ECHEANCES.map(e => <SelectItem key={e.value} value={String(e.value)}>{e.label}</SelectItem>)}</Sel></Field>
             <Field label="Date d'echeance"><Input type="date" value={dateEcheance} onChange={e => { setDateEcheance(e.target.value); setEcheancePreset(-1) }} /></Field>
           </div>
           {settings && modePaiement === "Virement" && (settings.banque_nom || settings.banque_iban) && (
             <div className="mt-4 bg-gray-50 rounded-lg p-4 text-sm space-y-1">
-              <p className="font-semibold text-[#0B0F2E] mb-1">Coordonnees bancaires</p>
+              <p className="font-semibold text-[#0B0F2E] mb-1">{t('inv.nf.bank_details', locale)}</p>
               {settings.banque_nom && <p>Banque : {settings.banque_nom}</p>}
               {settings.banque_compte && <p>Compte : {settings.banque_compte}</p>}
               {settings.banque_iban && <p>IBAN : {settings.banque_iban}</p>}
@@ -735,7 +737,7 @@ export default function NouvelleFacturePage() {
 
       {/* 8. Accent Color */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Palette className="w-4 h-4" />Couleur de la facture</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Palette className="w-4 h-4" />{t('inv.nf.invoice_color', locale)}</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-gray-500 mb-3">Choisissez la couleur d&apos;accent pour l&apos;en-tete, le tableau et les totaux de votre facture.</p>
           <div className="flex flex-wrap gap-3">
@@ -763,8 +765,8 @@ export default function NouvelleFacturePage() {
         <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><StickyNote className="w-4 h-4" />Notes</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Notes visibles sur la facture"><Textarea value={notesVisibles} onChange={e => setNotesVisibles(e.target.value)} placeholder="Conditions de paiement, mentions legales..." rows={3} className="resize-y" /></Field>
-            <Field label="Notes internes (non imprimees)"><Textarea value={notesInternes} onChange={e => setNotesInternes(e.target.value)} placeholder="Notes internes, rappels..." rows={3} className="resize-y" /></Field>
+            <Field label={t('inv.nf.notes_visible', locale)}><Textarea value={notesVisibles} onChange={e => setNotesVisibles(e.target.value)} placeholder={t('inv.nf.notes_visible_placeholder', locale)} rows={3} className="resize-y" /></Field>
+            <Field label={t('inv.nf.notes_internal', locale)}><Textarea value={notesInternes} onChange={e => setNotesInternes(e.target.value)} placeholder={t('inv.nf.notes_internal_placeholder', locale)} rows={3} className="resize-y" /></Field>
           </div>
         </CardContent>
       </Card>
@@ -845,7 +847,7 @@ export default function NouvelleFacturePage() {
             <Button variant="outline" onClick={handleDownloadPDF}><Download className="w-4 h-4 mr-2" />Telecharger PDF</Button>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => handleSave("brouillon")} disabled={saving} variant="outline" className="border-[#0B0F2E] text-[#0B0F2E]"><Save className="w-4 h-4 mr-2" />{saving ? "..." : "Sauvegarder brouillon"}</Button>
+            <Button onClick={() => handleSave("brouillon")} disabled={saving} variant="outline" className="border-[#0B0F2E] text-[#0B0F2E]"><Save className="w-4 h-4 mr-2" />{saving ? "..." : t('inv.nf.save_draft', locale)}</Button>
             <Button onClick={() => handleSave("en_attente")} disabled={saving} className="bg-[#D4AF37] hover:bg-[#b8973e] text-white font-semibold"><Lock className="w-4 h-4 mr-2" />{saving ? "..." : "Finaliser"}</Button>
           </div>
         </div>

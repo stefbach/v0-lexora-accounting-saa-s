@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, Plus, FileText, Users, BookOpen, Edit, Loader2, Check, Sparkles } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ClientPanel, ClientEmpty, ClientChip } from "@/components/client/ClientKit"
+import { t, getLocale } from "@/lib/i18n"
 
 const FONT = "'Poppins', sans-serif"
 
@@ -30,6 +31,7 @@ const REGIME_OPTIONS = [
 ]
 
 export default function SocietesPage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -56,11 +58,11 @@ export default function SocietesPage() {
       d = await res.json()
     } catch (e) {
       setSaving(false)
-      alert("Erreur réseau : " + (e instanceof Error ? e.message : String(e)))
+      alert(t('core.soc.network_error', locale) + " : " + (e instanceof Error ? e.message : String(e)))
       return
     }
     setSaving(false)
-    if (d.error) { alert("Erreur : " + d.error); return }
+    if (d.error) { alert(t('core.soc.error_prefix', locale) + " : " + d.error); return }
     setOpen(false); setForm(EMPTY); setEditId(null); load()
   }
 
@@ -76,12 +78,12 @@ export default function SocietesPage() {
   return (
     <ClientPageShell
       breadcrumbs={[
-        { label: "Espace client", href: "/client" },
-        { label: "Mes Sociétés" },
+        { label: t('core.soc.breadcrumb_client', locale), href: "/client" },
+        { label: t('core.soc.my_companies', locale) },
       ]}
-      kicker={count > 0 ? `${count} ${count > 1 ? "sociétés actives" : "société active"}` : "Aucune société"}
-      title="Mes Sociétés"
-      subtitle="Administrez vos entités juridiques — BRN, ERN, TVA, secteur, coordonnées. Les documents, la paie et la comptabilité sont rattachés à chaque société."
+      kicker={count > 0 ? `${count} ${count > 1 ? t('core.soc.active_many', locale) : t('core.soc.active_one', locale)}` : t('core.soc.none', locale)}
+      title={t('core.soc.my_companies', locale)}
+      subtitle={t('core.soc.subtitle', locale)}
       actions={
         <Dialog open={open} onOpenChange={o=>{ setOpen(o); if(!o){setForm(EMPTY);setEditId(null)} }}>
           <DialogTrigger asChild>
@@ -96,38 +98,38 @@ export default function SocietesPage() {
                 fontFamily: FONT,
               }}
             >
-              <Plus className="w-4 h-4 mr-2"/>Nouvelle société
+              <Plus className="w-4 h-4 mr-2"/>{t('core.soc.new_company', locale)}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle style={{ fontFamily: FONT, letterSpacing:"-0.01em" }}>{editId ? "Modifier" : "Créer"} une société</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle style={{ fontFamily: FONT, letterSpacing:"-0.01em" }}>{editId ? t('core.soc.edit', locale) : t('core.soc.create', locale)} {t('core.soc.a_company', locale)}</DialogTitle></DialogHeader>
             <div className="space-y-3 pt-2">
-              <div><Label>Nom de la société <span className="text-red-500">*</span></Label><Input value={form.nom} onChange={F("nom")} placeholder="Digital Data Solutions Ltd"/></div>
+              <div><Label>{t('core.soc.company_name', locale)} <span className="text-red-500">*</span></Label><Input value={form.nom} onChange={F("nom")} placeholder="Digital Data Solutions Ltd"/></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>BRN</Label><Input value={form.brn} onChange={F("brn")} placeholder="C20173522"/></div>
-                <div><Label>ERN (MRA)</Label><Input value={form.ern} onChange={F("ern")} placeholder="ERN-xxx"/></div>
+                <div><Label>{t('core.soc.brn', locale)}</Label><Input value={form.brn} onChange={F("brn")} placeholder="C20173522"/></div>
+                <div><Label>{t('core.soc.ern_mra', locale)}</Label><Input value={form.ern} onChange={F("ern")} placeholder="ERN-xxx"/></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>N° TVA MRA</Label><Input value={form.numero_tva_mra} onChange={F("numero_tva_mra")} placeholder="27816949"/></div>
+                <div><Label>{t('core.soc.vat_number_mra', locale)}</Label><Input value={form.numero_tva_mra} onChange={F("numero_tva_mra")} placeholder="27816949"/></div>
                 <div>
-                  <Label>TVA assujetti</Label>
+                  <Label>{t('core.soc.vat_subject', locale)}</Label>
                   <Select value={form.statut_tva?"oui":"non"} onValueChange={v=>setForm(f=>({...f,statut_tva:v==="oui"}))}>
                     <SelectTrigger><SelectValue/></SelectTrigger>
-                    <SelectContent><SelectItem value="oui">Oui</SelectItem><SelectItem value="non">Non</SelectItem></SelectContent>
+                    <SelectContent><SelectItem value="oui">{t('core.soc.yes', locale)}</SelectItem><SelectItem value="non">{t('core.soc.no', locale)}</SelectItem></SelectContent>
                   </Select>
                 </div>
               </div>
               <div>
-                <Label>Secteur d&apos;activité</Label>
+                <Label>{t('core.soc.sector', locale)}</Label>
                 <Select value={form.secteur_activite} onValueChange={v=>setForm(f=>({...f,secteur_activite:v}))}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionner"/></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('core.soc.select', locale)}/></SelectTrigger>
                   <SelectContent>{SECTEURS.map(s=><SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label>Adresse</Label><Input value={form.adresse} onChange={F("adresse")} placeholder="Port Louis, Maurice"/></div>
+              <div><Label>{t('core.soc.address', locale)}</Label><Input value={form.adresse} onChange={F("adresse")} placeholder="Port Louis, Maurice"/></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Téléphone</Label><Input value={form.telephone} onChange={F("telephone")} placeholder="+230 xxx xxxx"/></div>
-                <div><Label>Email</Label><Input value={form.email} onChange={F("email")} placeholder="contact@société.mu"/></div>
+                <div><Label>{t('core.soc.phone', locale)}</Label><Input value={form.telephone} onChange={F("telephone")} placeholder="+230 xxx xxxx"/></div>
+                <div><Label>{t('core.soc.email', locale)}</Label><Input value={form.email} onChange={F("email")} placeholder="contact@société.mu"/></div>
               </div>
 
               {/* Phase K — Régime fiscal/réglementaire */}
@@ -204,7 +206,7 @@ export default function SocietesPage() {
                   fontFamily: FONT,
                 }}
               >
-                {saving ? "Enregistrement..." : editId ? "Modifier" : "Créer la société"}
+                {saving ? t('core.soc.saving', locale) : editId ? t('core.soc.modify', locale) : t('core.soc.create_company', locale)}
               </Button>
             </div>
           </DialogContent>
@@ -218,8 +220,8 @@ export default function SocietesPage() {
       ) : societes.length === 0 ? (
         <ClientEmpty
           icon={Building2}
-          title="Aucune société"
-          description="Créez votre première société pour commencer à rattacher documents, paie et comptabilité."
+          title={t('core.soc.none', locale)}
+          description={t('core.soc.create_first', locale)}
           accent="gold"
           action={
             <Button
@@ -234,7 +236,7 @@ export default function SocietesPage() {
                 padding: "10px 22px",
               }}
             >
-              <Plus className="w-4 h-4 mr-2"/>Créer la première société
+              <Plus className="w-4 h-4 mr-2"/>{t('core.soc.create_first_btn', locale)}
             </Button>
           }
         />
@@ -247,7 +249,7 @@ export default function SocietesPage() {
           }}
         >
           {societes.map((s, idx) => (
-            <SocieteCard key={s.id} societe={s} index={idx} onEdit={() => openEdit(s)} />
+            <SocieteCard key={s.id} societe={s} index={idx} onEdit={() => openEdit(s)} locale={locale} />
           ))}
         </div>
       )}
@@ -257,7 +259,7 @@ export default function SocietesPage() {
 
 /* ------------------------------------------------------------------ */
 
-function SocieteCard({ societe: s, index, onEdit }: { societe: Societe; index: number; onEdit: () => void }) {
+function SocieteCard({ societe: s, index, onEdit, locale }: { societe: Societe; index: number; onEdit: () => void; locale: 'fr' | 'en' }) {
   const accentColors = ["#4191FF", "#D4AF37", "#2ECC8A", "#E8A84C"]
   const accent = accentColors[index % accentColors.length]
 
@@ -308,10 +310,10 @@ function SocieteCard({ societe: s, index, onEdit }: { societe: Societe; index: n
                 {s.nom}
               </div>
               <div style={{ marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                {s.brn && <ClientChip accent="blue">BRN · {s.brn}</ClientChip>}
+                {s.brn && <ClientChip accent="blue">{t('core.soc.brn', locale)} · {s.brn}</ClientChip>}
                 {s.ern && <ClientChip accent="blue">ERN · {s.ern}</ClientChip>}
-                {s.statut_tva && <ClientChip accent="green" icon={Check}>TVA assujetti</ClientChip>}
-                {s.numero_tva_mra && <ClientChip accent="gold">N° TVA {s.numero_tva_mra}</ClientChip>}
+                {s.statut_tva && <ClientChip accent="green" icon={Check}>{t('core.soc.vat_subject_chip', locale)}</ClientChip>}
+                {s.numero_tva_mra && <ClientChip accent="gold">{t('core.soc.vat_number_chip', locale)} {s.numero_tva_mra}</ClientChip>}
               </div>
               {s.secteur_activite && (
                 <div
@@ -335,7 +337,7 @@ function SocieteCard({ societe: s, index, onEdit }: { societe: Societe; index: n
             variant="ghost"
             size="sm"
             onClick={onEdit}
-            aria-label="Modifier"
+            aria-label={t('core.soc.modify', locale)}
             style={{ flexShrink: 0, color: "#475569", borderRadius: "8px" }}
           >
             <Edit className="w-4 h-4"/>
@@ -370,9 +372,9 @@ function SocieteCard({ societe: s, index, onEdit }: { societe: Societe; index: n
             gap: "8px",
           }}
         >
-          <QuickLink href={`/client/documents?societe_id=${s.id}`} icon={FileText} label="Documents" accent="#4191FF" />
-          <QuickLink href={`/rh/employes?societe_id=${s.id}`} icon={Users} label="Employés" accent="#D4AF37" />
-          <QuickLink href={`/client/grand-livre?societe_id=${s.id}`} icon={BookOpen} label="Grand Livre" accent="#2ECC8A" />
+          <QuickLink href={`/client/documents?societe_id=${s.id}`} icon={FileText} label={t('core.soc.documents', locale)} accent="#4191FF" />
+          <QuickLink href={`/rh/employes?societe_id=${s.id}`} icon={Users} label={t('core.soc.employees', locale)} accent="#D4AF37" />
+          <QuickLink href={`/client/grand-livre?societe_id=${s.id}`} icon={BookOpen} label={t('core.soc.general_ledger', locale)} accent="#2ECC8A" />
         </div>
       </div>
     </ClientPanel>

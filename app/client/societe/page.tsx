@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Save, Building2, Phone, Banknote, Settings, MapPin, CheckCircle } from "lucide-react"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -25,7 +26,7 @@ function TabButton({ id, label, active, onClick }: { id: Tab; label: string; act
 }
 
 // Each tab is a separate component with its own state to avoid re-render issues
-function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
+function DetailsTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; locale: Locale }) {
   const [f, setF] = useState({ ...data })
   const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
 
@@ -33,81 +34,81 @@ function DetailsTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <div><Label>Nom de la société *</Label><Input value={f.nom || ""} onChange={e => u("nom", e.target.value)} /></div>
-          <div><Label>Nom court</Label><Input value={f.short_name || ""} onChange={e => u("short_name", e.target.value)} placeholder="Ex: DDS" /></div>
-          <div><Label>ERN (Employer Registration Number)</Label><Input value={f.ern || ""} onChange={e => u("ern", e.target.value)} placeholder="Ex: 02276097" /></div>
-          <div><Label>NPF No.</Label><Input value={f.npf_number || ""} onChange={e => u("npf_number", e.target.value)} placeholder="Ex: 02276097" /></div>
-          <div><Label>Date d'incorporation</Label><Input type="date" value={f.date_incorporation || ""} onChange={e => u("date_incorporation", e.target.value)} /></div>
+          <div><Label>{t('core.socset.company_name', locale)} *</Label><Input value={f.nom || ""} onChange={e => u("nom", e.target.value)} /></div>
+          <div><Label>{t('core.socset.short_name', locale)}</Label><Input value={f.short_name || ""} onChange={e => u("short_name", e.target.value)} placeholder="Ex: DDS" /></div>
+          <div><Label>{t('core.socset.ern', locale)}</Label><Input value={f.ern || ""} onChange={e => u("ern", e.target.value)} placeholder="Ex: 02276097" /></div>
+          <div><Label>{t('core.socset.npf_number', locale)}</Label><Input value={f.npf_number || ""} onChange={e => u("npf_number", e.target.value)} placeholder="Ex: 02276097" /></div>
+          <div><Label>{t('core.socset.incorporation_date', locale)}</Label><Input type="date" value={f.date_incorporation || ""} onChange={e => u("date_incorporation", e.target.value)} /></div>
         </div>
         <div className="space-y-4">
-          <div><Label>BRN (Business Registration Number)</Label><Input value={f.brn || ""} onChange={e => u("brn", e.target.value)} placeholder="Ex: C20173522" /></div>
-          <div><Label>Numéro TVA MRA</Label><Input value={f.numero_tva_mra || ""} onChange={e => u("numero_tva_mra", e.target.value)} /></div>
-          <div><Label>Nature of Business</Label><Input value={f.nature_business || ""} onChange={e => u("nature_business", e.target.value)} placeholder="Ex: BPO, Télémedecine" /></div>
-          <div><Label>Secteur d'activité</Label><Input value={f.secteur_activite || ""} onChange={e => u("secteur_activite", e.target.value)} /></div>
+          <div><Label>{t('core.socset.brn', locale)}</Label><Input value={f.brn || ""} onChange={e => u("brn", e.target.value)} placeholder="Ex: C20173522" /></div>
+          <div><Label>{t('core.socset.vat_number_mra', locale)}</Label><Input value={f.numero_tva_mra || ""} onChange={e => u("numero_tva_mra", e.target.value)} /></div>
+          <div><Label>{t('core.socset.nature_business', locale)}</Label><Input value={f.nature_business || ""} onChange={e => u("nature_business", e.target.value)} placeholder="Ex: BPO, Télémedecine" /></div>
+          <div><Label>{t('core.socset.sector', locale)}</Label><Input value={f.secteur_activite || ""} onChange={e => u("secteur_activite", e.target.value)} /></div>
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
             <Switch checked={f.statut_tva === true} onCheckedChange={v => u("statut_tva", v)} />
-            <Label>Assujetti à la TVA</Label>
+            <Label>{t('core.socset.vat_subject', locale)}</Label>
           </div>
         </div>
       </div>
       <Button onClick={() => onSave(f)} style={{ backgroundColor: NAVY }} className="text-white">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer
+        <Save className="h-4 w-4 mr-2" /> {t('core.socset.save', locale)}
       </Button>
     </div>
   )
 }
 
-function ContactTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
+function ContactTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; locale: Locale }) {
   const [f, setF] = useState({ ...data })
   const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Personne de contact</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('core.socset.contact_person', locale)}</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4">
-          <div><Label>Nom</Label><Input value={f.contact_name || ""} onChange={e => u("contact_name", e.target.value)} placeholder="Stephane Bach" /></div>
-          <div><Label>Fonction</Label><Input value={f.contact_position || ""} onChange={e => u("contact_position", e.target.value)} placeholder="CEO" /></div>
+          <div><Label>{t('core.socset.name', locale)}</Label><Input value={f.contact_name || ""} onChange={e => u("contact_name", e.target.value)} placeholder="Stephane Bach" /></div>
+          <div><Label>{t('core.socset.position', locale)}</Label><Input value={f.contact_position || ""} onChange={e => u("contact_position", e.target.value)} placeholder="CEO" /></div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Coordonnées</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('core.socset.coordinates', locale)}</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4">
-          <div><Label>Adresse</Label><Input value={f.adresse || ""} onChange={e => u("adresse", e.target.value)} placeholder="Bourdet Road" /></div>
-          <div><Label>Téléphone</Label><Input value={f.telephone || ""} onChange={e => u("telephone", e.target.value)} placeholder="52503644" /></div>
-          <div><Label>Adresse 2</Label><Input value={f.adresse2 || ""} onChange={e => u("adresse2", e.target.value)} /></div>
-          <div><Label>Fax</Label><Input value={f.fax || ""} onChange={e => u("fax", e.target.value)} /></div>
-          <div><Label>Ville</Label><Input value={f.ville || ""} onChange={e => u("ville", e.target.value)} placeholder="Grand Baie" /></div>
-          <div><Label>Email</Label><Input type="email" value={f.email || ""} onChange={e => u("email", e.target.value)} /></div>
+          <div><Label>{t('core.socset.address', locale)}</Label><Input value={f.adresse || ""} onChange={e => u("adresse", e.target.value)} placeholder="Bourdet Road" /></div>
+          <div><Label>{t('core.socset.phone', locale)}</Label><Input value={f.telephone || ""} onChange={e => u("telephone", e.target.value)} placeholder="52503644" /></div>
+          <div><Label>{t('core.socset.address2', locale)}</Label><Input value={f.adresse2 || ""} onChange={e => u("adresse2", e.target.value)} /></div>
+          <div><Label>{t('core.socset.fax', locale)}</Label><Input value={f.fax || ""} onChange={e => u("fax", e.target.value)} /></div>
+          <div><Label>{t('core.socset.city', locale)}</Label><Input value={f.ville || ""} onChange={e => u("ville", e.target.value)} placeholder="Grand Baie" /></div>
+          <div><Label>{t('core.socset.email', locale)}</Label><Input type="email" value={f.email || ""} onChange={e => u("email", e.target.value)} /></div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Email spécifique</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('core.socset.specific_email', locale)}</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4">
-          <div><Label>Email réponse demandes</Label><Input type="email" value={f.email || ""} onChange={e => u("email", e.target.value)} /></div>
-          <div><Label>Email DCO (Data Controller)</Label><Input type="email" value={f.email_dco || ""} onChange={e => u("email_dco", e.target.value)} /></div>
+          <div><Label>{t('core.socset.email_response_requests', locale)}</Label><Input type="email" value={f.email || ""} onChange={e => u("email", e.target.value)} /></div>
+          <div><Label>{t('core.socset.email_dco', locale)}</Label><Input type="email" value={f.email_dco || ""} onChange={e => u("email_dco", e.target.value)} /></div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><MapPin className="h-4 w-4" /> Localisation GPS (pour pointage)</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500 flex items-center gap-2"><MapPin className="h-4 w-4" /> {t('core.socset.gps_location', locale)}</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-3 gap-4">
-          <div><Label>Latitude</Label><Input type="number" step="any" value={f.latitude || ""} onChange={e => u("latitude", e.target.value)} /></div>
-          <div><Label>Longitude</Label><Input type="number" step="any" value={f.longitude || ""} onChange={e => u("longitude", e.target.value)} /></div>
-          <div><Label>Rayon pointage (mètres)</Label><Input type="number" value={f.distance_pointage || 50} onChange={e => u("distance_pointage", parseInt(e.target.value))} /></div>
+          <div><Label>{t('core.socset.latitude', locale)}</Label><Input type="number" step="any" value={f.latitude || ""} onChange={e => u("latitude", e.target.value)} /></div>
+          <div><Label>{t('core.socset.longitude', locale)}</Label><Input type="number" step="any" value={f.longitude || ""} onChange={e => u("longitude", e.target.value)} /></div>
+          <div><Label>{t('core.socset.clocking_radius', locale)}</Label><Input type="number" value={f.distance_pointage || 50} onChange={e => u("distance_pointage", parseInt(e.target.value))} /></div>
         </CardContent>
       </Card>
 
       <Button onClick={() => onSave(f)} style={{ backgroundColor: NAVY }} className="text-white">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer
+        <Save className="h-4 w-4 mr-2" /> {t('core.socset.save', locale)}
       </Button>
     </div>
   )
 }
 
-function PayrollTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
+function PayrollTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; locale: Locale }) {
   const [f, setF] = useState({ ...data })
   const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
 
@@ -115,15 +116,15 @@ function PayrollTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Périodes</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('core.socset.periods', locale)}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div><Label>Jour de clôture du mois</Label>
+            <div><Label>{t('core.socset.month_closing_day', locale)}</Label>
               <Select value={String(f.period_closing_day || 24)} onValueChange={v => u("period_closing_day", parseInt(v))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{Array.from({ length: 28 }, (_, i) => i + 1).map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Jour de paiement</Label>
+            <div><Label>{t('core.socset.pay_day', locale)}</Label>
               <Select value={String(f.pay_day || 28)} onValueChange={v => u("pay_day", parseInt(v))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{Array.from({ length: 31 }, (_, i) => i + 1).map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent>
@@ -133,24 +134,24 @@ function PayrollTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Calcul salaire</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('core.socset.salary_calc', locale)}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div><Label>Fréquence</Label>
+            <div><Label>{t('core.socset.frequency', locale)}</Label>
               <Select value={f.salary_frequency || "monthly"} onValueChange={v => u("salary_frequency", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="monthly">Mensuel</SelectItem>
-                  <SelectItem value="fortnightly">Bimensuel</SelectItem>
-                  <SelectItem value="weekly">Hebdomadaire</SelectItem>
+                  <SelectItem value="monthly">{t('core.socset.monthly', locale)}</SelectItem>
+                  <SelectItem value="fortnightly">{t('core.socset.fortnightly', locale)}</SelectItem>
+                  <SelectItem value="weekly">{t('core.socset.weekly', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>EOY Bonus (13ème mois)</Label>
+            <div><Label>{t('core.socset.eoy_bonus', locale)}</Label>
               <Select value={f.eoy_bonus_mode || "separated"} onValueChange={v => u("eoy_bonus_mode", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="separated">Bulletin séparé</SelectItem>
-                  <SelectItem value="included">Inclus dans le bulletin</SelectItem>
+                  <SelectItem value="separated">{t('core.socset.separated_payslip', locale)}</SelectItem>
+                  <SelectItem value="included">{t('core.socset.included_payslip', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -158,9 +159,9 @@ function PayrollTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Déclarations</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('core.socset.declarations', locale)}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div><Label>Type de déclaration</Label>
+            <div><Label>{t('core.socset.declaration_type', locale)}</Label>
               <Select value={f.declaration_type || "MRA_PACO"} onValueChange={v => u("declaration_type", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -173,23 +174,23 @@ function PayrollTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Bulletin de paie</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('core.socset.payslip', locale)}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div><Label>Template</Label>
+            <div><Label>{t('core.socset.template', locale)}</Label>
               <Select value={f.payslip_template || "basic"} onValueChange={v => u("payslip_template", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="detailed">Détaillé</SelectItem>
+                  <SelectItem value="basic">{t('core.socset.basic', locale)}</SelectItem>
+                  <SelectItem value="detailed">{t('core.socset.detailed', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Langue d'impression</Label>
+            <div><Label>{t('core.socset.print_language', locale)}</Label>
               <Select value={f.payslip_language || "fr"} onValueChange={v => u("payslip_language", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="fr">Français</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="fr">{t('core.socset.french', locale)}</SelectItem>
+                  <SelectItem value="en">{t('core.socset.english', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -198,13 +199,13 @@ function PayrollTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
       </div>
 
       <Button onClick={() => onSave(f)} style={{ backgroundColor: NAVY }} className="text-white">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer
+        <Save className="h-4 w-4 mr-2" /> {t('core.socset.save', locale)}
       </Button>
     </div>
   )
 }
 
-function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
+function BankTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; locale: Locale }) {
   const [f, setF] = useState({ ...data })
   const u = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }))
   const [bankAccounts, setBankAccounts] = useState<any[]>([])
@@ -227,12 +228,12 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Comptes bancaires</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('core.socset.bank_accounts', locale)}</CardTitle></CardHeader>
           <CardContent>
             {bankError ? (
-              <p className="text-red-500 text-sm py-4 text-center">Impossible de charger les comptes bancaires.</p>
+              <p className="text-red-500 text-sm py-4 text-center">{t('core.socset.bank_load_error', locale)}</p>
             ) : bankAccounts.length === 0 ? (
-              <p className="text-gray-400 text-sm py-4 text-center">Aucun compte bancaire. Les comptes sont créés automatiquement lors de l&apos;upload d&apos;un relevé bancaire.</p>
+              <p className="text-gray-400 text-sm py-4 text-center">{t('core.socset.no_bank_account', locale)}</p>
             ) : (
               <div className="space-y-3">
                 {bankAccounts.map((b: any) => (
@@ -242,9 +243,9 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
                       <Badge variant="outline">{b.devise}</Badge>
                     </div>
                     <div className="mt-2 text-sm space-y-1">
-                      <p><span className="text-gray-500">Compte:</span> {b.numero_compte || "—"}</p>
-                      <p><span className="text-gray-500">IBAN:</span> {b.iban || "—"}</p>
-                      {b.solde_actuel != null && <p><span className="text-gray-500">Solde:</span> <span className="font-mono font-medium">{Number(b.solde_actuel).toLocaleString("fr-FR")} {b.devise}</span></p>}
+                      <p><span className="text-gray-500">{t('core.socset.account', locale)}:</span> {b.numero_compte || "—"}</p>
+                      <p><span className="text-gray-500">{t('core.socset.iban', locale)}:</span> {b.iban || "—"}</p>
+                      {b.solde_actuel != null && <p><span className="text-gray-500">{t('core.socset.balance', locale)}:</span> <span className="font-mono font-medium">{Number(b.solde_actuel).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR')} {b.devise}</span></p>}
                     </div>
                   </div>
                 ))}
@@ -254,7 +255,7 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Devises activées</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('core.socset.currencies_enabled', locale)}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-2">
               {allDevises.map(d => (
@@ -274,7 +275,7 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
       </div>
 
       <Button onClick={() => onSave(f)} style={{ backgroundColor: NAVY }} className="text-white">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer
+        <Save className="h-4 w-4 mr-2" /> {t('core.socset.save', locale)}
       </Button>
     </div>
   )
@@ -282,6 +283,7 @@ function BankTab({ data, onSave }: { data: any; onSave: (d: any) => void }) {
 
 // Main page
 export default function SocieteSettingsPage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societeId, setSocieteId] = useState("")
   const [societe, setSociete] = useState<any>(null)
@@ -319,13 +321,13 @@ export default function SocieteSettingsPage() {
         body: JSON.stringify({ id: societeId, ...data }),
       })
       const result = await res.json()
-      if (result.error) alert("Erreur: " + result.error)
+      if (result.error) alert(t('core.socset.error_prefix', locale) + ": " + result.error)
       else {
         setSaved(true)
         setSociete(data)
         setTimeout(() => setSaved(false), 3000)
       }
-    } catch { alert("Erreur réseau") }
+    } catch { alert(t('core.socset.network_error', locale)) }
     setSaving(false)
   }
 
@@ -335,11 +337,11 @@ export default function SocieteSettingsPage() {
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Paramètres Société</h1>
-          <p className="text-gray-500 text-sm">Configuration complète de votre entreprise</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('core.socset.title', locale)}</h1>
+          <p className="text-gray-500 text-sm">{t('core.socset.subtitle', locale)}</p>
         </div>
         <div className="flex items-center gap-3">
-          {saved && <Badge className="bg-green-100 text-green-700"><CheckCircle className="h-3 w-3 mr-1" /> Enregistré</Badge>}
+          {saved && <Badge className="bg-green-100 text-green-700"><CheckCircle className="h-3 w-3 mr-1" /> {t('core.socset.saved', locale)}</Badge>}
           {societes.length > 1 && (
             <Select value={societeId} onValueChange={setSocieteId}>
               <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
@@ -353,19 +355,19 @@ export default function SocieteSettingsPage() {
 
       {/* Tabs */}
       <div className="flex border-b">
-        <TabButton id="details" label="Détails société" active={tab === "details"} onClick={() => setTab("details")} />
-        <TabButton id="contact" label="Contact" active={tab === "contact"} onClick={() => setTab("contact")} />
-        <TabButton id="payroll" label="Paie" active={tab === "payroll"} onClick={() => setTab("payroll")} />
-        <TabButton id="bank" label="Banque" active={tab === "bank"} onClick={() => setTab("bank")} />
+        <TabButton id="details" label={t('core.socset.tab_details', locale)} active={tab === "details"} onClick={() => setTab("details")} />
+        <TabButton id="contact" label={t('core.socset.tab_contact', locale)} active={tab === "contact"} onClick={() => setTab("contact")} />
+        <TabButton id="payroll" label={t('core.socset.tab_payroll', locale)} active={tab === "payroll"} onClick={() => setTab("payroll")} />
+        <TabButton id="bank" label={t('core.socset.tab_bank', locale)} active={tab === "bank"} onClick={() => setTab("bank")} />
       </div>
 
       {/* Tab content — key={societeId} forces re-mount when société changes */}
       {societe && (
         <div>
-          {tab === "details" && <DetailsTab key={`details-${societeId}`} data={societe} onSave={handleSave} />}
-          {tab === "contact" && <ContactTab key={`contact-${societeId}`} data={societe} onSave={handleSave} />}
-          {tab === "payroll" && <PayrollTab key={`payroll-${societeId}`} data={societe} onSave={handleSave} />}
-          {tab === "bank" && <BankTab key={`bank-${societeId}`} data={societe} onSave={handleSave} />}
+          {tab === "details" && <DetailsTab key={`details-${societeId}`} data={societe} onSave={handleSave} locale={locale} />}
+          {tab === "contact" && <ContactTab key={`contact-${societeId}`} data={societe} onSave={handleSave} locale={locale} />}
+          {tab === "payroll" && <PayrollTab key={`payroll-${societeId}`} data={societe} onSave={handleSave} locale={locale} />}
+          {tab === "bank" && <BankTab key={`bank-${societeId}`} data={societe} onSave={handleSave} locale={locale} />}
         </div>
       )}
     </div>

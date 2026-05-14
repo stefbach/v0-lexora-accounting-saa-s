@@ -22,6 +22,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Loader2, RefreshCw, CheckCircle2, AlertTriangle, Clock, FileText, ShieldCheck } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 interface FactureRow {
   id: string
@@ -69,6 +70,7 @@ function fmtDateTime(d: string | null) {
 }
 
 export default function MraFiscalisationPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState<Stats | null>(null)
@@ -91,7 +93,7 @@ export default function MraFiscalisationPage() {
     try {
       const r = await fetch(`/api/client/mra-fiscalisation?societe_id=${societeId}`)
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || "Erreur chargement")
+      if (!r.ok) throw new Error(j.error || t('mra.fisc.error.load', locale))
       setStats(j.stats)
       setFailed(j.failed || [])
       setPending(j.pending || [])
@@ -112,7 +114,7 @@ export default function MraFiscalisationPage() {
       if (!r.ok || j.ok === false) return { ok: false, msg: j.error || `HTTP ${r.status}` }
       return { ok: true }
     } catch (e: any) {
-      return { ok: false, msg: e?.message || "Erreur réseau" }
+      return { ok: false, msg: e?.message || t('mra.fisc.toast.network', locale) }
     }
   }
 
@@ -121,16 +123,16 @@ export default function MraFiscalisationPage() {
     const res = await fiscaliseOne(id)
     setRetrying(prev => ({ ...prev, [id]: false }))
     if (res.ok) {
-      showToast("Facture fiscalisée", "success")
+      showToast(t('mra.fisc.toast.success', locale), "success")
       load()
     } else {
-      showToast(res.msg || "Échec fiscalisation", "error")
+      showToast(res.msg || t('mra.fisc.toast.fail', locale), "error")
     }
   }
 
   async function bulkFiscalise(rows: FactureRow[]) {
     if (rows.length === 0) return
-    if (!confirm(`Fiscaliser ${rows.length} facture(s) à la suite ? Un délai d'1s sépare chaque appel pour respecter le rate-limit MRA.`)) return
+    if (!confirm(`${t('mra.fisc.confirm.bulk_prefix', locale)}${rows.length}${t('mra.fisc.confirm.bulk_suffix', locale)}`)) return
     setBulkRunning(true)
     let ok = 0, ko = 0
     for (let i = 0; i < rows.length; i++) {
@@ -141,7 +143,7 @@ export default function MraFiscalisationPage() {
     }
     setBulkProgress({ done: rows.length, total: rows.length, ok, ko })
     setBulkRunning(false)
-    showToast(`${ok} fiscalisée(s), ${ko} échec(s)`, ko === 0 ? "success" : "error")
+    showToast(`${ok} / ${rows.length} — ${ko} ${t('mra.fisc.bulk.fail_suffix', locale).trim()}`, ko === 0 ? "success" : "error")
     load()
   }
 
@@ -157,37 +159,37 @@ export default function MraFiscalisationPage() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <ShieldCheck className="h-6 w-6 text-emerald-600" />
-              MRA e-Invoicing
+              {t('mra.fisc.title', locale)}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Supervision de la fiscalisation des factures auprès de la Mauritius Revenue Authority (EBS).
+              {t('mra.fisc.subtitle', locale)}
             </p>
           </div>
           <Button variant="outline" onClick={load} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-            Rafraîchir
+            {t('mra.fisc.refresh', locale)}
           </Button>
         </div>
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard label="Éligibles" value={stats?.total_eligible ?? "—"} tone="blue" />
-          <KpiCard label="Fiscalisées" value={stats?.fiscalised ?? "—"} tone="green" hint={stats ? `${successRate}%` : undefined} />
-          <KpiCard label="En attente" value={stats?.pending ?? "—"} tone="amber" />
-          <KpiCard label="En erreur" value={stats?.failed ?? "—"} tone="rose" />
+          <KpiCard label={t('mra.fisc.kpi.eligible', locale)} value={stats?.total_eligible ?? "—"} tone="blue" />
+          <KpiCard label={t('mra.fisc.kpi.fiscalised', locale)} value={stats?.fiscalised ?? "—"} tone="green" hint={stats ? `${successRate}%` : undefined} />
+          <KpiCard label={t('mra.fisc.kpi.pending', locale)} value={stats?.pending ?? "—"} tone="amber" />
+          <KpiCard label={t('mra.fisc.kpi.failed', locale)} value={stats?.failed ?? "—"} tone="rose" />
         </div>
 
         {bulkProgress && (
           <Card>
             <CardContent className="py-3">
               <div className="text-sm font-medium mb-1">
-                Fiscalisation en lot : {bulkProgress.done} / {bulkProgress.total}
+                {t('mra.fisc.bulk.title_prefix', locale)}{bulkProgress.done} / {bulkProgress.total}
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(bulkProgress.done / bulkProgress.total) * 100}%` }} />
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                {bulkProgress.ok} succès · {bulkProgress.ko} échec(s)
+                {bulkProgress.ok}{t('mra.fisc.bulk.success_suffix', locale)} · {bulkProgress.ko}{t('mra.fisc.bulk.fail_suffix', locale)}
               </div>
             </CardContent>
           </Card>
@@ -196,14 +198,14 @@ export default function MraFiscalisationPage() {
         <Tabs defaultValue="failed">
           <TabsList>
             <TabsTrigger value="failed">
-              En erreur
+              {t('mra.fisc.tab.failed', locale)}
               {failed.length > 0 && <Badge className="ml-2 bg-red-100 text-red-700 border-red-300">{failed.length}</Badge>}
             </TabsTrigger>
             <TabsTrigger value="pending">
-              En attente
+              {t('mra.fisc.tab.pending', locale)}
               {pending.length > 0 && <Badge className="ml-2 bg-amber-100 text-amber-700 border-amber-300">{pending.length}</Badge>}
             </TabsTrigger>
-            <TabsTrigger value="logs">Historique</TabsTrigger>
+            <TabsTrigger value="logs">{t('mra.fisc.tab.logs', locale)}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="failed">
@@ -212,18 +214,18 @@ export default function MraFiscalisationPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-red-600" />
-                    Factures en erreur de fiscalisation
+                    {t('mra.fisc.failed.title', locale)}
                   </CardTitle>
                   {failed.length > 0 && (
                     <Button size="sm" variant="outline" disabled={bulkRunning} onClick={() => bulkFiscalise(failed)}>
                       {bulkRunning ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-                      Tout réessayer ({failed.length})
+                      {t('mra.fisc.retry_all_prefix', locale)}{failed.length})
                     </Button>
                   )}
                 </div>
               </CardHeader>
               <CardContent>
-                <FactureTable rows={failed} retrying={retrying} onRetry={retryOne} emptyText="Aucune erreur. ✓" showError />
+                <FactureTable rows={failed} retrying={retrying} onRetry={retryOne} emptyText={t('mra.fisc.empty.failed', locale)} showError locale={locale} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -234,18 +236,18 @@ export default function MraFiscalisationPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Clock className="h-4 w-4 text-amber-600" />
-                    Factures non fiscalisées
+                    {t('mra.fisc.pending.title', locale)}
                   </CardTitle>
                   {pending.length > 0 && (
                     <Button size="sm" variant="outline" disabled={bulkRunning} onClick={() => bulkFiscalise(pending)}>
                       {bulkRunning ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <ShieldCheck className="h-3 w-3 mr-1" />}
-                      Fiscaliser tout ({pending.length})
+                      {t('mra.fisc.fiscalise_all_prefix', locale)}{pending.length})
                     </Button>
                   )}
                 </div>
               </CardHeader>
               <CardContent>
-                <FactureTable rows={pending} retrying={retrying} onRetry={retryOne} emptyText="Toutes les factures sont fiscalisées. ✓" />
+                <FactureTable rows={pending} retrying={retrying} onRetry={retryOne} emptyText={t('mra.fisc.empty.pending', locale)} locale={locale} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -255,12 +257,12 @@ export default function MraFiscalisationPage() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <FileText className="h-4 w-4 text-slate-600" />
-                  50 dernières tentatives
+                  {t('mra.fisc.logs.title', locale)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 {logs.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">Aucune tentative enregistrée.</p>
+                  <p className="py-8 text-center text-sm text-muted-foreground">{t('mra.fisc.logs.empty', locale)}</p>
                 ) : (
                   <div className="divide-y text-sm">
                     {logs.map(l => (
@@ -280,7 +282,7 @@ export default function MraFiscalisationPage() {
                             )}
                           </div>
                           {l.irn && (
-                            <p className="text-xs font-mono text-emerald-700 mt-0.5">IRN : {l.irn}</p>
+                            <p className="text-xs font-mono text-emerald-700 mt-0.5">{t('mra.fisc.logs.irn', locale)}{l.irn}</p>
                           )}
                           {l.error_message && (
                             <p className="text-xs text-red-700 mt-0.5">{l.error_code ? `[${l.error_code}] ` : ''}{l.error_message}</p>
@@ -290,7 +292,7 @@ export default function MraFiscalisationPage() {
                           <p className="text-[11px] text-muted-foreground">{fmtDateTime(l.created_at)}</p>
                           {l.facture_id && (
                             <Link href={`/client/facture-preview?facture_id=${l.facture_id}`} className="text-[11px] text-blue-600 hover:underline">
-                              Voir facture
+                              {t('mra.fisc.logs.view_invoice', locale)}
                             </Link>
                           )}
                         </div>
@@ -336,12 +338,14 @@ function FactureTable({
   onRetry,
   emptyText,
   showError,
+  locale,
 }: {
   rows: FactureRow[]
   retrying: Record<string, boolean>
   onRetry: (id: string) => void
   emptyText: string
   showError?: boolean
+  locale: Locale
 }) {
   if (rows.length === 0) return <p className="py-8 text-center text-sm text-muted-foreground">{emptyText}</p>
   return (
@@ -353,13 +357,13 @@ function FactureTable({
               <span className="font-mono text-sm font-medium">{f.numero_facture || f.id.slice(0, 8)}</span>
               {f.type_document && f.type_document !== "facture" && (
                 <Badge variant="outline" className="text-[10px]">
-                  {f.type_document === "avoir" ? "Avoir" : f.type_document === "note_debit" ? "Note de débit" : f.type_document}
+                  {f.type_document === "avoir" ? t('mra.fisc.row.credit_note', locale) : f.type_document === "note_debit" ? t('mra.fisc.row.debit_note', locale) : f.type_document}
                 </Badge>
               )}
             </div>
             <p className="text-sm mt-0.5 break-words">{f.tiers || "—"}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Émise : {fmtDate(f.date_facture)} · {fmt(f.montant_ttc, f.devise || "MUR")}
+              {t('mra.fisc.row.issued', locale)}{fmtDate(f.date_facture)} · {fmt(f.montant_ttc, f.devise || "MUR")}
             </p>
             {showError && f.last_error && (
               <p className="text-xs text-red-700 mt-1 italic">⚠ {f.last_error}</p>
@@ -374,10 +378,10 @@ function FactureTable({
               className="h-7 px-2 text-[11px] border-emerald-300 text-emerald-700 hover:bg-emerald-50"
             >
               {retrying[f.id] ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <ShieldCheck className="h-3 w-3 mr-1" />}
-              {showError ? "Réessayer" : "Fiscaliser"}
+              {showError ? t('mra.fisc.row.retry', locale) : t('mra.fisc.row.fiscalise', locale)}
             </Button>
             <Link href={`/client/facture-preview?facture_id=${f.id}`} className="text-[11px] text-blue-600 hover:underline">
-              Aperçu
+              {t('mra.fisc.row.preview', locale)}
             </Link>
           </div>
         </div>

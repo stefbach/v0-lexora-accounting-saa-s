@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import { Loader2, Building2, Download, Calendar, Upload, FileText, CheckCircle, AlertCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
@@ -298,6 +299,7 @@ function ProfitLossTable({ data, prevData, exercice, prevExercice }: { data: any
 }
 
 export default function BilanPage() {
+  const locale = getLocale()
   const { profile, loading } = useProfile()
   const { societeId, societe } = useSocieteActive()
   const [data, setData] = useState<any>(null)
@@ -647,10 +649,10 @@ export default function BilanPage() {
       {!hasData ? (
         <div className="flex flex-col items-center gap-2 py-16">
           <p className="text-sm text-muted-foreground">
-            Aucune ecriture comptable disponible pour le moment.
+            {t('acc.bil.no_data', locale)}
           </p>
           <p className="text-xs text-muted-foreground">
-            Les donnees apparaitront ici une fois vos factures traitees.
+            {t('acc.bil.no_data_help', locale)}
           </p>
         </div>
       ) : (

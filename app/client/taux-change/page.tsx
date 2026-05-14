@@ -10,6 +10,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { RefreshCw, Loader2, Plus, TrendingUp, Globe2, AlertCircle, CheckCircle2 } from "lucide-react"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -48,10 +49,10 @@ const DEVISE_FLAGS: Record<string, string> = {
 
 function getSourceBadge(source: string) {
   if (source === "exchangerate-api") {
-    return <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">API automatique</Badge>
+    return <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">{t('acc.tc.auto_api', getLocale())}</Badge>
   }
   if (source === "manual") {
-    return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs">Saisie manuelle</Badge>
+    return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs">{t('acc.tc.manual_entry', getLocale())}</Badge>
   }
   return <Badge className="bg-gray-100 text-gray-600 border-gray-200 text-xs">{source || "—"}</Badge>
 }
@@ -59,6 +60,7 @@ function getSourceBadge(source: string) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function TauxChangePage() {
+  const locale = getLocale()
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
@@ -160,10 +162,10 @@ export default function TauxChangePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Globe2 className="w-6 h-6 text-blue-600" />
-            Taux de change
+            {t('acc.tc.title', locale)}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Taux MUR par devise — compliance MRA (taux du jour de la transaction)
+            {t('acc.tc.subtitle', locale)}
           </p>
         </div>
         <Button
@@ -172,7 +174,7 @@ export default function TauxChangePage() {
           className="bg-blue-600 hover:bg-blue-700 text-white"
         >
           {updating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-          Mettre à jour depuis BOM
+          {t('acc.tc.update_from_bom', locale)}
         </Button>
       </div>
 
@@ -195,7 +197,7 @@ export default function TauxChangePage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-emerald-600" />
-            Taux actuels (1 devise = X MUR)
+            {t('acc.tc.current_rates', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -205,17 +207,17 @@ export default function TauxChangePage() {
             </div>
           ) : devises.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-sm">
-              Aucun taux enregistré — cliquez sur &quot;Mettre à jour depuis BOM&quot;
+              {t('acc.tc.no_rates', locale)}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50">
-                  <TableHead className="w-24">Devise</TableHead>
-                  <TableHead>Nom</TableHead>
-                  <TableHead className="text-right">Taux (MUR)</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Source</TableHead>
+                  <TableHead className="w-24">{t('acc.tc.currency', locale)}</TableHead>
+                  <TableHead>{t('acc.tc.name', locale)}</TableHead>
+                  <TableHead className="text-right">{t('acc.tc.rate_mur', locale)}</TableHead>
+                  <TableHead>{t('common.date', locale)}</TableHead>
+                  <TableHead>{t('acc.tc.source', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -255,16 +257,16 @@ export default function TauxChangePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <Plus className="w-4 h-4 text-blue-600" />
-              Saisir un taux historique
+              {t('acc.tc.enter_historical', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleManualEntry} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Devise</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{t('acc.tc.currency', locale)}</label>
                 <Select value={manualDevise} onValueChange={setManualDevise}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choisir une devise" />
+                    <SelectValue placeholder={t('acc.tc.choose_currency', locale)} />
                   </SelectTrigger>
                   <SelectContent>
                     {Object.entries(DEVISE_LABELS).map(([code, label]) => (
@@ -277,7 +279,7 @@ export default function TauxChangePage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Date du taux</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{t('acc.tc.date_of_rate', locale)}</label>
                 <Input
                   type="date"
                   value={manualDate}
@@ -288,7 +290,7 @@ export default function TauxChangePage() {
 
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Taux (1 {manualDevise} = ? MUR)
+                  {t('acc.tc.rate', locale)} (1 {manualDevise} = ? MUR)
                 </label>
                 <Input
                   type="number"
@@ -307,7 +309,7 @@ export default function TauxChangePage() {
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                Enregistrer le taux
+                {t('acc.tc.save_rate', locale)}
               </Button>
             </form>
           </CardContent>
@@ -317,7 +319,7 @@ export default function TauxChangePage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold">Historique des taux</CardTitle>
+              <CardTitle className="text-base font-semibold">{t('acc.tc.history', locale)}</CardTitle>
               <Select value={historyDevise} onValueChange={setHistoryDevise}>
                 <SelectTrigger className="w-32">
                   <SelectValue />
@@ -339,15 +341,15 @@ export default function TauxChangePage() {
               </div>
             ) : historyRows.length === 0 ? (
               <div className="text-center py-8 text-gray-400 text-sm px-4">
-                Aucun historique pour {historyDevise}
+                {t('acc.tc.no_history', locale)} {historyDevise}
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Taux (MUR)</TableHead>
-                    <TableHead>Source</TableHead>
+                    <TableHead>{t('common.date', locale)}</TableHead>
+                    <TableHead className="text-right">{t('acc.tc.rate_mur', locale)}</TableHead>
+                    <TableHead>{t('acc.tc.source', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -373,9 +375,7 @@ export default function TauxChangePage() {
 
       {/* Note de conformité MRA */}
       <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-        <strong>Compliance MRA :</strong> Les écritures comptables utilisent automatiquement le taux en vigueur
-        à la <em>date de la transaction</em> (pas le taux actuel). Si le taux du jour de la transaction
-        n&apos;est pas disponible, le système utilise le taux le plus proche antérieur.
+        {t('acc.tc.mra_note', locale)}
       </div>
     </div>
   )

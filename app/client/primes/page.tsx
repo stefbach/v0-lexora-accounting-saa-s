@@ -17,6 +17,7 @@ import {
   Calendar, FileText, History, DollarSign, ArrowRight
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " MUR"
@@ -33,15 +34,25 @@ interface PrimeCalculee {
   periode: string; statut: string
 }
 
-const TYPE_LABELS: Record<string, string> = {
+const TYPE_LABELS_FR: Record<string, string> = {
   fixe: "Fixe", pourcentage: "Pourcentage", anciennete: "Anciennete",
   assiduite: "Assiduite", objectif: "Objectif",
 }
-const SCOPE_LABELS: Record<string, string> = {
+const TYPE_LABELS_EN: Record<string, string> = {
+  fixe: "Fixed", pourcentage: "Percentage", anciennete: "Seniority",
+  assiduite: "Attendance", objectif: "Target",
+}
+const SCOPE_LABELS_FR: Record<string, string> = {
   tous: "Tous", groupe: "Groupe", individuel: "Individuel",
+}
+const SCOPE_LABELS_EN: Record<string, string> = {
+  tous: "All", groupe: "Group", individuel: "Individual",
 }
 
 export default function PrimesPage() {
+  const locale = getLocale()
+  const TYPE_LABELS = locale === 'fr' ? TYPE_LABELS_FR : TYPE_LABELS_EN
+  const SCOPE_LABELS = locale === 'fr' ? SCOPE_LABELS_FR : SCOPE_LABELS_EN
   const { profile, loading: profileLoading } = useProfile()
   const { societeId } = useSocieteActive()
   const [regles, setRegles] = useState<ReglePrime[]>([])
@@ -162,21 +173,21 @@ export default function PrimesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des Primes</h1>
-          <p className="text-sm text-gray-500">Catalogue, calcul et suivi des primes</p>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('hr.primes.title', locale)}</h1>
+          <p className="text-sm text-gray-500">{t('hr.primes.subtitle', locale)}</p>
         </div>
       </div>
 
       <Tabs defaultValue="catalogue">
         <TabsList className="bg-[#0B0F2E]/5">
           <TabsTrigger value="catalogue" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
-            <Target className="w-4 h-4 mr-1.5" /> Catalogue
+            <Target className="w-4 h-4 mr-1.5" /> {t('hr.primes.tab_catalog', locale)}
           </TabsTrigger>
           <TabsTrigger value="calcul" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
-            <Calculator className="w-4 h-4 mr-1.5" /> Calcul mensuel
+            <Calculator className="w-4 h-4 mr-1.5" /> {t('hr.primes.tab_calc', locale)}
           </TabsTrigger>
           <TabsTrigger value="historique" className="data-[state=active]:bg-[#0B0F2E] data-[state=active]:text-white">
-            <History className="w-4 h-4 mr-1.5" /> Historique
+            <History className="w-4 h-4 mr-1.5" /> {t('hr.primes.tab_history', locale)}
           </TabsTrigger>
         </TabsList>
 
@@ -186,74 +197,74 @@ export default function PrimesPage() {
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-[#D4AF37] hover:bg-[#b8963f] text-[#0B0F2E]">
-                  <Plus className="w-4 h-4 mr-1.5" /> Creer une prime
+                  <Plus className="w-4 h-4 mr-1.5" /> {t('hr.primes.create_bonus', locale)}
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
-                  <DialogTitle className="text-[#0B0F2E]">Creer une prime</DialogTitle>
+                  <DialogTitle className="text-[#0B0F2E]">{t('hr.primes.create_bonus', locale)}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                   <div className="grid gap-1.5">
-                    <Label>Nom</Label>
-                    <Input value={form.nom} onChange={e => setForm(p => ({ ...p, nom: e.target.value }))} placeholder="Prime de performance" />
+                    <Label>{t('hr.primes.name', locale)}</Label>
+                    <Input value={form.nom} onChange={e => setForm(p => ({ ...p, nom: e.target.value }))} placeholder={t('hr.primes.name_ph', locale)} />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-1.5">
-                      <Label>Type</Label>
+                      <Label>{t('hr.primes.type', locale)}</Label>
                       <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="fixe">Fixe</SelectItem>
-                          <SelectItem value="pourcentage">Pourcentage</SelectItem>
-                          <SelectItem value="anciennete">Anciennete</SelectItem>
-                          <SelectItem value="assiduite">Assiduite</SelectItem>
-                          <SelectItem value="objectif">Objectif</SelectItem>
+                          <SelectItem value="fixe">{t('hr.primes.type_fixed', locale)}</SelectItem>
+                          <SelectItem value="pourcentage">{t('hr.primes.type_pct', locale)}</SelectItem>
+                          <SelectItem value="anciennete">{t('hr.primes.type_seniority', locale)}</SelectItem>
+                          <SelectItem value="assiduite">{t('hr.primes.type_attendance', locale)}</SelectItem>
+                          <SelectItem value="objectif">{t('hr.primes.type_target', locale)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>Montant / Taux</Label>
+                      <Label>{t('hr.primes.amount_rate', locale)}</Label>
                       <Input type="number" value={form.montant} onChange={e => setForm(p => ({ ...p, montant: e.target.value }))} placeholder="5000" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-1.5">
-                      <Label>Scope</Label>
+                      <Label>{t('hr.primes.scope', locale)}</Label>
                       <Select value={form.scope} onValueChange={v => setForm(p => ({ ...p, scope: v }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="tous">Tous</SelectItem>
-                          <SelectItem value="groupe">Groupe</SelectItem>
-                          <SelectItem value="individuel">Individuel</SelectItem>
+                          <SelectItem value="tous">{t('hr.primes.scope_all', locale)}</SelectItem>
+                          <SelectItem value="groupe">{t('hr.primes.scope_group', locale)}</SelectItem>
+                          <SelectItem value="individuel">{t('hr.primes.scope_individual', locale)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     {form.scope !== "tous" && (
                       <div className="grid gap-1.5">
-                        <Label>Scope (valeur)</Label>
-                        <Input value={form.scope_value} onChange={e => setForm(p => ({ ...p, scope_value: e.target.value }))} placeholder={form.scope === "groupe" ? "Nom du groupe" : "ID employe"} />
+                        <Label>{t('hr.primes.scope_value', locale)}</Label>
+                        <Input value={form.scope_value} onChange={e => setForm(p => ({ ...p, scope_value: e.target.value }))} placeholder={form.scope === "groupe" ? t('hr.primes.group_name_ph', locale) : t('hr.primes.employee_id_ph', locale)} />
                       </div>
                     )}
                   </div>
                   <div className="grid gap-1.5">
-                    <Label>Conditions</Label>
-                    <Input value={form.conditions} onChange={e => setForm(p => ({ ...p, conditions: e.target.value }))} placeholder="Ex: anciennete >= 2 ans" />
+                    <Label>{t('hr.primes.conditions', locale)}</Label>
+                    <Input value={form.conditions} onChange={e => setForm(p => ({ ...p, conditions: e.target.value }))} placeholder={t('hr.primes.conditions_ph', locale)} />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-1.5">
-                      <Label>Periode</Label>
-                      <Input value={form.periode} onChange={e => setForm(p => ({ ...p, periode: e.target.value }))} placeholder="mensuel / annuel" />
+                      <Label>{t('hr.primes.period', locale)}</Label>
+                      <Input value={form.periode} onChange={e => setForm(p => ({ ...p, periode: e.target.value }))} placeholder={t('hr.primes.period_ph', locale)} />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>Plafond</Label>
+                      <Label>{t('hr.primes.cap', locale)}</Label>
                       <Input type="number" value={form.plafond} onChange={e => setForm(p => ({ ...p, plafond: e.target.value }))} placeholder="50000" />
                     </div>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
-                  <Button className="bg-[#0B0F2E] hover:bg-[#16203a] text-white" onClick={handleCreerRegle}>Enregistrer</Button>
+                  <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('hr.primes.cancel', locale)}</Button>
+                  <Button className="bg-[#0B0F2E] hover:bg-[#16203a] text-white" onClick={handleCreerRegle}>{t('hr.primes.save', locale)}</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -264,11 +275,11 @@ export default function PrimesPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-[#0B0F2E]/5">
-                    <TableHead>Nom</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Montant / Taux</TableHead>
-                    <TableHead>Scope</TableHead>
-                    <TableHead className="text-center">Actif</TableHead>
+                    <TableHead>{t('hr.primes.name', locale)}</TableHead>
+                    <TableHead>{t('hr.primes.type', locale)}</TableHead>
+                    <TableHead className="text-right">{t('hr.primes.amount_rate', locale)}</TableHead>
+                    <TableHead>{t('hr.primes.scope', locale)}</TableHead>
+                    <TableHead className="text-center">{t('hr.primes.active', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -278,7 +289,7 @@ export default function PrimesPage() {
                     </TableCell></TableRow>
                   ) : regles.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-gray-400">
-                      Aucune regle de prime configuree
+                      {t('hr.primes.no_rules', locale)}
                     </TableCell></TableRow>
                   ) : regles.map(r => (
                     <TableRow key={r.id}>
@@ -307,17 +318,17 @@ export default function PrimesPage() {
         <TabsContent value="calcul" className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-[#0B0F2E] text-base">Calcul des primes</CardTitle>
+              <CardTitle className="text-[#0B0F2E] text-base">{t('hr.primes.calc_title', locale)}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-end gap-4">
                 <div className="grid gap-1.5">
-                  <Label>Periode</Label>
+                  <Label>{t('hr.primes.period', locale)}</Label>
                   <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-48" />
                 </div>
                 <Button onClick={handleCalculer} disabled={calculating} className="bg-[#0B0F2E] hover:bg-[#16203a] text-white">
                   {calculating ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Calculator className="w-4 h-4 mr-1.5" />}
-                  Calculer primes
+                  {t('hr.primes.calculate', locale)}
                 </Button>
               </div>
             </CardContent>
@@ -329,10 +340,10 @@ export default function PrimesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-[#0B0F2E]/5">
-                      <TableHead>Employe</TableHead>
-                      <TableHead>Prime</TableHead>
-                      <TableHead className="text-right">Montant</TableHead>
-                      <TableHead>Statut</TableHead>
+                      <TableHead>{t('hr.primes.employee', locale)}</TableHead>
+                      <TableHead>{t('hr.primes.bonus', locale)}</TableHead>
+                      <TableHead className="text-right">{t('hr.primes.amount', locale)}</TableHead>
+                      <TableHead>{t('hr.primes.status', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -343,7 +354,7 @@ export default function PrimesPage() {
                         <TableCell className="text-right font-mono">{fmt(c.montant)}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
-                            {c.statut || "calcule"}
+                            {c.statut || t('hr.primes.status_calculated', locale)}
                           </Badge>
                         </TableCell>
                       </TableRow>
@@ -352,14 +363,14 @@ export default function PrimesPage() {
                 </Table>
                 <div className="flex justify-between items-center p-4 border-t">
                   <div className="text-sm text-gray-500">
-                    {calculs.length} ligne(s) - Total: <span className="font-semibold text-[#0B0F2E]">{fmt(calculs.reduce((s, c) => s + c.montant, 0))}</span>
+                    {calculs.length} {t('hr.primes.lines', locale)} - {t('hr.primes.total', locale)}: <span className="font-semibold text-[#0B0F2E]">{fmt(calculs.reduce((s, c) => s + c.montant, 0))}</span>
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={handleValider} className="border-[#0B0F2E] text-[#0B0F2E]">
-                      <CheckCircle className="w-4 h-4 mr-1.5" /> Valider
+                      <CheckCircle className="w-4 h-4 mr-1.5" /> {t('hr.primes.validate', locale)}
                     </Button>
                     <Button onClick={handleIntegrerPaie} className="bg-[#D4AF37] hover:bg-[#b8963f] text-[#0B0F2E]">
-                      <ArrowRight className="w-4 h-4 mr-1.5" /> Integrer en paie
+                      <ArrowRight className="w-4 h-4 mr-1.5" /> {t('hr.primes.integrate_payroll', locale)}
                     </Button>
                   </div>
                 </div>
@@ -371,7 +382,7 @@ export default function PrimesPage() {
             <Card>
               <CardContent className="py-12 text-center text-gray-400">
                 <Calculator className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <p>Selectionnez une periode et lancez le calcul</p>
+                <p>{t('hr.primes.select_period', locale)}</p>
               </CardContent>
             </Card>
           )}
@@ -384,18 +395,18 @@ export default function PrimesPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-[#0B0F2E]/5">
-                    <TableHead>Periode</TableHead>
-                    <TableHead>Employe</TableHead>
-                    <TableHead>Prime</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
-                    <TableHead>Statut</TableHead>
+                    <TableHead>{t('hr.primes.period', locale)}</TableHead>
+                    <TableHead>{t('hr.primes.employee', locale)}</TableHead>
+                    <TableHead>{t('hr.primes.bonus', locale)}</TableHead>
+                    <TableHead className="text-right">{t('hr.primes.amount', locale)}</TableHead>
+                    <TableHead>{t('hr.primes.status', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {historique.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-gray-400">
                       <History className="w-5 h-5 mx-auto mb-2 opacity-40" />
-                      Aucun historique disponible
+                      {t('hr.primes.no_history', locale)}
                     </TableCell></TableRow>
                   ) : historique.map(h => (
                     <TableRow key={h.id}>

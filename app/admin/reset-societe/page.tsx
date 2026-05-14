@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { AlertTriangle, Loader2, CheckCircle2, XCircle, Trash2, ShieldAlert } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Societe { id: string; nom: string; brn?: string | null }
 
@@ -32,6 +33,7 @@ const DEFAULT_OPTIONS: ResetOptions = {
 }
 
 export default function ResetSocietePage() {
+  const locale = getLocale()
   const { profile, loading: profileLoading } = useProfile()
   const router = useRouter()
   const [societes, setSocietes] = useState<Societe[]>([])
@@ -104,7 +106,7 @@ export default function ResetSocietePage() {
         setResult(data)
       }
     } catch (e: any) {
-      setError(e?.message || "Erreur réseau")
+      setError(e?.message || t('adm.reset.err_network', locale))
     } finally {
       setSubmitting(false)
     }
@@ -127,15 +129,12 @@ export default function ResetSocietePage() {
         <CardContent className="p-5 flex items-start gap-4">
           <ShieldAlert className="w-8 h-8 text-[#9F1239] flex-shrink-0 mt-0.5" />
           <div>
-            <h1 className="text-xl font-bold text-[#9F1239]">Zone dangereuse — Reset comptable complet</h1>
+            <h1 className="text-xl font-bold text-[#9F1239]">{t('adm.reset.danger_title', locale)}</h1>
             <p className="text-sm text-gray-700 mt-1">
-              Cette page permet de <strong>vider intégralement la comptabilité d'une société</strong>
-              (écritures, factures, rapprochements, audit…). Selon les options, peut aussi effacer
-              les documents, relevés, TVA, bulletins, immobilisations.
+              {t('adm.reset.danger_desc1_pre', locale)} <strong>{t('adm.reset.danger_desc1_strong', locale)}</strong> {t('adm.reset.danger_desc1_post', locale)}
             </p>
             <p className="text-sm text-gray-700 mt-2">
-              <strong>L'action est irréversible.</strong> Aucune corbeille, aucun rollback automatique.
-              Les fichiers supprimés du storage Supabase ne sont pas récupérables.
+              <strong>{t('adm.reset.danger_desc2_strong', locale)}</strong> {t('adm.reset.danger_desc2_post', locale)}
             </p>
           </div>
         </CardContent>
@@ -144,7 +143,7 @@ export default function ResetSocietePage() {
       {/* Liste des sociétés */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-[#0B0F2E]">Sociétés visibles</CardTitle>
+          <CardTitle className="text-[#0B0F2E]">{t('adm.reset.visible_companies', locale)}</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -152,7 +151,7 @@ export default function ResetSocietePage() {
               <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
             </div>
           ) : societes.length === 0 ? (
-            <div className="text-sm text-gray-500 py-6 text-center">Aucune société accessible.</div>
+            <div className="text-sm text-gray-500 py-6 text-center">{t('adm.reset.none_accessible', locale)}</div>
           ) : (
             <div className="divide-y">
               {societes.map(s => (
@@ -168,7 +167,7 @@ export default function ResetSocietePage() {
                     onClick={() => openDialog(s)}
                   >
                     <Trash2 className="w-4 h-4" />
-                    Reset complet
+                    {t('adm.reset.full_reset', locale)}
                   </Button>
                 </div>
               ))}
@@ -183,11 +182,10 @@ export default function ResetSocietePage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#9F1239]">
               <AlertTriangle className="w-5 h-5" />
-              Reset complet — {dialogSociete?.nom}
+              {t('adm.reset.confirm_title', locale)} {dialogSociete?.nom}
             </DialogTitle>
             <DialogDescription>
-              Action <strong>irréversible</strong>. Cochez ce que vous voulez effacer, puis
-              tapez le nom exact de la société pour confirmer.
+              {t('adm.reset.confirm_desc_pre', locale)} <strong>{t('adm.reset.confirm_desc_strong', locale)}</strong>{t('adm.reset.confirm_desc_post', locale)}
             </DialogDescription>
           </DialogHeader>
 
@@ -196,7 +194,7 @@ export default function ResetSocietePage() {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-[#0F766E] font-semibold">
                 <CheckCircle2 className="w-5 h-5" />
-                Reset effectué avec succès
+                {t('adm.reset.success', locale)}
               </div>
               <div className="bg-gray-50 rounded-lg p-3 text-xs font-mono space-y-1">
                 {Object.entries(result.stats || {}).map(([k, v]) => (
@@ -214,32 +212,32 @@ export default function ResetSocietePage() {
                 </ul>
               )}
               <DialogFooter>
-                <Button onClick={closeDialog}>Fermer</Button>
+                <Button onClick={closeDialog}>{t('adm.reset.close', locale)}</Button>
               </DialogFooter>
             </div>
           ) : (
             <>
               {/* Ce qui sera TOUJOURS effacé */}
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700 space-y-1">
-                <p className="font-semibold text-[#0B0F2E]">Toujours effacé :</p>
+                <p className="font-semibold text-[#0B0F2E]">{t('adm.reset.always_erased', locale)}</p>
                 <ul className="ml-3 space-y-0.5">
-                  <li>• Toutes les écritures comptables</li>
-                  <li>• Toutes les factures (clients + fournisseurs + avoirs)</li>
-                  <li>• Rapprochements bancaires + audit log</li>
-                  <li>• Comptes courants associés</li>
+                  <li>• {t('adm.reset.always_1', locale)}</li>
+                  <li>• {t('adm.reset.always_2', locale)}</li>
+                  <li>• {t('adm.reset.always_3', locale)}</li>
+                  <li>• {t('adm.reset.always_4', locale)}</li>
                 </ul>
               </div>
 
               {/* Options */}
               <div className="space-y-2.5">
-                <p className="text-sm font-semibold text-[#0B0F2E]">Options supplémentaires :</p>
+                <p className="text-sm font-semibold text-[#0B0F2E]">{t('adm.reset.options_label', locale)}</p>
                 {([
-                  ["releves", "Relevés bancaires importés"],
-                  ["documents", "Documents uploadés (PDF, Excel) + fichiers storage"],
-                  ["tva", "Déclarations TVA mensuelles"],
-                  ["bulletins", "Bulletins de paie + lignes associées"],
-                  ["plan_comptable", "Plan comptable client (à garder si possible)"],
-                  ["immobilisations", "Immobilisations"],
+                  ["releves", t('adm.reset.opt_releves', locale)],
+                  ["documents", t('adm.reset.opt_documents', locale)],
+                  ["tva", t('adm.reset.opt_tva', locale)],
+                  ["bulletins", t('adm.reset.opt_bulletins', locale)],
+                  ["plan_comptable", t('adm.reset.opt_plan', locale)],
+                  ["immobilisations", t('adm.reset.opt_immo', locale)],
                 ] as [keyof ResetOptions, string][]).map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
@@ -254,7 +252,7 @@ export default function ResetSocietePage() {
               {/* Confirm name input */}
               <div className="space-y-1.5 pt-2">
                 <Label htmlFor="confirm-name" className="text-sm">
-                  Tapez le nom EXACT de la société pour confirmer :
+                  {t('adm.reset.confirm_input', locale)}
                   <span className="font-mono font-semibold text-[#9F1239] ml-2">{dialogSociete?.nom}</span>
                 </Label>
                 <Input
@@ -277,7 +275,7 @@ export default function ResetSocietePage() {
 
               <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={closeDialog} disabled={submitting}>
-                  Annuler
+                  {t('adm.reset.cancel', locale)}
                 </Button>
                 <Button
                   onClick={handleReset}
@@ -285,9 +283,9 @@ export default function ResetSocietePage() {
                   className="bg-[#9F1239] hover:bg-[#9F1239]/90 text-white gap-2"
                 >
                   {submitting ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Reset en cours…</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> {t('adm.reset.running', locale)}</>
                   ) : (
-                    <><Trash2 className="w-4 h-4" /> Effacer définitivement</>
+                    <><Trash2 className="w-4 h-4" /> {t('adm.reset.erase_permanently', locale)}</>
                   )}
                 </Button>
               </DialogFooter>

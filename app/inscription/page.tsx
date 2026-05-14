@@ -40,19 +40,20 @@ import { LexoraLogo } from "@/components/LexoraLogo"
 import { ParticleField } from "@/components/ParticleField"
 import { FadeSlide, PressableWrap } from "@/components/ui/motion"
 import { Button } from "@/components/ui/button"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 type Role = "expert" | "entreprise" | "unknown"
 
 type Needs = Record<string, boolean>
 
-const MODULES: { key: string; label: string; icon: LucideIcon; accent: "blue" | "gold" | "green" }[] = [
-  { key: "ocr",       label: "OCR & Documents IA",       icon: FileSearch,  accent: "blue" },
-  { key: "compta",    label: "Comptabilité",             icon: BookOpen,    accent: "gold" },
-  { key: "facturation", label: "Facturation MRA",        icon: FileText,    accent: "blue" },
-  { key: "rh",        label: "RH & Paie",                icon: Users,       accent: "gold" },
-  { key: "juridique", label: "Juridique & Contrats",     icon: Scale,       accent: "blue" },
-  { key: "fiscal",    label: "Fiscal MRA",               icon: Landmark,    accent: "gold" },
-  { key: "sante",     label: "TIBOK · Santé salariés",   icon: HeartPulse,  accent: "green" },
+const buildModules = (locale: Locale): { key: string; label: string; icon: LucideIcon; accent: "blue" | "gold" | "green" }[] => [
+  { key: "ocr",       label: t('adm.inscription.mod_ocr', locale),         icon: FileSearch,  accent: "blue" },
+  { key: "compta",    label: t('adm.inscription.mod_compta', locale),      icon: BookOpen,    accent: "gold" },
+  { key: "facturation", label: t('adm.inscription.mod_facturation', locale), icon: FileText,    accent: "blue" },
+  { key: "rh",        label: t('adm.inscription.mod_rh', locale),          icon: Users,       accent: "gold" },
+  { key: "juridique", label: t('adm.inscription.mod_juridique', locale),   icon: Scale,       accent: "blue" },
+  { key: "fiscal",    label: t('adm.inscription.mod_fiscal', locale),      icon: Landmark,    accent: "gold" },
+  { key: "sante",     label: t('adm.inscription.mod_sante', locale),       icon: HeartPulse,  accent: "green" },
 ]
 
 const ACCENTS = {
@@ -64,6 +65,8 @@ const ACCENTS = {
 const FONT = "'Poppins', sans-serif"
 
 function InscriptionPageInner() {
+  const locale = getLocale()
+  const MODULES = buildModules(locale)
   const prefersReducedMotion = useReducedMotion()
   const params = useSearchParams()
   const roleParam = params?.get("role") ?? null
@@ -110,7 +113,7 @@ function InscriptionPageInner() {
     e.preventDefault()
     setError(null)
     if (!firstName || !email || !agree) {
-      setError("Prénom, e-mail et consentement sont obligatoires.")
+      setError(t('adm.inscription.req_required', locale))
       return
     }
     setSending(true)
@@ -156,12 +159,12 @@ function InscriptionPageInner() {
         }
       )
       if (!res.ok) {
-        setError("Erreur lors de l'envoi. Veuillez réessayer.")
+        setError(t('adm.inscription.err_send', locale))
         return
       }
       setSent(true)
     } catch {
-      setError("Erreur de connexion. Veuillez réessayer.")
+      setError(t('adm.inscription.err_connection', locale))
     } finally {
       setSending(false)
     }
@@ -212,7 +215,7 @@ function InscriptionPageInner() {
             }}
           >
             <ArrowLeft size={14} aria-hidden="true" />
-            Retour
+            {t('adm.inscription.back', locale)}
           </Link>
         </div>
       </header>
@@ -230,7 +233,7 @@ function InscriptionPageInner() {
               }}
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-              Demande d&apos;accès · Gratuit &amp; sans engagement
+              {t('adm.inscription.badge', locale)}
             </span>
             <h1
               className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
@@ -241,7 +244,7 @@ function InscriptionPageInner() {
                 lineHeight: 1.05,
               }}
             >
-              Rejoindre{" "}
+              {t('adm.inscription.hero_join', locale)}{" "}
               <span
                 style={{
                   backgroundImage:
@@ -262,9 +265,7 @@ function InscriptionPageInner() {
                 lineHeight: 1.7,
               }}
             >
-              Décrivez-nous votre besoin. Notre équipe vous rappelle sous 48 h
-              avec une démo adaptée à votre profil — expert-comptable ou
-              dirigeant d&apos;entreprise.
+              {t('adm.inscription.hero_desc', locale)}
             </p>
           </div>
         </FadeSlide>
@@ -308,15 +309,13 @@ function InscriptionPageInner() {
                   className="mb-3 text-2xl font-bold md:text-3xl"
                   style={{ color: "#E8EAFC", letterSpacing: "-0.02em" }}
                 >
-                  Merci {firstName || ""} — votre demande est partie.
+                  {t('adm.inscription.thanks', locale)} {firstName || ""} — {t('adm.inscription.thanks_suffix', locale)}
                 </h2>
                 <p
                   className="mx-auto max-w-md text-sm md:text-base"
                   style={{ color: "#A8AFC7", lineHeight: 1.7 }}
                 >
-                  Notre équipe vous rappelle sous 48 h ouvrées pour organiser
-                  votre démo personnalisée. Un e-mail de confirmation vous a
-                  été envoyé.
+                  {t('adm.inscription.success_desc', locale)}
                 </p>
                 <div className="mt-8 flex flex-wrap justify-center gap-3">
                   <PressableWrap>
@@ -331,7 +330,7 @@ function InscriptionPageInner() {
                           borderRadius: "10px",
                         }}
                       >
-                        Voir les tarifs
+                        {t('adm.inscription.see_pricing', locale)}
                         <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                       </Button>
                     </Link>
@@ -350,7 +349,7 @@ function InscriptionPageInner() {
                           borderRadius: "10px",
                         }}
                       >
-                        Retour à l&apos;accueil
+                        {t('adm.inscription.back_home', locale)}
                       </Button>
                     </Link>
                   </PressableWrap>
@@ -364,31 +363,31 @@ function InscriptionPageInner() {
                     className="mb-3 block text-xs font-bold uppercase tracking-[0.16em]"
                     style={{ color: "#D4AF37" }}
                   >
-                    Étape 1 · Votre profil
+                    {t('adm.inscription.step1', locale)}
                   </label>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <RoleCard
                       selected={role === "entreprise"}
                       onClick={() => setRole("entreprise")}
                       icon={Building2}
-                      title="Entreprise"
-                      desc="Dirigeant, DAF ou gestionnaire"
+                      title={t('adm.inscription.role_entreprise', locale)}
+                      desc={t('adm.inscription.role_entreprise_desc', locale)}
                       accent={ACCENTS.blue}
                     />
                     <RoleCard
                       selected={role === "expert"}
                       onClick={() => setRole("expert")}
                       icon={Briefcase}
-                      title="Expert-Comptable"
-                      desc="Cabinet multi-dossiers MIPA"
+                      title={t('adm.inscription.role_expert', locale)}
+                      desc={t('adm.inscription.role_expert_desc', locale)}
                       accent={ACCENTS.gold}
                     />
                     <RoleCard
                       selected={role === "unknown"}
                       onClick={() => setRole("unknown")}
                       icon={HelpCircle}
-                      title="Je découvre"
-                      desc="Je cherche à comprendre"
+                      title={t('adm.inscription.role_unknown', locale)}
+                      desc={t('adm.inscription.role_unknown_desc', locale)}
                       accent={ACCENTS.green}
                     />
                   </div>
@@ -400,7 +399,7 @@ function InscriptionPageInner() {
                     className="mb-3 block text-xs font-bold uppercase tracking-[0.16em]"
                     style={{ color: "#D4AF37" }}
                   >
-                    Étape 2 · {role === "expert" ? "Votre cabinet" : "Votre structure"}
+                    {role === "expert" ? t('adm.inscription.step2_cabinet', locale) : t('adm.inscription.step2_struct', locale)}
                   </label>
                   <AnimatePresence mode="wait">
                     {role === "expert" && (
@@ -413,22 +412,22 @@ function InscriptionPageInner() {
                         className="grid gap-4 sm:grid-cols-2"
                       >
                         <Field
-                          label="Nom du cabinet"
+                          label={t('adm.inscription.cabinet_name', locale)}
                           value={cabinetName}
                           onChange={setCabinetName}
-                          placeholder="Ex. Grant & Associates"
+                          placeholder={t('adm.inscription.cabinet_name_ph', locale)}
                         />
                         <Field
-                          label="N° MIPA (si disponible)"
+                          label={t('adm.inscription.mipa', locale)}
                           value={mipaId}
                           onChange={setMipaId}
-                          placeholder="MIPA-XXXXXX"
+                          placeholder={t('adm.inscription.mipa_ph', locale)}
                         />
                         <Field
-                          label="Clients actifs"
+                          label={t('adm.inscription.clients_active', locale)}
                           value={clientsCount}
                           onChange={setClientsCount}
-                          placeholder="Ex. 15 dossiers"
+                          placeholder={t('adm.inscription.clients_active_ph', locale)}
                           span={2}
                         />
                       </motion.div>
@@ -444,22 +443,22 @@ function InscriptionPageInner() {
                         className="grid gap-4 sm:grid-cols-2"
                       >
                         <Field
-                          label="Raison sociale"
+                          label={t('adm.inscription.company_name', locale)}
                           value={companyName}
                           onChange={setCompanyName}
-                          placeholder="Ex. Acme Ltd"
+                          placeholder={t('adm.inscription.company_name_ph', locale)}
                         />
                         <Field
-                          label="BRN (si connu)"
+                          label={t('adm.inscription.brn', locale)}
                           value={brn}
                           onChange={setBrn}
-                          placeholder="C20xxxxxxx"
+                          placeholder={t('adm.inscription.brn_ph', locale)}
                         />
                         <Field
-                          label="Secteur d'activité"
+                          label={t('adm.inscription.sector', locale)}
                           value={sector}
                           onChange={setSector}
-                          placeholder="Ex. Commerce, Services, Industrie"
+                          placeholder={t('adm.inscription.sector_ph', locale)}
                           span={2}
                         />
                         <div className="sm:col-span-2">
@@ -467,7 +466,7 @@ function InscriptionPageInner() {
                             className="mb-2 block text-xs font-medium"
                             style={{ color: "#A8AFC7" }}
                           >
-                            Nombre de salariés :{" "}
+                            {t('adm.inscription.employees_label', locale)}{" "}
                             <strong style={{ color: "#D4AF37" }}>{employees}</strong>
                           </label>
                           <input
@@ -489,7 +488,7 @@ function InscriptionPageInner() {
                             className="mt-1 text-xs"
                             style={{ color: "#A8AFC7" }}
                           >
-                            Plancher RH : Rs 250 / mois (1 salarié). Tarifs dégressifs au-delà.
+                            {t('adm.inscription.employees_hint', locale)}
                           </p>
                         </div>
                       </motion.div>
@@ -511,11 +510,7 @@ function InscriptionPageInner() {
                           lineHeight: 1.65,
                         }}
                       >
-                        Pas de problème — décrivez simplement votre besoin dans
-                        le champ « Votre message » plus bas. Notre équipe
-                        reviendra vers vous avec la meilleure option (accès
-                        direct entreprise ou passage par un expert-comptable
-                        partenaire).
+                        {t('adm.inscription.unknown_help', locale)}
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -527,10 +522,10 @@ function InscriptionPageInner() {
                     className="mb-3 block text-xs font-bold uppercase tracking-[0.16em]"
                     style={{ color: "#D4AF37" }}
                   >
-                    Étape 3 · Vos besoins prioritaires
+                    {t('adm.inscription.step3', locale)}
                   </label>
                   <p className="mb-4 text-xs" style={{ color: "#A8AFC7" }}>
-                    Sélectionnez les modules qui vous intéressent le plus (plusieurs choix possibles).
+                    {t('adm.inscription.step3_hint', locale)}
                   </p>
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                     {MODULES.map((m) => {
@@ -590,35 +585,35 @@ function InscriptionPageInner() {
                     className="mb-3 block text-xs font-bold uppercase tracking-[0.16em]"
                     style={{ color: "#D4AF37" }}
                   >
-                    Étape 4 · Vos coordonnées
+                    {t('adm.inscription.step4', locale)}
                   </label>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field
-                      label="Prénom *"
+                      label={t('adm.inscription.first_name', locale)}
                       value={firstName}
                       onChange={setFirstName}
-                      placeholder="Prénom"
+                      placeholder={t('adm.inscription.first_name_ph', locale)}
                       required
                     />
                     <Field
-                      label="Nom"
+                      label={t('adm.inscription.last_name', locale)}
                       value={lastName}
                       onChange={setLastName}
-                      placeholder="Nom"
+                      placeholder={t('adm.inscription.last_name_ph', locale)}
                     />
                     <Field
-                      label="E-mail *"
+                      label={t('adm.inscription.email', locale)}
                       value={email}
                       onChange={setEmail}
-                      placeholder="vous@entreprise.mu"
+                      placeholder={t('adm.inscription.email_ph', locale)}
                       type="email"
                       required
                     />
                     <Field
-                      label="Téléphone"
+                      label={t('adm.inscription.phone', locale)}
                       value={phone}
                       onChange={setPhone}
-                      placeholder="+230 5XXX XXXX"
+                      placeholder={t('adm.inscription.phone_ph', locale)}
                       type="tel"
                     />
                     <div className="sm:col-span-2">
@@ -626,13 +621,13 @@ function InscriptionPageInner() {
                         className="mb-2 block text-xs font-medium"
                         style={{ color: "#A8AFC7" }}
                       >
-                        Votre message (besoins, volume, échéances…)
+                        {t('adm.inscription.message_label', locale)}
                       </label>
                       <textarea
                         rows={4}
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        placeholder="Décrivez votre contexte et vos attentes…"
+                        placeholder={t('adm.inscription.message_ph', locale)}
                         className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-colors focus:ring-2"
                         style={{
                           backgroundColor: "rgba(11,15,46,0.7)",
@@ -662,25 +657,25 @@ function InscriptionPageInner() {
                     style={{ accentColor: "#4191FF" }}
                   />
                   <span className="text-xs" style={{ color: "#A8AFC7", lineHeight: 1.6 }}>
-                    J&apos;accepte que mes données soient traitées par{" "}
+                    {t('adm.inscription.consent_pre', locale)}{" "}
                     <strong style={{ color: "#E8EAFC" }}>
-                      Digital Data Solutions Ltd
+                      {t('adm.inscription.consent_org', locale)}
                     </strong>{" "}
-                    pour traiter ma demande, conformément à la{" "}
+                    {t('adm.inscription.consent_mid', locale)}{" "}
                     <Link
                       href="/protection-donnees"
                       className="underline"
                       style={{ color: "#4191FF" }}
                     >
-                      Charte de Protection des Données
+                      {t('adm.inscription.consent_charter', locale)}
                     </Link>{" "}
-                    et aux{" "}
+                    {t('adm.inscription.consent_and', locale)}{" "}
                     <Link
                       href="/cgu"
                       className="underline"
                       style={{ color: "#4191FF" }}
                     >
-                      CGU
+                      {t('adm.inscription.consent_cgu', locale)}
                     </Link>
                     .
                   </span>
@@ -703,7 +698,7 @@ function InscriptionPageInner() {
                 {/* SUBMIT */}
                 <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
                   <p className="text-xs" style={{ color: "#A8AFC7" }}>
-                    Réponse sous 48 h ouvrées · aucun engagement de souscription.
+                    {t('adm.inscription.footer_note', locale)}
                   </p>
                   <PressableWrap>
                     <Button
@@ -724,11 +719,11 @@ function InscriptionPageInner() {
                       {sending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                          Envoi en cours…
+                          {t('adm.inscription.sending', locale)}
                         </>
                       ) : (
                         <>
-                          Envoyer ma demande
+                          {t('adm.inscription.send', locale)}
                           <ArrowRight className="ml-2 h-5 w-5" aria-hidden="true" />
                         </>
                       )}
@@ -748,9 +743,9 @@ function InscriptionPageInner() {
               style={{ color: "#A8AFC7" }}
             >
               {[
-                { k: "Sécurité", v: "Données chiffrées · Supabase SOC 2 + HIPAA" },
-                { k: "Conformité", v: "MRA · WRA 2019 · DPA 2017" },
-                { k: "Sans engagement", v: "Accès cabinet gratuit · résiliable à tout moment" },
+                { k: t('adm.inscription.security', locale), v: t('adm.inscription.security_v', locale) },
+                { k: t('adm.inscription.compliance', locale), v: t('adm.inscription.compliance_v', locale) },
+                { k: t('adm.inscription.no_commitment', locale), v: t('adm.inscription.no_commitment_v', locale) },
               ].map((item) => (
                 <div
                   key={item.k}

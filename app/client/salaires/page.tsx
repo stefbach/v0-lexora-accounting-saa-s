@@ -20,6 +20,7 @@ import {
 import { useProfile } from "@/hooks/use-profile"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 function fmt(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " MUR"
@@ -31,10 +32,13 @@ const STATUT_COLORS: Record<string, string> = {
   paye: "bg-green-100 text-green-800",
 }
 
-const STATUT_LABELS: Record<string, string> = {
-  brouillon: "Brouillon",
-  valide: "Valid\u00e9",
-  paye: "Pay\u00e9",
+function statutLabel(s: string, loc: Locale): string {
+  const map: Record<string, string> = {
+    brouillon: t('hr.salaires.statut_draft', loc),
+    valide: t('hr.salaires.statut_validated', loc),
+    paye: t('hr.salaires.statut_paid', loc),
+  }
+  return map[s] || s
 }
 
 interface Societe { id: string; nom: string }
@@ -62,6 +66,7 @@ interface Bulletin {
 }
 
 export default function ClientSalairesPage() {
+  const locale = getLocale()
   const { profile, loading: profileLoading } = useProfile()
   const { societeId, societe } = useSocieteActive()
   const [employes, setEmployes] = useState<Employe[]>([])
@@ -383,10 +388,10 @@ export default function ClientSalairesPage() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: "Espace client", href: "/client" }, { label: "Salaires" }]}
-      kicker="Comptabilité · Paie"
-      title="Gestion de la paie"
-      subtitle="Bulletins de paie, calcul PAYE · CSG · NSF et exports MRA. Conforme WRA 2019."
+      breadcrumbs={[{ label: t('hr.salaires.bc_client', locale), href: "/client" }, { label: t('hr.salaires.bc_self', locale) }]}
+      kicker={t('hr.salaires.kicker', locale)}
+      title={t('hr.salaires.title', locale)}
+      subtitle={t('hr.salaires.subtitle', locale)}
       actions={
         <>
           <MonthPicker value={selectedPeriode} onChange={v => { if (v) setSelectedPeriode(v) }} showTout={false} />
@@ -400,13 +405,13 @@ export default function ClientSalairesPage() {
         {isMoisBrouillon && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-sm text-yellow-800">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-            <span>Mois en cours — salaires non finalis&eacute;s (brouillon)</span>
+            <span>{t('hr.salaires.draft_warning', locale)}</span>
           </div>
         )}
         {isMoisVide && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-500">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
-            <span>Aucun bulletin pour ce mois</span>
+            <span>{t('hr.salaires.no_payslips_month', locale)}</span>
           </div>
         )}
       </div>
@@ -458,7 +463,7 @@ export default function ClientSalairesPage() {
         <Card className="border border-gray-200">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2" style={{ color: "#0B0F2E" }}>
-              <AlertTriangle className="w-4 h-4 text-amber-500" /> Alertes Paie
+              <AlertTriangle className="w-4 h-4 text-amber-500" /> {t('hr.salaires.payroll_alerts', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -484,18 +489,18 @@ export default function ClientSalairesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Masse salariale brute</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('hr.salaires.kpi_gross', locale)}</CardTitle>
             <DollarSign className="h-5 w-5" style={{ color: "#0B0F2E" }} />
           </CardHeader>
           <CardContent>
             <p className="text-xl font-bold" style={{ color: "#0B0F2E" }}>{fmt(masseSalariale)}</p>
-            {isMoisBrouillon && <p className="text-xs text-yellow-600 mt-1">Provisoire</p>}
-            {(totalOT > 0 || totalPrimes > 0) && <p className="text-xs text-gray-400 mt-1">OT: {fmt(totalOT)} — Primes: {fmt(totalPrimes)}</p>}
+            {isMoisBrouillon && <p className="text-xs text-yellow-600 mt-1">{t('hr.salaires.provisional', locale)}</p>}
+            {(totalOT > 0 || totalPrimes > 0) && <p className="text-xs text-gray-400 mt-1">OT: {fmt(totalOT)} — {t('hr.salaires.bonuses', locale)}: {fmt(totalPrimes)}</p>}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Employ&eacute;s</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('hr.salaires.kpi_employees', locale)}</CardTitle>
             <Users className="h-5 w-5" style={{ color: "#D4AF37" }} />
           </CardHeader>
           <CardContent>
@@ -504,7 +509,7 @@ export default function ClientSalairesPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Charges patronales</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('hr.salaires.kpi_employer_charges', locale)}</CardTitle>
             <TrendingUp className="h-5 w-5" style={{ color: "#D4AF37" }} />
           </CardHeader>
           <CardContent>
@@ -513,7 +518,7 @@ export default function ClientSalairesPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Masse nette</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('hr.salaires.kpi_net', locale)}</CardTitle>
             <FileText className="h-5 w-5" style={{ color: "#0B0F2E" }} />
           </CardHeader>
           <CardContent>
@@ -582,7 +587,7 @@ export default function ClientSalairesPage() {
           {periodClosed && (
             <div className="mt-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
               <Lock className="h-4 w-4 flex-shrink-0" />
-              <span>Periode cloturee. Les bulletins sont valides et ne peuvent plus etre modifies. Seul un administrateur peut rouvrir la periode.</span>
+              <span>{t('hr.salaires.period_closed_warning', locale)}</span>
             </div>
           )}
         </CardContent>
@@ -591,9 +596,9 @@ export default function ClientSalairesPage() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="bulletins">Bulletins</TabsTrigger>
-          <TabsTrigger value="calculer">Calculer</TabsTrigger>
-          <TabsTrigger value="exports">Exports & Import</TabsTrigger>
+          <TabsTrigger value="bulletins">{t('hr.salaires.tab_payslips', locale)}</TabsTrigger>
+          <TabsTrigger value="calculer">{t('hr.salaires.tab_calc', locale)}</TabsTrigger>
+          <TabsTrigger value="exports">{t('hr.salaires.tab_exports', locale)}</TabsTrigger>
         </TabsList>
 
         {/* Tab: Bulletins */}
@@ -601,7 +606,7 @@ export default function ClientSalairesPage() {
           <Card>
             <CardHeader>
               <CardTitle style={{ color: "#0B0F2E" }}>
-                Bulletins de paie &mdash; {selectedPeriode} ({bulletins.length})
+                {t('hr.salaires.payslips_title', locale)} &mdash; {selectedPeriode} ({bulletins.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -612,23 +617,23 @@ export default function ClientSalairesPage() {
               ) : bulletins.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>Aucun bulletin pour cette p&eacute;riode.</p>
-                  <p className="text-sm mt-1">Allez dans l&apos;onglet &quot;Calculer&quot; pour g&eacute;n&eacute;rer les bulletins.</p>
+                  <p>{t('hr.salaires.no_payslips_period', locale)}</p>
+                  <p className="text-sm mt-1">{t('hr.salaires.go_to_calc', locale)}</p>
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employ&eacute;</TableHead>
-                      <TableHead>Code</TableHead>
-                      <TableHead className="text-right">Base</TableHead>
+                      <TableHead>{t('hr.salaires.th_employee', locale)}</TableHead>
+                      <TableHead>{t('hr.salaires.th_code', locale)}</TableHead>
+                      <TableHead className="text-right">{t('hr.salaires.th_base', locale)}</TableHead>
                       <TableHead className="text-right">OT</TableHead>
-                      <TableHead className="text-right">Primes</TableHead>
-                      <TableHead className="text-right">Brut</TableHead>
-                      <TableHead className="text-right">Net</TableHead>
+                      <TableHead className="text-right">{t('hr.salaires.th_bonuses', locale)}</TableHead>
+                      <TableHead className="text-right">{t('hr.salaires.th_gross', locale)}</TableHead>
+                      <TableHead className="text-right">{t('hr.salaires.th_net', locale)}</TableHead>
                       <TableHead className="text-right">PAYE</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>{t('hr.salaires.th_status', locale)}</TableHead>
+                      <TableHead>{t('hr.salaires.th_actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -648,7 +653,7 @@ export default function ClientSalairesPage() {
                         <TableCell className="text-right">{fmt(Number(b.paye) || 0)}</TableCell>
                         <TableCell>
                           <Badge className={STATUT_COLORS[b.statut] || "bg-gray-100 text-gray-600"}>
-                            {STATUT_LABELS[b.statut] || b.statut}
+                            {statutLabel(b.statut, locale)}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -657,7 +662,7 @@ export default function ClientSalairesPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => openPDF(b.id)}
-                              title="Voir PDF"
+                              title={t('hr.salaires.view_pdf', locale)}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -666,7 +671,7 @@ export default function ClientSalairesPage() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleValider(b.employe_id)}
-                                title="Valider"
+                                title={t('hr.salaires.validate', locale)}
                               >
                                 <CheckCircle className="h-4 w-4" style={{ color: "#22c55e" }} />
                               </Button>
@@ -687,24 +692,23 @@ export default function ClientSalairesPage() {
         <TabsContent value="calculer">
           <Card>
             <CardHeader>
-              <CardTitle style={{ color: "#0B0F2E" }}>Calcul de paie</CardTitle>
+              <CardTitle style={{ color: "#0B0F2E" }}>{t('hr.salaires.calc_title', locale)}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Lancez le calcul de paie pour tous les employ&eacute;s actifs de la soci&eacute;t&eacute; s&eacute;lectionn&eacute;e
-                pour la p&eacute;riode <strong>{selectedPeriode}</strong>.
+                {t('hr.salaires.calc_help', locale)} <strong>{selectedPeriode}</strong>.
               </p>
               <div className="flex items-center gap-4">
                 <div className="text-sm">
-                  <span className="text-muted-foreground">Soci&eacute;t&eacute; :</span>{" "}
+                  <span className="text-muted-foreground">{t('hr.salaires.company', locale)} :</span>{" "}
                   <strong>{societe?.nom || "---"}</strong>
                 </div>
                 <div className="text-sm">
-                  <span className="text-muted-foreground">P&eacute;riode :</span>{" "}
+                  <span className="text-muted-foreground">{t('hr.salaires.period', locale)} :</span>{" "}
                   <strong>{selectedPeriode}</strong>
                 </div>
                 <div className="text-sm">
-                  <span className="text-muted-foreground">Employ&eacute;s actifs :</span>{" "}
+                  <span className="text-muted-foreground">{t('hr.salaires.active_employees', locale)} :</span>{" "}
                   <strong>{nbEmployes}</strong>
                 </div>
               </div>
@@ -717,40 +721,40 @@ export default function ClientSalairesPage() {
                 {calculating ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Calcul en cours...
+                    {t('hr.salaires.calculating', locale)}
                   </>
                 ) : periodClosed ? (
                   <>
                     <Lock className="mr-2 h-4 w-4" />
-                    Periode cloturee
+                    {t('hr.salaires.period_closed', locale)}
                   </>
                 ) : (
                   <>
                     <Calculator className="mr-2 h-4 w-4" />
-                    Calculer paie
+                    {t('hr.salaires.calc_payroll', locale)}
                   </>
                 )}
               </Button>
               {bulletins.length > 0 && (
                 <div className="mt-4 p-4 rounded-lg border" style={{ borderColor: "#D4AF3733" }}>
                   <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>
-                    R&eacute;sultat du dernier calcul
+                    {t('hr.salaires.last_calc_result', locale)}
                   </p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
                     <div>
-                      <p className="text-xs text-muted-foreground">Bulletins</p>
+                      <p className="text-xs text-muted-foreground">{t('hr.salaires.payslips', locale)}</p>
                       <p className="font-semibold">{bulletins.length}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Masse brute</p>
+                      <p className="text-xs text-muted-foreground">{t('hr.salaires.gross_mass', locale)}</p>
                       <p className="font-semibold">{fmt(masseSalariale)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Masse nette</p>
+                      <p className="text-xs text-muted-foreground">{t('hr.salaires.net_mass', locale)}</p>
                       <p className="font-semibold">{fmt(masseNette)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Charges patronales</p>
+                      <p className="text-xs text-muted-foreground">{t('hr.salaires.kpi_employer_charges', locale)}</p>
                       <p className="font-semibold">{fmt(chargesPatronales)}</p>
                     </div>
                   </div>
@@ -766,11 +770,11 @@ export default function ClientSalairesPage() {
             {/* Exports */}
             <Card>
               <CardHeader>
-                <CardTitle style={{ color: "#0B0F2E" }}>Exports MRA</CardTitle>
+                <CardTitle style={{ color: "#0B0F2E" }}>{t('hr.salaires.exports_mra', locale)}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground mb-4">
-                  G&eacute;n&eacute;rez les fichiers CSV pour les d&eacute;clarations MRA.
+                  {t('hr.salaires.exports_help', locale)}
                 </p>
                 <Button
                   variant="outline"
@@ -779,7 +783,7 @@ export default function ClientSalairesPage() {
                   disabled={!!exportLoading}
                 >
                   {exportLoading === "csg" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Export CSG / NSF MRA
+                  {t('hr.salaires.export_csg_nsf', locale)}
                 </Button>
                 <Button
                   variant="outline"
@@ -788,7 +792,7 @@ export default function ClientSalairesPage() {
                   disabled={!!exportLoading}
                 >
                   {exportLoading === "paye" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Export PAYE MRA
+                  {t('hr.salaires.export_paye', locale)}
                 </Button>
                 <Button
                   variant="outline"
@@ -797,7 +801,7 @@ export default function ClientSalairesPage() {
                   disabled={!!exportLoading}
                 >
                   {exportLoading === "virement" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Export Banque (MCB Bulk Payment)
+                  {t('hr.salaires.export_bank', locale)}
                 </Button>
                 <div className="border-t pt-3 mt-3">
                   <Button
@@ -806,9 +810,9 @@ export default function ClientSalairesPage() {
                     disabled={comptabilising || comptabilise || !allValidated}
                   >
                     {comptabilising ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DollarSign className="mr-2 h-4 w-4" />}
-                    {comptabilise ? "Comptabilisé ✓" : comptabilising ? "Comptabilisation..." : "Comptabiliser (→ écritures SAL)"}
+                    {comptabilise ? t('hr.salaires.accounted_done', locale) : comptabilising ? t('hr.salaires.accounting_in_progress', locale) : t('hr.salaires.account_button', locale)}
                   </Button>
-                  {!allValidated && <p className="text-xs text-gray-400 mt-1">Validez tous les bulletins avant de comptabiliser</p>}
+                  {!allValidated && <p className="text-xs text-gray-400 mt-1">{t('hr.salaires.validate_first', locale)}</p>}
                 </div>
               </CardContent>
             </Card>
@@ -816,15 +820,15 @@ export default function ClientSalairesPage() {
             {/* Import */}
             <Card>
               <CardHeader>
-                <CardTitle style={{ color: "#0B0F2E" }}>Importer paie</CardTitle>
+                <CardTitle style={{ color: "#0B0F2E" }}>{t('hr.salaires.import_payroll', locale)}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground mb-4">
-                  Importez des bulletins de paie pr&eacute;-calcul&eacute;s depuis un logiciel externe (CSV).
+                  {t('hr.salaires.import_help', locale)}
                 </p>
                 <div className="space-y-3">
                   <div>
-                    <Label htmlFor="import-file" className="text-sm">Fichier CSV</Label>
+                    <Label htmlFor="import-file" className="text-sm">{t('hr.salaires.csv_file', locale)}</Label>
                     <Input
                       id="import-file"
                       type="file"
@@ -834,8 +838,7 @@ export default function ClientSalairesPage() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Colonnes attendues : employe_code, periode, salaire_brut, salaire_net, csg_salarie,
-                    csg_patronal, nsf_salarie, nsf_patronal, paye, training_levy
+                    {t('hr.salaires.columns_expected', locale)}
                   </p>
                   <Button
                     onClick={handleImport}
@@ -846,12 +849,12 @@ export default function ClientSalairesPage() {
                     {importLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Import en cours...
+                        {t('hr.salaires.import_in_progress', locale)}
                       </>
                     ) : (
                       <>
                         <Upload className="mr-2 h-4 w-4" />
-                        Importer paie
+                        {t('hr.salaires.import_payroll', locale)}
                       </>
                     )}
                   </Button>
@@ -861,7 +864,7 @@ export default function ClientSalairesPage() {
                         <p>{importResult.error}</p>
                       ) : (
                         <>
-                          <p className="font-medium">{importResult.imported || 0} bulletin(s) import&eacute;(s)</p>
+                          <p className="font-medium">{importResult.imported || 0} {t('hr.salaires.imported', locale)}</p>
                           {importResult.errors?.length > 0 && (
                             <ul className="mt-1 list-disc list-inside">
                               {importResult.errors.map((err: string, i: number) => (

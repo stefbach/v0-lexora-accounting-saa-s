@@ -29,9 +29,23 @@ import {
   RefreshCw, Edit2, Download, Building2, Calendar, Hash, Euro,
   TrendingUp, TrendingDown, AlertCircle,
 } from "lucide-react"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
+
+function getTypeLabels(locale: Locale): Record<string, string> {
+  return {
+    facture_fournisseur: t('core.docdetail.tl.facture_fournisseur', locale),
+    facture_client: t('core.docdetail.tl.facture_client', locale),
+    releve_bancaire: t('core.docdetail.tl.releve_bancaire', locale),
+    fiche_paie: t('core.docdetail.tl.fiche_paie', locale),
+    charges_sociales: t('core.docdetail.tl.charges_sociales', locale),
+    contrat: t('core.docdetail.tl.contrat', locale),
+    rapport: t('core.docdetail.tl.rapport', locale),
+    autre: t('core.docdetail.tl.autre', locale),
+  }
+}
 
 interface DocumentDetail {
   id: string
@@ -54,32 +68,23 @@ interface DocumentDetail {
   }
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  facture_fournisseur: "Facture Fournisseur",
-  facture_client: "Facture Client",
-  releve_bancaire: "Relevé Bancaire",
-  fiche_paie: "Fiche de Paie",
-  charges_sociales: "Cotisations Sociales",
-  contrat: "Contrat",
-  rapport: "Rapport Mensuel",
-  autre: "Autre Document",
-}
-
-function ConfianceBadge({ confiance }: { confiance: number | null | undefined }) {
+function ConfianceBadge({ confiance, locale }: { confiance: number | null | undefined; locale: Locale }) {
   if (confiance == null) return null
-  if (confiance >= 80) return <Badge className="bg-green-100 text-green-700">{confiance}% — Haute confiance</Badge>
-  if (confiance >= 50) return <Badge className="bg-orange-100 text-orange-700">{confiance}% — Confiance moyenne</Badge>
-  return <Badge className="bg-red-100 text-red-700">{confiance}% — Faible confiance</Badge>
+  if (confiance >= 80) return <Badge className="bg-green-100 text-green-700">{confiance}{t('core.docdetail.high_confidence', locale)}</Badge>
+  if (confiance >= 50) return <Badge className="bg-orange-100 text-orange-700">{confiance}{t('core.docdetail.medium_confidence', locale)}</Badge>
+  return <Badge className="bg-red-100 text-red-700">{confiance}{t('core.docdetail.low_confidence', locale)}</Badge>
 }
 
-function StatutBadge({ statut }: { statut: string }) {
-  if (statut === "traite") return <Badge className="bg-green-100 text-green-700"><CheckCircle className="h-3 w-3 mr-1" />Traité</Badge>
-  if (statut === "en_cours" || statut === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Loader2 className="h-3 w-3 mr-1 animate-spin" />En cours</Badge>
-  if (statut === "erreur") return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />Erreur</Badge>
+function StatutBadge({ statut, locale }: { statut: string; locale: Locale }) {
+  if (statut === "traite") return <Badge className="bg-green-100 text-green-700"><CheckCircle className="h-3 w-3 mr-1" />{t('core.docdetail.statut_traite', locale)}</Badge>
+  if (statut === "en_cours" || statut === "en_attente") return <Badge className="bg-blue-100 text-blue-700"><Loader2 className="h-3 w-3 mr-1 animate-spin" />{t('core.docdetail.statut_en_cours', locale)}</Badge>
+  if (statut === "erreur") return <Badge className="bg-red-100 text-red-700"><AlertTriangle className="h-3 w-3 mr-1" />{t('core.docdetail.statut_erreur', locale)}</Badge>
   return <Badge variant="outline">{statut}</Badge>
 }
 
 export default function DocumentDetailPage() {
+  const locale = getLocale()
+  const TYPE_LABELS = getTypeLabels(locale)
   const params = useParams()
   const router = useRouter()
   const docId = params.id as string
@@ -105,14 +110,14 @@ export default function DocumentDetailPage() {
         setDoc(data.document)
         setEditTypeDoc(data.document.type_document || "")
       } else {
-        setMessage({ type: "error", text: data.error || "Document non trouvé" })
+        setMessage({ type: "error", text: data.error || t('core.docdetail.not_found', locale) })
       }
     } catch {
-      setMessage({ type: "error", text: "Erreur de chargement" })
+      setMessage({ type: "error", text: t('core.docdetail.loading_error', locale) })
     } finally {
       setLoading(false)
     }
-  }, [docId])
+  }, [docId, locale])
 
   useEffect(() => {
     fetchDoc()
@@ -137,14 +142,14 @@ export default function DocumentDetailPage() {
       })
       const data = await res.json()
       if (res.ok) {
-        setMessage({ type: "success", text: "Corrections enregistrées avec succès." })
+        setMessage({ type: "success", text: t('core.docdetail.corrections_saved', locale) })
         setEditMode(false)
         await fetchDoc()
       } else {
-        setMessage({ type: "error", text: data.error || "Erreur lors de la sauvegarde" })
+        setMessage({ type: "error", text: data.error || t('core.docdetail.save_error', locale) })
       }
     } catch {
-      setMessage({ type: "error", text: "Erreur de connexion" })
+      setMessage({ type: "error", text: t('core.docdetail.conn_error', locale) })
     } finally {
       setSaving(false)
       setTimeout(() => setMessage(null), 6000)
@@ -171,14 +176,14 @@ export default function DocumentDetailPage() {
       })
       const data = await res.json()
       if (res.ok && data.success) {
-        setMessage({ type: "success", text: `Réanalysé avec succès. Type détecté : ${data.type_detected || "—"}` })
+        setMessage({ type: "success", text: `${t('core.docdetail.reanalyzed_success', locale)}${data.type_detected || "—"}` })
         setHintText("")
         await fetchDoc()
       } else {
-        setMessage({ type: "error", text: data.error || "Erreur lors de la réanalyse" })
+        setMessage({ type: "error", text: data.error || t('core.docdetail.reanalyze_error', locale) })
       }
     } catch {
-      setMessage({ type: "error", text: "Erreur de connexion" })
+      setMessage({ type: "error", text: t('core.docdetail.conn_error', locale) })
     } finally {
       setReanalyzing(false)
       setTimeout(() => setMessage(null), 8000)
@@ -197,9 +202,9 @@ export default function DocumentDetailPage() {
     return (
       <div className="p-8 text-center text-muted-foreground">
         <FileText className="h-12 w-12 mx-auto mb-3" />
-        <p>Document non trouvé ou accès non autorisé.</p>
+        <p>{t('core.docdetail.not_found_or_no_access', locale)}</p>
         <Button className="mt-4" variant="outline" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4 mr-2" />Retour
+          <ArrowLeft className="h-4 w-4 mr-2" />{t('core.docdetail.back', locale)}
         </Button>
       </div>
     )
@@ -220,7 +225,7 @@ export default function DocumentDetailPage() {
       <div className="flex items-center gap-3">
         <Link href="/client/documents">
           <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-1" />Mes Documents
+            <ArrowLeft className="h-4 w-4 mr-1" />{t('core.docdetail.my_documents', locale)}
           </Button>
         </Link>
         <span className="text-muted-foreground">/</span>
@@ -247,10 +252,10 @@ export default function DocumentDetailPage() {
                 {doc.nom_fichier}
               </CardTitle>
               <div className="flex flex-wrap gap-2 mt-2">
-                <StatutBadge statut={doc.statut} />
-                <ConfianceBadge confiance={confiance} />
+                <StatutBadge statut={doc.statut} locale={locale} />
+                <ConfianceBadge confiance={confiance} locale={locale} />
                 {doc.corrige_manuellement && (
-                  <Badge variant="outline" className="text-xs">Corrigé manuellement</Badge>
+                  <Badge variant="outline" className="text-xs">{t('core.docdetail.corrected_manually', locale)}</Badge>
                 )}
               </div>
             </div>
@@ -258,7 +263,7 @@ export default function DocumentDetailPage() {
               {doc.signed_url && (
                 <Button variant="outline" size="sm" asChild>
                   <a href={doc.signed_url} target="_blank" rel="noreferrer">
-                    <Download className="h-4 w-4 mr-1" />Télécharger
+                    <Download className="h-4 w-4 mr-1" />{t('core.docdetail.download', locale)}
                   </a>
                 </Button>
               )}
@@ -267,7 +272,7 @@ export default function DocumentDetailPage() {
                 size="sm"
                 onClick={() => setEditMode(!editMode)}
               >
-                <Edit2 className="h-4 w-4 mr-1" />{editMode ? "Annuler" : "Corriger"}
+                <Edit2 className="h-4 w-4 mr-1" />{editMode ? t('core.docdetail.cancel', locale) : t('core.docdetail.correct', locale)}
               </Button>
             </div>
           </div>
@@ -275,19 +280,19 @@ export default function DocumentDetailPage() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Hash className="h-3 w-3" />Type</p>
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Hash className="h-3 w-3" />{t('core.docdetail.type', locale)}</p>
               <p className="font-medium">{TYPE_LABELS[doc.type_document || ""] || doc.type_document || "—"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Building2 className="h-3 w-3" />Société</p>
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Building2 className="h-3 w-3" />{t('core.docdetail.company', locale)}</p>
               <p className="font-medium">{doc.societe_detectee || (doc.dossiers as any)?.societes?.nom || "—"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" />Date upload</p>
-              <p className="font-medium">{new Date(doc.created_at).toLocaleDateString("fr-FR")}</p>
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" />{t('core.docdetail.upload_date', locale)}</p>
+              <p className="font-medium">{new Date(doc.created_at).toLocaleDateString(locale === 'en' ? 'en-US' : 'fr-FR')}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Format</p>
+              <p className="text-xs text-muted-foreground mb-1">{t('core.docdetail.format', locale)}</p>
               <p className="font-medium uppercase">{doc.type_fichier}</p>
             </div>
           </div>
@@ -295,15 +300,15 @@ export default function DocumentDetailPage() {
           {/* Extraction summary */}
           {extraction.montant_ttc || extraction.montant_total ? (
             <div className="mt-4 p-3 rounded-lg bg-muted/40 grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-              {extraction.emetteur && <div><span className="text-xs text-muted-foreground">Émetteur</span><p className="font-medium">{extraction.emetteur}</p></div>}
-              {extraction.destinataire && <div><span className="text-xs text-muted-foreground">Destinataire</span><p className="font-medium">{extraction.destinataire}</p></div>}
-              {extraction.date_document && <div><span className="text-xs text-muted-foreground">Date document</span><p className="font-medium">{extraction.date_document}</p></div>}
-              {extraction.numero_reference && <div><span className="text-xs text-muted-foreground">Référence</span><p className="font-medium">{extraction.numero_reference}</p></div>}
-              {extraction.montant_ht != null && <div><span className="text-xs text-muted-foreground">Montant HT</span><p className="font-medium">{Number(extraction.montant_ht).toLocaleString("fr-FR")} {extraction.devise || "MUR"}</p></div>}
-              {extraction.montant_tva != null && <div><span className="text-xs text-muted-foreground">TVA</span><p className="font-medium">{Number(extraction.montant_tva).toLocaleString("fr-FR")} {extraction.devise || "MUR"}</p></div>}
+              {extraction.emetteur && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.issuer', locale)}</span><p className="font-medium">{extraction.emetteur}</p></div>}
+              {extraction.destinataire && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.recipient', locale)}</span><p className="font-medium">{extraction.destinataire}</p></div>}
+              {extraction.date_document && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.document_date', locale)}</span><p className="font-medium">{extraction.date_document}</p></div>}
+              {extraction.numero_reference && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.reference', locale)}</span><p className="font-medium">{extraction.numero_reference}</p></div>}
+              {extraction.montant_ht != null && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.amount_excl_vat', locale)}</span><p className="font-medium">{Number(extraction.montant_ht).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')} {extraction.devise || "MUR"}</p></div>}
+              {extraction.montant_tva != null && <div><span className="text-xs text-muted-foreground">{t('core.docdetail.vat', locale)}</span><p className="font-medium">{Number(extraction.montant_tva).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')} {extraction.devise || "MUR"}</p></div>}
               {(extraction.montant_ttc || extraction.montant_total) != null && (
-                <div><span className="text-xs text-muted-foreground">Montant TTC</span>
-                  <p className="font-medium text-base">{Number(extraction.montant_ttc || extraction.montant_total).toLocaleString("fr-FR")} {extraction.devise || "MUR"}</p>
+                <div><span className="text-xs text-muted-foreground">{t('core.docdetail.amount_incl_vat', locale)}</span>
+                  <p className="font-medium text-base">{Number(extraction.montant_ttc || extraction.montant_total).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')} {extraction.devise || "MUR"}</p>
                 </div>
               )}
             </div>
@@ -313,9 +318,9 @@ export default function DocumentDetailPage() {
           {isReleve && extraction.lignes_manquantes && (
             <div className="mt-3 p-3 rounded-lg bg-orange-50 border border-orange-200 flex items-center gap-2 text-sm text-orange-800">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              Attention : écart de solde détecté ({extraction.ecart_solde} MUR). Des lignes peuvent être manquantes.
+              {t('core.docdetail.balance_warn_prefix', locale)}{extraction.ecart_solde}{t('core.docdetail.balance_warn_suffix', locale)}
               <Button size="sm" variant="outline" className="ml-auto" onClick={handleReanalyze} disabled={reanalyzing}>
-                <RefreshCw className={`h-3 w-3 mr-1 ${reanalyzing ? "animate-spin" : ""}`} />Relire
+                <RefreshCw className={`h-3 w-3 mr-1 ${reanalyzing ? "animate-spin" : ""}`} />{t('core.docdetail.re_read', locale)}
               </Button>
             </div>
           )}
@@ -327,13 +332,13 @@ export default function DocumentDetailPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base" style={{ color: NAVY }}>
-              Transactions ({transactions.length})
+              {t('core.docdetail.transactions', locale)} ({transactions.length})
             </CardTitle>
             <div className="flex gap-4 text-sm text-muted-foreground">
-              <span>Solde ouverture : <strong>{Number(extraction.solde_ouverture || extraction.solde_debut || 0).toLocaleString("fr-FR")}</strong></span>
-              <span>Total crédits : <strong className="text-green-700">+{Number(extraction.total_credits || 0).toLocaleString("fr-FR")}</strong></span>
-              <span>Total débits : <strong className="text-red-700">-{Number(extraction.total_debits || 0).toLocaleString("fr-FR")}</strong></span>
-              <span>Solde clôture : <strong>{Number(extraction.solde_cloture || extraction.solde_fin || 0).toLocaleString("fr-FR")}</strong></span>
+              <span>{t('core.docdetail.opening_balance', locale)}<strong>{Number(extraction.solde_ouverture || extraction.solde_debut || 0).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')}</strong></span>
+              <span>{t('core.docdetail.total_credits', locale)}<strong className="text-green-700">+{Number(extraction.total_credits || 0).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')}</strong></span>
+              <span>{t('core.docdetail.total_debits', locale)}<strong className="text-red-700">-{Number(extraction.total_debits || 0).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')}</strong></span>
+              <span>{t('core.docdetail.closing_balance', locale)}<strong>{Number(extraction.solde_cloture || extraction.solde_fin || 0).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')}</strong></span>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -341,48 +346,48 @@ export default function DocumentDetailPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Libellé</TableHead>
-                    <TableHead>Tiers</TableHead>
-                    <TableHead>Compte</TableHead>
-                    <TableHead className="text-right">Débit</TableHead>
-                    <TableHead className="text-right">Crédit</TableHead>
-                    <TableHead>Confiance</TableHead>
+                    <TableHead>{t('core.docdetail.col_date', locale)}</TableHead>
+                    <TableHead>{t('core.docdetail.col_label', locale)}</TableHead>
+                    <TableHead>{t('core.docdetail.col_party', locale)}</TableHead>
+                    <TableHead>{t('core.docdetail.col_account', locale)}</TableHead>
+                    <TableHead className="text-right">{t('core.docdetail.col_debit', locale)}</TableHead>
+                    <TableHead className="text-right">{t('core.docdetail.col_credit', locale)}</TableHead>
+                    <TableHead>{t('core.docdetail.col_confidence', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.map((t: any, i: number) => (
-                    <TableRow key={i} className={t.confiance < 50 ? "bg-orange-50" : ""}>
-                      <TableCell className="text-xs">{t.date}</TableCell>
-                      <TableCell className="text-xs max-w-[200px] truncate" title={t.libelle}>{t.libelle}</TableCell>
+                  {transactions.map((tx: any, i: number) => (
+                    <TableRow key={i} className={tx.confiance < 50 ? "bg-orange-50" : ""}>
+                      <TableCell className="text-xs">{tx.date}</TableCell>
+                      <TableCell className="text-xs max-w-[200px] truncate" title={tx.libelle}>{tx.libelle}</TableCell>
                       <TableCell className="text-xs">
-                        {t.tiers_detecte ? (
-                          <span className="font-medium">{t.tiers_detecte}</span>
+                        {tx.tiers_detecte ? (
+                          <span className="font-medium">{tx.tiers_detecte}</span>
                         ) : (
-                          <span className="text-muted-foreground italic">Non identifié</span>
+                          <span className="text-muted-foreground italic">{t('core.docdetail.unidentified', locale)}</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs font-mono">{t.compte_comptable || t.compte_debit || t.compte_credit || "—"}</TableCell>
+                      <TableCell className="text-xs font-mono">{tx.compte_comptable || tx.compte_debit || tx.compte_credit || "—"}</TableCell>
                       <TableCell className="text-right text-xs text-red-700">
-                        {(t.debit > 0 || t.sens === "debit") ? (
+                        {(tx.debit > 0 || tx.sens === "debit") ? (
                           <span className="flex items-center justify-end gap-1">
                             <TrendingDown className="h-3 w-3" />
-                            {Number(t.debit || t.montant || 0).toLocaleString("fr-FR")}
+                            {Number(tx.debit || tx.montant || 0).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')}
                           </span>
                         ) : "—"}
                       </TableCell>
                       <TableCell className="text-right text-xs text-green-700">
-                        {(t.credit > 0 || t.sens === "credit") ? (
+                        {(tx.credit > 0 || tx.sens === "credit") ? (
                           <span className="flex items-center justify-end gap-1">
                             <TrendingUp className="h-3 w-3" />
-                            {Number(t.credit || t.montant || 0).toLocaleString("fr-FR")}
+                            {Number(tx.credit || tx.montant || 0).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')}
                           </span>
                         ) : "—"}
                       </TableCell>
                       <TableCell>
-                        {t.confiance != null ? (
-                          <span className={`text-xs font-medium ${t.confiance >= 80 ? "text-green-700" : t.confiance >= 50 ? "text-orange-600" : "text-red-600"}`}>
-                            {t.confiance}%
+                        {tx.confiance != null ? (
+                          <span className={`text-xs font-medium ${tx.confiance >= 80 ? "text-green-700" : tx.confiance >= 50 ? "text-orange-600" : "text-red-600"}`}>
+                            {tx.confiance}%
                           </span>
                         ) : null}
                       </TableCell>
@@ -400,17 +405,17 @@ export default function DocumentDetailPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base" style={{ color: NAVY }}>
-              Écritures Comptables Générées ({ecritures.length})
+              {t('core.docdetail.entries_generated', locale)} ({ecritures.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Compte</TableHead>
-                  <TableHead>Libellé</TableHead>
-                  <TableHead className="text-right">Débit</TableHead>
-                  <TableHead className="text-right">Crédit</TableHead>
+                  <TableHead>{t('core.docdetail.col_account', locale)}</TableHead>
+                  <TableHead>{t('core.docdetail.col_label', locale)}</TableHead>
+                  <TableHead className="text-right">{t('core.docdetail.col_debit', locale)}</TableHead>
+                  <TableHead className="text-right">{t('core.docdetail.col_credit', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -418,8 +423,8 @@ export default function DocumentDetailPage() {
                   <TableRow key={i}>
                     <TableCell className="font-mono text-sm">{e.compte}</TableCell>
                     <TableCell className="text-sm">{e.libelle}</TableCell>
-                    <TableCell className="text-right text-sm">{e.debit > 0 ? Number(e.debit).toLocaleString("fr-FR") : "—"}</TableCell>
-                    <TableCell className="text-right text-sm">{e.credit > 0 ? Number(e.credit).toLocaleString("fr-FR") : "—"}</TableCell>
+                    <TableCell className="text-right text-sm">{e.debit > 0 ? Number(e.debit).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR') : "—"}</TableCell>
+                    <TableCell className="text-right text-sm">{e.credit > 0 ? Number(e.credit).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR') : "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -434,7 +439,7 @@ export default function DocumentDetailPage() {
           <CardContent className="py-4">
             <p className="text-sm text-orange-800 mb-3 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              Ce document nécessite votre attention : type non reconnu ou confiance IA insuffisante.
+              {t('core.docdetail.needs_attention', locale)}
             </p>
             <div className="flex gap-2 flex-wrap">
               <Button
@@ -442,7 +447,7 @@ export default function DocumentDetailPage() {
                 style={{ backgroundColor: GOLD, color: "white" }}
                 onClick={() => setEditMode(true)}
               >
-                <Edit2 className="h-4 w-4 mr-1" />Corriger manuellement
+                <Edit2 className="h-4 w-4 mr-1" />{t('core.docdetail.correct_manually', locale)}
               </Button>
               <Button
                 size="sm"
@@ -451,7 +456,7 @@ export default function DocumentDetailPage() {
                 disabled={reanalyzing}
               >
                 <RefreshCw className={`h-4 w-4 mr-1 ${reanalyzing ? "animate-spin" : ""}`} />
-                {reanalyzing ? "Réanalyse..." : "Réanalyser"}
+                {reanalyzing ? t('core.docdetail.reanalyzing', locale) : t('core.docdetail.reanalyze', locale)}
               </Button>
             </div>
           </CardContent>
@@ -463,16 +468,16 @@ export default function DocumentDetailPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base" style={{ color: NAVY }}>
-              <Edit2 className="h-4 w-4 mr-2 inline" />Correction Manuelle
+              <Edit2 className="h-4 w-4 mr-2 inline" />{t('core.docdetail.manual_correction', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Type de document</Label>
+                <Label>{t('core.docdetail.document_type', locale)}</Label>
                 <Select value={editTypeDoc} onValueChange={setEditTypeDoc}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un type" />
+                    <SelectValue placeholder={t('core.docdetail.select_type', locale)} />
                   </SelectTrigger>
                   <SelectContent>
                     {Object.entries(TYPE_LABELS).map(([k, v]) => (
@@ -483,10 +488,10 @@ export default function DocumentDetailPage() {
               </div>
               {societes.length > 0 && (
                 <div className="space-y-2">
-                  <Label>Société</Label>
+                  <Label>{t('core.docdetail.company', locale)}</Label>
                   <Select value={editSocieteId} onValueChange={setEditSocieteId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner une société" />
+                      <SelectValue placeholder={t('core.docdetail.select_company', locale)} />
                     </SelectTrigger>
                     <SelectContent>
                       {societes.map(s => (
@@ -499,15 +504,15 @@ export default function DocumentDetailPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Indice pour la réanalyse (optionnel)</Label>
+              <Label>{t('core.docdetail.reanalysis_hint', locale)}</Label>
               <Textarea
-                placeholder="Ex: C'est une facture EMTEL juillet 2025, montant MUR 12,500"
+                placeholder={t('core.docdetail.ph.hint', locale)}
                 value={hintText}
                 onChange={e => setHintText(e.target.value)}
                 rows={2}
               />
               <p className="text-xs text-muted-foreground">
-                Ajoutez des informations pour aider l'IA à mieux analyser ce document.
+                {t('core.docdetail.hint_help', locale)}
               </p>
             </div>
 
@@ -518,7 +523,7 @@ export default function DocumentDetailPage() {
                 disabled={saving}
               >
                 {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1" />}
-                Enregistrer les corrections
+                {t('core.docdetail.save_corrections', locale)}
               </Button>
               <Button
                 variant="outline"
@@ -526,9 +531,9 @@ export default function DocumentDetailPage() {
                 disabled={reanalyzing}
               >
                 <RefreshCw className={`h-4 w-4 mr-1 ${reanalyzing ? "animate-spin" : ""}`} />
-                {reanalyzing ? "Réanalyse..." : "Réanalyser avec l'IA"}
+                {reanalyzing ? t('core.docdetail.reanalyzing', locale) : t('core.docdetail.reanalyze_with_ai', locale)}
               </Button>
-              <Button variant="ghost" onClick={() => setEditMode(false)}>Annuler</Button>
+              <Button variant="ghost" onClick={() => setEditMode(false)}>{t('core.docdetail.cancel', locale)}</Button>
             </div>
           </CardContent>
         </Card>

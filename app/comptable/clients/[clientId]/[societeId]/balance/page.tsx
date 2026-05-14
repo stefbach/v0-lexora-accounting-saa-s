@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, ArrowLeft, Download, Scale, AlertTriangle } from "lucide-react"
+import { t, getLocale } from '@/lib/i18n'
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -57,6 +58,7 @@ const CLASSE_COLORS: Record<string, string> = {
 
 export default function BalancePage() {
   const params    = useParams()
+  const locale    = getLocale()
   const societeId = params.societeId as string
   const clientId  = params.clientId  as string
 
@@ -91,13 +93,13 @@ export default function BalancePage() {
     const nomSociete = societeId.slice(0, 8)
     const periode    = dateDeb ? dateDeb.slice(0, 7) : new Date().toISOString().slice(0, 7)
     const rows = [
-      ["Compte", "Libellé", "Classe", "Sens normal", "Total Débit", "Total Crédit", "Solde débiteur", "Solde créditeur"],
+      [t('cabclt.bal.col_account', locale), t('cabclt.bal.col_label', locale), t('cabclt.bal.col_class', locale), t('cabclt.bal.col_normal_side', locale), t('cabclt.bal.col_total_debit', locale), t('cabclt.bal.col_total_credit', locale), t('cabclt.bal.col_debit_balance', locale), t('cabclt.bal.col_credit_balance', locale)],
       ...data.comptes.map(c => [
         c.numero_compte, c.libelle, c.libelle_classe, c.sens_normal,
         c.total_debit.toFixed(2), c.total_credit.toFixed(2),
         c.solde_debiteur.toFixed(2), c.solde_crediteur.toFixed(2),
       ]),
-      ["TOTAL", "", "", "",
+      [t('cabclt.bal.total', locale), "", "", "",
        data.total_debit.toFixed(2), data.total_credit.toFixed(2), "", ""],
     ]
     const csv  = rows.map(r => r.map(v => `"${v}"`).join(";")).join("\n")
@@ -110,9 +112,13 @@ export default function BalancePage() {
   }
 
   const classeLabels: Record<string, string> = {
-    "1": "1 — Capitaux propres", "2": "2 — Immobilisations",
-    "3": "3 — Stocks", "4": "4 — Tiers",
-    "5": "5 — Finances", "6": "6 — Charges", "7": "7 — Produits",
+    "1": "1 — " + t('cabclt.bal.class_1', locale),
+    "2": "2 — " + t('cabclt.bal.class_2', locale),
+    "3": "3 — " + t('cabclt.bal.class_3', locale),
+    "4": "4 — " + t('cabclt.bal.class_4', locale),
+    "5": "5 — " + t('cabclt.bal.class_5', locale),
+    "6": "6 — " + t('cabclt.bal.class_6', locale),
+    "7": "7 — " + t('cabclt.bal.class_7', locale),
   }
 
   return (
@@ -121,22 +127,22 @@ export default function BalancePage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href={`/comptable/clients/${clientId}/${societeId}`}>
-            <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Retour</Button>
+            <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />{t('cabclt.bal.back', locale)}</Button>
           </Link>
           <div>
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
               <Scale className="inline w-6 h-6 mr-2" style={{ color: GOLD }} />
-              Balance des Comptes
+              {t('cabclt.bal.title', locale)}
             </h1>
-            <p className="text-sm text-gray-500 mt-0.5">Récapitulatif débit / crédit / solde par compte</p>
+            <p className="text-sm text-gray-500 mt-0.5">{t('cabclt.bal.subtitle', locale)}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => setVue(vue === "classe" ? "detail" : "classe")} variant="outline" size="sm">
-            {vue === "classe" ? "Vue détaillée" : "Vue par classe"}
+            {vue === "classe" ? t('cabclt.bal.detailed_view', locale) : t('cabclt.bal.class_view', locale)}
           </Button>
           <Button onClick={exportCSV} variant="outline" className="gap-2" disabled={!data?.comptes?.length}>
-            <Download className="w-4 h-4" /> Export Excel (CSV)
+            <Download className="w-4 h-4" /> {t('cabclt.bal.export_csv', locale)}
           </Button>
         </div>
       </div>
@@ -146,8 +152,7 @@ export default function BalancePage() {
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            <strong>Déséquilibre détecté !</strong> Écart de {fmt(data.delta_desequilibre)} MUR entre total débit et crédit.
-            Vérifiez les écritures de la période.
+            <strong>{t('cabclt.bal.imbalance_detected', locale)}</strong> {t('cabclt.bal.imbalance_pre', locale)} {fmt(data.delta_desequilibre)} {t('cabclt.bal.imbalance_post', locale)}
           </AlertDescription>
         </Alert>
       )}
@@ -156,19 +161,19 @@ export default function BalancePage() {
       <Card>
         <CardContent className="p-4 flex flex-wrap gap-3 items-end">
           <div>
-            <Label className="text-xs">Date début</Label>
+            <Label className="text-xs">{t('cabclt.bal.start_date', locale)}</Label>
             <Input type="date" value={dateDeb} onChange={e => setDateDeb(e.target.value)} className="h-8 text-sm w-36" />
           </div>
           <div>
-            <Label className="text-xs">Date fin</Label>
+            <Label className="text-xs">{t('cabclt.bal.end_date', locale)}</Label>
             <Input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="h-8 text-sm w-36" />
           </div>
           <div>
-            <Label className="text-xs">Exercice</Label>
+            <Label className="text-xs">{t('cabclt.bal.fiscal_year', locale)}</Label>
             <Select value={exercice} onValueChange={setExercice}>
-              <SelectTrigger className="h-8 text-sm w-36"><SelectValue placeholder="Tous" /></SelectTrigger>
+              <SelectTrigger className="h-8 text-sm w-36"><SelectValue placeholder={t('cabclt.bal.all', locale)} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous</SelectItem>
+                <SelectItem value="all">{t('cabclt.bal.all', locale)}</SelectItem>
                 <SelectItem value="FY2024-2025">FY2024-2025</SelectItem>
                 <SelectItem value="FY2023-2024">FY2023-2024</SelectItem>
                 <SelectItem value="FY2025-2026">FY2025-2026</SelectItem>
@@ -182,22 +187,22 @@ export default function BalancePage() {
       {data && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500 uppercase">Comptes</p>
+            <p className="text-xs text-gray-500 uppercase">{t('cabclt.bal.kpi_accounts', locale)}</p>
             <p className="text-xl font-bold" style={{ color: NAVY }}>{data.nb_comptes}</p>
           </CardContent></Card>
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500 uppercase">Total Débit</p>
+            <p className="text-xs text-gray-500 uppercase">{t('cabclt.bal.col_total_debit', locale)}</p>
             <p className="text-xl font-bold text-blue-700">{fmt(data.total_debit)}</p>
           </CardContent></Card>
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500 uppercase">Total Crédit</p>
+            <p className="text-xs text-gray-500 uppercase">{t('cabclt.bal.col_total_credit', locale)}</p>
             <p className="text-xl font-bold text-purple-700">{fmt(data.total_credit)}</p>
           </CardContent></Card>
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500 uppercase">Équilibre</p>
+            <p className="text-xs text-gray-500 uppercase">{t('cabclt.bal.balance_status', locale)}</p>
             <div className="flex items-center gap-2 mt-1">
               <Badge className={data.equilibre ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
-                {data.equilibre ? "✓ Équilibré" : "✗ Déséquilibré"}
+                {data.equilibre ? "✓ " + t('cabclt.bal.balanced', locale) : "✗ " + t('cabclt.bal.unbalanced', locale)}
               </Badge>
             </div>
           </CardContent></Card>
@@ -213,7 +218,7 @@ export default function BalancePage() {
         <Card><CardContent className="py-12 text-center text-gray-500">
           <Scale className="w-12 h-12 mx-auto mb-3 text-gray-300" />
           <p className="font-medium">{data.message}</p>
-          <p className="text-sm mt-1">Uploadez des documents pour commencer</p>
+          <p className="text-sm mt-1">{t('cabclt.bal.upload_hint', locale)}</p>
         </CardContent></Card>
       ) : vue === "classe" ? (
         // Vue groupée par classe
@@ -227,21 +232,21 @@ export default function BalancePage() {
               <Card key={classe} className={`border ${CLASSE_COLORS[classe] || ""}`}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm" style={{ color: NAVY }}>
-                    Classe {classeLabels[classe] || classe}
-                    <span className="ml-2 text-xs font-normal text-gray-500">({comptes.length} comptes)</span>
+                    {t('cabclt.bal.class_prefix', locale)} {classeLabels[classe] || classe}
+                    <span className="ml-2 text-xs font-normal text-gray-500">({comptes.length} {t('cabclt.bal.accounts_lower', locale)})</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>
                       <TableRow className="text-xs">
-                        <TableHead>Compte</TableHead>
-                        <TableHead>Libellé</TableHead>
-                        <TableHead>Sens</TableHead>
-                        <TableHead className="text-right">Total Débit</TableHead>
-                        <TableHead className="text-right">Total Crédit</TableHead>
-                        <TableHead className="text-right">Solde Débiteur</TableHead>
-                        <TableHead className="text-right">Solde Créditeur</TableHead>
+                        <TableHead>{t('cabclt.bal.col_account', locale)}</TableHead>
+                        <TableHead>{t('cabclt.bal.col_label', locale)}</TableHead>
+                        <TableHead>{t('cabclt.bal.col_side', locale)}</TableHead>
+                        <TableHead className="text-right">{t('cabclt.bal.col_total_debit', locale)}</TableHead>
+                        <TableHead className="text-right">{t('cabclt.bal.col_total_credit', locale)}</TableHead>
+                        <TableHead className="text-right">{t('cabclt.bal.col_debit_balance', locale)}</TableHead>
+                        <TableHead className="text-right">{t('cabclt.bal.col_credit_balance', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -251,7 +256,7 @@ export default function BalancePage() {
                           <TableCell className="text-xs">{c.libelle}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className="text-[10px] px-1">
-                              {c.sens_normal === "D" ? "Débit" : "Crédit"}
+                              {c.sens_normal === "D" ? t('cabclt.bal.side_debit', locale) : t('cabclt.bal.side_credit', locale)}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-right font-mono text-blue-700">
@@ -270,7 +275,7 @@ export default function BalancePage() {
                       ))}
                       {/* Sous-total */}
                       <TableRow className="bg-gray-100 font-bold text-xs border-t-2">
-                        <TableCell colSpan={3} className="text-xs font-bold">Sous-total classe {classe}</TableCell>
+                        <TableCell colSpan={3} className="text-xs font-bold">{t('cabclt.bal.subtotal_class', locale)} {classe}</TableCell>
                         <TableCell className="text-right font-mono text-blue-800">{fmt(tdDebit)}</TableCell>
                         <TableCell className="text-right font-mono text-purple-800">{fmt(tdCredit)}</TableCell>
                         <TableCell className="text-right font-mono">{tdSoldeD > 0 ? fmt(tdSoldeD) : "—"}</TableCell>
@@ -289,21 +294,21 @@ export default function BalancePage() {
               <CardContent className="p-4">
                 <div className="grid grid-cols-4 gap-4 text-center">
                   <div>
-                    <p className="text-xs text-gray-500">TOTAL DÉBIT</p>
+                    <p className="text-xs text-gray-500">{t('cabclt.bal.total_debit_caps', locale)}</p>
                     <p className="text-lg font-bold text-blue-700">{fmt(data.total_debit)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">TOTAL CRÉDIT</p>
+                    <p className="text-xs text-gray-500">{t('cabclt.bal.total_credit_caps', locale)}</p>
                     <p className="text-lg font-bold text-purple-700">{fmt(data.total_credit)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">SOLDE DÉBITEUR</p>
+                    <p className="text-xs text-gray-500">{t('cabclt.bal.debit_balance_caps', locale)}</p>
                     <p className="text-lg font-bold text-blue-700">
                       {fmt(data.comptes?.reduce((s, c) => s + c.solde_debiteur, 0) || 0)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">SOLDE CRÉDITEUR</p>
+                    <p className="text-xs text-gray-500">{t('cabclt.bal.credit_balance_caps', locale)}</p>
                     <p className="text-lg font-bold text-purple-700">
                       {fmt(data.comptes?.reduce((s, c) => s + c.solde_crediteur, 0) || 0)}
                     </p>
@@ -320,14 +325,14 @@ export default function BalancePage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50 text-xs">
-                  <TableHead>Compte</TableHead>
-                  <TableHead>Libellé</TableHead>
-                  <TableHead>Classe</TableHead>
-                  <TableHead>Sens</TableHead>
-                  <TableHead className="text-right">Total Débit</TableHead>
-                  <TableHead className="text-right">Total Crédit</TableHead>
-                  <TableHead className="text-right">Solde Débiteur</TableHead>
-                  <TableHead className="text-right">Solde Créditeur</TableHead>
+                  <TableHead>{t('cabclt.bal.col_account', locale)}</TableHead>
+                  <TableHead>{t('cabclt.bal.col_label', locale)}</TableHead>
+                  <TableHead>{t('cabclt.bal.col_class', locale)}</TableHead>
+                  <TableHead>{t('cabclt.bal.col_side', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cabclt.bal.col_total_debit', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cabclt.bal.col_total_credit', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cabclt.bal.col_debit_balance', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cabclt.bal.col_credit_balance', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -358,7 +363,7 @@ export default function BalancePage() {
                 {/* Totaux */}
                 {data && (
                   <TableRow className="bg-gray-100 font-bold border-t-2">
-                    <TableCell colSpan={4} className="text-xs font-bold">TOTAL GÉNÉRAL</TableCell>
+                    <TableCell colSpan={4} className="text-xs font-bold">{t('cabclt.bal.grand_total', locale)}</TableCell>
                     <TableCell className="text-right text-sm font-mono text-blue-800">{fmt(data.total_debit)}</TableCell>
                     <TableCell className="text-right text-sm font-mono text-purple-800">{fmt(data.total_credit)}</TableCell>
                     <TableCell className="text-right text-sm font-mono">

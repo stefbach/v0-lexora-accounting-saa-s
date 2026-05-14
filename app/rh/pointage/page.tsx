@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Clock, LogIn, LogOut, Users, Calendar, ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle, Coffee } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -134,6 +135,7 @@ function frenchDate(d: Date): string {
 // Component
 // ---------------------------------------------------------------------------
 export default function PointagePage() {
+  const locale = getLocale()
   // Clock
   const [now, setNow] = useState(new Date())
 

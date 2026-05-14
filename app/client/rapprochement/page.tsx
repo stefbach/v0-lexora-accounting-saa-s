@@ -56,6 +56,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 const AGENT_NAME = "Lex Banque"
 
@@ -128,6 +129,7 @@ interface Facture {
 }
 
 export default function ClientRapprochementPage() {
+  const locale = getLocale()
   // ── Société active du client (1 seule) ────────────────────────────
   const { societeId } = useSocieteActive()
 
@@ -753,11 +755,11 @@ export default function ClientRapprochementPage() {
                 <h1 className="text-2xl font-bold text-purple-900 flex items-center gap-2">
                   {AGENT_NAME}
                   <Badge className="bg-purple-600 text-white text-[10px] uppercase">
-                    Agent IA
+                    {t('acc.rap.ai_agent', locale)}
                   </Badge>
                 </h1>
                 <p className="text-sm text-purple-700/80 mt-0.5">
-                  Rapprochement bancaire intelligent · matching automatique des factures + classifications PCM
+                  {t('acc.rap.subtitle', locale)}
                 </p>
               </div>
             </div>
@@ -769,7 +771,7 @@ export default function ClientRapprochementPage() {
                 size="sm"
               >
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('common.refresh', locale)}
               </Button>
               <Button
                 onClick={() => handleRunAgent(false)}
@@ -780,12 +782,12 @@ export default function ClientRapprochementPage() {
                 {runningAgent ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    En cours…
+                    {t('acc.rap.running', locale)}
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Lancer {AGENT_NAME}
+                    {t('acc.rap.run', locale)} {AGENT_NAME}
                   </>
                 )}
               </Button>
@@ -797,7 +799,7 @@ export default function ClientRapprochementPage() {
                 title="Approfondit avec l'IA Claude (~30s) sur les cas ambigus"
               >
                 <Bot className="h-4 w-4 mr-1.5" />
-                + Approfondir avec IA
+                {t('acc.rap.deepen_ai', locale)}
               </Button>
             </div>
           </div>

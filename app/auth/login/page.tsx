@@ -24,20 +24,20 @@ export default function AuthLoginPage() {
   const switchLang = (l: Locale) => { setLoc(l); setLocale(l) }
 
   const txt = {
-    title: locale === "fr" ? "Connexion a votre compte" : "Sign in to your account",
-    subtitle: locale === "fr" ? "Entrez vos identifiants pour acceder a votre espace" : "Enter your credentials to access your workspace",
-    email: locale === "fr" ? "Adresse e-mail" : "Email address",
-    password: locale === "fr" ? "Mot de passe" : "Password",
-    forgot: locale === "fr" ? "Mot de passe oublie ? Contactez votre RH." : "Forgot password? Contact your HR.",
-    login: locale === "fr" ? "Se connecter" : "Sign in",
-    logging: locale === "fr" ? "Connexion en cours..." : "Signing in...",
-    no_account: locale === "fr" ? "Vous n'avez pas de compte ?" : "Don't have an account?",
-    contact_admin: locale === "fr" ? "Contactez votre administrateur" : "Contact your administrator",
-    back_home: locale === "fr" ? "Retour a l'accueil" : "Back to home",
-    error_invalid: locale === "fr" ? "Identifiants invalides. Verifiez votre adresse e-mail et votre mot de passe." : "Invalid credentials. Please check your email and password.",
-    error_email: locale === "fr" ? "Votre email n'est pas encore confirme." : "Your email is not yet confirmed.",
-    error_generic: locale === "fr" ? "Une erreur inattendue s'est produite." : "An unexpected error occurred.",
-    powered: "Powered by Digital Data Solutions Ltd",
+    title: t('adm.auth_login.title', locale),
+    subtitle: t('adm.auth_login.subtitle', locale),
+    email: t('adm.auth_login.email', locale),
+    password: t('adm.auth_login.password', locale),
+    forgot: t('adm.auth_login.forgot', locale),
+    login: t('adm.auth_login.login', locale),
+    logging: t('adm.auth_login.logging', locale),
+    no_account: t('adm.auth_login.no_account', locale),
+    contact_admin: t('adm.auth_login.contact_admin', locale),
+    back_home: t('adm.auth_login.back_home', locale),
+    error_invalid: t('adm.auth_login.error_invalid', locale),
+    error_email: t('adm.auth_login.error_email', locale),
+    error_generic: t('adm.auth_login.error_generic', locale),
+    powered: t('adm.auth_login.powered', locale),
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {

@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 interface Modele {
   id: string
@@ -55,13 +56,15 @@ function fmt(n: number, dev = "MUR"): string {
   )
 }
 
-const FREQ_LABEL: Record<string, string> = {
-  mensuel: "Mensuel",
-  trimestriel: "Trimestriel",
-  annuel: "Annuel",
+function freqLabel(freq: string, locale: Locale): string {
+  if (freq === 'mensuel') return t('inv.rec.freq_mensuel', locale)
+  if (freq === 'trimestriel') return t('inv.rec.freq_trimestriel', locale)
+  if (freq === 'annuel') return t('inv.rec.freq_annuel', locale)
+  return freq
 }
 
 export default function ClientRecurrencesPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [modeles, setModeles] = useState<Modele[]>([])
   const [plans, setPlans] = useState<Plan[]>([])
@@ -80,15 +83,15 @@ export default function ClientRecurrencesPage() {
     try {
       const res = await fetch(`/api/client/recurrences?societe_id=${societeId}`)
       const d = await res.json()
-      if (!res.ok) throw new Error(d?.error || "Erreur")
+      if (!res.ok) throw new Error(d?.error || t('inv.rec.toast_error', locale))
       setModeles(d?.modeles || [])
       setPlans(d?.plans || [])
     } catch (e: any) {
-      showToast(e?.message || "Erreur chargement", "error")
+      showToast(e?.message || t('inv.rec.toast_error_load', locale), "error")
     } finally {
       setLoading(false)
     }
-  }, [societeId])
+  }, [societeId, locale])
 
   useEffect(() => {
     load()
@@ -102,11 +105,11 @@ export default function ClientRecurrencesPage() {
   async function run(dry_run: boolean) {
     if (!societeId) return
     if (totalAGenerer === 0) {
-      showToast("Aucune génération en attente", "error")
+      showToast(t('inv.rec.toast_none_pending', locale), "error")
       return
     }
     if (!dry_run) {
-      const ok = window.confirm(`Générer ${totalAGenerer} facture(s) maintenant ?`)
+      const ok = window.confirm(t('inv.rec.confirm_generate', locale).replace('{n}', String(totalAGenerer)))
       if (!ok) return
     }
     setSubmitting(true)
@@ -117,16 +120,16 @@ export default function ClientRecurrencesPage() {
         body: JSON.stringify({ societe_id: societeId, dry_run }),
       })
       const d = await res.json()
-      if (!res.ok) throw new Error(d?.error || "Erreur")
+      if (!res.ok) throw new Error(d?.error || t('inv.rec.toast_error', locale))
       showToast(
-        `${dry_run ? "Simulation" : "Génération"} : ${d?.summary?.factures_creees ?? 0} créée(s), ${
+        `${dry_run ? t('inv.rec.simulation', locale) : t('inv.rec.generation', locale)} : ${d?.summary?.factures_creees ?? 0} ${t('inv.rec.summary_created', locale)} ${
           d?.summary?.erreurs ?? 0
-        } erreur(s)`,
+        } ${t('inv.rec.summary_errors', locale)}`,
         d?.summary?.erreurs > 0 ? "error" : "success",
       )
       await load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur", "error")
+      showToast(e?.message || t('inv.rec.toast_error', locale), "error")
     } finally {
       setSubmitting(false)
     }
@@ -152,21 +155,21 @@ export default function ClientRecurrencesPage() {
                 <Repeat className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-violet-900">Factures récurrentes</h1>
+                <h1 className="text-2xl font-bold text-violet-900">{t('inv.rec.title', locale)}</h1>
                 <p className="text-sm text-violet-800/80 mt-0.5">
-                  Modèles générés automatiquement (mensuel / trimestriel / annuel)
+                  {t('inv.rec.subtitle', locale)}
                 </p>
               </div>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('inv.rec.refresh', locale)}
               </Button>
               <Link href="/client/nouvelle-facture">
                 <Button className="bg-violet-600 hover:bg-violet-700 text-white shadow-md">
                   <Plus className="h-4 w-4 mr-1.5" />
-                  Créer un modèle
+                  {t('inv.rec.create_model', locale)}
                 </Button>
               </Link>
             </div>
@@ -176,7 +179,7 @@ export default function ClientRecurrencesPage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('inv.rec.no_societe', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -192,11 +195,11 @@ export default function ClientRecurrencesPage() {
                   {totalAGenerer > 0 ? (
                     <>
                       <AlertTriangle className="h-4 w-4 text-amber-700" />
-                      <strong>{totalAGenerer} facture(s)</strong> en attente de génération sur{" "}
-                      {plans.length} modèle(s).
+                      <strong>{totalAGenerer} {t('inv.rec.invoices_n', locale)}</strong> {t('inv.rec.pending_msg', locale)}{" "}
+                      {plans.length} {t('inv.rec.pending_models', locale)}
                     </>
                   ) : (
-                    <>Tous les modèles sont à jour ✓</>
+                    <>{t('inv.rec.up_to_date', locale)}</>
                   )}
                 </div>
                 <div className="flex gap-2">
@@ -207,7 +210,7 @@ export default function ClientRecurrencesPage() {
                     disabled={submitting || totalAGenerer === 0}
                   >
                     {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Simuler
+                    {t('inv.rec.simulate', locale)}
                   </Button>
                   <Button
                     size="sm"
@@ -217,7 +220,7 @@ export default function ClientRecurrencesPage() {
                   >
                     {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     <Play className="h-4 w-4 mr-1.5" />
-                    Générer maintenant
+                    {t('inv.rec.generate_now', locale)}
                   </Button>
                 </div>
               </CardContent>
@@ -225,16 +228,15 @@ export default function ClientRecurrencesPage() {
 
             <Tabs defaultValue="modeles">
               <TabsList>
-                <TabsTrigger value="modeles">Modèles ({modeles.length})</TabsTrigger>
-                <TabsTrigger value="preview">À générer ({totalAGenerer})</TabsTrigger>
+                <TabsTrigger value="modeles">{t('inv.rec.tab_models', locale)} ({modeles.length})</TabsTrigger>
+                <TabsTrigger value="preview">{t('inv.rec.tab_preview', locale)} ({totalAGenerer})</TabsTrigger>
               </TabsList>
 
               <TabsContent value="modeles">
                 {modeles.length === 0 ? (
                   <Card>
                     <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                      Aucun modèle récurrent. Créez une nouvelle facture et cochez
-                      « Facture récurrente » pour en faire un modèle.
+                      {t('inv.rec.no_models', locale)}
                     </CardContent>
                   </Card>
                 ) : (
@@ -249,12 +251,12 @@ export default function ClientRecurrencesPage() {
                               </span>
                               <Badge className="bg-violet-100 text-violet-700 border-violet-300">
                                 <Repeat className="h-3 w-3 mr-1" />
-                                {FREQ_LABEL[m.recurrent_frequence] || m.recurrent_frequence}
+                                {freqLabel(m.recurrent_frequence, locale)}
                               </Badge>
                               {m.recurrence_jour_du_mois && (
                                 <Badge variant="outline" className="text-[10px]">
                                   <Calendar className="h-3 w-3 mr-1" />
-                                  Jour {m.recurrence_jour_du_mois}
+                                  {t('inv.rec.day', locale)} {m.recurrence_jour_du_mois}
                                 </Badge>
                               )}
                             </div>
@@ -262,13 +264,13 @@ export default function ClientRecurrencesPage() {
                               {fmt(m.montant_ttc, m.devise)}
                             </div>
                           </div>
-                          <div className="text-sm mt-1">{m.tiers || "—"}</div>
+                          <div className="text-sm mt-1">{m.tiers || t('inv.rec.dash', locale)}</div>
                           <div className="text-xs text-muted-foreground mt-0.5 flex gap-3 flex-wrap">
-                            <span>Début : {m.recurrence_date_debut || "—"}</span>
-                            {m.recurrence_date_fin && <span>Fin : {m.recurrence_date_fin}</span>}
+                            <span>{t('inv.rec.start', locale)} : {m.recurrence_date_debut || t('inv.rec.dash', locale)}</span>
+                            {m.recurrence_date_fin && <span>{t('inv.rec.end', locale)} : {m.recurrence_date_fin}</span>}
                             <span>
-                              Dernière génération :{" "}
-                              {m.derniere_generation_date || "jamais"}
+                              {t('inv.rec.last_gen', locale)} :{" "}
+                              {m.derniere_generation_date || t('inv.rec.never', locale)}
                             </span>
                           </div>
                         </div>
@@ -282,7 +284,7 @@ export default function ClientRecurrencesPage() {
                 {plans.length === 0 ? (
                   <Card>
                     <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                      Aucune génération en attente.
+                      {t('inv.rec.no_pending', locale)}
                     </CardContent>
                   </Card>
                 ) : (
@@ -294,9 +296,9 @@ export default function ClientRecurrencesPage() {
                             <span className="font-mono font-medium">
                               {p.modele_numero || p.modele_id.slice(0, 8)}
                             </span>
-                            <span className="text-sm">{p.tiers || "—"}</span>
+                            <span className="text-sm">{p.tiers || t('inv.rec.dash', locale)}</span>
                             <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-[10px]">
-                              {p.dates_a_generer.length} à générer
+                              {p.dates_a_generer.length} {t('inv.rec.to_generate', locale)}
                             </Badge>
                           </div>
                           <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-1">

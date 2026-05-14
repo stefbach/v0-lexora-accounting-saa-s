@@ -22,48 +22,48 @@ interface NavLink {
 
 const ALL_LINKS: NavLink[] = [
   { href: '/rh', label: 'Tableau de bord', labelKey: 'nav.dashboard', icon: Clock, exact: true, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
-  { href: '/rh/manager', label: 'Mon équipe', icon: Users, exact: true, roles: ['manager', 'team_leader'] },
+  { href: '/rh/manager', label: 'Mon équipe', labelKey: 'comp.rh_sidebar.manager_team', icon: Users, exact: true, roles: ['manager', 'team_leader'] },
   { href: '/rh/employes', label: 'Employés', labelKey: 'hr.employees', icon: Users, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
-  { href: '/rh/juridique', label: 'Contrats Travail', icon: FilePen, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'direction'] },
-  { href: '/rh/groupes', label: 'Groupes / Équipes', icon: Users, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
-  { href: '/rh/depart', label: 'Gestion départs', icon: UserMinus, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/juridique', label: 'Contrats Travail', labelKey: 'comp.rh_sidebar.work_contracts', icon: FilePen, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'direction'] },
+  { href: '/rh/groupes', label: 'Groupes / Équipes', labelKey: 'comp.rh_sidebar.groups_teams', icon: Users, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/depart', label: 'Gestion départs', labelKey: 'comp.rh_sidebar.departures', icon: UserMinus, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   // G12 — Severance Calculator WRA S.70. Réservé admin/rh.
-  { href: '/rh/severance', label: 'Severance (S.70)', icon: Wallet, roles: ['admin', 'rh'] },
+  { href: '/rh/severance', label: 'Severance (S.70)', labelKey: 'comp.rh_sidebar.severance', icon: Wallet, roles: ['admin', 'rh'] },
   // G8 Phase 1 — Provisions congés payés IAS 19. Admin/rh.
-  { href: '/rh/provisions/conges', label: 'IAS 19 — Congés payés', icon: BookOpenCheck, roles: ['admin', 'rh'] },
+  { href: '/rh/provisions/conges', label: 'IAS 19 — Congés payés', labelKey: 'comp.rh_sidebar.ias19_leave', icon: BookOpenCheck, roles: ['admin', 'rh'] },
   // G8 Phase 2 — Provisions EOY Bonus IAS 19. Admin/rh.
-  { href: '/rh/provisions/eoy', label: 'IAS 19 — EOY Bonus', icon: Gift, roles: ['admin', 'rh'] },
-  { href: '/rh/planning', label: 'Planning', icon: CalendarDays, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager', 'team_leader'] },
+  { href: '/rh/provisions/eoy', label: 'IAS 19 — EOY Bonus', labelKey: 'comp.rh_sidebar.ias19_eoy', icon: Gift, roles: ['admin', 'rh'] },
+  { href: '/rh/planning', label: 'Planning', labelKey: 'hr.planning', icon: CalendarDays, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager', 'team_leader'] },
   // Sprint 5 FIX 7 — lien "Regles planning" supprimé du menu : la page
   // /rh/planning a déjà un bouton "Règles" intégré, le lien sidebar était
   // redondant et créait de la confusion. La route reste accessible via
   // le bouton interne de /rh/planning et par URL directe.
-  { href: '/rh/geolocalisation', label: 'Carte collaborateurs', icon: MapPin, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager', 'team_leader'] },
+  { href: '/rh/geolocalisation', label: 'Carte collaborateurs', labelKey: 'comp.rh_sidebar.geo_map', icon: MapPin, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager', 'team_leader'] },
   { href: '/rh/pointage', label: 'Pointage', labelKey: 'hr.time_clock', icon: Clock },
   { href: '/rh/conges', label: 'Absences & Congés', labelKey: 'rh.absences_leave', icon: Calendar },
-  { href: '/rh/conges/parametres', label: 'Règles congés', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
-  { href: '/rh/jours-feries', label: 'Jours fériés', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/conges/parametres', label: 'Règles congés', labelKey: 'comp.rh_sidebar.leave_rules', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/jours-feries', label: 'Jours fériés', labelKey: 'comp.rh_sidebar.public_holidays', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie', label: 'Paie & Bulletins', labelKey: 'hr.payslips', icon: CreditCard, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   // G11 — End of Year Bonus (WRA S.54). Réservé admin/rh.
-  { href: '/rh/eoy-bonus', label: 'End of Year Bonus', icon: Gift, roles: ['admin', 'rh'] },
-  { href: '/rh/paie/validation', label: 'Contrôle pré-paie', icon: CheckCircle, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/eoy-bonus', label: 'End of Year Bonus', labelKey: 'comp.rh_sidebar.eoy_bonus', icon: Gift, roles: ['admin', 'rh'] },
+  { href: '/rh/paie/validation', label: 'Contrôle pré-paie', labelKey: 'comp.rh_sidebar.prepayroll_check', icon: CheckCircle, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie/primes', label: 'Primes & OT', labelKey: 'rh.bonuses_ot', icon: TrendingUp },
-  { href: '/rh/frais-km', label: 'Frais kilométriques', icon: Car },
-  { href: '/rh/trajets-km', label: 'Trajets GPS / IK', icon: Route, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
-  { href: '/rh/exports/paie', label: 'Exports Paie & MRA', icon: Banknote, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
-  { href: '/rh/import-paie', label: 'Import Paie Excel', icon: Upload, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
-  { href: '/rh/historique-paie', label: 'Historique Paie', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
+  { href: '/rh/frais-km', label: 'Frais kilométriques', labelKey: 'comp.rh_sidebar.km_expenses', icon: Car },
+  { href: '/rh/trajets-km', label: 'Trajets GPS / IK', labelKey: 'comp.rh_sidebar.gps_trips', icon: Route, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/exports/paie', label: 'Exports Paie & MRA', labelKey: 'comp.rh_sidebar.exports_payroll_mra', icon: Banknote, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
+  { href: '/rh/import-paie', label: 'Import Paie Excel', labelKey: 'comp.rh_sidebar.import_payroll_excel', icon: Upload, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/historique-paie', label: 'Historique Paie', labelKey: 'comp.rh_sidebar.payroll_history', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   // G6 — Exports légaux WRA S.116 : placés après 'Historique Paie' dans la
   // section paie/compliance. Réservés admin + rh (seuls rôles réels en DB).
-  { href: '/rh/exports-legaux', label: 'Exports légaux (S.116)', icon: ShieldCheck, roles: ['admin', 'rh'] },
+  { href: '/rh/exports-legaux', label: 'Exports légaux (S.116)', labelKey: 'comp.rh_sidebar.legal_exports', icon: ShieldCheck, roles: ['admin', 'rh'] },
   // G13 — Déclarations MRA mensuelles + Exit Statements PRGF.
-  { href: '/rh/declarations-mra', label: 'Déclarations MRA', icon: FileBarChart, roles: ['admin', 'rh'] },
-  { href: '/rh/prgf/exit-statements', label: 'Exit Statements PRGF', icon: LogOut, roles: ['admin', 'rh'] },
-  { href: '/rh/annonces', label: 'Annonces', icon: Megaphone, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
-  { href: '/rh/chat', label: 'CLARA — Assistant IA', icon: Bot },
+  { href: '/rh/declarations-mra', label: 'Déclarations MRA', labelKey: 'comp.rh_sidebar.mra_declarations', icon: FileBarChart, roles: ['admin', 'rh'] },
+  { href: '/rh/prgf/exit-statements', label: 'Exit Statements PRGF', labelKey: 'comp.rh_sidebar.exit_statements_prgf', icon: LogOut, roles: ['admin', 'rh'] },
+  { href: '/rh/annonces', label: 'Annonces', labelKey: 'comp.rh_sidebar.announcements', icon: Megaphone, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/chat', label: 'CLARA — Assistant IA', labelKey: 'comp.rh_sidebar.clara', icon: Bot },
   // Sprint 2 — hub central de paramètres en plus des sous-pages spécifiques.
-  { href: '/rh/parametres', label: 'Paramètres (hub)', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
-  { href: '/rh/societe', label: 'Paramètres société', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/parametres', label: 'Paramètres (hub)', labelKey: 'comp.rh_sidebar.settings_hub', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
+  { href: '/rh/societe', label: 'Paramètres société', labelKey: 'comp.rh_sidebar.company_settings', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/paie/parametres', label: 'Paramètres paie', labelKey: 'rh.payroll_settings', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
 ]
 
@@ -104,14 +104,14 @@ export function RHSidebarDedicated() {
   })
 
   const isManager = userRole === 'manager' || userRole === 'team_leader'
-  const subtitle = isManager ? 'Espace Manager' : t('rh.module_title', locale)
+  const subtitle = isManager ? t('comp.rh_sidebar.manager_space', locale) : t('rh.module_title', locale)
 
   return (
     <>
       {/* Mobile trigger */}
       <button
         onClick={() => setMobileOpen(true)}
-        aria-label="Ouvrir la navigation RH"
+        aria-label={t('comp.rh_sidebar.open_nav', locale)}
         className="fixed top-4 left-4 z-50 md:hidden inline-flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-lg backdrop-blur"
         style={{
           backgroundColor: "rgba(16,24,71,0.85)",
@@ -148,7 +148,7 @@ export function RHSidebarDedicated() {
         <button
           onClick={() => setMobileOpen(false)}
           className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10"
-          aria-label="Fermer"
+          aria-label={t('comp.sidebar.close', locale)}
         >
           <X className="w-5 h-5" />
         </button>
@@ -203,7 +203,7 @@ export function RHSidebarDedicated() {
                 }}
               >
                 <ArrowLeft className="w-4 h-4 flex-shrink-0" />
-                <span>Retour espace client</span>
+                <span>{t('comp.rh_sidebar.back_client', locale)}</span>
               </Link>
             </>
           )}
@@ -293,7 +293,7 @@ export function RHSidebarDedicated() {
               />
             )}
             <UserCircle className="w-4 h-4 flex-shrink-0 relative" style={{ color: isActive("/salarie") ? "#0B0F2E" : undefined }} />
-            <span className="truncate relative">Mon espace</span>
+            <span className="truncate relative">{t('comp.sidebar.my_space_employee', locale)}</span>
           </Link>
         </nav>
 

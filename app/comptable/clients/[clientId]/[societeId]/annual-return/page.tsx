@@ -18,6 +18,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
 import { Building2, Users, UserCog, TrendingUp, CalendarDays, Plus, AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ interface AnnualReturn {
 const fmt = (n: number) =>
   new Intl.NumberFormat('fr-MU', { style: 'currency', currency: 'MUR', minimumFractionDigits: 0 }).format(n)
 
-const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
+const fmtDate = (d?: string, locale: Locale = 'fr') => d ? new Date(d).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB') : '—'
 
 function getDeadlineStatus(echeance?: string) {
   if (!echeance) return null
@@ -98,13 +99,13 @@ const TYPE_LABELS: Record<string, string> = {
   cfo: 'CFO'
 }
 
-const STATUT_LABELS: Record<string, string> = {
-  a_faire: 'À faire',
-  en_cours: 'En cours',
-  soumis: 'Soumis',
-  accepte: 'Accepté',
-  rejete: 'Rejeté'
-}
+const getStatutLabels = (locale: Locale): Record<string, string> => ({
+  a_faire: t('cabclt.ar.status_todo', locale),
+  en_cours: t('cabclt.ar.status_inprogress', locale),
+  soumis: t('cabclt.ar.status_submitted', locale),
+  accepte: t('cabclt.ar.status_accepted', locale),
+  rejete: t('cabclt.ar.status_rejected', locale)
+})
 
 const STATUT_COLORS: Record<string, string> = {
   a_faire: 'bg-gray-100 text-gray-700',
@@ -118,6 +119,8 @@ const STATUT_COLORS: Record<string, string> = {
 
 export default function AnnualReturnPage() {
   const params = useParams()
+  const locale = getLocale()
+  const STATUT_LABELS = getStatutLabels(locale)
   const societeId = params?.societeId as string
 
   const [societe, setSociete] = useState<Societe | null>(null)
@@ -290,9 +293,9 @@ export default function AnnualReturnPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>
-            Annual Return ROC
+            {t('cabclt.ar.title', locale)}
           </h1>
-          <p className="text-muted-foreground mt-1">{societe?.nom} — Exercice {annee}</p>
+          <p className="text-muted-foreground mt-1">{societe?.nom} — {t('cabclt.ar.fiscal_year', locale)} {annee}</p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={String(annee)} onValueChange={v => setAnnee(parseInt(v))}>
@@ -319,7 +322,7 @@ export default function AnnualReturnPage() {
         <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
           <AlertTriangle className="h-5 w-5" />
           <span className="font-medium">
-            Deadline ROC dépassée ! Soumission requise avant le {fmtDate(annualReturn?.date_echeance)}
+            {t('cabclt.ar.deadline_passed', locale)} {fmtDate(annualReturn?.date_echeance, locale)}
           </span>
         </div>
       )}
@@ -327,7 +330,7 @@ export default function AnnualReturnPage() {
         <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg text-orange-700">
           <Clock className="h-5 w-5" />
           <span className="font-medium">
-            Deadline ROC dans moins de 7 jours : {fmtDate(annualReturn?.date_echeance)}
+            {t('cabclt.ar.deadline_urgent', locale)} {fmtDate(annualReturn?.date_echeance, locale)}
           </span>
         </div>
       )}
@@ -338,10 +341,10 @@ export default function AnnualReturnPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5" style={{ color: '#D4AF37' }} />
-              <CardTitle className="text-base">Informations légales société</CardTitle>
+              <CardTitle className="text-base">{t('cabclt.ar.legal_info', locale)}</CardTitle>
             </div>
             <Button variant="outline" size="sm" onClick={() => setShowSocieteEdit(!showSocieteEdit)}>
-              {showSocieteEdit ? 'Masquer' : 'Modifier'}
+              {showSocieteEdit ? t('cabclt.ar.hide', locale) : t('cabclt.ar.edit', locale)}
             </Button>
           </div>
         </CardHeader>
@@ -377,15 +380,15 @@ export default function AnnualReturnPage() {
             <div className="mt-4 pt-4 border-t space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <Label>Registered Office</Label>
+                  <Label>{t('cabclt.ar.registered_office', locale)}</Label>
                   <Input
                     value={societeForm.registered_office}
                     onChange={e => setSocieteForm(f => ({ ...f, registered_office: e.target.value }))}
-                    placeholder="Adresse du siège social"
+                    placeholder={t('cabclt.ar.address_placeholder', locale)}
                   />
                 </div>
                 <div>
-                  <Label>Date d&apos;incorporation</Label>
+                  <Label>{t('cabclt.ar.incorp_date', locale)}</Label>
                   <Input
                     type="date"
                     value={societeForm.date_incorporation}
@@ -393,15 +396,15 @@ export default function AnnualReturnPage() {
                   />
                 </div>
                 <div>
-                  <Label>Nature d&apos;activité</Label>
+                  <Label>{t('cabclt.ar.activity_nature', locale)}</Label>
                   <Input
                     value={societeForm.nature_activite}
                     onChange={e => setSocieteForm(f => ({ ...f, nature_activite: e.target.value }))}
-                    placeholder="Ex: Consulting, Commerce..."
+                    placeholder={t('cabclt.ar.activity_placeholder', locale)}
                   />
                 </div>
                 <div>
-                  <Label>Capital social (MUR)</Label>
+                  <Label>{t('cabclt.ar.share_capital_mur', locale)}</Label>
                   <Input
                     type="number"
                     value={societeForm.capital_social}
@@ -409,7 +412,7 @@ export default function AnnualReturnPage() {
                   />
                 </div>
                 <div>
-                  <Label>Nb actions total</Label>
+                  <Label>{t('cabclt.ar.total_shares', locale)}</Label>
                   <Input
                     type="number"
                     value={societeForm.nb_actions_total}
@@ -429,7 +432,7 @@ export default function AnnualReturnPage() {
                 }}
                 style={{ backgroundColor: '#0B0F2E', color: 'white' }}
               >
-                Enregistrer
+                {t('cabclt.ar.save', locale)}
               </Button>
             </div>
           )}
@@ -442,8 +445,8 @@ export default function AnnualReturnPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5" style={{ color: '#D4AF37' }} />
-              <CardTitle className="text-base">Actionnariat</CardTitle>
-              <Badge variant="secondary">{actionnaires.filter(a => a.actif).length} actionnaire(s)</Badge>
+              <CardTitle className="text-base">{t('cabclt.ar.shareholders', locale)}</CardTitle>
+              <Badge variant="secondary">{actionnaires.filter(a => a.actif).length} {t('cabclt.ar.shareholders_count', locale)}</Badge>
             </div>
             <Dialog open={showActionnaire} onOpenChange={setShowActionnaire}>
               <DialogTrigger asChild>
@@ -453,68 +456,68 @@ export default function AnnualReturnPage() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Nouvel actionnaire</DialogTitle>
+                  <DialogTitle>{t('cabclt.ar.new_shareholder', locale)}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>Nom *</Label>
+                      <Label>{t('cabclt.ar.name', locale)} *</Label>
                       <Input value={newActionnaire.nom} onChange={e => setNewActionnaire(f => ({ ...f, nom: e.target.value }))} />
                     </div>
                     <div>
-                      <Label>Prénom</Label>
+                      <Label>{t('cabclt.ar.firstname', locale)}</Label>
                       <Input value={newActionnaire.prenom} onChange={e => setNewActionnaire(f => ({ ...f, prenom: e.target.value }))} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>Type de personne</Label>
+                      <Label>{t('cabclt.ar.person_type', locale)}</Label>
                       <Select value={newActionnaire.type_personne} onValueChange={v => setNewActionnaire(f => ({ ...f, type_personne: v }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="physique">Physique</SelectItem>
-                          <SelectItem value="morale">Morale</SelectItem>
+                          <SelectItem value="physique">{t('cabclt.ar.individual', locale)}</SelectItem>
+                          <SelectItem value="morale">{t('cabclt.ar.corporate', locale)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <Label>Nationalité</Label>
+                      <Label>{t('cabclt.ar.nationality', locale)}</Label>
                       <Input value={newActionnaire.nationalite} onChange={e => setNewActionnaire(f => ({ ...f, nationalite: e.target.value }))} />
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <Label>Nb actions</Label>
+                      <Label>{t('cabclt.ar.nb_shares', locale)}</Label>
                       <Input type="number" value={newActionnaire.nb_actions} onChange={e => setNewActionnaire(f => ({ ...f, nb_actions: parseInt(e.target.value) || 0 }))} />
                     </div>
                     <div>
-                      <Label>Type actions</Label>
+                      <Label>{t('cabclt.ar.share_type', locale)}</Label>
                       <Select value={newActionnaire.type_actions} onValueChange={v => setNewActionnaire(f => ({ ...f, type_actions: v }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="ordinaires">Ordinaires</SelectItem>
-                          <SelectItem value="preferentielles">Préférentielles</SelectItem>
-                          <SelectItem value="rerachetables">Rachetables</SelectItem>
+                          <SelectItem value="ordinaires">{t('cabclt.ar.ordinary', locale)}</SelectItem>
+                          <SelectItem value="preferentielles">{t('cabclt.ar.preference', locale)}</SelectItem>
+                          <SelectItem value="rerachetables">{t('cabclt.ar.redeemable', locale)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <Label>Val. nominale</Label>
+                      <Label>{t('cabclt.ar.par_value', locale)}</Label>
                       <Input type="number" step="0.01" value={newActionnaire.valeur_nominale} onChange={e => setNewActionnaire(f => ({ ...f, valeur_nominale: parseFloat(e.target.value) || 1 }))} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>% détenu</Label>
+                      <Label>{t('cabclt.ar.pct_held', locale)}</Label>
                       <Input type="number" step="0.01" max="100" value={newActionnaire.pourcentage} onChange={e => setNewActionnaire(f => ({ ...f, pourcentage: parseFloat(e.target.value) || 0 }))} />
                     </div>
                     <div>
-                      <Label>Date d&apos;entrée</Label>
+                      <Label>{t('cabclt.ar.entry_date', locale)}</Label>
                       <Input type="date" value={newActionnaire.date_entree} onChange={e => setNewActionnaire(f => ({ ...f, date_entree: e.target.value }))} />
                     </div>
                   </div>
                   <Button onClick={handleAddActionnaire} className="w-full" style={{ backgroundColor: '#0B0F2E', color: 'white' }}>
-                    Ajouter l&apos;actionnaire
+                    {t('cabclt.ar.add_shareholder', locale)}
                   </Button>
                 </div>
               </DialogContent>
@@ -525,12 +528,12 @@ export default function AnnualReturnPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Nb actions</TableHead>
+                <TableHead>{t('cabclt.ar.name', locale)}</TableHead>
+                <TableHead>{t('cabclt.ar.type', locale)}</TableHead>
+                <TableHead className="text-right">{t('cabclt.ar.nb_shares', locale)}</TableHead>
                 <TableHead className="text-right">%</TableHead>
-                <TableHead>Type actions</TableHead>
-                <TableHead>Date entrée</TableHead>
+                <TableHead>{t('cabclt.ar.share_type', locale)}</TableHead>
+                <TableHead>{t('cabclt.ar.entry_date', locale)}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -540,17 +543,17 @@ export default function AnnualReturnPage() {
                   <TableCell className="font-medium">{a.prenom ? `${a.prenom} ${a.nom}` : a.nom}</TableCell>
                   <TableCell>
                     <Badge variant="outline">
-                      {a.type_personne === 'physique' ? 'Personne physique' : 'Personne morale'}
+                      {a.type_personne === 'physique' ? t('cabclt.ar.individual_long', locale) : t('cabclt.ar.corporate_long', locale)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">{a.nb_actions?.toLocaleString('fr-FR')}</TableCell>
+                  <TableCell className="text-right">{a.nb_actions?.toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB')}</TableCell>
                   <TableCell className="text-right">
                     {totalActions > 0
                       ? `${((a.nb_actions / totalActions) * 100).toFixed(1)}%`
                       : a.pourcentage ? `${a.pourcentage}%` : '—'}
                   </TableCell>
                   <TableCell>{a.type_actions}</TableCell>
-                  <TableCell>{fmtDate(a.date_entree)}</TableCell>
+                  <TableCell>{fmtDate(a.date_entree, locale)}</TableCell>
                   <TableCell>
                     <Button
                       variant="ghost"
@@ -558,7 +561,7 @@ export default function AnnualReturnPage() {
                       className="text-red-500 hover:text-red-700"
                       onClick={() => handleDeleteActionnaire(a.id)}
                     >
-                      Retirer
+                      {t('cabclt.ar.remove', locale)}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -566,7 +569,7 @@ export default function AnnualReturnPage() {
               {actionnaires.filter(a => a.actif).length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    Aucun actionnaire enregistré
+                    {t('cabclt.ar.no_shareholders', locale)}
                   </TableCell>
                 </TableRow>
               )}
@@ -581,8 +584,8 @@ export default function AnnualReturnPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <UserCog className="h-5 w-5" style={{ color: '#D4AF37' }} />
-              <CardTitle className="text-base">Administrateurs & Dirigeants</CardTitle>
-              <Badge variant="secondary">{administrateurs.filter(a => a.actif).length} actif(s)</Badge>
+              <CardTitle className="text-base">{t('cabclt.ar.directors', locale)}</CardTitle>
+              <Badge variant="secondary">{administrateurs.filter(a => a.actif).length} {t('cabclt.ar.active_count', locale)}</Badge>
             </div>
             <Dialog open={showAdministrateur} onOpenChange={setShowAdministrateur}>
               <DialogTrigger asChild>
@@ -592,22 +595,22 @@ export default function AnnualReturnPage() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Nouvel administrateur</DialogTitle>
+                  <DialogTitle>{t('cabclt.ar.new_director', locale)}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>Nom *</Label>
+                      <Label>{t('cabclt.ar.name', locale)} *</Label>
                       <Input value={newAdmin.nom} onChange={e => setNewAdmin(f => ({ ...f, nom: e.target.value }))} />
                     </div>
                     <div>
-                      <Label>Prénom</Label>
+                      <Label>{t('cabclt.ar.firstname', locale)}</Label>
                       <Input value={newAdmin.prenom} onChange={e => setNewAdmin(f => ({ ...f, prenom: e.target.value }))} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>Fonction</Label>
+                      <Label>{t('cabclt.ar.role', locale)}</Label>
                       <Select value={newAdmin.type} onValueChange={v => setNewAdmin(f => ({ ...f, type: v }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -620,22 +623,22 @@ export default function AnnualReturnPage() {
                       </Select>
                     </div>
                     <div>
-                      <Label>Nationalité</Label>
+                      <Label>{t('cabclt.ar.nationality', locale)}</Label>
                       <Input value={newAdmin.nationalite} onChange={e => setNewAdmin(f => ({ ...f, nationalite: e.target.value }))} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>NIC</Label>
-                      <Input value={newAdmin.nic} onChange={e => setNewAdmin(f => ({ ...f, nic: e.target.value }))} placeholder="National ID Card" />
+                      <Input value={newAdmin.nic} onChange={e => setNewAdmin(f => ({ ...f, nic: e.target.value }))} placeholder={t('cabclt.ar.nic_placeholder', locale)} />
                     </div>
                     <div>
-                      <Label>Date de nomination</Label>
+                      <Label>{t('cabclt.ar.nomination_date', locale)}</Label>
                       <Input type="date" value={newAdmin.date_nomination} onChange={e => setNewAdmin(f => ({ ...f, date_nomination: e.target.value }))} />
                     </div>
                   </div>
                   <Button onClick={handleAddAdmin} className="w-full" style={{ backgroundColor: '#0B0F2E', color: 'white' }}>
-                    Ajouter l&apos;administrateur
+                    {t('cabclt.ar.add_director', locale)}
                   </Button>
                 </div>
               </DialogContent>
@@ -646,12 +649,12 @@ export default function AnnualReturnPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Fonction</TableHead>
-                <TableHead>Nationalité</TableHead>
+                <TableHead>{t('cabclt.ar.name', locale)}</TableHead>
+                <TableHead>{t('cabclt.ar.role', locale)}</TableHead>
+                <TableHead>{t('cabclt.ar.nationality', locale)}</TableHead>
                 <TableHead>NIC</TableHead>
-                <TableHead>Date nomination</TableHead>
-                <TableHead>Statut</TableHead>
+                <TableHead>{t('cabclt.ar.nomination_date', locale)}</TableHead>
+                <TableHead>{t('cabclt.ar.status', locale)}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -666,11 +669,11 @@ export default function AnnualReturnPage() {
                   </TableCell>
                   <TableCell>{a.nationalite || '—'}</TableCell>
                   <TableCell className="font-mono text-sm">{a.nic || '—'}</TableCell>
-                  <TableCell>{fmtDate(a.date_nomination)}</TableCell>
+                  <TableCell>{fmtDate(a.date_nomination, locale)}</TableCell>
                   <TableCell>
                     {a.actif
-                      ? <Badge className="bg-green-100 text-green-700">Actif</Badge>
-                      : <Badge className="bg-gray-100 text-gray-600">Inactif</Badge>}
+                      ? <Badge className="bg-green-100 text-green-700">{t('cabclt.ar.active', locale)}</Badge>
+                      : <Badge className="bg-gray-100 text-gray-600">{t('cabclt.ar.inactive', locale)}</Badge>}
                   </TableCell>
                   <TableCell>
                     {a.actif && (
@@ -689,7 +692,7 @@ export default function AnnualReturnPage() {
               {administrateurs.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    Aucun administrateur enregistré
+                    {t('cabclt.ar.no_directors', locale)}
                   </TableCell>
                 </TableRow>
               )}
@@ -703,13 +706,13 @@ export default function AnnualReturnPage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" style={{ color: '#D4AF37' }} />
-            <CardTitle className="text-base">États financiers simplifiés</CardTitle>
+            <CardTitle className="text-base">{t('cabclt.ar.simplified_fs', locale)}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <Label className="text-xs text-muted-foreground">Actif total</Label>
+              <Label className="text-xs text-muted-foreground">{t('cabclt.ar.total_assets', locale)}</Label>
               <Input
                 type="number"
                 value={returnForm.actif_total}
@@ -718,7 +721,7 @@ export default function AnnualReturnPage() {
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Passif total</Label>
+              <Label className="text-xs text-muted-foreground">{t('cabclt.ar.total_liabilities', locale)}</Label>
               <Input
                 type="number"
                 value={returnForm.passif_total}
@@ -727,7 +730,7 @@ export default function AnnualReturnPage() {
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Chiffre d&apos;affaires</Label>
+              <Label className="text-xs text-muted-foreground">{t('cabclt.ar.turnover', locale)}</Label>
               <Input
                 type="number"
                 value={returnForm.chiffre_affaires}
@@ -736,7 +739,7 @@ export default function AnnualReturnPage() {
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Résultat net</Label>
+              <Label className="text-xs text-muted-foreground">{t('cabclt.ar.net_profit', locale)}</Label>
               <Input
                 type="number"
                 value={returnForm.resultat_net}
@@ -747,11 +750,11 @@ export default function AnnualReturnPage() {
           </div>
           {annualReturn && (
             <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 rounded-lg p-3">
-              <div><p className="text-xs text-muted-foreground">Actif total</p><p className="font-bold">{fmt(annualReturn.actif_total)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Passif total</p><p className="font-bold">{fmt(annualReturn.passif_total)}</p></div>
-              <div><p className="text-xs text-muted-foreground">CA</p><p className="font-bold">{fmt(annualReturn.chiffre_affaires)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('cabclt.ar.total_assets', locale)}</p><p className="font-bold">{fmt(annualReturn.actif_total)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('cabclt.ar.total_liabilities', locale)}</p><p className="font-bold">{fmt(annualReturn.passif_total)}</p></div>
+              <div><p className="text-xs text-muted-foreground">{t('cabclt.ar.ca_short', locale)}</p><p className="font-bold">{fmt(annualReturn.chiffre_affaires)}</p></div>
               <div>
-                <p className="text-xs text-muted-foreground">Résultat net</p>
+                <p className="text-xs text-muted-foreground">{t('cabclt.ar.net_profit', locale)}</p>
                 <p className={`font-bold ${annualReturn.resultat_net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {fmt(annualReturn.resultat_net)}
                 </p>
@@ -766,7 +769,7 @@ export default function AnnualReturnPage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <CalendarDays className="h-5 w-5" style={{ color: '#D4AF37' }} />
-            <CardTitle className="text-base">Soumission ROC</CardTitle>
+            <CardTitle className="text-base">{t('cabclt.ar.roc_submission', locale)}</CardTitle>
             {annualReturn && (
               <Badge className={STATUT_COLORS[annualReturn.statut]}>
                 {STATUT_LABELS[annualReturn.statut]}
@@ -777,7 +780,7 @@ export default function AnnualReturnPage() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <Label>Date AGM</Label>
+              <Label>{t('cabclt.ar.agm_date', locale)}</Label>
               <Input
                 type="date"
                 value={returnForm.date_agm}
@@ -786,7 +789,7 @@ export default function AnnualReturnPage() {
               />
             </div>
             <div>
-              <Label>Statut</Label>
+              <Label>{t('cabclt.ar.status', locale)}</Label>
               <Select value={returnForm.statut} onValueChange={v => setReturnForm(f => ({ ...f, statut: v }))}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -797,7 +800,7 @@ export default function AnnualReturnPage() {
               </Select>
             </div>
             <div>
-              <Label>Référence ROC</Label>
+              <Label>{t('cabclt.ar.roc_reference', locale)}</Label>
               <Input
                 value={returnForm.reference_roc}
                 onChange={e => setReturnForm(f => ({ ...f, reference_roc: e.target.value }))}
@@ -809,12 +812,12 @@ export default function AnnualReturnPage() {
 
           {annualReturn?.date_echeance && (
             <div className="mt-4 flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Deadline (AGM + 28 jours) :</span>
+              <span className="text-sm text-muted-foreground">{t('cabclt.ar.deadline_label', locale)}</span>
               <span className={`font-semibold ${
                 deadlineStatus === 'depasse' ? 'text-red-600' :
                 deadlineStatus === 'urgent' ? 'text-orange-600' : 'text-green-600'
               }`}>
-                {fmtDate(annualReturn.date_echeance)}
+                {fmtDate(annualReturn.date_echeance, locale)}
               </span>
               {deadlineStatus === 'depasse' && <AlertTriangle className="h-4 w-4 text-red-500" />}
               {deadlineStatus === 'ok' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
@@ -822,11 +825,11 @@ export default function AnnualReturnPage() {
           )}
 
           <div className="mt-4">
-            <Label>Notes</Label>
+            <Label>{t('cabclt.ar.notes', locale)}</Label>
             <Textarea
               value={returnForm.notes}
               onChange={e => setReturnForm(f => ({ ...f, notes: e.target.value }))}
-              placeholder="Observations, commentaires..."
+              placeholder={t('cabclt.ar.notes_placeholder', locale)}
               className="mt-1"
               rows={3}
             />
@@ -838,7 +841,7 @@ export default function AnnualReturnPage() {
               disabled={savingReturn}
               style={{ backgroundColor: '#0B0F2E', color: 'white' }}
             >
-              {savingReturn ? 'Enregistrement...' : annualReturn ? 'Mettre à jour' : 'Créer Annual Return'}
+              {savingReturn ? t('cabclt.ar.saving', locale) : annualReturn ? t('cabclt.ar.update', locale) : t('cabclt.ar.create_ar', locale)}
             </Button>
             {annualReturn && annualReturn.statut !== 'soumis' && (
               <Button
@@ -852,7 +855,7 @@ export default function AnnualReturnPage() {
                   setTimeout(handleSaveReturn, 100)
                 }}
               >
-                Marquer soumis
+                {t('cabclt.ar.mark_submitted', locale)}
               </Button>
             )}
           </div>

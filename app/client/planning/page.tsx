@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface Societe { id: string; nom: string }
 interface Employe { id: string; nom: string; prenom: string }
@@ -20,7 +21,8 @@ type Shift = "9h-17h" | "14h-22h" | "Repos" | "Conge" | string
 interface PlanningRow { employe: Employe; shifts: Shift[] }
 interface Template { id: string; nom: string; shifts: Shift[] }
 
-const JOURS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+const JOURS_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+const JOURS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const SHIFT_OPTIONS: Shift[] = ["9h-17h", "14h-22h", "Repos", "Conge"]
 
 function getShiftColor(shift: Shift): string {
@@ -31,13 +33,13 @@ function getShiftColor(shift: Shift): string {
   return "bg-white text-gray-700 border-gray-200"
 }
 
-function getWeekDates(offset: number): { start: Date; end: Date; label: string } {
+function getWeekDates(offset: number, loc: Locale = 'fr'): { start: Date; end: Date; label: string } {
   const d = new Date()
   d.setDate(d.getDate() - d.getDay() + 1 + offset * 7)
   const start = new Date(d)
   const end = new Date(d)
   end.setDate(end.getDate() + 6)
-  const fmt = (dt: Date) => dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })
+  const fmt = (dt: Date) => dt.toLocaleDateString(loc === 'fr' ? "fr-FR" : "en-US", { day: "2-digit", month: "short" })
   return { start, end, label: `${fmt(start)} - ${fmt(end)} ${end.getFullYear()}` }
 }
 
@@ -47,6 +49,8 @@ const DEFAULT_TEMPLATES: Template[] = [
 ]
 
 export default function PlanningPage() {
+  const locale = getLocale()
+  const JOURS = locale === 'fr' ? JOURS_FR : JOURS_EN
   const { profile, loading: profileLoading } = useProfile()
   const { societeId } = useSocieteActive()
   const [employes, setEmployes] = useState<Employe[]>([])
@@ -61,7 +65,7 @@ export default function PlanningPage() {
   const [editCell, setEditCell] = useState<{ row: number; col: number } | null>(null)
   const [fetching, setFetching] = useState(true)
 
-  const week = getWeekDates(weekOffset)
+  const week = getWeekDates(weekOffset, locale)
 
   const fetchEmployes = useCallback(async () => {
     if (!societeId) return
@@ -157,8 +161,8 @@ export default function PlanningPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Planning</h1>
-          <p className="text-sm text-gray-500">Planification des horaires hebdomadaires</p>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('hr.planning.title', locale)}</h1>
+          <p className="text-sm text-gray-500">{t('hr.planning.subtitle', locale)}</p>
         </div>
       </div>
 
@@ -177,12 +181,12 @@ export default function PlanningPage() {
               <ChevronRight className="w-4 h-4" />
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setWeekOffset(0)} className="text-xs text-[#D4AF37]">
-              Aujourd&apos;hui
+              {t('hr.planning.today', locale)}
             </Button>
           </div>
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <Input placeholder="Filtrer employes..." value={filter} onChange={e => setFilter(e.target.value)} className="pl-9 w-56" />
+            <Input placeholder={t('hr.planning.filter_employees', locale)} value={filter} onChange={e => setFilter(e.target.value)} className="pl-9 w-56" />
           </div>
         </CardContent>
       </Card>
@@ -197,13 +201,13 @@ export default function PlanningPage() {
           ) : rows.length === 0 ? (
             <div className="py-16 text-center text-gray-400">
               <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p>Aucun employe trouve</p>
+              <p>{t('hr.planning.no_employees', locale)}</p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-[#0B0F2E] text-white">
-                  <th className="text-left px-4 py-3 font-medium w-48">Employe</th>
+                  <th className="text-left px-4 py-3 font-medium w-48">{t('hr.planning.employee', locale)}</th>
                   {JOURS.map((j, idx) => {
                     const d = new Date(week.start)
                     d.setDate(d.getDate() + idx)
@@ -266,24 +270,24 @@ export default function PlanningPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
-              <Clock className="w-4 h-4" /> Modeles de planning
+              <Clock className="w-4 h-4" /> {t('hr.planning.templates_title', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {templates.map(t => (
-              <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border bg-gray-50/50">
+            {templates.map(tpl => (
+              <div key={tpl.id} className="flex items-center justify-between p-3 rounded-lg border bg-gray-50/50">
                 <div>
-                  <p className="font-medium text-sm text-[#0B0F2E]">{t.nom}</p>
+                  <p className="font-medium text-sm text-[#0B0F2E]">{tpl.nom}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {t.shifts.join(" / ")}
+                    {tpl.shifts.join(" / ")}
                   </p>
                 </div>
                 <div className="flex gap-1.5">
-                  <Button size="sm" variant="outline" onClick={() => applyTemplate(t, "all")} className="text-xs h-7">
-                    Appliquer a tous
+                  <Button size="sm" variant="outline" onClick={() => applyTemplate(tpl, "all")} className="text-xs h-7">
+                    {t('hr.planning.apply_all', locale)}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => applyTemplate(t, "filtered")} className="text-xs h-7">
-                    Au filtre
+                  <Button size="sm" variant="outline" onClick={() => applyTemplate(tpl, "filtered")} className="text-xs h-7">
+                    {t('hr.planning.apply_filtered', locale)}
                   </Button>
                 </div>
               </div>
@@ -292,21 +296,21 @@ export default function PlanningPage() {
             <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="w-full border-dashed border-[#D4AF37] text-[#D4AF37]">
-                  <Save className="w-3.5 h-3.5 mr-1.5" /> Sauvegarder le planning actuel comme modele
+                  <Save className="w-3.5 h-3.5 mr-1.5" /> {t('hr.planning.save_as_template', locale)}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle className="text-[#0B0F2E]">Sauvegarder comme modele</DialogTitle>
+                  <DialogTitle className="text-[#0B0F2E]">{t('hr.planning.save_as_template_title', locale)}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-2 py-2">
-                  <Label>Nom du modele</Label>
-                  <Input value={saveTemplateName} onChange={e => setSaveTemplateName(e.target.value)} placeholder="Mon modele personnalise" />
-                  <p className="text-xs text-gray-500">Le planning du premier employe sera utilise comme modele de reference.</p>
+                  <Label>{t('hr.planning.template_name', locale)}</Label>
+                  <Input value={saveTemplateName} onChange={e => setSaveTemplateName(e.target.value)} placeholder={t('hr.planning.template_name_ph', locale)} />
+                  <p className="text-xs text-gray-500">{t('hr.planning.template_help', locale)}</p>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>Annuler</Button>
-                  <Button className="bg-[#0B0F2E] hover:bg-[#16203a] text-white" onClick={handleSaveTemplate}>Sauvegarder</Button>
+                  <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>{t('hr.planning.cancel', locale)}</Button>
+                  <Button className="bg-[#0B0F2E] hover:bg-[#16203a] text-white" onClick={handleSaveTemplate}>{t('hr.planning.save', locale)}</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -317,16 +321,16 @@ export default function PlanningPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
-              <Wand2 className="w-4 h-4" /> Generation IA
+              <Wand2 className="w-4 h-4" /> {t('hr.planning.ai_title', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-gray-500">
-              Decrivez le planning souhaite en langage naturel et laissez l&apos;IA remplir la grille.
+              {t('hr.planning.ai_help', locale)}
             </p>
             <textarea
               className="w-full border rounded-lg p-3 text-sm min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50"
-              placeholder="Ex: Equipe A en matin du lundi au vendredi, equipe B en apres-midi. Week-end repos pour tous sauf Jean qui travaille le samedi matin."
+              placeholder={t('hr.planning.ai_placeholder', locale)}
               value={aiPrompt}
               onChange={e => setAiPrompt(e.target.value)}
             />
@@ -336,7 +340,7 @@ export default function PlanningPage() {
               className="w-full bg-[#D4AF37] hover:bg-[#b8963f] text-[#0B0F2E]"
             >
               {aiLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Wand2 className="w-4 h-4 mr-1.5" />}
-              Generer
+              {t('hr.planning.generate', locale)}
             </Button>
           </CardContent>
         </Card>

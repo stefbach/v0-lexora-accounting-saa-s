@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " MUR"
 
@@ -32,17 +33,20 @@ interface Resultat {
   net: number; charges_pat: number; cout_total: number
 }
 
-const STEPS = [
-  { num: 1, label: "Periode", icon: Calendar },
-  { num: 2, label: "Employes", icon: Users },
-  { num: 3, label: "Variables", icon: Calculator },
-  { num: 4, label: "Resultat", icon: FileText },
-  { num: 5, label: "Bulletins", icon: FileSpreadsheet },
-  { num: 6, label: "Exports", icon: Download },
-]
-const MONTHS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"]
+const MONTHS_FR = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"]
+const MONTHS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"]
 
 export default function ElaborationPaiePage() {
+  const locale = getLocale()
+  const STEPS = [
+    { num: 1, label: t('hr.elab.step_period', locale), icon: Calendar },
+    { num: 2, label: t('hr.elab.step_employees', locale), icon: Users },
+    { num: 3, label: t('hr.elab.step_variables', locale), icon: Calculator },
+    { num: 4, label: t('hr.elab.step_result', locale), icon: FileText },
+    { num: 5, label: t('hr.elab.step_payslips', locale), icon: FileSpreadsheet },
+    { num: 6, label: t('hr.elab.step_exports', locale), icon: Download },
+  ]
+  const MONTHS = locale === 'fr' ? MONTHS_FR : MONTHS_EN
   const { profile, loading: profileLoading } = useProfile()
   const { societeId, societe } = useSocieteActive()
   const [step, setStep] = useState(1)
@@ -176,10 +180,10 @@ export default function ElaborationPaiePage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Elaboration de la Paie</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('hr.elab.title', locale)}</h1>
           <p className="text-sm text-gray-500 mt-1">
             {societeNom && <span className="font-medium">{societeNom}</span>}
-            {periode && <span className="ml-2">-- Periode : {MONTHS[parseInt(month) - 1]} {year}</span>}
+            {periode && <span className="ml-2">-- {t('hr.elab.period', locale)} : {MONTHS[parseInt(month) - 1]} {year}</span>}
           </p>
         </div>
       </div>
@@ -207,25 +211,25 @@ export default function ElaborationPaiePage() {
       {/* Step 1: Periode */}
       {step === 1 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Calendar className="w-5 h-5 text-[#D4AF37]" />Selectionner la periode de paie</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Calendar className="w-5 h-5 text-[#D4AF37]" />{t('hr.elab.select_period', locale)}</CardTitle></CardHeader>
           <CardContent>
             <div className="flex gap-4 items-end">
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Mois</label>
+                <label className="text-sm font-medium text-gray-700">{t('hr.elab.month', locale)}</label>
                 <Select value={month} onValueChange={setMonth}>
                   <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
                   <SelectContent>{MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Annee</label>
+                <label className="text-sm font-medium text-gray-700">{t('hr.elab.year', locale)}</label>
                 <Select value={year} onValueChange={setYear}>
                   <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                   <SelectContent>{[2024, 2025, 2026].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <Button onClick={handleStart} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white">
-                <ArrowRight className="w-4 h-4 mr-2" />Demarrer
+                <ArrowRight className="w-4 h-4 mr-2" />{t('hr.elab.start', locale)}
               </Button>
             </div>
           </CardContent>
@@ -235,21 +239,21 @@ export default function ElaborationPaiePage() {
       {/* Step 2: Employes */}
       {step === 2 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Users className="w-5 h-5 text-[#D4AF37]" />Selection des employes</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Users className="w-5 h-5 text-[#D4AF37]" />{t('hr.elab.employee_selection', locale)}</CardTitle></CardHeader>
           <CardContent>
             {processing ? (
-              <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#D4AF37]" /><span className="ml-2 text-gray-500">Chargement...</span></div>
+              <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#D4AF37]" /><span className="ml-2 text-gray-500">{t('hr.elab.loading', locale)}</span></div>
             ) : (<>
               <div className="mb-3 flex items-center gap-3">
-                <Badge variant="outline" className="text-[#0B0F2E]">{selected.size} / {employes.length} selectionnes</Badge>
-                <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(employes.map(e => e.id)))}>Tout selectionner</Button>
-                <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Tout deselectionner</Button>
+                <Badge variant="outline" className="text-[#0B0F2E]">{selected.size} / {employes.length} {t('hr.elab.selected', locale)}</Badge>
+                <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(employes.map(e => e.id)))}>{t('hr.elab.select_all', locale)}</Button>
+                <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>{t('hr.elab.deselect_all', locale)}</Button>
               </div>
               <div className="border rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader><TableRow className="bg-gray-50">
-                    <TableHead className="w-10"></TableHead><TableHead>Nom</TableHead><TableHead>Poste</TableHead>
-                    <TableHead className="text-right">Salaire de base</TableHead><TableHead>Banque</TableHead>
+                    <TableHead className="w-10"></TableHead><TableHead>{t('hr.elab.name', locale)}</TableHead><TableHead>{t('hr.elab.position', locale)}</TableHead>
+                    <TableHead className="text-right">{t('hr.elab.base_salary', locale)}</TableHead><TableHead>{t('hr.elab.bank', locale)}</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {employes.map(e => (
@@ -263,14 +267,14 @@ export default function ElaborationPaiePage() {
                         <TableCell className="text-gray-500">{e.banque || e.compte_bancaire || "--"}</TableCell>
                       </TableRow>
                     ))}
-                    {employes.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-gray-400 py-8">Aucun employe trouve</TableCell></TableRow>}
+                    {employes.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-gray-400 py-8">{t('hr.elab.no_employees', locale)}</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </div>
               <div className="mt-4 flex justify-between">
-                <Button variant="outline" onClick={() => setStep(1)}>Retour</Button>
+                <Button variant="outline" onClick={() => setStep(1)}>{t('hr.elab.back', locale)}</Button>
                 <Button onClick={handleValidateEmployees} disabled={selected.size === 0} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white">
-                  <CheckCircle className="w-4 h-4 mr-2" />Valider ({selected.size})
+                  <CheckCircle className="w-4 h-4 mr-2" />{t('hr.elab.validate', locale)} ({selected.size})
                 </Button>
               </div>
             </>)}
@@ -281,15 +285,15 @@ export default function ElaborationPaiePage() {
       {/* Step 3: Variables */}
       {step === 3 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Calculator className="w-5 h-5 text-[#D4AF37]" />Saisie des variables de paie</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Calculator className="w-5 h-5 text-[#D4AF37]" />{t('hr.elab.variables_title', locale)}</CardTitle></CardHeader>
           <CardContent>
             <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader><TableRow className="bg-gray-50">
-                  <TableHead className="min-w-[160px]">Employe</TableHead>
-                  <TableHead className="text-center w-24">Jours</TableHead><TableHead className="text-center w-24">Absences</TableHead>
+                  <TableHead className="min-w-[160px]">{t('hr.elab.employee', locale)}</TableHead>
+                  <TableHead className="text-center w-24">{t('hr.elab.days', locale)}</TableHead><TableHead className="text-center w-24">{t('hr.elab.absences', locale)}</TableHead>
                   <TableHead className="text-center w-24">HS 1.5x</TableHead><TableHead className="text-center w-24">HS 2x</TableHead>
-                  <TableHead className="text-center w-28">Primes</TableHead><TableHead className="text-center w-28">Avance</TableHead>
+                  <TableHead className="text-center w-28">{t('hr.elab.bonuses', locale)}</TableHead><TableHead className="text-center w-28">{t('hr.elab.advance', locale)}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {variables.map((v, i) => (
@@ -304,9 +308,9 @@ export default function ElaborationPaiePage() {
               </Table>
             </div>
             <div className="mt-4 flex justify-between">
-              <Button variant="outline" onClick={() => setStep(2)}>Retour</Button>
+              <Button variant="outline" onClick={() => setStep(2)}>{t('hr.elab.back', locale)}</Button>
               <Button onClick={handleCalculate} disabled={processing} className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-[#0B0F2E] font-semibold">
-                {processing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Calculator className="w-4 h-4 mr-2" />}Calculer
+                {processing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Calculator className="w-4 h-4 mr-2" />}{t('hr.elab.calculate', locale)}
               </Button>
             </div>
           </CardContent>
@@ -317,9 +321,9 @@ export default function ElaborationPaiePage() {
       {step === 4 && (<>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { label: "Masse salariale brute", val: summary.masse, border: "border-l-[#0B0F2E]", color: "text-[#0B0F2E]" },
-            { label: "Total net a payer", val: summary.totalNet, border: "border-l-green-500", color: "text-green-700" },
-            { label: "Charges patronales", val: summary.charges, border: "border-l-[#D4AF37]", color: "text-[#D4AF37]" },
+            { label: t('hr.elab.gross_mass', locale), val: summary.masse, border: "border-l-[#0B0F2E]", color: "text-[#0B0F2E]" },
+            { label: t('hr.elab.net_total', locale), val: summary.totalNet, border: "border-l-green-500", color: "text-green-700" },
+            { label: t('hr.elab.employer_charges', locale), val: summary.charges, border: "border-l-[#D4AF37]", color: "text-[#D4AF37]" },
           ].map(c => (
             <Card key={c.label} className={`border-l-4 ${c.border}`}>
               <CardContent className="pt-4">
@@ -330,15 +334,15 @@ export default function ElaborationPaiePage() {
           ))}
         </div>
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><FileText className="w-5 h-5 text-[#D4AF37]" />Resultats du calcul</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><FileText className="w-5 h-5 text-[#D4AF37]" />{t('hr.elab.calc_results', locale)}</CardTitle></CardHeader>
           <CardContent>
             <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader><TableRow className="bg-gray-50">
-                  <TableHead>Employe</TableHead><TableHead className="text-right">Brut</TableHead>
+                  <TableHead>{t('hr.elab.employee', locale)}</TableHead><TableHead className="text-right">{t('hr.elab.gross', locale)}</TableHead>
                   <TableHead className="text-right">CSG</TableHead><TableHead className="text-right">NSF</TableHead>
-                  <TableHead className="text-right">PAYE</TableHead><TableHead className="text-right">Net</TableHead>
-                  <TableHead className="text-right">Ch. Pat.</TableHead><TableHead className="text-right">Cout total</TableHead>
+                  <TableHead className="text-right">PAYE</TableHead><TableHead className="text-right">{t('hr.elab.net', locale)}</TableHead>
+                  <TableHead className="text-right">{t('hr.elab.emp_ch', locale)}</TableHead><TableHead className="text-right">{t('hr.elab.total_cost', locale)}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {resultats.map(r => (
@@ -357,9 +361,9 @@ export default function ElaborationPaiePage() {
               </Table>
             </div>
             <div className="mt-4 flex justify-between">
-              <Button variant="outline" onClick={() => setStep(3)}>Retour</Button>
+              <Button variant="outline" onClick={() => setStep(3)}>{t('hr.elab.back', locale)}</Button>
               <Button onClick={() => { setStep(5) }} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white">
-                <CheckCircle className="w-4 h-4 mr-2" />Valider bulletins
+                <CheckCircle className="w-4 h-4 mr-2" />{t('hr.elab.validate_payslips', locale)}
               </Button>
             </div>
           </CardContent>
@@ -369,7 +373,7 @@ export default function ElaborationPaiePage() {
       {/* Step 5: Bulletins */}
       {step === 5 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><FileSpreadsheet className="w-5 h-5 text-[#D4AF37]" />Bulletins de paie -- {MONTHS[parseInt(month) - 1]} {year}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><FileSpreadsheet className="w-5 h-5 text-[#D4AF37]" />{t('hr.elab.payslips_title', locale)} -- {MONTHS[parseInt(month) - 1]} {year}</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
               {resultats.map(r => (
@@ -378,24 +382,24 @@ export default function ElaborationPaiePage() {
                     <CheckCircle className="w-5 h-5 text-green-500" />
                     <div>
                       <p className="font-medium text-[#0B0F2E]">{r.prenom} {r.nom}</p>
-                      <p className="text-sm text-gray-500">Net : {fmt(r.net)}</p>
+                      <p className="text-sm text-gray-500">{t('hr.elab.net', locale)} : {fmt(r.net)}</p>
                     </div>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => window.open(
                     `/api/rh/paie/pdf?employe_id=${r.employe_id}&periode=${periode}`, "_blank"
-                  )}><Eye className="w-4 h-4 mr-1" />Voir PDF</Button>
+                  )}><Eye className="w-4 h-4 mr-1" />{t('hr.elab.view_pdf', locale)}</Button>
                 </div>
               ))}
-              {resultats.length === 0 && <p className="text-center text-gray-400 py-8">Aucun bulletin</p>}
+              {resultats.length === 0 && <p className="text-center text-gray-400 py-8">{t('hr.elab.no_payslip', locale)}</p>}
             </div>
             <div className="mt-4 flex justify-between">
-              <Button variant="outline" onClick={() => setStep(4)}>Retour</Button>
+              <Button variant="outline" onClick={() => setStep(4)}>{t('hr.elab.back', locale)}</Button>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => window.open(
                   `/api/rh/paie/bulletins-zip?societe_id=${societeId}&periode=${periode}`, "_blank"
-                )}><Download className="w-4 h-4 mr-2" />Telecharger tout</Button>
+                )}><Download className="w-4 h-4 mr-2" />{t('hr.elab.download_all', locale)}</Button>
                 <Button onClick={() => setStep(6)} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white">
-                  <ChevronRight className="w-4 h-4 mr-2" />Exports
+                  <ChevronRight className="w-4 h-4 mr-2" />{t('hr.elab.step_exports', locale)}
                 </Button>
               </div>
             </div>
@@ -406,20 +410,20 @@ export default function ElaborationPaiePage() {
       {/* Step 6: Exports */}
       {step === 6 && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Download className="w-5 h-5 text-[#D4AF37]" />Exports et cloture -- {MONTHS[parseInt(month) - 1]} {year}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-[#0B0F2E]"><Download className="w-5 h-5 text-[#D4AF37]" />{t('hr.elab.exports_close', locale)} -- {MONTHS[parseInt(month) - 1]} {year}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {exportBtn("virement", <Banknote className="w-5 h-5 mr-3 text-[#0B0F2E]" />, "Fichier de virement bancaire", "Format bancaire standard")}
-              {exportBtn("csg", <Calculator className="w-5 h-5 mr-3 text-[#0B0F2E]" />, "Declaration CSG (MRA)", "Contribution Sociale Generalisee")}
-              {exportBtn("paye", <FileText className="w-5 h-5 mr-3 text-[#0B0F2E]" />, "Declaration PAYE (MRA)", "Pay As You Earn")}
-              {exportBtn("compta", <FileSpreadsheet className="w-5 h-5 mr-3 text-[#0B0F2E]" />, "Comptabilisation", "Ecritures comptables de paie")}
+              {exportBtn("virement", <Banknote className="w-5 h-5 mr-3 text-[#0B0F2E]" />, t('hr.elab.export_bank_title', locale), t('hr.elab.export_bank_desc', locale))}
+              {exportBtn("csg", <Calculator className="w-5 h-5 mr-3 text-[#0B0F2E]" />, t('hr.elab.export_csg_title', locale), t('hr.elab.export_csg_desc', locale))}
+              {exportBtn("paye", <FileText className="w-5 h-5 mr-3 text-[#0B0F2E]" />, t('hr.elab.export_paye_title', locale), t('hr.elab.export_paye_desc', locale))}
+              {exportBtn("compta", <FileSpreadsheet className="w-5 h-5 mr-3 text-[#0B0F2E]" />, t('hr.elab.export_compta_title', locale), t('hr.elab.export_compta_desc', locale))}
             </div>
             <div className="mt-6 pt-4 border-t flex justify-between items-center">
-              <Button variant="outline" onClick={() => setStep(5)}>Retour</Button>
+              <Button variant="outline" onClick={() => setStep(5)}>{t('hr.elab.back', locale)}</Button>
               <Button onClick={handleCloture} disabled={exports.cloture || processing}
                 className={exports.cloture ? "bg-green-600 text-white cursor-not-allowed" : "bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-[#0B0F2E] font-semibold"}>
                 {processing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
-                {exports.cloture ? "Periode cloturee" : "Cloturer periode"}
+                {exports.cloture ? t('hr.elab.period_closed', locale) : t('hr.elab.close_period', locale)}
               </Button>
             </div>
           </CardContent>

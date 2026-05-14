@@ -27,6 +27,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 interface Alert {
   severity: "critical" | "warning" | "info"
@@ -37,18 +38,20 @@ interface Alert {
   details?: any
 }
 
-const CODE_LABELS: Record<string, string> = {
-  OCR_ERROR: "Erreur OCR",
-  ORPHAN_OCR: "Pipeline cassé (facture)",
-  ORPHAN_RELEVE: "Pipeline cassé (relevé)",
-  DUPLICATE_INVOICE: "Doublon de facture",
-  MISSING_FIELDS: "Champs manquants",
-  MISMATCH_AMOUNT: "Écart montant",
-  MISMATCH_DATE: "Écart date",
-  MISMATCH_TIERS: "Écart tiers",
-  MISMATCH_CURRENCY: "Écart devise",
-  WRONG_SOCIETE: "Mauvaise société",
-  MISMATCH_RELEVE_TX: "Écart nb transactions relevé",
+function getCodeLabels(locale: Locale): Record<string, string> {
+  return {
+    OCR_ERROR: t('core.lex.label_ocr_error', locale),
+    ORPHAN_OCR: t('core.lex.label_orphan_ocr', locale),
+    ORPHAN_RELEVE: t('core.lex.label_orphan_releve', locale),
+    DUPLICATE_INVOICE: t('core.lex.label_duplicate_invoice', locale),
+    MISSING_FIELDS: t('core.lex.label_missing_fields', locale),
+    MISMATCH_AMOUNT: t('core.lex.label_mismatch_amount', locale),
+    MISMATCH_DATE: t('core.lex.label_mismatch_date', locale),
+    MISMATCH_TIERS: t('core.lex.label_mismatch_tiers', locale),
+    MISMATCH_CURRENCY: t('core.lex.label_mismatch_currency', locale),
+    WRONG_SOCIETE: t('core.lex.label_wrong_societe', locale),
+    MISMATCH_RELEVE_TX: t('core.lex.label_mismatch_releve_tx', locale),
+  }
 }
 
 // Construit un identifiant stable pour une alerte (pour suivi local)
@@ -63,6 +66,8 @@ function alertKey(a: Alert): string {
 const RESOLVED_KEY = "lex-ocr-resolved-v1"
 
 export default function LexOcrPage() {
+  const locale = getLocale()
+  const CODE_LABELS = getCodeLabels(locale)
   const { societeId } = useSocieteActive()
   const [analyzing, setAnalyzing] = useState(false)
   const [result, setResult] = useState<any>(null)
@@ -110,7 +115,7 @@ export default function LexOcrPage() {
         persistResolved(n)
         return n
       })
-      showToast("Alerte marquée comme résolue")
+      showToast(t('core.lex.alert_resolved', locale))
     },
     [persistResolved]
   )
@@ -124,7 +129,7 @@ export default function LexOcrPage() {
         persistResolved(n)
         return n
       })
-      showToast("Alerte ré-affichée")
+      showToast(t('core.lex.alert_reshown', locale))
     },
     [persistResolved]
   )
@@ -141,12 +146,12 @@ export default function LexOcrPage() {
         })
         const d = await res.json()
         if (!res.ok) {
-          showToast(d?.error || "Erreur action", "error")
+          showToast(d?.error || t('core.lex.action_error', locale), "error")
           return false
         }
         return true
       } catch (e: any) {
-        showToast(e?.message || "Erreur réseau", "error")
+        showToast(e?.message || t('core.lex.network_error', locale), "error")
         return false
       } finally {
         setActing(null)
@@ -169,7 +174,7 @@ export default function LexOcrPage() {
         fields,
       })
       if (ok) {
-        showToast(`OCR appliqué (${field}) — relance Lex OCR pour vérifier`)
+        showToast(`${t('core.lex.ocr_applied', locale)} (${field}) — ${t('core.lex.relaunch_to_check', locale)}`)
         markResolved(a)
       }
     },
@@ -180,7 +185,7 @@ export default function LexOcrPage() {
     async (facture_id: string, a: Alert) => {
       const ok = await callAction({ action: "annule_facture", facture_id })
       if (ok) {
-        showToast("Facture annulée")
+        showToast(t('core.lex.invoice_cancelled', locale))
         markResolved(a)
       }
     },
@@ -198,13 +203,13 @@ export default function LexOcrPage() {
       })
       const d = await res.json()
       if (!res.ok) {
-        showToast(d?.error || "Erreur Lex OCR", "error")
+        showToast(d?.error || t('core.lex.lex_ocr_error', locale), "error")
         return
       }
       setResult(d)
-      showToast(`Lex OCR : score ${d.score}/100 — ${d.alerts.length} alerte(s)`)
+      showToast(`${t('core.lex.lex_ocr_score_msg', locale)} ${d.score}/100 — ${d.alerts.length} ${t('core.lex.alerts_count_word_one', locale)}`)
     } catch (e: any) {
-      showToast(e?.message || "Erreur réseau", "error")
+      showToast(e?.message || t('core.lex.network_error', locale), "error")
     } finally {
       setAnalyzing(false)
     }
@@ -257,12 +262,11 @@ export default function LexOcrPage() {
                 <h1 className="text-2xl font-bold text-indigo-900 flex items-center gap-2">
                   Lex OCR
                   <Badge className="bg-indigo-600 text-white text-[10px] uppercase">
-                    Agent IA
+                    {t('core.lex.ai_agent', locale)}
                   </Badge>
                 </h1>
                 <p className="text-sm text-indigo-700/80 mt-0.5">
-                  Contrôle qualité OCR : intégrité des extractions, cohérence DB,
-                  doublons, mismatches
+                  {t('core.lex.header_subtitle', locale)}
                 </p>
               </div>
             </div>
@@ -270,7 +274,7 @@ export default function LexOcrPage() {
               <Link href="/client/documents">
                 <Button variant="outline" size="sm">
                   <FileText className="h-4 w-4 mr-1.5" />
-                  Documents
+                  {t('core.lex.documents', locale)}
                 </Button>
               </Link>
               <Button
@@ -281,12 +285,12 @@ export default function LexOcrPage() {
                 {analyzing ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Analyse en cours…
+                    {t('core.lex.analyzing_dots', locale)}
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Lancer Lex OCR
+                    {t('core.lex.launch_lex_ocr', locale)}
                   </>
                 )}
               </Button>
@@ -297,17 +301,16 @@ export default function LexOcrPage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('core.lex.company_unavailable', locale)}
             </CardContent>
           </Card>
         ) : !result ? (
           <Card>
             <CardContent className="py-16 text-center">
               <Bot className="h-12 w-12 mx-auto text-indigo-300 mb-3" />
-              <p className="font-medium text-sm">Lance l'analyse pour démarrer</p>
+              <p className="font-medium text-sm">{t('core.lex.launch_to_start', locale)}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                L'agent compare les données extraites par OCR avec ce qui a été
-                effectivement persisté en base et signale les incohérences.
+                {t('core.lex.agent_desc', locale)}
               </p>
             </CardContent>
           </Card>
@@ -321,28 +324,28 @@ export default function LexOcrPage() {
                     <Bot className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold">Lex OCR — Contrôle qualité</h3>
+                    <h3 className="font-bold">{t('core.lex.quality_control', locale)}</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {summary.total_documents} document(s) analysés ·{" "}
-                      {summary.factures_creees} factures · {summary.releves_crees} relevés
+                      {summary.total_documents} {t('core.lex.docs_analyzed', locale)} ·{" "}
+                      {summary.factures_creees} {t('core.lex.factures', locale)} · {summary.releves_crees} {t('core.lex.releves', locale)}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className={`text-4xl font-bold ${scoreColor}`}>{score}</div>
-                  <div className="text-xs text-muted-foreground">/100 santé</div>
+                  <div className="text-xs text-muted-foreground">{t('core.lex.health_suffix', locale)}</div>
                 </div>
               </div>
             </div>
 
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              <KpiCard label="Docs en erreur" value={summary.docs_en_erreur || 0} tone="rose" accent={summary.docs_en_erreur > 0} />
-              <KpiCard label="Orphelins" value={summary.docs_orphelins || 0} tone="rose" accent={summary.docs_orphelins > 0} />
-              <KpiCard label="Champs manquants" value={summary.docs_champs_manquants || 0} tone="amber" accent={summary.docs_champs_manquants > 0} />
-              <KpiCard label="Doublons factures" value={summary.doublons_facture || 0} tone="amber" accent={summary.doublons_facture > 0} />
-              <KpiCard label="Mismatch montant" value={summary.mismatches_montant || 0} tone="amber" accent={summary.mismatches_montant > 0} />
-              <KpiCard label="Mismatch tiers" value={summary.mismatches_tiers || 0} tone="blue" />
+              <KpiCard label={t('core.lex.kpi_docs_error', locale)} value={summary.docs_en_erreur || 0} tone="rose" accent={summary.docs_en_erreur > 0} />
+              <KpiCard label={t('core.lex.kpi_orphans', locale)} value={summary.docs_orphelins || 0} tone="rose" accent={summary.docs_orphelins > 0} />
+              <KpiCard label={t('core.lex.kpi_missing_fields', locale)} value={summary.docs_champs_manquants || 0} tone="amber" accent={summary.docs_champs_manquants > 0} />
+              <KpiCard label={t('core.lex.kpi_dup_invoices', locale)} value={summary.doublons_facture || 0} tone="amber" accent={summary.doublons_facture > 0} />
+              <KpiCard label={t('core.lex.kpi_mismatch_amount', locale)} value={summary.mismatches_montant || 0} tone="amber" accent={summary.mismatches_montant > 0} />
+              <KpiCard label={t('core.lex.kpi_mismatch_tiers', locale)} value={summary.mismatches_tiers || 0} tone="blue" />
             </div>
 
             {/* Filtre sévérité */}
@@ -351,10 +354,10 @@ export default function LexOcrPage() {
                 <div className="flex gap-1 flex-wrap">
                   {(
                     [
-                      { v: "all", label: "Toutes", count: alerts.length },
-                      { v: "critical", label: "Critiques", count: alerts.filter((a) => a.severity === "critical").length, color: "border-red-300" },
-                      { v: "warning", label: "Avertissements", count: alerts.filter((a) => a.severity === "warning").length, color: "border-amber-300" },
-                      { v: "info", label: "Infos", count: alerts.filter((a) => a.severity === "info").length, color: "border-blue-300" },
+                      { v: "all", label: t('core.lex.f_all', locale), count: alerts.length },
+                      { v: "critical", label: t('core.lex.f_critical', locale), count: alerts.filter((a) => a.severity === "critical").length, color: "border-red-300" },
+                      { v: "warning", label: t('core.lex.f_warning', locale), count: alerts.filter((a) => a.severity === "warning").length, color: "border-amber-300" },
+                      { v: "info", label: t('core.lex.f_info', locale), count: alerts.filter((a) => a.severity === "info").length, color: "border-blue-300" },
                     ] as const
                   ).map((opt: any) => (
                     <button
@@ -379,7 +382,7 @@ export default function LexOcrPage() {
                 <CardTitle className="text-base flex items-center gap-2 justify-between">
                   <span className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-amber-600" />
-                    Alertes ({filteredAlerts.length})
+                    {t('core.lex.alerts_count', locale)} ({filteredAlerts.length})
                   </span>
                   {resolvedCount > 0 && (
                     <Button
@@ -391,12 +394,12 @@ export default function LexOcrPage() {
                       {showResolved ? (
                         <>
                           <EyeOff className="h-3.5 w-3.5 mr-1" />
-                          Masquer résolues ({resolvedCount})
+                          {t('core.lex.hide_resolved', locale)} ({resolvedCount})
                         </>
                       ) : (
                         <>
                           <Eye className="h-3.5 w-3.5 mr-1" />
-                          Voir résolues ({resolvedCount})
+                          {t('core.lex.show_resolved', locale)} ({resolvedCount})
                         </>
                       )}
                     </Button>
@@ -410,9 +413,9 @@ export default function LexOcrPage() {
                     <p className="text-sm font-medium">
                       {filter === "all"
                         ? alerts.length === 0
-                          ? "Aucune anomalie détectée — pipeline OCR propre"
-                          : "Toutes les alertes ont été traitées"
-                        : `Aucune alerte ${filter}`}
+                          ? t('core.lex.no_anomaly', locale)
+                          : t('core.lex.all_handled', locale)
+                        : `${t('core.lex.no_alert_with_severity', locale)} ${filter}`}
                     </p>
                   </div>
                 ) : (
@@ -452,7 +455,7 @@ export default function LexOcrPage() {
                               )}
                               {isResolved && (
                                 <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300">
-                                  Résolue
+                                  {t('core.lex.resolved', locale)}
                                 </Badge>
                               )}
                             </div>
@@ -478,7 +481,7 @@ export default function LexOcrPage() {
                                         ) : (
                                           <ArrowRight className="h-3 w-3 mr-1" />
                                         )}
-                                        Appliquer OCR
+                                        {t('core.lex.apply_ocr', locale)}
                                       </Button>
                                       <Button
                                         size="sm"
@@ -487,7 +490,7 @@ export default function LexOcrPage() {
                                         onClick={() => markResolved(a)}
                                       >
                                         <Check className="h-3 w-3 mr-1" />
-                                        OK garder DB
+                                        {t('core.lex.ok_keep_db', locale)}
                                       </Button>
                                       <Link
                                         href={`/client/factures/${a.details.facture_id}`}
@@ -498,7 +501,7 @@ export default function LexOcrPage() {
                                           className="h-7 text-xs"
                                         >
                                           <FileText className="h-3 w-3 mr-1" />
-                                          Ouvrir facture
+                                          {t('core.lex.open_invoice', locale)}
                                         </Button>
                                       </Link>
                                     </>
@@ -516,7 +519,7 @@ export default function LexOcrPage() {
                                       onClick={() => handleAnnuleFacture(fid, a)}
                                     >
                                       <Ban className="h-3 w-3 mr-1" />
-                                      Annuler #{idx + 1}
+                                      {t('core.lex.cancel_idx', locale)} #{idx + 1}
                                     </Button>
                                   ))}
 
@@ -528,7 +531,7 @@ export default function LexOcrPage() {
                                       className="h-7 text-xs"
                                     >
                                       <FileText className="h-3 w-3 mr-1" />
-                                      Compléter la facture
+                                      {t('core.lex.complete_invoice', locale)}
                                     </Button>
                                   </Link>
                                 )}
@@ -544,7 +547,7 @@ export default function LexOcrPage() {
                                         className="h-7 text-xs"
                                       >
                                         <FileText className="h-3 w-3 mr-1" />
-                                        Voir document
+                                        {t('core.lex.view_document', locale)}
                                       </Button>
                                     </Link>
                                   )}
@@ -557,7 +560,7 @@ export default function LexOcrPage() {
                                   onClick={() => markResolved(a)}
                                 >
                                   <CheckCircle2 className="h-3 w-3 mr-1" />
-                                  Marquer résolu
+                                  {t('core.lex.mark_resolved', locale)}
                                 </Button>
                               </div>
                             )}
@@ -571,7 +574,7 @@ export default function LexOcrPage() {
                                   onClick={() => unmarkResolved(a)}
                                 >
                                   <Eye className="h-3 w-3 mr-1" />
-                                  Ré-afficher
+                                  {t('core.lex.reshow', locale)}
                                 </Button>
                               </div>
                             )}
@@ -579,7 +582,7 @@ export default function LexOcrPage() {
                             {a.details && (
                               <details className="mt-2 text-[11px]">
                                 <summary className="cursor-pointer text-muted-foreground">
-                                  détail
+                                  {t('core.lex.detail', locale)}
                                 </summary>
                                 <pre className="mt-1 p-2 bg-white/50 rounded font-mono overflow-x-auto">
                                   {JSON.stringify(a.details, null, 2)}

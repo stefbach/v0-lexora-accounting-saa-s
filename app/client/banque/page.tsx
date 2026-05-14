@@ -43,6 +43,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 interface CompteBancaire {
   id: string
@@ -98,6 +99,7 @@ function daysSince(d: string | null): number {
 }
 
 export default function ClientBanquePage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [comptes, setComptes] = useState<CompteBancaire[]>([])
   const [releves, setReleves] = useState<ReleveBancaire[]>([])
@@ -217,9 +219,9 @@ export default function ClientBanquePage() {
                 <Landmark className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-blue-900">Comptes bancaires</h1>
+                <h1 className="text-2xl font-bold text-blue-900">{t('acc.bnq.title', locale)}</h1>
                 <p className="text-sm text-blue-700/80 mt-0.5">
-                  Comptes & relevés · prérequis pour Lex Banque
+                  {t('acc.bnq.subtitle', locale)}
                 </p>
               </div>
             </div>
@@ -231,7 +233,7 @@ export default function ClientBanquePage() {
                 size="sm"
               >
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('common.refresh', locale)}
               </Button>
               <label>
                 <input
@@ -255,13 +257,13 @@ export default function ClientBanquePage() {
                   ) : (
                     <Upload className="h-4 w-4" />
                   )}
-                  Importer un relevé
+                  {t('acc.bnq.import_statement', locale)}
                 </span>
               </label>
               <Link href="/client/rapprochement">
                 <Button className="bg-purple-600 hover:bg-purple-700 text-white">
                   <Sparkles className="h-4 w-4 mr-1.5" />
-                  Aller à Lex Banque
+                  {t('acc.bnq.go_lex_banque', locale)}
                   <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
               </Link>
@@ -272,7 +274,7 @@ export default function ClientBanquePage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('acc.bnq.no_company', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -283,19 +285,19 @@ export default function ClientBanquePage() {
           <>
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard label="Comptes actifs" value={comptes.filter((c) => c.actif).length} />
+              <KpiCard label={t('acc.bnq.active_accounts', locale)} value={comptes.filter((c) => c.actif).length} />
               <KpiCard
-                label="Solde cumulé"
+                label={t('acc.bnq.cumulative_balance', locale)}
                 value={fmt(totalSoldes, comptes[0]?.devise || "MUR")}
                 tone="green"
               />
               <KpiCard
-                label="Dernier import"
+                label={t('acc.bnq.last_import', locale)}
                 value={lastImport ? formatDate(lastImport) : "—"}
                 tone="blue"
               />
               <KpiCard
-                label="Tx en attente"
+                label={t('acc.bnq.tx_pending', locale)}
                 value={txEnAttente}
                 tone={txEnAttente > 0 ? "amber" : "green"}
                 accent={txEnAttente > 0}
@@ -307,13 +309,13 @@ export default function ClientBanquePage() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Landmark className="h-5 w-5 text-blue-600" />
-                  Vos comptes bancaires ({comptes.length})
+                  {t('acc.bnq.your_accounts', locale)} ({comptes.length})
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {comptes.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    Aucun compte bancaire — importe un relevé pour en créer un.
+                    {t('acc.bnq.no_accounts', locale)}
                   </p>
                 ) : (
                   comptes.map((c) => {

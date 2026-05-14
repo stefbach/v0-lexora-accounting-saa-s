@@ -19,6 +19,7 @@ import {
   Megaphone, Trash2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 import { createClient } from "@/lib/supabase/client"
 import { countJoursOuvrablesSync, buildJoursFeriesSet } from "@/lib/rh/jours-ouvrables"
 import {
@@ -491,6 +492,7 @@ function TeamCalendarView({ conges, employes, societeFilter }: {
 
 // ─── Page component ──────────────────────────────────────────────
 export default function CongesPage() {
+  const locale = getLocale()
   // State
   const [tab, setTab] = useState("dashboard")
   const [societes, setSocietes] = useState<any[]>([])
@@ -1096,7 +1098,7 @@ export default function CongesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Absences & Conges</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.a.conges.title', locale)}</h1>
           <p className="text-sm text-gray-500">
             Gestion des conges - Workers&apos; Rights Act 2019 (Maurice)
           </p>

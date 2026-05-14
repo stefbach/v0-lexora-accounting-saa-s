@@ -22,6 +22,7 @@ import {
 import { FileText, Search, Loader2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 interface Document {
   id: string
@@ -48,26 +49,26 @@ interface SocieteOption {
   nom: string
 }
 
-function getDocTypeBadge(type: string) {
+function getDocTypeBadge(type: string, locale: Locale) {
   const config: Record<string, { label: string; className: string }> = {
-    facture_fournisseur: { label: "Facture fournisseur", className: "bg-purple-100 text-purple-800" },
-    facture_client: { label: "Facture client", className: "bg-blue-100 text-blue-800" },
-    releve_bancaire: { label: "Releve bancaire", className: "bg-green-100 text-green-800" },
-    fiche_paie: { label: "Fiche de paie", className: "bg-orange-100 text-orange-800" },
-    charges_sociales: { label: "Charges sociales", className: "bg-pink-100 text-pink-800" },
-    contrat: { label: "Contrat", className: "bg-indigo-100 text-indigo-800" },
-    autre: { label: "Autre", className: "bg-gray-100 text-gray-800" },
+    facture_fournisseur: { label: t('adm.docs.dt_supplier_invoice', locale), className: "bg-purple-100 text-purple-800" },
+    facture_client: { label: t('adm.docs.dt_client_invoice', locale), className: "bg-blue-100 text-blue-800" },
+    releve_bancaire: { label: t('adm.docs.dt_bank_statement', locale), className: "bg-green-100 text-green-800" },
+    fiche_paie: { label: t('adm.docs.dt_payslip', locale), className: "bg-orange-100 text-orange-800" },
+    charges_sociales: { label: t('adm.docs.dt_social_charges', locale), className: "bg-pink-100 text-pink-800" },
+    contrat: { label: t('adm.docs.dt_contract', locale), className: "bg-indigo-100 text-indigo-800" },
+    autre: { label: t('adm.docs.dt_other', locale), className: "bg-gray-100 text-gray-800" },
   }
   const c = config[type] || config.autre
   return <Badge variant="outline" className={c.className}>{c.label}</Badge>
 }
 
-function getStatusBadge(statut: string) {
+function getStatusBadge(statut: string, locale: Locale) {
   const config: Record<string, { label: string; className: string }> = {
-    en_attente: { label: "En attente", className: "bg-yellow-100 text-yellow-800" },
-    en_cours: { label: "En cours", className: "bg-blue-100 text-blue-800" },
-    traite: { label: "Traite", className: "bg-green-100 text-green-800" },
-    erreur: { label: "Erreur", className: "bg-red-100 text-red-800" },
+    en_attente: { label: t('adm.docs.st_pending', locale), className: "bg-yellow-100 text-yellow-800" },
+    en_cours: { label: t('adm.docs.st_progress', locale), className: "bg-blue-100 text-blue-800" },
+    traite: { label: t('adm.docs.st_processed', locale), className: "bg-green-100 text-green-800" },
+    erreur: { label: t('adm.docs.st_error', locale), className: "bg-red-100 text-red-800" },
   }
   const c = config[statut] || { label: statut, className: "bg-gray-100 text-gray-800" }
   return <Badge variant="outline" className={c.className}>{c.label}</Badge>
@@ -83,6 +84,7 @@ function formatSize(bytes: number | null) {
 const fmtDate = (d: string) => new Date(d).toLocaleDateString("fr-FR")
 
 export default function AdminDocumentsPage() {
+  const locale = getLocale()
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<Stats>({ total: 0, traite: 0, en_attente: 0, en_cours: 0, erreur: 0 })
   const [societes, setSocietes] = useState<SocieteOption[]>([])
@@ -160,8 +162,8 @@ export default function AdminDocumentsPage() {
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Documents</h1>
-        <p className="text-muted-foreground">Suivi des documents de la plateforme (stockage / usage)</p>
+        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('adm.docs.title', locale)}</h1>
+        <p className="text-muted-foreground">{t('adm.docs.subtitle', locale)}</p>
       </div>
 
       {/* Stats */}
@@ -169,25 +171,25 @@ export default function AdminDocumentsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{stats.total}</div>
-            <p className="text-sm text-muted-foreground">Total documents</p>
+            <p className="text-sm text-muted-foreground">{t('adm.docs.total', locale)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-green-600">{stats.traite}</div>
-            <p className="text-sm text-muted-foreground">Traites</p>
+            <p className="text-sm text-muted-foreground">{t('adm.docs.processed', locale)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-yellow-600">{stats.en_attente + stats.en_cours}</div>
-            <p className="text-sm text-muted-foreground">En attente / en cours</p>
+            <p className="text-sm text-muted-foreground">{t('adm.docs.pending_progress', locale)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-red-600">{stats.erreur}</div>
-            <p className="text-sm text-muted-foreground">Erreurs</p>
+            <p className="text-sm text-muted-foreground">{t('adm.docs.errors', locale)}</p>
           </CardContent>
         </Card>
       </div>
@@ -197,7 +199,7 @@ export default function AdminDocumentsPage() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Rechercher par nom de fichier..."
+            placeholder={t('adm.docs.search', locale)}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -205,37 +207,37 @@ export default function AdminDocumentsPage() {
         </div>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Type de document" />
+            <SelectValue placeholder={t('adm.docs.type_doc', locale)} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tous les types</SelectItem>
-            <SelectItem value="facture_fournisseur">Facture fournisseur</SelectItem>
-            <SelectItem value="facture_client">Facture client</SelectItem>
-            <SelectItem value="releve_bancaire">Releve bancaire</SelectItem>
-            <SelectItem value="fiche_paie">Fiche de paie</SelectItem>
-            <SelectItem value="charges_sociales">Charges sociales</SelectItem>
-            <SelectItem value="contrat">Contrat</SelectItem>
-            <SelectItem value="autre">Autre</SelectItem>
+            <SelectItem value="all">{t('adm.docs.all_types', locale)}</SelectItem>
+            <SelectItem value="facture_fournisseur">{t('adm.docs.dt_supplier_invoice', locale)}</SelectItem>
+            <SelectItem value="facture_client">{t('adm.docs.dt_client_invoice', locale)}</SelectItem>
+            <SelectItem value="releve_bancaire">{t('adm.docs.dt_bank_statement', locale)}</SelectItem>
+            <SelectItem value="fiche_paie">{t('adm.docs.dt_payslip', locale)}</SelectItem>
+            <SelectItem value="charges_sociales">{t('adm.docs.dt_social_charges', locale)}</SelectItem>
+            <SelectItem value="contrat">{t('adm.docs.dt_contract', locale)}</SelectItem>
+            <SelectItem value="autre">{t('adm.docs.dt_other', locale)}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Statut" />
+            <SelectValue placeholder={t('adm.docs.status', locale)} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="en_attente">En attente</SelectItem>
-            <SelectItem value="en_cours">En cours</SelectItem>
-            <SelectItem value="traite">Traite</SelectItem>
-            <SelectItem value="erreur">Erreur</SelectItem>
+            <SelectItem value="all">{t('adm.docs.all_statuses', locale)}</SelectItem>
+            <SelectItem value="en_attente">{t('adm.docs.st_pending', locale)}</SelectItem>
+            <SelectItem value="en_cours">{t('adm.docs.st_progress', locale)}</SelectItem>
+            <SelectItem value="traite">{t('adm.docs.st_processed', locale)}</SelectItem>
+            <SelectItem value="erreur">{t('adm.docs.st_error', locale)}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={societeFilter} onValueChange={setSocieteFilter}>
           <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Societe" />
+            <SelectValue placeholder={t('adm.docs.company', locale)} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Toutes les societes</SelectItem>
+            <SelectItem value="all">{t('adm.docs.all_companies', locale)}</SelectItem>
             {societes.map((s) => (
               <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
             ))}
@@ -248,11 +250,11 @@ export default function AdminDocumentsPage() {
         <div className="sticky top-0 z-20 flex items-center justify-between gap-3 rounded-lg border border-[#9F1239]/30 bg-[#9F1239]/5 px-4 py-3 shadow-sm">
           <div className="text-sm">
             <span className="font-semibold text-[#0B0F2E]">{selectedIds.size}</span>
-            <span className="text-gray-600"> document{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}</span>
+            <span className="text-gray-600"> {locale === 'en' ? 'document' + (selectedIds.size > 1 ? 's' : '') + ' selected' : 'document' + (selectedIds.size > 1 ? 's' : '') + ' sélectionné' + (selectedIds.size > 1 ? 's' : '')}</span>
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())} disabled={bulkDeleting}>
-              Tout désélectionner
+              {t('adm.docs.deselect_all', locale)}
             </Button>
             <Button
               size="sm"
@@ -261,7 +263,7 @@ export default function AdminDocumentsPage() {
               disabled={bulkDeleting}
             >
               {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Supprimer {selectedIds.size}
+              {t('adm.docs.delete', locale)} {selectedIds.size}
             </Button>
           </div>
         </div>
@@ -290,14 +292,14 @@ export default function AdminDocumentsPage() {
                       }}
                     />
                   </TableHead>
-                  <TableHead>Fichier</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Societe</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Date upload</TableHead>
-                  <TableHead>Taille</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t('adm.docs.col_file', locale)}</TableHead>
+                  <TableHead>{t('adm.docs.col_type', locale)}</TableHead>
+                  <TableHead>{t('adm.docs.col_company', locale)}</TableHead>
+                  <TableHead>{t('adm.docs.col_client', locale)}</TableHead>
+                  <TableHead>{t('adm.docs.col_status', locale)}</TableHead>
+                  <TableHead>{t('adm.docs.col_date', locale)}</TableHead>
+                  <TableHead>{t('adm.docs.col_size', locale)}</TableHead>
+                  <TableHead className="text-right">{t('adm.docs.col_actions', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -317,10 +319,10 @@ export default function AdminDocumentsPage() {
                         <span className="truncate max-w-[250px]">{doc.nom_fichier}</span>
                       </div>
                     </TableCell>
-                    <TableCell>{getDocTypeBadge(doc.type_document)}</TableCell>
+                    <TableCell>{getDocTypeBadge(doc.type_document, locale)}</TableCell>
                     <TableCell>{doc.societe_nom || "—"}</TableCell>
                     <TableCell>{doc.client_nom || "—"}</TableCell>
-                    <TableCell>{getStatusBadge(doc.statut)}</TableCell>
+                    <TableCell>{getStatusBadge(doc.statut, locale)}</TableCell>
                     <TableCell className="text-muted-foreground">{fmtDate(doc.created_at)}</TableCell>
                     <TableCell className="text-muted-foreground">{formatSize(doc.taille)}</TableCell>
                     <TableCell className="text-right">
@@ -353,8 +355,8 @@ export default function AdminDocumentsPage() {
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       {search || typeFilter !== "all" || statusFilter !== "all" || societeFilter !== "all"
-                        ? "Aucun document trouve pour ces criteres."
-                        : "Aucun document sur la plateforme."}
+                        ? t('adm.docs.empty_filter', locale)
+                        : t('adm.docs.empty_all', locale)}
                     </TableCell>
                   </TableRow>
                 )}

@@ -78,7 +78,7 @@ export function AdminSidebar() {
     <>
       <button
         onClick={() => setMobileOpen(true)}
-        aria-label="Ouvrir la navigation"
+        aria-label={t('comp.sidebar.open_nav', locale)}
         className="fixed top-4 left-4 z-50 md:hidden inline-flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-lg backdrop-blur"
         style={{
           backgroundColor: "rgba(16,24,71,0.85)",
@@ -105,7 +105,7 @@ export function AdminSidebar() {
           fontFamily: "'Poppins', sans-serif",
         }}
       >
-        <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10" aria-label="Fermer">
+        <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10" aria-label={t('comp.sidebar.close', locale)}>
           <X className="w-5 h-5" />
         </button>
 

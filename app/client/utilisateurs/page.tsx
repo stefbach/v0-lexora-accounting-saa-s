@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,40 +56,46 @@ interface Societe {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const ROLES = [
-  { value: "admin", label: "Admin Plateforme", color: "bg-red-100 text-red-800 border-red-200" },
-  { value: "super_admin", label: "Super Admin", color: "bg-red-200 text-red-900 border-red-300" },
-  { value: "comptable", label: "Comptable", color: "bg-blue-100 text-blue-800 border-blue-200" },
-  { value: "comptable_dedie", label: "Comptable Dedie", color: "bg-blue-100 text-blue-800 border-blue-200" },
-  { value: "client_admin", label: "Client (Dirigeant)", color: "bg-green-100 text-green-800 border-green-200" },
-  { value: "client_user", label: "Client (Utilisateur)", color: "bg-green-50 text-green-700 border-green-200" },
-  { value: "client_assistant", label: "Assistant (Direction)", color: "bg-cyan-100 text-cyan-800 border-cyan-200" },
-  { value: "rh", label: "RH", color: "bg-orange-100 text-orange-800 border-orange-200" },
-  { value: "juridique", label: "Juridique", color: "bg-purple-100 text-purple-800 border-purple-200" },
-  { value: "manager", label: "Manager", color: "bg-teal-100 text-teal-800 border-teal-200" },
-  { value: "direction", label: "Direction", color: "bg-indigo-100 text-indigo-800 border-indigo-200" },
-  { value: "employe", label: "Employe", color: "bg-gray-100 text-gray-700 border-gray-200" },
-]
+function getRoles(locale: Locale) {
+  return [
+    { value: "admin", label: t('core.users.rl.admin', locale), color: "bg-red-100 text-red-800 border-red-200" },
+    { value: "super_admin", label: t('core.users.rl.super_admin', locale), color: "bg-red-200 text-red-900 border-red-300" },
+    { value: "comptable", label: t('core.users.rl.comptable', locale), color: "bg-blue-100 text-blue-800 border-blue-200" },
+    { value: "comptable_dedie", label: t('core.users.rl.comptable_dedie', locale), color: "bg-blue-100 text-blue-800 border-blue-200" },
+    { value: "client_admin", label: t('core.users.rl.client_admin', locale), color: "bg-green-100 text-green-800 border-green-200" },
+    { value: "client_user", label: t('core.users.rl.client_user', locale), color: "bg-green-50 text-green-700 border-green-200" },
+    { value: "client_assistant", label: t('core.users.rl.client_assistant', locale), color: "bg-cyan-100 text-cyan-800 border-cyan-200" },
+    { value: "rh", label: t('core.users.rl.rh', locale), color: "bg-orange-100 text-orange-800 border-orange-200" },
+    { value: "juridique", label: t('core.users.rl.juridique', locale), color: "bg-purple-100 text-purple-800 border-purple-200" },
+    { value: "manager", label: t('core.users.rl.manager', locale), color: "bg-teal-100 text-teal-800 border-teal-200" },
+    { value: "direction", label: t('core.users.rl.direction', locale), color: "bg-indigo-100 text-indigo-800 border-indigo-200" },
+    { value: "employe", label: t('core.users.rl.employe', locale), color: "bg-gray-100 text-gray-700 border-gray-200" },
+  ]
+}
 
-const HR_ROLE_GUIDE = [
-  { value: 'rh', label: 'RH', desc: 'Employés, Pointage, Paie, Congés', color: 'bg-orange-100 text-orange-800 border-orange-200' },
-  { value: 'manager', label: 'Manager', desc: 'Supervision équipe, validation', color: 'bg-teal-100 text-teal-800 border-teal-200' },
-  { value: 'juridique', label: 'Juridique', desc: 'Contrats, Documents légaux', color: 'bg-purple-100 text-purple-800 border-purple-200' },
-  { value: 'employe', label: 'Employé', desc: 'Portail salarié uniquement', color: 'bg-gray-100 text-gray-700 border-gray-200' },
-]
+function getHrRoleGuide(locale: Locale) {
+  return [
+    { value: 'rh', label: t('core.users.rl.rh', locale), desc: t('core.users.hrg.rh_desc', locale), color: 'bg-orange-100 text-orange-800 border-orange-200' },
+    { value: 'manager', label: t('core.users.rl.manager', locale), desc: t('core.users.hrg.manager_desc', locale), color: 'bg-teal-100 text-teal-800 border-teal-200' },
+    { value: 'juridique', label: t('core.users.rl.juridique', locale), desc: t('core.users.hrg.juridique_desc', locale), color: 'bg-purple-100 text-purple-800 border-purple-200' },
+    { value: 'employe', label: t('core.users.rl.employe', locale), desc: t('core.users.hrg.employe_desc', locale), color: 'bg-gray-100 text-gray-700 border-gray-200' },
+  ]
+}
 
 const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "direction", "client_assistant", "client_admin", "client_user", "comptable", "comptable_dedie"]
 const MULTI_SOCIETE_ROLES = ["client_assistant", "client_admin", "client_user", "rh", "comptable", "comptable_dedie"]
 
-const MODULE_DEFS = [
-  { key: "documents", label: "Documents & OCR", icon: FileText },
-  { key: "comptabilite", label: "Comptabilite (Grand Livre, Bilan, Banque, Rapprochement)", icon: Calculator },
-  { key: "facturation", label: "Facturation (Factures, Nouvelle facture)", icon: Receipt },
-  { key: "rh", label: "RH & Paie (Employes, Pointage, Conges, Paie, Primes)", icon: Users },
-  { key: "fiscal", label: "Fiscal MRA (TVA, IT Form 3, Annual Return)", icon: Scale },
-  { key: "etats_financiers", label: "Etats Financiers (Bilan, Previsionnel, Exercices)", icon: BarChart3 },
-  { key: "employe_portal", label: "Portail Employe (bulletins et conges)", icon: UserCheck },
-] as const
+function getModuleDefs(locale: Locale) {
+  return [
+    { key: "documents", label: t('core.users.md.documents', locale), icon: FileText },
+    { key: "comptabilite", label: t('core.users.md.comptabilite', locale), icon: Calculator },
+    { key: "facturation", label: t('core.users.md.facturation', locale), icon: Receipt },
+    { key: "rh", label: t('core.users.md.rh', locale), icon: Users },
+    { key: "fiscal", label: t('core.users.md.fiscal', locale), icon: Scale },
+    { key: "etats_financiers", label: t('core.users.md.etats_financiers', locale), icon: BarChart3 },
+    { key: "employe_portal", label: t('core.users.md.employe_portal', locale), icon: UserCheck },
+  ] as const
+}
 
 function getDefaultModules(role: string): ModulesUtilisateur {
   switch (role) {
@@ -112,24 +119,25 @@ function getDefaultModules(role: string): ModulesUtilisateur {
   }
 }
 
-function PermissionsEditor({ modules, onChange, role }: { modules: ModulesUtilisateur; onChange: (m: ModulesUtilisateur) => void; role: string }) {
+function PermissionsEditor({ modules, onChange, role, locale }: { modules: ModulesUtilisateur; onChange: (m: ModulesUtilisateur) => void; role: string; locale: Locale }) {
   const [open, setOpen] = useState(false)
   const defaults = getDefaultModules(role)
   const isCustom = Object.keys(modules).some(k => (modules as Record<string, boolean>)[k] !== (defaults as Record<string, boolean>)[k])
+  const MODULE_DEFS = getModuleDefs(locale)
   return (
     <div className="border rounded-lg">
       <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-[#0B0F2E] hover:bg-gray-50 rounded-lg">
         <span className="flex items-center gap-2">
-          Permissions avancees
-          {isCustom && <Badge className="text-[10px] bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30">Personnalise</Badge>}
+          {t('core.users.advanced_perms', locale)}
+          {isCustom && <Badge className="text-[10px] bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/30">{t('core.users.custom', locale)}</Badge>}
         </span>
         {open ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
       </button>
       {open && (
         <div className="px-3 pb-3 space-y-2 border-t pt-2">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-gray-500">Modules accessibles pour cet utilisateur</p>
-            <button type="button" onClick={() => onChange(getDefaultModules(role))} className="text-xs text-[#D4AF37] hover:underline">Reinitialiser</button>
+            <p className="text-xs text-gray-500">{t('core.users.modules_for_user', locale)}</p>
+            <button type="button" onClick={() => onChange(getDefaultModules(role))} className="text-xs text-[#D4AF37] hover:underline">{t('core.users.reset', locale)}</button>
           </div>
           {MODULE_DEFS.map(({ key, label, icon: Icon }) => (
             <div key={key} className="flex items-center justify-between py-1.5">
@@ -156,13 +164,13 @@ function genPassword(): string {
   return pw
 }
 
-function getRoleMeta(role: string) {
-  return ROLES.find((r) => r.value === role) || { value: role, label: role, color: "bg-gray-100 text-gray-700 border-gray-200" }
+function getRoleMeta(role: string, roles: ReturnType<typeof getRoles>) {
+  return roles.find((r) => r.value === role) || { value: role, label: role, color: "bg-gray-100 text-gray-700 border-gray-200" }
 }
 
-function formatDate(d?: string) {
+function formatDate(d: string | undefined, locale: Locale) {
   if (!d) return "--"
-  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })
+  return new Date(d).toLocaleDateString(locale === 'en' ? 'en-US' : "fr-FR", { day: "2-digit", month: "short", year: "numeric" })
 }
 
 function getInitials(name: string) {
@@ -195,16 +203,16 @@ function SocieteBadge({ name }: { name?: string }) {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-function RoleBadge({ role }: { role: string }) {
-  const r = getRoleMeta(role)
+function RoleBadge({ role, roles }: { role: string; roles: ReturnType<typeof getRoles> }) {
+  const r = getRoleMeta(role, roles)
   return <Badge className={`text-xs border ${r.color}`}>{r.label}</Badge>
 }
 
-function StatusBadge({ actif }: { actif?: boolean }) {
+function StatusBadge({ actif, locale }: { actif?: boolean; locale: Locale }) {
   const isActive = actif !== false
   return (
     <Badge className={`text-xs border ${isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
-      {isActive ? "Actif" : "Inactif"}
+      {isActive ? t('core.users.active', locale) : t('core.users.inactive', locale)}
     </Badge>
   )
 }
@@ -213,6 +221,9 @@ function StatusBadge({ actif }: { actif?: boolean }) {
 // Main page
 // ---------------------------------------------------------------------------
 export default function UtilisateursPage() {
+  const locale = getLocale()
+  const ROLES = getRoles(locale)
+  const HR_ROLE_GUIDE = getHrRoleGuide(locale)
   const { societeId, societes: providerSocietes } = useSocieteActive()
   const societes = providerSocietes as any as Societe[]
   const [users, setUsers] = useState<User[]>([])
@@ -348,7 +359,7 @@ export default function UtilisateursPage() {
       setCreateForm({ prenom: "", nom: "", email: "", password: genPassword(), role: "client_admin", societe_id: "", societe_ids: [], modules_utilisateur: getDefaultModules("client_admin") })
       load()
     } catch {
-      alert("Erreur reseau")
+      alert(t('core.users.network_error', locale))
     }
     setSaving(false)
   }
@@ -398,12 +409,12 @@ export default function UtilisateursPage() {
         body: JSON.stringify(payload),
       })
       const data = await res.json()
-      if (data.error) { alert("Erreur: " + data.error); setEditSaving(false); return }
+      if (data.error) { alert(t('core.users.error_prefix', locale) + data.error); setEditSaving(false); return }
       setEditOpen(false)
       setEditUser(null)
       load()
     } catch {
-      alert("Erreur reseau")
+      alert(t('core.users.network_error', locale))
     }
     setEditSaving(false)
   }
@@ -429,8 +440,8 @@ export default function UtilisateursPage() {
 
   const handleChangePassword = async () => {
     if (!pwdUser) return
-    if (!pwdValue || pwdValue.length < 6) { alert("Mot de passe requis (min 6 caractères)"); return }
-    if (!confirm(`Confirmer le changement de mot de passe pour ${pwdUser.full_name || pwdUser.email} ?\n\nLe nouveau mot de passe prendra effet immédiatement.`)) {
+    if (!pwdValue || pwdValue.length < 6) { alert(t('core.users.alert_pwd_required', locale)); return }
+    if (!confirm(`${t('core.users.confirm_change_pwd_prefix', locale)}${pwdUser.full_name || pwdUser.email}${t('core.users.confirm_change_pwd_suffix', locale)}`)) {
       return
     }
     setPwdSaving(true)
@@ -441,10 +452,10 @@ export default function UtilisateursPage() {
         body: JSON.stringify({ password: pwdValue }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) { alert("Erreur: " + (data.error || `HTTP ${res.status}`)); return }
+      if (!res.ok) { alert(t('core.users.error_prefix', locale) + (data.error || `HTTP ${res.status}`)); return }
       // Afficher écran de confirmation avec le mot de passe à communiquer.
       setPwdSuccess(true)
-    } catch { alert("Erreur réseau") }
+    } catch { alert(t('core.users.network_error', locale)) }
     finally { setPwdSaving(false) }
   }
 
@@ -470,40 +481,40 @@ export default function UtilisateursPage() {
             <Users className="w-5 h-5 text-[#D4AF37]" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des utilisateurs</h1>
-            <p className="text-sm text-gray-500">{users.length} compte{users.length !== 1 ? "s" : ""} enregistré{users.length !== 1 ? "s" : ""}</p>
+            <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('core.users.title', locale)}</h1>
+            <p className="text-sm text-gray-500">{users.length} {users.length !== 1 ? t('core.users.account_many', locale) : t('core.users.account_one', locale)}</p>
           </div>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button className="bg-[#0B0F2E] hover:bg-[#2a3d66] gap-2">
-              <UserPlus className="w-4 h-4" /> Creer un compte
+              <UserPlus className="w-4 h-4" /> {t('core.users.create_account', locale)}
             </Button>
           </DialogTrigger>
           {/* Create dialog content rendered below */}
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
-                <UserPlus className="w-5 h-5" /> Creer un compte utilisateur
+                <UserPlus className="w-5 h-5" /> {t('core.users.create_user_account', locale)}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-2">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Prenom</Label>
-                  <Input value={createForm.prenom} onChange={(e) => setCreateForm((f) => ({ ...f, prenom: e.target.value }))} placeholder="Jean" />
+                  <Label>{t('core.users.first_name', locale)}</Label>
+                  <Input value={createForm.prenom} onChange={(e) => setCreateForm((f) => ({ ...f, prenom: e.target.value }))} placeholder={t('core.users.ph.firstname', locale)} />
                 </div>
                 <div>
-                  <Label>Nom</Label>
-                  <Input value={createForm.nom} onChange={(e) => setCreateForm((f) => ({ ...f, nom: e.target.value }))} placeholder="Dupont" />
+                  <Label>{t('core.users.last_name', locale)}</Label>
+                  <Input value={createForm.nom} onChange={(e) => setCreateForm((f) => ({ ...f, nom: e.target.value }))} placeholder={t('core.users.ph.lastname', locale)} />
                 </div>
               </div>
               <div>
-                <Label className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> Email</Label>
-                <Input type="email" value={createForm.email} onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))} placeholder="jean.dupont@email.com" />
+                <Label className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {t('core.users.email', locale)}</Label>
+                <Input type="email" value={createForm.email} onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))} placeholder={t('core.users.ph.email', locale)} />
               </div>
               <div>
-                <Label className="flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> Role</Label>
+                <Label className="flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> {t('core.users.role', locale)}</Label>
                 <Select value={createForm.role} onValueChange={(v) => setCreateForm((f) => ({ ...f, role: v, societe_id: "", modules_utilisateur: getDefaultModules(v) }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -513,11 +524,11 @@ export default function UtilisateursPage() {
                   </SelectContent>
                 </Select>
                 {createForm.role === "client_assistant" && (
-                  <p className="text-xs text-gray-500 mt-1">Acces uniquement a la numerisation des documents</p>
+                  <p className="text-xs text-gray-500 mt-1">{t('core.users.assistant_access_note', locale)}</p>
                 )}
                 {HR_ROLE_GUIDE.some(r => r.value === createForm.role) && (
                   <div className="mt-2 border rounded-lg p-3 bg-gray-50">
-                    <p className="text-xs font-medium text-gray-500 mb-2">Guide des rôles RH</p>
+                    <p className="text-xs font-medium text-gray-500 mb-2">{t('core.users.hr_role_guide', locale)}</p>
                     <div className="space-y-1.5">
                       {HR_ROLE_GUIDE.map(r => (
                         <div key={r.value} className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded ${r.value === createForm.role ? 'ring-1 ring-[#D4AF37]' : ''}`}>
@@ -531,9 +542,9 @@ export default function UtilisateursPage() {
               </div>
               {NEEDS_SOCIETE.includes(createForm.role) && !MULTI_SOCIETE_ROLES.includes(createForm.role) && (
                 <div>
-                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societe <span className="text-red-500">*</span></Label>
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {t('core.users.company', locale)} <span className="text-red-500">*</span></Label>
                   <Select value={createForm.societe_id} onValueChange={(v) => setCreateForm((f) => ({ ...f, societe_id: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Selectionner une societe" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('core.users.select_company', locale)} /></SelectTrigger>
                     <SelectContent>
                       {societes.map((s) => (
                         <SelectItem key={s.id} value={s.id}>{s.nom}{s.brn ? ` -- ${s.brn}` : ""}</SelectItem>
@@ -544,7 +555,7 @@ export default function UtilisateursPage() {
               )}
               {MULTI_SOCIETE_ROLES.includes(createForm.role) && (
                 <div>
-                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societes <span className="text-red-500">*</span></Label>
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {t('core.users.companies', locale)} <span className="text-red-500">*</span></Label>
                   <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-lg p-2">
                     {societes.map(s => (
                       <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
@@ -555,28 +566,29 @@ export default function UtilisateursPage() {
                       </label>
                     ))}
                   </div>
-                  {createForm.societe_ids.length > 0 && <p className="text-xs text-gray-500 mt-1">{createForm.societe_ids.length} societe(s)</p>}
+                  {createForm.societe_ids.length > 0 && <p className="text-xs text-gray-500 mt-1">{createForm.societe_ids.length} {t('core.users.companies_count_suffix', locale)}</p>}
                 </div>
               )}
               <PermissionsEditor
                 modules={createForm.modules_utilisateur}
                 onChange={(m) => setCreateForm((f) => ({ ...f, modules_utilisateur: m }))}
                 role={createForm.role}
+                locale={locale}
               />
               <div>
-                <Label>Mot de passe genere</Label>
+                <Label>{t('core.users.generated_password', locale)}</Label>
                 <div className="flex gap-2">
                   <Input value={createForm.password} readOnly className="font-mono bg-gray-50" />
-                  <Button variant="outline" size="icon" className="shrink-0" onClick={() => copyToClipboard(createForm.password)} title="Copier">
+                  <Button variant="outline" size="icon" className="shrink-0" onClick={() => copyToClipboard(createForm.password)} title={t('core.users.copy', locale)}>
                     <Copy className="w-4 h-4" />
                   </Button>
-                  <Button variant="outline" size="icon" className="shrink-0" onClick={() => setCreateForm((f) => ({ ...f, password: genPassword() }))} title="Regenerer">
+                  <Button variant="outline" size="icon" className="shrink-0" onClick={() => setCreateForm((f) => ({ ...f, password: genPassword() }))} title={t('core.users.regenerate', locale)}>
                     <RefreshCw className="w-4 h-4" />
                   </Button>
                 </div>
                 <div className="flex items-start gap-2 mt-2 p-2 bg-amber-50 border border-amber-200 rounded-md">
                   <Shield className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                  <p className="text-xs text-amber-700">Notez ce mot de passe, il ne sera plus affiche apres la creation du compte.</p>
+                  <p className="text-xs text-amber-700">{t('core.users.password_note', locale)}</p>
                 </div>
               </div>
               <Button
@@ -584,7 +596,7 @@ export default function UtilisateursPage() {
                 disabled={saving || !createForm.prenom || !createForm.nom || !createForm.email || (NEEDS_SOCIETE.includes(createForm.role) && !MULTI_SOCIETE_ROLES.includes(createForm.role) && !createForm.societe_id) || (MULTI_SOCIETE_ROLES.includes(createForm.role) && createForm.societe_ids.length === 0)}
                 className="w-full bg-[#0B0F2E] hover:bg-[#2a3d66]"
               >
-                {saving ? "Creation en cours..." : "Creer le compte"}
+                {saving ? t('core.users.creating', locale) : t('core.users.create_btn', locale)}
               </Button>
             </div>
           </DialogContent>
@@ -597,13 +609,13 @@ export default function UtilisateursPage() {
           <div className="flex items-center gap-3">
             <Check className="w-5 h-5 text-emerald-600 shrink-0" />
             <div>
-              <p className="font-semibold text-amber-800">Compte cree -- mot de passe a communiquer :</p>
+              <p className="font-semibold text-amber-800">{t('core.users.account_created_banner', locale)}</p>
               <p className="font-mono text-lg text-amber-900 mt-1 select-all">{lastPassword}</p>
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => copyToClipboard(lastPassword)} className="gap-1">
-              <Copy className="w-3.5 h-3.5" /> Copier
+              <Copy className="w-3.5 h-3.5" /> {t('core.users.copy', locale)}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setLastPassword("")}>
               <X className="w-3.5 h-3.5" />
@@ -617,7 +629,7 @@ export default function UtilisateursPage() {
         <Card className="border-l-4 border-l-[#0B0F2E]">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">Total utilisateurs</p>
+              <p className="text-sm text-gray-500">{t('core.users.total_users', locale)}</p>
               <Users className="w-5 h-5 text-[#0B0F2E]" />
             </div>
             <p className="text-3xl font-bold text-[#0B0F2E] mt-1">{kpis.total}</p>
@@ -626,7 +638,7 @@ export default function UtilisateursPage() {
         <Card className="border-l-4 border-l-emerald-500">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">Actifs ce mois</p>
+              <p className="text-sm text-gray-500">{t('core.users.active_this_month', locale)}</p>
               <UserPlus className="w-5 h-5 text-emerald-600" />
             </div>
             <p className="text-3xl font-bold text-emerald-700 mt-1">{kpis.activeThisMonth}</p>
@@ -635,7 +647,7 @@ export default function UtilisateursPage() {
         <Card className="border-l-4 border-l-[#D4AF37]">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">Par role (top 3)</p>
+              <p className="text-sm text-gray-500">{t('core.users.top_roles', locale)}</p>
               <Shield className="w-5 h-5 text-[#D4AF37]" />
             </div>
             <div className="mt-2 space-y-1">
@@ -652,13 +664,13 @@ export default function UtilisateursPage() {
         <Card className="border-l-4 border-l-purple-500">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">Derniere creation</p>
+              <p className="text-sm text-gray-500">{t('core.users.latest_creation', locale)}</p>
               <Calendar className="w-5 h-5 text-purple-500" />
             </div>
             {kpis.latest ? (
               <div className="mt-1">
                 <p className="font-semibold text-[#0B0F2E] text-sm truncate">{kpis.latest.full_name || kpis.latest.email}</p>
-                <p className="text-xs text-gray-400">{formatDate(kpis.latest.created_at)}</p>
+                <p className="text-xs text-gray-400">{formatDate(kpis.latest.created_at, locale)}</p>
               </div>
             ) : (
               <p className="text-sm text-gray-400 mt-1">--</p>
@@ -672,7 +684,7 @@ export default function UtilisateursPage() {
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Rechercher par nom, email ou role..."
+            placeholder={t('core.users.search_ph', locale)}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -681,10 +693,10 @@ export default function UtilisateursPage() {
         <Select value={filterRole} onValueChange={setFilterRole}>
           <SelectTrigger className="w-52">
             <Shield className="w-4 h-4 mr-2 text-gray-400" />
-            <SelectValue placeholder="Filtrer par role" />
+            <SelectValue placeholder={t('core.users.filter_role_ph', locale)} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tous les roles</SelectItem>
+            <SelectItem value="all">{t('core.users.all_roles', locale)}</SelectItem>
             {ROLES.map((r) => (
               <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
             ))}
@@ -694,13 +706,13 @@ export default function UtilisateursPage() {
 
       {/* ---- TABLE ---- */}
       {loading ? (
-        <div className="text-center text-gray-400 py-16">Chargement des utilisateurs...</div>
+        <div className="text-center text-gray-400 py-16">{t('core.users.loading_users', locale)}</div>
       ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
             <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="font-medium text-gray-500">Aucun utilisateur trouve</p>
-            <p className="text-sm text-gray-400 mt-1">Modifiez vos filtres ou creez un nouveau compte.</p>
+            <p className="font-medium text-gray-500">{t('core.users.none_found', locale)}</p>
+            <p className="text-sm text-gray-400 mt-1">{t('core.users.adjust_or_create', locale)}</p>
           </CardContent>
         </Card>
       ) : (
@@ -711,23 +723,23 @@ export default function UtilisateursPage() {
                 <tr className="bg-gray-50 border-b text-left">
                   <th className="px-4 py-3 font-semibold text-gray-600">
                     <button className="flex items-center gap-1 hover:text-[#0B0F2E]" onClick={() => handleSort("full_name")}>
-                      Nom {sortField === "full_name" ? (sortDir === "asc" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 text-gray-300" />}
+                      {t('core.users.col_name', locale)} {sortField === "full_name" ? (sortDir === "asc" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 text-gray-300" />}
                     </button>
                   </th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Email</th>
+                  <th className="px-4 py-3 font-semibold text-gray-600">{t('core.users.col_email', locale)}</th>
                   <th className="px-4 py-3 font-semibold text-gray-600">
                     <button className="flex items-center gap-1 hover:text-[#0B0F2E]" onClick={() => handleSort("role")}>
-                      Role {sortField === "role" ? (sortDir === "asc" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 text-gray-300" />}
+                      {t('core.users.col_role', locale)} {sortField === "role" ? (sortDir === "asc" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 text-gray-300" />}
                     </button>
                   </th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Societe</th>
-                  <th className="px-4 py-3 font-semibold text-gray-600">Statut</th>
+                  <th className="px-4 py-3 font-semibold text-gray-600">{t('core.users.col_company', locale)}</th>
+                  <th className="px-4 py-3 font-semibold text-gray-600">{t('core.users.col_status', locale)}</th>
                   <th className="px-4 py-3 font-semibold text-gray-600">
                     <button className="flex items-center gap-1 hover:text-[#0B0F2E]" onClick={() => handleSort("created_at")}>
-                      Date creation {sortField === "created_at" ? (sortDir === "asc" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 text-gray-300" />}
+                      {t('core.users.col_created_at', locale)} {sortField === "created_at" ? (sortDir === "asc" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 text-gray-300" />}
                     </button>
                   </th>
-                  <th className="px-4 py-3 font-semibold text-gray-600 text-right">Actions</th>
+                  <th className="px-4 py-3 font-semibold text-gray-600 text-right">{t('core.users.col_actions', locale)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -748,19 +760,19 @@ export default function UtilisateursPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-gray-600">{user.email}</td>
-                        <td className="px-4 py-3"><RoleBadge role={user.role} /></td>
+                        <td className="px-4 py-3"><RoleBadge role={user.role} roles={ROLES} /></td>
                         <td className="px-4 py-3">
                           <SocieteBadge name={user.societes?.nom || societes.find((s) => s.id === user.societe_id)?.nom} />
                         </td>
-                        <td className="px-4 py-3"><StatusBadge actif={user.actif} /></td>
-                        <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(user.created_at)}</td>
+                        <td className="px-4 py-3"><StatusBadge actif={user.actif} locale={locale} /></td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(user.created_at, locale)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(user)} title="Modifier">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(user)} title={t('core.users.modify', locale)}>
                               <Pencil className="w-4 h-4 text-gray-500" />
                             </Button>
                             {/* Sprint 12 FEATURE 2 — changer mot de passe */}
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPasswordDialog(user)} title="Changer le mot de passe">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPasswordDialog(user)} title={t('core.users.change_password', locale)}>
                               <Key className="w-4 h-4 text-purple-600" />
                             </Button>
                             <Button
@@ -768,7 +780,7 @@ export default function UtilisateursPage() {
                               size="icon"
                               className="h-8 w-8"
                               onClick={() => toggleActif(user)}
-                              title={user.actif !== false ? "Desactiver" : "Activer"}
+                              title={user.actif !== false ? t('core.users.deactivate', locale) : t('core.users.activate', locale)}
                             >
                               {user.actif !== false
                                 ? <ToggleRight className="w-4 h-4 text-emerald-600" />
@@ -784,25 +796,25 @@ export default function UtilisateursPage() {
                           <td colSpan={7} className="px-6 py-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                               <div>
-                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Informations</p>
+                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">{t('core.users.info', locale)}</p>
                                 <div className="space-y-1">
                                   <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-gray-400" /> {user.email}</p>
                                   <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-gray-400" /> {user.phone || "--"}</p>
-                                  <p className="flex items-center gap-2"><Shield className="w-3.5 h-3.5 text-gray-400" /> <RoleBadge role={user.role} /></p>
+                                  <p className="flex items-center gap-2"><Shield className="w-3.5 h-3.5 text-gray-400" /> <RoleBadge role={user.role} roles={ROLES} /></p>
                                 </div>
                               </div>
                               <div>
-                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Societe</p>
+                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">{t('core.users.company', locale)}</p>
                                 <SocieteBadge name={user.societes?.nom || societes.find((s) => s.id === user.societe_id)?.nom} />
                               </div>
                               <div>
-                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Derniere connexion</p>
-                                <p className="text-gray-600">{user.last_sign_in_at ? formatDate(user.last_sign_in_at) : "Jamais"}</p>
+                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">{t('core.users.last_login', locale)}</p>
+                                <p className="text-gray-600">{user.last_sign_in_at ? formatDate(user.last_sign_in_at, locale) : t('core.users.never', locale)}</p>
                               </div>
                               <div>
-                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Creation</p>
-                                <p className="text-gray-600">{formatDate(user.created_at)}</p>
-                                {user.created_by && <p className="text-xs text-gray-400 mt-0.5">Par : {user.created_by}</p>}
+                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">{t('core.users.creation', locale)}</p>
+                                <p className="text-gray-600">{formatDate(user.created_at, locale)}</p>
+                                {user.created_by && <p className="text-xs text-gray-400 mt-0.5">{t('core.users.by', locale)}{user.created_by}</p>}
                               </div>
                             </div>
                           </td>
@@ -822,25 +834,25 @@ export default function UtilisateursPage() {
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
-              <Pencil className="w-5 h-5" /> Modifier l&apos;utilisateur
+              <Pencil className="w-5 h-5" /> {t('core.users.modify_user', locale)}
             </DialogTitle>
           </DialogHeader>
           {editUser && (
             <div className="space-y-4 pt-2">
               <div>
-                <Label>Nom complet</Label>
+                <Label>{t('core.users.full_name', locale)}</Label>
                 <Input value={editForm.full_name} onChange={(e) => setEditForm((f) => ({ ...f, full_name: e.target.value }))} />
               </div>
               <div>
-                <Label className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> Email</Label>
+                <Label className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> {t('core.users.email', locale)}</Label>
                 <Input type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} />
               </div>
               <div>
-                <Label className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> Telephone</Label>
+                <Label className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {t('core.users.phone', locale)}</Label>
                 <Input value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+230 5XXX XXXX" />
               </div>
               <div>
-                <Label className="flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> Role</Label>
+                <Label className="flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> {t('core.users.role', locale)}</Label>
                 <Select value={editForm.role} onValueChange={(v) => setEditForm((f) => ({ ...f, role: v, modules_utilisateur: getDefaultModules(v) }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -852,7 +864,7 @@ export default function UtilisateursPage() {
               </div>
               {MULTI_SOCIETE_ROLES.includes(editForm.role) ? (
                 <div>
-                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societes</Label>
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {t('core.users.companies', locale)}</Label>
                   <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-lg p-2">
                     {societes.map(s => (
                       <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
@@ -863,15 +875,15 @@ export default function UtilisateursPage() {
                       </label>
                     ))}
                   </div>
-                  {editForm.societe_ids.length > 0 && <p className="text-xs text-gray-500 mt-1">{editForm.societe_ids.length} societe(s)</p>}
+                  {editForm.societe_ids.length > 0 && <p className="text-xs text-gray-500 mt-1">{editForm.societe_ids.length} {t('core.users.companies_count_suffix', locale)}</p>}
                 </div>
               ) : (
                 <div>
-                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societe</Label>
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {t('core.users.company', locale)}</Label>
                   <Select value={editForm.societe_id || "none"} onValueChange={(v) => setEditForm((f) => ({ ...f, societe_id: v === "none" ? "" : v }))}>
-                    <SelectTrigger><SelectValue placeholder="Aucune" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('core.users.none', locale)} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Aucune</SelectItem>
+                      <SelectItem value="none">{t('core.users.none', locale)}</SelectItem>
                       {societes.map((s) => (
                         <SelectItem key={s.id} value={s.id}>{s.nom}{s.brn ? ` -- ${s.brn}` : ""}</SelectItem>
                       ))}
@@ -883,11 +895,12 @@ export default function UtilisateursPage() {
                 modules={editForm.modules_utilisateur}
                 onChange={(m) => setEditForm((f) => ({ ...f, modules_utilisateur: m }))}
                 role={editForm.role}
+                locale={locale}
               />
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                 <div>
-                  <p className="font-medium text-sm text-[#0B0F2E]">Statut du compte</p>
-                  <p className="text-xs text-gray-500">{editForm.actif ? "Le compte est actif" : "Le compte est desactive"}</p>
+                  <p className="font-medium text-sm text-[#0B0F2E]">{t('core.users.account_status', locale)}</p>
+                  <p className="text-xs text-gray-500">{editForm.actif ? t('core.users.account_active', locale) : t('core.users.account_inactive', locale)}</p>
                 </div>
                 <Button
                   variant="outline"
@@ -896,11 +909,11 @@ export default function UtilisateursPage() {
                   onClick={() => setEditForm((f) => ({ ...f, actif: !f.actif }))}
                 >
                   {editForm.actif ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                  {editForm.actif ? "Actif" : "Inactif"}
+                  {editForm.actif ? t('core.users.active', locale) : t('core.users.inactive', locale)}
                 </Button>
               </div>
               <Button onClick={handleEdit} disabled={editSaving || !editForm.full_name || !editForm.email} className="w-full bg-[#0B0F2E] hover:bg-[#2a3d66]">
-                {editSaving ? "Enregistrement..." : "Enregistrer les modifications"}
+                {editSaving ? t('core.users.saving', locale) : t('core.users.save_changes', locale)}
               </Button>
             </div>
           )}
@@ -913,7 +926,7 @@ export default function UtilisateursPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
               <Key className="w-5 h-5 text-purple-600" />
-              Changer le mot de passe
+              {t('core.users.change_password_title', locale)}
             </DialogTitle>
           </DialogHeader>
           {pwdUser && !pwdSuccess && (
@@ -923,7 +936,7 @@ export default function UtilisateursPage() {
                 <p className="text-sm text-gray-500">{pwdUser.email}</p>
               </div>
               <div>
-                <Label>Nouveau mot de passe</Label>
+                <Label>{t('core.users.new_password', locale)}</Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
@@ -931,40 +944,38 @@ export default function UtilisateursPage() {
                       value={pwdValue}
                       onChange={(e) => setPwdValue(e.target.value)}
                       className="font-mono pr-10"
-                      placeholder="Mot de passe..."
+                      placeholder={t('core.users.ph.password', locale)}
                     />
                     <button
                       type="button"
                       onClick={() => setPwdVisible((v) => !v)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      title={pwdVisible ? "Masquer" : "Afficher"}
+                      title={pwdVisible ? t('core.users.hide', locale) : t('core.users.show', locale)}
                     >
                       {pwdVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => setPwdValue(genPassword())} title="Générer automatiquement">
-                    Générer
+                  <Button variant="outline" size="sm" onClick={() => setPwdValue(genPassword())} title={t('core.users.generate_auto', locale)}>
+                    {t('core.users.generate', locale)}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères.</p>
+                <p className="text-xs text-gray-500 mt-1">{t('core.users.min_chars', locale)}</p>
               </div>
               <div className="p-3 rounded bg-amber-50 border border-amber-200 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-800">
-                  <span className="font-semibold">Important :</span> le nouveau mot de passe remplace
-                  l'ancien immédiatement. Communiquez-le par un canal sécurisé — il ne sera plus visible
-                  après la confirmation.
+                  <span className="font-semibold">{t('core.users.important', locale)}</span>{t('core.users.pwd_warning', locale)}
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setPwdOpen(false)}>Annuler</Button>
+                <Button variant="outline" className="flex-1" onClick={() => setPwdOpen(false)}>{t('core.users.cancel', locale)}</Button>
                 <Button
                   onClick={handleChangePassword}
                   disabled={pwdSaving || !pwdValue || pwdValue.length < 6}
                   className="flex-1 bg-[#0B0F2E] text-white hover:bg-[#2a3d66]"
                 >
                   {pwdSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Key className="w-4 h-4 mr-2" />}
-                  Enregistrer
+                  {t('core.users.save_btn', locale)}
                 </Button>
               </div>
             </div>
@@ -974,20 +985,20 @@ export default function UtilisateursPage() {
               <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                 <p className="font-semibold text-green-800 mb-2 flex items-center gap-2">
                   <Check className="w-4 h-4" />
-                  Mot de passe modifié
+                  {t('core.users.password_changed', locale)}
                 </p>
                 <div className="space-y-1">
-                  <p className="text-sm">Utilisateur : <span className="font-semibold">{pwdUser.full_name || pwdUser.email}</span></p>
-                  <p className="text-sm">Email : <span className="font-mono font-bold">{pwdUser.email}</span></p>
-                  <p className="text-sm">Nouveau mot de passe : <span className="font-mono font-bold text-lg">{pwdValue}</span></p>
+                  <p className="text-sm">{t('core.users.user_label', locale)}<span className="font-semibold">{pwdUser.full_name || pwdUser.email}</span></p>
+                  <p className="text-sm">{t('core.users.email_label', locale)}<span className="font-mono font-bold">{pwdUser.email}</span></p>
+                  <p className="text-sm">{t('core.users.new_pwd_label', locale)}<span className="font-mono font-bold text-lg">{pwdValue}</span></p>
                 </div>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => copyToClipboard(pwdValue)}>
-                  <Copy className="w-4 h-4 mr-2" /> Copier
+                  <Copy className="w-4 h-4 mr-2" /> {t('core.users.copy', locale)}
                 </Button>
                 <Button className="flex-1 bg-[#0B0F2E] text-white" onClick={() => setPwdOpen(false)}>
-                  Fermer
+                  {t('core.users.close', locale)}
                 </Button>
               </div>
             </div>

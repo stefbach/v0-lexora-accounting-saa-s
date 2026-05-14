@@ -1,6 +1,20 @@
+import { gbcChunk } from './i18n/gbc'
+import { mraChunk } from './i18n/mra'
+import { coreChunk } from './i18n/core'
+import { hrChunk } from './i18n/hr'
+import { invoicingChunk } from './i18n/invoicing'
+import { accountingChunk } from './i18n/accounting'
+import { comptableChunk } from './i18n/comptable'
+import { rhAdminChunk } from './i18n/rh_admin'
+import { adminChunk } from './i18n/admin'
+import { publicChunk } from './i18n/public'
+import { componentsChunk } from './i18n/components'
+import { invoicingExtChunk } from './i18n/invoicing_ext'
+import { mraExtChunk } from './i18n/mra_ext'
+
 export type Locale = 'fr' | 'en'
 
-const translations = {
+const baseTranslations = {
   fr: {
     // Navigation
     'nav.dashboard': 'Tableau de bord',
@@ -597,8 +611,43 @@ const translations = {
   },
 } as const
 
+const translations: Record<Locale, Record<string, string>> = {
+  fr: {
+    ...baseTranslations.fr,
+    ...gbcChunk.fr,
+    ...mraChunk.fr,
+    ...coreChunk.fr,
+    ...hrChunk.fr,
+    ...invoicingChunk.fr,
+    ...accountingChunk.fr,
+    ...comptableChunk.fr,
+    ...rhAdminChunk.fr,
+    ...adminChunk.fr,
+    ...publicChunk.fr,
+    ...componentsChunk.fr,
+    ...invoicingExtChunk.fr,
+    ...mraExtChunk.fr,
+  },
+  en: {
+    ...baseTranslations.en,
+    ...gbcChunk.en,
+    ...mraChunk.en,
+    ...coreChunk.en,
+    ...hrChunk.en,
+    ...invoicingChunk.en,
+    ...accountingChunk.en,
+    ...comptableChunk.en,
+    ...rhAdminChunk.en,
+    ...adminChunk.en,
+    ...publicChunk.en,
+    ...componentsChunk.en,
+    ...invoicingExtChunk.en,
+    ...mraExtChunk.en,
+  },
+}
+
 export function t(key: string, locale: Locale = 'fr'): string {
-  return (translations[locale] as Record<string, string>)[key] || key
+  return translations[locale][key] || key
 }
 
 export function getLocale(): Locale {

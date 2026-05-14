@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Loader2, ArrowLeft, Download, Plus, RefreshCw, TrendingDown } from "lucide-react"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -29,13 +30,13 @@ const TAUX_MRA: Record<string, number> = {
   other: 20,
 }
 
-const CATEGORIE_LABELS: Record<string, string> = {
-  commercial_premises: "Locaux commerciaux",
-  motor_vehicles: "Véhicules à moteur",
-  furniture_fittings: "Mobilier & agencements",
-  computer_equipment: "Équipements informatiques",
-  other: "Autres immobilisations",
-}
+const getCategorieLabels = (locale: Locale): Record<string, string> => ({
+  commercial_premises: t('cabclt.far.cat_commercial_premises', locale),
+  motor_vehicles: t('cabclt.far.cat_motor_vehicles', locale),
+  furniture_fittings: t('cabclt.far.cat_furniture', locale),
+  computer_equipment: t('cabclt.far.cat_computer', locale),
+  other: t('cabclt.far.cat_other', locale),
+})
 
 interface Actif {
   id: string
@@ -82,6 +83,8 @@ interface NewActif {
 
 export default function FARPage() {
   const params    = useParams()
+  const locale    = getLocale()
+  const CATEGORIE_LABELS = getCategorieLabels(locale)
   const societeId = params.societeId as string
   const clientId  = params.clientId  as string
 
@@ -157,13 +160,13 @@ export default function FARPage() {
   const exportCSV = () => {
     if (!data?.actifs) return
     const rows = [
-      ["Description", "Catégorie", "Fournisseur", "Date acq.", "Coût 01/07", "Additions", "Disposals (coût)", "Coût 30/06", "TWDV 01/07", "TWDV Ajustée", "Dotation annuelle", "TWDV 30/06", "Taux MRA", "100% Expensé"],
+      [t('cabclt.far.col_desc', locale), t('cabclt.far.col_category', locale), t('cabclt.far.col_supplier', locale), t('cabclt.far.col_date_acq', locale), t('cabclt.far.col_cost_0107', locale), t('cabclt.far.col_additions', locale), t('cabclt.far.col_disposals_cost', locale), t('cabclt.far.col_cost_3006', locale), t('cabclt.far.col_twdv_0107', locale), t('cabclt.far.col_twdv_adj', locale), t('cabclt.far.col_annual_allowance', locale), t('cabclt.far.col_twdv_3006', locale), t('cabclt.far.col_mra_rate', locale), t('cabclt.far.col_fully_expensed', locale)],
       ...data.actifs.map(a => [
         a.actif_description, CATEGORIE_LABELS[a.categorie] || a.categorie,
         a.fournisseur || "", a.date_acquisition || "",
         a.cout_01_07, a.additions, a.disposals_cost, a.cout_30_06,
         a.twdv_01_07, a.twdv_adjusted, a.annual_allowance, a.twdv_30_06,
-        `${a.taux_mra}%`, a.fully_expensed ? "Oui" : "Non",
+        `${a.taux_mra}%`, a.fully_expensed ? t('cabclt.far.yes', locale) : t('cabclt.far.no', locale),
       ]),
     ]
     const csv  = rows.map(r => r.map(v => `"${v}"`).join(";")).join("\n")
@@ -181,14 +184,14 @@ export default function FARPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href={`/comptable/clients/${clientId}/${societeId}`}>
-            <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Retour</Button>
+            <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />{t('cabclt.far.back', locale)}</Button>
           </Link>
           <div>
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
               <TrendingDown className="inline w-6 h-6 mr-2" style={{ color: GOLD }} />
-              FAR — Fixed Asset Register
+              {t('cabclt.far.title', locale)}
             </h1>
-            <p className="text-sm text-gray-500 mt-0.5">Tableau d'amortissements selon barème MRA</p>
+            <p className="text-sm text-gray-500 mt-0.5">{t('cabclt.far.subtitle', locale)}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -202,26 +205,26 @@ export default function FARPage() {
           </Select>
           <Button onClick={handleCalcAll} variant="outline" size="sm" disabled={calculating} className="gap-1">
             {calculating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Calculer
+            {t('cabclt.far.calculate', locale)}
           </Button>
           <Button onClick={exportCSV} variant="outline" size="sm" className="gap-1">
-            <Download className="w-4 h-4" /> CSV MRA
+            <Download className="w-4 h-4" /> {t('cabclt.far.csv_mra', locale)}
           </Button>
           <Dialog open={showForm} onOpenChange={setShowForm}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-1" style={{ backgroundColor: NAVY }}>
-                <Plus className="w-4 h-4" /> Ajouter actif
+                <Plus className="w-4 h-4" /> {t('cabclt.far.add_asset', locale)}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
-              <DialogHeader><DialogTitle>Nouvel actif immobilisé</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t('cabclt.far.new_asset', locale)}</DialogTitle></DialogHeader>
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div className="col-span-2">
-                  <Label className="text-xs">Description *</Label>
-                  <Input value={newActif.actif_description} onChange={e => setNewActif(p => ({ ...p, actif_description: e.target.value }))} placeholder="Ex: Ordinateur Dell..." className="h-8 text-sm" />
+                  <Label className="text-xs">{t('cabclt.far.col_desc', locale)} *</Label>
+                  <Input value={newActif.actif_description} onChange={e => setNewActif(p => ({ ...p, actif_description: e.target.value }))} placeholder={t('cabclt.far.desc_placeholder', locale)} className="h-8 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-xs">Catégorie *</Label>
+                  <Label className="text-xs">{t('cabclt.far.col_category', locale)} *</Label>
                   <Select value={newActif.categorie} onValueChange={v => setNewActif(p => ({ ...p, categorie: v }))}>
                     <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -232,38 +235,38 @@ export default function FARPage() {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Taux MRA auto</Label>
+                  <Label className="text-xs">{t('cabclt.far.mra_rate_auto', locale)}</Label>
                   <Input value={`${TAUX_MRA[newActif.categorie]}%`} disabled className="h-8 text-sm bg-gray-50" />
                 </div>
                 <div>
-                  <Label className="text-xs">Fournisseur</Label>
+                  <Label className="text-xs">{t('cabclt.far.col_supplier', locale)}</Label>
                   <Input value={newActif.fournisseur} onChange={e => setNewActif(p => ({ ...p, fournisseur: e.target.value }))} className="h-8 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-xs">Date acquisition</Label>
+                  <Label className="text-xs">{t('cabclt.far.acq_date', locale)}</Label>
                   <Input type="date" value={newActif.date_acquisition} onChange={e => setNewActif(p => ({ ...p, date_acquisition: e.target.value }))} className="h-8 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-xs">Coût 01/07 (MUR)</Label>
+                  <Label className="text-xs">{t('cabclt.far.cost_0107_mur', locale)}</Label>
                   <Input type="number" value={newActif.cout_01_07} onChange={e => setNewActif(p => ({ ...p, cout_01_07: e.target.value }))} placeholder="0" className="h-8 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-xs">TWDV 01/07 (MUR)</Label>
+                  <Label className="text-xs">{t('cabclt.far.twdv_0107_mur', locale)}</Label>
                   <Input type="number" value={newActif.twdv_01_07} onChange={e => setNewActif(p => ({ ...p, twdv_01_07: e.target.value }))} placeholder="0" className="h-8 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-xs">Additions de l'année</Label>
+                  <Label className="text-xs">{t('cabclt.far.additions_year', locale)}</Label>
                   <Input type="number" value={newActif.additions} onChange={e => setNewActif(p => ({ ...p, additions: e.target.value }))} placeholder="0" className="h-8 text-sm" />
                 </div>
                 <div>
-                  <Label className="text-xs">Notes</Label>
+                  <Label className="text-xs">{t('cabclt.far.notes', locale)}</Label>
                   <Input value={newActif.notes} onChange={e => setNewActif(p => ({ ...p, notes: e.target.value }))} className="h-8 text-sm" />
                 </div>
                 <div className="col-span-2 flex gap-2 justify-end mt-2">
-                  <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Annuler</Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>{t('cabclt.far.cancel', locale)}</Button>
                   <Button size="sm" onClick={handleAdd} disabled={saving || !newActif.actif_description} style={{ backgroundColor: NAVY }}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-                    Ajouter
+                    {t('cabclt.far.add', locale)}
                   </Button>
                 </div>
               </div>
@@ -276,19 +279,19 @@ export default function FARPage() {
       {data && (
         <div className="grid grid-cols-4 gap-4">
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500">Actifs</p>
+            <p className="text-xs text-gray-500">{t('cabclt.far.kpi_assets', locale)}</p>
             <p className="text-2xl font-bold" style={{ color: NAVY }}>{data.totaux.nb_actifs}</p>
           </CardContent></Card>
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500">Coût total</p>
+            <p className="text-xs text-gray-500">{t('cabclt.far.kpi_total_cost', locale)}</p>
             <p className="text-xl font-bold text-blue-700">{fmt(data.totaux.total_cout)} MUR</p>
           </CardContent></Card>
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500">Annual Allowance totale</p>
+            <p className="text-xs text-gray-500">{t('cabclt.far.kpi_total_aa', locale)}</p>
             <p className="text-xl font-bold text-orange-600">{fmt(data.totaux.total_annual_allowance)} MUR</p>
           </CardContent></Card>
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500">TWDV résiduelle</p>
+            <p className="text-xs text-gray-500">{t('cabclt.far.kpi_twdv', locale)}</p>
             <p className="text-xl font-bold text-green-700">{fmt(data.totaux.total_twdv)} MUR</p>
           </CardContent></Card>
         </div>
@@ -300,8 +303,8 @@ export default function FARPage() {
       ) : !data?.actifs?.length ? (
         <Card><CardContent className="py-12 text-center text-gray-500">
           <TrendingDown className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-          <p className="font-medium">Aucun actif enregistré</p>
-          <p className="text-sm mt-1">Ajoutez vos immobilisations pour calculer l'annual allowance MRA</p>
+          <p className="font-medium">{t('cabclt.far.no_assets', locale)}</p>
+          <p className="text-sm mt-1">{t('cabclt.far.no_assets_hint', locale)}</p>
         </CardContent></Card>
       ) : (
         <div className="space-y-4">
@@ -315,7 +318,7 @@ export default function FARPage() {
                   <CardTitle className="text-sm flex items-center gap-2" style={{ color: NAVY }}>
                     {CATEGORIE_LABELS[cat] || cat}
                     <Badge variant="outline" className="text-[10px]">{TAUX_MRA[cat] || 20}% MRA</Badge>
-                    <span className="text-xs font-normal text-gray-500">({actifs.length} actifs)</span>
+                    <span className="text-xs font-normal text-gray-500">({actifs.length} {t('cabclt.far.assets_lower', locale)})</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -323,16 +326,16 @@ export default function FARPage() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-gray-50 text-xs">
-                          <TableHead>Description</TableHead>
-                          <TableHead>Fournisseur</TableHead>
-                          <TableHead>Date acq.</TableHead>
-                          <TableHead className="text-right">Coût 01/07</TableHead>
-                          <TableHead className="text-right">Additions</TableHead>
-                          <TableHead className="text-right">Disposals</TableHead>
-                          <TableHead className="text-right">Coût 30/06</TableHead>
-                          <TableHead className="text-right">TWDV 01/07</TableHead>
-                          <TableHead className="text-right">Dotation</TableHead>
-                          <TableHead className="text-right">TWDV 30/06</TableHead>
+                          <TableHead>{t('cabclt.far.col_desc', locale)}</TableHead>
+                          <TableHead>{t('cabclt.far.col_supplier', locale)}</TableHead>
+                          <TableHead>{t('cabclt.far.col_date_acq', locale)}</TableHead>
+                          <TableHead className="text-right">{t('cabclt.far.col_cost_0107', locale)}</TableHead>
+                          <TableHead className="text-right">{t('cabclt.far.col_additions', locale)}</TableHead>
+                          <TableHead className="text-right">{t('cabclt.far.col_disposals', locale)}</TableHead>
+                          <TableHead className="text-right">{t('cabclt.far.col_cost_3006', locale)}</TableHead>
+                          <TableHead className="text-right">{t('cabclt.far.col_twdv_0107', locale)}</TableHead>
+                          <TableHead className="text-right">{t('cabclt.far.col_dotation', locale)}</TableHead>
+                          <TableHead className="text-right">{t('cabclt.far.col_twdv_3006', locale)}</TableHead>
                           <TableHead className="text-right">NBV</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -347,7 +350,7 @@ export default function FARPage() {
                             </TableCell>
                             <TableCell className="text-xs text-gray-500">{a.fournisseur || "—"}</TableCell>
                             <TableCell className="text-xs text-gray-500">
-                              {a.date_acquisition ? new Date(a.date_acquisition).toLocaleDateString("fr-FR") : "—"}
+                              {a.date_acquisition ? new Date(a.date_acquisition).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB') : "—"}
                             </TableCell>
                             <TableCell className="text-xs text-right font-mono">{fmt(a.cout_01_07)}</TableCell>
                             <TableCell className="text-xs text-right font-mono text-blue-600">
@@ -367,7 +370,7 @@ export default function FARPage() {
                         ))}
                         {/* Sous-total */}
                         <TableRow className="bg-gray-100 border-t-2 font-semibold text-xs">
-                          <TableCell colSpan={6} className="font-bold">Sous-total {CATEGORIE_LABELS[cat] || cat}</TableCell>
+                          <TableCell colSpan={6} className="font-bold">{t('cabclt.far.subtotal', locale)} {CATEGORIE_LABELS[cat] || cat}</TableCell>
                           <TableCell className="text-right font-mono">{fmt(totalCout)}</TableCell>
                           <TableCell></TableCell>
                           <TableCell className="text-right font-mono text-orange-600">({fmt(totalAA)})</TableCell>
@@ -387,19 +390,19 @@ export default function FARPage() {
             <CardContent className="p-4">
               <div className="grid grid-cols-4 gap-4 text-center">
                 <div>
-                  <p className="text-xs text-gray-500 uppercase">Coût total 30/06</p>
+                  <p className="text-xs text-gray-500 uppercase">{t('cabclt.far.total_cost_3006', locale)}</p>
                   <p className="text-lg font-bold" style={{ color: NAVY }}>{fmt(data.totaux.total_cout)} MUR</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 uppercase">Annual Allowance</p>
+                  <p className="text-xs text-gray-500 uppercase">{t('cabclt.far.total_annual_allowance', locale)}</p>
                   <p className="text-lg font-bold text-orange-600">({fmt(data.totaux.total_annual_allowance)}) MUR</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 uppercase">TWDV résiduelle</p>
+                  <p className="text-xs text-gray-500 uppercase">{t('cabclt.far.kpi_twdv', locale)}</p>
                   <p className="text-lg font-bold text-green-700">{fmt(data.totaux.total_twdv)} MUR</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 uppercase">Exercice</p>
+                  <p className="text-xs text-gray-500 uppercase">{t('cabclt.far.fiscal_year', locale)}</p>
                   <p className="text-lg font-bold" style={{ color: GOLD }}>{exercice}</p>
                 </div>
               </div>

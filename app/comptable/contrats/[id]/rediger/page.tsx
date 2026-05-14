@@ -18,6 +18,7 @@ import {
   RefreshCw,
   ChevronRight,
 } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Message {
   role: 'user' | 'assistant'
@@ -45,6 +46,7 @@ interface AnalyseStatus {
 }
 
 export default function RedigerContratPage() {
+  const locale = getLocale()
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const pathname = usePathname() || ""
@@ -164,7 +166,7 @@ export default function RedigerContratPage() {
         ...prev,
         {
           role: 'assistant',
-          content: "Désolé, une erreur s'est produite. Veuillez réessayer.",
+          content: t('cab.rediger.error_retry', locale),
           timestamp: new Date().toISOString(),
         },
       ])
@@ -203,10 +205,10 @@ export default function RedigerContratPage() {
 
   // Suggestions rapides pour démarrer
   const suggestions = [
-    "Lettre de mission pour tenue de comptabilité, 15 000 MUR/mois",
-    "Convention d'honoraires pour préparation déclarations fiscales annuelles",
-    "NDA avec un partenaire potentiel pour 2 ans",
-    "Contrat de prestation IT, forfait 50 000 MUR",
+    t('cab.rediger.sugg_1', locale),
+    t('cab.rediger.sugg_2', locale),
+    t('cab.rediger.sugg_3', locale),
+    t('cab.rediger.sugg_4', locale),
   ]
 
   if (loading) {
@@ -231,14 +233,14 @@ export default function RedigerContratPage() {
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-blue-600" />
               <h1 className="font-semibold text-gray-900 text-sm">
-                {contrat?.titre || 'Rédaction de contrat'}
+                {contrat?.titre || t('cab.rediger.title_default', locale)}
               </h1>
               {contrat?.reference && (
                 <span className="text-xs text-gray-400">{contrat.reference}</span>
               )}
             </div>
             <p className="text-xs text-gray-500">
-              Assistant IA · {contrat?.client?.full_name || 'Client non défini'}
+              {t('cab.rediger.assistant_ia', locale)} · {contrat?.client?.full_name || t('cab.rediger.client_undefined', locale)}
               {contrat?.societe && ` · ${contrat.societe.nom}`}
             </p>
           </div>
@@ -249,7 +251,7 @@ export default function RedigerContratPage() {
             <Link href={`${basePath}/${id}`}>
               <Button variant="outline" size="sm" className="text-xs">
                 <Eye className="w-3 h-3 mr-1" />
-                Voir le contrat
+                {t('cab.rediger.view_contract', locale)}
               </Button>
             </Link>
           )}
@@ -264,7 +266,7 @@ export default function RedigerContratPage() {
             ) : (
               <FileText className="w-3 h-3 mr-1" />
             )}
-            {contrat?.contenu_html ? 'Régénérer' : 'Générer le contrat'}
+            {contrat?.contenu_html ? t('cab.rediger.regenerate', locale) : t('cab.rediger.generate', locale)}
           </Button>
         </div>
       </div>
@@ -278,18 +280,17 @@ export default function RedigerContratPage() {
                 <Sparkles className="w-8 h-8 text-blue-600" />
               </div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                Assistant rédaction de contrats
+                {t('cab.rediger.intro_title', locale)}
               </h2>
               <p className="text-gray-500 text-sm">
-                Décrivez votre besoin en langage naturel. Je vais vous guider étape par étape
-                pour rédiger un contrat complet et professionnel.
+                {t('cab.rediger.intro_text', locale)}
               </p>
             </div>
 
             {/* Suggestions */}
             <div className="space-y-2">
               <p className="text-xs text-gray-400 font-medium uppercase tracking-wide text-center mb-3">
-                Exemples pour démarrer
+                {t('cab.rediger.examples_label', locale)}
               </p>
               {suggestions.map((s, i) => (
                 <button
@@ -371,7 +372,7 @@ export default function RedigerContratPage() {
             <>
               <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
               <span className="text-green-700 font-medium">
-                Prêt à générer le contrat
+                {t('cab.rediger.ready_to_generate', locale)}
               </span>
               <Button
                 onClick={() => genererContrat()}
@@ -379,14 +380,14 @@ export default function RedigerContratPage() {
                 size="sm"
                 className="ml-auto h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
               >
-                {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Générer maintenant'}
+                {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : t('cab.rediger.generate_now', locale)}
               </Button>
             </>
           ) : (
             <>
               <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
               <span className="text-yellow-700">
-                Manque : {analyse.informations_manquantes.slice(0, 3).join(', ')}
+                {t('cab.rediger.missing', locale)} {analyse.informations_manquantes.slice(0, 3).join(', ')}
                 {analyse.informations_manquantes.length > 3 && ` +${analyse.informations_manquantes.length - 3}`}
               </span>
             </>
@@ -403,7 +404,7 @@ export default function RedigerContratPage() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Décrivez votre contrat... (Entrée pour envoyer, Maj+Entrée pour sauter une ligne)"
+              placeholder={t('cab.rediger.input_placeholder', locale)}
               className="min-h-[52px] max-h-32 resize-none pr-12 text-sm"
               disabled={sending || streaming}
               rows={2}
@@ -422,7 +423,7 @@ export default function RedigerContratPage() {
           </Button>
         </div>
         <p className="text-xs text-gray-400 text-center mt-2">
-          L'IA extrait automatiquement les paramètres du contrat au fil de la conversation
+          {t('cab.rediger.input_hint', locale)}
         </p>
       </div>
     </div>

@@ -13,6 +13,7 @@ import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 import { toast } from "sonner"
+import { t, getLocale } from "@/lib/i18n"
 
 /* ── Section card for grouped form fields ── */
 function FormSection({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) {
@@ -801,6 +802,7 @@ function computeTotalBrut(emp: any): number {
 }
 
 export default function EmployesPage() {
+  const locale = getLocale()
   const router = useRouter()
   const [employes, setEmployes] = useState<any[]>([])
   const [societes, setSocietes] = useState<any[]>([])
@@ -1022,7 +1024,7 @@ export default function EmployesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]" style={{ fontFamily: "Poppins, sans-serif" }}>Employes</h1>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]" style={{ fontFamily: "Poppins, sans-serif" }}>{t('rha.a.emp.title', locale)}</h1>
           <p className="text-sm text-gray-500">{employes.length} employe(s) {filterStatut === "sortis" ? "sorti(s)" : filterStatut === "tous" ? "au total" : "actif(s)"}</p>
         </div>
         <div className="flex gap-2 flex-wrap">

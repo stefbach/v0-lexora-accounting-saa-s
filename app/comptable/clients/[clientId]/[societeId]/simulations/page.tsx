@@ -15,6 +15,7 @@ import {
   ArrowLeft, Plus, Brain, TrendingUp, TrendingDown, CheckCircle2,
   Clock, X, BarChart3, Loader2,
 } from "lucide-react"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -60,16 +61,16 @@ interface Simulation {
 // ---------------------------------------------------------------------------
 // Type options for the new simulation form
 // ---------------------------------------------------------------------------
-const typeOptions = [
-  { value: "nouveau_client", label: "Nouveau client" },
-  { value: "embauche", label: "Embauche" },
-  { value: "investissement", label: "Investissement" },
-  { value: "emprunt", label: "Emprunt bancaire" },
-  { value: "expansion", label: "Expansion" },
-  { value: "reduction", label: "Reduction de couts" },
+const getTypeOptions = (locale: Locale) => [
+  { value: "nouveau_client", label: t('cabclt.sim.type_new_client', locale) },
+  { value: "embauche", label: t('cabclt.sim.type_hiring', locale) },
+  { value: "investissement", label: t('cabclt.sim.type_investment', locale) },
+  { value: "emprunt", label: t('cabclt.sim.type_loan', locale) },
+  { value: "expansion", label: t('cabclt.sim.type_expansion', locale) },
+  { value: "reduction", label: t('cabclt.sim.type_cost_reduction', locale) },
 ]
 
-function mapDbSimulation(row: any): Simulation {
+function mapDbSimulation(row: any, locale: Locale): Simulation {
   const score = row.score_opportunite || 0
   const isGood = score >= 70
   const optim = row.scenario_optimiste || {}
@@ -78,41 +79,43 @@ function mapDbSimulation(row: any): Simulation {
 
   return {
     id: row.id,
-    titre: row.titre || "Sans titre",
+    titre: row.titre || t('cabclt.sim.no_title', locale),
     type: row.type_simulation || "autre",
     description: row.recommandation || "",
     score,
-    verdict: isGood ? "Viable" : "A evaluer",
+    verdict: isGood ? t('cabclt.sim.verdict_viable', locale) : t('cabclt.sim.verdict_evaluate', locale),
     verdictColor: isGood ? "text-green-700" : "text-orange-700",
     verdictBg: isGood ? "bg-green-100" : "bg-orange-100",
-    date: row.created_at ? new Date(row.created_at).toLocaleDateString("fr-FR") : "--",
+    date: row.created_at ? new Date(row.created_at).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB') : "--",
     impacts: [],
     scenarios: [
       {
-        nom: "Optimiste",
+        nom: t('cabclt.sim.scenario_optimistic', locale),
         probabilite: optim.probabilite || "--",
         impact: optim.impact_tresorerie ? fmt(optim.impact_tresorerie) : optim.description || "--",
         detail: optim.description || "",
       },
       {
-        nom: "Base",
+        nom: t('cabclt.sim.scenario_base', locale),
         probabilite: base.probabilite || "--",
         impact: base.impact_tresorerie ? fmt(base.impact_tresorerie) : base.description || "--",
         detail: base.description || "",
       },
       {
-        nom: "Pessimiste",
+        nom: t('cabclt.sim.scenario_pessimistic', locale),
         probabilite: pessim.probabilite || "--",
         impact: pessim.impact_tresorerie ? fmt(pessim.impact_tresorerie) : pessim.description || "--",
         detail: pessim.description || "",
       },
     ],
-    analyseIA: row.recommandation || "Aucune analyse disponible.",
+    analyseIA: row.recommandation || t('cabclt.sim.no_analysis', locale),
   }
 }
 
 export default function SimulationsPage() {
   const params = useParams()
+  const locale = getLocale()
+  const typeOptions = getTypeOptions(locale)
   const clientId = params.clientId as string
   const societeId = params.societeId as string
 
@@ -140,7 +143,7 @@ export default function SimulationsPage() {
         .order("created_at", { ascending: false })
 
       if (!error && rows) {
-        setSimulations(rows.map(mapDbSimulation))
+        setSimulations(rows.map((r: any) => mapDbSimulation(r, locale)))
       }
     } catch {
       // API not available, keep empty
@@ -176,20 +179,20 @@ export default function SimulationsPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setSubmitError(data.error || "Erreur lors de la simulation.")
+        setSubmitError(data.error || t('cabclt.sim.error_simulation', locale))
         setSubmitting(false)
         return
       }
 
       // Add the new simulation to the list
       if (data.simulation) {
-        setSimulations(prev => [mapDbSimulation(data.simulation), ...prev])
+        setSimulations(prev => [mapDbSimulation(data.simulation, locale), ...prev])
       }
 
       setNewSim({ titre: "", type: "nouveau_client", description: "", parametres: "" })
       setShowDialog(false)
     } catch {
-      setSubmitError("Erreur de connexion.")
+      setSubmitError(t('cabclt.sim.error_connection', locale))
     } finally {
       setSubmitting(false)
     }
@@ -201,15 +204,15 @@ export default function SimulationsPage() {
       <div className="flex items-center gap-3 mb-2">
         <Link href={`/comptable/clients/${clientId}/${societeId}`}>
           <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Retour
+            <ArrowLeft className="w-4 h-4 mr-1" /> {t('cabclt.sim.back', locale)}
           </Button>
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
-            Simulations
+            {t('cabclt.sim.title', locale)}
           </h1>
           <p className="text-sm text-gray-500">
-            Modelisez l&apos;impact de decisions strategiques sur la tresorerie
+            {t('cabclt.sim.subtitle', locale)}
           </p>
         </div>
         <Button
@@ -217,7 +220,7 @@ export default function SimulationsPage() {
           style={{ background: GOLD, color: NAVY }}
           onClick={() => setShowDialog(true)}
         >
-          <Plus className="w-4 h-4 mr-1" /> Nouvelle simulation
+          <Plus className="w-4 h-4 mr-1" /> {t('cabclt.sim.new_simulation', locale)}
         </Button>
       </div>
 
@@ -226,50 +229,50 @@ export default function SimulationsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <Card className="w-full max-w-lg mx-4">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle style={{ color: NAVY }}>Nouvelle simulation</CardTitle>
+              <CardTitle style={{ color: NAVY }}>{t('cabclt.sim.new_simulation', locale)}</CardTitle>
               <Button variant="ghost" size="sm" onClick={() => { setShowDialog(false); setSubmitError(null) }}>
                 <X className="w-4 h-4" />
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <label className="text-sm font-medium block mb-1">Titre</label>
+                <label className="text-sm font-medium block mb-1">{t('cabclt.sim.label_title', locale)}</label>
                 <input
                   type="text"
                   className="border rounded-md px-3 py-2 w-full text-sm"
-                  placeholder="Ex: Nouveau contrat Air Mauritius"
+                  placeholder={t('cabclt.sim.placeholder_title', locale)}
                   value={newSim.titre}
                   onChange={(e) => setNewSim({ ...newSim, titre: e.target.value })}
                 />
               </div>
               <div>
-                <label className="text-sm font-medium block mb-1">Type</label>
+                <label className="text-sm font-medium block mb-1">{t('cabclt.sim.label_type', locale)}</label>
                 <select
                   className="border rounded-md px-3 py-2 w-full text-sm"
                   value={newSim.type}
                   onChange={(e) => setNewSim({ ...newSim, type: e.target.value })}
                 >
-                  {typeOptions.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
+                  {typeOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="text-sm font-medium block mb-1">Description</label>
+                <label className="text-sm font-medium block mb-1">{t('cabclt.sim.label_description', locale)}</label>
                 <textarea
                   className="border rounded-md px-3 py-2 w-full text-sm"
                   rows={3}
-                  placeholder="Decrivez le contexte et les hypotheses..."
+                  placeholder={t('cabclt.sim.placeholder_description', locale)}
                   value={newSim.description}
                   onChange={(e) => setNewSim({ ...newSim, description: e.target.value })}
                 />
               </div>
               <div>
-                <label className="text-sm font-medium block mb-1">Parametres</label>
+                <label className="text-sm font-medium block mb-1">{t('cabclt.sim.label_params', locale)}</label>
                 <textarea
                   className="border rounded-md px-3 py-2 w-full text-sm"
                   rows={2}
-                  placeholder="Montant estime, duree, nombre d'employes..."
+                  placeholder={t('cabclt.sim.placeholder_params', locale)}
                   value={newSim.parametres}
                   onChange={(e) => setNewSim({ ...newSim, parametres: e.target.value })}
                 />
@@ -279,7 +282,7 @@ export default function SimulationsPage() {
               )}
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" size="sm" onClick={() => { setShowDialog(false); setSubmitError(null) }}>
-                  Annuler
+                  {t('cabclt.sim.cancel', locale)}
                 </Button>
                 <Button
                   size="sm"
@@ -292,7 +295,7 @@ export default function SimulationsPage() {
                   ) : (
                     <Brain className="w-4 h-4 mr-1" />
                   )}
-                  Analyser avec l&apos;IA
+                  {t('cabclt.sim.analyze_with_ai', locale)}
                 </Button>
               </div>
             </CardContent>
@@ -310,9 +313,9 @@ export default function SimulationsPage() {
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
               <BarChart3 className="h-12 w-12 text-muted-foreground/40" />
-              <p className="font-medium text-base">Aucune simulation</p>
+              <p className="font-medium text-base">{t('cabclt.sim.empty', locale)}</p>
               <p className="text-sm text-center">
-                Creez votre premiere simulation pour modeliser l&apos;impact de decisions strategiques sur la tresorerie.
+                {t('cabclt.sim.empty_detail', locale)}
               </p>
               <Button
                 size="sm"
@@ -320,7 +323,7 @@ export default function SimulationsPage() {
                 style={{ background: GOLD, color: NAVY }}
                 onClick={() => setShowDialog(true)}
               >
-                <Plus className="w-4 h-4 mr-1" /> Nouvelle simulation
+                <Plus className="w-4 h-4 mr-1" /> {t('cabclt.sim.new_simulation', locale)}
               </Button>
             </CardContent>
           </Card>
@@ -337,10 +340,10 @@ export default function SimulationsPage() {
                       </Badge>
                     </div>
                     <p className="text-sm text-gray-500">{sim.description}</p>
-                    <p className="text-xs text-gray-400 mt-1">Creee le {sim.date}</p>
+                    <p className="text-xs text-gray-400 mt-1">{t('cabclt.sim.created_on', locale)} {sim.date}</p>
                   </div>
                   <div className="flex flex-col items-center ml-4">
-                    <span className="text-xs text-gray-500 mb-1">Score</span>
+                    <span className="text-xs text-gray-500 mb-1">{t('cabclt.sim.score', locale)}</span>
                     <div
                       className={`text-2xl font-black rounded-xl w-14 h-14 flex items-center justify-center ${sim.verdictBg} ${sim.verdictColor}`}
                     >
@@ -360,8 +363,8 @@ export default function SimulationsPage() {
               <CardContent>
                 <Tabs defaultValue="scenarios" className="w-full">
                   <TabsList className="mb-3">
-                    <TabsTrigger value="scenarios">3 Scenarios</TabsTrigger>
-                    <TabsTrigger value="analyse">Analyse IA</TabsTrigger>
+                    <TabsTrigger value="scenarios">{t('cabclt.sim.tab_scenarios', locale)}</TabsTrigger>
+                    <TabsTrigger value="analyse">{t('cabclt.sim.tab_ai_analysis', locale)}</TabsTrigger>
                   </TabsList>
 
                   {/* 3 Scénarios */}
@@ -369,9 +372,9 @@ export default function SimulationsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {sim.scenarios.map((sc) => {
                         const colors: Record<string, string> = {
-                          Optimiste: "border-green-200 bg-green-50",
-                          Base: "border-blue-200 bg-blue-50",
-                          Pessimiste: "border-red-200 bg-red-50",
+                          [t('cabclt.sim.scenario_optimistic', locale)]: "border-green-200 bg-green-50",
+                          [t('cabclt.sim.scenario_base', locale)]: "border-blue-200 bg-blue-50",
+                          [t('cabclt.sim.scenario_pessimistic', locale)]: "border-red-200 bg-red-50",
                         }
                         return (
                           <div key={sc.nom} className={`rounded-lg border p-4 ${colors[sc.nom] || ""}`}>

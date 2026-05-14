@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Save, Loader2, CheckCircle2, AlertCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 type Params = {
   org_nom: string
@@ -49,6 +50,7 @@ const DEFAULTS: Params = {
 }
 
 export default function AdminParametresPage() {
+  const locale = getLocale()
   const [params, setParams] = useState<Params>(DEFAULTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -78,12 +80,12 @@ export default function AdminParametresPage() {
         body: JSON.stringify(params),
       })
       const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error || "Erreur sauvegarde")
+      if (!res.ok || data.error) throw new Error(data.error || t('adm.params.err_save', locale))
       setSaveStatus("success")
       setTimeout(() => setSaveStatus("idle"), 3000)
     } catch (e: unknown) {
       setSaveStatus("error")
-      setSaveError(e instanceof Error ? e.message : "Erreur inconnue")
+      setSaveError(e instanceof Error ? e.message : t('adm.params.err_unknown', locale))
     } finally {
       setSaving(false)
     }
@@ -102,19 +104,19 @@ export default function AdminParametresPage() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>Paramètres plateforme</h1>
-          <p className="text-muted-foreground">Configuration persistante de Lexora</p>
+          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('adm.params.title', locale)}</h1>
+          <p className="text-muted-foreground">{t('adm.params.subtitle', locale)}</p>
         </div>
         <Button onClick={handleSave} disabled={saving} style={{ backgroundColor: "#D4AF37" }} className="gap-2">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Enregistrer tout
+          {t('adm.params.save_all', locale)}
         </Button>
       </div>
 
       {saveStatus === "success" && (
         <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
           <CheckCircle2 className="h-4 w-4" />
-          Paramètres sauvegardés avec succès.
+          {t('adm.params.saved', locale)}
         </div>
       )}
       {saveStatus === "error" && (
@@ -127,22 +129,22 @@ export default function AdminParametresPage() {
       {/* ── 1. Informations plateforme ── */}
       <Card>
         <CardHeader>
-          <CardTitle>Informations plateforme</CardTitle>
-          <CardDescription>Identité de l&apos;organisation</CardDescription>
+          <CardTitle>{t('adm.params.section_org', locale)}</CardTitle>
+          <CardDescription>{t('adm.params.section_org_desc', locale)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Nom de l&apos;organisation</Label>
+              <Label>{t('adm.params.org_name', locale)}</Label>
               <Input value={params.org_nom} onChange={e => set("org_nom", e.target.value)} placeholder="Lexora Mauritius" />
             </div>
             <div className="space-y-2">
-              <Label>Email de contact</Label>
+              <Label>{t('adm.params.org_email', locale)}</Label>
               <Input type="email" value={params.org_email} onChange={e => set("org_email", e.target.value)} placeholder="admin@lexora.mu" />
             </div>
           </div>
           <div className="space-y-2">
-            <Label>URL du logo (optionnel)</Label>
+            <Label>{t('adm.params.logo_url', locale)}</Label>
             <Input value={params.org_logo_url} onChange={e => set("org_logo_url", e.target.value)} placeholder="https://..." />
           </div>
         </CardContent>
@@ -151,21 +153,21 @@ export default function AdminParametresPage() {
       {/* ── 2. WATI WhatsApp ── */}
       <Card>
         <CardHeader>
-          <CardTitle>Configuration WATI WhatsApp</CardTitle>
-          <CardDescription>Intégration notifications WhatsApp via WATI</CardDescription>
+          <CardTitle>{t('adm.params.section_wati', locale)}</CardTitle>
+          <CardDescription>{t('adm.params.section_wati_desc', locale)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Token WATI</Label>
+            <Label>{t('adm.params.wati_token', locale)}</Label>
             <Input type="password" value={params.wati_token} onChange={e => set("wati_token", e.target.value)} placeholder="Bearer eyJ..." />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Phone ID</Label>
+              <Label>{t('adm.params.phone_id', locale)}</Label>
               <Input value={params.wati_phone_id} onChange={e => set("wati_phone_id", e.target.value)} placeholder="2307XXXXXXXX" />
             </div>
             <div className="space-y-2">
-              <Label>Webhook URL</Label>
+              <Label>{t('adm.params.webhook_url', locale)}</Label>
               <Input value={params.wati_webhook_url} onChange={e => set("wati_webhook_url", e.target.value)} placeholder="https://lexora.mu/api/webhooks/wati" />
             </div>
           </div>
@@ -175,17 +177,17 @@ export default function AdminParametresPage() {
       {/* ── 3. Configuration email ── */}
       <Card>
         <CardHeader>
-          <CardTitle>Configuration email</CardTitle>
-          <CardDescription>Adresses d&apos;envoi des notifications</CardDescription>
+          <CardTitle>{t('adm.params.section_email', locale)}</CardTitle>
+          <CardDescription>{t('adm.params.section_email_desc', locale)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>From email</Label>
+              <Label>{t('adm.params.from_email', locale)}</Label>
               <Input type="email" value={params.email_from} onChange={e => set("email_from", e.target.value)} placeholder="noreply@lexora.mu" />
             </div>
             <div className="space-y-2">
-              <Label>Reply-to email</Label>
+              <Label>{t('adm.params.reply_to', locale)}</Label>
               <Input type="email" value={params.email_reply_to} onChange={e => set("email_reply_to", e.target.value)} placeholder="admin@lexora.mu" />
             </div>
           </div>
@@ -195,8 +197,8 @@ export default function AdminParametresPage() {
       {/* ── 4. Taux de change ── */}
       <Card>
         <CardHeader>
-          <CardTitle>Taux de change (override manuel)</CardTitle>
-          <CardDescription>Laisser vide pour utiliser les taux en temps réel</CardDescription>
+          <CardTitle>{t('adm.params.section_fx', locale)}</CardTitle>
+          <CardDescription>{t('adm.params.section_fx_desc', locale)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -215,17 +217,17 @@ export default function AdminParametresPage() {
       {/* ── 5. Paramètres généraux ── */}
       <Card>
         <CardHeader>
-          <CardTitle>Paramètres généraux</CardTitle>
-          <CardDescription>Exercice fiscal et devise</CardDescription>
+          <CardTitle>{t('adm.params.section_general', locale)}</CardTitle>
+          <CardDescription>{t('adm.params.section_general_desc', locale)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Début exercice fiscal (JJ-MM)</Label>
+              <Label>{t('adm.params.fiscal_start', locale)}</Label>
               <Input value={params.exercice_fiscal_debut} onChange={e => set("exercice_fiscal_debut", e.target.value)} placeholder="01-01 ou 01-07" />
             </div>
             <div className="space-y-2">
-              <Label>Devise principale</Label>
+              <Label>{t('adm.params.primary_currency', locale)}</Label>
               <Select value={params.devise_principale} onValueChange={v => set("devise_principale", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -243,15 +245,15 @@ export default function AdminParametresPage() {
       {/* ── 6. Notifications ── */}
       <Card>
         <CardHeader>
-          <CardTitle>Notifications</CardTitle>
-          <CardDescription>Alertes et rappels automatiques</CardDescription>
+          <CardTitle>{t('adm.params.section_notif', locale)}</CardTitle>
+          <CardDescription>{t('adm.params.section_notif_desc', locale)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {[
-            { key: "notif_email" as const,     label: "Notifications par email",          desc: "Recevoir les alertes par email" },
-            { key: "notif_new_users" as const, label: "Alertes nouveaux utilisateurs",     desc: "Notification lors de l'inscription" },
-            { key: "notif_uploads" as const,   label: "Alertes documents uploadés",        desc: "Notification lors de l'upload d'un document" },
-            { key: "notif_tva" as const,       label: "Rappels TVA / deadlines MRA",       desc: "Alerte avant les échéances fiscales" },
+            { key: "notif_email" as const,     label: t('adm.params.notif_email', locale),      desc: t('adm.params.notif_email_desc', locale) },
+            { key: "notif_new_users" as const, label: t('adm.params.notif_new_users', locale),  desc: t('adm.params.notif_new_users_desc', locale) },
+            { key: "notif_uploads" as const,   label: t('adm.params.notif_uploads', locale),    desc: t('adm.params.notif_uploads_desc', locale) },
+            { key: "notif_tva" as const,       label: t('adm.params.notif_tva', locale),        desc: t('adm.params.notif_tva_desc', locale) },
           ].map(({ key, label, desc }) => (
             <div key={key} className="flex items-center justify-between">
               <div>
@@ -267,7 +269,7 @@ export default function AdminParametresPage() {
       <div className="flex justify-end pb-8">
         <Button onClick={handleSave} disabled={saving} style={{ backgroundColor: "#D4AF37" }} className="gap-2 px-8">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Enregistrer tous les paramètres
+          {t('adm.params.save_all_long', locale)}
         </Button>
       </div>
     </div>

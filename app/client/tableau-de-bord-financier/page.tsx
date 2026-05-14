@@ -4,11 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, TrendingUp, TrendingDown, Brain } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n).replace("€","MUR") }
 function pct(n: number) { return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%` }
 
 export default function TableauDeBordFinancierPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [data, setData] = useState<any>(null)
   const [generating, setGenerating] = useState(false)
@@ -32,13 +34,13 @@ export default function TableauDeBordFinancierPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-bold text-[#0B0F2E]">Tableau de bord financier</h1>
-        <p className="text-sm text-gray-500">Analyse IA de vos indicateurs clés</p></div>
+        <div><h1 className="text-2xl font-bold text-[#0B0F2E]">{t('core.tdbf.title', locale)}</h1>
+        <p className="text-sm text-gray-500">{t('core.tdbf.subtitle', locale)}</p></div>
         <div className="flex gap-2">
           <input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="border rounded px-3 py-2 text-sm"/>
           <Button onClick={generer} disabled={generating || !societeId} className="bg-[#0B0F2E] text-white gap-1">
             {generating ? <Loader2 className="w-4 h-4 animate-spin"/> : <Brain className="w-4 h-4"/>}
-            Analyser avec IA
+            {t('core.tdbf.analyze_with_ai', locale)}
           </Button>
         </div>
       </div>
@@ -46,14 +48,14 @@ export default function TableauDeBordFinancierPage() {
       {!data && !generating && (
         <Card className="border-dashed"><CardContent className="p-8 text-center">
           <Brain className="w-12 h-12 text-[#D4AF37] mx-auto mb-3"/>
-          <p className="text-gray-500">Sélectionnez une société et cliquez sur <strong>Analyser avec IA</strong> pour générer votre tableau de bord financier.</p>
+          <p className="text-gray-500">{t('core.tdbf.empty_prompt_1', locale)} <strong>{t('core.tdbf.analyze_with_ai', locale)}</strong> {t('core.tdbf.empty_prompt_2', locale)}</p>
         </CardContent></Card>
       )}
 
       {generating && (
         <Card><CardContent className="p-8 flex items-center justify-center gap-3">
           <Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]"/>
-          <p className="text-gray-500">L'IA analyse vos données financières...</p>
+          <p className="text-gray-500">{t('core.tdbf.loading_msg', locale)}</p>
         </CardContent></Card>
       )}
 
@@ -69,7 +71,7 @@ export default function TableauDeBordFinancierPage() {
                   {k.variation !== undefined && (
                     <p className={`text-xs ${k.variation >= 0 ? "text-green-600" : "text-red-600"}`}>
                       {k.variation >= 0 ? <TrendingUp className="w-3 h-3 inline mr-1"/> : <TrendingDown className="w-3 h-3 inline mr-1"/>}
-                      {pct(k.variation)} vs mois préc.
+                      {pct(k.variation)} {t('core.tdbf.vs_prev_month', locale)}
                     </p>
                   )}
                 </CardContent></Card>
@@ -92,7 +94,7 @@ export default function TableauDeBordFinancierPage() {
           {/* Recommandations IA */}
           {recommandations.length > 0 && (
             <Card>
-              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Brain className="w-4 h-4 text-[#D4AF37]"/>Recommandations CFO</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base"><Brain className="w-4 h-4 text-[#D4AF37]"/>{t('core.tdbf.cfo_recommendations', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {recommandations.map((r: any, i: number) => (
                   <div key={i} className="border-l-4 border-[#D4AF37] pl-4 py-1">

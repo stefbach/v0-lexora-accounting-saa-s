@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Download, Users, Banknote, ChevronDown } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -16,6 +17,7 @@ function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractio
 type Step = "upload" | "preview" | "result"
 
 export default function ImportPaiePage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [societe, setSociete] = useState("")
   const [periode, setPeriode] = useState("")
@@ -62,7 +64,7 @@ export default function ImportPaiePage() {
     setParseError("")
     try {
       if (file.size > 10 * 1024 * 1024) {
-        setParseError("Fichier trop volumineux (max 10 MB)")
+        setParseError(t('rha.a.import.file_too_large', locale))
         return
       }
       const fd = new FormData()
@@ -84,7 +86,7 @@ export default function ImportPaiePage() {
 
       if (data.error) { setParseError(data.error); return }
       if (!data.employes || data.employes.length === 0) {
-        setParseError("Aucun employé détecté dans le fichier. Vérifiez que le fichier contient des colonnes: Basic Salary, Net Pay, CSG, etc.")
+        setParseError(t('rha.a.import.no_employees_detected', locale))
         return
       }
 
@@ -102,9 +104,9 @@ export default function ImportPaiePage() {
   }
 
   const handleImport = async () => {
-    if (!societe) { alert("Veuillez sélectionner une société"); return }
-    if (!periode) { alert("Veuillez sélectionner la période (mois)"); return }
-    if (employes.length === 0) { alert("Aucun employé à importer"); return }
+    if (!societe) { alert(t('rha.a.import.veuillez_societe', locale)); return }
+    if (!periode) { alert(t('rha.a.import.veuillez_periode', locale)); return }
+    if (employes.length === 0) { alert(t('rha.a.import.aucun_employe_importer', locale)); return }
     setImporting(true)
     try {
       const res = await fetch("/api/rh/import-paie", {
@@ -116,7 +118,7 @@ export default function ImportPaiePage() {
       setResult(data)
       setStep("result")
       loadHistory()
-    } catch (e: any) { alert("Erreur réseau: " + (e.message || "")) }
+    } catch (e: any) { alert(t('rha.a.import.erreur_reseau', locale) + " " + (e.message || "")) }
     finally { setImporting(false) }
   }
 
@@ -144,12 +146,12 @@ export default function ImportPaiePage() {
     <div className="space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Import Paie Excel</h1>
-          <p className="text-gray-500 text-sm">Importez vos rapports de paie — alimente RH + comptabilité</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.a.import.title', locale)}</h1>
+          <p className="text-gray-500 text-sm">{t('rha.a.import.subtitle', locale)}</p>
         </div>
         <div className="flex gap-2">
           <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Société" /></SelectTrigger>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder={t('rha.a.common.societe', locale)} /></SelectTrigger>
             <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
           </Select>
         </div>
@@ -166,12 +168,12 @@ export default function ImportPaiePage() {
               onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('border-[#D4AF37]', 'bg-[#D4AF37]/5'); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
             >
               {parsing ? (
-                <div><Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-[#D4AF37]" /><p className="text-gray-500">Analyse du fichier <strong>{fileName}</strong> en cours...</p></div>
+                <div><Loader2 className="h-12 w-12 animate-spin mx-auto mb-3 text-[#D4AF37]" /><p className="text-gray-500">{t('rha.a.import.analyzing_prefix', locale)} <strong>{fileName}</strong> {t('rha.a.import.analyzing_suffix', locale)}</p></div>
               ) : (
                 <div>
                   <FileSpreadsheet className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                  <p className="text-lg font-medium" style={{ color: NAVY }}>Glissez votre fichier Excel ici</p>
-                  <p className="text-sm text-gray-400 mt-1">ou utilisez le bouton ci-dessous</p>
+                  <p className="text-lg font-medium" style={{ color: NAVY }}>{t('rha.a.import.dropzone', locale)}</p>
+                  <p className="text-sm text-gray-400 mt-1">{t('rha.a.import.dropzone_or', locale)}</p>
                 </div>
               )}
             </div>
@@ -188,11 +190,11 @@ export default function ImportPaiePage() {
               {fileName && !parsing && <Badge variant="outline">{fileName}</Badge>}
             </div>
 
-            <p className="text-xs text-gray-400 text-center">Format attendu : Payroll Report avec colonnes Basic Salary, CSG, NSF, PAYE, Net Pay (.xlsx, .xls, .csv)</p>
+            <p className="text-xs text-gray-400 text-center">{t('rha.a.import.format_expected', locale)}</p>
 
             {parseError && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-red-600 text-sm font-medium">Erreur</p>
+                <p className="text-red-600 text-sm font-medium">{t('rha.a.import.error_label', locale)}</p>
                 <p className="text-red-500 text-sm mt-1">{parseError}</p>
               </div>
             )}
@@ -206,14 +208,14 @@ export default function ImportPaiePage() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <Badge style={{ backgroundColor: NAVY }} className="text-white">{fileName}</Badge>
-              <Badge variant="outline">{employes.length} employés</Badge>
-              <Badge variant="outline">{columns.length} colonnes</Badge>
+              <Badge variant="outline">{employes.length} {t('rha.a.common.employes', locale)}</Badge>
+              <Badge variant="outline">{columns.length} {t('rha.a.import.colonnes_count', locale)}</Badge>
             </div>
             <div className="flex items-center gap-2">
-              <Label className="text-sm font-medium">Période :</Label>
+              <Label className="text-sm font-medium">{t('rha.a.common.periode', locale)} :</Label>
               <select value={periode} onChange={e => setPeriode(e.target.value)}
                 className="border rounded px-3 py-2 text-sm">
-                <option value="">-- Choisir --</option>
+                <option value="">{t('rha.a.common.choisir', locale)}</option>
                 {(() => {
                   const opts = []
                   for (let y = 2026; y >= 2020; y--) {
@@ -227,12 +229,12 @@ export default function ImportPaiePage() {
                   return opts
                 })()}
               </select>
-              <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setColumns([]) }}>Annuler</Button>
+              <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setColumns([]) }}>{t('rha.a.common.annuler', locale)}</Button>
               <Button onClick={handleImport} disabled={importing || !periode || !societe}
                 style={{ backgroundColor: !periode || !societe ? '#999' : NAVY }}
                 className="text-white">
                 {importing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                {!periode ? "Choisir le mois d'abord" : !societe ? "Choisir la société" : `Importer ${employes.length} employés`}
+                {!periode ? t('rha.a.import.choose_month_first', locale) : !societe ? t('rha.a.import.choose_societe', locale) : `${t('rha.a.import.importer_n', locale)} ${employes.length} ${t('rha.a.import.suffix_employes', locale)}`}
               </Button>
             </div>
           </div>
@@ -240,38 +242,38 @@ export default function ImportPaiePage() {
           {/* KPIs — indicateurs clés */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
-              <p className="text-xs text-gray-400">Masse salariale brute</p>
+              <p className="text-xs text-gray-400">{t('rha.a.import.masse_brute', locale)}</p>
               <p className="text-2xl font-bold text-blue-600">{fmt(totals.brut)}</p>
-              <p className="text-xs text-gray-400 mt-1">{employes.length} employés • Basic: {fmt(totals.basic)}</p>
+              <p className="text-xs text-gray-400 mt-1">{employes.length} {t('rha.a.common.employes', locale)} • {t('rha.a.common.base', locale)}: {fmt(totals.basic)}</p>
             </CardContent></Card>
             <Card className="border-l-4 border-l-emerald-500"><CardContent className="p-4">
-              <p className="text-xs text-gray-400">Net à payer</p>
+              <p className="text-xs text-gray-400">{t('rha.a.import.net_payer', locale)}</p>
               <p className="text-2xl font-bold text-emerald-600">{fmt(totals.net)}</p>
-              {totals.net === 0 && totals.brut > 0 && <p className="text-xs text-red-500 mt-1">Colonne "NET Pay" non détectée</p>}
-              {totals.net > 0 && <p className="text-xs text-gray-400 mt-1">{Math.round(totals.net / totals.brut * 100)}% du brut</p>}
+              {totals.net === 0 && totals.brut > 0 && <p className="text-xs text-red-500 mt-1">{t('rha.a.import.col_net_pay_missing', locale)}</p>}
+              {totals.net > 0 && <p className="text-xs text-gray-400 mt-1">{Math.round(totals.net / totals.brut * 100)}% {t('rha.a.import.de_brut', locale)}</p>}
             </CardContent></Card>
             <Card className="border-l-4 border-l-red-500"><CardContent className="p-4">
-              <p className="text-xs text-gray-400">Retenues salariales</p>
+              <p className="text-xs text-gray-400">{t('rha.a.import.retenues_salariales', locale)}</p>
               <p className="text-2xl font-bold text-red-600">{fmt(totals.deductions)}</p>
               <p className="text-xs text-gray-400 mt-1">CSG {fmt(totals.csg)} • NSF {fmt(totals.nsf)} • PAYE {fmt(totals.paye)}</p>
             </CardContent></Card>
             <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
-              <p className="text-xs text-gray-400">Charges patronales</p>
+              <p className="text-xs text-gray-400">{t('rha.a.import.charges_patronales', locale)}</p>
               <p className="text-2xl font-bold text-orange-600">{fmt(totals.charges)}</p>
-              <p className="text-xs text-gray-400 mt-1">Coût total: <strong>{fmt(totals.brut + totals.charges)}</strong></p>
+              <p className="text-xs text-gray-400 mt-1">{t('rha.a.import.cout_total', locale)}: <strong>{fmt(totals.brut + totals.charges)}</strong></p>
             </CardContent></Card>
           </div>
 
           {/* Vérification cohérence */}
           {totals.brut > 0 && Math.abs(totals.brut - totals.deductions - totals.net) > 100 && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
-              Vérification : Brut ({fmt(totals.brut)}) - Déductions ({fmt(totals.deductions)}) = {fmt(totals.brut - totals.deductions)} ≠ Net ({fmt(totals.net)}) — Écart de {fmt(Math.abs(totals.brut - totals.deductions - totals.net))}
+              {t('rha.a.import.verif_coherence', locale)} : {t('rha.a.common.brut', locale)} ({fmt(totals.brut)}) - {t('rha.a.import.verif_deductions', locale)} ({fmt(totals.deductions)}) = {fmt(totals.brut - totals.deductions)} ≠ {t('rha.a.common.net', locale)} ({fmt(totals.net)}) — {t('rha.a.import.verif_ecart', locale)} {fmt(Math.abs(totals.brut - totals.deductions - totals.net))}
             </div>
           )}
 
           {/* Colonnes détectées */}
           <details className="text-xs">
-            <summary className="text-gray-400 cursor-pointer">Colonnes détectées ({columns.length})</summary>
+            <summary className="text-gray-400 cursor-pointer">{t('rha.a.import.colonnes_detectees', locale)} ({columns.length})</summary>
             <div className="flex flex-wrap gap-1 mt-1">
               {columns.map((c: any) => (
                 <Badge key={c.field} variant="outline" className="text-[10px]">{c.field}: col {c.index}</Badge>
@@ -356,20 +358,20 @@ export default function ImportPaiePage() {
         <Card>
           <CardContent className="p-8 text-center space-y-4">
             <CheckCircle className="h-16 w-16 mx-auto text-emerald-500" />
-            <h2 className="text-xl font-bold" style={{ color: NAVY }}>Import terminé</h2>
+            <h2 className="text-xl font-bold" style={{ color: NAVY }}>{t('rha.a.import.import_termine', locale)}</h2>
             <div className="flex justify-center gap-6">
-              <div><p className="text-3xl font-bold text-emerald-600">{result.created}</p><p className="text-sm text-gray-500">Créés</p></div>
-              <div><p className="text-3xl font-bold text-blue-600">{result.updated}</p><p className="text-sm text-gray-500">Mis à jour</p></div>
-              <div><p className="text-3xl font-bold text-red-600">{result.errors.length}</p><p className="text-sm text-gray-500">Erreurs</p></div>
+              <div><p className="text-3xl font-bold text-emerald-600">{result.created}</p><p className="text-sm text-gray-500">{t('rha.a.import.crees', locale)}</p></div>
+              <div><p className="text-3xl font-bold text-blue-600">{result.updated}</p><p className="text-sm text-gray-500">{t('rha.a.import.mis_a_jour', locale)}</p></div>
+              <div><p className="text-3xl font-bold text-red-600">{result.errors.length}</p><p className="text-sm text-gray-500">{t('rha.a.import.erreurs', locale)}</p></div>
             </div>
             {result.errors.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-left text-sm max-h-40 overflow-y-auto">
                 {result.errors.map((e, i) => <p key={i} className="text-red-700">{e}</p>)}
               </div>
             )}
-            <p className="text-sm text-gray-500">Les écritures comptables (641, 645, 421, 431, 444, 432) ont été générées automatiquement.</p>
+            <p className="text-sm text-gray-500">{t('rha.a.import.ecritures_generees', locale)}</p>
             <Button variant="outline" onClick={() => { setStep("upload"); setEmployes([]); setResult(null) }}>
-              Importer un autre fichier
+              {t('rha.a.import.importer_autre', locale)}
             </Button>
           </CardContent>
         </Card>
@@ -380,12 +382,12 @@ export default function ImportPaiePage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base" style={{ color: NAVY }}>
             <Banknote className="inline h-5 w-5 mr-2" style={{ color: GOLD }} />
-            Historique des imports
+            {t('rha.a.import.historique', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {history.length === 0 ? (
-            <p className="text-gray-400 text-center py-6">Aucun import effectué</p>
+            <p className="text-gray-400 text-center py-6">{t('rha.a.import.aucun_import', locale)}</p>
           ) : (
             <div className="space-y-1">
               {history.map(h => (
@@ -396,19 +398,19 @@ export default function ImportPaiePage() {
                       <Badge style={{ backgroundColor: NAVY }} className="text-white text-xs">
                         {new Date(h.periode + "T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}
                       </Badge>
-                      <span className="text-sm"><Users className="inline h-4 w-4 mr-1 text-gray-400" />{h.nb} employés</span>
+                      <span className="text-sm"><Users className="inline h-4 w-4 mr-1 text-gray-400" />{h.nb} {t('rha.a.common.employes', locale)}</span>
                     </div>
                     <div className="flex items-center gap-4 text-sm font-mono">
-                      <span>Brut: {fmt(h.total_brut)}</span>
-                      <span className="text-emerald-600">Net: {fmt(h.total_net)}</span>
-                      <span className="text-orange-600">Charges: {fmt(h.total_charges)}</span>
+                      <span>{t('rha.a.common.brut', locale)}: {fmt(h.total_brut)}</span>
+                      <span className="text-emerald-600">{t('rha.a.common.net', locale)}: {fmt(h.total_net)}</span>
+                      <span className="text-orange-600">{t('rha.a.common.charges', locale)}: {fmt(h.total_charges)}</span>
                       <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${historyDetail === h.periode ? "rotate-180" : ""}`} />
                     </div>
                   </button>
                   {historyDetail === h.periode && (
                     <div className="ml-4 mb-3 border-l-2 pl-4" style={{ borderColor: GOLD }}>
                       <table className="w-full text-xs">
-                        <thead><tr className="text-gray-400"><th className="text-left py-1">Employé</th><th className="text-right py-1">Base</th><th className="text-right py-1">Net</th><th className="text-right py-1">CSG</th><th className="text-right py-1">PAYE</th></tr></thead>
+                        <thead><tr className="text-gray-400"><th className="text-left py-1">{t('rha.a.common.employe', locale)}</th><th className="text-right py-1">{t('rha.a.common.base', locale)}</th><th className="text-right py-1">{t('rha.a.common.net', locale)}</th><th className="text-right py-1">CSG</th><th className="text-right py-1">PAYE</th></tr></thead>
                         <tbody>
                           {detailBulletins.map((b: any) => (
                             <tr key={b.id} className="border-t border-gray-100">

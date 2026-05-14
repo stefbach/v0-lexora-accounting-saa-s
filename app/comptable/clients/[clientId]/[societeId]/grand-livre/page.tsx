@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, ArrowLeft, Download, ChevronLeft, ChevronRight, BookOpen, Check, X } from "lucide-react"
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -59,22 +60,24 @@ interface GrandLivreResp {
 }
 
 // Filtres rapides par classe
-const QUICK_FILTERS = [
-  { label: "Tous",        debut: "",    fin: "" },
-  { label: "1xx Capital", debut: "100", fin: "199" },
-  { label: "2xx Immo",    debut: "200", fin: "299" },
-  { label: "3xx Stocks",  debut: "300", fin: "399" },
-  { label: "4xx Tiers",   debut: "400", fin: "499" },
-  { label: "401 Fourn.",  debut: "401", fin: "4019" },
-  { label: "411 Clients", debut: "411", fin: "4119" },
-  { label: "5xx Banque",  debut: "500", fin: "599" },
-  { label: "512 Banque",  debut: "512", fin: "5129" },
-  { label: "6xx Charges", debut: "600", fin: "699" },
-  { label: "7xx Produits",debut: "700", fin: "799" },
+const getQuickFilters = (locale: Locale) => [
+  { label: t('cabclt.gl.qf_all', locale),        debut: "",    fin: "" },
+  { label: t('cabclt.gl.qf_1xx', locale), debut: "100", fin: "199" },
+  { label: t('cabclt.gl.qf_2xx', locale),    debut: "200", fin: "299" },
+  { label: t('cabclt.gl.qf_3xx', locale),  debut: "300", fin: "399" },
+  { label: t('cabclt.gl.qf_4xx', locale),   debut: "400", fin: "499" },
+  { label: t('cabclt.gl.qf_401', locale),  debut: "401", fin: "4019" },
+  { label: t('cabclt.gl.qf_411', locale), debut: "411", fin: "4119" },
+  { label: t('cabclt.gl.qf_5xx', locale),  debut: "500", fin: "599" },
+  { label: t('cabclt.gl.qf_512', locale),  debut: "512", fin: "5129" },
+  { label: t('cabclt.gl.qf_6xx', locale), debut: "600", fin: "699" },
+  { label: t('cabclt.gl.qf_7xx', locale),debut: "700", fin: "799" },
 ]
 
 export default function GrandLivrePage() {
   const params = useParams()
+  const locale = getLocale()
+  const QUICK_FILTERS = getQuickFilters(locale)
   const societeId  = params.societeId as string
   const clientId   = params.clientId  as string
 
@@ -206,7 +209,7 @@ export default function GrandLivrePage() {
   const exportCSV = () => {
     if (!data?.ecritures) return
     const rows = [
-      ["Date", "Journal", "N° Pièce", "Compte", "Libellé", "Débit", "Crédit", "Solde progressif", "Lettre"],
+      [t('cabclt.gl.col_date', locale), t('cabclt.gl.col_journal', locale), t('cabclt.gl.col_piece', locale), t('cabclt.gl.col_account', locale), t('cabclt.gl.col_label', locale), t('cabclt.gl.col_debit', locale), t('cabclt.gl.col_credit', locale), t('cabclt.gl.col_running_balance', locale), t('cabclt.gl.col_letter', locale)],
       ...data.ecritures.map(e => [
         fmtDate(e.date_ecriture), e.journal, e.ref_folio || "",
         e.numero_compte, e.description || e.nom_compte || "",
@@ -229,59 +232,59 @@ export default function GrandLivrePage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href={`/comptable/clients/${clientId}/${societeId}`}>
-            <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Retour</Button>
+            <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />{t('cabclt.gl.back', locale)}</Button>
           </Link>
           <div>
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>
               <BookOpen className="inline w-6 h-6 mr-2" style={{ color: GOLD }} />
-              Grand Livre
+              {t('cabclt.gl.title', locale)}
             </h1>
-            <p className="text-sm text-gray-500 mt-0.5">Toutes les écritures comptables avec solde progressif</p>
+            <p className="text-sm text-gray-500 mt-0.5">{t('cabclt.gl.subtitle', locale)}</p>
           </div>
         </div>
         <Button onClick={exportCSV} variant="outline" className="gap-2" disabled={!data?.ecritures?.length}>
-          <Download className="w-4 h-4" /> Exporter CSV
+          <Download className="w-4 h-4" /> {t('cabclt.gl.export_csv', locale)}
         </Button>
       </div>
 
       {/* Filtres */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-gray-500 uppercase tracking-wide">Filtres</CardTitle>
+          <CardTitle className="text-sm font-medium text-gray-500 uppercase tracking-wide">{t('cabclt.gl.filters', locale)}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div>
-              <Label className="text-xs">Compte début</Label>
-              <Input placeholder="Ex: 401" value={compteDeb} onChange={e => setCompteDeb(e.target.value)} className="h-8 text-sm" />
+              <Label className="text-xs">{t('cabclt.gl.account_start', locale)}</Label>
+              <Input placeholder={t('cabclt.gl.example_401', locale)} value={compteDeb} onChange={e => setCompteDeb(e.target.value)} className="h-8 text-sm" />
             </div>
             <div>
-              <Label className="text-xs">Compte fin</Label>
-              <Input placeholder="Ex: 499" value={compteFin} onChange={e => setCompteFin(e.target.value)} className="h-8 text-sm" />
+              <Label className="text-xs">{t('cabclt.gl.account_end', locale)}</Label>
+              <Input placeholder={t('cabclt.gl.example_499', locale)} value={compteFin} onChange={e => setCompteFin(e.target.value)} className="h-8 text-sm" />
             </div>
             <div>
-              <Label className="text-xs">Date début</Label>
+              <Label className="text-xs">{t('cabclt.gl.date_start', locale)}</Label>
               <Input type="date" value={dateDeb} onChange={e => setDateDeb(e.target.value)} className="h-8 text-sm" />
             </div>
             <div>
-              <Label className="text-xs">Date fin</Label>
+              <Label className="text-xs">{t('cabclt.gl.date_end', locale)}</Label>
               <Input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="h-8 text-sm" />
             </div>
             <div>
-              <Label className="text-xs">Journal</Label>
+              <Label className="text-xs">{t('cabclt.gl.col_journal', locale)}</Label>
               <Select value={journal} onValueChange={setJournal}>
                 <SelectTrigger className="h-8 text-sm">
-                  <SelectValue placeholder="Tous" />
+                  <SelectValue placeholder={t('cabclt.gl.all', locale)} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="ACH">ACH — Achats</SelectItem>
-                  <SelectItem value="VTE">VTE — Ventes</SelectItem>
-                  <SelectItem value="BQ">BQ — Banque</SelectItem>
-                  <SelectItem value="BNQ">BNQ — Banque (auto)</SelectItem>
-                  <SelectItem value="OD">OD — Opérations diverses</SelectItem>
-                  <SelectItem value="SAL">SAL — Salaires</SelectItem>
-                  <SelectItem value="AN">AN — À-nouveau</SelectItem>
+                  <SelectItem value="all">{t('cabclt.gl.all', locale)}</SelectItem>
+                  <SelectItem value="ACH">{t('cabclt.gl.j_ach', locale)}</SelectItem>
+                  <SelectItem value="VTE">{t('cabclt.gl.j_vte', locale)}</SelectItem>
+                  <SelectItem value="BQ">{t('cabclt.gl.j_bq', locale)}</SelectItem>
+                  <SelectItem value="BNQ">{t('cabclt.gl.j_bnq', locale)}</SelectItem>
+                  <SelectItem value="OD">{t('cabclt.gl.j_od', locale)}</SelectItem>
+                  <SelectItem value="SAL">{t('cabclt.gl.j_sal', locale)}</SelectItem>
+                  <SelectItem value="AN">{t('cabclt.gl.j_an', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -313,32 +316,32 @@ export default function GrandLivrePage() {
       {data && (
         <div className="grid grid-cols-4 gap-4">
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Total Débit</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">{t('cabclt.gl.col_total_debit', locale)}</p>
             <p className="text-xl font-bold text-blue-700">{fmt(data.total_debit)} MUR</p>
           </CardContent></Card>
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Total Crédit</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">{t('cabclt.gl.col_total_credit', locale)}</p>
             <p className="text-xl font-bold text-blue-700">{fmt(data.total_credit)} MUR</p>
           </CardContent></Card>
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Solde Clôture</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">{t('cabclt.gl.closing_balance', locale)}</p>
             <p className={`text-xl font-bold ${data.solde_cloture >= 0 ? "text-green-700" : "text-red-600"}`}>
               {fmt(Math.abs(data.solde_cloture))} MUR
               <span className="text-xs ml-1 text-gray-500">{data.solde_cloture >= 0 ? "D" : "C"}</span>
             </p>
           </CardContent></Card>
           <Card><CardContent className="p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Lettrage</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">{t('cabclt.gl.matching', locale)}</p>
             <p className="text-xl font-bold text-green-700">
               {data.lettrage.lettrees}
               <span className="text-xs ml-1 font-normal text-gray-500">/ {data.lettrage.total}</span>
             </p>
             <div className="flex items-center gap-2 mt-1">
               <Badge className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0 hover:bg-green-100">
-                {data.lettrage.lettrees} lettrées
+                {data.lettrage.lettrees} {t('cabclt.gl.matched', locale)}
               </Badge>
               <Badge className="bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0 hover:bg-gray-100">
-                {data.lettrage.non_lettrees} non lettrées
+                {data.lettrage.non_lettrees} {t('cabclt.gl.unmatched', locale)}
               </Badge>
             </div>
           </CardContent></Card>
@@ -349,8 +352,8 @@ export default function GrandLivrePage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle style={{ color: NAVY }}>
-            Écritures
-            {data && <span className="ml-2 text-sm font-normal text-gray-500">({data.total} lignes)</span>}
+            {t('cabclt.gl.entries', locale)}
+            {data && <span className="ml-2 text-sm font-normal text-gray-500">({data.total} {t('cabclt.gl.lines', locale)})</span>}
           </CardTitle>
           {/* Pagination */}
           {data && data.pages > 1 && (
@@ -358,7 +361,7 @@ export default function GrandLivrePage() {
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => handlePage(page - 1)}>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <span className="text-sm text-gray-600">Page {page} / {data.pages}</span>
+              <span className="text-sm text-gray-600">{t('cabclt.gl.page', locale)} {page} / {data.pages}</span>
               <Button variant="outline" size="sm" disabled={page >= data.pages} onClick={() => handlePage(page + 1)}>
                 <ChevronRight className="w-4 h-4" />
               </Button>
@@ -373,8 +376,8 @@ export default function GrandLivrePage() {
           ) : !data?.ecritures?.length ? (
             <div className="text-center py-12 text-gray-500">
               <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="font-medium">Aucune écriture comptabilisée</p>
-              <p className="text-sm mt-1">Uploadez des documents pour commencer</p>
+              <p className="font-medium">{t('cabclt.gl.no_entries', locale)}</p>
+              <p className="text-sm mt-1">{t('cabclt.gl.upload_hint', locale)}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -382,15 +385,15 @@ export default function GrandLivrePage() {
                 <TableHeader>
                   <TableRow className="bg-gray-50">
                     {isTiersRange && <TableHead className="w-8"></TableHead>}
-                    <TableHead className="text-xs">Date</TableHead>
-                    <TableHead className="text-xs">Journal</TableHead>
-                    <TableHead className="text-xs">N° Pièce</TableHead>
-                    <TableHead className="text-xs">Compte</TableHead>
-                    <TableHead className="text-xs">Libellé</TableHead>
-                    <TableHead className="text-xs text-right">Débit</TableHead>
-                    <TableHead className="text-xs text-right">Crédit</TableHead>
-                    <TableHead className="text-xs text-right">Solde progressif</TableHead>
-                    <TableHead className="text-xs text-center">Lettre</TableHead>
+                    <TableHead className="text-xs">{t('cabclt.gl.col_date', locale)}</TableHead>
+                    <TableHead className="text-xs">{t('cabclt.gl.col_journal', locale)}</TableHead>
+                    <TableHead className="text-xs">{t('cabclt.gl.col_piece', locale)}</TableHead>
+                    <TableHead className="text-xs">{t('cabclt.gl.col_account', locale)}</TableHead>
+                    <TableHead className="text-xs">{t('cabclt.gl.col_label', locale)}</TableHead>
+                    <TableHead className="text-xs text-right">{t('cabclt.gl.col_debit', locale)}</TableHead>
+                    <TableHead className="text-xs text-right">{t('cabclt.gl.col_credit', locale)}</TableHead>
+                    <TableHead className="text-xs text-right">{t('cabclt.gl.col_running_balance', locale)}</TableHead>
+                    <TableHead className="text-xs text-center">{t('cabclt.gl.col_letter', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -432,7 +435,7 @@ export default function GrandLivrePage() {
                       </TableCell>
                       <TableCell className="text-xs text-center">
                         {e.lettre ? (
-                          <Badge className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0 hover:bg-green-100" title={e.date_lettrage ? `Lettré le ${fmtDate(e.date_lettrage)}` : "Rapproché"}>
+                          <Badge className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0 hover:bg-green-100" title={e.date_lettrage ? `${t('cabclt.gl.matched_on', locale)} ${fmtDate(e.date_lettrage)}` : t('cabclt.gl.reconciled', locale)}>
                             {e.lettre}
                           </Badge>
                         ) : (
@@ -452,31 +455,31 @@ export default function GrandLivrePage() {
       <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 rounded-full bg-green-700"></span>
-          Solde normal
+          {t('cabclt.gl.normal_balance', locale)}
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 rounded-full bg-red-600"></span>
-          Solde anormal (sens inversé)
+          {t('cabclt.gl.abnormal_balance', locale)}
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 rounded-full bg-blue-700"></span>
-          Débit
+          {t('cabclt.gl.col_debit', locale)}
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 rounded-full bg-purple-700"></span>
-          Crédit
+          {t('cabclt.gl.col_credit', locale)}
         </span>
         <span className="flex items-center gap-1">
           <Badge className="bg-green-100 text-green-800 text-[10px] px-1 py-0 hover:bg-green-100">AB</Badge>
-          Lettré (rapproché)
+          {t('cabclt.gl.matched_reconciled', locale)}
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-8 h-3 rounded bg-green-50 border border-green-200"></span>
-          Écriture lettrée
+          {t('cabclt.gl.matched_entry', locale)}
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-8 h-3 rounded bg-orange-50 border border-orange-200"></span>
-          Tiers non lettré
+          {t('cabclt.gl.unmatched_party', locale)}
         </span>
       </div>
 
@@ -485,20 +488,20 @@ export default function GrandLivrePage() {
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 shadow-2xl px-6 py-3 flex items-center gap-4 flex-wrap"
           style={{ borderColor: NAVY }}>
           <span className="font-semibold text-sm" style={{ color: NAVY }}>
-            {selectedIds.size} sélectionnée{selectedIds.size > 1 ? "s" : ""}
+            {selectedIds.size} {selectedIds.size > 1 ? t('cabclt.gl.selected_plural', locale) : t('cabclt.gl.selected_singular', locale)}
           </span>
           <span className="text-sm text-gray-500">
-            Débit : <strong className="text-blue-700">{fmt(selDebit)}</strong>
+            {t('cabclt.gl.col_debit', locale)} : <strong className="text-blue-700">{fmt(selDebit)}</strong>
             {" | "}
-            Crédit : <strong className="text-purple-700">{fmt(selCredit)}</strong>
+            {t('cabclt.gl.col_credit', locale)} : <strong className="text-purple-700">{fmt(selCredit)}</strong>
             {" | "}
-            Écart : <strong className={selEcart <= 0.01 ? "text-green-600" : "text-red-600"}>
+            {t('cabclt.gl.variance', locale)} : <strong className={selEcart <= 0.01 ? "text-green-600" : "text-red-600"}>
               {fmt(selEcart)} MUR
             </strong>
           </span>
           <div className="flex items-center gap-2 ml-auto">
             <Input
-              placeholder="Code lettre (auto si vide)"
+              placeholder={t('cabclt.gl.letter_code_placeholder', locale)}
               value={lettrageCode}
               onChange={e => setLettrageCode(e.target.value)}
               className="h-8 text-sm w-48"
@@ -510,7 +513,7 @@ export default function GrandLivrePage() {
               onClick={handleLettrer}
             >
               {isLettraging ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-              Lettrer
+              {t('cabclt.gl.match', locale)}
             </Button>
             <Button
               size="sm"
@@ -519,7 +522,7 @@ export default function GrandLivrePage() {
               disabled={isLettraging}
               onClick={handleDelettrer}
             >
-              Délettrer
+              {t('cabclt.gl.unmatch', locale)}
             </Button>
             <Button
               size="sm"
@@ -527,7 +530,7 @@ export default function GrandLivrePage() {
               className="text-gray-500 gap-1"
               onClick={() => setSelectedIds(new Set())}
             >
-              <X className="w-3 h-3" /> Annuler
+              <X className="w-3 h-3" /> {t('cabclt.gl.cancel', locale)}
             </Button>
           </div>
         </div>

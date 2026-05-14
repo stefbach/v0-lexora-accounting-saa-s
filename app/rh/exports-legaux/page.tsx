@@ -9,6 +9,7 @@ import {
   ShieldCheck, FileSpreadsheet, FileText, AlertTriangle,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -16,27 +17,27 @@ const GOLD = "#D4AF37"
 type RegistreType = 'hours' | 'salary' | 'leave' | 'overtime' | 'absence'
 type FormatType = 'xlsx' | 'pdf'
 
-const REGISTRES: Array<{
-  type: RegistreType
-  title: string
-  subtitle: string
-  icon: any
-  color: string
-  needsMois: boolean
-}> = [
-  { type: 'hours',    title: 'Hours Register',    subtitle: 'Heures travaillées, normales, supplémentaires', icon: Clock,         color: '#2563eb', needsMois: true  },
-  { type: 'salary',   title: 'Salary Register',   subtitle: 'Salaires bruts, nets, déductions détaillées',    icon: CreditCard,    color: '#059669', needsMois: true  },
-  { type: 'leave',    title: 'Leave Register',    subtitle: 'Soldes et prises AL, SL, VL, FML par cycle',     icon: Umbrella,      color: '#7c3aed', needsMois: false },
-  { type: 'overtime', title: 'Overtime Register', subtitle: 'Heures OT tranches 1.5× et 2× (WRA S.20)',        icon: Zap,           color: '#ea580c', needsMois: true  },
-  { type: 'absence',  title: 'Absence Register',  subtitle: 'Absences justifiées et non justifiées',           icon: AlertOctagon,  color: '#dc2626', needsMois: false },
-]
-
 const MOIS_FR = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ]
 
 export default function ExportsLegauxPage() {
+  const locale: Locale = getLocale()
+  const REGISTRES: Array<{
+    type: RegistreType
+    title: string
+    subtitle: string
+    icon: any
+    color: string
+    needsMois: boolean
+  }> = [
+    { type: 'hours',    title: 'Hours Register',    subtitle: t('rha.b.exleg.hours_subtitle', locale), icon: Clock,         color: '#2563eb', needsMois: true  },
+    { type: 'salary',   title: 'Salary Register',   subtitle: t('rha.b.exleg.salary_subtitle', locale), icon: CreditCard,    color: '#059669', needsMois: true  },
+    { type: 'leave',    title: 'Leave Register',    subtitle: t('rha.b.exleg.leave_subtitle', locale), icon: Umbrella,      color: '#7c3aed', needsMois: false },
+    { type: 'overtime', title: 'Overtime Register', subtitle: t('rha.b.exleg.overtime_subtitle', locale), icon: Zap,           color: '#ea580c', needsMois: true  },
+    { type: 'absence',  title: 'Absence Register',  subtitle: t('rha.b.exleg.absence_subtitle', locale), icon: AlertOctagon,  color: '#dc2626', needsMois: false },
+  ]
   const [societes, setSocietes] = useState<Array<{ id: string; nom: string }>>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [annee, setAnnee] = useState<number>(new Date().getFullYear())
@@ -57,7 +58,7 @@ export default function ExportsLegauxPage() {
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
-          if (!cancelled) { setAuthorized(false); setRoleMsg('Non authentifié.') }
+          if (!cancelled) { setAuthorized(false); setRoleMsg(t('rha.b.exleg.not_auth', locale)) }
           return
         }
         const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
@@ -66,7 +67,7 @@ export default function ExportsLegauxPage() {
         if (cancelled) return
         setAuthorized(ok)
         if (!ok) {
-          setRoleMsg(`Accès réservé aux RH et administrateurs (rôle courant : ${role || 'inconnu'}).`)
+          setRoleMsg(t('rha.b.exleg.access_role', locale).replace('{role}', role || (locale === 'fr' ? 'inconnu' : 'unknown')))
           return
         }
         // Authorized : charger la liste des sociétés.
@@ -76,7 +77,7 @@ export default function ExportsLegauxPage() {
         setSocietes(d?.societes || [])
         if (d?.societes?.length > 0) setSocieteId((prev) => prev || d.societes[0].id)
       } catch {
-        if (!cancelled) { setAuthorized(false); setRoleMsg('Erreur de chargement.') }
+        if (!cancelled) { setAuthorized(false); setRoleMsg(t('rha.b.exleg.load_err', locale)) }
       } finally {
         if (!cancelled) setLoadingPermissions(false)
       }
@@ -104,7 +105,7 @@ export default function ExportsLegauxPage() {
       const res = await fetch(`/api/rh/exports/registre/${type}?${p.toString()}`)
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        alert(`Erreur : ${err?.error || `HTTP ${res.status}`}`)
+        alert(`${t('rha.b.exleg.dl_err', locale)} : ${err?.error || `HTTP ${res.status}`}`)
         return
       }
       const blob = await res.blob()
@@ -120,7 +121,7 @@ export default function ExportsLegauxPage() {
       a.remove()
       URL.revokeObjectURL(url)
     } catch (e: any) {
-      alert(`Erreur réseau : ${e?.message || 'inconnue'}`)
+      alert(`${t('rha.b.exleg.net_err', locale)} : ${e?.message || (locale === 'fr' ? 'inconnue' : 'unknown')}`)
     } finally {
       setDownloading(null)
     }
@@ -143,13 +144,12 @@ export default function ExportsLegauxPage() {
           <CardContent className="p-6 flex items-start gap-3">
             <ShieldCheck className="h-6 w-6 text-red-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-red-900">Accès refusé</p>
+              <p className="font-semibold text-red-900">{t('rha.b.exleg.access_denied', locale)}</p>
               <p className="text-sm text-red-800 mt-1">
-                {roleMsg || 'Cette page est réservée aux RH Manager et administrateurs.'}
+                {roleMsg || t('rha.b.exleg.access_msg', locale)}
               </p>
               <p className="text-xs text-red-700 mt-2">
-                Les exports légaux S.116 contiennent des données sensibles et ne sont
-                accessibles qu&apos;aux responsables RH et administrateurs.
+                {t('rha.b.exleg.access_hint', locale)}
               </p>
             </div>
           </CardContent>
@@ -165,30 +165,30 @@ export default function ExportsLegauxPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2" style={{ color: NAVY }}>
             <ShieldCheck className="h-7 w-7" style={{ color: GOLD }} />
-            Exports légaux — Workers&apos; Rights Act S.116
+            {t('rha.b.exleg.title', locale)}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            5 registres obligatoires à produire sur demande du Labour Inspector. Conservation 5 ans minimum.
+            {t('rha.b.exleg.subtitle', locale)}
           </p>
         </div>
 
         {/* Filtres */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base" style={{ color: NAVY }}>Paramètres d&apos;export</CardTitle>
+            <CardTitle className="text-base" style={{ color: NAVY }}>{t('rha.b.exleg.params', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <Label className="text-sm">Société</Label>
+              <Label className="text-sm">{t('rha.b.exleg.societe', locale)}</Label>
               <Select value={societeId} onValueChange={setSocieteId}>
-                <SelectTrigger><SelectValue placeholder="Choisir une société" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rha.b.exleg.choose_societe', locale)} /></SelectTrigger>
                 <SelectContent>
                   {societes.map(s => (<SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-sm">Année</Label>
+              <Label className="text-sm">{t('rha.b.exleg.year', locale)}</Label>
               <Select value={String(annee)} onValueChange={v => setAnnee(parseInt(v, 10))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -197,11 +197,11 @@ export default function ExportsLegauxPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-sm">Mois (optionnel)</Label>
+              <Label className="text-sm">{t('rha.b.exleg.month_opt', locale)}</Label>
               <Select value={mois || "all"} onValueChange={v => setMois(v === "all" ? "" : v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toute l&apos;année</SelectItem>
+                  <SelectItem value="all">{t('rha.b.exleg.whole_year', locale)}</SelectItem>
                   {MOIS_FR.map((m, i) => (
                     <SelectItem key={i} value={String(i + 1)}>
                       {String(i + 1).padStart(2, '0')} — {m}
@@ -211,7 +211,7 @@ export default function ExportsLegauxPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-sm">Format</Label>
+              <Label className="text-sm">{t('rha.b.exleg.format', locale)}</Label>
               <div className="flex gap-1 mt-1.5">
                 <Button
                   size="sm" variant={format === 'xlsx' ? 'default' : 'outline'}
@@ -260,11 +260,11 @@ export default function ExportsLegauxPage() {
                       ) : (
                         <Download className="h-3.5 w-3.5 mr-1.5" />
                       )}
-                      Télécharger .{format}
+                      {t('rha.b.exleg.download', locale)} .{format}
                     </Button>
                     {r.needsMois === false && mois && (
                       <p className="text-[10px] text-gray-400 mt-1 italic text-center">
-                        (filtre mois ignoré pour ce registre — toujours annuel)
+                        {t('rha.b.exleg.month_ignored', locale)}
                       </p>
                     )}
                   </div>
@@ -280,18 +280,13 @@ export default function ExportsLegauxPage() {
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-sm text-amber-900 space-y-1">
               <p className="font-semibold">
-                Registres obligatoires — Workers&apos; Rights Act 2019 S.116
+                {t('rha.b.exleg.banner_title', locale)}
               </p>
               <p>
-                L&apos;employeur doit conserver ces registres pendant au moins{" "}
-                <span className="font-semibold">5 années</span> et les rendre disponibles sur demande
-                du Labour Inspector. Les valeurs sont calculées en temps réel sur les tables
-                de production (bulletins, pointages, congés).
+                {t('rha.b.exleg.banner_body', locale)}
               </p>
               <p className="text-xs text-amber-700 italic">
-                Note : si aucune donnée n&apos;apparaît pour une période, c&apos;est qu&apos;aucun
-                bulletin / pointage n&apos;a été enregistré. Cela ne signifie pas que le registre
-                est « vide » au sens légal — il faut alors générer un fichier nul à archiver.
+                {t('rha.b.exleg.banner_note', locale)}
               </p>
             </div>
           </CardContent>
