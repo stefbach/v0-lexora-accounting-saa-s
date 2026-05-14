@@ -2433,5 +2433,20 @@ export const comptableChunk = {
     'cab.charges.col_credit_balance': 'Credit Balance',
     'cab.charges.total_class': 'Total C',
     'cab.charges.grand_total': 'GRAND TOTAL',
+
+    // Bank (deep)
+    'cab.banque.err_load': 'Loading error',
+    'cab.banque.err_upload': 'Upload error',
+    'cab.banque.statement_imported_pre': 'Statement imported —',
+    'cab.banque.statement_imported_post': 'transactions extracted',
+    'cab.banque.current_balance': 'Current balance',
+    'cab.banque.last_statement': 'Last statement',
+    'cab.banque.stale_pre': 'More than',
+    'cab.banque.stale_post': 'd without statement',
+    'cab.banque.unknown_account': 'Unknown account',
+    'cab.banque.balance_label': 'Balance',
+    'cab.banque.transaction': 'transaction',
+    'cab.banque.reconciled': 'reconciled',
+    'cab.banque.to_validate': 'to validate',
   } as Record<string, string>,
 }

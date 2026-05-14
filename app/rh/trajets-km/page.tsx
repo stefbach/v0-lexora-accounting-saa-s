@@ -30,11 +30,13 @@ const STATUT_COLORS: Record<string, string> = {
   valide: "bg-green-100 text-green-800",
   rejete: "bg-red-100 text-red-800",
 }
-const STATUT_LABELS: Record<string, string> = {
-  en_cours: "En cours",
-  termine: "A valider",
-  valide: "Validé",
-  rejete: "Rejeté",
+function getStatutLabels(locale: Locale): Record<string, string> {
+  return {
+    en_cours: t('rha.b.trajets.status_in_progress', locale),
+    termine: t('rha.b.trajets.status_to_validate', locale),
+    valide: t('rha.b.trajets.status_validated', locale),
+    rejete: t('rha.b.trajets.status_rejected', locale),
+  }
 }
 
 const VEHICULE_ICONS: Record<string, any> = {
@@ -43,10 +45,12 @@ const VEHICULE_ICONS: Record<string, any> = {
   velo: Bike,
 }
 
-const VEHICULE_LABELS: Record<string, string> = {
-  voiture: "Voiture",
-  moto: "Moto",
-  velo: "Vélo",
+function getVehiculeLabels(locale: Locale): Record<string, string> {
+  return {
+    voiture: t('rha.b.trajets.car', locale),
+    moto: t('rha.b.trajets.moto', locale),
+    velo: t('rha.b.trajets.bike', locale),
+  }
 }
 
 interface Trajet {
