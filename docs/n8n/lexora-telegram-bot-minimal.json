@@ -1,0 +1,91 @@
+{
+  "name": "Lexora Telegram Bot — MVP minimal",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lexora-telegram-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f5e62bbf-3c5b-4e87-92c8-1a2b3c4d5e6f",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "lexora-telegram-agent-mvp"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.message.text || 'L\\'utilisateur a envoyé un fichier (non géré dans cette version MVP).' }}",
+        "options": {
+          "systemMessage": "Tu es Lexora Bot, l'assistant IA de Lexora (plateforme comptable & RH pour Maurice).\n\nContexte :\n- chat_id : {{ $json.body.chat_id }}\n- societe_id : {{ $json.body.societe_id }}\n- Langue : {{ $json.body.locale }} (fr ou en)\n- Prénom : {{ $json.body.first_name }}\n\n🚧 VERSION MVP — Lecture/écriture des données en cours d'implémentation.\n\nRéponds aux questions générales sur :\n- Fiscalité Maurice (MRA : VAT, PAYE, CSG/NSF, TDS, CIT, ROC, IT Form 3)\n- Droit du travail (Workers' Rights Act 2019)\n- IFRS for SMEs et Full IFRS (GBC)\n- Companies Act 2001 Maurice\n- Conseils comptables, fiscaux et RH\n\nPour toute demande spécifique (KPIs société, factures, paie, congés), explique poliment :\n\"Cette fonction est en cours d'implémentation. En attendant, utilise l'app web : https://www.lexora.finance\"\n\nStyle :\n- Concis (1-5 lignes max)\n- Format Telegram : <b>gras</b>, <code>code</code>\n- Emojis ciblés\n- Langue : adapte-toi (fr par défaut, en si locale='en')",
+          "maxIterations": 3
+        }
+      },
+      "id": "aaaaaaaa-1111-2222-3333-444444444444",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [560, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-5-20250929",
+        "options": {
+          "maxTokensToSample": 1024,
+          "temperature": 0.3
+        }
+      },
+      "id": "bbbbbbbb-1111-2222-3333-444444444444",
+      "name": "Claude Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [480, 540]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN || '8861971006:AAFGV8wh4A-kKJpYfTG5NHwKPqAAs4fkE_I' }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": {{ $('Webhook').item.json.body.chat_id }},\n  \"text\": {{ JSON.stringify($json.output || '(réponse vide)') }},\n  \"parse_mode\": \"HTML\"\n}",
+        "options": {}
+      },
+      "id": "cccccccc-1111-2222-3333-444444444444",
+      "name": "Telegram send",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\":true}"
+      },
+      "id": "dddddddd-1111-2222-3333-444444444444",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [1140, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]]
+    },
+    "Claude Sonnet": {
+      "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "AI Agent": {
+      "main": [[{ "node": "Telegram send", "type": "main", "index": 0 }]]
+    },
+    "Telegram send": {
+      "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [{ "name": "lexora" }, { "name": "telegram" }, { "name": "mvp" }]
+}
