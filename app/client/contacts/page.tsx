@@ -54,6 +54,7 @@ import {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { ContactsImportDialog } from "@/components/client/ContactsImportDialog"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 interface Contact {
   id: string
@@ -82,6 +83,7 @@ interface Contact {
 const DEVISES = ["MUR", "EUR", "USD", "GBP"] as const
 
 export default function ClientContactsPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [items, setItems] = useState<Contact[]>([])
   const [loading, setLoading] = useState(false)
@@ -128,14 +130,14 @@ export default function ClientContactsPage() {
       }`
       const res = await fetch(url)
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Erreur")
+      if (!res.ok) throw new Error(data?.error || t('inv.ct.toast_error', locale))
       setItems(data?.items || [])
     } catch (e: any) {
-      showToast(e?.message || "Erreur chargement", "error")
+      showToast(e?.message || t('inv.ct.toast_error_load', locale), "error")
     } finally {
       setLoading(false)
     }
-  }, [societeId, includeInactifs])
+  }, [societeId, includeInactifs, locale])
 
   useEffect(() => {
     load()
@@ -206,7 +208,7 @@ export default function ClientContactsPage() {
     if (!societeId) return
     const nom = fNom.trim()
     if (!nom) {
-      showToast("Nom requis", "error")
+      showToast(t('inv.ct.toast_name_required', locale), "error")
       return
     }
     setSubmitting(true)
@@ -242,19 +244,19 @@ export default function ClientContactsPage() {
         body: JSON.stringify(body),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Erreur")
-      showToast(editing ? "Contact modifié" : "Contact ajouté")
+      if (!res.ok) throw new Error(data?.error || t('inv.ct.toast_error', locale))
+      showToast(editing ? t('inv.ct.toast_modified', locale) : t('inv.ct.toast_added', locale))
       setDialogOpen(false)
       await load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur", "error")
+      showToast(e?.message || t('inv.ct.toast_error', locale), "error")
     } finally {
       setSubmitting(false)
     }
   }
 
   async function handleDelete(c: Contact) {
-    if (!confirm(`Supprimer "${c.nom}" du carnet de contacts ?`)) return
+    if (!confirm(t('inv.ct.confirm_delete', locale).replace('{name}', c.nom))) return
     try {
       const res = await fetch(`/api/client/factures-contacts/${c.id}`, { method: "DELETE" })
       const data = await res.json().catch(() => ({}))
@@ -262,7 +264,7 @@ export default function ClientContactsPage() {
         if (data?.can_archive) {
           if (
             confirm(
-              `${data.error}\n\nVoulez-vous l'archiver à la place (actif = false) ?`,
+              `${data.error}${t('inv.ct.confirm_archive_suffix', locale)}`,
             )
           ) {
             const r2 = await fetch(`/api/client/factures-contacts/${c.id}`, {
@@ -271,18 +273,18 @@ export default function ClientContactsPage() {
               body: JSON.stringify({ ...c, actif: false }),
             })
             const d2 = await r2.json()
-            if (!r2.ok) throw new Error(d2?.error || "Erreur")
-            showToast("Contact archivé")
+            if (!r2.ok) throw new Error(d2?.error || t('inv.ct.toast_error', locale))
+            showToast(t('inv.ct.toast_archived', locale))
             await load()
           }
           return
         }
-        throw new Error(data?.error || "Erreur")
+        throw new Error(data?.error || t('inv.ct.toast_error', locale))
       }
-      showToast("Contact supprimé")
+      showToast(t('inv.ct.toast_deleted', locale))
       await load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur", "error")
+      showToast(e?.message || t('inv.ct.toast_error', locale), "error")
     }
   }
 
@@ -319,12 +321,12 @@ export default function ClientContactsPage() {
         body: JSON.stringify({ societe_id: societeId, items: itemsToImport }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Erreur")
-      showToast(`Importé : ${data?.inserted} contact(s)`)
+      if (!res.ok) throw new Error(data?.error || t('inv.ct.toast_error', locale))
+      showToast(t('inv.ct.toast_imported', locale).replace('{n}', String(data?.inserted)))
       setLegacyCount(0)
       await load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur import", "error")
+      showToast(e?.message || t('inv.ct.toast_error_import', locale), "error")
     }
   }
 
@@ -360,16 +362,16 @@ export default function ClientContactsPage() {
                 <Users className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-sky-900">Contacts clients</h1>
+                <h1 className="text-2xl font-bold text-sky-900">{t('inv.ct.title', locale)}</h1>
                 <p className="text-sm text-sky-800/80 mt-0.5">
-                  Carnet d'adresses réutilisable dans vos factures
+                  {t('inv.ct.subtitle', locale)}
                 </p>
               </div>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('inv.ct.refresh', locale)}
               </Button>
               <Button
                 variant="outline"
@@ -378,7 +380,7 @@ export default function ClientContactsPage() {
                 className="border-sky-300 text-sky-700 hover:bg-sky-50"
               >
                 <FileSpreadsheet className="h-4 w-4 mr-1.5" />
-                Importer fichier
+                {t('inv.ct.import_file', locale)}
               </Button>
               <Button
                 onClick={openNew}
@@ -386,7 +388,7 @@ export default function ClientContactsPage() {
                 className="bg-sky-600 hover:bg-sky-700 text-white shadow-md"
               >
                 <Plus className="h-4 w-4 mr-1.5" />
-                Nouveau contact
+                {t('inv.ct.new_contact', locale)}
               </Button>
             </div>
           </div>
@@ -396,8 +398,8 @@ export default function ClientContactsPage() {
           <Card className="border-amber-300 bg-amber-50">
             <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
               <div className="text-sm">
-                <strong>{legacyCount} contact(s) trouvé(s) en local storage</strong> —
-                votre carnet n'était pas synchronisé avec Supabase.
+                <strong>{legacyCount} {t('inv.ct.legacy_found', locale)}</strong> —
+                {' '}{t('inv.ct.legacy_note', locale)}
               </div>
               <Button
                 onClick={importLegacy}
@@ -405,7 +407,7 @@ export default function ClientContactsPage() {
                 className="bg-amber-600 hover:bg-amber-700 text-white"
               >
                 <Upload className="h-4 w-4 mr-1.5" />
-                Importer maintenant
+                {t('inv.ct.import_now', locale)}
               </Button>
             </CardContent>
           </Card>
@@ -418,13 +420,13 @@ export default function ClientContactsPage() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher nom, entreprise, email..."
+                placeholder={t('inv.ct.search_ph', locale)}
                 className="pl-8 h-9"
               />
             </div>
             <Label className="flex items-center gap-2 cursor-pointer text-sm">
               <Switch checked={includeInactifs} onCheckedChange={setIncludeInactifs} />
-              Inclure inactifs
+              {t('inv.ct.include_inactive', locale)}
             </Label>
           </CardContent>
         </Card>
@@ -432,7 +434,7 @@ export default function ClientContactsPage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('inv.ct.no_societe', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -444,8 +446,8 @@ export default function ClientContactsPage() {
             <CardContent className="py-16 text-center text-gray-500">
               <Users className="h-10 w-10 mx-auto mb-2 text-gray-400" />
               {items.length === 0
-                ? "Aucun contact. Créez vos clients récurrents pour gagner du temps à la facturation."
-                : "Aucun résultat pour ce filtre."}
+                ? t('inv.ct.empty', locale)
+                : t('inv.ct.empty_filter', locale)}
             </CardContent>
           </Card>
         ) : (
@@ -454,13 +456,13 @@ export default function ClientContactsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nom / Entreprise</TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead>VAT</TableHead>
-                    <TableHead className="text-right">Délai paiement</TableHead>
-                    <TableHead>Devise</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t('inv.ct.col_name', locale)}</TableHead>
+                    <TableHead>{t('inv.ct.col_contact', locale)}</TableHead>
+                    <TableHead>{t('inv.ct.col_vat', locale)}</TableHead>
+                    <TableHead className="text-right">{t('inv.ct.col_pay', locale)}</TableHead>
+                    <TableHead>{t('inv.ct.col_currency', locale)}</TableHead>
+                    <TableHead>{t('inv.ct.col_status', locale)}</TableHead>
+                    <TableHead className="text-right">{t('inv.ct.col_actions', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -487,28 +489,28 @@ export default function ClientContactsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-xs">
-                        {c.vat_number && <div>VAT : {c.vat_number}</div>}
-                        {c.brn && <div className="text-muted-foreground">BRN : {c.brn}</div>}
+                        {c.vat_number && <div>{t('inv.ct.vat_label', locale)} : {c.vat_number}</div>}
+                        {c.brn && <div className="text-muted-foreground">{t('inv.ct.brn_label', locale)} : {c.brn}</div>}
                         {c.kbis && <div className="text-muted-foreground">{c.kbis}</div>}
                         {!c.vat_number && !c.brn && !c.kbis && <span className="text-muted-foreground">—</span>}
                       </TableCell>
-                      <TableCell className="text-right">{c.conditions_paiement} j</TableCell>
+                      <TableCell className="text-right">{c.conditions_paiement} {t('inv.ct.days_short', locale)}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{c.devise}</Badge>
                         {c.offshore && (
                           <Badge className="ml-1 text-[10px] bg-blue-100 text-blue-700 border-blue-300">
                             <Globe className="h-3 w-3 mr-0.5" />
-                            Offshore
+                            {t('inv.ct.offshore', locale)}
                           </Badge>
                         )}
                       </TableCell>
                       <TableCell>
                         {c.actif ? (
                           <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300">
-                            Actif
+                            {t('inv.ct.active', locale)}
                           </Badge>
                         ) : (
-                          <Badge variant="outline">Archivé</Badge>
+                          <Badge variant="outline">{t('inv.ct.archived', locale)}</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right space-x-1">
@@ -535,86 +537,86 @@ export default function ClientContactsPage() {
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>{editing ? "Modifier le contact" : "Nouveau contact"}</DialogTitle>
+              <DialogTitle>{editing ? t('inv.ct.dlg_edit', locale) : t('inv.ct.dlg_new', locale)}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label>Nom *</Label>
-                  <Input value={fNom} onChange={(e) => setFNom(e.target.value)} placeholder="John Doe" />
+                  <Label>{t('inv.ct.field_name', locale)}</Label>
+                  <Input value={fNom} onChange={(e) => setFNom(e.target.value)} placeholder={t('inv.ct.ph_name', locale)} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Entreprise</Label>
-                  <Input value={fEntreprise} onChange={(e) => setFEntreprise(e.target.value)} placeholder="ACME Ltd" />
+                  <Label>{t('inv.ct.field_company', locale)}</Label>
+                  <Input value={fEntreprise} onChange={(e) => setFEntreprise(e.target.value)} placeholder={t('inv.ct.ph_company', locale)} />
                 </div>
               </div>
               {/* Adresse structurée : ligne adresse libre + code postal +
                   ville + pays. Permet le filtrage / regroupement ultérieur
                   par ville/pays et le formatage propre sur la facture. */}
               <div className="space-y-1">
-                <Label>Adresse (rue, numéro)</Label>
+                <Label>{t('inv.ct.field_address', locale)}</Label>
                 <Textarea
                   value={fAdresse}
                   onChange={(e) => setFAdresse(e.target.value)}
                   rows={2}
-                  placeholder="12 Royal Road, Bâtiment B"
+                  placeholder={t('inv.ct.ph_address', locale)}
                 />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <Label>Code postal</Label>
+                  <Label>{t('inv.ct.field_zip', locale)}</Label>
                   <Input value={fCodePostal} onChange={(e) => setFCodePostal(e.target.value)} placeholder="11328" />
                 </div>
                 <div className="space-y-1">
-                  <Label>Ville</Label>
-                  <Input value={fVille} onChange={(e) => setFVille(e.target.value)} placeholder="Port Louis" />
+                  <Label>{t('inv.ct.field_city', locale)}</Label>
+                  <Input value={fVille} onChange={(e) => setFVille(e.target.value)} placeholder={t('inv.ct.ph_city', locale)} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Pays</Label>
-                  <Input value={fPays} onChange={(e) => setFPays(e.target.value)} placeholder="Maurice" />
+                  <Label>{t('inv.ct.field_country', locale)}</Label>
+                  <Input value={fPays} onChange={(e) => setFPays(e.target.value)} placeholder={t('inv.ct.ph_country', locale)} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label>Email</Label>
+                  <Label>{t('inv.ct.field_email', locale)}</Label>
                   <Input type="email" value={fEmail} onChange={(e) => setFEmail(e.target.value)} placeholder="bob@acme.com" />
                 </div>
                 <div className="space-y-1">
-                  <Label>Téléphone (fixe)</Label>
+                  <Label>{t('inv.ct.field_phone', locale)}</Label>
                   <Input value={fTel} onChange={(e) => setFTel(e.target.value)} placeholder="+230 5..." />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label>Mobile</Label>
+                  <Label>{t('inv.ct.field_mobile', locale)}</Label>
                   <Input value={fMobile} onChange={(e) => setFMobile(e.target.value)} placeholder="+230 5 123 4567" />
                 </div>
                 <div className="space-y-1">
-                  <Label>Fax</Label>
+                  <Label>{t('inv.ct.field_fax', locale)}</Label>
                   <Input value={fFax} onChange={(e) => setFFax(e.target.value)} placeholder="+230 2 12 34 56" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <Label>VAT number</Label>
+                  <Label>{t('inv.ct.field_vat_number', locale)}</Label>
                   <Input value={fVat} onChange={(e) => setFVat(e.target.value)} placeholder="VAT-XXX" />
                 </div>
                 <div className="space-y-1">
-                  <Label>BRN (Maurice)</Label>
+                  <Label>{t('inv.ct.field_brn', locale)}</Label>
                   <Input value={fBrn} onChange={(e) => setFBrn(e.target.value)} placeholder="C12345678" />
                 </div>
                 <div className="space-y-1">
-                  <Label>KBIS / SIREN / autre</Label>
-                  <Input value={fKbis} onChange={(e) => setFKbis(e.target.value)} placeholder="Identifiant légal étranger" />
+                  <Label>{t('inv.ct.field_kbis', locale)}</Label>
+                  <Input value={fKbis} onChange={(e) => setFKbis(e.target.value)} placeholder={t('inv.ct.ph_kbis', locale)} />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <Label>Site web</Label>
+                  <Label>{t('inv.ct.field_web', locale)}</Label>
                   <Input value={fSiteWeb} onChange={(e) => setFSiteWeb(e.target.value)} placeholder="https://..." />
                 </div>
                 <div className="space-y-1">
-                  <Label>Devise</Label>
+                  <Label>{t('inv.ct.field_currency', locale)}</Label>
                   <Select value={fDevise} onValueChange={setFDevise}>
                     <SelectTrigger>
                       <SelectValue />
@@ -629,7 +631,7 @@ export default function ClientContactsPage() {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Délai paiement (j)</Label>
+                  <Label>{t('inv.ct.field_pay_days', locale)}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -641,18 +643,18 @@ export default function ClientContactsPage() {
               </div>
               <Label className="flex items-center gap-2 cursor-pointer">
                 <Switch checked={fOffshore} onCheckedChange={setFOffshore} />
-                Client offshore (TVA 0%)
+                {t('inv.ct.toggle_offshore', locale)}
               </Label>
               {editing && (
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Switch checked={fActif} onCheckedChange={setFActif} />
-                  Contact actif
+                  {t('inv.ct.toggle_active', locale)}
                 </Label>
               )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
-                Annuler
+                {t('inv.ct.cancel', locale)}
               </Button>
               <Button
                 onClick={handleSave}
@@ -660,7 +662,7 @@ export default function ClientContactsPage() {
                 className="bg-sky-600 hover:bg-sky-700 text-white"
               >
                 {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {editing ? "Enregistrer" : "Ajouter"}
+                {editing ? t('inv.ct.save', locale) : t('inv.ct.add', locale)}
               </Button>
             </DialogFooter>
           </DialogContent>

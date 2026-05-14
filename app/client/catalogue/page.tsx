@@ -53,6 +53,7 @@ import {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { CatalogueImportDialog } from "@/components/client/CatalogueImportDialog"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 interface CatalogueItem {
   id: string
@@ -79,6 +80,7 @@ function fmt(n: number, dev = "MUR"): string {
 }
 
 export default function ClientCataloguePage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [items, setItems] = useState<CatalogueItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -116,14 +118,14 @@ export default function ClientCataloguePage() {
       }`
       const res = await fetch(url)
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Erreur")
+      if (!res.ok) throw new Error(data?.error || t('inv.cat.toast_error', locale))
       setItems(data?.items || [])
     } catch (e: any) {
-      showToast(e?.message || "Erreur chargement", "error")
+      showToast(e?.message || t('inv.cat.toast_error_load', locale), "error")
     } finally {
       setLoading(false)
     }
-  }, [societeId, includeInactifs])
+  }, [societeId, includeInactifs, locale])
 
   useEffect(() => {
     load()
@@ -173,12 +175,12 @@ export default function ClientCataloguePage() {
     if (!societeId) return
     const desc = fDescription.trim()
     if (!desc) {
-      showToast("Description requise", "error")
+      showToast(t('inv.cat.toast_desc_required', locale), "error")
       return
     }
     const prix = Number(fPrix)
     if (!Number.isFinite(prix) || prix < 0) {
-      showToast("Prix invalide", "error")
+      showToast(t('inv.cat.toast_price_invalid', locale), "error")
       return
     }
     setSubmitting(true)
@@ -203,27 +205,27 @@ export default function ClientCataloguePage() {
         body: JSON.stringify(body),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Erreur")
-      showToast(editing ? "Article modifié" : "Article ajouté")
+      if (!res.ok) throw new Error(data?.error || t('inv.cat.toast_error', locale))
+      showToast(editing ? t('inv.cat.toast_modified', locale) : t('inv.cat.toast_added', locale))
       setDialogOpen(false)
       await load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur", "error")
+      showToast(e?.message || t('inv.cat.toast_error', locale), "error")
     } finally {
       setSubmitting(false)
     }
   }
 
   async function handleDelete(item: CatalogueItem) {
-    if (!confirm(`Supprimer "${item.description}" du catalogue ?`)) return
+    if (!confirm(t('inv.cat.confirm_delete', locale).replace('{name}', item.description))) return
     try {
       const res = await fetch(`/api/client/catalogue/${item.id}`, { method: "DELETE" })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || "Erreur")
-      showToast("Article supprimé")
+      if (!res.ok) throw new Error(data?.error || t('inv.cat.toast_error', locale))
+      showToast(t('inv.cat.toast_deleted', locale))
       await load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur", "error")
+      showToast(e?.message || t('inv.cat.toast_error', locale), "error")
     }
   }
 
@@ -249,13 +251,13 @@ export default function ClientCataloguePage() {
         body: JSON.stringify({ societe_id: societeId, items: itemsToImport }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || "Erreur")
-      showToast(`Importé : ${data?.inserted} article(s)`)
+      if (!res.ok) throw new Error(data?.error || t('inv.cat.toast_error', locale))
+      showToast(t('inv.cat.toast_imported', locale).replace('{n}', String(data?.inserted)))
       // Garde localStorage en backup (l'utilisateur peut le vider plus tard)
       setLegacyCount(0)
       await load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur import", "error")
+      showToast(e?.message || t('inv.cat.toast_error_import', locale), "error")
     }
   }
 
@@ -297,17 +299,17 @@ export default function ClientCataloguePage() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-indigo-900">
-                  Catalogue services / produits
+                  {t('inv.cat.title', locale)}
                 </h1>
                 <p className="text-sm text-indigo-800/80 mt-0.5">
-                  Articles réutilisables pour accélérer la création de factures
+                  {t('inv.cat.subtitle', locale)}
                 </p>
               </div>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                Actualiser
+                {t('inv.cat.refresh', locale)}
               </Button>
               <Button
                 variant="outline"
@@ -316,7 +318,7 @@ export default function ClientCataloguePage() {
                 className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
               >
                 <FileSpreadsheet className="h-4 w-4 mr-1.5" />
-                Importer fichier
+                {t('inv.cat.import_file', locale)}
               </Button>
               <Button
                 onClick={openNew}
@@ -324,7 +326,7 @@ export default function ClientCataloguePage() {
                 className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md"
               >
                 <Plus className="h-4 w-4 mr-1.5" />
-                Nouvel article
+                {t('inv.cat.new_item', locale)}
               </Button>
             </div>
           </div>
@@ -335,8 +337,8 @@ export default function ClientCataloguePage() {
           <Card className="border-amber-300 bg-amber-50">
             <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
               <div className="text-sm">
-                <strong>{legacyCount} article(s) trouvé(s) en local storage</strong> —
-                votre ancien catalogue n'était pas synchronisé avec Supabase.
+                <strong>{legacyCount} {t('inv.cat.legacy_found', locale)}</strong> —
+                {' '}{t('inv.cat.legacy_note', locale)}
               </div>
               <Button
                 onClick={importLegacy}
@@ -344,7 +346,7 @@ export default function ClientCataloguePage() {
                 className="bg-amber-600 hover:bg-amber-700 text-white"
               >
                 <Upload className="h-4 w-4 mr-1.5" />
-                Importer maintenant
+                {t('inv.cat.import_now', locale)}
               </Button>
             </CardContent>
           </Card>
@@ -358,13 +360,13 @@ export default function ClientCataloguePage() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher..."
+                placeholder={t('inv.cat.search_ph', locale)}
                 className="pl-8 h-9"
               />
             </div>
             <Label className="flex items-center gap-2 cursor-pointer text-sm">
               <Switch checked={includeInactifs} onCheckedChange={setIncludeInactifs} />
-              Inclure inactifs
+              {t('inv.cat.include_inactive', locale)}
             </Label>
           </CardContent>
         </Card>
@@ -373,7 +375,7 @@ export default function ClientCataloguePage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('inv.cat.no_societe', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -386,11 +388,10 @@ export default function ClientCataloguePage() {
               {items.length === 0 ? (
                 <>
                   <Package className="h-10 w-10 mx-auto mb-2 text-gray-400" />
-                  Aucun article. Ajoutez vos prestations courantes pour les
-                  réutiliser dans vos factures.
+                  {t('inv.cat.empty_title', locale)}
                 </>
               ) : (
-                "Aucun résultat pour ce filtre."
+                t('inv.cat.empty_filter', locale)
               )}
             </CardContent>
           </Card>
@@ -400,13 +401,13 @@ export default function ClientCataloguePage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Catégorie</TableHead>
-                    <TableHead>Unité</TableHead>
-                    <TableHead className="text-right">Prix unitaire</TableHead>
-                    <TableHead>TVA</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t('inv.cat.col_desc', locale)}</TableHead>
+                    <TableHead>{t('inv.cat.col_cat', locale)}</TableHead>
+                    <TableHead>{t('inv.cat.col_unit', locale)}</TableHead>
+                    <TableHead className="text-right">{t('inv.cat.col_price', locale)}</TableHead>
+                    <TableHead>{t('inv.cat.col_vat', locale)}</TableHead>
+                    <TableHead>{t('inv.cat.col_status', locale)}</TableHead>
+                    <TableHead className="text-right">{t('inv.cat.col_actions', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -427,19 +428,19 @@ export default function ClientCataloguePage() {
                       <TableCell>
                         {item.tva_applicable ? (
                           <Badge className="bg-orange-100 text-orange-700 border-orange-300">
-                            TVA 15%
+                            {t('inv.cat.vat_15', locale)}
                           </Badge>
                         ) : (
-                          <Badge variant="outline">Zero-rated</Badge>
+                          <Badge variant="outline">{t('inv.cat.zero_rated', locale)}</Badge>
                         )}
                       </TableCell>
                       <TableCell>
                         {item.actif ? (
                           <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300">
-                            Actif
+                            {t('inv.cat.active', locale)}
                           </Badge>
                         ) : (
-                          <Badge variant="outline">Inactif</Badge>
+                          <Badge variant="outline">{t('inv.cat.inactive', locale)}</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right space-x-1">
@@ -467,20 +468,20 @@ export default function ClientCataloguePage() {
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>{editing ? "Modifier l'article" : "Nouvel article"}</DialogTitle>
+              <DialogTitle>{editing ? t('inv.cat.dlg_edit', locale) : t('inv.cat.dlg_new', locale)}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1">
-                <Label>Description *</Label>
+                <Label>{t('inv.cat.field_desc', locale)}</Label>
                 <Input
                   value={fDescription}
                   onChange={(e) => setFDescription(e.target.value)}
-                  placeholder="Prestation comptable mensuelle"
+                  placeholder={t('inv.cat.ph_desc', locale)}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label>Prix unitaire</Label>
+                  <Label>{t('inv.cat.field_price', locale)}</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -490,7 +491,7 @@ export default function ClientCataloguePage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label>Devise</Label>
+                  <Label>{t('inv.cat.field_currency', locale)}</Label>
                   <Select value={fDevise} onValueChange={setFDevise}>
                     <SelectTrigger>
                       <SelectValue />
@@ -507,11 +508,11 @@ export default function ClientCataloguePage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label>Catégorie</Label>
+                  <Label>{t('inv.cat.field_cat', locale)}</Label>
                   <Input
                     value={fCategorie}
                     onChange={(e) => setFCategorie(e.target.value)}
-                    placeholder="Comptabilité, Audit..."
+                    placeholder={t('inv.cat.ph_cat', locale)}
                     list="catalogue-cat-suggestions"
                   />
                   <datalist id="catalogue-cat-suggestions">
@@ -521,7 +522,7 @@ export default function ClientCataloguePage() {
                   </datalist>
                 </div>
                 <div className="space-y-1">
-                  <Label>Unité</Label>
+                  <Label>{t('inv.cat.field_unit', locale)}</Label>
                   <Input
                     value={fUnite}
                     onChange={(e) => setFUnite(e.target.value)}
@@ -535,7 +536,7 @@ export default function ClientCataloguePage() {
                 </div>
               </div>
               <div className="space-y-1">
-                <Label>TVA applicable</Label>
+                <Label>{t('inv.cat.field_vat_applicable', locale)}</Label>
                 <Select
                   value={fTva ? "oui" : "non"}
                   onValueChange={(v) => setFTva(v === "oui")}
@@ -544,21 +545,21 @@ export default function ClientCataloguePage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="oui">Oui — TVA 15%</SelectItem>
-                    <SelectItem value="non">Non — Zero-rated</SelectItem>
+                    <SelectItem value="oui">{t('inv.cat.vat_yes', locale)}</SelectItem>
+                    <SelectItem value="non">{t('inv.cat.vat_no', locale)}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               {editing && (
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Switch checked={fActif} onCheckedChange={setFActif} />
-                  Article actif (affiché dans le sélecteur des factures)
+                  {t('inv.cat.toggle_active', locale)}
                 </Label>
               )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
-                Annuler
+                {t('inv.cat.cancel', locale)}
               </Button>
               <Button
                 onClick={handleSave}
@@ -566,7 +567,7 @@ export default function ClientCataloguePage() {
                 className="bg-indigo-600 hover:bg-indigo-700 text-white"
               >
                 {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {editing ? "Enregistrer" : "Ajouter"}
+                {editing ? t('inv.cat.save', locale) : t('inv.cat.add', locale)}
               </Button>
             </DialogFooter>
           </DialogContent>

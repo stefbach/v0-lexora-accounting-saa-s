@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 type Canal = "email" | "whatsapp"
 
@@ -88,13 +89,21 @@ function formatDateTime(d: string): string {
   })
 }
 
-const NIVEAU_LABELS: Record<number, { label: string; color: string }> = {
-  1: { label: "Rappel", color: "bg-amber-100 text-amber-700 border-amber-300" },
-  2: { label: "Relance ferme", color: "bg-orange-100 text-orange-700 border-orange-300" },
-  3: { label: "Mise en demeure", color: "bg-red-100 text-red-700 border-red-300" },
+const NIVEAU_COLORS: Record<number, string> = {
+  1: "bg-amber-100 text-amber-700 border-amber-300",
+  2: "bg-orange-100 text-orange-700 border-orange-300",
+  3: "bg-red-100 text-red-700 border-red-300",
+}
+
+function niveauLabel(niveau: number, locale: Locale): string {
+  if (niveau === 1) return t('inv.rel.level1', locale)
+  if (niveau === 2) return t('inv.rel.level2', locale)
+  if (niveau === 3) return t('inv.rel.level3', locale)
+  return ''
 }
 
 export default function ClientRelancesPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [config, setConfig] = useState<SocieteConfig | null>(null)
   const [factures, setFactures] = useState<FactureARelancer[]>([])
@@ -125,11 +134,11 @@ export default function ClientRelancesPage() {
       setHistorique(hist?.historique || [])
       setSelectedIds(new Set((preview?.factures || []).map((f: FactureARelancer) => f.facture_id)))
     } catch {
-      showToast("Erreur chargement", "error")
+      showToast(t('inv.rel.toast_error_load', locale), "error")
     } finally {
       setLoading(false)
     }
-  }, [societeId])
+  }, [societeId, locale])
 
   useEffect(() => {
     load()
@@ -181,16 +190,18 @@ export default function ClientRelancesPage() {
   async function runRelances(dry_run: boolean) {
     if (!societeId) return
     if (selectedIds.size === 0) {
-      showToast("Sélectionnez au moins une facture", "error")
+      showToast(t('inv.rel.toast_select_invoice', locale), "error")
       return
     }
     if (canauxEffectifs.length === 0) {
-      showToast("Sélectionnez au moins un canal", "error")
+      showToast(t('inv.rel.toast_select_channel', locale), "error")
       return
     }
     if (!dry_run) {
       const ok = window.confirm(
-        `Envoyer ${selectedIds.size} relance(s) via ${canauxEffectifs.join(" + ")} ?`,
+        t('inv.rel.confirm_send', locale)
+          .replace('{n}', String(selectedIds.size))
+          .replace('{channels}', canauxEffectifs.join(" + ")),
       )
       if (!ok) return
     }
@@ -208,17 +219,17 @@ export default function ClientRelancesPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        showToast(data?.error || "Erreur", "error")
+        showToast(data?.error || t('inv.rel.toast_error', locale), "error")
         return
       }
       const s = data?.summary
       showToast(
-        `${dry_run ? "Simulation" : "Envoi"} : ${s?.envois_ok ?? 0} OK · ${s?.envois_echec ?? 0} échec`,
+        `${dry_run ? t('inv.rel.summary_sim', locale) : t('inv.rel.summary_send', locale)} : ${s?.envois_ok ?? 0} ${t('inv.rel.summary_ok', locale)} ${s?.envois_echec ?? 0} ${t('inv.rel.summary_fail', locale)}`,
         s?.envois_echec > 0 ? "error" : "success",
       )
       await load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur réseau", "error")
+      showToast(e?.message || t('inv.rel.toast_error_network', locale), "error")
     } finally {
       setSubmitting(false)
     }
@@ -245,15 +256,15 @@ export default function ClientRelancesPage() {
                 <Send className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-amber-900">Relances factures</h1>
+                <h1 className="text-2xl font-bold text-amber-900">{t('inv.rel.title', locale)}</h1>
                 <p className="text-sm text-amber-800/80 mt-0.5">
-                  Relancer automatiquement les clients qui n'ont pas payé à échéance
+                  {t('inv.rel.subtitle', locale)}
                 </p>
               </div>
             </div>
             <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
               <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-              Actualiser
+              {t('inv.rel.refresh', locale)}
             </Button>
           </div>
         </div>
@@ -262,22 +273,21 @@ export default function ClientRelancesPage() {
         {config && (
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Configuration</CardTitle>
+              <CardTitle className="text-base">{t('inv.rel.config', locale)}</CardTitle>
             </CardHeader>
             <CardContent className="text-sm space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Cron automatique&nbsp;:</span>
+                <span className="text-muted-foreground">{t('inv.rel.auto_cron', locale)}</span>
                 {config.relances_actif ? (
                   <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300">
-                    <CheckCircle2 className="h-3 w-3 mr-1" /> Activé
+                    <CheckCircle2 className="h-3 w-3 mr-1" /> {t('inv.rel.enabled', locale)}
                   </Badge>
                 ) : (
-                  <Badge variant="outline">Désactivé (envoi manuel uniquement)</Badge>
+                  <Badge variant="outline">{t('inv.rel.disabled', locale)}</Badge>
                 )}
               </div>
               <div className="text-muted-foreground">
-                Délais&nbsp;: rappel à J+{config.delais_jours["1"]}, ferme à J+{config.delais_jours["2"]},
-                mise en demeure à J+{config.delais_jours["3"]} après échéance
+                {t('inv.rel.delays_prefix', locale)}{config.delais_jours["1"]}{t('inv.rel.delays_firm', locale)}{config.delais_jours["2"]}{t('inv.rel.delays_med', locale)}{config.delais_jours["3"]}{t('inv.rel.delays_suffix', locale)}
               </div>
             </CardContent>
           </Card>
@@ -286,7 +296,7 @@ export default function ClientRelancesPage() {
         {!societeId ? (
           <Card>
             <CardContent className="py-16 text-center text-gray-400">
-              Société non disponible.
+              {t('inv.rel.no_societe', locale)}
             </CardContent>
           </Card>
         ) : loading ? (
@@ -299,25 +309,25 @@ export default function ClientRelancesPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Card className="border-amber-200 bg-amber-50">
                 <CardContent className="p-3">
-                  <div className="text-xs text-muted-foreground">Niveau 1 (rappel)</div>
+                  <div className="text-xs text-muted-foreground">{t('inv.rel.kpi_l1', locale)}</div>
                   <div className="text-xl font-semibold mt-1">{stats.parNiveau[1]}</div>
                 </CardContent>
               </Card>
               <Card className="border-orange-200 bg-orange-50">
                 <CardContent className="p-3">
-                  <div className="text-xs text-muted-foreground">Niveau 2 (ferme)</div>
+                  <div className="text-xs text-muted-foreground">{t('inv.rel.kpi_l2', locale)}</div>
                   <div className="text-xl font-semibold mt-1">{stats.parNiveau[2]}</div>
                 </CardContent>
               </Card>
               <Card className="border-red-200 bg-red-50">
                 <CardContent className="p-3">
-                  <div className="text-xs text-muted-foreground">Niveau 3 (MED)</div>
+                  <div className="text-xs text-muted-foreground">{t('inv.rel.kpi_l3', locale)}</div>
                   <div className="text-xl font-semibold mt-1">{stats.parNiveau[3]}</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-3">
-                  <div className="text-xs text-muted-foreground">Total à recouvrer</div>
+                  <div className="text-xs text-muted-foreground">{t('inv.rel.kpi_total', locale)}</div>
                   <div className="text-xl font-semibold mt-1 font-mono">{fmt(stats.totalDu, "MUR")}</div>
                 </CardContent>
               </Card>
@@ -327,31 +337,31 @@ export default function ClientRelancesPage() {
             <Card>
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center gap-4 flex-wrap">
-                  <span className="text-sm font-medium">Canaux&nbsp;:</span>
+                  <span className="text-sm font-medium">{t('inv.rel.channels', locale)}</span>
                   <Label className="flex items-center gap-2 cursor-pointer">
                     <Checkbox
                       checked={canauxEffectifs.includes("email")}
                       onCheckedChange={() => toggleCanal("email")}
                     />
-                    <Mail className="h-4 w-4" /> Email
+                    <Mail className="h-4 w-4" /> {t('inv.rel.email', locale)}
                   </Label>
                   <Label className="flex items-center gap-2 cursor-pointer">
                     <Checkbox
                       checked={canauxEffectifs.includes("whatsapp")}
                       onCheckedChange={() => toggleCanal("whatsapp")}
                     />
-                    <MessageCircle className="h-4 w-4" /> WhatsApp
+                    <MessageCircle className="h-4 w-4" /> {t('inv.rel.whatsapp', locale)}
                   </Label>
                   {stats.sansEmail > 0 && canauxEffectifs.includes("email") && (
                     <span className="text-xs text-amber-700">
                       <AlertTriangle className="inline h-3 w-3 mr-1" />
-                      {stats.sansEmail} facture(s) sans email
+                      {stats.sansEmail} {t('inv.rel.no_email_n', locale)}
                     </span>
                   )}
                   {stats.sansPhone > 0 && canauxEffectifs.includes("whatsapp") && (
                     <span className="text-xs text-amber-700">
                       <AlertTriangle className="inline h-3 w-3 mr-1" />
-                      {stats.sansPhone} facture(s) sans téléphone
+                      {stats.sansPhone} {t('inv.rel.no_phone_n', locale)}
                     </span>
                   )}
                 </div>
@@ -363,7 +373,7 @@ export default function ClientRelancesPage() {
                     disabled={submitting || selectedIds.size === 0}
                   >
                     {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Simuler ({selectedIds.size})
+                    {t('inv.rel.simulate', locale)} ({selectedIds.size})
                   </Button>
                   <Button
                     size="sm"
@@ -373,7 +383,7 @@ export default function ClientRelancesPage() {
                   >
                     {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     <Send className="h-4 w-4 mr-1.5" />
-                    Envoyer ({selectedIds.size})
+                    {t('inv.rel.send', locale)} ({selectedIds.size})
                   </Button>
                 </div>
               </CardContent>
@@ -382,8 +392,8 @@ export default function ClientRelancesPage() {
             {/* Liste */}
             <Tabs defaultValue="apreleance">
               <TabsList>
-                <TabsTrigger value="apreleance">À relancer ({factures.length})</TabsTrigger>
-                <TabsTrigger value="historique">Historique ({historique.length})</TabsTrigger>
+                <TabsTrigger value="apreleance">{t('inv.rel.tab_pending', locale)} ({factures.length})</TabsTrigger>
+                <TabsTrigger value="historique">{t('inv.rel.tab_history', locale)} ({historique.length})</TabsTrigger>
               </TabsList>
 
               <TabsContent value="apreleance" className="space-y-2">
@@ -391,7 +401,7 @@ export default function ClientRelancesPage() {
                   <Card>
                     <CardContent className="py-12 text-center text-sm text-muted-foreground">
                       <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-500" />
-                      Aucune facture à relancer aujourd'hui.
+                      {t('inv.rel.empty_pending', locale)}
                     </CardContent>
                   </Card>
                 ) : (
@@ -403,12 +413,13 @@ export default function ClientRelancesPage() {
                           onCheckedChange={toggleAll}
                         />
                         <span className="text-xs text-muted-foreground">
-                          Tout sélectionner / désélectionner
+                          {t('inv.rel.toggle_all', locale)}
                         </span>
                       </div>
                       <div className="divide-y">
                         {factures.map((f) => {
-                          const ni = NIVEAU_LABELS[f.niveau]
+                          const niColor = NIVEAU_COLORS[f.niveau]
+                          const niLabel = niveauLabel(f.niveau, locale)
                           const selected = selectedIds.has(f.facture_id)
                           return (
                             <div
@@ -425,29 +436,29 @@ export default function ClientRelancesPage() {
                                   <span className="font-mono font-medium text-sm">
                                     {f.numero_facture || f.facture_id.slice(0, 8)}
                                   </span>
-                                  <Badge className={`text-[10px] border ${ni.color}`}>
-                                    {ni.label}
+                                  <Badge className={`text-[10px] border ${niColor}`}>
+                                    {niLabel}
                                   </Badge>
                                   <Badge className="text-[10px] bg-red-100 text-red-700 border-red-300">
                                     <Clock className="h-3 w-3 mr-1" />
-                                    {f.jours_retard}j de retard
+                                    {f.jours_retard}{t('inv.rel.days_late_suffix', locale)}
                                   </Badge>
                                 </div>
-                                <div className="text-sm mt-1">{f.tiers || "—"}</div>
+                                <div className="text-sm mt-1">{f.tiers || t('inv.rel.dash', locale)}</div>
                                 <div className="text-xs text-muted-foreground mt-0.5 flex gap-3 flex-wrap">
                                   {f.contact_email ? (
                                     <span className="flex items-center gap-1">
                                       <Mail className="h-3 w-3" /> {f.contact_email}
                                     </span>
                                   ) : (
-                                    <span className="text-amber-600">Pas d'email</span>
+                                    <span className="text-amber-600">{t('inv.rel.no_email', locale)}</span>
                                   )}
                                   {f.contact_phone ? (
                                     <span className="flex items-center gap-1">
                                       <MessageCircle className="h-3 w-3" /> {f.contact_phone}
                                     </span>
                                   ) : (
-                                    <span className="text-amber-600">Pas de téléphone</span>
+                                    <span className="text-amber-600">{t('inv.rel.no_phone', locale)}</span>
                                   )}
                                 </div>
                               </div>
@@ -456,7 +467,7 @@ export default function ClientRelancesPage() {
                                   {fmt(f.solde_du_mur, "MUR")}
                                 </div>
                                 <div className="text-[10px] text-muted-foreground">
-                                  Échéance : {f.date_echeance}
+                                  {t('inv.rel.due', locale)} : {f.date_echeance}
                                 </div>
                               </div>
                             </div>
@@ -472,7 +483,7 @@ export default function ClientRelancesPage() {
                 {historique.length === 0 ? (
                   <Card>
                     <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                      Aucune relance envoyée jusqu'à présent.
+                      {t('inv.rel.empty_history', locale)}
                     </CardContent>
                   </Card>
                 ) : (
@@ -483,10 +494,10 @@ export default function ClientRelancesPage() {
                           <div key={h.id} className="flex items-start gap-3 p-3 text-sm">
                             <Badge
                               className={`text-[10px] border ${
-                                NIVEAU_LABELS[h.niveau]?.color || ""
+                                NIVEAU_COLORS[h.niveau] || ""
                               }`}
                             >
-                              N{h.niveau}
+                              {t('inv.rel.level_short', locale)}{h.niveau}
                             </Badge>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -496,20 +507,20 @@ export default function ClientRelancesPage() {
                                   <MessageCircle className="h-3 w-3" />
                                 )}
                                 <span className="text-xs text-muted-foreground">
-                                  {h.destinataire || "—"}
+                                  {h.destinataire || t('inv.rel.dash', locale)}
                                 </span>
                                 {h.dry_run && (
                                   <Badge variant="outline" className="text-[10px]">
-                                    Simulation
+                                    {t('inv.rel.simulation_badge', locale)}
                                   </Badge>
                                 )}
                                 {h.statut === "envoye" ? (
                                   <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300">
-                                    Envoyé
+                                    {t('inv.rel.sent', locale)}
                                   </Badge>
                                 ) : (
                                   <Badge className="text-[10px] bg-red-100 text-red-700 border-red-300">
-                                    Échec
+                                    {t('inv.rel.failed', locale)}
                                   </Badge>
                                 )}
                               </div>

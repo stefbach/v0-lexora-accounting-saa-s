@@ -15,71 +15,82 @@ import {
   Shield, Scale, Globe, Save, Trash2, FileSignature
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
-const CONTRACT_TYPES = [
-  { id: 'CDI', label: 'Travail — CDI', law: 'WRA 2019 s.11' },
-  { id: 'CDD', label: 'Travail — CDD', law: 'WRA 2019 s.12' },
-  { id: 'CDD_partiel', label: 'Travail — Temps partiel', law: 'WRA 2019 s.35' },
-  { id: 'prestataire', label: 'Prestataire / Consultant', law: 'Contract Act' },
-  { id: 'client_saas', label: 'Client SaaS / Abonnement', law: 'ICT Act' },
-  { id: 'client_service', label: 'Client — Prestation services', law: 'Contract Act' },
-  { id: 'nda', label: 'NDA / Confidentialité', law: 'DPA 2017' },
-]
-
-const LANGUAGES = [
-  { id: 'fr', label: 'Français' },
-  { id: 'en', label: 'English' },
-  { id: 'fr_en', label: 'Bilingue FR/EN' },
-]
-
-const JURISDICTIONS = [
-  { id: 'mu', label: 'Maurice — droit mauricien', flag: '🇲🇺' },
-  { id: 'mu_fr', label: 'Maurice — droit français applicable', flag: '🇫🇷' },
-  { id: 'cv', label: 'Cabo Verde', flag: '🇨🇻' },
-]
-
-const CLAUSES = {
-  required: [
-    { id: 'c1', label: 'Identification complète des parties', ref: 'WRA s.11' },
-    { id: 'c2', label: 'Durée et type de contrat', ref: 'WRA s.12' },
-    { id: 'c3', label: 'Rémunération et modalités de paiement', ref: 'WRA s.24' },
-    { id: 'c4', label: 'Heures de travail (45h/semaine max)', ref: 'WRA s.36' },
-    { id: 'c5', label: 'Congés annuels (20 jours min)', ref: 'WRA s.47' },
-    { id: 'c6', label: 'Congés maladie (15 jours/an)', ref: 'WRA s.49' },
-    { id: 'c7', label: 'Cotisations sociales CSG / NSF', ref: 'CSG Act' },
-    { id: 'c8', label: 'Retenue PAYE à la source', ref: 'ITA 1995' },
-    { id: 'c9', label: 'Conditions de rupture et préavis', ref: 'WRA s.38-40' },
-  ],
-  recommended: [
-    { id: 'r1', label: 'Confidentialité et secrets commerciaux', ref: 'DPA 2017' },
-    { id: 'r2', label: 'Propriété intellectuelle', ref: 'Copyright Act' },
-    { id: 'r3', label: 'Politique IT et usage des ressources', ref: 'ICT Act' },
-    { id: 'r4', label: 'Non-sollicitation (12 mois)', ref: 'Contract Act' },
-    { id: 'r5', label: 'End of Year Bonus (13ème mois)', ref: 'WRA s.50' },
-    { id: 'r6', label: 'Loi applicable & juridiction', ref: 'Courts Act' },
-  ],
-  optional: [
-    { id: 'o1', label: 'Clause de télétravail' },
-    { id: 'o2', label: 'Non-concurrence (délimitée)' },
-    { id: 'o3', label: 'Mobilité interne/régionale' },
-    { id: 'o4', label: 'Exclusivité partielle' },
-    { id: 'o5', label: 'Protection données personnelles (GDPR)' },
-    { id: 'o6', label: 'Prime de performance et KPIs' },
-  ],
+function getContractTypes(locale: Locale) {
+  return [
+    { id: 'CDI', label: t('pub.contrats.ct.cdi', locale), law: 'WRA 2019 s.11' },
+    { id: 'CDD', label: t('pub.contrats.ct.cdd', locale), law: 'WRA 2019 s.12' },
+    { id: 'CDD_partiel', label: t('pub.contrats.ct.cdd_partiel', locale), law: 'WRA 2019 s.35' },
+    { id: 'prestataire', label: t('pub.contrats.ct.prestataire', locale), law: 'Contract Act' },
+    { id: 'client_saas', label: t('pub.contrats.ct.client_saas', locale), law: 'ICT Act' },
+    { id: 'client_service', label: t('pub.contrats.ct.client_service', locale), law: 'Contract Act' },
+    { id: 'nda', label: t('pub.contrats.ct.nda', locale), law: 'DPA 2017' },
+  ]
 }
 
-const STEPS = [
-  { id: 'type', label: 'Type', icon: FileText },
-  { id: 'parties', label: 'Parties', icon: Users },
-  { id: 'conditions', label: 'Conditions', icon: Settings },
-  { id: 'clauses', label: 'Clauses', icon: List },
-  { id: 'preview', label: 'Aperçu', icon: Eye },
-] as const
+function getLanguages(locale: Locale) {
+  return [
+    { id: 'fr', label: t('pub.contrats.lang.fr', locale) },
+    { id: 'en', label: t('pub.contrats.lang.en', locale) },
+    { id: 'fr_en', label: t('pub.contrats.lang.fr_en', locale) },
+  ]
+}
 
-type StepId = typeof STEPS[number]['id']
+function getJurisdictions(locale: Locale) {
+  return [
+    { id: 'mu', label: t('pub.contrats.juris.mu', locale), flag: '🇲🇺' },
+    { id: 'mu_fr', label: t('pub.contrats.juris.mu_fr', locale), flag: '🇫🇷' },
+    { id: 'cv', label: t('pub.contrats.juris.cv', locale), flag: '🇨🇻' },
+  ]
+}
+
+function getClauses(locale: Locale) {
+  return {
+    required: [
+      { id: 'c1', label: t('pub.contrats.cl.c1', locale), ref: 'WRA s.11' },
+      { id: 'c2', label: t('pub.contrats.cl.c2', locale), ref: 'WRA s.12' },
+      { id: 'c3', label: t('pub.contrats.cl.c3', locale), ref: 'WRA s.24' },
+      { id: 'c4', label: t('pub.contrats.cl.c4', locale), ref: 'WRA s.36' },
+      { id: 'c5', label: t('pub.contrats.cl.c5', locale), ref: 'WRA s.47' },
+      { id: 'c6', label: t('pub.contrats.cl.c6', locale), ref: 'WRA s.49' },
+      { id: 'c7', label: t('pub.contrats.cl.c7', locale), ref: 'CSG Act' },
+      { id: 'c8', label: t('pub.contrats.cl.c8', locale), ref: 'ITA 1995' },
+      { id: 'c9', label: t('pub.contrats.cl.c9', locale), ref: 'WRA s.38-40' },
+    ],
+    recommended: [
+      { id: 'r1', label: t('pub.contrats.cl.r1', locale), ref: 'DPA 2017' },
+      { id: 'r2', label: t('pub.contrats.cl.r2', locale), ref: 'Copyright Act' },
+      { id: 'r3', label: t('pub.contrats.cl.r3', locale), ref: 'ICT Act' },
+      { id: 'r4', label: t('pub.contrats.cl.r4', locale), ref: 'Contract Act' },
+      { id: 'r5', label: t('pub.contrats.cl.r5', locale), ref: 'WRA s.50' },
+      { id: 'r6', label: t('pub.contrats.cl.r6', locale), ref: 'Courts Act' },
+    ],
+    optional: [
+      { id: 'o1', label: t('pub.contrats.cl.o1', locale) },
+      { id: 'o2', label: t('pub.contrats.cl.o2', locale) },
+      { id: 'o3', label: t('pub.contrats.cl.o3', locale) },
+      { id: 'o4', label: t('pub.contrats.cl.o4', locale) },
+      { id: 'o5', label: t('pub.contrats.cl.o5', locale) },
+      { id: 'o6', label: t('pub.contrats.cl.o6', locale) },
+    ],
+  }
+}
+
+function getSteps(locale: Locale) {
+  return [
+    { id: 'type' as const, label: t('pub.contrats.step.type', locale), icon: FileText },
+    { id: 'parties' as const, label: t('pub.contrats.step.parties', locale), icon: Users },
+    { id: 'conditions' as const, label: t('pub.contrats.step.conditions', locale), icon: Settings },
+    { id: 'clauses' as const, label: t('pub.contrats.step.clauses', locale), icon: List },
+    { id: 'preview' as const, label: t('pub.contrats.step.preview', locale), icon: Eye },
+  ]
+}
+
+type StepId = 'type' | 'parties' | 'conditions' | 'clauses' | 'preview'
 
 interface ContractForm {
   contractType: string
@@ -113,6 +124,13 @@ interface ContractForm {
 }
 
 export default function ContratsPage() {
+  const locale = getLocale()
+  const CONTRACT_TYPES = getContractTypes(locale)
+  const LANGUAGES = getLanguages(locale)
+  const JURISDICTIONS = getJurisdictions(locale)
+  const CLAUSES = getClauses(locale)
+  const STEPS = getSteps(locale)
+
   const [step, setStep] = useState<StepId>('type')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -191,12 +209,12 @@ export default function ContratsPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || "Erreur de génération")
+        setError(data.error || t('pub.contrats.error_generation', locale))
         return
       }
       setResult(data.text || "")
     } catch (e: any) {
-      setError("Erreur réseau : " + (e.message || ""))
+      setError(t('pub.contrats.error_network', locale) + (e.message || ""))
     } finally {
       setLoading(false)
     }
@@ -222,13 +240,13 @@ export default function ContratsPage() {
         body: JSON.stringify(body),
       })
       const data = await res.json()
-      if (!res.ok) { alert(data.error || "Erreur sauvegarde"); return }
+      if (!res.ok) { alert(data.error || t('pub.contrats.error_save', locale)); return }
       if (data.contract_id) {
         setSavedContractId(data.contract_id)
-        alert("Contrat sauvegardé avec succès")
+        alert(t('pub.contrats.saved_success', locale))
       }
     } catch (e: any) {
-      alert("Erreur : " + (e.message || ""))
+      alert(t('pub.contrats.error_prefix', locale) + " " + (e.message || ""))
     } finally {
       setSaving(false)
     }
@@ -237,7 +255,7 @@ export default function ContratsPage() {
   const handleCopy = () => {
     if (result) {
       navigator.clipboard.writeText(result)
-      alert("Copié dans le presse-papier")
+      alert(t('pub.contrats.copied_clipboard', locale))
     }
   }
 
@@ -262,12 +280,12 @@ export default function ContratsPage() {
             <FileSignature className="w-5 h-5" style={{ color: GOLD }} />
           </div>
           <div className="flex-1">
-            <h1 className="text-xl font-bold" style={{ color: NAVY }}>Générateur de contrats</h1>
-            <p className="text-xs text-gray-500">Droit mauricien · WRA 2019 · Income Tax Act · DPA 2017</p>
+            <h1 className="text-xl font-bold" style={{ color: NAVY }}>{t('pub.contrats.title', locale)}</h1>
+            <p className="text-xs text-gray-500">{t('pub.contrats.subtitle', locale)}</p>
           </div>
           <Badge className="gap-1.5" style={{ backgroundColor: NAVY, color: GOLD }}>
             <Shield className="w-3 h-3" />
-            {CONTRACT_TYPES.find(t => t.id === form.contractType)?.label}
+            {CONTRACT_TYPES.find(ct => ct.id === form.contractType)?.label}
           </Badge>
         </div>
 
@@ -275,7 +293,7 @@ export default function ContratsPage() {
         {societes.length > 1 && (
           <Card className="mb-4">
             <CardContent className="p-3 flex items-center gap-3">
-              <Label className="text-sm text-gray-500 shrink-0">Société cliente :</Label>
+              <Label className="text-sm text-gray-500 shrink-0">{t('pub.contrats.client_company', locale)}</Label>
               <Select value={societeId} onValueChange={setSocieteId}>
                 <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -322,18 +340,18 @@ export default function ContratsPage() {
               <>
                 <div>
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: NAVY }}>
-                    <FileText className="w-4 h-4" /> Type de contrat
+                    <FileText className="w-4 h-4" /> {t('pub.contrats.contract_type', locale)}
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {CONTRACT_TYPES.map(t => (
-                      <button key={t.id} onClick={() => update('contractType', t.id)}
+                    {CONTRACT_TYPES.map(ct => (
+                      <button key={ct.id} onClick={() => update('contractType', ct.id)}
                         className={`text-left p-3 rounded-xl border text-sm transition-all ${
-                          form.contractType === t.id ? "border-transparent" : "border-gray-200 hover:border-gray-400"
+                          form.contractType === ct.id ? "border-transparent" : "border-gray-200 hover:border-gray-400"
                         }`}
-                        style={form.contractType === t.id ? { backgroundColor: NAVY, color: GOLD } : {}}
+                        style={form.contractType === ct.id ? { backgroundColor: NAVY, color: GOLD } : {}}
                       >
-                        <div className="font-medium leading-tight">{t.label}</div>
-                        <div className={`text-xs mt-0.5 ${form.contractType === t.id ? "opacity-70" : "text-gray-400"}`}>{t.law}</div>
+                        <div className="font-medium leading-tight">{ct.label}</div>
+                        <div className={`text-xs mt-0.5 ${form.contractType === ct.id ? "opacity-70" : "text-gray-400"}`}>{ct.law}</div>
                       </button>
                     ))}
                   </div>
@@ -341,7 +359,7 @@ export default function ContratsPage() {
 
                 <div>
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: NAVY }}>
-                    <Globe className="w-4 h-4" /> Langue
+                    <Globe className="w-4 h-4" /> {t('pub.contrats.language', locale)}
                   </h3>
                   <div className="flex gap-2 flex-wrap">
                     {LANGUAGES.map(l => (
@@ -359,7 +377,7 @@ export default function ContratsPage() {
 
                 <div>
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: NAVY }}>
-                    <Scale className="w-4 h-4" /> Juridiction
+                    <Scale className="w-4 h-4" /> {t('pub.contrats.jurisdiction', locale)}
                   </h3>
                   <div className="flex gap-2 flex-wrap">
                     {JURISDICTIONS.map(j => (
@@ -382,26 +400,26 @@ export default function ContratsPage() {
               <>
                 <div>
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: NAVY }}>
-                    <Users className="w-4 h-4" /> Employeur / Prestataire
+                    <Users className="w-4 h-4" /> {t('pub.contrats.employer_provider', locale)}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div><Label className="text-xs">Raison sociale</Label><Input value={form.empName} onChange={e => update('empName', e.target.value)} placeholder="Digital Data Solutions Ltd" /></div>
-                    <div><Label className="text-xs">N° BRN</Label><Input value={form.empBrn} onChange={e => update('empBrn', e.target.value)} placeholder="C07123456" /></div>
-                    <div className="md:col-span-2"><Label className="text-xs">Adresse enregistrée</Label><Input value={form.empAddr} onChange={e => update('empAddr', e.target.value)} placeholder="Flic en Flac, Rivière Noire, Mauritius" /></div>
-                    <div><Label className="text-xs">Représentant légal</Label><Input value={form.empRep} onChange={e => update('empRep', e.target.value)} placeholder="Prénom Nom" /></div>
-                    <div><Label className="text-xs">Titre / Fonction</Label><Input value={form.empTitle} onChange={e => update('empTitle', e.target.value)} placeholder="CEO, DRH..." /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.legal_name', locale)}</Label><Input value={form.empName} onChange={e => update('empName', e.target.value)} placeholder={t('pub.contrats.ph.legal_name', locale)} /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.brn', locale)}</Label><Input value={form.empBrn} onChange={e => update('empBrn', e.target.value)} placeholder={t('pub.contrats.ph.brn', locale)} /></div>
+                    <div className="md:col-span-2"><Label className="text-xs">{t('pub.contrats.registered_address', locale)}</Label><Input value={form.empAddr} onChange={e => update('empAddr', e.target.value)} placeholder={t('pub.contrats.ph.address_full', locale)} /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.legal_rep', locale)}</Label><Input value={form.empRep} onChange={e => update('empRep', e.target.value)} placeholder={t('pub.contrats.ph.firstlast', locale)} /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.title_role', locale)}</Label><Input value={form.empTitle} onChange={e => update('empTitle', e.target.value)} placeholder={t('pub.contrats.ph.role_examples', locale)} /></div>
                   </div>
                 </div>
                 <div className="pt-4 border-t">
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: NAVY }}>
-                    <Users className="w-4 h-4" /> Employé / Cocontractant
+                    <Users className="w-4 h-4" /> {t('pub.contrats.employee_party', locale)}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div><Label className="text-xs">Nom complet</Label><Input value={form.eeName} onChange={e => update('eeName', e.target.value)} placeholder="Prénom Nom" /></div>
-                    <div><Label className="text-xs">NIC / Passeport</Label><Input value={form.eeNic} onChange={e => update('eeNic', e.target.value)} placeholder="N° identité" /></div>
-                    <div className="md:col-span-2"><Label className="text-xs">Adresse résidentielle</Label><Input value={form.eeAddr} onChange={e => update('eeAddr', e.target.value)} placeholder="Adresse complète" /></div>
-                    <div><Label className="text-xs">Email</Label><Input type="email" value={form.eeEmail} onChange={e => update('eeEmail', e.target.value)} placeholder="email@domain.com" /></div>
-                    <div><Label className="text-xs">Téléphone</Label><Input value={form.eePhone} onChange={e => update('eePhone', e.target.value)} placeholder="+230 5xxx xxxx" /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.full_name', locale)}</Label><Input value={form.eeName} onChange={e => update('eeName', e.target.value)} placeholder={t('pub.contrats.ph.firstlast', locale)} /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.nic_passport', locale)}</Label><Input value={form.eeNic} onChange={e => update('eeNic', e.target.value)} placeholder={t('pub.contrats.ph.nic_id', locale)} /></div>
+                    <div className="md:col-span-2"><Label className="text-xs">{t('pub.contrats.residential_address', locale)}</Label><Input value={form.eeAddr} onChange={e => update('eeAddr', e.target.value)} placeholder={t('pub.contrats.ph.full_address', locale)} /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.email', locale)}</Label><Input type="email" value={form.eeEmail} onChange={e => update('eeEmail', e.target.value)} placeholder={t('pub.contrats.ph.email', locale)} /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.phone', locale)}</Label><Input value={form.eePhone} onChange={e => update('eePhone', e.target.value)} placeholder={t('pub.contrats.ph.phone', locale)} /></div>
                   </div>
                 </div>
               </>
@@ -412,45 +430,45 @@ export default function ContratsPage() {
               <>
                 <div>
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: NAVY }}>
-                    <Settings className="w-4 h-4" /> Poste & Rémunération
+                    <Settings className="w-4 h-4" /> {t('pub.contrats.job_compensation', locale)}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div><Label className="text-xs">Intitulé du poste</Label><Input value={form.jobTitle} onChange={e => update('jobTitle', e.target.value)} placeholder="Chargé(e) de clientèle" /></div>
-                    <div><Label className="text-xs">Département</Label><Input value={form.jobDept} onChange={e => update('jobDept', e.target.value)} placeholder="Operations, Tech..." /></div>
-                    <div><Label className="text-xs">Date de début</Label><Input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} /></div>
-                    <div><Label className="text-xs">Date de fin (CDD uniquement)</Label><Input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} /></div>
-                    <div><Label className="text-xs">Salaire mensuel brut (MUR)</Label><Input value={form.salary} onChange={e => update('salary', e.target.value)} placeholder="35 000" /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.job_title', locale)}</Label><Input value={form.jobTitle} onChange={e => update('jobTitle', e.target.value)} placeholder={t('pub.contrats.ph.job_title', locale)} /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.department', locale)}</Label><Input value={form.jobDept} onChange={e => update('jobDept', e.target.value)} placeholder={t('pub.contrats.ph.department', locale)} /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.start_date', locale)}</Label><Input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.end_date', locale)}</Label><Input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.monthly_salary', locale)}</Label><Input value={form.salary} onChange={e => update('salary', e.target.value)} placeholder={t('pub.contrats.ph.salary', locale)} /></div>
                     <div>
-                      <Label className="text-xs">Fréquence de paiement</Label>
+                      <Label className="text-xs">{t('pub.contrats.pay_frequency', locale)}</Label>
                       <Select value={form.payFrequency} onValueChange={v => update('payFrequency', v)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Mensuel">Mensuel</SelectItem>
-                          <SelectItem value="Bi-mensuel">Bi-mensuel</SelectItem>
-                          <SelectItem value="Hebdomadaire">Hebdomadaire</SelectItem>
+                          <SelectItem value="Mensuel">{t('pub.contrats.freq.monthly', locale)}</SelectItem>
+                          <SelectItem value="Bi-mensuel">{t('pub.contrats.freq.bimonthly', locale)}</SelectItem>
+                          <SelectItem value="Hebdomadaire">{t('pub.contrats.freq.weekly', locale)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <Label className="text-xs">Période d&apos;essai</Label>
+                      <Label className="text-xs">{t('pub.contrats.probation', locale)}</Label>
                       <Select value={form.probation} onValueChange={v => update('probation', v)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="3 mois">3 mois</SelectItem>
-                          <SelectItem value="6 mois">6 mois</SelectItem>
-                          <SelectItem value="1 an">1 an</SelectItem>
-                          <SelectItem value="Aucune">Aucune</SelectItem>
+                          <SelectItem value="3 mois">{t('pub.contrats.probation.3m', locale)}</SelectItem>
+                          <SelectItem value="6 mois">{t('pub.contrats.probation.6m', locale)}</SelectItem>
+                          <SelectItem value="1 an">{t('pub.contrats.probation.1y', locale)}</SelectItem>
+                          <SelectItem value="Aucune">{t('pub.contrats.probation.none', locale)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <Label className="text-xs">Préavis de rupture</Label>
+                      <Label className="text-xs">{t('pub.contrats.notice_period', locale)}</Label>
                       <Select value={form.noticePeriod} onValueChange={v => update('noticePeriod', v)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="1 mois">1 mois</SelectItem>
-                          <SelectItem value="2 mois">2 mois</SelectItem>
-                          <SelectItem value="3 mois">3 mois</SelectItem>
+                          <SelectItem value="1 mois">{t('pub.contrats.notice.1m', locale)}</SelectItem>
+                          <SelectItem value="2 mois">{t('pub.contrats.notice.2m', locale)}</SelectItem>
+                          <SelectItem value="3 mois">{t('pub.contrats.notice.3m', locale)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -459,20 +477,20 @@ export default function ContratsPage() {
 
                 <div className="pt-4 border-t">
                   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: NAVY }}>
-                    <Settings className="w-4 h-4" /> Conditions de travail
+                    <Settings className="w-4 h-4" /> {t('pub.contrats.working_conditions', locale)}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div><Label className="text-xs">Heures / semaine</Label><Input type="number" value={form.weeklyHours} onChange={e => update('weeklyHours', e.target.value)} placeholder="45" /></div>
-                    <div><Label className="text-xs">Lieu de travail</Label><Input value={form.workLocation} onChange={e => update('workLocation', e.target.value)} placeholder="Flic en Flac / Télétravail" /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.weekly_hours', locale)}</Label><Input type="number" value={form.weeklyHours} onChange={e => update('weeklyHours', e.target.value)} placeholder="45" /></div>
+                    <div><Label className="text-xs">{t('pub.contrats.work_location', locale)}</Label><Input value={form.workLocation} onChange={e => update('workLocation', e.target.value)} placeholder={t('pub.contrats.ph.work_location', locale)} /></div>
                     <div className="md:col-span-2">
-                      <Label className="text-xs">Congés annuels</Label>
+                      <Label className="text-xs">{t('pub.contrats.annual_leave', locale)}</Label>
                       <Select value={form.annualLeave} onValueChange={v => update('annualLeave', v)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="20 jours (légal minimum WRA 2019)">20 jours (légal minimum WRA 2019)</SelectItem>
-                          <SelectItem value="22 jours">22 jours</SelectItem>
-                          <SelectItem value="25 jours">25 jours</SelectItem>
-                          <SelectItem value="30 jours">30 jours</SelectItem>
+                          <SelectItem value="20 jours (légal minimum WRA 2019)">{t('pub.contrats.leave.20', locale)}</SelectItem>
+                          <SelectItem value="22 jours">{t('pub.contrats.leave.22', locale)}</SelectItem>
+                          <SelectItem value="25 jours">{t('pub.contrats.leave.25', locale)}</SelectItem>
+                          <SelectItem value="30 jours">{t('pub.contrats.leave.30', locale)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -480,12 +498,12 @@ export default function ContratsPage() {
                 </div>
 
                 <div className="pt-4 border-t">
-                  <Label className="text-xs font-semibold">Avantages complémentaires</Label>
+                  <Label className="text-xs font-semibold">{t('pub.contrats.benefits', locale)}</Label>
                   <Textarea
                     className="mt-1.5 min-h-[80px]"
                     value={form.benefits}
                     onChange={e => update('benefits', e.target.value)}
-                    placeholder="Transport Rs 2 000/mois, assurance TIBOK incluse, 13ème mois prorata..."
+                    placeholder={t('pub.contrats.ph.benefits', locale)}
                   />
                 </div>
               </>
@@ -496,14 +514,14 @@ export default function ContratsPage() {
               <>
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>Les clauses <strong>obligatoires</strong> sont verrouillées (conformité WRA 2019, Income Tax Act, CSG Act). Les autres sont modifiables.</span>
+                  <span>{t('pub.contrats.clauses_locked_info', locale)}</span>
                 </div>
 
                 {/* Required */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Clauses obligatoires</span>
-                    <Badge className="bg-blue-100 text-blue-700 text-[9px]">WRA 2019</Badge>
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('pub.contrats.clauses_mandatory', locale)}</span>
+                    <Badge className="bg-blue-100 text-blue-700 text-[9px]">{t('pub.contrats.badge_wra', locale)}</Badge>
                   </div>
                   <div className="space-y-1.5">
                     {CLAUSES.required.map(c => (
@@ -519,8 +537,8 @@ export default function ContratsPage() {
                 {/* Recommended */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Clauses recommandées</span>
-                    <Badge className="bg-green-100 text-green-700 text-[9px]">Recommandé</Badge>
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('pub.contrats.clauses_recommended', locale)}</span>
+                    <Badge className="bg-green-100 text-green-700 text-[9px]">{t('pub.contrats.badge_recommended', locale)}</Badge>
                   </div>
                   <div className="space-y-1.5">
                     {CLAUSES.recommended.map(c => (
@@ -539,8 +557,8 @@ export default function ContratsPage() {
                 {/* Optional */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Clauses optionnelles</span>
-                    <Badge className="bg-gray-100 text-gray-600 text-[9px]">Optionnel</Badge>
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('pub.contrats.clauses_optional', locale)}</span>
+                    <Badge className="bg-gray-100 text-gray-600 text-[9px]">{t('pub.contrats.badge_optional', locale)}</Badge>
                   </div>
                   <div className="space-y-1.5">
                     {CLAUSES.optional.map(c => (
@@ -556,12 +574,12 @@ export default function ContratsPage() {
                 </div>
 
                 <div>
-                  <Label className="text-xs font-semibold">Clause personnalisée</Label>
+                  <Label className="text-xs font-semibold">{t('pub.contrats.custom_clause', locale)}</Label>
                   <Textarea
                     className="mt-1.5 min-h-[70px]"
                     value={form.customClause}
                     onChange={e => update('customClause', e.target.value)}
-                    placeholder="Rédigez ici une clause spécifique (mobilité, exclusivité, équipement, astreinte...)"
+                    placeholder={t('pub.contrats.ph.custom_clause', locale)}
                   />
                 </div>
               </>
@@ -573,26 +591,26 @@ export default function ContratsPage() {
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     {loading ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Génération en cours…</>
+                      <><Loader2 className="w-4 h-4 animate-spin" /> {t('pub.contrats.generating', locale)}</>
                     ) : result ? (
-                      <><CheckCircle className="w-4 h-4 text-green-500" /> Contrat généré</>
+                      <><CheckCircle className="w-4 h-4 text-green-500" /> {t('pub.contrats.generated', locale)}</>
                     ) : error ? (
-                      <><AlertCircle className="w-4 h-4 text-red-500" /> Erreur</>
+                      <><AlertCircle className="w-4 h-4 text-red-500" /> {t('pub.contrats.error', locale)}</>
                     ) : (
-                      <><FileText className="w-4 h-4" /> Prêt à générer</>
+                      <><FileText className="w-4 h-4" /> {t('pub.contrats.ready_to_generate', locale)}</>
                     )}
                   </div>
                   {result && (
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={handleCopy}>
-                        <Copy className="w-3 h-3 mr-1" /> Copier
+                        <Copy className="w-3 h-3 mr-1" /> {t('pub.contrats.copy', locale)}
                       </Button>
                       <Button variant="outline" size="sm" onClick={handleDownload}>
-                        <Download className="w-3 h-3 mr-1" /> Télécharger
+                        <Download className="w-3 h-3 mr-1" /> {t('pub.contrats.download', locale)}
                       </Button>
                       <Button size="sm" onClick={handleSave} disabled={saving || !societeId} style={{ backgroundColor: NAVY, color: GOLD }}>
                         {saving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
-                        Sauvegarder
+                        {t('pub.contrats.save', locale)}
                       </Button>
                     </div>
                   )}
@@ -601,26 +619,26 @@ export default function ContratsPage() {
                 {!result && !loading && !error && (
                   <div className="text-center py-16 text-gray-400">
                     <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">Complétez les étapes et cliquez sur &quot;Générer le contrat&quot;</p>
+                    <p className="text-sm">{t('pub.contrats.complete_then_click', locale)}</p>
                   </div>
                 )}
 
                 {error && (
                   <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                    <strong>Erreur :</strong> {error}
+                    <strong>{t('pub.contrats.error_prefix', locale)}</strong> {error}
                   </div>
                 )}
 
                 {savedContractId && (
                   <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 flex items-center gap-2">
                     <CheckCircle className="w-4 h-4" />
-                    Contrat sauvegardé avec l&apos;ID : <code className="font-mono text-xs">{savedContractId.slice(0, 8)}</code>
+                    {t('pub.contrats.saved_with_id', locale)} <code className="font-mono text-xs">{savedContractId.slice(0, 8)}</code>
                   </div>
                 )}
 
                 {(loading || result) && (
                   <pre className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs leading-relaxed whitespace-pre-wrap overflow-y-auto max-h-[600px] font-mono text-gray-800">
-                    {loading && !result ? "…génération en cours…" : result}
+                    {loading && !result ? t('pub.contrats.generating_placeholder', locale) : result}
                   </pre>
                 )}
               </>
@@ -629,16 +647,16 @@ export default function ContratsPage() {
             {/* Navigation */}
             <div className="flex justify-between pt-4 border-t">
               <Button variant="ghost" onClick={() => setStep(STEPS[Math.max(0, currentIdx - 1)].id)} disabled={currentIdx === 0}>
-                <ChevronLeft className="w-4 h-4 mr-1" /> Retour
+                <ChevronLeft className="w-4 h-4 mr-1" /> {t('pub.contrats.back', locale)}
               </Button>
               {step === 'clauses' ? (
                 <Button onClick={handleGenerate} disabled={loading} style={{ backgroundColor: NAVY, color: GOLD }}>
                   {loading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FileText className="w-4 h-4 mr-1" />}
-                  Générer le contrat
+                  {t('pub.contrats.generate_contract', locale)}
                 </Button>
               ) : step !== 'preview' ? (
                 <Button onClick={() => setStep(STEPS[currentIdx + 1].id)} style={{ backgroundColor: NAVY, color: GOLD }}>
-                  Suivant <ChevronRight className="w-4 h-4 ml-1" />
+                  {t('pub.contrats.next', locale)} <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               ) : null}
             </div>
