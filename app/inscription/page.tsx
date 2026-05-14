@@ -40,6 +40,7 @@ import { LexoraLogo } from "@/components/LexoraLogo"
 import { ParticleField } from "@/components/ParticleField"
 import { FadeSlide, PressableWrap } from "@/components/ui/motion"
 import { Button } from "@/components/ui/button"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 type Role = "expert" | "entreprise" | "unknown"
 

@@ -866,7 +866,7 @@ export default function SocietesPage() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            title="Lier un client"
+                            title={t('adm.socs.tooltip_link', locale)}
                             onClick={() => {
                               setLinkSociete(s)
                               setLinkClientId("")
@@ -879,7 +879,7 @@ export default function SocietesPage() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            title="Modifier"
+                            title={t('adm.socs.tooltip_edit', locale)}
                             onClick={() => openEditDialog(s)}
                           >
                             <Pencil className="h-4 w-4" />
@@ -889,7 +889,7 @@ export default function SocietesPage() {
                             variant="ghost"
                             size="icon-sm"
                             className="text-destructive hover:text-destructive"
-                            title="Supprimer"
+                            title={t('adm.socs.tooltip_delete', locale)}
                             onClick={() => openDeleteDialog(s)}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -905,7 +905,7 @@ export default function SocietesPage() {
                       colSpan={7}
                       className="text-center py-8 text-muted-foreground"
                     >
-                      Aucune societe trouvee.
+                      {t('adm.socs.no_found', locale)}
                     </TableCell>
                   </TableRow>
                 )}

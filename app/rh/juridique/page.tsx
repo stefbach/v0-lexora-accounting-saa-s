@@ -601,16 +601,16 @@ export default function JuridiquePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
-                🔍 Vérification de conformité (WRA 2019)
+                {t('rha.b.jur.verify_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label>Collez le texte ou HTML du contrat à analyser</Label>
+                <Label>{t('rha.b.jur.verify_lbl', locale)}</Label>
                 <Textarea
                   value={verifyText}
                   onChange={e => setVerifyText(e.target.value)}
-                  placeholder="Collez ici le contenu du contrat..."
+                  placeholder={t('rha.b.jur.verify_ph', locale)}
                   rows={10}
                   className="mt-1 font-mono text-xs"
                 />
@@ -620,12 +620,12 @@ export default function JuridiquePage() {
                 disabled={verifying || !verifyText.trim()}
                 className="bg-[#0B0F2E] text-white"
               >
-                {verifying ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Analyse en cours...</> : "🔍 Analyser avec IA"}
+                {verifying ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />{t('rha.b.jur.btn_analyzing', locale)}</> : t('rha.b.jur.btn_analyze_ai', locale)}
               </Button>
 
               {verifyResult && (
                 <div className="space-y-2 mt-4">
-                  <p className="text-sm font-semibold text-[#0B0F2E]">Résultats de conformité</p>
+                  <p className="text-sm font-semibold text-[#0B0F2E]">{t('rha.b.jur.compliance_results', locale)}</p>
                   <div className="space-y-1.5">
                     {verifyResult.map((point: any, i: number) => {
                       const isOk = point.statut === "ok" || point.texte?.startsWith("✅")

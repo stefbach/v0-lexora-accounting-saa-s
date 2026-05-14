@@ -436,10 +436,10 @@ export default function TVAPage() {
                       </TableCell>
                       <TableCell className={`text-right text-sm font-mono font-bold ${r.tva_nette >= 0 ? "text-red-600" : "text-green-600"}`}>
                         {fmt(Math.abs(r.tva_nette))}
-                        <span className="text-xs ml-1 text-gray-400">{r.tva_nette >= 0 ? "dû" : "crédit"}</span>
+                        <span className="text-xs ml-1 text-gray-400">{r.tva_nette >= 0 ? t('cab.tva.due', locale) : t('cab.tva.credit', locale)}</span>
                       </TableCell>
                       <TableCell className={`text-sm ${isLate ? "text-red-600 font-semibold" : ""}`}>
-                        {r.date_limite ? new Date(r.date_limite).toLocaleDateString("fr-FR") : "—"}
+                        {r.date_limite ? new Date(r.date_limite).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR') : "—"}
                       </TableCell>
                       <TableCell>{statutBadge(r.statut_declaration, r.date_limite, locale)}</TableCell>
                       <TableCell className="text-right text-sm font-mono text-orange-600">
