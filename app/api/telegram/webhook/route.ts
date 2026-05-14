@@ -8,6 +8,7 @@ import {
   editMessageText,
 } from '@/lib/telegram/auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { ingestTelegramDocument } from '@/lib/telegram/document-ingest'
 
 /**
  * POST /api/telegram/webhook
@@ -87,6 +88,13 @@ export async function POST(req: NextRequest) {
     await sendTelegramMessage(chatId,
       'Aucune société active. Tape <code>/societe</code> pour en choisir une.')
     return NextResponse.json({ ok: true })
+  }
+
+  // --- Document / photo → ingestion OCR ----------------------------------------
+  const tgDoc = update.message?.document
+  const tgPhoto = update.message?.photo // array of PhotoSize
+  if (tgDoc || tgPhoto) {
+    return await handleDocumentMessage(chatId, ctx.user_id, ctx.current_societe_id, tgDoc, tgPhoto, update.message?.caption)
   }
 
   // Résout le rôle de l'utilisateur dans la société active (pour propagation à n8n)
@@ -390,6 +398,75 @@ async function handleCallbackQuery(cb: any) {
     })
   }
 
+  return NextResponse.json({ ok: true })
+}
+
+/**
+ * Gère un message contenant un document ou une photo.
+ *
+ * - `document` : meilleur cas — on a file_id + file_name + mime_type
+ * - `photo`    : on prend la plus grande taille (dernier élément de l'array)
+ *   et on déduit l'extension PNG/JPG depuis le mime renvoyé par getFile
+ */
+async function handleDocumentMessage(
+  chatId: number,
+  userId: string,
+  societeId: string,
+  tgDoc: any | undefined,
+  tgPhoto: any[] | undefined,
+  caption: string | undefined,
+) {
+  let file_id: string | null = null
+  let file_name: string | undefined
+  let mime_type: string | undefined
+  let declared_size: number | undefined
+
+  if (tgDoc) {
+    file_id = tgDoc.file_id
+    file_name = tgDoc.file_name
+    mime_type = tgDoc.mime_type
+    declared_size = tgDoc.file_size
+  } else if (tgPhoto && tgPhoto.length > 0) {
+    const largest = tgPhoto[tgPhoto.length - 1]
+    file_id = largest.file_id
+    file_name = caption ? `${caption.replace(/[^a-zA-Z0-9._-]/g, '_')}.jpg` : `photo_${Date.now()}.jpg`
+    mime_type = 'image/jpeg'
+    declared_size = largest.file_size
+  }
+
+  if (!file_id) {
+    await sendTelegramMessage(chatId, '⚠️ Document non reconnu.')
+    return NextResponse.json({ ok: true })
+  }
+
+  await sendTelegramMessage(chatId, '📥 Réception du document…')
+
+  const r = await ingestTelegramDocument({
+    chat_id: chatId,
+    user_id: userId,
+    societe_id: societeId,
+    file_id,
+    file_name,
+    mime_type,
+    declared_size,
+  })
+
+  if (!r.ok) {
+    await sendTelegramMessage(chatId, `⚠️ ${r.error}`)
+    await logAction({
+      chat_id: chatId, user_id: userId, societe_id: societeId,
+      intent: 'document.ingest', status: 'error', error_msg: r.error,
+    })
+    return NextResponse.json({ ok: true })
+  }
+
+  const tailleKo = Math.round(r.taille / 1024)
+  await sendTelegramMessage(
+    chatId,
+    `✅ <b>Document reçu</b>\n` +
+    `📄 ${r.nom_fichier} (${tailleKo} Ko, ${r.type_fichier.toUpperCase()})\n\n` +
+    `🤖 Traitement OCR en attente. Tu retrouveras le document dans <b>Lexora → Documents</b>.`,
+  )
   return NextResponse.json({ ok: true })
 }
 
