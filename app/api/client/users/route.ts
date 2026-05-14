@@ -395,11 +395,24 @@ export async function PATCH(request: NextRequest) {
     if (error) {
       console.error('[PATCH] profile update error:', error.message)
       if (/profiles_role_check|user_societes_role_check|violates check constraint/i.test(error.message)) {
-        return NextResponse.json({
-          error: `Le rôle "${role}" n'est pas autorisé par la base de données. Si vous venez d'ajouter "team_leader", lancez la migration supabase/migrations/261_team_leader_role.sql dans Supabase Studio.`,
-        }, { status: 400 })
+        // Auto-fix : tente de mettre à jour le CHECK constraint puis retry
+        const fixed = await tryAutoFixRoleConstraint(supabase)
+        if (fixed) {
+          const { error: retryError } = await supabase.from('profiles').update(updates).eq('id', user_id)
+          if (retryError) {
+            return NextResponse.json({
+              error: `Auto-fix appliqué mais retry PATCH échoue : ${retryError.message}`,
+            }, { status: 500 })
+          }
+          console.log('[PATCH] Auto-fix role constraint OK, profile mis à jour après retry')
+        } else {
+          return NextResponse.json({
+            error: `Le rôle "${role}" n'est pas autorisé par la base. Lance manuellement supabase/migrations/261_team_leader_role.sql dans Supabase Studio (ou POST /api/admin/fix-db en admin).`,
+          }, { status: 400 })
+        }
+      } else {
+        return NextResponse.json({ error: error.message }, { status: 500 })
       }
-      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     if (societe_ids && Array.isArray(societe_ids) && societe_ids.length > 0) {
