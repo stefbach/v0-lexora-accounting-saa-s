@@ -98,15 +98,28 @@ export async function POST(req: NextRequest) {
     return await handleDocumentMessage(chatId, ctx.user_id, ctx.current_societe_id, tgDoc, tgPhoto, update.message?.caption)
   }
 
-  // Résout le rôle de l'utilisateur dans la société active (pour propagation à n8n)
+  // Résout le rôle + capabilities + nom société (pour propagation à n8n).
+  // Permet à l'agent d'utiliser des labels lisibles dans le welcome message.
   const admin = getAdminClient()
-  const { data: usRow } = await admin
-    .from('user_societes')
-    .select('role')
-    .eq('user_id', ctx.user_id)
-    .eq('societe_id', ctx.current_societe_id)
-    .maybeSingle()
-  const role = usRow?.role || 'employe'
+  const [{ data: usRow }, { data: socRow }] = await Promise.all([
+    admin
+      .from('user_societes')
+      .select('role, telegram_capabilities')
+      .eq('user_id', ctx.user_id)
+      .eq('societe_id', ctx.current_societe_id)
+      .maybeSingle(),
+    admin
+      .from('societes')
+      .select('id, nom, brn')
+      .eq('id', ctx.current_societe_id)
+      .maybeSingle(),
+  ])
+  const role = (usRow?.role || 'employe') as keyof typeof ROLE_LABELS
+  const capabilities = Array.isArray(usRow?.telegram_capabilities)
+    ? (usRow!.telegram_capabilities as string[])
+    : defaultCapabilitiesForRole(role)
+  const societeName = socRow?.nom || 'votre société'
+  const roleLabel = ROLE_LABELS[role] || role
 
   // --- Forward to n8n AI Agent webhook -----------------------------------------
   const N8N_AGENT_WEBHOOK = process.env.N8N_TELEGRAM_AGENT_WEBHOOK
@@ -137,7 +150,10 @@ export async function POST(req: NextRequest) {
         chat_id: chatId,
         user_id: ctx.user_id,
         societe_id: ctx.current_societe_id,
+        societe_name: societeName,
         role,
+        role_label: roleLabel,
+        capabilities,
         locale: ctx.language_code,
         first_name: ctx.telegram_firstname,
         message: update.message,
@@ -519,4 +535,45 @@ function buildHelp() {
     '<code>/logout</code> — me déconnecter',
     '<code>/help</code> — ce message',
   ].join('\n')
+}
+
+// Référentiel rôles (synchro avec lib/telegram/internal-auth.ts et l'UI)
+const ROLE_LABELS = {
+  employe: 'Employé',
+  manager: 'Manager',
+  rh: 'RH',
+  comptable: 'Comptable',
+  comptable_dedie: 'Comptable dédié',
+  direction: 'Direction',
+  client_admin: 'Dirigeant client',
+  admin: 'Administrateur',
+  super_admin: 'Super Admin',
+} as const
+
+function defaultCapabilitiesForRole(role: string): string[] {
+  const base = ['view_help', 'switch_societe', 'logout']
+  switch (role) {
+    case 'employe':
+      return [...base, 'view_my_payslip', 'view_my_leave_balance', 'request_leave']
+    case 'manager':
+      return [...base, 'view_my_payslip', 'view_my_leave_balance', 'request_leave',
+              'view_team_kpis', 'approve_team_leave', 'view_team_pending']
+    case 'rh':
+      return [...base, 'view_my_payslip', 'view_team_kpis', 'add_ot', 'add_bonus',
+              'compute_payroll', 'export_mra', 'view_employees', 'manage_leave_settings']
+    case 'comptable':
+    case 'comptable_dedie':
+      return [...base, 'view_kpis', 'view_bank', 'create_invoice', 'view_tax_calendar',
+              'export_mra', 'reconcile_bank', 'view_audit_log']
+    case 'direction':
+    case 'client_admin':
+      return [...base, 'view_kpis', 'view_bank', 'view_tax_calendar', 'create_invoice',
+              'compute_payroll', 'approve_payroll', 'export_mra', 'approve_team_leave',
+              'view_audit_log', 'manage_alerts_config']
+    case 'admin':
+    case 'super_admin':
+      return ['ALL']
+    default:
+      return base
+  }
 }
