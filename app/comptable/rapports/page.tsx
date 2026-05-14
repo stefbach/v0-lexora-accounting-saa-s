@@ -12,14 +12,14 @@ import { Loader2, Plus, Package, TrendingDown, AlertCircle, Download } from "luc
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale } from "@/lib/i18n"
 
-const CATEGORIES = [
-  { value: "materiel_informatique", label: "Matériel informatique (50%)" },
-  { value: "logiciel", label: "Logiciel (50%)" },
-  { value: "vehicule", label: "Véhicule (25%)" },
-  { value: "mobilier", label: "Mobilier / Fixtures (20%)" },
-  { value: "equipement", label: "Équipement (20%)" },
-  { value: "immobilier", label: "Immobilier (5%)" },
-  { value: "autre", label: "Autre (20%)" },
+const getCategories = (locale: 'fr' | 'en') => [
+  { value: "materiel_informatique", label: t('cab.rapports.cat_it_hardware', locale) },
+  { value: "logiciel", label: t('cab.rapports.cat_software', locale) },
+  { value: "vehicule", label: t('cab.rapports.cat_vehicle', locale) },
+  { value: "mobilier", label: t('cab.rapports.cat_furniture', locale) },
+  { value: "equipement", label: t('cab.rapports.cat_equipment', locale) },
+  { value: "immobilier", label: t('cab.rapports.cat_real_estate', locale) },
+  { value: "autre", label: t('cab.rapports.cat_other', locale) },
 ]
 
 const TAUX_DEFAUT: Record<string, number> = {
@@ -43,6 +43,7 @@ function fmt(n: number) {
 
 export default function ImmobilisationsPage() {
   const locale = getLocale()
+  const CATEGORIES = getCategories(locale)
   const [immobilisations, setImmobilisations] = useState<Immo[]>([])
   const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
@@ -80,7 +81,7 @@ export default function ImmobilisationsPage() {
 
   const handleCreate = async () => {
     if (!form.societe_id || !form.designation || !form.date_acquisition || !form.cout_acquisition) {
-      setError("Champs requis manquants"); return
+      setError(t('cab.rapports.err_missing_fields', locale)); return
     }
     setSaving(true); setError(null)
     try {

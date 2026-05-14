@@ -768,7 +768,7 @@ export default function ExportPaiePage() {
                               <div className="font-medium">{emp.prenom} {emp.nom}</div>
                               {emp.poste && <div className="text-xs text-gray-400">{emp.poste}</div>}
                             </td>
-                            <td className="px-4 py-3 text-gray-600 text-xs">{emp.bank_name || <span className="text-orange-500">Non renseigne</span>}</td>
+                            <td className="px-4 py-3 text-gray-600 text-xs">{emp.bank_name || <span className="text-orange-500">{t('rha.b.expaie.bank_missing', locale)}</span>}</td>
                             <td className="px-4 py-3 font-mono text-xs text-gray-600">{emp.bank_account || <span className="text-orange-500">--</span>}</td>
                             <td className="px-4 py-3 text-center">
                               <select
@@ -777,9 +777,9 @@ export default function ExportPaiePage() {
                                 className="text-xs border rounded px-2 py-1 bg-white"
                                 style={{ color: emp.mode_paiement === "especes" ? "#dc2626" : emp.mode_paiement === "individuel" ? "#ea580c" : "#059669" }}
                               >
-                                <option value="bulk">Bulk MCB</option>
-                                <option value="individuel">Individuel</option>
-                                <option value="especes">Espèces</option>
+                                <option value="bulk">{t('rha.b.expaie.mode_bulk', locale)}</option>
+                                <option value="individuel">{t('rha.b.expaie.mode_indiv', locale)}</option>
+                                <option value="especes">{t('rha.b.expaie.mode_cash', locale)}</option>
                               </select>
                             </td>
                             <td className="px-4 py-3 text-center">
@@ -794,15 +794,15 @@ export default function ExportPaiePage() {
                             <td className="px-4 py-3 text-center">
                               {!b ? (
                                 <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[11px]">
-                                  <AlertTriangle className="w-3 h-3 mr-1" />Pas de bulletin
+                                  <AlertTriangle className="w-3 h-3 mr-1" />{t('rha.b.expaie.no_bulletin', locale)}
                                 </Badge>
                               ) : statut === "valide" || statut === "paye" ? (
                                 <Badge variant="outline" className="text-green-700 border-green-200 bg-green-50 text-[11px]">
-                                  <CheckCircle className="w-3 h-3 mr-1" />{statut === "paye" ? "Paye" : "Valide"}
+                                  <CheckCircle className="w-3 h-3 mr-1" />{statut === "paye" ? t('rha.b.expaie.status_paid', locale) : t('rha.b.expaie.status_valid', locale)}
                                 </Badge>
                               ) : (
                                 <Badge variant="outline" className="text-gray-500 border-gray-200 bg-gray-50 text-[11px]">
-                                  {statut || "Brouillon"}
+                                  {statut || t('rha.b.expaie.status_draft', locale)}
                                 </Badge>
                               )}
                             </td>
@@ -843,7 +843,7 @@ export default function ExportPaiePage() {
                     ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     : <Download className="h-4 w-4 mr-2" />
                   }
-                  Télécharger PACO MRA (.csv)
+                  {t('rha.b.expaie.btn_dl_paco', locale)}
                 </Button>
                 <StatusBadge status={pacoStatus} />
               </div>

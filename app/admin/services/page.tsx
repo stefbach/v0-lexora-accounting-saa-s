@@ -597,20 +597,20 @@ export default function AdminServicesPage() {
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
                           <div>
                             <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{ps.nom}</p>
-                            <p className="text-xs text-muted-foreground">{ps.count} societe(s)</p>
+                            <p className="text-xs text-muted-foreground">{ps.count} {t('adm.services.societe_suffix', locale)}</p>
                           </div>
                         </div>
                         <span className="font-semibold text-sm" style={{ color: "#0B0F2E" }}>
-                          {revenue > 0 ? `Rs ${revenue.toLocaleString("fr-FR")}` : "Sur devis"}
+                          {revenue > 0 ? `Rs ${revenue.toLocaleString(locale === 'fr' ? "fr-FR" : "en-GB")}` : t('adm.services.on_quote', locale)}
                         </span>
                       </div>
                     )
                   })}
                   <div className="pt-3 border-t">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium" style={{ color: "#0B0F2E" }}>Total mensuel estimatif</span>
+                      <span className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{t('adm.services.total_monthly', locale)}</span>
                       <span className="font-bold" style={{ color: "#D4AF37" }}>
-                        Rs {planStats.reduce((sum, ps) => sum + ps.count * (Number(ps.prix_mensuel) || 0), 0).toLocaleString("fr-FR")}
+                        Rs {planStats.reduce((sum, ps) => sum + ps.count * (Number(ps.prix_mensuel) || 0), 0).toLocaleString(locale === 'fr' ? "fr-FR" : "en-GB")}
                       </span>
                     </div>
                   </div>
