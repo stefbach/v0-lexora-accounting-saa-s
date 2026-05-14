@@ -698,41 +698,41 @@ function RhTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Temps de travail</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.rh_temps_travail', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Heures par semaine" name="heures_semaine" type="number" step="0.5" defaultValue={data.heures_semaine ?? 45} onChange={u} />
-            <Field label="Jours travaillés / semaine" name="jours_travail_semaine" type="number" defaultValue={data.jours_travail_semaine ?? 5} onChange={u} />
+            <Field label={t('rha.a.soc.rh_heures_sem', locale)} name="heures_semaine" type="number" step="0.5" defaultValue={data.heures_semaine ?? 45} onChange={u} />
+            <Field label={t('rha.a.soc.rh_jours_sem', locale)} name="jours_travail_semaine" type="number" defaultValue={data.jours_travail_semaine ?? 5} onChange={u} />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Politique de congés</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.rh_pol_conges', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Congés annuels (jours / an)" name="conges_annuels_jours" type="number" defaultValue={data.conges_annuels_jours ?? 20} onChange={u} />
-            <Field label="Congés maladie (jours / an)" name="conges_maladie_jours" type="number" defaultValue={data.conges_maladie_jours ?? 15} onChange={u} />
+            <Field label={t('rha.a.soc.rh_conges_an', locale)} name="conges_annuels_jours" type="number" defaultValue={data.conges_annuels_jours ?? 20} onChange={u} />
+            <Field label={t('rha.a.soc.rh_conges_mal', locale)} name="conges_maladie_jours" type="number" defaultValue={data.conges_maladie_jours ?? 15} onChange={u} />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Heures supplémentaires</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.rh_heures_sup', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Taux normal (× salaire horaire)" name="ot_taux_normal" type="number" step="0.1" defaultValue={data.ot_taux_normal ?? 1.5} onChange={u} />
-            <Field label="Taux majoré (jours fériés / nuit)" name="ot_taux_majore" type="number" step="0.1" defaultValue={data.ot_taux_majore ?? 2.0} onChange={u} />
+            <Field label={t('rha.a.soc.rh_taux_normal', locale)} name="ot_taux_normal" type="number" step="0.1" defaultValue={data.ot_taux_normal ?? 1.5} onChange={u} />
+            <Field label={t('rha.a.soc.rh_taux_majore', locale)} name="ot_taux_majore" type="number" step="0.1" defaultValue={data.ot_taux_majore ?? 2.0} onChange={u} />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Paie</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.rh_paie', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Jour de clôture du mois</Label>
+              <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.rh_jour_cloture', locale)}</Label>
               <Select defaultValue={String(data.period_closing_day ?? 24)} onValueChange={uSelect("period_closing_day")}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -743,7 +743,7 @@ function RhTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; 
               </Select>
             </div>
             <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Jour de paiement</Label>
+              <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.rh_jour_paie', locale)}</Label>
               <Select defaultValue={String(data.pay_day ?? 28)} onValueChange={uSelect("pay_day")}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -758,27 +758,27 @@ function RhTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; 
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Calcul du salaire</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.rh_calcul_sal', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Fréquence</Label>
+              <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.rh_freq', locale)}</Label>
               <Select defaultValue={data.salary_frequency ?? "monthly"} onValueChange={uSelect("salary_frequency")}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="monthly">Mensuel</SelectItem>
-                  <SelectItem value="fortnightly">Bimensuel</SelectItem>
-                  <SelectItem value="weekly">Hebdomadaire</SelectItem>
+                  <SelectItem value="monthly">{t('rha.a.soc.rh_freq_monthly', locale)}</SelectItem>
+                  <SelectItem value="fortnightly">{t('rha.a.soc.rh_freq_fortnight', locale)}</SelectItem>
+                  <SelectItem value="weekly">{t('rha.a.soc.rh_freq_weekly', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs text-gray-600 mb-1 block">EOY Bonus (13ème mois)</Label>
+              <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.rh_eoy', locale)}</Label>
               <Select defaultValue={data.eoy_bonus_mode ?? "separated"} onValueChange={uSelect("eoy_bonus_mode")}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="separated">Bulletin séparé</SelectItem>
-                  <SelectItem value="included">Inclus dans le bulletin</SelectItem>
+                  <SelectItem value="separated">{t('rha.a.soc.rh_eoy_separated', locale)}</SelectItem>
+                  <SelectItem value="included">{t('rha.a.soc.rh_eoy_included', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -787,31 +787,31 @@ function RhTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; 
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Bulletin de paie</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.rh_bulletin', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Template</Label>
+              <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.rh_template', locale)}</Label>
               <Select defaultValue={data.payslip_template ?? "basic"} onValueChange={uSelect("payslip_template")}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="detailed">Détaillé</SelectItem>
+                  <SelectItem value="basic">{t('rha.a.soc.rh_template_basic', locale)}</SelectItem>
+                  <SelectItem value="detailed">{t('rha.a.soc.rh_template_detailed', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Langue d'impression</Label>
+              <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.rh_lang', locale)}</Label>
               <Select defaultValue={data.payslip_language ?? "fr"} onValueChange={uSelect("payslip_language")}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="fr">Français</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="fr">{t('rha.a.soc.rh_lang_fr', locale)}</SelectItem>
+                  <SelectItem value="en">{t('rha.a.soc.rh_lang_en', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Déclaration MRA</Label>
+              <Label className="text-xs text-gray-600 mb-1 block">{t('rha.a.soc.rh_decl_mra', locale)}</Label>
               <Select defaultValue={data.declaration_type ?? "MRA_PACO"} onValueChange={uSelect("declaration_type")}>
                 <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -825,7 +825,7 @@ function RhTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; 
       </div>
 
       <Button onClick={() => onSave(f.current)} style={{ backgroundColor: NAVY }} className="text-white hover:opacity-90">
-        <Save className="h-4 w-4 mr-2" /> Enregistrer les paramètres RH
+        <Save className="h-4 w-4 mr-2" /> {t('rha.a.soc.btn_save_rh', locale)}
       </Button>
     </div>
   )
@@ -833,12 +833,13 @@ function RhTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void; 
 
 // ── FISCAL PARAMETERS TAB ──────────────────────────────────────────────────────
 function FiscalTab({
-  data, params, year, onSave,
+  data, params, year, onSave, locale,
 }: {
   data: any
   params: any
   year: number
   onSave: (societeData: any, paramsData: any) => void
+  locale: Locale
 }) {
   const fSociete = useRef({ ...data })
   const fParams = useRef({ annee: year, ...(params ?? {}) })
@@ -852,7 +853,7 @@ function FiscalTab({
       <div className="flex items-center gap-2 p-3 rounded-lg" style={{ backgroundColor: `${NAVY}10` }}>
         <Scale className="h-4 w-4" style={{ color: NAVY }} />
         <span className="text-sm font-medium" style={{ color: NAVY }}>
-          Paramètres fiscaux — Exercice {year} (Finance Act Mauritius)
+          {t('rha.a.soc.fiscal_banner', locale).replace('{year}', String(year))}
         </span>
       </div>
 
@@ -860,83 +861,81 @@ function FiscalTab({
         {/* CSG */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">CSG — Contribution Sociale Généralisée</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.fiscal_csg', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Seuil taux réduit (MUR / mois)" name="csg_seuil_taux_reduit" type="number" defaultValue={p.csg_seuil_taux_reduit ?? 50000} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_csg_seuil', locale)} name="csg_seuil_taux_reduit" type="number" defaultValue={p.csg_seuil_taux_reduit ?? 50000} onChange={uP} />
             <Separator />
-            <p className="text-xs font-medium text-gray-500 uppercase">Salarié</p>
-            <Field label="Taux réduit salarié (%)" name="csg_salarie_taux_reduit" type="number" step="0.01" defaultValue={p.csg_salarie_taux_reduit ?? 1.5} onChange={uP} />
-            <Field label="Taux plein salarié (%)" name="csg_salarie_taux_plein" type="number" step="0.01" defaultValue={p.csg_salarie_taux_plein ?? 3} onChange={uP} />
+            <p className="text-xs font-medium text-gray-500 uppercase">{t('rha.a.soc.fiscal_salarie', locale)}</p>
+            <Field label={t('rha.a.soc.fiscal_csg_sal_red', locale)} name="csg_salarie_taux_reduit" type="number" step="0.01" defaultValue={p.csg_salarie_taux_reduit ?? 1.5} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_csg_sal_plein', locale)} name="csg_salarie_taux_plein" type="number" step="0.01" defaultValue={p.csg_salarie_taux_plein ?? 3} onChange={uP} />
             <Separator />
-            <p className="text-xs font-medium text-gray-500 uppercase">Patronal</p>
-            <Field label="Taux patronal (%)" name="csg_patronal" type="number" step="0.01" defaultValue={p.csg_patronal ?? 6} onChange={uP} />
-            <Field label="Taux patronal réduit (%)" name="csg_patronal_taux_reduit" type="number" step="0.01" defaultValue={p.csg_patronal_taux_reduit ?? 3} onChange={uP} />
+            <p className="text-xs font-medium text-gray-500 uppercase">{t('rha.a.soc.fiscal_patronal', locale)}</p>
+            <Field label={t('rha.a.soc.fiscal_csg_pat', locale)} name="csg_patronal" type="number" step="0.01" defaultValue={p.csg_patronal ?? 6} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_csg_pat_red', locale)} name="csg_patronal_taux_reduit" type="number" step="0.01" defaultValue={p.csg_patronal_taux_reduit ?? 3} onChange={uP} />
           </CardContent>
         </Card>
 
         {/* NSF */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">NSF — National Savings Fund</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.fiscal_nsf', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Taux salarié NSF (%)" name="nsf_salarie" type="number" step="0.01" defaultValue={p.nsf_salarie ?? 1} onChange={uP} />
-            <Field label="Taux patronal NSF (%)" name="nsf_patronal" type="number" step="0.01" defaultValue={p.nsf_patronal ?? 2.5} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_nsf_sal', locale)} name="nsf_salarie" type="number" step="0.01" defaultValue={p.nsf_salarie ?? 1} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_nsf_pat', locale)} name="nsf_patronal" type="number" step="0.01" defaultValue={p.nsf_patronal ?? 2.5} onChange={uP} />
           </CardContent>
         </Card>
 
         {/* PAYE */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">PAYE — Income Tax</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.fiscal_paye', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Seuil d'exonération (MUR / an)" name="paye_seuil_exoneration" type="number" defaultValue={p.paye_seuil_exoneration ?? 390000} onChange={uP} />
-            <Field label="Taux 1 (%)" name="paye_taux_1" type="number" step="0.1" defaultValue={p.paye_taux_1 ?? 15} onChange={uP} />
-            <Field label="Seuil taux 2 (MUR / an)" name="paye_seuil_taux_2" type="number" defaultValue={p.paye_seuil_taux_2 ?? 650000} onChange={uP} />
-            <Field label="Taux 2 (%)" name="paye_taux_2" type="number" step="0.1" defaultValue={p.paye_taux_2 ?? 20} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_paye_seuil', locale)} name="paye_seuil_exoneration" type="number" defaultValue={p.paye_seuil_exoneration ?? 390000} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_paye_t1', locale)} name="paye_taux_1" type="number" step="0.1" defaultValue={p.paye_taux_1 ?? 15} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_paye_seuil_t2', locale)} name="paye_seuil_taux_2" type="number" defaultValue={p.paye_seuil_taux_2 ?? 650000} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_paye_t2', locale)} name="paye_taux_2" type="number" step="0.1" defaultValue={p.paye_taux_2 ?? 20} onChange={uP} />
           </CardContent>
         </Card>
 
         {/* Training Levy & PRGF */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Training Levy & PRGF</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.fiscal_training', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Training Levy (%)" name="training_levy" type="number" step="0.01" defaultValue={p.training_levy ?? 1} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_training_lvl', locale)} name="training_levy" type="number" step="0.01" defaultValue={p.training_levy ?? 1} onChange={uP} />
             <Separator />
-            <p className="text-xs font-medium text-gray-500 uppercase">PRGF — Portable Retirement Gratuity Fund</p>
-            <Field label="PRGF patronal par jour (MUR)" name="prgf_patronal_par_jour" type="number" step="0.01" defaultValue={p.prgf_patronal_par_jour ?? 2} onChange={uP} />
-            <Field label="PRGF taux émoluments (%)" name="prgf_taux_emoluments" type="number" step="0.01" defaultValue={p.prgf_taux_emoluments ?? 0} onChange={uP} />
+            <p className="text-xs font-medium text-gray-500 uppercase">{t('rha.a.soc.fiscal_prgf_block', locale)}</p>
+            <Field label={t('rha.a.soc.fiscal_prgf_jour', locale)} name="prgf_patronal_par_jour" type="number" step="0.01" defaultValue={p.prgf_patronal_par_jour ?? 2} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_prgf_emol', locale)} name="prgf_taux_emoluments" type="number" step="0.01" defaultValue={p.prgf_taux_emoluments ?? 0} onChange={uP} />
           </CardContent>
         </Card>
 
         {/* Salaire minimum */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Salaire minimum & compensation</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.fiscal_min', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Salaire minimum légal (MUR)" name="salaire_minimum" type="number" defaultValue={p.salaire_minimum ?? 16500} onChange={uP} />
-            <Field label="Salaire minimum national (MUR)" name="salaire_minimum_national" type="number" defaultValue={p.salaire_minimum_national ?? 16500} onChange={uP} />
-            {/* POLICY Lexora — compensation salariale Finance Act 2024 considérée
-                incluse dans le salaire négocié. Champs retirés du paramétrage. */}
+            <Field label={t('rha.a.soc.fiscal_min_legal', locale)} name="salaire_minimum" type="number" defaultValue={p.salaire_minimum ?? 16500} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_min_nat', locale)} name="salaire_minimum_national" type="number" defaultValue={p.salaire_minimum_national ?? 16500} onChange={uP} />
           </CardContent>
         </Card>
 
         {/* Congés légaux */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Congés légaux</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t('rha.a.soc.fiscal_conges', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Congés annuels — moins de 5 ans (jours)" name="conges_annuels_moins_5ans" type="number" defaultValue={p.conges_annuels_moins_5ans ?? 15} onChange={uP} />
-            <Field label="Congés annuels — plus de 5 ans (jours)" name="conges_annuels_plus_5ans" type="number" defaultValue={p.conges_annuels_plus_5ans ?? 20} onChange={uP} />
-            <Field label="Congés maladie (jours / an)" name="conges_maladie_annuels" type="number" defaultValue={p.conges_maladie_annuels ?? 15} onChange={uP} />
-            <Field label="Congés maternité (semaines)" name="conges_maternite_semaines" type="number" defaultValue={p.conges_maternite_semaines ?? 16} onChange={uP} />
-            <Field label="Congés paternité (semaines)" name="conges_paternite_semaines" type="number" defaultValue={p.conges_paternite_semaines ?? 4} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_conges_5moins', locale)} name="conges_annuels_moins_5ans" type="number" defaultValue={p.conges_annuels_moins_5ans ?? 15} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_conges_5plus', locale)} name="conges_annuels_plus_5ans" type="number" defaultValue={p.conges_annuels_plus_5ans ?? 20} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_conges_mal', locale)} name="conges_maladie_annuels" type="number" defaultValue={p.conges_maladie_annuels ?? 15} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_conges_mat', locale)} name="conges_maternite_semaines" type="number" defaultValue={p.conges_maternite_semaines ?? 16} onChange={uP} />
+            <Field label={t('rha.a.soc.fiscal_conges_pat', locale)} name="conges_paternite_semaines" type="number" defaultValue={p.conges_paternite_semaines ?? 4} onChange={uP} />
           </CardContent>
         </Card>
       </div>
@@ -946,7 +945,7 @@ function FiscalTab({
         style={{ backgroundColor: NAVY }}
         className="text-white hover:opacity-90"
       >
-        <Save className="h-4 w-4 mr-2" /> Enregistrer les paramètres fiscaux
+        <Save className="h-4 w-4 mr-2" /> {t('rha.a.soc.btn_save_fiscal', locale)}
       </Button>
     </div>
   )
@@ -965,7 +964,7 @@ const ACTION_COLORS: Record<string, { bg: string; text: string }> = {
 const ACTION_OPTIONS = ["CREATE", "UPDATE", "DELETE", "VIEW", "EXPORT", "SEND"]
 const ENTITE_OPTIONS = ["employe", "bulletin_paie", "conge", "document", "societe", "planning", "prime", "contrat"]
 
-function AuditTab({ societeId }: { societeId: string }) {
+function AuditTab({ societeId, locale }: { societeId: string; locale: Locale }) {
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -1001,14 +1000,14 @@ function AuditTab({ societeId }: { societeId: string }) {
   useEffect(() => { loadLogs() }, [societeId, page, filterAction, filterEntite, dateFrom, dateTo])
 
   const handleExportCSV = () => {
-    toast.success("Export CSV en cours de développement", {
-      description: "Cette fonctionnalité sera disponible prochainement.",
+    toast.success(t('rha.a.soc.audit_csv_toast_title', locale), {
+      description: t('rha.a.soc.audit_csv_toast_desc', locale),
     })
   }
 
   const formatDate = (d: string) => {
     try {
-      return new Date(d).toLocaleString("fr-FR", {
+      return new Date(d).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR', {
         day: "2-digit", month: "2-digit", year: "numeric",
         hour: "2-digit", minute: "2-digit",
       })
@@ -1016,17 +1015,17 @@ function AuditTab({ societeId }: { societeId: string }) {
   }
 
   const renderDiff = (avant: any, apres: any) => {
-    if (!avant && !apres) return <p className="text-gray-400 text-xs italic">Aucun détail disponible</p>
+    if (!avant && !apres) return <p className="text-gray-400 text-xs italic">{t('rha.a.soc.audit_no_detail', locale)}</p>
     const allKeys = [...new Set([...Object.keys(avant || {}), ...Object.keys(apres || {})])]
     const changedKeys = allKeys.filter(k => JSON.stringify(avant?.[k]) !== JSON.stringify(apres?.[k]))
     if (changedKeys.length === 0 && avant && apres) {
-      return <p className="text-gray-400 text-xs italic">Aucune modification détectée</p>
+      return <p className="text-gray-400 text-xs italic">{t('rha.a.soc.audit_no_change', locale)}</p>
     }
     return (
       <div className="space-y-1.5 text-xs">
         {avant && !apres && (
           <div className="p-2 bg-red-50 rounded border border-red-100">
-            <p className="font-medium text-red-600 mb-1">Valeurs supprimées :</p>
+            <p className="font-medium text-red-600 mb-1">{t('rha.a.soc.audit_deleted_values', locale)}</p>
             <pre className="whitespace-pre-wrap text-red-700 font-mono text-[11px]">
               {JSON.stringify(avant, null, 2)}
             </pre>
@@ -1034,7 +1033,7 @@ function AuditTab({ societeId }: { societeId: string }) {
         )}
         {!avant && apres && (
           <div className="p-2 bg-green-50 rounded border border-green-100">
-            <p className="font-medium text-green-600 mb-1">Valeurs créées :</p>
+            <p className="font-medium text-green-600 mb-1">{t('rha.a.soc.audit_created_values', locale)}</p>
             <pre className="whitespace-pre-wrap text-green-700 font-mono text-[11px]">
               {JSON.stringify(apres, null, 2)}
             </pre>
@@ -1059,36 +1058,36 @@ function AuditTab({ societeId }: { societeId: string }) {
         <CardContent className="pt-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <div>
-              <Label className="text-xs text-gray-500 mb-1 block">Action</Label>
+              <Label className="text-xs text-gray-500 mb-1 block">{t('rha.a.soc.audit_f_action', locale)}</Label>
               <Select value={filterAction} onValueChange={v => { setFilterAction(v === "all" ? "" : v); setPage(1) }}>
-                <SelectTrigger className="h-11"><SelectValue placeholder="Toutes" /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue placeholder={t('rha.a.soc.audit_f_all', locale)} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes</SelectItem>
+                  <SelectItem value="all">{t('rha.a.soc.audit_f_all', locale)}</SelectItem>
                   {ACTION_OPTIONS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs text-gray-500 mb-1 block">Entité</Label>
+              <Label className="text-xs text-gray-500 mb-1 block">{t('rha.a.soc.audit_f_entite', locale)}</Label>
               <Select value={filterEntite} onValueChange={v => { setFilterEntite(v === "all" ? "" : v); setPage(1) }}>
-                <SelectTrigger className="h-11"><SelectValue placeholder="Toutes" /></SelectTrigger>
+                <SelectTrigger className="h-11"><SelectValue placeholder={t('rha.a.soc.audit_f_all', locale)} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes</SelectItem>
+                  <SelectItem value="all">{t('rha.a.soc.audit_f_all', locale)}</SelectItem>
                   {ENTITE_OPTIONS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs text-gray-500 mb-1 block">Du</Label>
+              <Label className="text-xs text-gray-500 mb-1 block">{t('rha.a.soc.audit_f_du', locale)}</Label>
               <Input type="date" className="h-11 text-sm" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} />
             </div>
             <div>
-              <Label className="text-xs text-gray-500 mb-1 block">Au</Label>
+              <Label className="text-xs text-gray-500 mb-1 block">{t('rha.a.soc.audit_f_au', locale)}</Label>
               <Input type="date" className="h-11 text-sm" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }} />
             </div>
             <div className="flex items-end">
               <Button variant="outline" className="h-9 text-sm w-full" onClick={handleExportCSV}>
-                <Download className="h-3.5 w-3.5 mr-1.5" /> Export CSV
+                <Download className="h-3.5 w-3.5 mr-1.5" /> {t('rha.a.soc.audit_btn_csv', locale)}
               </Button>
             </div>
           </div>
@@ -1097,8 +1096,8 @@ function AuditTab({ societeId }: { societeId: string }) {
 
       {/* Results info */}
       <div className="flex items-center justify-between text-sm text-gray-500">
-        <span>{total} entrée{total !== 1 ? "s" : ""} trouvée{total !== 1 ? "s" : ""}</span>
-        {totalPages > 1 && <span>Page {page} / {totalPages}</span>}
+        <span>{t('rha.a.soc.audit_count_found', locale).replace('{n}', String(total))}</span>
+        {totalPages > 1 && <span>{t('rha.a.soc.audit_page_x_y', locale).replace('{x}', String(page)).replace('{y}', String(totalPages))}</span>}
       </div>
 
       {/* Table */}
@@ -1107,22 +1106,22 @@ function AuditTab({ societeId }: { societeId: string }) {
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin" style={{ color: NAVY }} />
-              <span className="ml-2 text-gray-500 text-sm">Chargement…</span>
+              <span className="ml-2 text-gray-500 text-sm">{t('rha.a.soc.audit_loading', locale)}</span>
             </div>
           ) : logs.length === 0 ? (
             <div className="text-center py-12 text-gray-400 text-sm">
-              Aucune entrée dans le journal d'audit
+              {t('rha.a.soc.audit_empty', locale)}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left">
-                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">Date</th>
-                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">Utilisateur</th>
-                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">Action</th>
-                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">Entité</th>
-                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">Détails</th>
+                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">{t('rha.a.soc.audit_col_date', locale)}</th>
+                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">{t('rha.a.soc.audit_col_user', locale)}</th>
+                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">{t('rha.a.soc.audit_col_action', locale)}</th>
+                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">{t('rha.a.soc.audit_col_entite', locale)}</th>
+                    <th className="px-4 py-3 font-medium text-gray-500 text-xs uppercase">{t('rha.a.soc.audit_col_details', locale)}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1148,7 +1147,7 @@ function AuditTab({ societeId }: { societeId: string }) {
                               onClick={() => setExpandedId(isExpanded ? null : log.id)}
                             >
                               <Eye className="h-3 w-3" />
-                              Voir détails
+                              {t('rha.a.soc.audit_btn_view', locale)}
                               {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                             </Button>
                           </td>
@@ -1179,10 +1178,10 @@ function AuditTab({ societeId }: { societeId: string }) {
             disabled={page <= 1}
             onClick={() => setPage(p => p - 1)}
           >
-            Précédent
+            {t('rha.a.soc.audit_btn_prev', locale)}
           </Button>
           <span className="text-sm text-gray-500">
-            Page {page} sur {totalPages}
+            {t('rha.a.soc.audit_page_sur', locale).replace('{x}', String(page)).replace('{y}', String(totalPages))}
           </span>
           <Button
             variant="outline"
@@ -1190,7 +1189,7 @@ function AuditTab({ societeId }: { societeId: string }) {
             disabled={page >= totalPages}
             onClick={() => setPage(p => p + 1)}
           >
-            Suivant
+            {t('rha.a.soc.audit_btn_next', locale)}
           </Button>
         </div>
       )}
@@ -1391,10 +1390,11 @@ export default function SocieteSettingsPage() {
             params={paramsPaie}
             year={currentYear}
             onSave={handleFiscalSave}
+            locale={locale}
           />
         )}
         {tab === "audit" && (
-          <AuditTab key={`audit-${societeId}`} societeId={societeId} />
+          <AuditTab key={`audit-${societeId}`} societeId={societeId} locale={locale} />
         )}
       </div>
     </div>
