@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ChevronRight } from "lucide-react"
 import { HELP_CATEGORIES, getCategory, getArticlesByCategory } from "@/content/help"
+// TODO i18n: server component — labels (Centre d'aide / Aucun article / de lecture) remain FR. Migrate via client wrapper if priority increases.
 
 const FONT = "'Poppins', sans-serif"
 

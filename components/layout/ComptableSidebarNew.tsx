@@ -72,8 +72,8 @@ const CABINET_SECTIONS: NavSection[] = [
       { href: "/comptable", label: "Dashboard", labelKey: "admin.dashboard", icon: LayoutDashboard },
       { href: "/comptable/clients", label: "Mes Clients", labelKey: "comptable.my_clients", icon: Users },
       { href: "/comptable/equipe", label: "Mon Équipe", labelKey: "comptable.my_team", icon: UsersRound },
-      { href: "/comptable/contrats", label: "Contrats clients", icon: FilePen },
-      { href: "/juridique/contrats", label: "Générateur IA (juridique)", icon: Gavel },
+      { href: "/comptable/contrats", label: "Contrats clients", labelKey: "comp.cab_sidebar.client_contracts", icon: FilePen },
+      { href: "/juridique/contrats", label: "Générateur IA (juridique)", labelKey: "comp.cab_sidebar.legal_ai_generator", icon: Gavel },
     ],
   },
 ]
@@ -85,50 +85,56 @@ const CABINET_SECTIONS: NavSection[] = [
 const CLIENT_SECTIONS: NavSection[] = [
   {
     title: "Mon Espace",
+    titleKey: "nav.my_space",
     items: [
-      { href: "/client/tableau-de-bord", label: "Tableau de bord", icon: LayoutDashboard },
-      { href: "/client/documents", label: "Mes Documents", icon: FileText },
+      { href: "/client/tableau-de-bord", label: "Tableau de bord", labelKey: "nav.dashboard", icon: LayoutDashboard },
+      { href: "/client/documents", label: "Mes Documents", labelKey: "comp.cab_sidebar.my_documents", icon: FileText },
     ],
   },
   {
     title: "Facturation",
+    titleKey: "inv.invoicing",
     items: [
-      { href: "/client/factures", label: "Factures (clients & fournisseurs)", icon: FileSpreadsheet },
+      { href: "/client/factures", label: "Factures (clients & fournisseurs)", labelKey: "comp.cab_sidebar.invoices_clients_suppliers", icon: FileSpreadsheet },
     ],
   },
   {
     title: "Comptabilité",
+    titleKey: "acc.accounting",
     items: [
-      { href: "/client/banque", label: "Banque", icon: Landmark },
-      { href: "/client/rapprochement", label: "Rapprochement", icon: CreditCard },
-      { href: "/client/rapprochement-mensuel", label: "Rapprochement mensuel", icon: FileSpreadsheet },
-      { href: "/client/ecritures", label: "Écritures & OD", icon: FilePen },
-      { href: "/client/grand-livre", label: "Grand Livre", icon: BookOpen },
-      { href: "/client/tiers-consolidation", label: "Consolider tiers", icon: UsersRound },
+      { href: "/client/banque", label: "Banque", labelKey: "comp.cab_sidebar.bank", icon: Landmark },
+      { href: "/client/rapprochement", label: "Rapprochement", labelKey: "comp.cab_sidebar.reconciliation", icon: CreditCard },
+      { href: "/client/rapprochement-mensuel", label: "Rapprochement mensuel", labelKey: "comp.cab_sidebar.monthly_reconciliation", icon: FileSpreadsheet },
+      { href: "/client/ecritures", label: "Écritures & OD", labelKey: "comp.cab_sidebar.entries_od", icon: FilePen },
+      { href: "/client/grand-livre", label: "Grand Livre", labelKey: "comp.client_sidebar.general_ledger", icon: BookOpen },
+      { href: "/client/tiers-consolidation", label: "Consolider tiers", labelKey: "comp.cab_sidebar.consolidate_thirdparties", icon: UsersRound },
     ],
   },
   {
     title: "États Financiers",
+    titleKey: "fin.financial_statements",
     items: [
-      { href: "/client/bilan", label: "Bilan & P&L", icon: BookOpen },
-      { href: "/client/echeances", label: "Échéances", icon: CalendarDays },
+      { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
+      { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
     ],
   },
   {
     title: "Fiscal MRA",
+    titleKey: "tax.fiscal_mra",
     items: [
-      { href: "/client/tva", label: "TVA MRA", icon: Receipt },
-      { href: "/client/itform3", label: "IT Form 3 / IS", icon: FileText },
-      { href: "/client/salaires-compta", label: "Salaires — Plan comptable", icon: CreditCard },
+      { href: "/client/tva", label: "TVA MRA", labelKey: "tax.vat", icon: Receipt },
+      { href: "/client/itform3", label: "IT Form 3 / IS", labelKey: "comp.cab_sidebar.itform3_is", icon: FileText },
+      { href: "/client/salaires-compta", label: "Salaires — Plan comptable", labelKey: "comp.cab_sidebar.salaries_chart", icon: CreditCard },
     ],
   },
   {
     title: "RH & Paie",
+    titleKey: "hr.hr_payroll",
     items: [
-      { href: "/rh", label: "Module RH complet", icon: UserCog },
-      { href: "/rh/paie", label: "Bulletins de paie", icon: FileSpreadsheet },
-      { href: "/rh/import-paie", label: "Import paie Excel", icon: Upload },
-      { href: "/rh/paie/exports-mra", label: "Exports MRA", icon: Download },
+      { href: "/rh", label: "Module RH complet", labelKey: "comp.cab_sidebar.full_hr_module", icon: UserCog },
+      { href: "/rh/paie", label: "Bulletins de paie", labelKey: "comp.cab_sidebar.payslips", icon: FileSpreadsheet },
+      { href: "/rh/import-paie", label: "Import paie Excel", labelKey: "comp.cab_sidebar.import_payroll_excel", icon: Upload },
+      { href: "/rh/paie/exports-mra", label: "Exports MRA", labelKey: "rh.exports_mra", icon: Download },
     ],
   },
 ]
@@ -136,19 +142,19 @@ const CLIENT_SECTIONS: NavSection[] = [
 /* ------------------------------------------------------------------ */
 /*  Per-société section (when in /comptable/clients/[id]/[societeId])  */
 /* ------------------------------------------------------------------ */
-function buildSocieteSection(clientId: string, societeId: string, societeName: string): NavSection {
+function buildSocieteSection(clientId: string, societeId: string, societeName: string, locale: 'fr' | 'en'): NavSection {
   const base = `/comptable/clients/${clientId}/${societeId}`
   return {
-    title: societeName || "Société",
+    title: societeName || t('comp.cab_sidebar.company_default', locale),
     items: [
-      { href: `${base}/tableau-de-bord`, label: "Tableau de bord", icon: LayoutDashboard },
-      { href: `${base}/grand-livre`, label: "Grand Livre", icon: BookOpen },
-      { href: `${base}/balance`, label: "Balance", icon: BarChart3 },
-      { href: `${base}/bilan`, label: "Bilan & P&L", icon: FileSpreadsheet },
-      { href: `${base}/it-form3`, label: "IT Form 3", icon: FileText },
-      { href: `${base}/previsionnel`, label: "Prévisionnel", icon: TrendingUp },
-      { href: `${base}/far`, label: "FAR / Amortissements", icon: Target },
-      { href: `${base}/annual-return`, label: "Annual Return", icon: ClipboardList },
+      { href: `${base}/tableau-de-bord`, label: "Tableau de bord", labelKey: "nav.dashboard", icon: LayoutDashboard },
+      { href: `${base}/grand-livre`, label: "Grand Livre", labelKey: "comp.client_sidebar.general_ledger", icon: BookOpen },
+      { href: `${base}/balance`, label: "Balance", labelKey: "comp.cab_sidebar.balance", icon: BarChart3 },
+      { href: `${base}/bilan`, label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: FileSpreadsheet },
+      { href: `${base}/it-form3`, label: "IT Form 3", labelKey: "comp.cab_sidebar.it_form3", icon: FileText },
+      { href: `${base}/previsionnel`, label: "Prévisionnel", labelKey: "fin.forecast", icon: TrendingUp },
+      { href: `${base}/far`, label: "FAR / Amortissements", labelKey: "comp.cab_sidebar.far_amortissements", icon: Target },
+      { href: `${base}/annual-return`, label: "Annual Return", labelKey: "comp.cab_sidebar.annual_return", icon: ClipboardList },
     ],
   }
 }
@@ -191,7 +197,9 @@ export function ComptableSidebarNew() {
   }, [clientId, societeId, hasSociete])
 
   const roleLabel =
-    profile?.role === "comptable_dedie" ? "Assistant Comptable" : "Expert-Comptable"
+    profile?.role === "comptable_dedie"
+      ? t('comp.cab_sidebar.role_assistant', locale)
+      : t('comp.cab_sidebar.role_expert', locale)
 
   // Build sections based on context
   let sections: NavSection[]
@@ -202,7 +210,7 @@ export function ComptableSidebarNew() {
     // In /comptable/clients/[clientId]/[societeId]/*: show cabinet + société sections
     sections = [
       ...CABINET_SECTIONS,
-      buildSocieteSection(clientId, societeId, societeName),
+      buildSocieteSection(clientId, societeId, societeName, locale),
     ]
   } else {
     // Default: just the cabinet
@@ -233,7 +241,7 @@ export function ComptableSidebarNew() {
       {/* Mobile trigger — glassmorphic pill */}
       <button
         onClick={() => setMobileOpen(true)}
-        aria-label="Ouvrir la navigation"
+        aria-label={t('comp.sidebar.open_nav', locale)}
         className="fixed top-4 left-4 z-50 md:hidden inline-flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-lg backdrop-blur"
         style={{
           backgroundColor: "rgba(16,24,71,0.85)",
@@ -273,7 +281,7 @@ export function ComptableSidebarNew() {
         <button
           onClick={() => setMobileOpen(false)}
           className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10"
-          aria-label="Fermer"
+          aria-label={t('comp.sidebar.close', locale)}
         >
           <X className="w-5 h-5" />
         </button>
@@ -332,7 +340,7 @@ export function ComptableSidebarNew() {
             }}
           >
             <ArrowLeft className="w-4 h-4 flex-shrink-0" />
-            <span className="text-xs font-semibold">Retour espace cabinet</span>
+            <span className="text-xs font-semibold">{t('comp.cab_sidebar.back_to_firm', locale)}</span>
           </Link>
         )}
 
@@ -349,7 +357,7 @@ export function ComptableSidebarNew() {
             <span className="text-xs font-semibold truncate" style={{ color: GOLD }}>
               {societeName || societeId}
             </span>
-            <Link href="/comptable/clients" className="ml-auto text-white/40 hover:text-white/80 text-xs whitespace-nowrap">← Tous</Link>
+            <Link href="/comptable/clients" className="ml-auto text-white/40 hover:text-white/80 text-xs whitespace-nowrap">{t('comp.cab_sidebar.all_companies', locale)}</Link>
           </div>
         )}
 
@@ -379,7 +387,7 @@ export function ComptableSidebarNew() {
                           boxShadow: hasActive ? `0 0 4px ${GOLD}` : "none",
                         }}
                       />
-                      <span className="truncate">{section.title}</span>
+                      <span className="truncate">{section.titleKey ? t(section.titleKey, locale) : section.title}</span>
                     </span>
                     {isSectionCollapsed ? <ChevronRight className="w-3 h-3 flex-shrink-0" /> : <ChevronDown className="w-3 h-3 flex-shrink-0" />}
                   </button>
@@ -432,7 +440,7 @@ export function ComptableSidebarNew() {
                             />
                           )}
                           <Icon className="w-4 h-4 flex-shrink-0 relative" />
-                          {!collapsed && <span className="truncate relative">{item.label}</span>}
+                          {!collapsed && <span className="truncate relative">{item.labelKey ? t(item.labelKey, locale) : item.label}</span>}
                         </Link>
                       )
                     })}
@@ -460,7 +468,7 @@ export function ComptableSidebarNew() {
             onClick={() => setCollapsed(!collapsed)}
             className="w-full justify-center text-white/50 hover:bg-white/5 hover:text-white"
           >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="h-4 w-4" /><span className="ml-2">Réduire</span></>}
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="h-4 w-4" /><span className="ml-2">{t('comp.cab_sidebar.collapse_label', locale)}</span></>}
           </Button>
 
           {/* Entrée statique "Mon espace" — harmonisation avec les autres
@@ -476,7 +484,7 @@ export function ComptableSidebarNew() {
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent" }}
           >
             <UserCircle className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>Mon espace</span>}
+            {!collapsed && <span>{t('comp.sidebar.my_space_employee', locale)}</span>}
           </Link>
 
           <Link
@@ -489,7 +497,7 @@ export function ComptableSidebarNew() {
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent" }}
           >
             <Settings className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>Mon Profil</span>}
+            {!collapsed && <span>{t('account.my_profile', locale)}</span>}
           </Link>
 
           <button
@@ -509,7 +517,7 @@ export function ComptableSidebarNew() {
             }}
           >
             <LogOut className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>Déconnexion</span>}
+            {!collapsed && <span>{t('common.logout', locale)}</span>}
           </button>
         </div>
       </aside>

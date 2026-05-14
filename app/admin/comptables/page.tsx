@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 interface Comptable {
   id: string
@@ -37,6 +38,7 @@ interface Assignation {
 }
 
 export default function AdminComptablesPage() {
+  const locale = getLocale()
   const [comptables, setComptables] = useState<Comptable[]>([])
   const [societes, setSocietes] = useState<Societe[]>([])
   const [assignations, setAssignations] = useState<Assignation[]>([])
@@ -125,7 +127,7 @@ export default function AdminComptablesPage() {
       }
       setAllEmployes(empsRes.employes || [])
     } catch (e: any) {
-      setTypeError(`Chargement partiel : ${e?.message || 'réseau'}`)
+      setTypeError(`${t('adm.cabs.partial_load', locale)} : ${e?.message || t('adm.cabs.network_err', locale)}`)
     } finally {
       setTypeLoading(false)
     }
@@ -157,7 +159,7 @@ export default function AdminComptablesPage() {
       // la carte pour l'instant. L'admin peut ouvrir à nouveau pour voir
       // le nouveau type (il sera récupéré via profilRes).
     } catch (e: any) {
-      setTypeError(e?.message || 'Erreur réseau')
+      setTypeError(e?.message || t('adm.cabs.network_err', locale))
     } finally {
       setTypeSaving(false)
     }
@@ -173,9 +175,9 @@ export default function AdminComptablesPage() {
   }
 
   const badgeAcces = (type: string) => {
-    if (type === 'comptable_dedie') return <Badge className="bg-purple-100 text-purple-800">Dédié</Badge>
-    if (type === 'lecture') return <Badge variant="outline">Lecture</Badge>
-    return <Badge className="bg-blue-100 text-blue-800">Comptable</Badge>
+    if (type === 'comptable_dedie') return <Badge className="bg-purple-100 text-purple-800">{t('adm.cabs.badge_dedicated', locale)}</Badge>
+    if (type === 'lecture') return <Badge variant="outline">{t('adm.cabs.badge_read', locale)}</Badge>
+    return <Badge className="bg-blue-100 text-blue-800">{t('adm.cabs.badge_comptable', locale)}</Badge>
   }
 
   // Stats globales
@@ -189,22 +191,22 @@ export default function AdminComptablesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B0F2E]">Gestion des Comptables</h1>
-          <p className="text-sm text-gray-500">Assignation comptable ↔ sociétés</p>
+          <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('adm.cabs.title', locale)}</h1>
+          <p className="text-sm text-gray-500">{t('adm.cabs.subtitle', locale)}</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#0B0F2E]">+ Assigner un comptable</Button>
+            <Button className="bg-[#0B0F2E]">{t('adm.cabs.assign_btn', locale)}</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Assigner un comptable à une société</DialogTitle>
+              <DialogTitle>{t('adm.cabs.assign_dialog_title', locale)}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-2">
               <div>
-                <Label>Comptable</Label>
+                <Label>{t('adm.cabs.comptable', locale)}</Label>
                 <Select value={selectedComptable} onValueChange={setSelectedComptable}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionner un comptable" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('adm.cabs.select_comptable', locale)} /></SelectTrigger>
                   <SelectContent>
                     {comptables.map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.full_name} — {c.email}</SelectItem>
@@ -213,9 +215,9 @@ export default function AdminComptablesPage() {
                 </Select>
               </div>
               <div>
-                <Label>Société</Label>
+                <Label>{t('adm.cabs.societe', locale)}</Label>
                 <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionner une société" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('adm.cabs.select_societe', locale)} /></SelectTrigger>
                   <SelectContent>
                     {societes.map(s => (
                       <SelectItem key={s.id} value={s.id}>{s.nom} {s.brn ? `— ${s.brn}` : ''}</SelectItem>
@@ -224,22 +226,22 @@ export default function AdminComptablesPage() {
                 </Select>
               </div>
               <div>
-                <Label>Type d'accès</Label>
+                <Label>{t('adm.cabs.access_type', locale)}</Label>
                 <Select value={typeAcces} onValueChange={setTypeAcces}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="comptable">Comptable — accès complet</SelectItem>
-                    <SelectItem value="comptable_dedie">Comptable dédié — société unique</SelectItem>
-                    <SelectItem value="lecture">Lecture seule</SelectItem>
+                    <SelectItem value="comptable">{t('adm.cabs.access_full', locale)}</SelectItem>
+                    <SelectItem value="comptable_dedie">{t('adm.cabs.access_dedicated', locale)}</SelectItem>
+                    <SelectItem value="lecture">{t('adm.cabs.access_read', locale)}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Notes (optionnel)</Label>
-                <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ex: responsable TVA uniquement" />
+                <Label>{t('adm.cabs.notes_optional', locale)}</Label>
+                <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder={t('adm.cabs.notes_placeholder', locale)} />
               </div>
               <Button onClick={assigner} disabled={saving || !selectedComptable || !selectedSociete} className="w-full bg-[#0B0F2E]">
-                {saving ? "Enregistrement..." : "Confirmer l'assignation"}
+                {saving ? t('adm.cabs.saving', locale) : t('adm.cabs.confirm_assign', locale)}
               </Button>
             </div>
           </DialogContent>
@@ -249,10 +251,10 @@ export default function AdminComptablesPage() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Comptables actifs", value: nbComptablesActifs, color: "text-blue-600" },
-          { label: "Sociétés avec comptable", value: nbSocietesAvecComptable, color: "text-green-600" },
-          { label: "Sociétés sans comptable", value: nbSocietésSansComptable, color: nbSocietésSansComptable > 0 ? "text-red-600" : "text-green-600" },
-          { label: "Docs en attente total", value: totalDocsEnAttente, color: totalDocsEnAttente > 0 ? "text-orange-600" : "text-green-600" },
+          { label: t('adm.cabs.stat_active', locale), value: nbComptablesActifs, color: "text-blue-600" },
+          { label: t('adm.cabs.stat_with', locale), value: nbSocietesAvecComptable, color: "text-green-600" },
+          { label: t('adm.cabs.stat_without', locale), value: nbSocietésSansComptable, color: nbSocietésSansComptable > 0 ? "text-red-600" : "text-green-600" },
+          { label: t('adm.cabs.stat_pending_docs', locale), value: totalDocsEnAttente, color: totalDocsEnAttente > 0 ? "text-orange-600" : "text-green-600" },
         ].map(s => (
           <Card key={s.label}>
             <CardContent className="p-4">
@@ -265,9 +267,9 @@ export default function AdminComptablesPage() {
 
       {/* Par comptable */}
       {loading ? (
-        <div className="text-center text-gray-400 py-8">Chargement...</div>
+        <div className="text-center text-gray-400 py-8">{t('adm.cabs.loading', locale)}</div>
       ) : comptables.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-gray-400">Aucun comptable enregistré. Invitez des comptables via Admin → Utilisateurs.</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-gray-400">{t('adm.cabs.none_invite', locale)}</CardContent></Card>
       ) : (
         <div className="space-y-4">
           {comptables.map(c => {
@@ -286,17 +288,17 @@ export default function AdminComptablesPage() {
                         size="sm"
                         onClick={() => openTypeEdit(c.id, c.full_name)}
                         className="h-7 text-xs"
-                        title="Définir le type (interne / externe / dédié)"
+                        title={t('adm.cabs.type_tooltip', locale)}
                       >
-                        ⚙️ Type
+                        {t('adm.cabs.type_btn', locale)}
                       </Button>
-                      <Badge variant="outline">{mesAssignations.length} société{mesAssignations.length !== 1 ? 's' : ''}</Badge>
+                      <Badge variant="outline">{mesAssignations.length} {mesAssignations.length !== 1 ? t('adm.cabs.societe_count_many', locale) : t('adm.cabs.societe_count_one', locale)}</Badge>
                     </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {mesAssignations.length === 0 ? (
-                    <p className="text-sm text-gray-400 italic">Aucune société assignée</p>
+                    <p className="text-sm text-gray-400 italic">{t('adm.cabs.none_assigned', locale)}</p>
                   ) : (
                     <div className="space-y-2">
                       {mesAssignations.map(a => (
@@ -306,12 +308,12 @@ export default function AdminComptablesPage() {
                             <span className="font-medium text-sm">{a.societe_nom}</span>
                             {a.brn && <span className="text-xs text-gray-400">{a.brn}</span>}
                             {a.docs_en_attente > 0 && (
-                              <Badge className="bg-orange-100 text-orange-700 text-xs">{a.docs_en_attente} doc{a.docs_en_attente > 1 ? 's' : ''} en attente</Badge>
+                              <Badge className="bg-orange-100 text-orange-700 text-xs">{a.docs_en_attente} {a.docs_en_attente > 1 ? t('adm.cabs.docs_pending_many', locale) : t('adm.cabs.docs_pending_one', locale)}</Badge>
                             )}
                           </div>
                           <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700"
                             onClick={() => retirer(a.comptable_id, a.societe_id)}>
-                            Retirer
+                            {t('adm.cabs.remove', locale)}
                           </Button>
                         </div>
                       ))}

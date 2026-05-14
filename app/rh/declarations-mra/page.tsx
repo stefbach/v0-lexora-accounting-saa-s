@@ -25,10 +25,16 @@ const GOLD = "#D4AF37"
 
 interface Societe { id: string; nom: string; ern?: string }
 
-const MOIS_LABELS = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-]
+function getMoisLabels(locale: Locale): string[] {
+  return [
+    t('rha.b.decmra.month_jan', locale), t('rha.b.decmra.month_feb', locale),
+    t('rha.b.decmra.month_mar', locale), t('rha.b.decmra.month_apr', locale),
+    t('rha.b.decmra.month_may', locale), t('rha.b.decmra.month_jun', locale),
+    t('rha.b.decmra.month_jul', locale), t('rha.b.decmra.month_aug', locale),
+    t('rha.b.decmra.month_sep', locale), t('rha.b.decmra.month_oct', locale),
+    t('rha.b.decmra.month_nov', locale), t('rha.b.decmra.month_dec', locale),
+  ]
+}
 
 export default function DeclarationsMraPage() {
   const locale: Locale = getLocale()
@@ -174,18 +180,19 @@ export default function DeclarationsMraPage() {
     finally { setPaying(false) }
   }, [declsMois, isAdmin, societeId, payDate, payRef, loadHist])
 
+  const MOIS_LABELS = getMoisLabels(locale)
   // ─── Rendu ─────────────────────────────────────────────────────────
   if (authorized === null) {
     return <ClientPageShell><div className="flex items-center gap-2 text-slate-500 p-6">
-      <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+      <Loader2 className="h-4 w-4 animate-spin" /> {t('rha.b.decmra.loading', locale)}
     </div></ClientPageShell>
   }
   if (authorized === false) {
     return <ClientPageShell><Card><CardContent className="p-6 flex items-start gap-3">
       <ShieldAlert className="h-5 w-5 text-red-600 mt-1" />
       <div>
-        <div className="font-semibold">Accès refusé</div>
-        <div className="text-sm text-slate-600">Cette page est réservée aux rôles admin et rh.</div>
+        <div className="font-semibold">{t('rha.b.decmra.access_denied', locale)}</div>
+        <div className="text-sm text-slate-600">{t('rha.b.decmra.access_msg', locale)}</div>
       </div>
     </CardContent></Card></ClientPageShell>
   }

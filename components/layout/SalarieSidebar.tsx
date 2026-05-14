@@ -3,6 +3,7 @@ import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import { LayoutDashboard, CalendarDays, CreditCard, Calendar, TrendingUp, User, LogOut, Menu, X, HeartPulse, FolderOpen, Navigation, FileText, Clock, ArrowLeft } from "lucide-react"
 
@@ -15,39 +16,50 @@ import { LayoutDashboard, CalendarDays, CreditCard, Calendar, TrendingUp, User, 
  * - Links use hash anchors (#dashboard, #conges, …). The monolithic page
  *   reads window.location.hash on mount to preselect the right tab.
  */
-const NAV = [
-  { hash: "#dashboard", label: "Pointage", icon: Clock },
-  { hash: "#conges",    label: "Mes congés", icon: CalendarDays },
-  { hash: "#bulletins", label: "Mes bulletins", icon: CreditCard },
-  { hash: "#planning",  label: "Mon planning", icon: Calendar },
-  { hash: "#primes",    label: "Mes primes", icon: TrendingUp },
-  { hash: "#contrats",  label: "Mes contrats", icon: FileText },
-  { hash: "#documents", label: "Mes documents", icon: FolderOpen },
-  { hash: "#trajets",   label: "Mes trajets km", icon: Navigation },
-  { hash: "#sante",     label: "Ma santé (TIBOK)", icon: HeartPulse },
-  { hash: "#profil",    label: "Ma fiche", icon: User },
-]
+function getNav(locale: Locale) {
+  return [
+    { hash: "#dashboard", label: t('comp.emp_sidebar.clocking', locale), icon: Clock },
+    { hash: "#conges",    label: t('comp.emp_sidebar.my_leave', locale), icon: CalendarDays },
+    { hash: "#bulletins", label: t('comp.emp_sidebar.my_payslips', locale), icon: CreditCard },
+    { hash: "#planning",  label: t('comp.emp_sidebar.my_planning', locale), icon: Calendar },
+    { hash: "#primes",    label: t('comp.emp_sidebar.my_bonuses', locale), icon: TrendingUp },
+    { hash: "#contrats",  label: t('comp.emp_sidebar.my_contracts', locale), icon: FileText },
+    { hash: "#documents", label: t('comp.emp_sidebar.my_documents', locale), icon: FolderOpen },
+    { hash: "#trajets",   label: t('comp.emp_sidebar.my_trips', locale), icon: Navigation },
+    { hash: "#sante",     label: t('comp.emp_sidebar.my_health', locale), icon: HeartPulse },
+    { hash: "#profil",    label: t('comp.emp_sidebar.my_file', locale), icon: User },
+  ]
+}
 
 // Rôles multi-espaces : map le rôle vers l'espace d'origine pour afficher
 // un lien "Retour à l'espace …" en haut du sidebar /salarie. Chacun
 // retourne à l'espace qui lui est propre (client_admin → /client,
 // client_assistant → /client/assistant, comptable → /comptable, etc.).
-const RETURN_CONFIG: Record<string, { href: string; label: string }> = {
-  rh:               { href: "/rh",               label: "Retour à l'espace RH" },
-  rh_manager:       { href: "/rh",               label: "Retour à l'espace RH" },
-  admin:            { href: "/rh",               label: "Retour à l'espace RH" },
-  super_admin:      { href: "/rh",               label: "Retour à l'espace RH" },
-  manager:          { href: "/rh",               label: "Retour à l'espace RH" },
-  direction:        { href: "/rh",               label: "Retour à l'espace RH" },
-  client_admin:     { href: "/client",           label: "Retour à l'espace client" },
-  client_assistant: { href: "/client/assistant", label: "Retour à l'espace assistant" },
-  comptable:        { href: "/comptable",        label: "Retour à l'espace comptable" },
-  comptable_dedie:  { href: "/comptable",        label: "Retour à l'espace comptable" },
+function getReturnConfig(locale: Locale): Record<string, { href: string; label: string }> {
+  const rh = t('comp.emp_sidebar.back_rh', locale)
+  const cli = t('comp.emp_sidebar.back_client', locale)
+  const asst = t('comp.emp_sidebar.back_assistant', locale)
+  const cab = t('comp.emp_sidebar.back_comptable', locale)
+  return {
+    rh:               { href: "/rh",               label: rh },
+    rh_manager:       { href: "/rh",               label: rh },
+    admin:            { href: "/rh",               label: rh },
+    super_admin:      { href: "/rh",               label: rh },
+    manager:          { href: "/rh",               label: rh },
+    direction:        { href: "/rh",               label: rh },
+    client_admin:     { href: "/client",           label: cli },
+    client_assistant: { href: "/client/assistant", label: asst },
+    comptable:        { href: "/comptable",        label: cab },
+    comptable_dedie:  { href: "/comptable",        label: cab },
+  }
 }
 
 export function SalarieSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const locale = getLocale()
+  const NAV = getNav(locale)
+  const RETURN_CONFIG = getReturnConfig(locale)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [activeHash, setActiveHash] = useState<string>("#dashboard")
   const [badges, setBadges] = useState<{ contrats_a_signer: number; bulletins_non_lus: number }>({
@@ -113,7 +125,7 @@ export function SalarieSidebar() {
       {/* Mobile trigger — glassmorphic pill */}
       <button
         onClick={() => setMobileOpen(true)}
-        aria-label="Ouvrir le menu"
+        aria-label={t('comp.sidebar.open_menu', locale)}
         className="fixed top-4 left-4 z-50 md:hidden inline-flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-lg backdrop-blur"
         style={{
           backgroundColor: "rgba(16,24,71,0.85)",
@@ -150,7 +162,7 @@ export function SalarieSidebar() {
         <button
           onClick={() => setMobileOpen(false)}
           className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10"
-          aria-label="Fermer le menu"
+          aria-label={t('comp.sidebar.close_menu', locale)}
         >
           <X className="w-5 h-5" />
         </button>
@@ -184,7 +196,7 @@ export function SalarieSidebar() {
             className="mt-2 inline-block text-[10px] font-bold uppercase tracking-[0.18em]"
             style={{ color: "#A8AFC7" }}
           >
-            Espace Salarié
+            {t('comp.emp_sidebar.title', locale)}
           </span>
         </div>
 
@@ -220,9 +232,9 @@ export function SalarieSidebar() {
                   color: "#D4AF37",
                   border: "1px solid rgba(212,175,55,0.35)",
                 }}
-                aria-label="Fonction administrateur"
+                aria-label={t('comp.emp_sidebar.admin_aria', locale)}
               >
-                Admin
+                {t('comp.emp_sidebar.admin_badge', locale)}
               </span>
             </a>
           )}
@@ -277,7 +289,7 @@ export function SalarieSidebar() {
                 <span className="relative flex-1">{label}</span>
                 {hash === "#contrats" && badges.contrats_a_signer > 0 && (
                   <span
-                    aria-label={`${badges.contrats_a_signer} contrat(s) à signer`}
+                    aria-label={`${badges.contrats_a_signer} ${t('comp.emp_sidebar.contracts_to_sign_aria', locale)}`}
                     className="relative inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold leading-none"
                     style={{
                       backgroundColor: active ? "#0B0F2E" : "#D4AF37",
@@ -289,7 +301,7 @@ export function SalarieSidebar() {
                 )}
                 {hash === "#bulletins" && badges.bulletins_non_lus > 0 && (
                   <span
-                    aria-label={`${badges.bulletins_non_lus} bulletin(s) non lu(s)`}
+                    aria-label={`${badges.bulletins_non_lus} ${t('comp.emp_sidebar.payslips_unread_aria', locale)}`}
                     className="relative inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold leading-none"
                     style={{
                       backgroundColor: active ? "#0B0F2E" : "#4191FF",
@@ -325,7 +337,7 @@ export function SalarieSidebar() {
             }}
           >
             <LogOut className="w-4 h-4" />
-            <span>Déconnexion</span>
+            <span>{t('common.logout', locale)}</span>
           </button>
         </div>
       </aside>

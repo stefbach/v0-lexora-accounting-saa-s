@@ -1,5 +1,6 @@
+"use client"
+
 import Link from "next/link"
-import type { Metadata } from "next"
 import { LexoraLogo } from "@/components/LexoraLogo"
 import {
   Building2,
@@ -13,12 +14,7 @@ import {
   ArrowLeft,
   type LucideIcon,
 } from "lucide-react"
-
-export const metadata: Metadata = {
-  title: "Mentions légales | Lexora",
-  description:
-    "Mentions légales, hébergement, protection des données et IA : informations officielles concernant la plateforme Lexora, éditée par Digital Data Solutions Ltd à Maurice.",
-}
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const FONT = "'Poppins', sans-serif"
 
@@ -119,6 +115,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default function MentionsLegalesPage() {
+  const locale: Locale = getLocale()
   return (
     <div style={{ backgroundColor: C.bg, minHeight: "100vh", fontFamily: FONT }}>
       {/* NAV — minimal, dark */}
@@ -160,7 +157,7 @@ export default function MentionsLegalesPage() {
             }}
           >
             <ArrowLeft size={14} aria-hidden="true" />
-            Retour à l&apos;accueil
+            {t('pub.ml.back_home', locale)}
           </Link>
         </div>
       </header>
@@ -189,7 +186,7 @@ export default function MentionsLegalesPage() {
             marginBottom: "18px",
           }}
         >
-          Information officielle
+          {t('pub.ml.eyebrow', locale)}
         </span>
         <h1
           style={{
@@ -202,7 +199,7 @@ export default function MentionsLegalesPage() {
             margin: "0 0 14px",
           }}
         >
-          Mentions légales
+          {t('pub.ml.title', locale)}
         </h1>
         <p
           style={{
@@ -212,12 +209,8 @@ export default function MentionsLegalesPage() {
             margin: "0 auto",
             maxWidth: "700px",
           }}
-        >
-          Informations légales relatives à la plateforme{" "}
-          <strong style={{ color: C.text }}>Lexora</strong>, éditée par{" "}
-          <strong style={{ color: C.text }}>Digital Data Solutions Ltd</strong> à
-          Maurice.
-        </p>
+          dangerouslySetInnerHTML={{ __html: t('pub.ml.intro_html', locale) }}
+        />
       </section>
 
       {/* CONTENT */}
@@ -231,17 +224,17 @@ export default function MentionsLegalesPage() {
         }}
       >
         {/* 1. Éditeur */}
-        <Section icon={Building2} title="Éditeur de la plateforme">
+        <Section icon={Building2} title={t('pub.ml.s1_title', locale)}>
           <dl style={{ margin: 0 }}>
-            <Field label="Nom commercial" value="Lexora" />
-            <Field label="Société exploitante" value="Digital Data Solutions Ltd" />
-            <Field label="Forme juridique" value="Société à responsabilité limitée (Ltd)" />
-            <Field label="Numéro d'immatriculation" value="C20173522" />
-            <Field label="TVA" value="27816949" />
-            <Field label="Siège social" value="Bourdet Road, Grand Baie, Maurice" />
-            <Field label="Téléphone" value="+230 4687378" />
+            <Field label={t('pub.ml.f_brand', locale)} value="Lexora" />
+            <Field label={t('pub.ml.f_company', locale)} value="Digital Data Solutions Ltd" />
+            <Field label={t('pub.ml.f_form', locale)} value={t('pub.ml.f_form_v', locale)} />
+            <Field label={t('pub.ml.f_reg', locale)} value="C20173522" />
+            <Field label={t('pub.ml.f_vat', locale)} value="27816949" />
+            <Field label={t('pub.ml.f_seat', locale)} value={t('pub.ml.f_seat_v', locale)} />
+            <Field label={t('pub.ml.f_phone', locale)} value="+230 4687378" />
             <Field
-              label="E-mail de contact"
+              label={t('pub.ml.f_email', locale)}
               value={
                 <a
                   href="mailto:contact@lexora.finance"
@@ -255,247 +248,61 @@ export default function MentionsLegalesPage() {
         </Section>
 
         {/* 2. Hébergement */}
-        <Section icon={Server} title="Hébergement">
-          <p style={{ margin: "0 0 12px" }}>
-            La plateforme Lexora s&apos;appuie sur une infrastructure cloud
-            sécurisée de niveau entreprise. L&apos;application est hébergée sur{" "}
-            <strong style={{ color: C.text }}>Vercel Inc.</strong> (440 N
-            Barranca Ave #4133, Covina, CA 91723, États-Unis), prestataire
-            certifié <strong style={{ color: C.text }}>ISO 27001</strong> et{" "}
-            <strong style={{ color: C.text }}>SOC 2 Type II</strong>.
-          </p>
-          <p style={{ margin: "0 0 12px" }}>
-            Les données comptables, fiscales, RH et de paie sont stockées de
-            manière chiffrée sur{" "}
-            <strong style={{ color: C.text }}>Supabase</strong>{" "}
-            (PostgreSQL managé), infrastructure conforme{" "}
-            <strong style={{ color: C.text }}>SOC 2 Type II</strong>,{" "}
-            <strong style={{ color: C.text }}>HIPAA</strong> et{" "}
-            <strong style={{ color: C.text }}>ISO 27001</strong>, au sein de
-            datacenters européens sous surveillance 24/7.
-          </p>
-          <p style={{ margin: 0 }}>
-            L&apos;ensemble des échanges est protégé en transit par TLS 1.3 et
-            au repos par chiffrement AES-256, garantissant la{" "}
-            <strong style={{ color: C.text }}>confidentialité</strong>,
-            l&apos;<strong style={{ color: C.text }}>intégrité</strong> et la{" "}
-            <strong style={{ color: C.text }}>disponibilité</strong> des
-            informations financières et personnelles de nos utilisateurs.
-          </p>
+        <Section icon={Server} title={t('pub.ml.s2_title', locale)}>
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s2_p1', locale) }} />
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s2_p2', locale) }} />
+          <p style={{ margin: 0 }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s2_p3', locale) }} />
         </Section>
 
         {/* 3. Responsabilité éditoriale */}
-        <Section icon={FileText} title="Responsabilité éditoriale">
-          <p style={{ margin: "0 0 12px" }}>
-            La société{" "}
-            <strong style={{ color: C.text }}>Digital Data Solutions Ltd</strong>, en
-            tant qu&apos;éditeur de la plateforme Lexora, est responsable du
-            contenu publié et de la conformité réglementaire du site.
-          </p>
-          <p style={{ margin: "0 0 12px" }}>
-            Les contenus à portée{" "}
-            <strong style={{ color: C.text }}>comptable et fiscale</strong>{" "}
-            sont rédigés et validés par des experts-comptables et fiscalistes
-            inscrits au registre du{" "}
-            <strong style={{ color: C.text }}>
-              Mauritius Institute of Professional Accountants (MIPA)
-            </strong>
-            . Les contenus à portée{" "}
-            <strong style={{ color: C.text }}>juridique</strong> (contrats de
-            travail, contrats commerciaux, NDA, etc.) sont établis en conformité
-            avec le{" "}
-            <strong style={{ color: C.text }}>Workers&apos; Rights Act 2019</strong>,
-            le <strong style={{ color: C.text }}>Contract Act</strong> et le{" "}
-            <strong style={{ color: C.text }}>Data Protection Act 2017</strong>{" "}
-            mauriciens.
-          </p>
-          <p style={{ margin: "0 0 12px" }}>
-            Le module santé{" "}
-            <strong style={{ color: C.text }}>TIBOK · Santé salariés</strong>,
-            intégré à Lexora, est opéré par la plateforme TIBOK. Les contenus à
-            visée médicale sont exclusivement rédigés ou validés par des
-            professionnels de santé inscrits au{" "}
-            <strong style={{ color: C.text }}>Medical Council of Mauritius</strong>.
-          </p>
-          <p style={{ margin: 0 }}>
-            Toute utilisation frauduleuse, abusive ou contraire à l&apos;éthique
-            entraînera la suppression immédiate du compte utilisateur et pourra
-            faire l&apos;objet de poursuites.
-          </p>
+        <Section icon={FileText} title={t('pub.ml.s3_title', locale)}>
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s3_p1', locale) }} />
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s3_p2', locale) }} />
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s3_p3', locale) }} />
+          <p style={{ margin: 0 }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s3_p4', locale) }} />
         </Section>
 
         {/* 4. Protection des données personnelles */}
-        <Section icon={ShieldCheck} title="Protection des données personnelles">
-          <p style={{ margin: "0 0 12px" }}>
-            Lexora collecte et traite des données personnelles, comptables, de
-            paie et fiscales dans le strict respect du{" "}
-            <strong style={{ color: C.text }}>
-              Data Protection Act 2017 (Mauritius)
-            </strong>
-            , du <strong style={{ color: C.text }}>GDPR</strong> (pour les
-            utilisateurs concernés) et des normes internationales applicables.
-          </p>
-          <p style={{ margin: "0 0 12px" }}>
-            Les données sont conservées de manière chiffrée sur des serveurs
-            Supabase conformes aux normes SOC 2 Type II, HIPAA et ISO 27001.{" "}
-            <strong style={{ color: C.text }}>
-              Elles ne sont jamais cédées, vendues ni exploitées à des fins
-              commerciales.
-            </strong>{" "}
-            Lexora ne consulte vos données que pour fournir le service et
-            répondre aux obligations légales vis-à-vis de l&apos;administration
-            mauricienne (MRA, ROC).
-          </p>
-          <p style={{ margin: "0 0 12px" }}>
-            Un{" "}
-            <strong style={{ color: C.text }}>
-              Délégué à la Protection des Données (DPO)
-            </strong>{" "}
-            a été désigné conformément à la loi afin de veiller au respect des
-            obligations légales et réglementaires.
-          </p>
-          <p style={{ margin: 0 }}>
-            Pour toute demande relative à vos données personnelles (accès,
-            rectification, portabilité, suppression), vous pouvez écrire à :{" "}
-            <a
-              href="mailto:dpo@lexora.finance"
-              style={{ color: C.accent, textDecoration: "none", fontWeight: 600 }}
-            >
-              dpo@lexora.finance
-            </a>
-            .
-          </p>
+        <Section icon={ShieldCheck} title={t('pub.ml.s4_title', locale)}>
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s4_p1', locale) }} />
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s4_p2', locale) }} />
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s4_p3', locale) }} />
+          <p style={{ margin: 0 }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s4_p4', locale) }} />
         </Section>
 
         {/* 5. Propriété intellectuelle */}
-        <Section icon={Lock} title="Droits de propriété intellectuelle">
-          <p style={{ margin: "0 0 12px" }}>
-            La marque <strong style={{ color: C.text }}>Lexora</strong>, le
-            logo, le contenu du site (textes, images, vidéos, interfaces,
-            composants logiciels), les modèles de contrats générés, les
-            algorithmes d&apos;IA propriétaires et les templates de factures
-            sont protégés au titre de la propriété intellectuelle.
-          </p>
-          <p style={{ margin: 0 }}>
-            Toute reproduction, représentation, adaptation, traduction, rétro-
-            ingénierie ou extraction non autorisée, totale ou partielle, est
-            strictement interdite sans accord écrit préalable de{" "}
-            <strong style={{ color: C.text }}>Digital Data Solutions Ltd</strong>.
-          </p>
+        <Section icon={Lock} title={t('pub.ml.s5_title', locale)}>
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s5_p1', locale) }} />
+          <p style={{ margin: 0 }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s5_p2', locale) }} />
         </Section>
 
         {/* 6. Loi applicable */}
-        <Section icon={Scale} title="Loi applicable">
-          <p style={{ margin: 0 }}>
-            Le présent site est soumis à la{" "}
-            <strong style={{ color: C.text }}>législation mauricienne</strong>.
-            Tout litige relatif à son utilisation relève de la compétence
-            exclusive des juridictions de{" "}
-            <strong style={{ color: C.text }}>Port-Louis (île Maurice)</strong>,
-            sauf disposition contraire d&apos;ordre public.
-          </p>
+        <Section icon={Scale} title={t('pub.ml.s6_title', locale)}>
+          <p style={{ margin: 0 }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s6_p1', locale) }} />
         </Section>
 
         {/* 7. IA — assistance */}
         <Section
           icon={Brain}
-          title="Intelligence artificielle et traitement des données"
+          title={t('pub.ml.s7_title', locale)}
         >
-          <h3
-            style={{
-              color: C.text,
-              fontFamily: FONT,
-              fontWeight: 700,
-              fontSize: "16px",
-              margin: "0 0 10px",
-            }}
-          >
-            Utilisation d&apos;outils d&apos;IA pour assister les métiers
+          <h3 style={{ color: C.text, fontFamily: FONT, fontWeight: 700, fontSize: "16px", margin: "0 0 10px" }}>
+            {t('pub.ml.s7_h1', locale)}
           </h3>
-          <p style={{ margin: "0 0 16px" }}>
-            Lexora embarque six agents propriétaires d&apos;assistance
-            (<strong style={{ color: C.text }}>OCR</strong>,{" "}
-            <strong style={{ color: C.text }}>Rapprochement</strong>,{" "}
-            <strong style={{ color: C.text }}>Juridique</strong>,{" "}
-            <strong style={{ color: C.text }}>RH</strong>,{" "}
-            <strong style={{ color: C.text }}>Fiscal</strong>,{" "}
-            <strong style={{ color: C.text }}>Facturation</strong>), développés
-            en interne et reposant sur l&apos;API{" "}
-            <strong style={{ color: C.text }}>Anthropic (Claude)</strong>. Ces
-            agents constituent un{" "}
-            <em>support à l&apos;analyse et à la production</em>, sans jamais
-            remplacer le jugement ni la responsabilité de l&apos;expert-comptable,
-            du juriste, du gestionnaire de paie ou du dirigeant en charge de
-            valider le document final.
-          </p>
-          <p style={{ margin: "0 0 16px" }}>
-            Les écritures comptables, déclarations fiscales, bulletins de paie
-            et contrats générés par l&apos;IA sont{" "}
-            <strong style={{ color: C.text }}>
-              systématiquement soumis à la validation humaine
-            </strong>{" "}
-            de l&apos;utilisateur avant toute transmission à un tiers ou à
-            l&apos;administration (MRA, ROC, banques, salariés).
-          </p>
+          <p style={{ margin: "0 0 16px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s7_p1', locale) }} />
+          <p style={{ margin: "0 0 16px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s7_p2', locale) }} />
 
-          <h3
-            style={{
-              color: C.text,
-              fontFamily: FONT,
-              fontWeight: 700,
-              fontSize: "16px",
-              margin: "16px 0 10px",
-            }}
-          >
-            Anonymisation et sécurité des données envoyées à l&apos;IA
+          <h3 style={{ color: C.text, fontFamily: FONT, fontWeight: 700, fontSize: "16px", margin: "16px 0 10px" }}>
+            {t('pub.ml.s7_h2', locale)}
           </h3>
-          <p style={{ margin: "0 0 12px" }}>
-            Lors du traitement des informations par les agents IA, les données
-            transmises sont <strong style={{ color: C.text }}>anonymisées</strong>{" "}
-            et <strong style={{ color: C.text }}>chiffrées</strong>. En aucune
-            circonstance des données nominatives (nom, prénom, NIC, coordonnées
-            bancaires, numéros d&apos;identifiants fiscaux) ne sont envoyées à
-            l&apos;API Anthropic sous forme identifiante : seules les
-            informations métier strictement nécessaires à l&apos;assistance sont
-            traitées.
-          </p>
-          <p style={{ margin: "0 0 12px" }}>
-            Les communications sont protégées par des protocoles de chiffrement
-            avancés (TLS 1.3 en transit, AES-256 au repos). Des mesures de
-            sécurité techniques et organisationnelles strictes sont mises en
-            œuvre afin de garantir la confidentialité, l&apos;intégrité et la
-            conformité aux réglementations applicables (Data Protection Act
-            2017 et standards internationaux).
-          </p>
-          <p style={{ margin: "0 0 12px" }}>
-            Conformément aux engagements de notre prestataire IA (Anthropic),{" "}
-            <strong style={{ color: C.text }}>
-              les données envoyées ne sont pas utilisées pour entraîner les
-              modèles
-            </strong>
-            .
-          </p>
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s7_p3', locale) }} />
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s7_p4', locale) }} />
+          <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s7_p5', locale) }} />
 
-          <h3
-            style={{
-              color: C.text,
-              fontFamily: FONT,
-              fontWeight: 700,
-              fontSize: "16px",
-              margin: "16px 0 10px",
-            }}
-          >
-            Consentement de l&apos;utilisateur
+          <h3 style={{ color: C.text, fontFamily: FONT, fontWeight: 700, fontSize: "16px", margin: "16px 0 10px" }}>
+            {t('pub.ml.s7_h3', locale)}
           </h3>
-          <p style={{ margin: 0 }}>
-            L&apos;utilisateur est informé que l&apos;IA constitue uniquement un
-            outil d&apos;assistance et qu&apos;il conserve à tout moment la
-            garantie qu&apos;un professionnel (comptable, juriste, gestionnaire
-            de paie ou dirigeant) valide personnellement et in fine les écritures,
-            déclarations, bulletins et contrats. Le consentement explicite de
-            l&apos;utilisateur est recueilli lors de l&apos;inscription pour tout
-            traitement de données via ces agents IA.
-          </p>
+          <p style={{ margin: 0 }} dangerouslySetInnerHTML={{ __html: t('pub.ml.s7_p6', locale) }} />
         </Section>
 
         {/* Contact card */}
@@ -535,7 +342,7 @@ export default function MentionsLegalesPage() {
               }}
             >
               <Mail size={12} aria-hidden="true" />
-              Une question ?
+              {t('pub.ml.contact_eyebrow', locale)}
             </div>
             <h2
               style={{
@@ -547,11 +354,10 @@ export default function MentionsLegalesPage() {
                 letterSpacing: "-0.01em",
               }}
             >
-              Notre équipe juridique et DPO sont à votre écoute
+              {t('pub.ml.contact_title', locale)}
             </h2>
             <p style={{ color: "#A8AFC7", fontSize: "14px", margin: "0 0 18px" }}>
-              Pour toute question relative aux mentions légales, à la
-              protection de vos données ou à l&apos;exercice de vos droits.
+              {t('pub.ml.contact_sub', locale)}
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
@@ -603,7 +409,7 @@ export default function MentionsLegalesPage() {
             margin: "8px 0 0",
           }}
         >
-          Dernière mise à jour : avril 2026
+          {t('pub.ml.last_update', locale)}
         </p>
       </main>
 
@@ -628,27 +434,17 @@ export default function MentionsLegalesPage() {
         >
           <LexoraLogo href="/" size="md" />
           <p style={{ color: "#A8AFC7", fontSize: "13px", margin: 0 }}>
-            &copy; {new Date().getFullYear()} Digital Data Solutions Ltd — Tous
-            droits réservés — Port-Louis, Maurice
+            &copy; {new Date().getFullYear()} {t('pub.ml.footer_copy', locale)}
           </p>
           <div style={{ display: "flex", gap: "20px", fontSize: "13px" }}>
-            <Link
-              href="/"
-              style={{ color: "#A8AFC7", textDecoration: "none" }}
-            >
-              Accueil
+            <Link href="/" style={{ color: "#A8AFC7", textDecoration: "none" }}>
+              {t('pub.ml.nav_home', locale)}
             </Link>
-            <Link
-              href="/tarifs"
-              style={{ color: "#A8AFC7", textDecoration: "none" }}
-            >
-              Tarifs
+            <Link href="/tarifs" style={{ color: "#A8AFC7", textDecoration: "none" }}>
+              {t('pub.ml.nav_pricing', locale)}
             </Link>
-            <a
-              href="mailto:contact@lexora.finance"
-              style={{ color: "#A8AFC7", textDecoration: "none" }}
-            >
-              Contact
+            <a href="mailto:contact@lexora.finance" style={{ color: "#A8AFC7", textDecoration: "none" }}>
+              {t('pub.ml.nav_contact', locale)}
             </a>
           </div>
         </div>

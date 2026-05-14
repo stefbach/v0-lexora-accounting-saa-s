@@ -219,12 +219,12 @@ export default function ComptableSocietesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setLinkError(data.error || "Erreur"); return }
+      if (!res.ok) { setLinkError(data.error || t('cab.societes.err_generic', locale)); return }
 
-      setSuccess("Client lié à la société avec succès !")
+      setSuccess(t('cab.societes.success_linked', locale))
       setLinkDialogOpen(false); setLinkClientId(""); setLinkSocieteId(null); fetchData()
     } catch {
-      setLinkError("Erreur de connexion")
+      setLinkError(t('cab.societes.err_connection_short', locale))
     } finally {
       setLinking(false)
     }
@@ -248,72 +248,72 @@ export default function ComptableSocietesPage() {
             </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>Nouvelle société</DialogTitle>
-                <DialogDescription>Créez une société et liez-la à des clients existants.</DialogDescription>
+                <DialogTitle>{t('cab.societes.dialog_create_title', locale)}</DialogTitle>
+                <DialogDescription>{t('cab.societes.dialog_create_desc', locale)}</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Nom de la société *</Label>
+                  <Label>{t('cab.societes.fld_name', locale)}</Label>
                   <Input placeholder="Ex: TIBOK Ltd" value={formNom} onChange={(e) => setFormNom(e.target.value)} />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>BRN</Label>
+                    <Label>{t('cab.societes.fld_brn', locale)}</Label>
                     <Input placeholder="Ex: C12345678" value={formBrn} onChange={(e) => setFormBrn(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>N° TVA MRA</Label>
+                    <Label>{t('cab.societes.fld_vat_no', locale)}</Label>
                     <Input placeholder="Ex: VAT-20230001" value={formTva} onChange={(e) => setFormTva(e.target.value)} />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Statut TVA</Label>
+                  <Label>{t('cab.societes.fld_vat_status', locale)}</Label>
                   <Select value={formStatutTva} onValueChange={setFormStatutTva}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="true">Assujetti à la TVA</SelectItem>
-                      <SelectItem value="false">Non assujetti</SelectItem>
+                      <SelectItem value="true">{t('cab.societes.vat_subject', locale)}</SelectItem>
+                      <SelectItem value="false">{t('cab.societes.vat_not_subject', locale)}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>ERN (Employer Registration N°)</Label>
+                    <Label>{t('cab.societes.fld_ern', locale)}</Label>
                     <Input placeholder="Ex: C12345678" value={formErn} onChange={(e) => setFormErn(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>TAN Société</Label>
+                    <Label>{t('cab.societes.fld_tan', locale)}</Label>
                     <Input placeholder="Ex: A123456789" value={formTanSociete} onChange={(e) => setFormTanSociete(e.target.value)} />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Date d&apos;incorporation</Label>
+                  <Label>{t('cab.societes.fld_incorp_date', locale)}</Label>
                   <Input type="date" value={formDateIncorporation} onChange={(e) => setFormDateIncorporation(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Adresse du siège (Registered Office)</Label>
+                  <Label>{t('cab.societes.fld_registered_office', locale)}</Label>
                   <Input placeholder="Ex: Bourdet Road, Pointe aux Cannoniers, Mauritius" value={formRegisteredOffice} onChange={(e) => setFormRegisteredOffice(e.target.value)} />
                 </div>
                 <div className="border-t pt-3 mt-3">
-                  <p className="text-xs font-semibold uppercase text-gray-500 mb-2">Contact MRA (déclaration TVA)</p>
+                  <p className="text-xs font-semibold uppercase text-gray-500 mb-2">{t('cab.societes.mra_contact_title', locale)}</p>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Nom du déclarant</Label>
+                      <Label>{t('cab.societes.fld_declarant_name', locale)}</Label>
                       <Input placeholder="Ex: John Doe" value={formMraDeclarant} onChange={(e) => setFormMraDeclarant(e.target.value)} />
                     </div>
                     <div className="space-y-2">
-                      <Label>Email MRA</Label>
+                      <Label>{t('cab.societes.fld_mra_email', locale)}</Label>
                       <Input type="email" placeholder="contact@societe.com" value={formMraEmail} onChange={(e) => setFormMraEmail(e.target.value)} />
                     </div>
                   </div>
                   <div className="space-y-2 mt-3">
-                    <Label>Téléphone MRA</Label>
+                    <Label>{t('cab.societes.fld_mra_phone', locale)}</Label>
                     <Input placeholder="Ex: +230 1234 5678" value={formMraTelephone} onChange={(e) => setFormMraTelephone(e.target.value)} />
                   </div>
                 </div>
                 {clients.length > 0 && (
                   <div className="space-y-2">
-                    <Label>Clients à lier</Label>
+                    <Label>{t('cab.societes.fld_clients_to_link', locale)}</Label>
                     <div className="max-h-[200px] overflow-auto space-y-2 border rounded-md p-3">
                       {clients.map((client) => (
                         <div
@@ -334,9 +334,9 @@ export default function ComptableSocietesPage() {
                 {error && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Annuler</Button>
+                <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>{t('cab.societes.cancel', locale)}</Button>
                 <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleCreate} disabled={creating}>
-                  {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Création...</> : "Créer la société"}
+                  {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('cab.societes.creating', locale)}</> : t('cab.societes.create_btn', locale)}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -361,7 +361,7 @@ export default function ComptableSocietesPage() {
             <CardTitle style={{ color: "#0B0F2E" }}>
               <div className="flex items-center gap-2">
                 <Building2 className="h-5 w-5" />
-                Sociétés ({filtered.length})
+                {t('cab.societes.title', locale)} ({filtered.length})
               </div>
             </CardTitle>
           </CardHeader>
@@ -369,12 +369,12 @@ export default function ComptableSocietesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>BRN</TableHead>
-                  <TableHead>N° TVA MRA</TableHead>
-                  <TableHead>Statut TVA</TableHead>
-                  <TableHead>Client(s)</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t('cab.societes.col_name', locale)}</TableHead>
+                  <TableHead>{t('cab.societes.col_brn', locale)}</TableHead>
+                  <TableHead>{t('cab.societes.col_vat_no', locale)}</TableHead>
+                  <TableHead>{t('cab.societes.col_vat_status', locale)}</TableHead>
+                  <TableHead>{t('cab.societes.col_clients', locale)}</TableHead>
+                  <TableHead>{t('cab.societes.col_actions', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -387,14 +387,14 @@ export default function ComptableSocietesPage() {
                       <TableCell>{societe.numero_tva_mra || "—"}</TableCell>
                       <TableCell>
                         <Badge className={societe.statut_tva ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}>
-                          {societe.statut_tva ? "Active" : "Inactive"}
+                          {societe.statut_tva ? t('cab.societes.badge_active', locale) : t('cab.societes.badge_inactive', locale)}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {societeClients.length > 0 ? societeClients.map((c) => (
                             <Badge key={c.id} variant="outline" style={{ borderColor: "#D4AF37", color: "#0B0F2E" }}>{c.full_name}</Badge>
-                          )) : <span className="text-muted-foreground text-sm">Aucun</span>}
+                          )) : <span className="text-muted-foreground text-sm">{t('cab.societes.none', locale)}</span>}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -430,16 +430,16 @@ export default function ComptableSocietesPage() {
       <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Lier un client à la société</DialogTitle>
+            <DialogTitle>{t('cab.societes.link_dialog_title', locale)}</DialogTitle>
             <DialogDescription>
-              {linkSocieteId && `Société : ${societes.find(s => s.id === linkSocieteId)?.nom}`}
+              {linkSocieteId && `${t('cab.societes.company_label', locale)} : ${societes.find(s => s.id === linkSocieteId)?.nom}`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Client</Label>
+              <Label>{t('cab.societes.fld_client', locale)}</Label>
               <Select value={linkClientId} onValueChange={setLinkClientId}>
-                <SelectTrigger><SelectValue placeholder="Sélectionner un client" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('cab.societes.select_client_placeholder', locale)} /></SelectTrigger>
                 <SelectContent>
                   {clients.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.full_name} — {c.email}</SelectItem>
@@ -450,9 +450,9 @@ export default function ComptableSocietesPage() {
             {linkError && <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{linkError}</div>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>{t('cab.societes.cancel', locale)}</Button>
             <Button style={{ backgroundColor: "#D4AF37" }} onClick={handleLinkClient} disabled={linking}>
-              {linking ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Liaison...</> : "Lier le client"}
+              {linking ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('cab.societes.linking', locale)}</> : t('cab.societes.link_btn', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
