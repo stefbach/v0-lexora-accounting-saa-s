@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 
 /**
@@ -10,7 +10,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * lier son compte.
  */
 export async function POST(_req: NextRequest) {
-  const supabase = await getServerClient()
+  const supabase = await createClient()
   const { data: { user }, error: userErr } = await supabase.auth.getUser()
   if (userErr || !user) {
     return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
@@ -38,7 +38,7 @@ export async function POST(_req: NextRequest) {
  * Renvoie le statut de liaison Telegram du user courant.
  */
 export async function GET() {
-  const supabase = await getServerClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ linked: false, authenticated: false }, { status: 401 })
 
@@ -62,7 +62,7 @@ export async function GET() {
  * Délie le compte Telegram du user courant.
  */
 export async function DELETE() {
-  const supabase = await getServerClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
