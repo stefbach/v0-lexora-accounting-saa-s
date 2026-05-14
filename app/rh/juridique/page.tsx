@@ -36,18 +36,21 @@ const STATUT_COLORS: Record<string, string> = {
   resilie:       "bg-red-100 text-red-700",
 }
 
-const STATUT_LABELS: Record<string, string> = {
-  brouillon:     "Brouillon",
-  signe_employe: "Signé par employé",
-  signe:         "Signé ✓✓",
-  expire:        "Expiré",
-  resilie:       "Résilié",
+function getStatutLabels(locale: Locale): Record<string, string> {
+  return {
+    brouillon:     t('rha.b.jur.status_brouillon', locale),
+    signe_employe: t('rha.b.jur.status_signe_employe', locale),
+    signe:         t('rha.b.jur.status_signe', locale),
+    expire:        t('rha.b.jur.status_expire', locale),
+    resilie:       t('rha.b.jur.status_resilie', locale),
+  }
 }
 
-function StatutBadge({ statut }: { statut: string }) {
+function StatutBadge({ statut, locale }: { statut: string; locale: Locale }) {
+  const labels = getStatutLabels(locale)
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUT_COLORS[statut] ?? "bg-gray-100 text-gray-600"}`}>
-      {STATUT_LABELS[statut] ?? statut}
+      {labels[statut] ?? statut}
     </span>
   )
 }
@@ -372,7 +375,7 @@ export default function JuridiquePage() {
                 <SelectTrigger className="w-36"><SelectValue placeholder={t('rha.b.jur.filter_status', locale)} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('rha.b.jur.filter_all_status', locale)}</SelectItem>
-                  {Object.entries(STATUT_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                  {Object.entries(getStatutLabels(locale)).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                 </SelectContent>
               </Select>
             </CardContent>
@@ -407,7 +410,7 @@ export default function JuridiquePage() {
                         <TableCell className="text-sm">{c.employe?.poste ?? "—"}</TableCell>
                         <TableCell className="text-sm font-mono">{c.date_debut ?? "—"}</TableCell>
                         <TableCell className="text-sm font-mono">{c.date_fin ?? <span className="text-gray-400">{t('rha.b.jur.indeterminate', locale)}</span>}</TableCell>
-                        <TableCell><StatutBadge statut={c.statut} /></TableCell>
+                        <TableCell><StatutBadge statut={c.statut} locale={locale} /></TableCell>
                         <TableCell>
                           <div className="flex gap-1 flex-wrap">
                             <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setViewContrat(c)}>
@@ -717,12 +720,12 @@ export default function JuridiquePage() {
           <DialogHeader>
             <DialogTitle>
               {t('rha.b.jur.contract_for', locale)} {viewContrat?.employe?.prenom} {viewContrat?.employe?.nom}
-              <StatutBadge statut={viewContrat?.statut ?? "brouillon"} />
+              <StatutBadge statut={viewContrat?.statut ?? "brouillon"} locale={locale} />
             </DialogTitle>
           </DialogHeader>
           <div className="flex items-center gap-2 flex-wrap border-b pb-3">
             <span className="text-sm text-gray-500">{t('rha.b.jur.change_status', locale)}</span>
-            {Object.entries(STATUT_LABELS).map(([v, l]) => (
+            {Object.entries(getStatutLabels(locale)).map(([v, l]) => (
               <Button
                 key={v}
                 size="sm"
@@ -749,7 +752,7 @@ export default function JuridiquePage() {
                   className="h-7 text-xs"
                   onClick={() => imprimerContrat(viewContrat.html_content_modified || viewContrat.html_content)}
                 >
-                  <Printer className="w-3 h-3 mr-1" />Imprimer
+                  <Printer className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_print', locale)}
                 </Button>
               )}
               {/* Sprint 5 AMÉLIO F — bouton Modifier / Enregistrer */}
@@ -767,7 +770,7 @@ export default function JuridiquePage() {
                     setEditMode(true)
                   }}
                 >
-                  <Pencil className="w-3 h-3 mr-1" />Modifier
+                  <Pencil className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_modify', locale)}
                 </Button>
               ) : (
                 <>
@@ -778,7 +781,7 @@ export default function JuridiquePage() {
                     disabled={savingEdit}
                     onClick={() => { setEditMode(false); setEditedHtml(""); setSigNom(""); setSigImage("") }}
                   >
-                    Annuler
+                    {t('rha.b.jur.btn_cancel', locale)}
                   </Button>
                   <Button
                     size="sm"
@@ -810,7 +813,7 @@ export default function JuridiquePage() {
                     }}
                   >
                     {savingEdit ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />}
-                    Enregistrer
+                    {t('rha.b.jur.btn_save_short', locale)}
                   </Button>
                 </>
               )}
@@ -825,7 +828,7 @@ export default function JuridiquePage() {
                     ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
                     : <Link2 className="w-3 h-3 mr-1" />
                   }
-                  Envoyer à l'employé
+                  {t('rha.b.jur.btn_send_employee', locale)}
                 </Button>
               )}
               {viewContrat?.statut === "signe_employe" && !editMode && (
@@ -837,7 +840,7 @@ export default function JuridiquePage() {
                 >
                   {contresignant
                     ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                    : "✍️ Contresigner"
+                    : t('rha.b.jur.btn_countersign', locale)
                   }
                 </Button>
               )}
@@ -851,15 +854,14 @@ export default function JuridiquePage() {
 
                 <div className="rounded-xl border p-4 bg-amber-50/40 space-y-3">
                   <h3 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4" /> Signature du dirigeant
+                    <ImageIcon className="w-4 h-4" /> {t('rha.b.jur.signature_dirigeant', locale)}
                   </h3>
                   <p className="text-xs text-amber-800">
-                    Le nom et l'image seront rendus au bas du contrat. Visible à l'employé
-                    au moment de la signature.
+                    {t('rha.b.jur.signature_dirigeant_hint', locale)}
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs">Nom du signataire</Label>
+                      <Label className="text-xs">{t('rha.b.jur.signer_name', locale)}</Label>
                       <Input
                         value={sigNom}
                         onChange={e => setSigNom(e.target.value)}
@@ -868,7 +870,7 @@ export default function JuridiquePage() {
                       />
                     </div>
                     <div>
-                      <Label className="text-xs">Image signature (PNG/JPG)</Label>
+                      <Label className="text-xs">{t('rha.b.jur.signature_image', locale)}</Label>
                       <Input
                         type="file"
                         accept="image/png,image/jpeg"
@@ -891,7 +893,7 @@ export default function JuridiquePage() {
                     <div className="flex items-center gap-3">
                       <img src={sigImage} alt="Signature" className="h-16 border rounded bg-white p-1" />
                       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSigImage("")}>
-                        <XCircle className="w-3 h-3 mr-1" />Retirer
+                        <XCircle className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_remove', locale)}
                       </Button>
                     </div>
                   )}
@@ -908,7 +910,7 @@ export default function JuridiquePage() {
                 {/* Bloc signature dirigeant rendu en bas du contrat */}
                 {(viewContrat?.signature_nom_complet || viewContrat?.signature_image_dirigeant_url) && (
                   <div className="mx-4 mt-6 mb-4 p-4 border-t bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-500 mb-2">Signature de l'employeur</p>
+                    <p className="text-xs text-gray-500 mb-2">{t('rha.b.jur.employer_signature', locale)}</p>
                     {viewContrat.signature_image_dirigeant_url && (
                       <img
                         src={viewContrat.signature_image_dirigeant_url}
@@ -924,7 +926,7 @@ export default function JuridiquePage() {
               </>
             ) : (
               <div className="p-6 text-center text-gray-500">
-                <p>Aucun contenu HTML disponible.</p>
+                <p>{t('rha.b.jur.no_html', locale)}</p>
                 <p className="text-xs mt-1 text-gray-400">Type : {viewContrat?.type_contrat} | Secteur : {viewContrat?.secteur}</p>
               </div>
             )}

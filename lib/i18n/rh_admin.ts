@@ -516,6 +516,7 @@ const partB_fr: Record<string, string> = {
   'rha.b.jur.status_signe': 'Signé ✓✓',
   'rha.b.jur.status_expire': 'Expiré',
   'rha.b.jur.status_resilie': 'Résilié',
+  'rha.b.jur.btn_cancel': 'Annuler',
 
   // frais-km (deep body)
   'rha.b.fraiskm.all_societes': 'Toutes les sociétés',
@@ -1431,6 +1432,7 @@ const partB_en: Record<string, string> = {
   'rha.b.jur.status_signe': 'Signed ✓✓',
   'rha.b.jur.status_expire': 'Expired',
   'rha.b.jur.status_resilie': 'Terminated',
+  'rha.b.jur.btn_cancel': 'Cancel',
 
   // frais-km (deep body)
   'rha.b.fraiskm.all_societes': 'All companies',
