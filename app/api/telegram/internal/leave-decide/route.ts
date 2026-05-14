@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { notifyLeaveDecided } from '@/lib/telegram/notify'
 
 /**
  * POST /api/telegram/internal/leave-decide
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
     // Fetch demande + employé (pour vérif scope et notification)
     const { data: dem } = await admin
       .from('demandes_conges')
-      .select('id, statut, employe_id, employes!inner(id, societe_id, manager_id, user_id, prenom, nom)')
+      .select('id, statut, employe_id, type_conge, nb_jours, date_debut, date_fin, employes!inner(id, societe_id, manager_id, user_id, prenom, nom)')
       .eq('id', demande_id)
       .maybeSingle()
     if (!dem) {
@@ -100,13 +101,29 @@ export async function POST(req: NextRequest) {
       employe_chat_id_to_notify = tg?.chat_id ?? null
     }
 
+    const employeNom = `${emp.prenom || ''} ${emp.nom || ''}`.trim()
+
+    // Notification push employé (best-effort)
+    const notif = await notifyLeaveDecided({
+      employe_chat_id: employe_chat_id_to_notify,
+      employe_nom: employeNom,
+      decision: nouveauStatut as 'approuve' | 'refuse',
+      type_conge: (dem as any).type_conge,
+      nb_jours: (dem as any).nb_jours,
+      date_debut: (dem as any).date_debut,
+      date_fin: (dem as any).date_fin,
+      commentaire,
+      societe_id: ctx.societe_id,
+    })
+
     return {
       result: {
         id: updated.id,
         statut: updated.statut,
         employe_id: dem.employe_id,
-        employe_nom: `${emp.prenom || ''} ${emp.nom || ''}`.trim(),
+        employe_nom: employeNom,
         employe_chat_id_to_notify,
+        employee_notified: notif.sent,
       },
     }
   })

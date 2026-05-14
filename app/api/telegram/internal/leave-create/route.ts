@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { notifyLeaveCreated } from '@/lib/telegram/notify'
 
 /**
  * POST /api/telegram/internal/leave-create
@@ -103,6 +104,20 @@ export async function POST(req: NextRequest) {
       return { result: null, status: 'error', error_msg: `Erreur création demande: ${error.message}` }
     }
 
+    const employeNom = `${emp.prenom || ''} ${emp.nom || ''}`.trim()
+
+    // Notification push manager (best-effort, ne fait pas échouer l'INSERT)
+    const notif = await notifyLeaveCreated({
+      demande_id: inserted.id,
+      manager_id: emp.manager_id || null,
+      employe_nom: employeNom,
+      type_conge: inserted.type_conge,
+      nb_jours: inserted.nb_jours,
+      date_debut,
+      date_fin,
+      societe_id: ctx.societe_id,
+    })
+
     return {
       result: {
         id: inserted.id,
@@ -111,8 +126,10 @@ export async function POST(req: NextRequest) {
         statut: inserted.statut,
         date_debut,
         date_fin,
-        employe: `${emp.prenom || ''} ${emp.nom || ''}`.trim(),
+        employe: employeNom,
         manager_id_to_notify: emp.manager_id || null,
+        manager_notified: notif.sent,
+        manager_notify_reason: notif.sent ? null : (notif as any).reason || null,
       },
     }
   })
