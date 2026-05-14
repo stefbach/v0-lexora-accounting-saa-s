@@ -192,6 +192,7 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
       { href: "/client/telegram-config", label: "Telegram Bot", labelKey: "account.telegram_bot", icon: MessageCircle } as any,
+      { href: "/client/telegram-permissions", label: "Permissions Bot", labelKey: "account.telegram_permissions", icon: MessageCircle, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
     ]
   },
 ]

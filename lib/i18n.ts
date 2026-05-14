@@ -77,6 +77,7 @@ const baseTranslations = {
     'account.my_account': 'Mon Compte',
     'account.my_profile': 'Mon Profil',
     'account.telegram_bot': 'Telegram Bot',
+    'account.telegram_permissions': 'Permissions Bot',
 
     // Common
     'common.loading': 'Chargement...',
@@ -375,6 +376,7 @@ const baseTranslations = {
     'account.my_account': 'My Account',
     'account.my_profile': 'My Profile',
     'account.telegram_bot': 'Telegram Bot',
+    'account.telegram_permissions': 'Bot Permissions',
 
     // Common
     'common.loading': 'Loading...',
