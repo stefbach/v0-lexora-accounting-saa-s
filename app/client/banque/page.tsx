@@ -85,9 +85,9 @@ function fmt(n: number, dev = "MUR"): string {
     dev
   )
 }
-function formatDate(d: string | null): string {
+function formatDate(d: string | null, locale: Locale = 'fr'): string {
   if (!d) return "—"
-  return new Date(d).toLocaleDateString("fr-FR", {
+  return new Date(d).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR', {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -142,11 +142,11 @@ export default function ClientBanquePage() {
       setComptes(accounts)
       setReleves(d.releves || [])
     } catch {
-      showToast("Erreur chargement", "error")
+      showToast(t('acc.bnq.load_error', locale), "error")
     } finally {
       setLoading(false)
     }
-  }, [societeId, showToast])
+  }, [societeId, showToast, locale])
   useEffect(() => {
     load()
   }, [load])
@@ -161,13 +161,13 @@ export default function ClientBanquePage() {
       const res = await fetch("/api/documents/upload", { method: "POST", body: fd })
       const d = await res.json()
       if (!res.ok) {
-        showToast(d?.error || "Erreur upload", "error")
+        showToast(d?.error || t('acc.bnq.upload_error', locale), "error")
         return
       }
-      showToast(`Relevé importé — ${d?.nb_transactions || 0} transactions extraites`)
+      showToast(t('acc.bnq.statement_imported', locale).replace('{n}', String(d?.nb_transactions || 0)))
       load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur upload", "error")
+      showToast(e?.message || t('acc.bnq.upload_error', locale), "error")
     } finally {
       setUploading(false)
     }
@@ -187,12 +187,12 @@ export default function ClientBanquePage() {
     return releves.reduce((sum, r) => {
       const arr = Array.isArray(r.transactions_json) ? r.transactions_json : []
       const enAttente = arr.filter(
-        (t: any) =>
-          t.statut === "propose" ||
-          t.statut === "a_verifier" ||
-          (!t.statut &&
-            !t.facture_id &&
-            !(Array.isArray(t.facture_ids) && t.facture_ids.length > 0))
+        (tx: any) =>
+          tx.statut === "propose" ||
+          tx.statut === "a_verifier" ||
+          (!tx.statut &&
+            !tx.facture_id &&
+            !(Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0))
       ).length
       return sum + enAttente
     }, 0)
@@ -339,12 +339,12 @@ export default function ClientBanquePage() {
                             </Badge>
                             {c.compte_principal && (
                               <Badge className="text-[10px] bg-blue-100 text-blue-700 border border-blue-300">
-                                Principal
+                                {t('acc.bnq.principal', locale)}
                               </Badge>
                             )}
                             {!c.actif && (
                               <Badge variant="outline" className="text-[10px] opacity-60">
-                                Inactif
+                                {t('acc.bnq.inactive', locale)}
                               </Badge>
                             )}
                           </div>
@@ -355,18 +355,18 @@ export default function ClientBanquePage() {
                           )}
                           <div className="flex items-center gap-3 mt-2 flex-wrap text-xs">
                             <span className="text-muted-foreground">
-                              Solde actuel :{" "}
+                              {t('acc.bnq.current_balance', locale)} :{" "}
                               <span className="font-mono font-medium text-foreground">
                                 {fmt(c.solde_actuel, c.devise)}
                               </span>
                             </span>
                             <span className="text-muted-foreground">
-                              Dernier relevé : {formatDate(c.date_dernier_releve)}
+                              {t('acc.bnq.last_statement', locale)} : {formatDate(c.date_dernier_releve, locale)}
                             </span>
                             {stale && (
                               <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
                                 <AlertTriangle className="h-3 w-3 mr-1" />
-                                Plus de {days}j sans relevé
+                                {t('acc.bnq.no_stmt_for_d', locale).replace('{d}', String(days))}
                               </Badge>
                             )}
                           </div>
@@ -374,7 +374,7 @@ export default function ClientBanquePage() {
                         <Link href="/client/rapprochement">
                           <Button size="sm" variant="outline">
                             <Bot className="h-4 w-4 mr-1.5" />
-                            Rapprocher
+                            {t('acc.bnq.reconcile', locale)}
                           </Button>
                         </Link>
                       </div>
@@ -389,13 +389,13 @@ export default function ClientBanquePage() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <FileText className="h-5 w-5 text-blue-600" />
-                  Relevés importés ({releves.length})
+                  {t('acc.bnq.imported_statements', locale)} ({releves.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {releves.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    Aucun relevé importé. Clique sur "Importer un relevé" pour commencer.
+                    {t('acc.bnq.no_statements_imported', locale)}
                   </p>
                 ) : (
                   <div className="rounded border bg-card divide-y">
@@ -409,11 +409,11 @@ export default function ClientBanquePage() {
                           : 0
                         const enAttente = Array.isArray(r.transactions_json)
                           ? r.transactions_json.filter(
-                              (t: any) => t.statut === "propose" || t.statut === "a_verifier"
+                              (tx: any) => tx.statut === "propose" || tx.statut === "a_verifier"
                             ).length
                           : 0
                         const rapprochees = Array.isArray(r.transactions_json)
-                          ? r.transactions_json.filter((t: any) => t.statut === "rapproche")
+                          ? r.transactions_json.filter((tx: any) => tx.statut === "rapproche")
                               .length
                           : 0
                         return (
@@ -426,33 +426,33 @@ export default function ClientBanquePage() {
                                 <h4 className="font-medium text-sm">
                                   {compte
                                     ? `${compte.banque} ${compte.numero_compte}`
-                                    : "Compte inconnu"}
+                                    : t('acc.bnq.unknown_account', locale)}
                                 </h4>
                                 <Badge variant="outline" className="text-[10px]">
-                                  {r.periode || formatDate(r.date_debut)}
+                                  {r.periode || formatDate(r.date_debut, locale)}
                                 </Badge>
                                 <span className="text-xs text-muted-foreground">
-                                  {formatDate(r.date_debut)} → {formatDate(r.date_fin)}
+                                  {formatDate(r.date_debut, locale)} → {formatDate(r.date_fin, locale)}
                                 </span>
                               </div>
                               <div className="flex items-center gap-3 mt-1 flex-wrap text-xs">
                                 <span className="text-muted-foreground">
-                                  Solde {fmt(r.solde_ouverture, compte?.devise)} →{" "}
+                                  {t('acc.bnq.balance_short', locale)} {fmt(r.solde_ouverture, compte?.devise)} →{" "}
                                   {fmt(r.solde_cloture, compte?.devise)}
                                 </span>
                                 <span className="text-muted-foreground">
-                                  {nbTx} transaction{nbTx > 1 ? "s" : ""}
+                                  {nbTx} {t('acc.bnq.transactions_lc', locale)}
                                 </span>
                                 {rapprochees > 0 && (
                                   <Badge className="text-[10px] bg-green-100 text-green-700 border-green-300">
                                     <CheckCircle2 className="h-3 w-3 mr-1" />
-                                    {rapprochees} rapprochée{rapprochees > 1 ? "s" : ""}
+                                    {rapprochees} {t('acc.bnq.reconciled_count', locale)}{rapprochees > 1 ? "s" : ""}
                                   </Badge>
                                 )}
                                 {enAttente > 0 && (
                                   <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
                                     <Clock className="h-3 w-3 mr-1" />
-                                    {enAttente} à valider
+                                    {enAttente} {t('acc.bnq.to_validate_count', locale)}
                                   </Badge>
                                 )}
                               </div>
@@ -482,6 +482,7 @@ export default function ClientBanquePage() {
               setFiltreStatut={setFiltreStatut}
               maxRows={maxRows}
               setMaxRows={setMaxRows}
+              locale={locale}
             />
 
             {/* CTA Lex Banque */}
@@ -493,17 +494,16 @@ export default function ClientBanquePage() {
                       <Bot className="h-6 w-6" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-purple-900">Prêt pour Lex Banque ?</h3>
+                      <h3 className="font-bold text-purple-900">{t('acc.bnq.ready_lex_banque', locale)}</h3>
                       <p className="text-sm text-purple-700/80 mt-0.5">
-                        L'agent IA va rapprocher tes {txEnAttente} transactions en attente avec
-                        tes factures.
+                        {t('acc.bnq.ready_help', locale).replace('{n}', String(txEnAttente))}
                       </p>
                     </div>
                   </div>
                   <Link href="/client/rapprochement">
                     <Button className="bg-purple-600 hover:bg-purple-700 text-white shadow-md">
                       <Sparkles className="h-4 w-4 mr-1.5" />
-                      Lancer Lex Banque
+                      {t('acc.bnq.run_lex_banque', locale)}
                       <ArrowRight className="h-4 w-4 ml-1.5" />
                     </Button>
                   </Link>
@@ -528,6 +528,7 @@ function TransactionsList({
   setFiltreStatut,
   maxRows,
   setMaxRows,
+  locale,
 }: {
   comptes: CompteBancaire[]
   releves: ReleveBancaire[]
@@ -539,6 +540,7 @@ function TransactionsList({
   setFiltreStatut: (v: string) => void
   maxRows: number
   setMaxRows: (n: number) => void
+  locale: Locale
 }) {
   // Aplatit toutes les transactions de tous les relevés
   const allTx = useMemo(() => {
@@ -599,29 +601,29 @@ function TransactionsList({
   const filtered = useMemo(() => {
     let list = allTx
     if (filtreCompte !== "all") {
-      list = list.filter((t) => t.compte_bancaire_id === filtreCompte)
+      list = list.filter((tx) => tx.compte_bancaire_id === filtreCompte)
     }
     if (filtreStatut !== "all") {
-      list = list.filter((t) => t.statut === filtreStatut)
+      list = list.filter((tx) => tx.statut === filtreStatut)
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(
-        (t) =>
-          t.libelle.toLowerCase().includes(q) ||
-          t.tiers_detecte?.toLowerCase().includes(q) ||
-          t.compte_comptable?.includes(q) ||
-          t.lettre?.toLowerCase().includes(q) ||
-          String(t.debit).includes(q) ||
-          String(t.credit).includes(q)
+        (tx) =>
+          tx.libelle.toLowerCase().includes(q) ||
+          tx.tiers_detecte?.toLowerCase().includes(q) ||
+          tx.compte_comptable?.includes(q) ||
+          tx.lettre?.toLowerCase().includes(q) ||
+          String(tx.debit).includes(q) ||
+          String(tx.credit).includes(q)
       )
     }
     return list.slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""))
   }, [allTx, filtreCompte, filtreStatut, search])
 
   const visible = filtered.slice(0, maxRows)
-  const totalDebit = filtered.reduce((s, t) => s + t.debit, 0)
-  const totalCredit = filtered.reduce((s, t) => s + t.credit, 0)
+  const totalDebit = filtered.reduce((s, tx) => s + tx.debit, 0)
+  const totalCredit = filtered.reduce((s, tx) => s + tx.credit, 0)
 
   return (
     <Card>
@@ -629,7 +631,7 @@ function TransactionsList({
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <CardTitle className="text-base flex items-center gap-2">
             <ListFilter className="h-5 w-5 text-blue-600" />
-            Toutes les écritures bancaires ({filtered.length})
+            {t('acc.bnq.all_bank_entries', locale)} ({filtered.length})
           </CardTitle>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative">
@@ -637,7 +639,7 @@ function TransactionsList({
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Libellé, tiers, montant…"
+                placeholder={t('acc.bnq.search_placeholder', locale)}
                 className="pl-8 h-9 w-64"
               />
             </div>
@@ -646,7 +648,7 @@ function TransactionsList({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous les comptes</SelectItem>
+                <SelectItem value="all">{t('acc.bnq.all_accounts_filter', locale)}</SelectItem>
                 {comptes.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.banque} {c.numero_compte} ({c.devise})
@@ -659,11 +661,11 @@ function TransactionsList({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous statuts</SelectItem>
-                <SelectItem value="non_identifie">Non identifiée</SelectItem>
-                <SelectItem value="propose">Proposée (agent)</SelectItem>
-                <SelectItem value="a_verifier">À vérifier</SelectItem>
-                <SelectItem value="rapproche">Rapprochée</SelectItem>
+                <SelectItem value="all">{t('acc.bnq.all_status', locale)}</SelectItem>
+                <SelectItem value="non_identifie">{t('acc.bnq.status_unidentified', locale)}</SelectItem>
+                <SelectItem value="propose">{t('acc.bnq.status_proposed', locale)}</SelectItem>
+                <SelectItem value="a_verifier">{t('acc.bnq.status_to_verify', locale)}</SelectItem>
+                <SelectItem value="rapproche">{t('acc.bnq.status_reconciled', locale)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -683,7 +685,7 @@ function TransactionsList({
               </span>
             </span>
             <span>
-              Solde net{" "}
+              {t('acc.bnq.net_balance', locale)}{" "}
               <span className={totalDebit - totalCredit >= 0 ? "text-green-700" : "text-rose-700"}>
                 {(totalDebit - totalCredit).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
@@ -694,25 +696,25 @@ function TransactionsList({
       <CardContent>
         {filtered.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            Aucune écriture pour ce filtre.
+            {t('acc.bnq.no_entries_filter', locale)}
           </p>
         ) : (
           <>
             <div className="rounded border bg-card divide-y">
-              {visible.map((t) => {
-                const compte = compteById.get(t.compte_bancaire_id)
-                const isMatched = t.statut === "rapproche"
-                const isPropose = t.statut === "propose" || t.statut === "a_verifier"
-                const montant = t.debit > 0 ? -t.debit : t.credit
+              {visible.map((tx) => {
+                const compte = compteById.get(tx.compte_bancaire_id)
+                const isMatched = tx.statut === "rapproche"
+                const isPropose = tx.statut === "propose" || tx.statut === "a_verifier"
+                const montant = tx.debit > 0 ? -tx.debit : tx.credit
                 return (
                   <div
-                    key={`${t.releve_id}:${t.idx}`}
+                    key={`${tx.releve_id}:${tx.idx}`}
                     className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs text-muted-foreground font-mono">
-                          {formatDate(t.date)}
+                          {formatDate(tx.date, locale)}
                         </span>
                         {compte && (
                           <Badge variant="outline" className="text-[10px] font-mono">
@@ -722,30 +724,30 @@ function TransactionsList({
                         {isMatched && (
                           <Badge className="text-[10px] bg-green-100 text-green-700 border-green-300">
                             <CheckCircle2 className="h-3 w-3 mr-0.5" />
-                            Rapprochée
+                            {t('acc.bnq.tx_reconciled', locale)}
                           </Badge>
                         )}
                         {isPropose && (
                           <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
                             <Bot className="h-3 w-3 mr-0.5" />
-                            {t.statut === "propose" ? "Proposée" : "À vérifier"}
+                            {tx.statut === "propose" ? t('acc.bnq.tx_proposed', locale) : t('acc.bnq.tx_to_verify', locale)}
                           </Badge>
                         )}
-                        {t.compte_comptable && (
+                        {tx.compte_comptable && (
                           <Badge variant="outline" className="text-[10px] font-mono">
-                            PCM {t.compte_comptable}
+                            PCM {tx.compte_comptable}
                           </Badge>
                         )}
-                        {t.lettre && (
+                        {tx.lettre && (
                           <Badge variant="outline" className="text-[10px] font-mono bg-green-50">
-                            {t.lettre}
+                            {tx.lettre}
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm mt-1 break-words">{t.libelle || "—"}</p>
-                      {t.tiers_detecte && (
+                      <p className="text-sm mt-1 break-words">{tx.libelle || "—"}</p>
+                      {tx.tiers_detecte && (
                         <p className="text-[11px] text-muted-foreground mt-0.5">
-                          Tiers : {t.tiers_detecte}
+                          {t('acc.bnq.tiers_short', locale)} : {tx.tiers_detecte}
                         </p>
                       )}
                     </div>
@@ -756,7 +758,7 @@ function TransactionsList({
                     >
                       {montant >= 0 ? "+" : ""}
                       {montant.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
-                      {t.devise}
+                      {tx.devise}
                     </p>
                   </div>
                 )
@@ -769,11 +771,11 @@ function TransactionsList({
                   size="sm"
                   onClick={() => setMaxRows(maxRows + 100)}
                 >
-                  Charger {Math.min(100, filtered.length - maxRows)} de plus
+                  {t('acc.bnq.load_more_n', locale).replace('{n}', String(Math.min(100, filtered.length - maxRows)))}
                   <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  {visible.length} sur {filtered.length}
+                  {t('acc.bnq.x_of_y', locale).replace('{x}', String(visible.length)).replace('{y}', String(filtered.length))}
                 </p>
               </div>
             )}

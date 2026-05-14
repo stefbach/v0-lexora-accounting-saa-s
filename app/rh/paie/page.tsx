@@ -561,7 +561,7 @@ export default function PaiePage() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold" style={{ color: NAVY }}>{t('rha.a.paie.title', locale)}</h1>
-            <p className="text-sm text-gray-500">Calcul, validation, verrouillage et exports PAYE · CSG · NSF</p>
+            <p className="text-sm text-gray-500">{t('rha.a.paie.subtitle2', locale)}</p>
           </div>
         </div>
 
@@ -571,13 +571,13 @@ export default function PaiePage() {
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-600" />
               <div>
-                <p className="font-medium">Erreur de chargement</p>
+                <p className="font-medium">{t('rha.a.paie.err_load', locale)}</p>
                 <p className="text-xs text-red-800 mt-0.5">{loadError}</p>
               </div>
             </div>
             <Button size="sm" variant="outline" onClick={() => { setLoadError(null); load() }}>
               <RefreshCw className="w-3.5 h-3.5 mr-1" />
-              Réessayer
+              {t('rha.a.paie.retry', locale)}
             </Button>
           </div>
         )}
@@ -587,11 +587,9 @@ export default function PaiePage() {
           <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex items-start gap-3">
             <span className="text-lg leading-none">ℹ️</span>
             <div>
-              <p className="font-medium">Le pointage automatique est désactivé.</p>
+              <p className="font-medium">{t('rha.a.paie.pointage_off_title', locale)}</p>
               <p className="text-xs text-blue-800 mt-0.5">
-                Les absences sont saisies manuellement (champ <code>absences</code> dans le calcul).
-                Pour activer la déduction automatique depuis les pointages, allez dans{' '}
-                <a href="/rh/societe" className="underline font-medium">Paramètres société → Pointage</a>.
+                {t('rha.a.paie.pointage_off_hint', locale)}
               </p>
             </div>
           </div>
@@ -600,9 +598,9 @@ export default function PaiePage() {
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex items-start gap-3">
             <span className="text-lg leading-none">✅</span>
             <div>
-              <p className="font-medium">Pointage actif — les absences sont calculées automatiquement.</p>
+              <p className="font-medium">{t('rha.a.paie.pointage_on_title', locale)}</p>
               <p className="text-xs text-emerald-800 mt-0.5">
-                Tout employé sans pointage ni congé approuvé sur un jour ouvré est compté absent.
+                {t('rha.a.paie.pointage_on_hint', locale)}
               </p>
             </div>
           </div>
@@ -612,18 +610,18 @@ export default function PaiePage() {
         <Card>
           <CardContent className="p-4 flex gap-3 items-center flex-wrap">
             <Select value={societe} onValueChange={setSociete}>
-              <SelectTrigger className="w-56"><SelectValue placeholder="Societe" /></SelectTrigger>
+              <SelectTrigger className="w-56"><SelectValue placeholder={t('rha.a.paie.societe_ph', locale)} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes</SelectItem>
+                <SelectItem value="all">{t('rha.a.paie.toutes', locale)}</SelectItem>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={periode} onValueChange={setPeriode}>
-              <SelectTrigger className="w-72"><SelectValue placeholder="Periode" /></SelectTrigger>
+              <SelectTrigger className="w-72"><SelectValue placeholder={t('rha.a.paie.periode_ph', locale)} /></SelectTrigger>
               <SelectContent>
                 {availablePeriodes.map(p => {
                   const d = new Date(p + "-15")
-                  const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+                  const label = d.toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR', { month: "long", year: "numeric" })
                   const base = label.charAt(0).toUpperCase() + label.slice(1)
                   // PE1 — suffixe '(25/03 → 24/04)' si mode cut_off_jour.
                   let suffix = ""
@@ -637,7 +635,7 @@ export default function PaiePage() {
               </SelectContent>
             </Select>
             {isLocked && (
-              <Badge className="bg-red-100 text-red-700 gap-1"><Lock className="w-3 h-3" />PERIODE VERROUILLEE</Badge>
+              <Badge className="bg-red-100 text-red-700 gap-1"><Lock className="w-3 h-3" />{t('rha.a.paie.locked_badge', locale)}</Badge>
             )}
           </CardContent>
         </Card>
@@ -645,9 +643,9 @@ export default function PaiePage() {
         {/* Sprint 12 FEATURE 5 — onglets Bulletins / Validation / Historique */}
         <Tabs value={activeTab} onValueChange={changeTab}>
           <TabsList>
-            <TabsTrigger value="bulletins" className="gap-2"><Calculator className="w-4 h-4" />Bulletins</TabsTrigger>
-            <TabsTrigger value="validation" className="gap-2"><ShieldCheck className="w-4 h-4" />Validation</TabsTrigger>
-            <TabsTrigger value="historique" className="gap-2"><History className="w-4 h-4" />Historique</TabsTrigger>
+            <TabsTrigger value="bulletins" className="gap-2"><Calculator className="w-4 h-4" />{t('rha.a.paie.tab_bulletins', locale)}</TabsTrigger>
+            <TabsTrigger value="validation" className="gap-2"><ShieldCheck className="w-4 h-4" />{t('rha.a.paie.tab_validation', locale)}</TabsTrigger>
+            <TabsTrigger value="historique" className="gap-2"><History className="w-4 h-4" />{t('rha.a.paie.tab_historique', locale)}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="bulletins" className="space-y-6 mt-4">
@@ -660,7 +658,7 @@ export default function PaiePage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
                   <ShieldCheck className="w-4 h-4 inline mr-1" />
-                  Calcul, validation et verrouillage
+                  {t('rha.a.paie.workflow_title', locale)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pb-3">
@@ -688,10 +686,10 @@ export default function PaiePage() {
                             pour l'étape "calcul". Le RH doit pouvoir recalculer à tout
                             moment tant que la période n'est pas verrouillée. */}
                         {step.done && step.id !== "calcul" ? (
-                          <span className="inline-block mt-2 text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">Fait</span>
+                          <span className="inline-block mt-2 text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">{t('rha.a.paie.fait', locale)}</span>
                         ) : step.done && step.id === "calcul" && !isLocked ? (
                           <div className="flex flex-col items-center gap-1 mt-2">
-                            <span className="text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">Fait</span>
+                            <span className="text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">{t('rha.a.paie.fait', locale)}</span>
                             <Button
                               className="h-7 text-[11px] px-3"
                               variant="outline"
@@ -699,7 +697,7 @@ export default function PaiePage() {
                               onClick={step.action}
                             >
                               {calculating && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                              🔄 Recalculer
+                              {t('rha.a.paie.recalculer', locale)}
                             </Button>
                           </div>
                         ) : step.action ? (
@@ -725,8 +723,8 @@ export default function PaiePage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold" style={{ color: GOLD }}>
                   <Lock className="w-4 h-4 inline mr-1" />
-                  Apres verrouillage — Exports et comptabilite
-                  {!isLocked && <span className="text-xs text-gray-400 font-normal ml-2">— Disponible apres verrouillage</span>}
+                  {t('rha.a.paie.postlock_title', locale)}
+                  {!isLocked && <span className="text-xs text-gray-400 font-normal ml-2">{t('rha.a.paie.postlock_hint', locale)}</span>}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pb-3">
@@ -747,7 +745,7 @@ export default function PaiePage() {
                         </p>
                         <p className="text-xs text-gray-500 mt-1">{step.desc}</p>
                         {step.done ? (
-                          <span className="inline-block mt-2 text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">Fait</span>
+                          <span className="inline-block mt-2 text-xs text-green-600 font-semibold bg-green-100 px-2 py-0.5 rounded-full">{t('rha.a.paie.fait', locale)}</span>
                         ) : step.action && isLocked ? (
                           <Button
                             className="mt-3 h-8 text-xs px-4"
@@ -761,7 +759,7 @@ export default function PaiePage() {
                         ) : step.link && isLocked ? (
                           <a href={step.link}>
                             <Button className="mt-3 h-8 text-xs px-4" style={{ backgroundColor: GOLD, color: "white" }}>
-                              Declarer MRA
+                              {t('rha.a.paie.declarer_mra', locale)}
                             </Button>
                           </a>
                         ) : null}
@@ -779,9 +777,9 @@ export default function PaiePage() {
             {isLocked && (
               <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg border border-red-200">
                 <Lock className="w-4 h-4 text-red-500 shrink-0" />
-                <span className="text-xs text-red-700 font-medium flex-1">Periode verrouillee — aucune modification possible sur les bulletins.</span>
+                <span className="text-xs text-red-700 font-medium flex-1">{t('rha.a.paie.locked_msg', locale)}</span>
                 <Button onClick={deverrouiller} variant="outline" size="sm" className="border-red-300 text-red-600 hover:bg-red-100 h-7 text-xs shrink-0">
-                  <Unlock className="w-3 h-3 mr-1" />Deverrouiller
+                  <Unlock className="w-3 h-3 mr-1" />{t('rha.a.paie.deverrouiller', locale)}
                 </Button>
               </div>
             )}
@@ -792,11 +790,11 @@ export default function PaiePage() {
         {bulletins.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {[
-              { label: "Masse salariale brute", v: fmt(totaux.masse_salariale_brute || 0), color: `text-[${NAVY}]` },
-              { label: "Masse salariale nette", v: fmt(totaux.masse_salariale_nette || 0), color: "text-green-700" },
-              { label: "Total deductions", v: fmt((totaux.masse_salariale_brute || 0) - (totaux.masse_salariale_nette || 0)), color: "text-red-600" },
-              { label: "Charges patronales", v: fmt(totaux.total_charges_patronales || 0), color: "text-orange-600" },
-              { label: "Cout total employeur", v: fmt(totaux.cout_total_employeur || 0), color: "text-[#D4AF37]" },
+              { label: t('rha.a.paie.kpi_brute', locale), v: fmt(totaux.masse_salariale_brute || 0), color: `text-[${NAVY}]` },
+              { label: t('rha.a.paie.kpi_nette', locale), v: fmt(totaux.masse_salariale_nette || 0), color: "text-green-700" },
+              { label: t('rha.a.paie.kpi_deductions', locale), v: fmt((totaux.masse_salariale_brute || 0) - (totaux.masse_salariale_nette || 0)), color: "text-red-600" },
+              { label: t('rha.a.paie.kpi_charges', locale), v: fmt(totaux.total_charges_patronales || 0), color: "text-orange-600" },
+              { label: t('rha.a.paie.kpi_cout', locale), v: fmt(totaux.cout_total_employeur || 0), color: "text-[#D4AF37]" },
             ].map(k => (
               <Card key={k.label}>
                 <CardContent className="p-4">
@@ -812,7 +810,7 @@ export default function PaiePage() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle style={{ color: NAVY }}>Bulletins de paie — {periode} ({bulletins.length})</CardTitle>
+              <CardTitle style={{ color: NAVY }}>{t('rha.a.paie.bulletins_for', locale)} — {periode} ({bulletins.length})</CardTitle>
               <div className="flex gap-2">
                 {periode.endsWith("-12") && !isLocked && (
                   <Button onClick={() => {
@@ -824,7 +822,7 @@ export default function PaiePage() {
                       }).then(() => { load(); loadWorkflow() })
                     }
                   }} variant="outline" className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10" size="sm">
-                    13eme mois
+                    {t('rha.a.paie.eoy_btn', locale)}
                   </Button>
                 )}
               </div>
@@ -839,9 +837,9 @@ export default function PaiePage() {
               // n'est généré tant que le RH ne clique pas sur ce bouton.
               <div className="text-center py-12 text-gray-500">
                 <Calculator className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p className="font-medium text-gray-700">Aucun bulletin pour cette période</p>
+                <p className="font-medium text-gray-700">{t('rha.a.paie.empty_title', locale)}</p>
                 <p className="text-sm mt-1 mb-4">
-                  Le calcul est manuel — aucun bulletin ne sera généré automatiquement.
+                  {t('rha.a.paie.empty_hint', locale)}
                 </p>
                 <Button
                   onClick={calculerBatch}
@@ -851,27 +849,27 @@ export default function PaiePage() {
                   {calculating
                     ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
                     : <Calculator className="w-4 h-4 mr-2" />}
-                  Calculer la paie
+                  {t('rha.a.paie.calculer', locale)}
                 </Button>
                 {societe === "all" && (
-                  <p className="text-xs text-amber-600 mt-3">Sélectionnez d'abord une société.</p>
+                  <p className="text-xs text-amber-600 mt-3">{t('rha.a.paie.empty_pick', locale)}</p>
                 )}
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Employe</TableHead>
-                    <TableHead>Poste</TableHead>
-                    <TableHead className="text-right">Base</TableHead>
-                    <TableHead className="text-right">OT</TableHead>
-                    <TableHead className="text-right">Primes</TableHead>
-                    <TableHead className="text-right font-bold">Brut</TableHead>
-                    <TableHead className="text-right text-red-600">Deductions</TableHead>
-                    <TableHead className="text-right font-bold text-green-700">Net</TableHead>
-                    <TableHead className="text-right">Charges</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>{t('rha.a.paie.col_employe', locale)}</TableHead>
+                    <TableHead>{t('rha.a.paie.col_poste', locale)}</TableHead>
+                    <TableHead className="text-right">{t('rha.a.paie.col_base', locale)}</TableHead>
+                    <TableHead className="text-right">{t('rha.a.paie.col_ot', locale)}</TableHead>
+                    <TableHead className="text-right">{t('rha.a.paie.col_primes', locale)}</TableHead>
+                    <TableHead className="text-right font-bold">{t('rha.a.paie.col_brut', locale)}</TableHead>
+                    <TableHead className="text-right text-red-600">{t('rha.a.paie.col_deductions', locale)}</TableHead>
+                    <TableHead className="text-right font-bold text-green-700">{t('rha.a.paie.col_net', locale)}</TableHead>
+                    <TableHead className="text-right">{t('rha.a.paie.col_charges', locale)}</TableHead>
+                    <TableHead>{t('rha.a.paie.col_statut', locale)}</TableHead>
+                    <TableHead>{t('rha.a.paie.col_actions', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

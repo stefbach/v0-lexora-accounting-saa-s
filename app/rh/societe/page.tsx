@@ -1270,9 +1270,9 @@ export default function SocieteSettingsPage() {
       if (result.error) flash(false, result.error)
       else {
         if (result.societe) setSociete(result.societe)
-        flash(true, "Paramètres enregistrés")
+        flash(true, t('rha.a.soc.params_saved', locale))
       }
-    } catch { flash(false, "Erreur réseau") }
+    } catch { flash(false, t('rha.a.soc.network_err', locale)) }
     setSaving(false)
   }
 
@@ -1294,9 +1294,9 @@ export default function SocieteSettingsPage() {
       else {
         if (result.societe) setSociete(result.societe)
         if (result.params_paie) setParamsPaie(result.params_paie)
-        flash(true, "Paramètres fiscaux enregistrés")
+        flash(true, t('rha.a.soc.params_fiscal_saved', locale))
       }
-    } catch { flash(false, "Erreur réseau") }
+    } catch { flash(false, t('rha.a.soc.network_err', locale)) }
     setSaving(false)
   }
 
@@ -1304,7 +1304,7 @@ export default function SocieteSettingsPage() {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: NAVY }} />
-        <span className="ml-3 text-gray-500">Chargement…</span>
+        <span className="ml-3 text-gray-500">{t('rha.a.soc.loading', locale)}</span>
       </div>
     )
   }
@@ -1314,7 +1314,7 @@ export default function SocieteSettingsPage() {
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <AlertCircle className="h-10 w-10 text-orange-400" />
         <p className="text-gray-600 text-center">
-          Aucune société trouvée. Veuillez vérifier votre accès ou créer une société.
+          {t('rha.a.soc.no_societe', locale)}
         </p>
       </div>
     )
@@ -1348,7 +1348,7 @@ export default function SocieteSettingsPage() {
           <Select value={societeId} onValueChange={handleSocieteChange}>
             <SelectTrigger className="w-[220px]">
               <Building2 className="h-4 w-4 mr-2 opacity-60" />
-              <SelectValue placeholder="Choisir une société" />
+              <SelectValue placeholder={t('rha.a.soc.choose_societe', locale)} />
             </SelectTrigger>
             <SelectContent>
               {societes.map(s => (
@@ -1361,12 +1361,12 @@ export default function SocieteSettingsPage() {
 
       {/* Tabs */}
       <div className="flex border-b gap-0.5 overflow-x-auto">
-        <TabBtn id="details" label="Identité" icon={<Building2 className="h-3.5 w-3.5" />} active={tab === "details"} onClick={() => setTab("details")} />
-        <TabBtn id="contact" label="Contact" icon={<Phone className="h-3.5 w-3.5" />} active={tab === "contact"} onClick={() => setTab("contact")} />
-        <TabBtn id="bank" label="Banque" icon={<Banknote className="h-3.5 w-3.5" />} active={tab === "bank"} onClick={() => setTab("bank")} />
-        <TabBtn id="rh" label="RH / Paie" icon={<Settings className="h-3.5 w-3.5" />} active={tab === "rh"} onClick={() => setTab("rh")} />
-        <TabBtn id="fiscal" label="Fiscal" icon={<Scale className="h-3.5 w-3.5" />} active={tab === "fiscal"} onClick={() => setTab("fiscal")} />
-        <TabBtn id="audit" label="Journal d'audit" icon={<Shield className="h-3.5 w-3.5" />} active={tab === "audit"} onClick={() => setTab("audit")} />
+        <TabBtn id="details" label={t('rha.a.soc.tab_identite', locale)} icon={<Building2 className="h-3.5 w-3.5" />} active={tab === "details"} onClick={() => setTab("details")} />
+        <TabBtn id="contact" label={t('rha.a.soc.tab_contact', locale)} icon={<Phone className="h-3.5 w-3.5" />} active={tab === "contact"} onClick={() => setTab("contact")} />
+        <TabBtn id="bank" label={t('rha.a.soc.tab_banque', locale)} icon={<Banknote className="h-3.5 w-3.5" />} active={tab === "bank"} onClick={() => setTab("bank")} />
+        <TabBtn id="rh" label={t('rha.a.soc.tab_rh', locale)} icon={<Settings className="h-3.5 w-3.5" />} active={tab === "rh"} onClick={() => setTab("rh")} />
+        <TabBtn id="fiscal" label={t('rha.a.soc.tab_fiscal', locale)} icon={<Scale className="h-3.5 w-3.5" />} active={tab === "fiscal"} onClick={() => setTab("fiscal")} />
+        <TabBtn id="audit" label={t('rha.a.soc.tab_audit', locale)} icon={<Shield className="h-3.5 w-3.5" />} active={tab === "audit"} onClick={() => setTab("audit")} />
       </div>
 
       {/* Tab content — key forces full re-mount when société changes */}

@@ -75,21 +75,23 @@ interface PCMEntry {
   sens_normal: "D" | "C" | null
 }
 
-const CLASSES: Array<{
+function getClasses(locale: Locale): Array<{
   num: number
   label: string
   desc: string
   color: string
   Icon: any
-}> = [
-  { num: 1, label: "Capitaux", desc: "Capital, réserves, emprunts long terme", color: "blue", Icon: Wallet },
-  { num: 2, label: "Immobilisations", desc: "Actifs corporels, incorporels, financiers", color: "cyan", Icon: Building2 },
-  { num: 3, label: "Stocks", desc: "Marchandises, matières premières, produits finis", color: "teal", Icon: Package },
-  { num: 4, label: "Tiers", desc: "Clients, fournisseurs, État, personnel, associés", color: "amber", Icon: Users },
-  { num: 5, label: "Trésorerie", desc: "Banque, caisse, virements internes", color: "purple", Icon: Landmark },
-  { num: 6, label: "Charges", desc: "Achats, services extérieurs, salaires, impôts", color: "rose", Icon: ArrowDownCircle },
-  { num: 7, label: "Produits", desc: "Ventes, prestations, produits financiers", color: "green", Icon: ArrowUpCircle },
-]
+}> {
+  return [
+    { num: 1, label: t('acc.gl.cls1', locale), desc: t('acc.gl.cls1_desc', locale), color: "blue", Icon: Wallet },
+    { num: 2, label: t('acc.gl.cls2', locale), desc: t('acc.gl.cls2_desc', locale), color: "cyan", Icon: Building2 },
+    { num: 3, label: t('acc.gl.cls3', locale), desc: t('acc.gl.cls3_desc', locale), color: "teal", Icon: Package },
+    { num: 4, label: t('acc.gl.cls4', locale), desc: t('acc.gl.cls4_desc', locale), color: "amber", Icon: Users },
+    { num: 5, label: t('acc.gl.cls5', locale), desc: t('acc.gl.cls5_desc', locale), color: "purple", Icon: Landmark },
+    { num: 6, label: t('acc.gl.cls6', locale), desc: t('acc.gl.cls6_desc', locale), color: "rose", Icon: ArrowDownCircle },
+    { num: 7, label: t('acc.gl.cls7', locale), desc: t('acc.gl.cls7_desc', locale), color: "green", Icon: ArrowUpCircle },
+  ]
+}
 
 const colorMap: Record<string, { bg: string; border: string; text: string; bgLight: string }> = {
   blue: { bg: "bg-blue-50", border: "border-blue-300", text: "text-blue-900", bgLight: "bg-blue-100" },
@@ -192,13 +194,13 @@ export default function ClientGrandLivrePage() {
       })
       const d = await res.json()
       if (!res.ok) {
-        showToast(d?.error || "Erreur Lex Livre", "error")
+        showToast(d?.error || t('acc.gl.error_lex', locale), "error")
         return
       }
       setAudit(d)
-      showToast(`Lex Livre : score ${d.score}/100`)
+      showToast(t('acc.gl.lex_score', locale).replace('{s}', String(d.score)))
     } catch (e: any) {
-      showToast(e?.message || "Erreur", "error")
+      showToast(e?.message || t('acc.gl.error', locale), "error")
     } finally {
       setAuditing(false)
     }
@@ -215,17 +217,17 @@ export default function ClientGrandLivrePage() {
       })
       const d = await res.json()
       if (!res.ok) {
-        showToast(d?.error || "Erreur lettrage", "error")
+        showToast(d?.error || t('acc.gl.error_letter', locale), "error")
         return
       }
       showToast(
-        `Lettrage : ${d.pairs_created} paire(s), ${d.ecritures_lettrees} écriture(s) lettrée(s)`
+        t('acc.gl.letter_msg', locale).replace('{p}', String(d.pairs_created)).replace('{e}', String(d.ecritures_lettrees))
       )
       load()
       // Re-audit pour refléter
       handleAudit()
     } catch (e: any) {
-      showToast(e?.message || "Erreur lettrage", "error")
+      showToast(e?.message || t('acc.gl.error_letter', locale), "error")
     } finally {
       setLettering(false)
     }
@@ -334,7 +336,7 @@ export default function ClientGrandLivrePage() {
                 variant="outline"
                 size="sm"
                 className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                title="Apparie les écritures 411x/401x du même tiers et même montant"
+                title={t('acc.gl.auto_match_title', locale)}
               >
                 {lettering ? (
                   <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
@@ -352,10 +354,10 @@ export default function ClientGrandLivrePage() {
                 variant="outline"
                 size="sm"
                 className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                title="Télécharger le grand-livre en Excel multi-feuilles (par classe PCM + synthèse)"
+                title={t('acc.gl.export_excel_title', locale)}
               >
                 <Download className="h-4 w-4 mr-1.5" />
-                Export Excel
+                {t('acc.gl.export_excel', locale)}
               </Button>
               <Button
                 onClick={handleAudit}
@@ -385,7 +387,7 @@ export default function ClientGrandLivrePage() {
           </div>
         ) : (
           <>
-            {audit && <AuditPanel audit={audit} />}
+            {audit && <AuditPanel audit={audit} locale={locale} />}
 
             {/* Synthèse comptable */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -421,7 +423,7 @@ export default function ClientGrandLivrePage() {
 
             {/* Sections par classe */}
             <div className="space-y-3">
-              {CLASSES.map((cl) => {
+              {getClasses(locale).map((cl) => {
                 const arr = filteredByClass.get(cl.num) || []
                 const open = openClasses.has(cl.num)
                 const cls = colorMap[cl.color]
@@ -440,26 +442,26 @@ export default function ClientGrandLivrePage() {
                         </div>
                         <div className="min-w-0">
                           <h3 className={`font-bold ${cls.text}`}>
-                            Classe {cl.num} — {cl.label}
+                            {t('acc.gl.class_label', locale)} {cl.num} — {cl.label}
                           </h3>
                           <p className="text-xs text-muted-foreground">{cl.desc}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm font-mono flex-shrink-0">
                         <div className="text-right">
-                          <div className="text-[10px] text-muted-foreground uppercase">Comptes</div>
+                          <div className="text-[10px] text-muted-foreground uppercase">{t('acc.gl.accounts_word', locale)}</div>
                           <div className={`font-bold ${cls.text}`}>{arr.length}</div>
                         </div>
                         <div className="text-right hidden md:block">
-                          <div className="text-[10px] text-muted-foreground uppercase">Débit</div>
+                          <div className="text-[10px] text-muted-foreground uppercase">{t('acc.pcm.debit', locale)}</div>
                           <div className="text-green-700">{fmt(debit)}</div>
                         </div>
                         <div className="text-right hidden md:block">
-                          <div className="text-[10px] text-muted-foreground uppercase">Crédit</div>
+                          <div className="text-[10px] text-muted-foreground uppercase">{t('acc.pcm.credit', locale)}</div>
                           <div className="text-rose-700">{fmt(credit)}</div>
                         </div>
                         <div className="text-right">
-                          <div className="text-[10px] text-muted-foreground uppercase">Solde</div>
+                          <div className="text-[10px] text-muted-foreground uppercase">{t('acc.bnq.balance_short', locale)}</div>
                           <div
                             className={`font-bold ${
                               solde >= 0 ? "text-green-700" : "text-rose-700"
@@ -480,8 +482,8 @@ export default function ClientGrandLivrePage() {
                         {arr.length === 0 ? (
                           <p className="py-4 text-center text-xs text-muted-foreground italic">
                             {search.trim()
-                              ? "Aucun compte ne correspond à la recherche dans cette classe"
-                              : "Aucun compte mouvementé dans cette classe"}
+                              ? t('acc.gl.no_match_in_class', locale)
+                              : t('acc.gl.no_account_class', locale)}
                           </p>
                         ) : (
                           <div className="divide-y">
@@ -514,7 +516,7 @@ export default function ClientGrandLivrePage() {
                                           {c.numero_compte}
                                         </Badge>
                                         <span className="text-xs text-muted-foreground">
-                                          {c.nb_ecritures} écriture{c.nb_ecritures > 1 ? "s" : ""}
+                                          {c.nb_ecritures} {c.nb_ecritures > 1 ? t('acc.gl.entry_plural', locale) : t('acc.gl.entry_singular', locale)}
                                         </span>
                                       </div>
                                       {c.libelle && (
@@ -545,6 +547,7 @@ export default function ClientGrandLivrePage() {
                                     <EcrituresDetail
                                       ecritures={compteEcritures}
                                       compte={c.numero_compte}
+                                      locale={locale}
                                     />
                                   )}
                                 </div>
@@ -565,7 +568,7 @@ export default function ClientGrandLivrePage() {
   )
 }
 
-function AuditPanel({ audit }: { audit: any }) {
+function AuditPanel({ audit, locale }: { audit: any; locale: Locale }) {
   const issues = audit.issues || []
   const score = audit.score || 0
   const severity = audit.severity || "ok"
@@ -589,12 +592,12 @@ function AuditPanel({ audit }: { audit: any }) {
           </div>
           <div>
             <h3 className="font-bold flex items-center gap-2">
-              Lex Livre — Audit Grand Livre
-              <Badge className="bg-purple-600 text-white text-[10px]">Agent IA</Badge>
+              {t('acc.gl.lex_audit_title', locale)}
+              <Badge className="bg-purple-600 text-white text-[10px]">{t('acc.rap.ai_agent', locale)}</Badge>
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {summary.total_ecritures} écritures · D {fmt(summary.total_debit || 0)} · C{" "}
-              {fmt(summary.total_credit || 0)} · écart{" "}
+              {summary.total_ecritures} {t('acc.gl.entries_word', locale)} · D {fmt(summary.total_debit || 0)} · C{" "}
+              {fmt(summary.total_credit || 0)} · {t('acc.gl.gap_word', locale)}{" "}
               <span
                 className={
                   Math.abs(summary.ecart_balance || 0) > 0.01
@@ -609,13 +612,13 @@ function AuditPanel({ audit }: { audit: any }) {
         </div>
         <div className="text-right">
           <div className={`text-4xl font-bold ${scoreColor}`}>{score}</div>
-          <div className="text-xs text-muted-foreground">/100 santé</div>
+          <div className="text-xs text-muted-foreground">{t('acc.gl.health', locale)}</div>
         </div>
       </div>
       {issues.length === 0 ? (
         <div className="mt-3 flex items-center gap-2 text-sm text-green-800">
           <CheckCircle2 className="h-4 w-4" />
-          Aucune anomalie détectée — grand livre propre.
+          {t('acc.gl.no_anomaly', locale)}
         </div>
       ) : (
         <div className="mt-3 space-y-1.5">
@@ -644,14 +647,14 @@ function AuditPanel({ audit }: { audit: any }) {
       {audit.comptes_hors_pcm?.length > 0 && (
         <details className="mt-3 text-xs">
           <summary className="cursor-pointer font-medium text-amber-700">
-            Comptes hors PCM ({audit.comptes_hors_pcm.length})
+            {t('acc.gl.accounts_off_pcm', locale)} ({audit.comptes_hors_pcm.length})
           </summary>
           <div className="mt-2 space-y-0.5">
             {audit.comptes_hors_pcm.slice(0, 10).map((c: any) => (
               <div key={c.numero} className="flex justify-between gap-2 font-mono">
                 <span>{c.numero}</span>
                 <span className="text-muted-foreground">
-                  {c.nb} écr. · solde {fmt((c.debit - c.credit) || 0)}
+                  {c.nb} {t('acc.gl.entries_short', locale)} · {t('acc.gl.balance_short', locale)} {fmt((c.debit - c.credit) || 0)}
                 </span>
               </div>
             ))}
@@ -665,14 +668,16 @@ function AuditPanel({ audit }: { audit: any }) {
 function EcrituresDetail({
   ecritures,
   compte,
+  locale,
 }: {
   ecritures: Ecriture[]
   compte: string
+  locale: Locale
 }) {
   if (ecritures.length === 0) {
     return (
       <div className="px-4 pb-3 pt-1 bg-muted/20 text-xs text-muted-foreground italic border-t">
-        Aucune écriture pour ce compte.
+        {t('acc.gl.no_entries_account', locale)}
       </div>
     )
   }
@@ -682,7 +687,7 @@ function EcrituresDetail({
     <div className="bg-slate-50 border-t">
       <div className="px-4 py-2 text-[11px] flex items-center justify-between gap-3 border-b">
         <span className="text-muted-foreground font-medium">
-          Détail des écritures du compte <span className="font-mono">{compte}</span>
+          {t('acc.gl.detail_entries_for', locale)} <span className="font-mono">{compte}</span>
         </span>
         <span className="font-mono">
           D <span className="text-green-700">{fmt(totalD)}</span> · C{" "}
@@ -693,13 +698,13 @@ function EcrituresDetail({
         <table className="w-full text-xs">
           <thead className="bg-slate-100">
             <tr>
-              <th className="px-2 py-1.5 text-left font-medium">Date</th>
-              <th className="px-2 py-1.5 text-left font-medium">Journal</th>
-              <th className="px-2 py-1.5 text-left font-medium">Libellé</th>
-              <th className="px-2 py-1.5 text-right font-medium">Débit</th>
-              <th className="px-2 py-1.5 text-right font-medium">Crédit</th>
-              <th className="px-2 py-1.5 text-left font-medium">Lettre</th>
-              <th className="px-2 py-1.5 text-left font-medium">Réf.</th>
+              <th className="px-2 py-1.5 text-left font-medium">{t('common.date', locale)}</th>
+              <th className="px-2 py-1.5 text-left font-medium">{t('acc.gl.col_journal', locale)}</th>
+              <th className="px-2 py-1.5 text-left font-medium">{t('acc.gl.col_label', locale)}</th>
+              <th className="px-2 py-1.5 text-right font-medium">{t('acc.pcm.debit', locale)}</th>
+              <th className="px-2 py-1.5 text-right font-medium">{t('acc.pcm.credit', locale)}</th>
+              <th className="px-2 py-1.5 text-left font-medium">{t('acc.gl.col_letter', locale)}</th>
+              <th className="px-2 py-1.5 text-left font-medium">{t('acc.gl.col_ref', locale)}</th>
             </tr>
           </thead>
           <tbody>
@@ -707,7 +712,7 @@ function EcrituresDetail({
               <tr key={e.id} className="border-b border-slate-200 hover:bg-white">
                 <td className="px-2 py-1.5 font-mono whitespace-nowrap">
                   {e.date_ecriture
-                    ? new Date(e.date_ecriture).toLocaleDateString("fr-FR")
+                    ? new Date(e.date_ecriture).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')
                     : "—"}
                 </td>
                 <td className="px-2 py-1.5">

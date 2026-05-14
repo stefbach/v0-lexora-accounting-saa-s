@@ -60,28 +60,30 @@ import { t, getLocale, type Locale } from '@/lib/i18n'
 
 const AGENT_NAME = "Lex Banque"
 
-const MOIS = [
-  { val: "01", label: "Janvier" },
-  { val: "02", label: "Février" },
-  { val: "03", label: "Mars" },
-  { val: "04", label: "Avril" },
-  { val: "05", label: "Mai" },
-  { val: "06", label: "Juin" },
-  { val: "07", label: "Juillet" },
-  { val: "08", label: "Août" },
-  { val: "09", label: "Septembre" },
-  { val: "10", label: "Octobre" },
-  { val: "11", label: "Novembre" },
-  { val: "12", label: "Décembre" },
-]
+function getMois(locale: Locale) {
+  return [
+    { val: "01", label: t('acc.rap.month_jan', locale) },
+    { val: "02", label: t('acc.rap.month_feb', locale) },
+    { val: "03", label: t('acc.rap.month_mar', locale) },
+    { val: "04", label: t('acc.rap.month_apr', locale) },
+    { val: "05", label: t('acc.rap.month_may', locale) },
+    { val: "06", label: t('acc.rap.month_jun', locale) },
+    { val: "07", label: t('acc.rap.month_jul', locale) },
+    { val: "08", label: t('acc.rap.month_aug', locale) },
+    { val: "09", label: t('acc.rap.month_sep', locale) },
+    { val: "10", label: t('acc.rap.month_oct', locale) },
+    { val: "11", label: t('acc.rap.month_nov', locale) },
+    { val: "12", label: t('acc.rap.month_dec', locale) },
+  ]
+}
 const ANNEES = ["2024", "2025", "2026", "2027"]
 
 function fmt(n: number): string {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
-function formatDate(d: string | null | undefined): string {
+function formatDate(d: string | null | undefined, locale: Locale = 'fr'): string {
   if (!d) return "—"
-  return new Date(d).toLocaleDateString("fr-FR", {
+  return new Date(d).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR', {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -183,12 +185,12 @@ export default function ClientRapprochementPage() {
       const d = await res.json()
       setData(d)
     } catch {
-      showToast("Erreur chargement", "error")
+      showToast(t('acc.rap.load_error', locale), "error")
       setData(null)
     } finally {
       setLoading(false)
     }
-  }, [societeId, periodeDebut, periodeFin, showToast])
+  }, [societeId, periodeDebut, periodeFin, showToast, locale])
   useEffect(() => {
     load()
   }, [load])
@@ -397,16 +399,16 @@ export default function ClientRapprochementPage() {
       virements_internes: [] as BankTx[],
       autres: [] as BankTx[],
     }
-    for (const t of all) {
-      const b = classifyBucket(t)
-      buckets[b].push(t)
+    for (const tx of all) {
+      const b = classifyBucket(tx)
+      buckets[b].push(tx)
     }
     const g: Grp[] = []
     if (buckets.encaissements_client.length)
       g.push({
         key: "encaissements_client",
-        title: `Encaissements clients`,
-        desc: "Paiements reçus de tes clients à rapprocher avec leurs factures.",
+        title: t('acc.rap.encaiss_title', locale),
+        desc: t('acc.rap.encaiss_desc', locale),
         icon: "📥",
         color: "border-green-300 bg-green-50",
         items: buckets.encaissements_client,
@@ -414,8 +416,8 @@ export default function ClientRapprochementPage() {
     if (buckets.paiements_fournisseur.length)
       g.push({
         key: "paiements_fournisseur",
-        title: `Paiements fournisseurs`,
-        desc: "Sorties bancaires à rapprocher avec les factures fournisseurs.",
+        title: t('acc.rap.paiem_title', locale),
+        desc: t('acc.rap.paiem_desc', locale),
         icon: "📤",
         color: "border-rose-300 bg-rose-50",
         items: buckets.paiements_fournisseur,
@@ -423,8 +425,8 @@ export default function ClientRapprochementPage() {
     if (buckets.mra.length)
       g.push({
         key: "mra",
-        title: `MRA & charges sociales`,
-        desc: "Paiements PAYE, NSF, CSG, NPF — à imputer sur les comptes 433x/444x.",
+        title: t('acc.rap.mra_title', locale),
+        desc: t('acc.rap.mra_desc', locale),
         icon: "🏛️",
         color: "border-red-300 bg-red-50",
         items: buckets.mra,
@@ -432,8 +434,8 @@ export default function ClientRapprochementPage() {
     if (buckets.frais_bancaires.length)
       g.push({
         key: "frais_bancaires",
-        title: `Frais bancaires`,
-        desc: "Commissions, agios, intérêts, frais de tenue de compte (PCM 6270/6611).",
+        title: t('acc.rap.frais_title', locale),
+        desc: t('acc.rap.frais_desc', locale),
         icon: "💳",
         color: "border-orange-300 bg-orange-50",
         items: buckets.frais_bancaires,
@@ -441,8 +443,8 @@ export default function ClientRapprochementPage() {
     if (buckets.salaires.length)
       g.push({
         key: "salaires",
-        title: `Salaires`,
-        desc: "Bulk Payment SALARY ou virements salaire individuels (PCM 4210).",
+        title: t('acc.rap.sal_title', locale),
+        desc: t('acc.rap.sal_desc', locale),
         icon: "💸",
         color: "border-purple-300 bg-purple-50",
         items: buckets.salaires,
@@ -450,8 +452,8 @@ export default function ClientRapprochementPage() {
     if (buckets.virements_internes.length)
       g.push({
         key: "virements_internes",
-        title: `Virements internes`,
-        desc: "Mouvements entre tes propres comptes (PCM 5811).",
+        title: t('acc.rap.vir_title', locale),
+        desc: t('acc.rap.vir_desc', locale),
         icon: "🔄",
         color: "border-blue-300 bg-blue-50",
         items: buckets.virements_internes,
@@ -459,14 +461,14 @@ export default function ClientRapprochementPage() {
     if (buckets.autres.length)
       g.push({
         key: "autres",
-        title: `Autres`,
-        desc: "Cas particuliers — vérifier au cas par cas.",
+        title: t('acc.rap.others_title', locale),
+        desc: t('acc.rap.others_desc', locale),
         icon: "❓",
         color: "border-slate-300 bg-slate-50",
         items: buckets.autres,
       })
     return g
-  }, [proposes, aVerifier, factures])
+  }, [proposes, aVerifier, factures, locale])
 
   // Lettrage automatique sans IA — appelle la pipeline native
   // /api/comptable/rapprochement?action=auto_rapprocher (matching algo pur).
@@ -484,19 +486,19 @@ export default function ClientRapprochementPage() {
       })
       const d = await res.json()
       if (!res.ok) {
-        showToast(d?.error || "Erreur lettrage automatique", "error")
+        showToast(d?.error || t('acc.rap.error_autoletter', locale), "error")
         return
       }
       showToast(
-        `Lettrage automatique : ${d.matched || 0} transaction(s) rapprochée(s)`
+        t('acc.rap.autoletter_msg', locale).replace('{n}', String(d.matched || 0))
       )
       load()
     } catch (e: any) {
-      showToast(`Erreur : ${e?.message || "réseau"}`, "error")
+      showToast(`${t('acc.rap.error_label', locale)} : ${e?.message || t('acc.rap.network_error', locale)}`, "error")
     } finally {
       setAutoLettrage(false)
     }
-  }, [societeId, periodeDebut, periodeFin, load, showToast])
+  }, [societeId, periodeDebut, periodeFin, load, showToast, locale])
 
   // Classification comptable automatique (R01-R06) sur les tx orphelines —
   // applique les règles déterministes (frais bancaires, salaires, MRA, etc.)
@@ -515,19 +517,19 @@ export default function ClientRapprochementPage() {
       })
       const d = await res.json()
       if (!res.ok) {
-        showToast(d?.error || "Erreur classification", "error")
+        showToast(d?.error || t('acc.rap.error_classif', locale), "error")
         return
       }
       showToast(
-        `Classification : ${d.classified || d.matched || 0} transaction(s) classée(s)`
+        t('acc.rap.classif_msg', locale).replace('{n}', String(d.classified || d.matched || 0))
       )
       load()
     } catch (e: any) {
-      showToast(`Erreur : ${e?.message || "réseau"}`, "error")
+      showToast(`${t('acc.rap.error_label', locale)} : ${e?.message || t('acc.rap.network_error', locale)}`, "error")
     } finally {
       setReclassifying(false)
     }
-  }, [societeId, periodeDebut, periodeFin, load, showToast])
+  }, [societeId, periodeDebut, periodeFin, load, showToast, locale])
 
   const handleRunAgent = useCallback(
     async (withAi = false) => {
@@ -551,7 +553,7 @@ export default function ClientRapprochementPage() {
         })
         const d = await res.json()
         if (!res.ok) {
-          showToast(d?.error || `Erreur ${AGENT_NAME}`, "error")
+          showToast(d?.error || t('acc.rap.error_run', locale).replace('{agent}', AGENT_NAME), "error")
           return
         }
         const total =
@@ -560,21 +562,25 @@ export default function ClientRapprochementPage() {
           (d.stats?.semantic_matches || 0) +
           (d.stats?.semantic_classifications || 0)
         showToast(
-          `${AGENT_NAME}${withAi ? " + IA" : ""} : ${total} suggestion(s), ${d.writes?.transactions_modifiees || 0} écrites`
+          t('acc.rap.lex_msg', locale)
+            .replace('{agent}', AGENT_NAME)
+            .replace('{ai}', withAi ? t('acc.rap.with_ai', locale) : '')
+            .replace('{n}', String(total))
+            .replace('{w}', String(d.writes?.transactions_modifiees || 0))
         )
         load()
       } catch (e: any) {
-        showToast(`Erreur ${AGENT_NAME} : ${e?.message || "réseau"}`, "error")
+        showToast(`${t('acc.rap.error_run', locale).replace('{agent}', AGENT_NAME)} : ${e?.message || t('acc.rap.network_error', locale)}`, "error")
       } finally {
         setRunningAgent(false)
       }
     },
-    [societeId, periodeDebut, periodeFin, load, showToast]
+    [societeId, periodeDebut, periodeFin, load, showToast, locale]
   )
 
   const validateOne = useCallback(
     async (tx: BankTx): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
-      if (!societeId) return { ok: false, error: "société manquante" }
+      if (!societeId) return { ok: false, error: t('acc.rap.company_missing', locale) }
       const body: any = {
         societe_id: societeId,
         transaction_id: tx.id,
@@ -599,7 +605,7 @@ export default function ClientRapprochementPage() {
         body.classification = tx.classification
         body.compte_charge = tx.compte_comptable
       } else {
-        return { ok: false, error: "Suggestion incomplète" }
+        return { ok: false, error: t('acc.rap.suggestion_incomplete', locale) }
       }
       try {
         const res = await fetch("/api/comptable/rapprochement", {
@@ -611,16 +617,16 @@ export default function ClientRapprochementPage() {
         if (!res.ok) return { ok: false, error: d?.error || `HTTP ${res.status}` }
         return { ok: true, lettre: d?.lettre }
       } catch (e: any) {
-        return { ok: false, error: e?.message || "Erreur réseau" }
+        return { ok: false, error: e?.message || t('acc.rap.network_error', locale) }
       }
     },
-    [societeId]
+    [societeId, locale]
   )
 
   const handleValidateOne = async (tx: BankTx) => {
     const r = await validateOne(tx)
-    if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
-    showToast(`Validé (${r.lettre || "—"}) — écriture BNQ créée`)
+    if (!r.ok) return showToast(`${t('acc.rap.fail', locale)} : ${r.error}`, "error")
+    showToast(t('acc.rap.validated_lettre', locale).replace('{l}', r.lettre || "—"))
     load()
   }
 
