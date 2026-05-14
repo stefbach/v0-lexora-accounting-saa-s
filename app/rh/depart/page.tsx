@@ -445,25 +445,25 @@ function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: 
       <CardHeader>
         <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
           <Clock className="w-4 h-4" />
-          Départs récents
+          {t('rha.b.depart.recent', locale)}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
         ) : departs.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">Aucun départ enregistré</div>
+          <div className="text-center py-8 text-gray-500">{t('rha.b.depart.no_departures', locale)}</div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Employé</TableHead>
-                <TableHead>Poste</TableHead>
-                <TableHead>Date départ</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Ancienneté</TableHead>
-                <TableHead>Raison</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('rha.b.depart.col_employee', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_position', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_date', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_type', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_seniority', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_reason', locale)}</TableHead>
+                <TableHead>{t('rha.b.depart.col_actions', locale)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -506,7 +506,7 @@ function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: 
                         disabled={reintegratingId === d.id}
                       >
                         {reintegratingId === d.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                        Réintégrer
+                        {t('rha.b.depart.btn_reintegrate', locale)}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -588,13 +588,13 @@ export default function DepartPage() {
             )}
           </div>
           <Button variant="outline" size="sm" className="ml-auto" onClick={() => setConfirmResult(null)}>
-            Fermer
+            {t('rha.b.expaie.close', locale)}
           </Button>
         </div>
       )}
 
       {/* Form */}
-      <DepartureForm societes={societes} onCalculated={handleCalculated} />
+      <DepartureForm societes={societes} onCalculated={handleCalculated} locale={locale} />
 
       {/* Breakdown */}
       {breakdown && formData && (
@@ -603,11 +603,12 @@ export default function DepartPage() {
           formData={formData}
           onConfirm={handleConfirm}
           confirming={confirming}
+          locale={locale}
         />
       )}
 
       {/* Recent departures */}
-      <RecentDepartures refreshKey={refreshKey} />
+      <RecentDepartures refreshKey={refreshKey} locale={locale} />
     </div>
     </ClientPageShell>
   )

@@ -503,23 +503,23 @@ export default function GeolocalisationPage() {
         </div>
         <div className="flex gap-3 items-center">
           <Select value={societe} onValueChange={setSociete}>
-            <SelectTrigger className="w-52"><SelectValue placeholder="Société" /></SelectTrigger>
+            <SelectTrigger className="w-52"><SelectValue placeholder={t('rha.b.geo.societe', locale)} /></SelectTrigger>
             <SelectContent>
               {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
           {groupes.length > 0 && (
             <Select value={filterGroupe} onValueChange={setFilterGroupe}>
-              <SelectTrigger className="w-44"><SelectValue placeholder="Groupe" /></SelectTrigger>
+              <SelectTrigger className="w-44"><SelectValue placeholder={t('rha.b.geo.group', locale)} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous les groupes</SelectItem>
+                <SelectItem value="all">{t('rha.b.geo.all_groups', locale)}</SelectItem>
                 {groupes.map(g => <SelectItem key={g.id} value={g.id}>{g.nom}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
           <div className="flex rounded-lg border overflow-hidden">
-            <button onClick={() => setView("carte")} className={`px-3 py-2 text-xs font-medium ${view === "carte" ? "bg-[#0B0F2E] text-white" : "text-gray-500"}`}>Carte</button>
-            <button onClick={() => setView("liste")} className={`px-3 py-2 text-xs font-medium ${view === "liste" ? "bg-[#0B0F2E] text-white" : "text-gray-500"}`}>Liste</button>
+            <button onClick={() => setView("carte")} className={`px-3 py-2 text-xs font-medium ${view === "carte" ? "bg-[#0B0F2E] text-white" : "text-gray-500"}`}>{t('rha.b.geo.view_map', locale)}</button>
+            <button onClick={() => setView("liste")} className={`px-3 py-2 text-xs font-medium ${view === "liste" ? "bg-[#0B0F2E] text-white" : "text-gray-500"}`}>{t('rha.b.geo.view_list', locale)}</button>
           </div>
           <Button variant="outline" size="sm" onClick={load}><RefreshCw className="w-4 h-4" /></Button>
         </div>
@@ -528,12 +528,12 @@ export default function GeolocalisationPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
-          { label: "Total", value: total, icon: Users, color: NAVY },
-          { label: "En service", value: enService, icon: Clock, color: BLUE },
-          { label: "Repos", value: repos, icon: Coffee, color: "#9ca3af" },
-          { label: "Congé", value: conge, icon: Coffee, color: GREEN },
-          { label: "Avec adresse", value: avecAdresse, icon: MapPin, color: GREEN },
-          { label: "Sans adresse", value: sansAdresse, icon: MapPin, color: "#dc2626" },
+          { label: t('rha.b.geo.kpi_total', locale), value: total, icon: Users, color: NAVY },
+          { label: t('rha.b.geo.kpi_in_service', locale), value: enService, icon: Clock, color: BLUE },
+          { label: t('rha.b.geo.kpi_rest', locale), value: repos, icon: Coffee, color: "#9ca3af" },
+          { label: t('rha.b.geo.kpi_leave', locale), value: conge, icon: Coffee, color: GREEN },
+          { label: t('rha.b.geo.kpi_with_addr', locale), value: avecAdresse, icon: MapPin, color: GREEN },
+          { label: t('rha.b.geo.kpi_no_addr', locale), value: sansAdresse, icon: MapPin, color: "#dc2626" },
         ].map(k => (
           <Card key={k.label} className="rounded-2xl shadow-sm">
             <CardContent className="p-4 text-center">
@@ -564,7 +564,7 @@ export default function GeolocalisationPage() {
               </div>
               <div>
                 <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-                  IA Assistant Geolocalisation
+                  {t('rha.b.geo.ai_title', locale)}
                   <Badge
                     className="text-[9px] font-semibold tracking-wider"
                     style={{ backgroundColor: `${GOLD}25`, color: GOLD, border: `1px solid ${GOLD}50` }}
@@ -573,7 +573,7 @@ export default function GeolocalisationPage() {
                   </Badge>
                 </CardTitle>
                 <p className="text-xs" style={{ color: "rgba(255,255,255,0.55)" }}>
-                  Analyse intelligente des equipes, transport, couverture et zones a risque
+                  {t('rha.b.geo.ai_subtitle', locale)}
                 </p>
               </div>
             </div>
@@ -590,12 +590,12 @@ export default function GeolocalisationPage() {
               {claudeLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Analyse en cours...
+                  {t('rha.b.geo.ai_analyzing', locale)}
                 </>
               ) : (
                 <>
                   <Zap className="w-4 h-4 mr-2" />
-                  Analyser avec Claude
+                  {t('rha.b.geo.ai_analyze_btn', locale)}
                 </>
               )}
             </Button>
@@ -614,7 +614,7 @@ export default function GeolocalisationPage() {
             >
               <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold">Erreur IA</p>
+                <p className="font-semibold">{t('rha.b.geo.ai_error', locale)}</p>
                 <p className="text-xs mt-1 opacity-80">{claudeError}</p>
               </div>
             </div>
@@ -636,7 +636,7 @@ export default function GeolocalisationPage() {
                   <div className="flex items-center gap-2 mb-2">
                     <TrendingUp className="w-4 h-4" style={{ color: GOLD }} />
                     <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>
-                      Analyse executive
+                      {t('rha.b.geo.executive_analysis', locale)}
                     </span>
                   </div>
                   <p className="text-sm whitespace-pre-wrap">{claudeData.insights}</p>
@@ -675,7 +675,7 @@ export default function GeolocalisationPage() {
                   <div className="flex items-center gap-2 mb-3">
                     <Lightbulb className="w-4 h-4" style={{ color: GOLD }} />
                     <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>
-                      Recommandations actionnables
+                      {t('rha.b.geo.recommendations', locale)}
                     </span>
                   </div>
                   <ul className="space-y-2.5">
@@ -699,10 +699,10 @@ export default function GeolocalisationPage() {
             >
               <Route className="w-8 h-8 mx-auto mb-2" style={{ color: "rgba(212,175,55,0.5)" }} />
               <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
-                Cliquez sur "Analyser avec Claude" pour obtenir des insights en temps reel
+                {t('rha.b.geo.empty_hint', locale)}
               </p>
               <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.4)" }}>
-                Composition d'equipes, couts transport, couverture shifts et zones a risque
+                {t('rha.b.geo.empty_subtitle', locale)}
               </p>
             </div>
           )}
@@ -715,7 +715,7 @@ export default function GeolocalisationPage() {
             <div className="flex items-center gap-2 mb-2">
               <Bot className="w-4 h-4" style={{ color: GOLD }} />
               <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>
-                Question libre
+                {t('rha.b.geo.free_question', locale)}
               </span>
             </div>
             <form
@@ -728,7 +728,7 @@ export default function GeolocalisationPage() {
               <Input
                 value={nlQuery}
                 onChange={(e) => setNlQuery(e.target.value)}
-                placeholder="Posez une question sur vos equipes..."
+                placeholder={t('rha.b.geo.question_ph', locale)}
                 className="flex-1 text-sm border-0 text-white placeholder:text-gray-400 h-11 rounded-xl"
                 style={{ backgroundColor: "rgba(255,255,255,0.07)" }}
               />
@@ -897,14 +897,14 @@ export default function GeolocalisationPage() {
             <Card className="rounded-2xl shadow-sm" style={{ borderLeft: `4px solid ${GOLD}` }}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
-                  <Truck className="w-5 h-5" style={{ color: GOLD }} /> Organiser ramassage
+                  <Truck className="w-5 h-5" style={{ color: GOLD }} /> {t('rha.b.geo.organize_pickup', locale)}
                 </CardTitle>
-                <p className="text-xs text-gray-500">Groupé par heure de début puis par zone</p>
+                <p className="text-xs text-gray-500">{t('rha.b.geo.pickup_subtitle', locale)}</p>
               </CardHeader>
               <CardContent className="space-y-2">
                 {/* Filter by shift time */}
                 <div className="flex gap-1 flex-wrap mb-2">
-                  <button onClick={() => setFilterTime("all")} className={`px-2 py-1 rounded-md text-[10px] font-medium ${filterTime === "all" ? "bg-[#0B0F2E] text-white" : "bg-gray-100 text-gray-500"}`}>Tous</button>
+                  <button onClick={() => setFilterTime("all")} className={`px-2 py-1 rounded-md text-[10px] font-medium ${filterTime === "all" ? "bg-[#0B0F2E] text-white" : "bg-gray-100 text-gray-500"}`}>{t('rha.b.geo.all', locale)}</button>
                   {shiftTimes.map(t => (
                     <button key={t} onClick={() => setFilterTime(t)} className={`px-2 py-1 rounded-md text-[10px] font-medium ${filterTime === t ? "bg-[#0B0F2E] text-white" : "bg-gray-100 text-gray-500"}`}>{t}</button>
                   ))}
