@@ -1025,50 +1025,50 @@ export default function EmployesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]" style={{ fontFamily: "Poppins, sans-serif" }}>{t('rha.a.emp.title', locale)}</h1>
-          <p className="text-sm text-gray-500">{employes.length} employe(s) {filterStatut === "sortis" ? "sorti(s)" : filterStatut === "tous" ? "au total" : "actif(s)"}</p>
+          <p className="text-sm text-gray-500">{employes.length} {t('rha.a.emp.suffix_employes', locale)} {filterStatut === "sortis" ? t('rha.a.emp.subtitle_sortis', locale) : filterStatut === "tous" ? t('rha.a.emp.subtitle_total', locale) : t('rha.a.emp.subtitle_active', locale)}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
         <Dialog open={importOpen} onOpenChange={(v) => { setImportOpen(v); if(!v){ setImportFile(null); setImportResult(null); setImportError(null) } }}>
-          <DialogTrigger asChild><Button variant="outline" className="border-[#0B0F2E] text-[#0B0F2E] rounded-xl h-10"><Upload className="w-4 h-4 mr-2"/>Importer CSV</Button></DialogTrigger>
+          <DialogTrigger asChild><Button variant="outline" className="border-[#0B0F2E] text-[#0B0F2E] rounded-xl h-10"><Upload className="w-4 h-4 mr-2"/>{t('rha.a.emp.import_csv', locale)}</Button></DialogTrigger>
           <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="w-5 h-5"/>Importer des employés</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="w-5 h-5"/>{t('rha.a.emp.import_title', locale)}</DialogTitle></DialogHeader>
             <div className="space-y-4 py-2">
               {importError && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{importError}</p>}
               {importResult && (
                 <div className="space-y-2">
-                  <p className="text-sm text-green-700 bg-green-50 p-2 rounded">{importResult.imported} employé(s) importé(s) sur {importResult.total_rows} ligne(s)</p>
+                  <p className="text-sm text-green-700 bg-green-50 p-2 rounded">{importResult.imported} {t('rha.a.emp.import_imported', locale)} {importResult.total_rows} {t('rha.a.emp.import_lignes', locale)}</p>
                   {importResult.errors.length > 0 && (
                     <div className="bg-yellow-50 p-2 rounded max-h-32 overflow-y-auto">
-                      <p className="text-sm font-medium text-yellow-800 mb-1">Erreurs ({importResult.errors.length}):</p>
-                      {importResult.errors.map((err, i) => <p key={i} className="text-xs text-yellow-700">Ligne {err.row}: {err.message}</p>)}
+                      <p className="text-sm font-medium text-yellow-800 mb-1">{t('rha.a.emp.import_errors', locale)} ({importResult.errors.length}):</p>
+                      {importResult.errors.map((err, i) => <p key={i} className="text-xs text-yellow-700">{t('rha.a.emp.import_line', locale)} {err.row}: {err.message}</p>)}
                     </div>
                   )}
                 </div>
               )}
               <div>
-                <Label>Société *</Label>
+                <Label>{t('rha.a.common.societe', locale)} *</Label>
                 <Select value={importSociete} onValueChange={setImportSociete}>
-                  <SelectTrigger><SelectValue placeholder="Choisir la société..."/></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('rha.a.emp.choose_societe', locale)}/></SelectTrigger>
                   <SelectContent>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Fichier CSV ou Excel *</Label>
+                <Label>{t('rha.a.emp.csv_file', locale)}</Label>
                 <Input type="file" accept=".csv,.xlsx,.xls" onChange={e => setImportFile(e.target.files?.[0] || null)} className="mt-1"/>
-                <p className="text-xs text-gray-500 mt-1">Colonnes: nom, prenom, email, poste, salaire_base, devise_salaire, date_arrivee, nic, bank_name, bank_account</p>
+                <p className="text-xs text-gray-500 mt-1">{t('rha.a.emp.csv_columns', locale)}</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={downloadTemplate} className="text-[#0B0F2E]"><Download className="w-4 h-4 mr-2"/>Télécharger modèle CSV</Button>
+              <Button variant="ghost" size="sm" onClick={downloadTemplate} className="text-[#0B0F2E]"><Download className="w-4 h-4 mr-2"/>{t('rha.a.emp.dl_template', locale)}</Button>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={()=>setImportOpen(false)}>Fermer</Button>
-              <Button onClick={handleImport} disabled={importing || !importFile || !importSociete} className="bg-[#0B0F2E] text-white">{importing&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}Importer</Button>
+              <Button variant="outline" onClick={()=>setImportOpen(false)}>{t('rha.a.emp.fermer', locale)}</Button>
+              <Button onClick={handleImport} disabled={importing || !importFile || !importSociete} className="bg-[#0B0F2E] text-white">{importing&&<Loader2 className="w-4 h-4 animate-spin mr-2"/>}{t('rha.a.emp.btn_importer', locale)}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild><Button className="bg-[#D4AF37] hover:bg-[#c9a432] text-white rounded-xl h-10 shadow-sm font-semibold"><Plus className="w-4 h-4 mr-2"/>Nouvel employe</Button></DialogTrigger>
+          <DialogTrigger asChild><Button className="bg-[#D4AF37] hover:bg-[#c9a432] text-white rounded-xl h-10 shadow-sm font-semibold"><Plus className="w-4 h-4 mr-2"/>{t('rha.a.emp.new', locale)}</Button></DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onOpenAutoFocus={e => e.preventDefault()}>
-            <DialogHeader><DialogTitle className="text-[#0B0F2E] text-lg font-bold flex items-center gap-2" style={{ fontFamily: "Poppins, sans-serif" }}><UserPlus className="w-5 h-5"/>Nouvel employe</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="text-[#0B0F2E] text-lg font-bold flex items-center gap-2" style={{ fontFamily: "Poppins, sans-serif" }}><UserPlus className="w-5 h-5"/>{t('rha.a.emp.new_dialog_title', locale)}</DialogTitle></DialogHeader>
             <CreateEmployeForm societes={societes} onCreated={load} onClose={() => setDialogOpen(false)} />
           </DialogContent>
         </Dialog>
@@ -1081,10 +1081,10 @@ export default function EmployesPage() {
               variant="outline"
               className="border-purple-300 text-purple-700 hover:bg-purple-50 rounded-xl h-10"
               onClick={openBulkCreate}
-              title={`${missing} employé(s) sans compte`}
+              title={`${missing} ${t('rha.a.emp.bulk_missing_title', locale)}`}
             >
               <Mail className="w-4 h-4 mr-2" />
-              Créer {missing} compte(s) manquant(s)
+              {t('rha.a.emp.bulk_create', locale).replace('{n}', String(missing))}
             </Button>
           )
         })()}
@@ -1095,11 +1095,11 @@ export default function EmployesPage() {
       <Card className="rounded-2xl shadow-sm"><CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
-          <Input className="pl-9 h-11 rounded-xl" placeholder="Rechercher par nom, poste, departement..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          <Input className="pl-9 h-11 rounded-xl" placeholder={t('rha.a.emp.search_ph', locale)} value={search} onChange={e=>setSearch(e.target.value)}/>
         </div>
         <div className="flex gap-2">
-          <Select value={filterStatut} onValueChange={setFilterStatut}><SelectTrigger className="w-36 h-11 rounded-xl"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="presents">Presents</SelectItem><SelectItem value="sortis">Sortis</SelectItem><SelectItem value="tous">Tous</SelectItem></SelectContent></Select>
-          <Select value={filterSociete} onValueChange={setFilterSociete}><SelectTrigger className="w-44 h-11 rounded-xl"><SelectValue placeholder="Toutes societes"/></SelectTrigger><SelectContent><SelectItem value="all">Toutes</SelectItem>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select>
+          <Select value={filterStatut} onValueChange={setFilterStatut}><SelectTrigger className="w-36 h-11 rounded-xl"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="presents">{t('rha.a.emp.f_presents', locale)}</SelectItem><SelectItem value="sortis">{t('rha.a.emp.f_sortis', locale)}</SelectItem><SelectItem value="tous">{t('rha.a.emp.f_tous', locale)}</SelectItem></SelectContent></Select>
+          <Select value={filterSociete} onValueChange={setFilterSociete}><SelectTrigger className="w-44 h-11 rounded-xl"><SelectValue placeholder={t('rha.a.emp.toutes_societes', locale)}/></SelectTrigger><SelectContent><SelectItem value="all">{t('rha.a.emp.toutes', locale)}</SelectItem>{societes.map(s=><SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent></Select>
         </div>
       </CardContent></Card>
 
@@ -1107,7 +1107,7 @@ export default function EmployesPage() {
       <Card className="rounded-2xl shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base" style={{ fontFamily: "Poppins, sans-serif" }}>
-            <Users className="w-4 h-4"/>Employes ({filtered.length})
+            <Users className="w-4 h-4"/>{t('rha.a.emp.list_title', locale)} ({filtered.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 sm:p-0">
@@ -1116,7 +1116,7 @@ export default function EmployesPage() {
           ) : filtered.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <Users className="w-10 h-10 mx-auto mb-2 opacity-40"/>
-              <p>Aucun employe trouve</p>
+              <p>{t('rha.a.emp.list_empty', locale)}</p>
             </div>
           ) : (
             <>
@@ -1181,14 +1181,14 @@ export default function EmployesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50/60">
-                      <TableHead className="pl-5 w-[280px]">Employe</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Poste</TableHead>
-                      <TableHead>Departement</TableHead>
-                      <TableHead className="text-right">Salaire</TableHead>
+                      <TableHead className="pl-5 w-[280px]">{t('rha.a.common.employe', locale)}</TableHead>
+                      <TableHead>{t('rha.a.common.statut', locale)}</TableHead>
+                      <TableHead>{t('rha.a.common.poste', locale)}</TableHead>
+                      <TableHead>{t('rha.a.common.departement', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.a.emp.col_salaire', locale)}</TableHead>
                       {/* Sprint 12 FEATURE 4 — statut compte Lexora */}
-                      <TableHead className="text-center">Compte Lexora</TableHead>
-                      <TableHead className="text-right pr-5">Actions</TableHead>
+                      <TableHead className="text-center">{t('rha.a.emp.col_compte', locale)}</TableHead>
+                      <TableHead className="text-right pr-5">{t('rha.a.emp.col_actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

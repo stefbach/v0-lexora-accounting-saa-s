@@ -70,15 +70,17 @@ interface CompteUsage {
   }>
 }
 
-const CLASSES: Array<{ num: number; label: string; desc: string; color: string; Icon: any }> = [
-  { num: 1, label: "Capitaux", desc: "Capital, réserves, emprunts long terme", color: "blue", Icon: Wallet },
-  { num: 2, label: "Immobilisations", desc: "Actifs corporels, incorporels, financiers", color: "cyan", Icon: Building2 },
-  { num: 3, label: "Stocks", desc: "Marchandises, matières premières, produits finis", color: "teal", Icon: Package },
-  { num: 4, label: "Tiers", desc: "Clients, fournisseurs, État, personnel, associés", color: "amber", Icon: Users },
-  { num: 5, label: "Trésorerie", desc: "Banque, caisse, virements internes", color: "purple", Icon: Landmark },
-  { num: 6, label: "Charges", desc: "Achats, services extérieurs, salaires, impôts", color: "rose", Icon: ArrowDownCircle },
-  { num: 7, label: "Produits", desc: "Ventes, prestations, produits financiers", color: "green", Icon: ArrowUpCircle },
-]
+function getClasses(locale: Locale): Array<{ num: number; label: string; desc: string; color: string; Icon: any }> {
+  return [
+    { num: 1, label: t('acc.pcm.cls1', locale), desc: t('acc.pcm.cls1_desc', locale), color: "blue", Icon: Wallet },
+    { num: 2, label: t('acc.pcm.cls2', locale), desc: t('acc.pcm.cls2_desc', locale), color: "cyan", Icon: Building2 },
+    { num: 3, label: t('acc.pcm.cls3', locale), desc: t('acc.pcm.cls3_desc', locale), color: "teal", Icon: Package },
+    { num: 4, label: t('acc.pcm.cls4', locale), desc: t('acc.pcm.cls4_desc', locale), color: "amber", Icon: Users },
+    { num: 5, label: t('acc.pcm.cls5', locale), desc: t('acc.pcm.cls5_desc', locale), color: "purple", Icon: Landmark },
+    { num: 6, label: t('acc.pcm.cls6', locale), desc: t('acc.pcm.cls6_desc', locale), color: "rose", Icon: ArrowDownCircle },
+    { num: 7, label: t('acc.pcm.cls7', locale), desc: t('acc.pcm.cls7_desc', locale), color: "green", Icon: ArrowUpCircle },
+  ]
+}
 const colorMap: Record<string, { bg: string; border: string; text: string; bgLight: string }> = {
   blue: { bg: "bg-blue-50", border: "border-blue-300", text: "text-blue-900", bgLight: "bg-blue-100" },
   cyan: { bg: "bg-cyan-50", border: "border-cyan-300", text: "text-cyan-900", bgLight: "bg-cyan-100" },
@@ -262,7 +264,7 @@ export default function PlanComptablePage() {
 
             {/* Sections par classe */}
             <div className="space-y-3">
-              {CLASSES.map((cl) => {
+              {getClasses(locale).map((cl) => {
                 const arr = filteredByClass.get(cl.num) || []
                 const open = openClasses.has(cl.num)
                 const cls = colorMap[cl.color]
@@ -325,6 +327,7 @@ export default function PlanComptablePage() {
                                     openCompte === c.compte ? null : c.compte
                                   )
                                 }
+                                locale={locale}
                               />
                             ))}
                           </div>
@@ -352,12 +355,14 @@ function PCMRow({
   usage,
   isOpen,
   onToggle,
+  locale,
 }: {
   c: ComptePCM
   cls: { bgLight: string; text: string }
   usage?: CompteUsage
   isOpen: boolean
   onToggle: () => void
+  locale: Locale
 }) {
   const indent = Math.max(0, (c.niveau || 1) - 2) * 16
   const isOverride = !!c.societe_id
@@ -386,7 +391,7 @@ function PCMRow({
             </Badge>
             {c.sens_normal && (
               <Badge variant="outline" className="text-[10px]">
-                {t('acc.pcm.direction', getLocale())} {c.sens_normal === "D" ? t('acc.pcm.debit', getLocale()) : t('acc.pcm.credit', getLocale())}
+                {t('acc.pcm.direction', locale)} {c.sens_normal === "D" ? t('acc.pcm.debit', locale) : t('acc.pcm.credit', locale)}
               </Badge>
             )}
             {c.type_compte && (
@@ -396,22 +401,22 @@ function PCMRow({
             )}
             {isOverride && (
               <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
-                {t('acc.pcm.custom_company', getLocale())}
+                {t('acc.pcm.custom_company', locale)}
               </Badge>
             )}
             {!c.actif && (
               <Badge variant="outline" className="text-[10px] opacity-60">
-                {t('acc.pcm.inactive', getLocale())}
+                {t('acc.pcm.inactive', locale)}
               </Badge>
             )}
             {c.est_analytique && (
               <Badge variant="outline" className="text-[10px]">
-                {t('acc.pcm.analytical', getLocale())}
+                {t('acc.pcm.analytical', locale)}
               </Badge>
             )}
             {c.compte_parent && (
               <span className="text-[10px] text-muted-foreground font-mono">
-                ↳ {t('acc.pcm.parent', getLocale())} {c.compte_parent}
+                ↳ {t('acc.pcm.parent', locale)} {c.compte_parent}
               </span>
             )}
           </div>
@@ -422,7 +427,7 @@ function PCMRow({
           {hasUsage ? (
             <>
               <div className="text-[10px] text-muted-foreground uppercase">
-                {usage!.nb_ecritures} {t('acc.pcm.entries_abbr', getLocale())}
+                {usage!.nb_ecritures} {t('acc.pcm.entries_abbr', locale)}
               </div>
               <div className="text-[11px] text-muted-foreground">
                 D {fmt(usage!.total_debit)}
@@ -439,26 +444,26 @@ function PCMRow({
               </div>
             </>
           ) : (
-            <div className="text-[10px] text-muted-foreground italic">{t('acc.pcm.not_used', getLocale())}</div>
+            <div className="text-[10px] text-muted-foreground italic">{t('acc.pcm.not_used', locale)}</div>
           )}
         </div>
       </button>
       {isOpen && hasUsage && (
         <div className="bg-slate-50 border-t border-b">
           <div className="px-4 py-2 text-[11px] text-muted-foreground border-b">
-            {usage!.nb_ecritures} {t('acc.pcm.entries_on_account', getLocale())}{" "}
+            {usage!.nb_ecritures} {t('acc.pcm.entries_on_account', locale)}{" "}
             <span className="font-mono">{c.compte}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-slate-100">
                 <tr>
-                  <th className="px-2 py-1.5 text-left font-medium">{t('common.date', getLocale())}</th>
-                  <th className="px-2 py-1.5 text-left font-medium">{t('acc.pcm.journal', getLocale())}</th>
-                  <th className="px-2 py-1.5 text-left font-medium">{t('acc.pcm.label', getLocale())}</th>
-                  <th className="px-2 py-1.5 text-right font-medium">{t('acc.pcm.debit', getLocale())}</th>
-                  <th className="px-2 py-1.5 text-right font-medium">{t('acc.pcm.credit', getLocale())}</th>
-                  <th className="px-2 py-1.5 text-left font-medium">{t('acc.pcm.letter', getLocale())}</th>
+                  <th className="px-2 py-1.5 text-left font-medium">{t('common.date', locale)}</th>
+                  <th className="px-2 py-1.5 text-left font-medium">{t('acc.pcm.journal', locale)}</th>
+                  <th className="px-2 py-1.5 text-left font-medium">{t('acc.pcm.label', locale)}</th>
+                  <th className="px-2 py-1.5 text-right font-medium">{t('acc.pcm.debit', locale)}</th>
+                  <th className="px-2 py-1.5 text-right font-medium">{t('acc.pcm.credit', locale)}</th>
+                  <th className="px-2 py-1.5 text-left font-medium">{t('acc.pcm.letter', locale)}</th>
                 </tr>
               </thead>
               <tbody>

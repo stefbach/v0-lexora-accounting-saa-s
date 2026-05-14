@@ -98,8 +98,8 @@ export default function ClientFacturesPage() {
   const [loading, setLoading] = useState(false)
   const searchParams = useSearchParams()
   const initialTab = (() => {
-    const t = searchParams.get("type")
-    if (t === "client" || t === "fournisseur" || t === "toutes") return t
+    const tp = searchParams.get("type")
+    if (tp === "client" || tp === "fournisseur" || tp === "toutes") return tp
     return "toutes" as const
   })()
   const [activeTab, setActiveTab] = useState<"toutes" | "client" | "fournisseur">(initialTab)
@@ -300,22 +300,20 @@ export default function ClientFacturesPage() {
             <Card className="border-emerald-200 bg-emerald-50/50">
               <CardContent className="p-4 text-sm text-emerald-900/90 space-y-1.5">
                 <p>
-                  <span className="font-medium">Comment lire cette page&nbsp;:</span> chaque ligne représente une facture, qu'elle soit
-                  émise par toi (vente, badge <span className="inline-block px-1.5 py-0 text-[10px] rounded border border-green-300 bg-green-50 text-green-700 font-medium">Client</span>)
-                  ou reçue d'un fournisseur (achat, badge <span className="inline-block px-1.5 py-0 text-[10px] rounded border border-rose-300 bg-rose-50 text-rose-700 font-medium">Fournisseur</span>).
+                  <span className="font-medium">{t('inv.fac.how_to_read_label', locale)}</span> {t('inv.fac.how_to_read_text', locale)} <span className="inline-block px-1.5 py-0 text-[10px] rounded border border-green-300 bg-green-50 text-green-700 font-medium">{t('inv.fac.client_badge', locale)}</span>{t('inv.fac.or_received_supplier', locale)} <span className="inline-block px-1.5 py-0 text-[10px] rounded border border-rose-300 bg-rose-50 text-rose-700 font-medium">{t('inv.fac.supplier_badge', locale)}</span>{t('inv.fac.filters_paren_close', locale)}
                 </p>
                 <p>
-                  <span className="font-medium">Statuts&nbsp;:</span>{" "}
-                  <span className="font-medium text-amber-700">En attente</span> = pas encore payée ·{" "}
-                  <span className="font-medium text-blue-700">Partiel</span> = paiement partiel reçu ·{" "}
-                  <span className="font-medium text-red-700">En retard</span> = échue impayée ·{" "}
-                  <span className="font-medium text-green-700">Payée</span> = soldée.
+                  <span className="font-medium">{t('inv.fac.statuses_label', locale)}</span>{" "}
+                  <span className="font-medium text-amber-700">{t('inv.fac.status_pending_help', locale)}</span> {t('inv.fac.status_pending_help_desc', locale)} ·{" "}
+                  <span className="font-medium text-blue-700">{t('inv.fac.status_partial_help', locale)}</span> {t('inv.fac.status_partial_help_desc', locale)} ·{" "}
+                  <span className="font-medium text-red-700">{t('inv.fac.status_overdue_help', locale)}</span> {t('inv.fac.status_overdue_help_desc', locale)} ·{" "}
+                  <span className="font-medium text-green-700">{t('inv.fac.status_paid_help', locale)}</span> {t('inv.fac.status_paid_help_desc', locale)}
                 </p>
                 <p>
-                  <span className="font-medium">Rapprochement bancaire&nbsp;:</span> badge <span className="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] rounded border border-purple-300 bg-purple-50 text-purple-700"><Bot className="h-3 w-3" />Rapprochée</span> si la facture est liée à une transaction bancaire (validée par toi ou par <span className="font-medium">Lex Banque</span>). Sinon, elle apparaît comme "pas encore rapprochée".
+                  <span className="font-medium">{t('inv.fac.bank_recon_label', locale)}</span> {t('inv.fac.bank_recon_text_1', locale)} <span className="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] rounded border border-purple-300 bg-purple-50 text-purple-700"><Bot className="h-3 w-3" />{t('inv.fac.bank_recon_badge', locale)}</span> {t('inv.fac.bank_recon_text_2', locale)} <span className="font-medium">{t('inv.fac.bank_recon_lex', locale)}</span>{t('inv.fac.bank_recon_text_3', locale)}
                 </p>
                 <p>
-                  <span className="font-medium">Filtres ci-dessous&nbsp;:</span> isole un client/fournisseur, une période, un statut, l'état de rapprochement → les KPIs se recalculent automatiquement (ex&nbsp;: <em>"Combien me doit ce client ?"</em>).
+                  <span className="font-medium">{t('inv.fac.filters_label', locale)}</span> {t('inv.fac.filters_text', locale)} <em>{t('inv.fac.filters_example', locale)}</em>{t('inv.fac.filters_paren_close', locale)}
                 </p>
               </CardContent>
             </Card>
@@ -377,9 +375,9 @@ export default function ClientFacturesPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">{t('inv.fac.all_tiers', locale)}</SelectItem>
-                        {tiersList.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t.length > 50 ? t.slice(0, 47) + "…" : t}
+                        {tiersList.map((tx) => (
+                          <SelectItem key={tx} value={tx}>
+                            {tx.length > 50 ? tx.slice(0, 47) + "…" : tx}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -413,7 +411,7 @@ export default function ClientFacturesPage() {
                         value={dateDebut}
                         onChange={(e) => setDateDebut(e.target.value)}
                         className="h-9 w-36"
-                        title="Date début"
+                        title={t('inv.fac.date_start_title', locale)}
                       />
                       <span>→</span>
                       <Input
@@ -421,7 +419,7 @@ export default function ClientFacturesPage() {
                         value={dateFin}
                         onChange={(e) => setDateFin(e.target.value)}
                         className="h-9 w-36"
-                        title="Date fin"
+                        title={t('inv.fac.date_end_title', locale)}
                       />
                     </div>
                   </div>
@@ -449,7 +447,7 @@ export default function ClientFacturesPage() {
           if (!open) setPaiementFacture(null)
         }}
         onSuccess={() => {
-          showToast("Paiement enregistré", "success")
+          showToast(t('inv.fac.payment_recorded', locale), "success")
           setPaiementFacture(null)
           load()
         }}
@@ -530,12 +528,12 @@ function FactureList({
                 {/* Badge MRA e-invoicing (mig 102 + 248) */}
                 {f.mra_status === 'fiscalise' && f.irn && (
                   <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300" title={`IRN : ${f.irn}`}>
-                    ✓ MRA Fiscalisée
+                    {t('inv.fac.mra_fiscalised_badge', locale)}
                   </Badge>
                 )}
                 {f.mra_status === 'erreur' && (
                   <Badge className="text-[10px] bg-red-100 text-red-700 border-red-300">
-                    ⚠ MRA erreur
+                    {t('inv.fac.mra_error_badge', locale)}
                   </Badge>
                 )}
               </div>
@@ -562,9 +560,9 @@ function FactureList({
               {totalMur > 0 && f.statut !== "annule" && (
                 <div className="w-32 text-right">
                   <div className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
-                    <span>{pctPaye}% payé</span>
+                    <span>{pctPaye}{t('inv.fac.percent_paid', locale)}</span>
                     {soldeMur > 1 && (
-                      <span className="font-mono">· reste {fmt(soldeMur, "MUR")}</span>
+                      <span className="font-mono">· {t('inv.fac.remaining', locale)} {fmt(soldeMur, "MUR")}</span>
                     )}
                   </div>
                   <div className="mt-0.5 h-1 bg-muted rounded-full overflow-hidden">
@@ -582,7 +580,7 @@ function FactureList({
                   className="h-7 px-2 text-[11px] mt-1"
                   onClick={() => onEnregistrerPaiement(f)}
                 >
-                  Enregistrer paiement
+                  {t('inv.fac.record_payment', locale)}
                 </Button>
               )}
               {/* Bouton MRA Fiscaliser — uniquement factures clients non
@@ -593,19 +591,19 @@ function FactureList({
                   variant="outline"
                   className="h-7 px-2 text-[11px] mt-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                   onClick={async () => {
-                    if (!confirm(`Fiscaliser la facture ${f.numero_facture} auprès du MRA ?`)) return
+                    if (!confirm(t('inv.fac.fiscalize_confirm', locale).replace('{num}', f.numero_facture || ''))) return
                     try {
                       const res = await fetch(`/api/client/factures/${f.id}/fiscalise`, { method: 'POST' })
                       const data = await res.json()
-                      if (!res.ok) throw new Error(data?.error || 'Erreur fiscalisation')
-                      alert(`✓ Facture fiscalisée\nIRN : ${data.irn}\nEnvironnement : ${data.environment}`)
+                      if (!res.ok) throw new Error(data?.error || t('inv.fac.fiscalize_error_default', locale))
+                      alert(t('inv.fac.fiscalize_success', locale).replace('{irn}', data.irn).replace('{env}', data.environment))
                       window.location.reload()
                     } catch (e: any) {
-                      alert(`❌ ${e?.message || 'Erreur fiscalisation MRA'}`)
+                      alert(`❌ ${e?.message || t('inv.fac.fiscalize_mra_error', locale)}`)
                     }
                   }}
                 >
-                  {f.mra_status === 'erreur' ? '↻ Réessayer MRA' : '🇲🇺 Fiscaliser MRA'}
+                  {f.mra_status === 'erreur' ? t('inv.fac.retry_mra', locale) : t('inv.fac.fiscalize_mra', locale)}
                 </Button>
               )}
             </div>

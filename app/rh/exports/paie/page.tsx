@@ -156,7 +156,7 @@ export default function ExportPaiePage() {
       }))
       setBulletins(buls)
     } catch {
-      setAlertMsg({ type: "error", text: "Erreur lors du chargement des donnees." })
+      setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_data_err', locale) })
     }
     setLoadingData(false)
   }, [societe, periode])
@@ -200,7 +200,7 @@ export default function ExportPaiePage() {
   // ========== Tab 1: Virements bancaires ==========
 
   const exportVirementMCB = async () => {
-    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    if (!societe) return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_pick_societe', locale) })
     setVirementStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const res = await fetch("/api/rh/exports/virement", {
@@ -223,9 +223,9 @@ export default function ExportPaiePage() {
         if (data.debug_stack) console.error('[exports/virement] server stack:', data.debug_stack)
         console.error('[exports/virement]', res.status, data?.error || data)
         if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
-          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le fichier de virement.`)
+          throw new Error(t('rha.b.expaie.err_lock_first', locale).replace('{p}', periode))
         }
-        throw new Error(data.error || `Erreur ${res.status} lors de la génération du virement.`)
+        throw new Error(data.error || t('rha.b.expaie.err_export_virement', locale))
       }
       // Response can have fichiers array or single content
       if (data.fichiers && Array.isArray(data.fichiers)) {
@@ -248,17 +248,17 @@ export default function ExportPaiePage() {
           error: null,
           summary: data.recap || null,
         })
-        setAlertMsg({ type: "success", text: `${downloaded} fichier(s) de virement telecharge(s).` })
+        setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_dl_n', locale).replace('{n}', String(downloaded)) })
       } else if (data.content) {
         downloadFile(data.content, data.filename || `virement_${periode}.txt`)
         setVirementStatus({ loading: false, done: true, error: null, summary: null })
-        setAlertMsg({ type: "success", text: "Fichier de virement telecharge." })
+        setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_dl_ok', locale) })
       } else {
         setVirementStatus({ loading: false, done: true, error: null, summary: data.recap || null })
-        setAlertMsg({ type: "success", text: "Export genere avec succes." })
+        setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_export_ok', locale) })
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur lors de l'export virement"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_export_virement', locale)
       setVirementStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -266,7 +266,7 @@ export default function ExportPaiePage() {
 
   const exportCSV = () => {
     if (!societe || bulletins.length === 0) {
-      return setAlertMsg({ type: "error", text: "Aucun bulletin a exporter." })
+      return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_no_bulletin', locale) })
     }
     setCsvExportStatus({ loading: true, done: false, error: null, summary: null })
     try {
@@ -284,9 +284,9 @@ export default function ExportPaiePage() {
 
       const modeLabel = (m?: string) => {
         const v = String(m ?? "bulk").trim().toLowerCase()
-        if (v === "especes") return "Espèces"
-        if (v === "individuel") return "Individuel"
-        return "Bulk MCB"
+        if (v === "especes") return t('rha.b.expaie.csv_mode_especes', locale)
+        if (v === "individuel") return t('rha.b.expaie.csv_mode_indiv', locale)
+        return t('rha.b.expaie.csv_mode_bulk', locale)
       }
 
       const headers = ["Code employé", "Nom", "Prénom", "Banque", "N° compte", "Mode paiement", "Net (MUR)"]
@@ -347,9 +347,9 @@ export default function ExportPaiePage() {
       XLSX.writeFile(wb, `virements_salaires_${socName}_${periode}.xlsx`)
 
       setCsvExportStatus({ loading: false, done: true, error: null, summary: null })
-      setAlertMsg({ type: "success", text: "Excel téléchargé." })
+      setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_excel_ok', locale) })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur Excel"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_excel', locale)
       setCsvExportStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -358,7 +358,7 @@ export default function ExportPaiePage() {
   // ========== Tab 2: Exports MRA ==========
 
   const exportCSGNSF = async () => {
-    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    if (!societe) return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_pick_societe', locale) })
     setCsgStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const res = await fetch("/api/rh/exports/csg-mra", {
@@ -377,9 +377,9 @@ export default function ExportPaiePage() {
         console.error('[exports/csg-mra]', res.status, data?.error || data)
         // Cas le plus fréquent : paie non verrouillée → message actionnable
         if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
-          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer la déclaration CSG/NSF.`)
+          throw new Error(t('rha.b.expaie.err_lock_csg', locale).replace('{p}', periode))
         }
-        throw new Error(data.error || `Erreur ${res.status} lors de la génération CSG/NSF.`)
+        throw new Error(data.error || t('rha.b.expaie.err_csg', locale))
       }
 
       // Download recap + detail CSVs
@@ -387,9 +387,9 @@ export default function ExportPaiePage() {
       if (data.detail_csv) setTimeout(() => downloadFile(data.detail_csv, data.filename_detail || `CSG_NSF_Detail_${periode}.csv`), 500)
 
       setCsgStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
-      setAlertMsg({ type: "success", text: `Declaration CSG/NSF generee (${data.nb_employes} employes).` })
+      setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_csg_ok', locale).replace('{n}', String(data.nb_employes)) })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur CSG/NSF"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_csg', locale)
       setCsgStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -399,7 +399,7 @@ export default function ExportPaiePage() {
   // Remplace l'upload manuel des 4 CSV legacy. Génère un fichier unique
   // paco<YYYYMMDD>.csv conforme au format attendu par le portail MRA e-Services.
   const exportPACO = async () => {
-    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    if (!societe) return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_pick_societe', locale) })
     setPacoStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const res = await fetch("/api/rh/exports/paco-mra", {
@@ -415,24 +415,24 @@ export default function ExportPaiePage() {
       if (!res.ok || data.error) {
         console.error('[exports/paco-mra]', res.status, data?.error || data)
         if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
-          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le PACO MRA.`)
+          throw new Error(t('rha.b.expaie.err_lock_paco', locale).replace('{p}', periode))
         }
-        throw new Error(data.error || `Erreur ${res.status} lors de la génération PACO.`)
+        throw new Error(data.error || t('rha.b.expaie.err_paco', locale))
       }
 
       if (data.csv) downloadFile(data.csv, data.filename || `paco_${periode}.csv`)
 
       setPacoStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
       const warningCount = Array.isArray(data.warnings) ? data.warnings.length : 0
-      const baseMsg = `PACO MRA généré (${data.totaux?.employes_inclus || '?'} employés).`
+      const baseMsg = t('rha.b.expaie.toast_paco_ok', locale).replace('{n}', String(data.totaux?.employes_inclus || '?'))
       if (warningCount > 0) {
         console.warn('[exports/paco-mra] warnings:', data.warnings)
-        setAlertMsg({ type: "success", text: `${baseMsg} ${warningCount} warning(s) — voir console.` })
+        setAlertMsg({ type: "success", text: baseMsg + t('rha.b.expaie.toast_paco_warns', locale).replace('{n}', String(warningCount)) })
       } else {
         setAlertMsg({ type: "success", text: baseMsg })
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur PACO"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_paco', locale)
       setPacoStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -441,7 +441,7 @@ export default function ExportPaiePage() {
   // PRGF Monthly Return — fichier séparé du PACO, à uploader sur le portail
   // PRGF dédié (https://eservices14.mra.mu/prgfcontribution/login).
   const exportPRGF = async () => {
-    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    if (!societe) return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_pick_societe', locale) })
     setPrgfStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const res = await fetch("/api/rh/exports/prgf-mra", {
@@ -457,9 +457,9 @@ export default function ExportPaiePage() {
       if (!res.ok || data.error) {
         console.error('[exports/prgf-mra]', res.status, data?.error || data)
         if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
-          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le PRGF.`)
+          throw new Error(t('rha.b.expaie.err_lock_prgf', locale).replace('{p}', periode))
         }
-        throw new Error(data.error || `Erreur ${res.status} lors de la génération PRGF.`)
+        throw new Error(data.error || t('rha.b.expaie.err_prgf', locale))
       }
 
       if (data.csv) downloadFile(data.csv, data.filename || `prgf_${periode}.csv`)
@@ -467,24 +467,24 @@ export default function ExportPaiePage() {
       setPrgfStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
       const warningCount = Array.isArray(data.warnings) ? data.warnings.length : 0
       const ecartCount = data.ecart_potentiel?.employes?.length || 0
-      let msg = `PRGF MRA généré (${data.totaux?.employes_inclus || '?'} employés).`
+      let msg = t('rha.b.expaie.toast_prgf_ok', locale).replace('{n}', String(data.totaux?.employes_inclus || '?'))
       if (ecartCount > 0) {
         console.warn('[exports/prgf-mra] écart potentiel:', data.ecart_potentiel)
-        msg += ` ${ecartCount} sur-déclaration(s) potentielle(s) — voir console.`
+        msg += t('rha.b.expaie.toast_prgf_over', locale).replace('{n}', String(ecartCount))
       }
       if (warningCount > 0) {
         console.warn('[exports/prgf-mra] warnings:', data.warnings)
       }
       setAlertMsg({ type: "success", text: msg })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur PRGF"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_prgf', locale)
       setPrgfStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
   }
 
   const exportPAYE = async () => {
-    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    if (!societe) return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_pick_societe', locale) })
     setPayeStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const res = await fetch("/api/rh/exports/paye-mra", {
@@ -500,18 +500,18 @@ export default function ExportPaiePage() {
         // du préfixe technique "[PAYE 403]" qui n'aide pas l'utilisateur.
         console.error('[exports/paye-mra]', res.status, data?.error || data)
         if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
-          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le PAYE Return.`)
+          throw new Error(t('rha.b.expaie.err_lock_paye', locale).replace('{p}', periode))
         }
-        throw new Error(data.error || `Erreur ${res.status} lors de la génération PAYE.`)
+        throw new Error(data.error || t('rha.b.expaie.err_paye', locale))
       }
 
       if (data.recap_csv) downloadFile(data.recap_csv, data.filename_recap || `PAYE_Recap_${periode}.csv`)
       if (data.detail_csv) setTimeout(() => downloadFile(data.detail_csv, data.filename_detail || `PAYE_Detail_${periode}.csv`), 500)
 
       setPayeStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
-      setAlertMsg({ type: "success", text: `PAYE Return genere (${data.totaux?.nb_employes || "?"} employes).` })
+      setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_paye_ok', locale).replace('{n}', String(data.totaux?.nb_employes || '?')) })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur PAYE"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_paye', locale)
       setPayeStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -547,11 +547,11 @@ export default function ExportPaiePage() {
       {/* Debug: show all export errors */}
       {(virementStatus.error || csgStatus.error || payeStatus.error) && (
         <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 text-xs font-mono text-orange-800 space-y-1">
-          <p className="font-bold text-sm">Debug erreurs exports :</p>
+          <p className="font-bold text-sm">{t('rha.b.expaie.debug_title', locale)}</p>
           {virementStatus.error && <p>VIREMENT: {virementStatus.error}</p>}
           {csgStatus.error && <p>CSG/NSF: {csgStatus.error}</p>}
           {payeStatus.error && <p>PAYE: {payeStatus.error}</p>}
-          <p className="text-orange-500">Societe: {societe || 'non selectionnee'} | Periode: {periode}</p>
+          <p className="text-orange-500">{t('rha.b.expaie.debug_societe', locale)}: {societe || t('rha.b.expaie.debug_none_picked', locale)} | {t('rha.b.expaie.debug_periode', locale)}: {periode}</p>
         </div>
       )}
 
@@ -715,7 +715,7 @@ export default function ExportPaiePage() {
                   {virementStatus.summary.nb_employes_sans_banque > 0 && (
                     <div className="text-orange-600">
                       <AlertTriangle className="inline w-3 h-3 mr-1" />
-                      {virementStatus.summary.nb_employes_sans_banque} employe(s) sans coordonnees bancaires
+                      {virementStatus.summary.nb_employes_sans_banque} {t('rha.b.expaie.no_bank_alert', locale)}
                     </div>
                   )}
                 </div>
@@ -825,12 +825,12 @@ export default function ExportPaiePage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <Building2 className="w-4 h-4" />
-                PACO MRA — fichier officiel à uploader
+                {t('rha.b.expaie.paco_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-700">
-                Génère le fichier <code>paco&lt;YYYYMMDD&gt;.csv</code> au format <strong>Joint PACO Dec 2024</strong> (CSG + NSF + PAYE consolidés). C'est le SEUL fichier à uploader sur le portail MRA e-Services.
+                {t('rha.b.expaie.paco_desc', locale)}
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <Button
@@ -850,28 +850,28 @@ export default function ExportPaiePage() {
               {pacoStatus.summary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
                   <div>
-                    <span className="text-gray-500 block text-xs">Employés inclus</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_emp_inclus', locale)}</span>
                     <strong>{pacoStatus.summary.employes_inclus || 0}</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total Wage Bill</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_wage', locale)}</span>
                     <strong>{fmt(pacoStatus.summary.total_wage_bill || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total CSG</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_csg', locale)}</span>
                     <strong>{fmt(pacoStatus.summary.total_csg || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total NSF</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_nsf', locale)}</span>
                     <strong>{fmt(pacoStatus.summary.total_nsf || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total PAYE</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_paye', locale)}</span>
                     <strong>{fmt(pacoStatus.summary.total_paye || 0)} MUR</strong>
                   </div>
                   {pacoStatus.summary.employes_exclus_mra > 0 && (
                     <div>
-                      <span className="text-gray-500 block text-xs">Exclus MRA</span>
+                      <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_excl_mra', locale)}</span>
                       <strong>{pacoStatus.summary.employes_exclus_mra}</strong>
                     </div>
                   )}
@@ -885,12 +885,12 @@ export default function ExportPaiePage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <Building2 className="w-4 h-4" />
-                PRGF Monthly Return — fichier officiel à uploader
+                {t('rha.b.expaie.prgf_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-700">
-                Génère le fichier <code>prgf&lt;YYYYMMDD&gt;.csv</code> au format MRA pour upload sur le portail PRGF (séparé du PACO). URL portail : <code>https://eservices14.mra.mu/prgfcontribution</code>.
+                {t('rha.b.expaie.prgf_desc', locale)} <code>https://eservices14.mra.mu/prgfcontribution</code>.
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <Button
@@ -910,24 +910,24 @@ export default function ExportPaiePage() {
               {prgfStatus.summary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
                   <div>
-                    <span className="text-gray-500 block text-xs">Employés inclus</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_emp_inclus', locale)}</span>
                     <strong>{prgfStatus.summary.employes_inclus || 0}</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total Basic</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_basic', locale)}</span>
                     <strong>{fmt(prgfStatus.summary.total_basic || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total Allowances</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_allow', locale)}</span>
                     <strong>{fmt(prgfStatus.summary.total_allowances || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total PRGF</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_prgf', locale)}</span>
                     <strong>{fmt(prgfStatus.summary.total_prgf || 0)} MUR</strong>
                   </div>
                   {Array.isArray(prgfStatus.summary.employes_exclus) && prgfStatus.summary.employes_exclus.length > 0 && (
                     <div className="col-span-2 md:col-span-4 text-xs text-gray-500">
-                      Exclus : {prgfStatus.summary.employes_exclus.length} (voir console pour détail)
+                      {t('rha.b.expaie.lbl_excl_n', locale)} : {prgfStatus.summary.employes_exclus.length} {t('rha.b.expaie.lbl_excl_hint', locale)}
                     </div>
                   )}
                 </div>
@@ -940,7 +940,7 @@ export default function ExportPaiePage() {
               correspondent PAS au format MRA officiel et ne doivent PAS être
               uploadées sur le portail. Utiliser PACO + PRGF ci-dessus. */}
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            ℹ️ Les 2 exports ci-dessous (CSG/NSF + PAYE) sont des <strong>rapports internes</strong> au format Lexora — utiles pour audit/contrôle visuel. Ils ne sont <strong>plus uploadés au MRA</strong>. Utilisez PACO + PRGF ci-dessus.
+            ℹ️ {t('rha.b.expaie.legacy_warn', locale)}
           </div>
 
           {/* CSG / NSF Card */}
@@ -948,12 +948,12 @@ export default function ExportPaiePage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <Building2 className="w-4 h-4" />
-                CSG / NSF (rapport interne)
+                {t('rha.b.expaie.csg_card_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-500">
-                Genere la declaration CSG/NSF mensuelle avec recap et detail par employe (2 fichiers CSV — format Lexora interne, pas MRA).
+                {t('rha.b.expaie.csg_card_desc', locale)}
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <Button
@@ -975,31 +975,31 @@ export default function ExportPaiePage() {
               {csgStatus.summary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
                   <div>
-                    <span className="text-gray-500 block text-xs">Masse salariale</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_masse_sal', locale)}</span>
                     <strong>{fmt(csgStatus.summary.total_masse_salariale || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">CSG salarie</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_csg_sal', locale)}</span>
                     <strong>{fmt(csgStatus.summary.total_csg_sal || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">CSG patronal</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_csg_pat', locale)}</span>
                     <strong>{fmt(csgStatus.summary.total_csg_pat || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">NSF (sal + pat)</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_nsf_combined', locale)}</span>
                     <strong>{fmt((csgStatus.summary.total_nsf_sal || 0) + (csgStatus.summary.total_nsf_pat || 0))} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Training Levy</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_training', locale)}</span>
                     <strong>{fmt(csgStatus.summary.total_training || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">PRGF</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_prgf', locale)}</span>
                     <strong>{fmt(csgStatus.summary.total_prgf || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total MRA</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_mra', locale)}</span>
                     <strong className="text-lg" style={{ color: BLUE }}>{fmt(csgStatus.summary.total_mra || 0)} MUR</strong>
                   </div>
                 </div>
@@ -1012,12 +1012,12 @@ export default function ExportPaiePage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <FileText className="w-4 h-4" />
-                PAYE Return (rapport interne)
+                {t('rha.b.expaie.paye_card_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-gray-500">
-                Genere le PAYE Return mensuel avec recap et detail par employe (2 fichiers CSV — format Lexora interne, pas MRA).
+                {t('rha.b.expaie.paye_card_desc', locale)}
               </p>
               <div className="flex items-center gap-3 flex-wrap">
                 <Button
@@ -1039,15 +1039,15 @@ export default function ExportPaiePage() {
               {payeStatus.summary && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 p-4 bg-gray-50 rounded-xl text-sm">
                   <div>
-                    <span className="text-gray-500 block text-xs">Total salaires bruts</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_brut', locale)}</span>
                     <strong>{fmt(payeStatus.summary.total_salaires_bruts || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Total PAYE retenu</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_total_paye_ret', locale)}</span>
                     <strong>{fmt(payeStatus.summary.total_paye_retenu || 0)} MUR</strong>
                   </div>
                   <div>
-                    <span className="text-gray-500 block text-xs">Employes</span>
+                    <span className="text-gray-500 block text-xs">{t('rha.b.expaie.lbl_employes', locale)}</span>
                     <strong>{payeStatus.summary.nb_employes || 0}</strong>
                   </div>
                 </div>
@@ -1072,7 +1072,7 @@ export default function ExportPaiePage() {
                   </div>
                   <div>
                     <p className="font-medium text-sm">CSG</p>
-                    <p className="text-xs text-gray-500">15 du mois suivant</p>
+                    <p className="text-xs text-gray-500">{t('rha.b.expaie.deadline_csg_sub', locale)}</p>
                     <p className={`text-xs font-medium mt-1 ${isLate(deadlineCsg) ? "text-red-600" : "text-gray-600"}`}>
                       {formatDeadline(deadlineCsg)}
                       {isLate(deadlineCsg) && ` -- ${t('rha.b.expaie.late', locale)}`}
@@ -1087,7 +1087,7 @@ export default function ExportPaiePage() {
                   </div>
                   <div>
                     <p className="font-medium text-sm">PAYE</p>
-                    <p className="text-xs text-gray-500">20 du mois suivant</p>
+                    <p className="text-xs text-gray-500">{t('rha.b.expaie.deadline_paye_sub', locale)}</p>
                     <p className={`text-xs font-medium mt-1 ${isLate(deadlinePaye) ? "text-red-600" : "text-gray-600"}`}>
                       {formatDeadline(deadlinePaye)}
                       {isLate(deadlinePaye) && ` -- ${t('rha.b.expaie.late', locale)}`}
@@ -1102,7 +1102,7 @@ export default function ExportPaiePage() {
                   </div>
                   <div>
                     <p className="font-medium text-sm">NSF</p>
-                    <p className="text-xs text-gray-500">Fin du mois</p>
+                    <p className="text-xs text-gray-500">{t('rha.b.expaie.deadline_nsf_sub', locale)}</p>
                     <p className={`text-xs font-medium mt-1 ${isLate(deadlineNsf) ? "text-red-600" : "text-gray-600"}`}>
                       {formatDeadline(deadlineNsf)}
                       {isLate(deadlineNsf) && ` -- ${t('rha.b.expaie.late', locale)}`}

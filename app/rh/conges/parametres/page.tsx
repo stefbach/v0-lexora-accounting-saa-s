@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import type { ConfigConge } from "@/lib/rh/types-conges"
-import { t, getLocale } from "@/lib/i18n"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -38,7 +38,7 @@ interface TypeUI {
   }
   // "16" pour MAT, "22" pour AL, "Variable" pour JUR/INT/CRT/Special…
   formatValue: (c: ConfigConge | null) => { value: string; unit: string }
-  puces: (c: ConfigConge | null) => string[]
+  puces: (c: ConfigConge | null, locale: Locale) => string[]
 }
 
 const TONES = {
@@ -136,11 +136,13 @@ const TYPES_UI: TypeUI[] = [
       value: String(c?.jours_par_cycle ?? 22),
       unit: "jours ouvrables / an",
     }),
-    puces: c => [
-      `${c?.jours_par_cycle ?? 22} jours ouvrables après ${c?.anciennete_min_mois ?? 12} mois d'emploi continu`,
-      "Weekends et jours fériés exclus",
-      "Cycle basé sur la date anniversaire (pas année civile)",
-      "Solde non pris : paiement compensatoire obligatoire",
+    puces: (c, locale) => [
+      t('rha.a.congesp.puce_AL_1', locale)
+        .replace('{n}', String(c?.jours_par_cycle ?? 22))
+        .replace('{m}', String(c?.anciennete_min_mois ?? 12)),
+      t('rha.a.congesp.puce_AL_2', locale),
+      t('rha.a.congesp.puce_AL_3', locale),
+      t('rha.a.congesp.puce_AL_4', locale),
     ],
   },
   {
@@ -154,11 +156,11 @@ const TYPES_UI: TypeUI[] = [
       value: String(c?.jours_par_cycle ?? 15),
       unit: "jours / an",
     }),
-    puces: c => [
-      `${c?.jours_par_cycle ?? 15} jours par an après 12 mois`,
-      "Accrual 1 j/mois de M7 à M12 (plafond 6)",
-      "Certificat médical si ≥ 3 jours consécutifs",
-      "Cumul possible jusqu'à 90 jours",
+    puces: (c, locale) => [
+      t('rha.a.congesp.puce_SL_1', locale).replace('{n}', String(c?.jours_par_cycle ?? 15)),
+      t('rha.a.congesp.puce_SL_2', locale),
+      t('rha.a.congesp.puce_SL_3', locale),
+      t('rha.a.congesp.puce_SL_4', locale),
     ],
   },
   {
@@ -172,11 +174,11 @@ const TYPES_UI: TypeUI[] = [
       value: String(c?.jours_par_cycle ?? 30),
       unit: "jours / 5 ans",
     }),
-    puces: c => [
-      `${c?.jours_par_cycle ?? 30} jours payés par cycle de 5 ans`,
-      `Workers uniquement (basic ≤ ${(c?.basic_salary_max ?? 50000).toLocaleString("fr-FR")} MUR/mois)`,
-      "Migrant workers exclus",
-      "Si refus employeur : cash-in-lieu obligatoire",
+    puces: (c, locale) => [
+      t('rha.a.congesp.puce_VL_1', locale).replace('{n}', String(c?.jours_par_cycle ?? 30)),
+      t('rha.a.congesp.puce_VL_2', locale).replace('{amt}', (c?.basic_salary_max ?? 50000).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR')),
+      t('rha.a.congesp.puce_VL_3', locale),
+      t('rha.a.congesp.puce_VL_4', locale),
     ],
   },
   {
@@ -190,11 +192,11 @@ const TYPES_UI: TypeUI[] = [
       value: String(c?.jours_par_cycle ?? 10),
       unit: "jours / an",
     }),
-    puces: c => [
-      `${c?.jours_par_cycle ?? 10} j/an pour parent/enfant/grand-parent malade`,
-      `Workers uniquement (basic ≤ ${(c?.basic_salary_max ?? 50000).toLocaleString("fr-FR")} MUR/mois)`,
-      `Déductible au choix de ${(c?.deductible_de?.length ? c.deductible_de.join(", ") : "AL, SL ou VL")}`,
-      "Certificat médical + lien de parenté requis",
+    puces: (c, locale) => [
+      t('rha.a.congesp.puce_FML_1', locale).replace('{n}', String(c?.jours_par_cycle ?? 10)),
+      t('rha.a.congesp.puce_FML_2', locale).replace('{amt}', (c?.basic_salary_max ?? 50000).toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR')),
+      t('rha.a.congesp.puce_FML_3', locale).replace('{types}', c?.deductible_de?.length ? c.deductible_de.join(", ") : t('rha.a.congesp.fml_default_types', locale)),
+      t('rha.a.congesp.puce_FML_4', locale),
     ],
   },
   {
@@ -209,13 +211,13 @@ const TYPES_UI: TypeUI[] = [
       const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 16
       return { value: String(weeks), unit: "semaines" }
     },
-    puces: c => {
+    puces: (c, locale) => {
       const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 16
       return [
-        `${weeks} semaines après ${c?.anciennete_min_mois ?? 12} mois de service`,
-        `${weeks + 2} semaines si naissance multiple / prématurée`,
-        "Allocation 3 000 MUR (forfait non-imposable)",
-        "Protection absolue contre le licenciement (S.64)",
+        t('rha.a.congesp.puce_MAT_1', locale).replace('{n}', String(weeks)).replace('{m}', String(c?.anciennete_min_mois ?? 12)),
+        t('rha.a.congesp.puce_MAT_2', locale).replace('{n}', String(weeks + 2)),
+        t('rha.a.congesp.puce_MAT_3', locale),
+        t('rha.a.congesp.puce_MAT_4', locale),
       ]
     },
   },
@@ -230,12 +232,12 @@ const TYPES_UI: TypeUI[] = [
       const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 4
       return { value: String(weeks), unit: "semaines" }
     },
-    puces: c => {
+    puces: (c, locale) => {
       const weeks = c?.jours_par_cycle ? Math.round(Number(c.jours_par_cycle) / 7) : 4
       return [
-        `${weeks} semaines consécutives (FMPA 2024)`,
-        `Payé si ≥ ${c?.anciennete_min_mois ?? 12} mois service`,
-        `Non payé si < ${c?.anciennete_min_mois ?? 12} mois`,
+        t('rha.a.congesp.puce_PAT_1', locale).replace('{n}', String(weeks)),
+        t('rha.a.congesp.puce_PAT_2', locale).replace('{m}', String(c?.anciennete_min_mois ?? 12)),
+        t('rha.a.congesp.puce_PAT_3', locale).replace('{m}', String(c?.anciennete_min_mois ?? 12)),
       ]
     },
   },
@@ -247,11 +249,11 @@ const TYPES_UI: TypeUI[] = [
     icon: Heart,
     tone: TONES.amber,
     formatValue: () => ({ value: "Variable", unit: "selon événement" }),
-    puces: () => [
-      "Mariage salarié : 6 jours (une fois carrière)",
-      "Mariage enfant : 3 jours",
-      "Décès famille proche : 3 jours",
-      "Après 12 mois, justificatifs requis",
+    puces: (_c, locale) => [
+      t('rha.a.congesp.puce_SPECIAL_1', locale),
+      t('rha.a.congesp.puce_SPECIAL_2', locale),
+      t('rha.a.congesp.puce_SPECIAL_3', locale),
+      t('rha.a.congesp.puce_SPECIAL_4', locale),
     ],
   },
   {
@@ -262,10 +264,10 @@ const TYPES_UI: TypeUI[] = [
     icon: Gavel,
     tone: TONES.gray,
     formatValue: () => ({ value: "Variable", unit: "durée du service" }),
-    puces: () => [
-      "Tous les salariés (pas de seuil)",
-      "Durée service juré (Courts Act 1945)",
-      "Payé intégralement",
+    puces: (_c, locale) => [
+      t('rha.a.congesp.puce_JUR_1', locale),
+      t('rha.a.congesp.puce_JUR_2', locale),
+      t('rha.a.congesp.puce_JUR_3', locale),
     ],
   },
   {
@@ -276,10 +278,10 @@ const TYPES_UI: TypeUI[] = [
     icon: Trophy,
     tone: TONES.indigo,
     formatValue: () => ({ value: "Variable", unit: "durée de l'événement" }),
-    puces: () => [
-      "Tous les salariés",
-      "Durée de l'événement international",
-      "Documentation officielle requise",
+    puces: (_c, locale) => [
+      t('rha.a.congesp.puce_INT_1', locale),
+      t('rha.a.congesp.puce_INT_2', locale),
+      t('rha.a.congesp.puce_INT_3', locale),
     ],
   },
   {
@@ -290,10 +292,10 @@ const TYPES_UI: TypeUI[] = [
     icon: Scale,
     tone: TONES.slate,
     formatValue: () => ({ value: "Variable", unit: "temps nécessaire" }),
-    puces: () => [
-      "Tous les salariés",
-      "Temps nécessaire à la démarche judiciaire",
-      "Payé intégralement",
+    puces: (_c, locale) => [
+      t('rha.a.congesp.puce_CRT_1', locale),
+      t('rha.a.congesp.puce_CRT_2', locale),
+      t('rha.a.congesp.puce_CRT_3', locale),
     ],
   },
 ]
@@ -314,7 +316,7 @@ export default function CongesParametresPage() {
       const data = await res.json()
       setRegles((data?.regles as Record<string, ConfigConge>) || {})
     } catch (e: any) {
-      setError(e?.message || "Impossible de charger les règles")
+      setError(e?.message || t('rha.a.congesp.err_load', locale))
       setRegles({})
     } finally {
       setLoading(false)
@@ -336,9 +338,9 @@ export default function CongesParametresPage() {
               {t('rha.a.congesp.title', locale)}
             </h1>
             <p className="text-gray-500 mt-1 text-sm">
-              Guide de référence selon le{" "}
-              <span className="font-semibold" style={{ color: BLUE }}>Workers&apos; Rights Act 2019</span>{" "}
-              de Maurice
+              {t('rha.a.congesp.intro_prefix', locale)}{" "}
+              <span className="font-semibold" style={{ color: BLUE }}>{t('rha.a.congesp.intro_law', locale)}</span>{" "}
+              {t('rha.a.congesp.intro_suffix', locale)}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -347,7 +349,7 @@ export default function CongesParametresPage() {
             ) : (
               <RefreshCw className="h-4 w-4 mr-1.5" />
             )}
-            Rafraîchir
+            {t('rha.a.congesp.refresh', locale)}
           </Button>
         </div>
 
@@ -360,8 +362,7 @@ export default function CongesParametresPage() {
             <ShieldCheck className="h-5 w-5 mt-0.5 shrink-0" style={{ color: BLUE }} />
             <div className="text-sm text-gray-700">
               <p>
-                <strong>Workers&apos; Rights Act 2019</strong> — Droits minimaux légaux à Maurice.
-                Les valeurs ci-dessous sont synchronisées avec la table{" "}
+                <strong>{t('rha.a.congesp.banner_law', locale)}</strong> {t('rha.a.congesp.banner_text', locale)}{" "}
                 <code className="text-xs bg-white/60 px-1 rounded">conges_regles</code>.
               </p>
             </div>
@@ -374,11 +375,11 @@ export default function CongesParametresPage() {
             <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm font-medium text-red-800">
-                Impossible de charger les règles
+                {t('rha.a.congesp.err_load', locale)}
               </p>
               <p className="text-xs text-red-600 mt-0.5">{error}</p>
               <p className="text-xs text-red-600 mt-1">
-                Les valeurs par défaut du WRA 2019 sont affichées ci-dessous.
+                {t('rha.a.congesp.err_default', locale)}
               </p>
             </div>
             <Button
@@ -387,7 +388,7 @@ export default function CongesParametresPage() {
               onClick={load}
               className="border-red-300 text-red-700 hover:bg-red-100"
             >
-              <RefreshCw className="h-3 w-3 mr-1" /> Réessayer
+              <RefreshCw className="h-3 w-3 mr-1" /> {t('rha.a.congesp.retry', locale)}
             </Button>
           </div>
         )}
@@ -399,52 +400,65 @@ export default function CongesParametresPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {TYPES_UI.map(t => {
+            {TYPES_UI.map(tx => {
               // SPECIAL est une carte synthétique qui représente 3 types DB
               // (SPC_MARIAGE_SELF / SPC_MARIAGE_ENFANT / SPC_DECES). On
               // prend SPC_MARIAGE_SELF comme référence pour S.48.
               const cfg =
-                t.id === "SPECIAL"
+                tx.id === "SPECIAL"
                   ? regles["SPC_MARIAGE_SELF"] || null
-                  : regles[t.id] || null
-              const { value, unit } = t.formatValue(cfg)
-              const Icon = t.icon
+                  : regles[tx.id] || null
+              const { value, unit } = tx.formatValue(cfg)
+              const Icon = tx.icon
+              const localizedTitle = t(`rha.a.congesp.t_${tx.id}` as any, locale) || tx.title
+              const unitMap: Record<string, string> = {
+                'jours ouvrables / an': t('rha.a.congesp.unit_jours_an', locale),
+                'jours / an': t('rha.a.congesp.unit_jours_an2', locale),
+                'jours / 5 ans': t('rha.a.congesp.unit_jours_5ans', locale),
+                'semaines': t('rha.a.congesp.unit_semaines', locale),
+                'selon événement': t('rha.a.congesp.unit_event', locale),
+                'durée du service': t('rha.a.congesp.unit_jury', locale),
+                "durée de l'événement": t('rha.a.congesp.unit_int', locale),
+                'temps nécessaire': t('rha.a.congesp.unit_court', locale),
+              }
+              const localizedUnit = unitMap[unit] || unit
+              const localizedValue = value === 'Variable' ? t('rha.a.congesp.unit_variable', locale) : value
               return (
                 <Card
-                  key={t.id}
-                  className={`border-2 ${t.tone.border} ${t.tone.bg} overflow-hidden flex flex-col`}
+                  key={tx.id}
+                  className={`border-2 ${tx.tone.border} ${tx.tone.bg} overflow-hidden flex flex-col`}
                 >
                   <div className="px-5 py-4 flex items-start justify-between gap-3">
                     <div className="flex items-start gap-2.5">
-                      <div className={`rounded-lg p-2 ${t.tone.badgeBg}`}>
-                        <Icon className={`h-5 w-5 ${t.tone.accent}`} />
+                      <div className={`rounded-lg p-2 ${tx.tone.badgeBg}`}>
+                        <Icon className={`h-5 w-5 ${tx.tone.accent}`} />
                       </div>
                       <div>
-                        <h3 className={`font-bold text-sm ${t.tone.text}`}>
-                          {t.title}
+                        <h3 className={`font-bold text-sm ${tx.tone.text}`}>
+                          {localizedTitle}
                         </h3>
-                        <p className="text-[11px] text-gray-500">{t.titleEn}</p>
+                        <p className="text-[11px] text-gray-500">{tx.titleEn}</p>
                       </div>
                     </div>
                     <Badge
                       variant="outline"
-                      className={`shrink-0 text-[10px] font-semibold ${t.tone.border} ${t.tone.accent}`}
+                      className={`shrink-0 text-[10px] font-semibold ${tx.tone.border} ${tx.tone.accent}`}
                     >
-                      {t.section}
+                      {tx.section}
                     </Badge>
                   </div>
                   <CardContent className="px-5 pb-4 pt-0 flex-1 space-y-3">
                     <div className="flex items-baseline gap-2">
-                      <span className={`text-4xl font-black ${t.tone.accent}`}>
-                        {value}
+                      <span className={`text-4xl font-black ${tx.tone.accent}`}>
+                        {localizedValue}
                       </span>
-                      <span className="text-sm text-gray-500">{unit}</span>
+                      <span className="text-sm text-gray-500">{localizedUnit}</span>
                     </div>
                     <ul className="space-y-1.5 text-xs text-gray-700">
-                      {t.puces(cfg).map((p, i) => (
+                      {tx.puces(cfg, locale).map((p, i) => (
                         <li key={i} className="flex items-start gap-2">
                           <CheckCircle2
-                            className={`h-3 w-3 mt-0.5 shrink-0 ${t.tone.accent}`}
+                            className={`h-3 w-3 mt-0.5 shrink-0 ${tx.tone.accent}`}
                           />
                           <span>{p}</span>
                         </li>
@@ -462,10 +476,8 @@ export default function CongesParametresPage() {
           <CardContent className="py-4 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <p className="text-sm text-amber-900">
-              <span className="font-semibold">Ces valeurs sont les minima légaux WRA 2019.</span>{" "}
-              Un employeur peut seulement proposer des conditions{" "}
-              <span className="font-semibold underline">PLUS FAVORABLES</span>{" "}
-              (WRA S.3(3)(a)). Toute clause moins favorable est réputée nulle de plein droit.
+              <span className="font-semibold">{t('rha.a.congesp.legal_min_strong', locale)}</span>{" "}
+              {t('rha.a.congesp.legal_min_text', locale)}
             </p>
           </CardContent>
         </Card>
@@ -476,13 +488,12 @@ export default function CongesParametresPage() {
             <BookOpen className="h-5 w-5 text-gray-500 shrink-0 mt-0.5" />
             <div className="text-xs text-gray-600 space-y-1">
               <p>
-                <span className="font-semibold">Source :</span> Workers&apos; Rights Act 2019 +
-                Family Medical & Paternity Amendment Act 2024 (FMPA).
+                <span className="font-semibold">{t('rha.a.congesp.source_label', locale)}</span> {t('rha.a.congesp.source_text', locale)}
               </p>
               <p>
-                Les règles sont stockées dans la table{" "}
-                <code className="bg-gray-100 px-1 rounded">conges_regles</code> ;
-                chaque société peut les surcharger via la fonction{" "}
+                {t('rha.a.congesp.storage_text', locale)}{" "}
+                <code className="bg-gray-100 px-1 rounded">conges_regles</code>
+                {t('rha.a.congesp.storage_text2', locale)}{" "}
                 <code className="bg-gray-100 px-1 rounded">get_conge_regle(societe_id, type)</code>.
               </p>
             </div>

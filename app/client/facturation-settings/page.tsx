@@ -71,11 +71,13 @@ const DEFAULT_SETTINGS: CompanySettings = {
   mention_legale: "VAT Reg No: XXXXX | BRN: XXXXX",
 }
 
-const TEMPLATES: InvoiceTemplate[] = [
-  { id: "standard", nom: "Standard", description: "Mise en page classique avec en-tete complet, ideal pour la plupart des entreprises.", style: { couleur_primaire: "#0B0F2E", couleur_secondaire: "#D4AF37", police: "Inter", layout: "standard" } },
-  { id: "professional", nom: "Professionnel", description: "Design epure avec accents dores, parfait pour les cabinets et consultants.", style: { couleur_primaire: "#0F172A", couleur_secondaire: "#B8860B", police: "Inter", layout: "professional" } },
-  { id: "minimal", nom: "Minimal", description: "Design minimaliste avec espacement genereux, moderne et lisible.", style: { couleur_primaire: "#374151", couleur_secondaire: "#6B7280", police: "Inter", layout: "minimal" } },
-]
+function getTemplates(locale: Locale): InvoiceTemplate[] {
+  return [
+    { id: "standard", nom: t('inv.fs.tpl_standard_name', locale), description: t('inv.fs.tpl_standard_desc', locale), style: { couleur_primaire: "#0B0F2E", couleur_secondaire: "#D4AF37", police: "Inter", layout: "standard" } },
+    { id: "professional", nom: t('inv.fs.tpl_pro_name', locale), description: t('inv.fs.tpl_pro_desc', locale), style: { couleur_primaire: "#0F172A", couleur_secondaire: "#B8860B", police: "Inter", layout: "professional" } },
+    { id: "minimal", nom: t('inv.fs.tpl_minimal_name', locale), description: t('inv.fs.tpl_minimal_desc', locale), style: { couleur_primaire: "#374151", couleur_secondaire: "#6B7280", police: "Inter", layout: "minimal" } },
+  ]
+}
 
 function genId() { return crypto.randomUUID() }
 
@@ -209,8 +211,8 @@ export default function FacturationSettingsPage() {
       if (c) setClients(JSON.parse(c))
       const cat = localStorage.getItem("lexora_invoice_catalogue")
       if (cat) setCatalogue(JSON.parse(cat))
-      const t = localStorage.getItem("lexora_invoice_template")
-      if (t) setSelectedTemplate(t)
+      const tplStored = localStorage.getItem("lexora_invoice_template")
+      if (tplStored) setSelectedTemplate(tplStored)
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       if (tc) setTemplateColors(JSON.parse(tc))
       const mra = localStorage.getItem("lexora_mra_settings")
@@ -292,10 +294,10 @@ export default function FacturationSettingsPage() {
           body: JSON.stringify(body),
         })
         const data = await res.json()
-        if (!res.ok) throw new Error(data?.error || "Erreur enregistrement")
+        if (!res.ok) throw new Error(data?.error || t('inv.fs.persist_err_default', locale))
         await refresh()
       } catch (e: any) {
-        setPersistError(e?.message || "Erreur enregistrement DB")
+        setPersistError(e?.message || t('inv.fs.persist_err_db', locale))
       } finally {
         setPersisting(false)
       }
@@ -393,7 +395,7 @@ export default function FacturationSettingsPage() {
           )}
           <Button onClick={saveAll} disabled={persisting} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
             {persisting ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enregistrement…</>
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t('inv.fs.saving', locale)}</>
             ) : saved ? (
               <><Check className="w-4 h-4 mr-2" />{t('inv.fs.saved', locale)}</>
             ) : (
@@ -423,9 +425,9 @@ export default function FacturationSettingsPage() {
             <Card>
               <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{t('inv.fs.company_identity', locale)}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <div><Label>Nom de l&apos;entreprise</Label><Input value={settings.nom} onChange={e => setSettings(s => ({ ...s, nom: e.target.value }))} placeholder="DDS Consulting Ltd" /></div>
+                <div><Label>{t('inv.fs.company_name_label', locale)}</Label><Input value={settings.nom} onChange={e => setSettings(s => ({ ...s, nom: e.target.value }))} placeholder="DDS Consulting Ltd" /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>BRN</Label><Input value={settings.brn} onChange={e => {
+                  <div><Label>{t('inv.fs.brn_label', locale)}</Label><Input value={settings.brn} onChange={e => {
                     // Si la mention légale courante a été auto-générée
                     // depuis l'ancien BRN/VAT, on la régénère avec la nouvelle
                     // valeur de BRN. Sinon on respecte l'édition manuelle.
@@ -440,7 +442,7 @@ export default function FacturationSettingsPage() {
                       }
                     })
                   }} placeholder="C12345678" /></div>
-                  <div><Label>N. TVA / VAT</Label><Input value={settings.vat_number} onChange={e => {
+                  <div><Label>{t('inv.fs.vat_label', locale)}</Label><Input value={settings.vat_number} onChange={e => {
                     const newVat = e.target.value
                     setSettings(s => {
                       const auto = buildMentionLegale(s.brn, s.vat_number)
@@ -454,7 +456,7 @@ export default function FacturationSettingsPage() {
                   }} placeholder="VAT12345678" /></div>
                 </div>
                 <div>
-                  <Label>Logo société</Label>
+                  <Label>{t('inv.fs.logo_label', locale)}</Label>
                   <div className="mt-2">
                     <LogoUploader
                       societeId={societeId}
@@ -467,19 +469,19 @@ export default function FacturationSettingsPage() {
                     />
                   </div>
                 </div>
-                <div><Label>Adresse</Label><Textarea value={settings.adresse} onChange={e => setSettings(s => ({ ...s, adresse: e.target.value }))} placeholder="Port Louis, Mauritius" rows={2} /></div>
+                <div><Label>{t('inv.fs.address_label', locale)}</Label><Textarea value={settings.adresse} onChange={e => setSettings(s => ({ ...s, adresse: e.target.value }))} placeholder="Port Louis, Mauritius" rows={2} /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Telephone</Label><Input value={settings.telephone} onChange={e => setSettings(s => ({ ...s, telephone: e.target.value }))} placeholder="+230 xxx xxxx" /></div>
-                  <div><Label>Email</Label><Input value={settings.email} onChange={e => setSettings(s => ({ ...s, email: e.target.value }))} placeholder="info@company.mu" /></div>
+                  <div><Label>{t('inv.fs.phone_label', locale)}</Label><Input value={settings.telephone} onChange={e => setSettings(s => ({ ...s, telephone: e.target.value }))} placeholder="+230 xxx xxxx" /></div>
+                  <div><Label>{t('inv.fs.email_label', locale)}</Label><Input value={settings.email} onChange={e => setSettings(s => ({ ...s, email: e.target.value }))} placeholder="info@company.mu" /></div>
                 </div>
-                <div><Label>Site web</Label><Input value={settings.website} onChange={e => setSettings(s => ({ ...s, website: e.target.value }))} placeholder="https://www.company.mu" /></div>
+                <div><Label>{t('inv.fs.website_label', locale)}</Label><Input value={settings.website} onChange={e => setSettings(s => ({ ...s, website: e.target.value }))} placeholder="https://www.company.mu" /></div>
               </CardContent>
             </Card>
 
             {/* Bank details & invoicing */}
             <div className="space-y-4">
               <Card>
-                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Coordonnees bancaires</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{t('inv.fs.bank_details_section', locale)}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   {/* Importer depuis un compte bancaire existant (mig 010/043).
                       L'utilisateur a souvent déjà saisi ses RIB via la page
@@ -487,7 +489,7 @@ export default function FacturationSettingsPage() {
                   {comptesBancaires.length > 0 && (
                     <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-2">
                       <div className="text-xs text-emerald-900 font-medium">
-                        💡 {comptesBancaires.length} compte(s) bancaire(s) trouvé(s) en base. Cliquez pour pré-remplir :
+                        💡 {comptesBancaires.length} {t('inv.fs.bank_accounts_found', locale)}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {comptesBancaires.map((c) => (
@@ -516,8 +518,8 @@ export default function FacturationSettingsPage() {
                       </div>
                     </div>
                   )}
-                  <div><Label>Nom de la banque</Label><Input value={settings.banque_nom} onChange={e => setSettings(s => ({ ...s, banque_nom: e.target.value }))} placeholder="MCB / SBM / AfrAsia" /></div>
-                  <div><Label>Numero de compte</Label><Input value={settings.banque_compte} onChange={e => setSettings(s => ({ ...s, banque_compte: e.target.value }))} /></div>
+                  <div><Label>{t('inv.fs.bank_name_label', locale)}</Label><Input value={settings.banque_nom} onChange={e => setSettings(s => ({ ...s, banque_nom: e.target.value }))} placeholder="MCB / SBM / AfrAsia" /></div>
+                  <div><Label>{t('inv.fs.account_number_label', locale)}</Label><Input value={settings.banque_compte} onChange={e => setSettings(s => ({ ...s, banque_compte: e.target.value }))} /></div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>IBAN</Label>
@@ -539,7 +541,7 @@ export default function FacturationSettingsPage() {
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <Label>SWIFT / BIC</Label>
+                        <Label>{t('inv.fs.swift_bic_label', locale)}</Label>
                         <Button
                           type="button"
                           variant="ghost"
@@ -554,9 +556,9 @@ export default function FacturationSettingsPage() {
                           }}
                           disabled={!settings.banque_iban}
                           className="h-6 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
-                          title="Déduit le SWIFT à partir du code banque de l'IBAN"
+                          title={t('inv.fs.deduce_swift_title', locale)}
                         >
-                          ↻ Déduire depuis IBAN
+                          {t('inv.fs.deduce_swift_btn', locale)}
                         </Button>
                       </div>
                       <Input value={settings.banque_swift} onChange={e => setSettings(s => ({ ...s, banque_swift: e.target.value }))} />
@@ -566,18 +568,18 @@ export default function FacturationSettingsPage() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Parametres de facturation</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{t('inv.fs.invoicing_params_title', locale)}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>Devise par defaut</Label>
+                      <Label>{t('inv.fs.default_currency_label', locale)}</Label>
                       <Select value={settings.devise_defaut} onValueChange={v => setSettings(s => ({ ...s, devise_defaut: v }))}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>{["MUR", "EUR", "USD", "GBP"].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <Label>Conditions de paiement par défaut (jours)</Label>
+                      <Label>{t('inv.fs.default_payment_terms', locale)}</Label>
                       {/* Input libre 0..365 avec datalist pour suggérer les
                           valeurs courantes. L'utilisateur peut taper
                           n'importe quoi (1, 2, 5, 21, 75…) — le Select
@@ -603,7 +605,7 @@ export default function FacturationSettingsPage() {
                         }}
                       />
                       <datalist id="conditions-paiement-suggestions">
-                        <option value="0" label="À réception" />
+                        <option value="0" label={t('inv.fs.on_receipt', locale)} />
                         <option value="1" />
                         <option value="7" />
                         <option value="14" />
@@ -614,9 +616,7 @@ export default function FacturationSettingsPage() {
                         <option value="90" />
                       </datalist>
                       <p className="text-[11px] text-gray-500 mt-1">
-                        Valeur pré-remplie à chaque création de facture (0 à 365 jours).
-                        <strong> 0 = "À réception"</strong> (date d'échéance = date de facture).
-                        Tu peux taper n'importe quelle valeur (1, 2, 5, 21, etc.).
+                        {t('inv.fs.payment_terms_help', locale)}
                       </p>
                     </div>
                   </div>
@@ -626,64 +626,62 @@ export default function FacturationSettingsPage() {
                       incrémenté automatiquement à chaque création. */}
                   <div className="space-y-3 border-t pt-3 mt-1">
                     <Label className="text-sm font-semibold text-[#0B0F2E]">
-                      Numérotation automatique
+                      {t('inv.fs.auto_numbering_label', locale)}
                     </Label>
                     <p className="text-[11px] text-gray-500 -mt-2">
-                      Préfixe + prochain numéro pour chaque type de document.
-                      Le numéro est généré et incrémenté automatiquement à
-                      chaque création — plus besoin de le saisir manuellement.
+                      {t('inv.fs.auto_numbering_help', locale)}
                     </p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-xs">Préfixe facture</Label>
+                        <Label className="text-xs">{t('inv.fs.invoice_prefix', locale)}</Label>
                         <Input value={settings.prefixe_facture}
                           onChange={e => setSettings(s => ({ ...s, prefixe_facture: e.target.value }))}
                           placeholder="INV-" />
                       </div>
                       <div>
-                        <Label className="text-xs">Prochain numéro facture</Label>
+                        <Label className="text-xs">{t('inv.fs.next_invoice_no', locale)}</Label>
                         <Input type="number" min={1} value={settings.prochain_numero}
                           onChange={e => setSettings(s => ({ ...s, prochain_numero: parseInt(e.target.value) || 1 }))} />
                       </div>
                       <div>
-                        <Label className="text-xs">Préfixe devis</Label>
+                        <Label className="text-xs">{t('inv.fs.quote_prefix', locale)}</Label>
                         <Input value={settings.devis_prefixe}
                           onChange={e => setSettings(s => ({ ...s, devis_prefixe: e.target.value }))}
                           placeholder="DEV-" />
                       </div>
                       <div>
-                        <Label className="text-xs">Prochain numéro devis</Label>
+                        <Label className="text-xs">{t('inv.fs.next_quote_no', locale)}</Label>
                         <Input type="number" min={1} value={settings.devis_prochain_numero}
                           onChange={e => setSettings(s => ({ ...s, devis_prochain_numero: parseInt(e.target.value) || 1 }))} />
                       </div>
                       <div>
-                        <Label className="text-xs">Préfixe avoir</Label>
+                        <Label className="text-xs">{t('inv.fs.credit_prefix', locale)}</Label>
                         <Input value={settings.avoir_prefixe}
                           onChange={e => setSettings(s => ({ ...s, avoir_prefixe: e.target.value }))}
                           placeholder="AV-" />
                       </div>
                       <div>
-                        <Label className="text-xs">Prochain numéro avoir</Label>
+                        <Label className="text-xs">{t('inv.fs.next_credit_no', locale)}</Label>
                         <Input type="number" min={1} value={settings.avoir_prochain_numero}
                           onChange={e => setSettings(s => ({ ...s, avoir_prochain_numero: parseInt(e.target.value) || 1 }))} />
                       </div>
                       <div>
-                        <Label className="text-xs">Préfixe note de débit</Label>
+                        <Label className="text-xs">{t('inv.fs.debit_prefix', locale)}</Label>
                         <Input value={settings.note_debit_prefixe}
                           onChange={e => setSettings(s => ({ ...s, note_debit_prefixe: e.target.value }))}
                           placeholder="ND-" />
                       </div>
                       <div>
-                        <Label className="text-xs">Prochain numéro note de débit</Label>
+                        <Label className="text-xs">{t('inv.fs.next_debit_no', locale)}</Label>
                         <Input type="number" min={1} value={settings.note_debit_prochain_numero}
                           onChange={e => setSettings(s => ({ ...s, note_debit_prochain_numero: parseInt(e.target.value) || 1 }))} />
                       </div>
                     </div>
                   </div>
-                  <div><Label>Texte de pied de page</Label><Input value={settings.footer_text} onChange={e => setSettings(s => ({ ...s, footer_text: e.target.value }))} /></div>
+                  <div><Label>{t('inv.fs.footer_text_label', locale)}</Label><Input value={settings.footer_text} onChange={e => setSettings(s => ({ ...s, footer_text: e.target.value }))} /></div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <Label>Mention légale MRA</Label>
+                      <Label>{t('inv.fs.legal_mention_mra', locale)}</Label>
                       <Button
                         type="button"
                         variant="ghost"
@@ -691,9 +689,9 @@ export default function FacturationSettingsPage() {
                         onClick={() => setSettings(s => ({ ...s, mention_legale: buildMentionLegale(s.brn, s.vat_number) }))}
                         disabled={!settings.brn && !settings.vat_number}
                         className="h-6 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
-                        title="Régénère la mention à partir du BRN et du N° TVA renseignés ci-dessus"
+                        title={t('inv.fs.regen_legal_title', locale)}
                       >
-                        ↻ Régénérer depuis BRN/VAT
+                        {t('inv.fs.regen_legal_btn', locale)}
                       </Button>
                     </div>
                     <Input
@@ -702,8 +700,7 @@ export default function FacturationSettingsPage() {
                       placeholder={buildMentionLegale(settings.brn, settings.vat_number) || "VAT Reg No: XXXXX | BRN: XXXXX"}
                     />
                     <p className="text-[11px] text-gray-500 mt-1">
-                      Auto-générée depuis BRN + N° TVA. Modifie l'un des deux ci-dessus → mise à jour automatique.
-                      Tu peux aussi la personnaliser manuellement.
+                      {t('inv.fs.legal_help', locale)}
                     </p>
                   </div>
                 </CardContent>
@@ -722,7 +719,7 @@ export default function FacturationSettingsPage() {
                 variant="outline"
                 onClick={async () => {
                   if (!societeId) return
-                  if (!confirm("Importer automatiquement les clients déjà connus du système (historique de facturation + annuaire OCR) dans votre carnet de contacts ?")) return
+                  if (!confirm(t('inv.fs.import_clients_confirm', locale))) return
                   try {
                     const res = await fetch(`/api/client/factures-contacts/import-existing`, {
                       method: "POST",
@@ -730,7 +727,7 @@ export default function FacturationSettingsPage() {
                       body: JSON.stringify({ societe_id: societeId }),
                     })
                     const data = await res.json()
-                    if (!res.ok) throw new Error(data?.error || "Erreur")
+                    if (!res.ok) throw new Error(data?.error || t('inv.nf.err_generic', locale))
                     // Détail des sources pour diagnostic — l'API renvoie
                     // source_counts depuis le PR fix-conditions-paiement.
                     const counts = data.source_counts || {}
@@ -739,29 +736,29 @@ export default function FacturationSettingsPage() {
                       `Historique factures : ${counts.factures_historique ?? 0} nom(s) distinct(s)`,
                     ].join("\n")
                     if (data.inserted > 0) {
-                      alert(`✓ Import terminé : ${data.inserted} nouveau(x) client(s) ajouté(s) sur ${data.candidats} candidat(s).\n\n${detail}`)
+                      alert(`${t('inv.fs.import_done', locale).replace('{n}', String(data.inserted)).replace('{c}', String(data.candidats))}\n\n${detail}`)
                       // Recharger la page pour voir les contacts importés
                       window.location.reload()
                     } else if (data.message) {
                       // Cas spécial : aucun candidat → diagnostic détaillé du serveur
                       alert(data.message)
                     } else {
-                      alert(`Aucun client à importer (tout est déjà dans ton carnet).\n\n${detail}`)
+                      alert(`${t('inv.fs.import_none', locale)}\n\n${detail}`)
                     }
                   } catch (e: any) {
-                    alert(e?.message || "Erreur import")
+                    alert(e?.message || t('inv.fs.import_err', locale))
                   }
                 }}
                 className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
               >
                 <Download className="w-4 h-4 mr-2" />
-                Importer mes clients existants
+                {t('inv.fs.import_existing_clients', locale)}
               </Button>
               <Button onClick={openNewClient} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />{t('inv.fs.new_client', locale)}</Button>
             </div>
           </div>
           <p className="text-xs text-gray-500 -mt-2">
-            💡 <strong>Importer mes clients existants</strong> récupère vos clients depuis l'historique de facturation et l'annuaire OCR (factures fournisseur scannées) pour pré-remplir votre carnet sans saisie manuelle.
+            {t('inv.fs.import_help', locale)}
           </p>
           <Card>
             <CardContent className="p-0 overflow-x-auto">
@@ -771,9 +768,9 @@ export default function FacturationSettingsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nom</TableHead><TableHead>Entreprise</TableHead><TableHead>Email</TableHead>
-                      <TableHead>N. TVA</TableHead><TableHead>Devise</TableHead><TableHead>Type</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t('inv.fs.col_name', locale)}</TableHead><TableHead>{t('inv.fs.col_company', locale)}</TableHead><TableHead>{t('inv.fs.col_email', locale)}</TableHead>
+                      <TableHead>{t('inv.fs.col_vat', locale)}</TableHead><TableHead>{t('inv.fs.col_currency', locale)}</TableHead><TableHead>{t('inv.fs.col_type', locale)}</TableHead>
+                      <TableHead className="text-right">{t('inv.fs.col_actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -786,8 +783,8 @@ export default function FacturationSettingsPage() {
                         <TableCell><Badge variant="outline">{c.devise}</Badge></TableCell>
                         <TableCell>
                           {c.offshore
-                            ? <Badge className="bg-blue-100 text-blue-700">Offshore / Export</Badge>
-                            : <Badge className="bg-green-100 text-green-700">Local Maurice</Badge>
+                            ? <Badge className="bg-blue-100 text-blue-700">{t('inv.fs.offshore_export', locale)}</Badge>
+                            : <Badge className="bg-green-100 text-green-700">{t('inv.fs.local_mauritius', locale)}</Badge>
                           }
                         </TableCell>
                         <TableCell className="text-right space-x-1">
@@ -805,29 +802,29 @@ export default function FacturationSettingsPage() {
           {/* Client Dialog */}
           <Dialog open={clientDialog} onOpenChange={setClientDialog}>
             <DialogContent className="max-w-lg">
-              <DialogHeader><DialogTitle>{editingClient ? "Modifier le client" : "Nouveau client"}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{editingClient ? t('inv.fs.edit_client', locale) : t('inv.fs.new_client_dialog', locale)}</DialogTitle></DialogHeader>
               <div className="grid gap-3 py-2">
-                <div><Label>Nom *</Label><Input value={cNom} onChange={e => setCNom(e.target.value)} placeholder="Nom complet" /></div>
-                <div><Label>Entreprise</Label><Input value={cEntreprise} onChange={e => setCEntreprise(e.target.value)} placeholder="Nom de la societe" /></div>
-                <div><Label>Adresse</Label><Textarea value={cAdresse} onChange={e => setCAdresse(e.target.value)} rows={2} /></div>
+                <div><Label>{t('inv.fs.name_required', locale)}</Label><Input value={cNom} onChange={e => setCNom(e.target.value)} placeholder={t('inv.fs.full_name', locale)} /></div>
+                <div><Label>{t('inv.fs.company_dialog', locale)}</Label><Input value={cEntreprise} onChange={e => setCEntreprise(e.target.value)} placeholder={t('inv.fs.company_name_dialog', locale)} /></div>
+                <div><Label>{t('inv.fs.address_dialog', locale)}</Label><Textarea value={cAdresse} onChange={e => setCAdresse(e.target.value)} rows={2} /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Email</Label><Input value={cEmail} onChange={e => setCEmail(e.target.value)} type="email" /></div>
-                  <div><Label>Telephone</Label><Input value={cTelephone} onChange={e => setCTelephone(e.target.value)} /></div>
+                  <div><Label>{t('inv.fs.col_email', locale)}</Label><Input value={cEmail} onChange={e => setCEmail(e.target.value)} type="email" /></div>
+                  <div><Label>{t('inv.fs.phone_dialog', locale)}</Label><Input value={cTelephone} onChange={e => setCTelephone(e.target.value)} /></div>
                 </div>
-                <div><Label>N. TVA / VAT</Label><Input value={cVat} onChange={e => setCVat(e.target.value)} /></div>
+                <div><Label>{t('inv.fs.vat_label', locale)}</Label><Input value={cVat} onChange={e => setCVat(e.target.value)} /></div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <Label>Devise</Label>
+                    <Label>{t('inv.fs.col_currency', locale)}</Label>
                     <Select value={cDevise} onValueChange={setCDevise}><SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>{["MUR", "EUR", "USD", "GBP"].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>Paiement (jours)</Label>
+                    <Label>{t('inv.fs.payment_days', locale)}</Label>
                     <Select value={String(cConditions)} onValueChange={v => setCConditions(parseInt(v))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="0">À réception</SelectItem>
+                        <SelectItem value="0">{t('inv.fs.on_receipt', locale)}</SelectItem>
                         <SelectItem value="7">7</SelectItem>
                         <SelectItem value="14">14</SelectItem>
                         <SelectItem value="30">30</SelectItem>
@@ -838,20 +835,20 @@ export default function FacturationSettingsPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label>Type</Label>
+                    <Label>{t('inv.fs.col_type', locale)}</Label>
                     <Select value={cOffshore ? "offshore" : "local"} onValueChange={v => setCOffshore(v === "offshore")}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="local">Local Maurice (TVA 15%)</SelectItem>
-                        <SelectItem value="offshore">Offshore / Export (0%)</SelectItem>
+                        <SelectItem value="local">{t('inv.fs.local_mauritius_vat', locale)}</SelectItem>
+                        <SelectItem value="offshore">{t('inv.fs.offshore_zero', locale)}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setClientDialog(false)}>Annuler</Button>
-                <Button onClick={saveClient} disabled={!cNom} className="bg-[#0B0F2E]">{editingClient ? "Modifier" : "Ajouter"}</Button>
+                <Button variant="outline" onClick={() => setClientDialog(false)}>{t('inv.fs.cancel', locale)}</Button>
+                <Button onClick={saveClient} disabled={!cNom} className="bg-[#0B0F2E]">{editingClient ? t('inv.fs.modify', locale) : t('inv.fs.add', locale)}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -860,20 +857,20 @@ export default function FacturationSettingsPage() {
         {/* ══════════ TAB: Catalogue ══════════ */}
         <TabsContent value="catalogue" className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">Catalogue de services et produits reutilisables</p>
-            <Button onClick={openNewItem} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />Nouveau service/produit</Button>
+            <p className="text-sm text-gray-500">{t('inv.fs.catalogue_subtitle', locale)}</p>
+            <Button onClick={openNewItem} className="bg-[#0B0F2E]"><Plus className="w-4 h-4 mr-2" />{t('inv.fs.new_service_product', locale)}</Button>
           </div>
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               {catalogue.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">Aucun service ou produit. Ajoutez vos prestations courantes.</div>
+                <div className="text-center py-12 text-gray-500">{t('inv.fs.no_catalogue', locale)}</div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Description</TableHead><TableHead>Categorie</TableHead>
-                      <TableHead className="text-right">Prix unitaire</TableHead><TableHead>Devise</TableHead>
-                      <TableHead>TVA</TableHead><TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t('inv.fs.col_description', locale)}</TableHead><TableHead>{t('inv.fs.col_category', locale)}</TableHead>
+                      <TableHead className="text-right">{t('inv.fs.col_unit_price', locale)}</TableHead><TableHead>{t('inv.fs.col_currency', locale)}</TableHead>
+                      <TableHead>{t('inv.fs.col_vat_short', locale)}</TableHead><TableHead className="text-right">{t('inv.fs.col_actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -883,7 +880,7 @@ export default function FacturationSettingsPage() {
                         <TableCell>{item.categorie || "-"}</TableCell>
                         <TableCell className="text-right font-mono">{item.prix_unitaire.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}</TableCell>
                         <TableCell><Badge variant="outline">{item.devise}</Badge></TableCell>
-                        <TableCell>{item.tva_applicable ? <Badge className="bg-orange-100 text-orange-700">TVA 15%</Badge> : <Badge className="bg-gray-100 text-gray-600">Zero-rated</Badge>}</TableCell>
+                        <TableCell>{item.tva_applicable ? <Badge className="bg-orange-100 text-orange-700">{t('inv.fs.vat_15', locale)}</Badge> : <Badge className="bg-gray-100 text-gray-600">{t('inv.fs.zero_rated', locale)}</Badge>}</TableCell>
                         <TableCell className="text-right space-x-1">
                           <Button variant="ghost" size="sm" onClick={() => openEditItem(item)}><Pencil className="w-4 h-4" /></Button>
                           <Button variant="ghost" size="sm" onClick={() => deleteCatalogueItem(item.id)} className="text-red-600 hover:text-red-700"><Trash2 className="w-4 h-4" /></Button>
@@ -899,33 +896,33 @@ export default function FacturationSettingsPage() {
           {/* Catalogue Dialog */}
           <Dialog open={catalogueDialog} onOpenChange={setCatalogueDialog}>
             <DialogContent className="max-w-md">
-              <DialogHeader><DialogTitle>{editingItem ? "Modifier" : "Nouveau service/produit"}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{editingItem ? t('inv.fs.modify_dialog', locale) : t('inv.fs.new_service_product', locale)}</DialogTitle></DialogHeader>
               <div className="grid gap-3 py-2">
-                <div><Label>Description *</Label><Input value={catDesc} onChange={e => setCatDesc(e.target.value)} placeholder="Prestation comptable mensuelle" /></div>
+                <div><Label>{t('inv.fs.cat_desc_required', locale)}</Label><Input value={catDesc} onChange={e => setCatDesc(e.target.value)} placeholder={t('inv.fs.cat_desc_placeholder', locale)} /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Prix unitaire</Label><Input type="number" value={catPrix} onChange={e => setCatPrix(e.target.value)} placeholder="0.00" /></div>
+                  <div><Label>{t('inv.fs.cat_unit_price', locale)}</Label><Input type="number" value={catPrix} onChange={e => setCatPrix(e.target.value)} placeholder="0.00" /></div>
                   <div>
-                    <Label>Devise</Label>
+                    <Label>{t('inv.fs.cat_currency', locale)}</Label>
                     <Select value={catDevise} onValueChange={setCatDevise}><SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>{["MUR", "EUR", "USD", "GBP"].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                 </div>
-                <div><Label>Categorie</Label><Input value={catCategorie} onChange={e => setCatCategorie(e.target.value)} placeholder="Comptabilite, Audit, Conseil..." /></div>
+                <div><Label>{t('inv.fs.cat_category', locale)}</Label><Input value={catCategorie} onChange={e => setCatCategorie(e.target.value)} placeholder={t('inv.fs.cat_category_placeholder', locale)} /></div>
                 <div>
-                  <Label>TVA applicable</Label>
+                  <Label>{t('inv.fs.vat_applicable', locale)}</Label>
                   <Select value={catTva ? "oui" : "non"} onValueChange={v => setCatTva(v === "oui")}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="oui">Oui - TVA 15%</SelectItem>
-                      <SelectItem value="non">Non - Zero-rated</SelectItem>
+                      <SelectItem value="oui">{t('inv.fs.yes_vat_15', locale)}</SelectItem>
+                      <SelectItem value="non">{t('inv.fs.no_zero_rated', locale)}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setCatalogueDialog(false)}>Annuler</Button>
-                <Button onClick={saveCatalogueItem} disabled={!catDesc} className="bg-[#0B0F2E]">{editingItem ? "Modifier" : "Ajouter"}</Button>
+                <Button variant="outline" onClick={() => setCatalogueDialog(false)}>{t('inv.fs.cancel', locale)}</Button>
+                <Button onClick={saveCatalogueItem} disabled={!catDesc} className="bg-[#0B0F2E]">{editingItem ? t('inv.fs.modify', locale) : t('inv.fs.add', locale)}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -933,9 +930,9 @@ export default function FacturationSettingsPage() {
 
         {/* ══════════ TAB: Modeles ══════════ */}
         <TabsContent value="modeles" className="space-y-4">
-          <p className="text-sm text-gray-500">Choisissez et personnalisez votre modele de facture</p>
+          <p className="text-sm text-gray-500">{t('inv.fs.templates_subtitle', locale)}</p>
           <div className="grid grid-cols-3 gap-4">
-            {TEMPLATES.map(tpl => (
+            {getTemplates(locale).map(tpl => (
               <Card key={tpl.id} className={`cursor-pointer transition-all ${selectedTemplate === tpl.id ? "ring-2 ring-[#D4AF37] shadow-lg" : "hover:shadow-md"}`}
                 onClick={() => { setSelectedTemplate(tpl.id); setTemplateColors(tpl.style.couleur_primaire ? { primaire: tpl.style.couleur_primaire, secondaire: tpl.style.couleur_secondaire } : templateColors) }}>
                 <CardContent className="p-4">
@@ -944,7 +941,7 @@ export default function FacturationSettingsPage() {
                     <div className="flex justify-between items-start mb-3">
                       <div className="w-10 h-10 rounded" style={{ backgroundColor: tpl.style.couleur_primaire }} />
                       <div className="text-right">
-                        <div className="text-[10px] font-bold" style={{ color: tpl.style.couleur_primaire }}>FACTURE</div>
+                        <div className="text-[10px] font-bold" style={{ color: tpl.style.couleur_primaire }}>{t('inv.fs.invoice_uc_preview', locale)}</div>
                         <div className="text-[8px] text-gray-400">INV-001</div>
                       </div>
                     </div>
@@ -980,9 +977,9 @@ export default function FacturationSettingsPage() {
 
           {/* Color Swatches */}
           <Card>
-            <CardHeader><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Palette className="w-4 h-4" />Couleur d&apos;accent par defaut</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Palette className="w-4 h-4" />{t('inv.fs.default_accent_color', locale)}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-gray-500">Selectionnez la couleur primaire par defaut pour vos factures. Elle sera utilisee pour l&apos;en-tete, le tableau et les totaux.</p>
+              <p className="text-sm text-gray-500">{t('inv.fs.default_accent_help', locale)}</p>
               <div className="flex flex-wrap gap-3">
                 {ACCENT_COLORS.map(color => (
                   <button
@@ -999,19 +996,19 @@ export default function FacturationSettingsPage() {
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-gray-400">Selection : <span className="font-mono font-medium">{ACCENT_COLORS.find(c => c.hex === templateColors.primaire)?.name || "Personnalise"}</span> ({templateColors.primaire})</p>
+              <p className="text-xs text-gray-400">{t('inv.fs.selection_label', locale)} <span className="font-mono font-medium">{ACCENT_COLORS.find(c => c.hex === templateColors.primaire)?.name || t('inv.fs.custom_label', locale)}</span> ({templateColors.primaire})</p>
 
               {/* Custom color pickers */}
               <div className="grid grid-cols-2 gap-4 max-w-md pt-2 border-t">
                 <div>
-                  <Label>Couleur primaire (personnalisee)</Label>
+                  <Label>{t('inv.fs.primary_color_custom', locale)}</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <input type="color" value={templateColors.primaire} onChange={e => setTemplateColors(c => ({ ...c, primaire: e.target.value }))} className="w-10 h-10 rounded border cursor-pointer" />
                     <Input value={templateColors.primaire} onChange={e => setTemplateColors(c => ({ ...c, primaire: e.target.value }))} className="font-mono text-sm" />
                   </div>
                 </div>
                 <div>
-                  <Label>Couleur secondaire</Label>
+                  <Label>{t('inv.fs.secondary_color', locale)}</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <input type="color" value={templateColors.secondaire} onChange={e => setTemplateColors(c => ({ ...c, secondaire: e.target.value }))} className="w-10 h-10 rounded border cursor-pointer" />
                     <Input value={templateColors.secondaire} onChange={e => setTemplateColors(c => ({ ...c, secondaire: e.target.value }))} className="font-mono text-sm" />
@@ -1021,11 +1018,11 @@ export default function FacturationSettingsPage() {
 
               {/* Mini preview with selected color */}
               <div className="border rounded-lg p-4 bg-white max-w-sm">
-                <p className="text-xs font-medium text-gray-500 mb-2">Apercu</p>
+                <p className="text-xs font-medium text-gray-500 mb-2">{t('inv.fs.preview_label', locale)}</p>
                 <div className="border rounded-lg overflow-hidden">
                   <div className="p-3 flex justify-between items-center" style={{ backgroundColor: templateColors.primaire }}>
                     <div className="w-6 h-6 rounded bg-white/20" />
-                    <span className="text-white text-[10px] font-bold tracking-wide">FACTURE</span>
+                    <span className="text-white text-[10px] font-bold tracking-wide">{t('inv.fs.invoice_uc_preview', locale)}</span>
                   </div>
                   <div className="p-3 space-y-1.5">
                     <div className="h-1.5 rounded bg-gray-200 w-3/4" />
@@ -1041,7 +1038,7 @@ export default function FacturationSettingsPage() {
                       </div>
                     </div>
                     <div className="border-t pt-2 flex justify-end">
-                      <div className="px-3 py-1 rounded text-[8px] text-white font-bold" style={{ backgroundColor: templateColors.primaire }}>TOTAL TTC</div>
+                      <div className="px-3 py-1 rounded text-[8px] text-white font-bold" style={{ backgroundColor: templateColors.primaire }}>{t('inv.fs.total_ttc_uc', locale)}</div>
                     </div>
                   </div>
                 </div>
@@ -1056,12 +1053,12 @@ export default function FacturationSettingsPage() {
             <div className="space-y-4">
               {/* Activation toggle */}
               <Card>
-                <CardHeader><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Shield className="w-4 h-4" />Fiscalisation MRA</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Shield className="w-4 h-4" />{t('inv.fs.mra_fiscalisation_title', locale)}</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-sm font-medium">Activer la fiscalisation MRA</Label>
-                      <p className="text-xs text-gray-500 mt-0.5">Soumettre les factures finalisees au MRA Invoice Fiscalization Platform</p>
+                      <Label className="text-sm font-medium">{t('inv.fs.activate_mra', locale)}</Label>
+                      <p className="text-xs text-gray-500 mt-0.5">{t('inv.fs.activate_mra_help', locale)}</p>
                     </div>
                     <button
                       type="button"
@@ -1074,9 +1071,9 @@ export default function FacturationSettingsPage() {
                   {mraActive && (
                     <div className="flex items-center gap-2 text-sm">
                       {mraTestResult?.success ? (
-                        <><Wifi className="w-4 h-4 text-green-600" /><span className="text-green-700 font-medium">Connecte</span></>
+                        <><Wifi className="w-4 h-4 text-green-600" /><span className="text-green-700 font-medium">{t('inv.fs.connected', locale)}</span></>
                       ) : (
-                        <><WifiOff className="w-4 h-4 text-gray-400" /><span className="text-gray-500">Non connecte</span></>
+                        <><WifiOff className="w-4 h-4 text-gray-400" /><span className="text-gray-500">{t('inv.fs.not_connected', locale)}</span></>
                       )}
                     </div>
                   )}
@@ -1085,10 +1082,10 @@ export default function FacturationSettingsPage() {
 
               {/* EBS Credentials */}
               <Card className={!mraActive ? "opacity-50 pointer-events-none" : ""}>
-                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Identifiants EBS</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{t('inv.fs.ebs_credentials_title', locale)}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <Label>EBS ID (Identifiant d&apos;enregistrement)</Label>
+                    <Label>{t('inv.fs.ebs_id_label', locale)}</Label>
                     <Input
                       value={mraEbsId}
                       onChange={e => setMraEbsId(e.target.value)}
@@ -1097,18 +1094,18 @@ export default function FacturationSettingsPage() {
                     />
                   </div>
                   <div>
-                    <Label>Cle API (API Key)</Label>
+                    <Label>{t('inv.fs.api_key_label', locale)}</Label>
                     <Input
                       type="password"
                       value={mraApiKey}
                       onChange={e => setMraApiKey(e.target.value)}
-                      placeholder="Votre cle API EBS"
+                      placeholder={t('inv.fs.api_key_placeholder', locale)}
                       className="font-mono"
                     />
-                    <p className="text-xs text-gray-400 mt-1">La cle API est masquee pour des raisons de securite</p>
+                    <p className="text-xs text-gray-400 mt-1">{t('inv.fs.api_key_masked', locale)}</p>
                   </div>
                   <div>
-                    <Label>Environnement</Label>
+                    <Label>{t('inv.fs.environment_label', locale)}</Label>
                     <Select
                       value={mraEnvironment}
                       onValueChange={v => {
@@ -1120,13 +1117,13 @@ export default function FacturationSettingsPage() {
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="sandbox">Sandbox (test)</SelectItem>
-                        <SelectItem value="production">Production</SelectItem>
+                        <SelectItem value="sandbox">{t('inv.fs.sandbox_test', locale)}</SelectItem>
+                        <SelectItem value="production">{t('inv.fs.production', locale)}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>URL de l&apos;API MRA</Label>
+                    <Label>{t('inv.fs.api_url_label', locale)}</Label>
                     <Input
                       value={mraApiUrl}
                       onChange={e => setMraApiUrl(e.target.value)}
@@ -1142,9 +1139,9 @@ export default function FacturationSettingsPage() {
                         const res = await fetch("/api/mra/fiscalise?facture_id=test")
                         // In mock mode, just simulate success
                         await new Promise(r => setTimeout(r, 800))
-                        setMraTestResult({ success: true, message: "Connexion au serveur MRA (" + mraEnvironment + ") reussie." })
+                        setMraTestResult({ success: true, message: t('inv.fs.test_success', locale).replace('{env}', mraEnvironment) })
                       } catch {
-                        setMraTestResult({ success: false, message: "Erreur de connexion au serveur MRA." })
+                        setMraTestResult({ success: false, message: t('inv.fs.test_error', locale) })
                       } finally {
                         setMraTesting(false)
                       }
@@ -1153,7 +1150,7 @@ export default function FacturationSettingsPage() {
                     variant="outline"
                     className="w-full border-[#0B0F2E] text-[#0B0F2E]"
                   >
-                    {mraTesting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Test en cours...</> : <><Wifi className="w-4 h-4 mr-2" />Tester la connexion</>}
+                    {mraTesting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t('inv.fs.testing', locale)}</> : <><Wifi className="w-4 h-4 mr-2" />{t('inv.fs.test_connection', locale)}</>}
                   </Button>
                   {mraTestResult && (
                     <div className={`rounded-lg p-3 text-sm ${mraTestResult.success ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
@@ -1167,44 +1164,43 @@ export default function FacturationSettingsPage() {
             {/* Info card */}
             <div className="space-y-4">
               <Card className="border-[#D4AF37]/30 bg-[#D4AF37]/5">
-                <CardHeader><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Info className="w-4 h-4" />A propos de la fiscalisation MRA</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><Info className="w-4 h-4" />{t('inv.fs.about_mra_title', locale)}</CardTitle></CardHeader>
                 <CardContent className="space-y-3 text-sm text-gray-700">
                   <p>
-                    Le <strong>Mauritius Revenue Authority (MRA)</strong> exige la fiscalisation electronique des factures
-                    via l&apos;Invoice Fiscalization Platform (IFP) pour les entreprises enregistrees a la TVA.
+                    {t('inv.fs.about_mra_p1_pre', locale)} <strong>Mauritius Revenue Authority (MRA)</strong> {t('inv.fs.about_mra_p1_post', locale)}
                   </p>
                   <div className="space-y-2">
-                    <h4 className="font-semibold text-[#0B0F2E]">Seuils et obligations</h4>
+                    <h4 className="font-semibold text-[#0B0F2E]">{t('inv.fs.thresholds_title', locale)}</h4>
                     <ul className="list-disc pl-5 space-y-1 text-xs text-gray-600">
-                      <li>Toutes les entreprises enregistrees a la TVA doivent se conformer</li>
-                      <li>Chaque facture finalisee recoit un <strong>IRN</strong> (Invoice Reference Number)</li>
-                      <li>Un <strong>QR code</strong> est genere pour verification par le client</li>
-                      <li>Les avoirs (credit notes) doivent etre fiscalises avec reference a la facture d&apos;origine</li>
+                      <li>{t('inv.fs.thresholds_1', locale)}</li>
+                      <li>{t('inv.fs.thresholds_2_pre', locale)} <strong>IRN</strong> {t('inv.fs.thresholds_2_post', locale)}</li>
+                      <li>{t('inv.fs.thresholds_3_pre', locale)} <strong>QR code</strong> {t('inv.fs.thresholds_3_post', locale)}</li>
+                      <li>{t('inv.fs.thresholds_4', locale)}</li>
                     </ul>
                   </div>
                   <div className="space-y-2">
-                    <h4 className="font-semibold text-[#0B0F2E]">Pre-requis</h4>
+                    <h4 className="font-semibold text-[#0B0F2E]">{t('inv.fs.prereq_title', locale)}</h4>
                     <ul className="list-disc pl-5 space-y-1 text-xs text-gray-600">
-                      <li>Enregistrement EBS (Electronic Billing System) aupres du MRA</li>
-                      <li>Obtention d&apos;un EBS ID et d&apos;une cle API</li>
-                      <li>Certification du systeme en environnement sandbox</li>
-                      <li>BRN et numero TVA valides configures dans Mon Entreprise</li>
+                      <li>{t('inv.fs.prereq_1', locale)}</li>
+                      <li>{t('inv.fs.prereq_2', locale)}</li>
+                      <li>{t('inv.fs.prereq_3', locale)}</li>
+                      <li>{t('inv.fs.prereq_4', locale)}</li>
                     </ul>
                   </div>
                   <div className="space-y-2">
-                    <h4 className="font-semibold text-[#0B0F2E]">Codes de document</h4>
+                    <h4 className="font-semibold text-[#0B0F2E]">{t('inv.fs.doc_codes_title', locale)}</h4>
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <div className="bg-white rounded p-2 border text-center">
                         <p className="font-mono font-bold text-[#0B0F2E]">01</p>
-                        <p className="text-gray-500">Facture</p>
+                        <p className="text-gray-500">{t('inv.fs.doc_invoice', locale)}</p>
                       </div>
                       <div className="bg-white rounded p-2 border text-center">
                         <p className="font-mono font-bold text-red-600">02</p>
-                        <p className="text-gray-500">Avoir</p>
+                        <p className="text-gray-500">{t('inv.fs.doc_credit', locale)}</p>
                       </div>
                       <div className="bg-white rounded p-2 border text-center">
                         <p className="font-mono font-bold text-orange-600">03</p>
-                        <p className="text-gray-500">Note de debit</p>
+                        <p className="text-gray-500">{t('inv.fs.doc_debit', locale)}</p>
                       </div>
                     </div>
                   </div>
@@ -1212,15 +1208,14 @@ export default function FacturationSettingsPage() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">Mode actuel</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-[#0B0F2E] text-base">{t('inv.fs.current_mode_title', locale)}</CardTitle></CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
                     <Info className="w-5 h-5 text-yellow-600 flex-shrink-0" />
                     <div className="text-sm">
-                      <p className="font-medium text-yellow-800">Mode simulation (Mock)</p>
+                      <p className="font-medium text-yellow-800">{t('inv.fs.simulation_mode', locale)}</p>
                       <p className="text-xs text-yellow-600 mt-0.5">
-                        Le systeme genere des IRN fictifs pour le developpement.
-                        Activez le mode production apres certification EBS.
+                        {t('inv.fs.simulation_help', locale)}
                       </p>
                     </div>
                   </div>
