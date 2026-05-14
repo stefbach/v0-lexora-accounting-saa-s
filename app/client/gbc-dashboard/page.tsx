@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge'
 import { Loader2, RefreshCw, AlertCircle, CheckCircle2, XCircle, ArrowRight, Globe, Banknote, Shield, GitBranch, UserCheck, Layers, FileText, FileSignature } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
 import Link from 'next/link'
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(n))
 
@@ -41,6 +42,7 @@ const STATUS_ICON: Record<ModuleStatus, any> = {
 }
 
 export default function GbcDashboardPage() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -82,8 +84,8 @@ export default function GbcDashboardPage() {
 
   useEffect(() => { load() }, [societeId])
 
-  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Aucune société sélectionnée.</div></div>
-  if (loading) return <div className="p-8 flex items-center gap-2 text-slate-600"><Loader2 className="animate-spin h-5 w-5" /> Chargement dashboard GBC…</div>
+  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t('gbc.common.no_societe', locale)}</div></div>
+  if (loading) return <div className="p-8 flex items-center gap-2 text-slate-600"><Loader2 className="animate-spin h-5 w-5" /> {t('gbc.dashboard.loading', locale)}</div>
 
   // Compute status per module
   const deviseFonct = societe?.devise_fonctionnelle || 'MUR'
@@ -119,129 +121,129 @@ export default function GbcDashboardPage() {
 
   const tilesAll: Array<{ icon: any; title: string; href: string; status: ModuleStatus; kpi: string; sub: string; phase: string; show: boolean }> = [
     {
-      icon: Banknote, title: 'Monnaie fonctionnelle', href: '/client/societes',
+      icon: Banknote, title: t('gbc.dashboard.tile.functional_currency', locale), href: '/client/societes',
       phase: 'A',
       status: mod.ias21_translation_active ? 'ok' : 'na',
       kpi: deviseFonct,
-      sub: mod.ias21_translation_active ? 'Comptabilité primaire (IAS 21)' : 'Société MUR',
+      sub: mod.ias21_translation_active ? t('gbc.dashboard.tile.functional_currency_sub_active', locale) : t('gbc.dashboard.tile.functional_currency_sub_mur', locale),
       show: true,  // toujours visible (info de base)
     },
     {
-      icon: Banknote, title: 'PER + IS', href: '/client/gbc-per',
+      icon: Banknote, title: t('gbc.dashboard.tile.per_is', locale), href: '/client/gbc-per',
       phase: 'B',
       status: perEligible > 0 ? 'ok' : (mod.per_active ? 'pending' : 'na'),
       kpi: `${fmt(perTotal)} MUR`,
-      sub: `${fmt(perEligible)} MUR PER-éligible`,
+      sub: `${fmt(perEligible)} ${t('gbc.dashboard.tile.per_is_sub_suffix', locale)}`,
       show: mod.per_active,
     },
     {
-      icon: Shield, title: 'Substance (CIGA)', href: '/client/gbc-substance',
+      icon: Shield, title: t('gbc.dashboard.tile.substance', locale), href: '/client/gbc-substance',
       phase: 'C',
       status: substanceStatus === 'compliant' ? 'ok' : substanceStatus === 'at_risk' ? 'warning' : substanceStatus === 'non_compliant' ? 'error' : 'pending',
       kpi: substanceStatus,
-      sub: 'Exigences ITA §73A + FSC',
+      sub: t('gbc.dashboard.tile.substance_sub', locale),
       show: mod.substance_required,
     },
     {
-      icon: GitBranch, title: 'Transfer Pricing', href: '/client/gbc-transfer-pricing',
+      icon: GitBranch, title: t('gbc.dashboard.tile.tp', locale), href: '/client/gbc-transfer-pricing',
       phase: 'D',
       status: tpFlagged > 0 ? 'error' : tpDocRequired > 0 ? 'warning' : 'ok',
-      kpi: `${tpDocRequired} doc requise`,
-      sub: tpFlagged > 0 ? `⚠ ${tpFlagged} hors arm's length` : 'Aucun écart détecté',
+      kpi: `${tpDocRequired} ${t('gbc.dashboard.tile.tp_doc_required_suffix', locale)}`,
+      sub: tpFlagged > 0 ? `⚠ ${tpFlagged} ${t('gbc.dashboard.tile.tp_arms_length_suffix', locale)}` : t('gbc.dashboard.tile.tp_no_issue', locale),
       show: mod.tp_required,
     },
     {
-      icon: UserCheck, title: 'UBO', href: '/client/gbc-ubo',
+      icon: UserCheck, title: t('gbc.dashboard.tile.ubo', locale), href: '/client/gbc-ubo',
       phase: 'E',
       status: uboCount === 0 ? 'error' : uboTotalPct < 75 ? 'warning' : 'ok',
-      kpi: `${uboCount} UBO`,
-      sub: `${uboTotalPct.toFixed(0)}% détention déclarée`,
+      kpi: `${uboCount} ${t('gbc.dashboard.tile.ubo_kpi_suffix', locale)}`,
+      sub: `${uboTotalPct.toFixed(0)}% ${t('gbc.dashboard.tile.ubo_pct_suffix', locale)}`,
       show: mod.ubo_required,
     },
     {
-      icon: Layers, title: 'Consolidation', href: '/client/gbc-consolidation',
+      icon: Layers, title: t('gbc.dashboard.tile.consolidation', locale), href: '/client/gbc-consolidation',
       phase: 'F',
       status: consolCount === 0 ? 'na' : 'ok',
-      kpi: `${consolCount} filiale${consolCount > 1 ? 's' : ''}`,
-      sub: consolCount > 0 ? `Goodwill ${fmt(consolGoodwill)} MUR` : 'Pas de groupe',
+      kpi: `${consolCount} ${consolCount > 1 ? t('gbc.dashboard.tile.consolidation_subsidiary_many', locale) : t('gbc.dashboard.tile.consolidation_subsidiary_one', locale)}`,
+      sub: consolCount > 0 ? `${t('gbc.dashboard.tile.consolidation_goodwill_prefix', locale)} ${fmt(consolGoodwill)} MUR` : t('gbc.dashboard.tile.consolidation_no_group', locale),
       show: mod.consolidation_active,
     },
     {
-      icon: FileText, title: 'CRS / FATCA', href: '/client/gbc-crs-fatca',
+      icon: FileText, title: t('gbc.dashboard.tile.crs_fatca', locale), href: '/client/gbc-crs-fatca',
       phase: 'G',
       status: crsCount > 0 ? 'ok' : 'na',
-      kpi: `${crsCount} holders`,
-      sub: 'Reporting annuel MRA',
+      kpi: `${crsCount} ${t('gbc.dashboard.tile.crs_holders_suffix', locale)}`,
+      sub: t('gbc.dashboard.tile.crs_sub', locale),
       show: mod.crs_fatca_active,
     },
     {
-      icon: Globe, title: 'Pillar Two', href: '/client/gbc-pillar-two',
+      icon: Globe, title: t('gbc.dashboard.tile.pillar_two', locale), href: '/client/gbc-pillar-two',
       phase: 'H',
       status: pillarInScope === true ? (pillarTopUp > 0 ? 'warning' : 'ok') : pillarInScope === false ? 'na' : 'pending',
-      kpi: pillarInScope === true ? `${fmt(pillarTopUp)} MUR top-up` : pillarInScope === false ? 'hors scope' : 'à évaluer',
-      sub: pillarInScope === true ? `${pillarLowTaxed} juridictions low-taxed` : 'CA consolidé < €750M ?',
+      kpi: pillarInScope === true ? `${fmt(pillarTopUp)} ${t('gbc.dashboard.tile.pillar_top_up_suffix', locale)}` : pillarInScope === false ? t('gbc.dashboard.tile.pillar_out_scope', locale) : t('gbc.dashboard.tile.pillar_to_assess', locale),
+      sub: pillarInScope === true ? `${pillarLowTaxed} ${t('gbc.dashboard.tile.pillar_jurisdictions_suffix', locale)}` : t('gbc.dashboard.tile.pillar_threshold_question', locale),
       show: mod.pillar_two_eligible,
     },
     {
-      icon: FileSignature, title: 'IFRS 16 Leases', href: '/client/leases',
+      icon: FileSignature, title: t('gbc.dashboard.tile.leases', locale), href: '/client/leases',
       phase: 'I',
       status: leasesCount > 0 ? 'ok' : 'na',
-      kpi: `${leasesCount} actif${leasesCount > 1 ? 's' : ''}`,
-      sub: leasesCount > 0 ? `${fmt(leasesRou)} MUR RoU` : 'Aucun lease',
+      kpi: `${leasesCount} ${leasesCount > 1 ? t('gbc.dashboard.tile.leases_active_many', locale) : t('gbc.dashboard.tile.leases_active_one', locale)}`,
+      sub: leasesCount > 0 ? `${fmt(leasesRou)} ${t('gbc.dashboard.tile.leases_rou_suffix', locale)}` : t('gbc.dashboard.tile.leases_none', locale),
       show: true,  // IFRS 16 cross-cutting, applicable à toutes
     },
   ]
 
   // Filtre les tuiles selon le régime de la société
-  const tiles = tilesAll.filter(t => t.show)
-  const compliantCount = tiles.filter(t => t.status === 'ok').length
-  const warningCount = tiles.filter(t => t.status === 'warning').length
-  const errorCount = tiles.filter(t => t.status === 'error').length
+  const tiles = tilesAll.filter(tile => tile.show)
+  const compliantCount = tiles.filter(tile => tile.status === 'ok').length
+  const warningCount = tiles.filter(tile => tile.status === 'warning').length
+  const errorCount = tiles.filter(tile => tile.status === 'error').length
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Globe className="h-6 w-6 text-purple-700" /> Dashboard GBC & Full IFRS</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Globe className="h-6 w-6 text-purple-700" /> {t('gbc.dashboard.title', locale)}</h1>
           <p className="text-sm text-slate-500">
-            Vue d'ensemble compliance pour {societe?.nom || '—'} · Exercice {exercice}
+            {t('gbc.dashboard.subtitle_prefix', locale)} {societe?.nom || '—'} · {t('gbc.dashboard.fiscal_year', locale)} {exercice}
             <Badge className={`ml-2 ${isGbc ? 'bg-purple-100 text-purple-900 border-purple-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-              {regime === 'gbc1' && 'GBC1'}
-              {regime === 'authorised_company' && 'Authorised Company'}
-              {regime === 'holding' && 'Holding'}
-              {regime === 'branch_foreign_pe' && 'Succursale étrangère'}
-              {regime === 'domestic' && 'PME Domestic'}
+              {regime === 'gbc1' && t('gbc.dashboard.regime_gbc1', locale)}
+              {regime === 'authorised_company' && t('gbc.dashboard.regime_authorised_company', locale)}
+              {regime === 'holding' && t('gbc.dashboard.regime_holding', locale)}
+              {regime === 'branch_foreign_pe' && t('gbc.dashboard.regime_branch_foreign_pe', locale)}
+              {regime === 'domestic' && t('gbc.dashboard.regime_domestic', locale)}
               {' · '}{deviseFonct}
             </Badge>
           </p>
         </div>
-        <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />Rafraîchir</Button>
+        <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />{t('gbc.dashboard.refresh', locale)}</Button>
       </div>
 
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex gap-2"><AlertCircle className="h-4 w-4" />{error}</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Modules conformes</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold text-emerald-700">{compliantCount}</div><div className="text-xs text-slate-500">sur {tiles.length} phases</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Modules à risque</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold text-amber-700">{warningCount}</div><div className="text-xs text-slate-500">at_risk / warnings</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">Modules non conformes</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold text-red-700">{errorCount}</div><div className="text-xs text-slate-500">action requise</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.dashboard.compliant_modules', locale)}</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold text-emerald-700">{compliantCount}</div><div className="text-xs text-slate-500">{t('gbc.dashboard.on', locale)} {tiles.length} {t('gbc.dashboard.phases_suffix', locale)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.dashboard.modules_at_risk', locale)}</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold text-amber-700">{warningCount}</div><div className="text-xs text-slate-500">{t('gbc.dashboard.at_risk_warnings', locale)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('gbc.dashboard.non_compliant_modules', locale)}</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold text-red-700">{errorCount}</div><div className="text-xs text-slate-500">{t('gbc.dashboard.action_required', locale)}</div></CardContent></Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {tiles.map(t => {
-          const Status = STATUS_ICON[t.status]
+        {tiles.map(tile => {
+          const Status = STATUS_ICON[tile.status]
           return (
-            <Link key={t.title} href={t.href} className={`rounded-xl border p-4 transition hover:shadow-md ${STATUS_CLASS[t.status]} block`}>
+            <Link key={tile.title} href={tile.href} className={`rounded-xl border p-4 transition hover:shadow-md ${STATUS_CLASS[tile.status]} block`}>
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <t.icon className="h-5 w-5" />
-                  <span className="text-xs font-mono font-semibold uppercase tracking-wide">Phase {t.phase}</span>
+                  <tile.icon className="h-5 w-5" />
+                  <span className="text-xs font-mono font-semibold uppercase tracking-wide">{t('gbc.dashboard.phase_prefix', locale)} {tile.phase}</span>
                 </div>
-                <Status className={`h-4 w-4 ${t.status === 'pending' ? 'animate-spin' : ''}`} />
+                <Status className={`h-4 w-4 ${tile.status === 'pending' ? 'animate-spin' : ''}`} />
               </div>
-              <div className="text-sm font-semibold mb-1">{t.title}</div>
-              <div className="text-2xl font-bold mb-1">{t.kpi}</div>
-              <div className="text-xs opacity-75 mb-2">{t.sub}</div>
-              <div className="text-xs flex items-center gap-1 opacity-75">Ouvrir le module <ArrowRight className="h-3 w-3" /></div>
+              <div className="text-sm font-semibold mb-1">{tile.title}</div>
+              <div className="text-2xl font-bold mb-1">{tile.kpi}</div>
+              <div className="text-xs opacity-75 mb-2">{tile.sub}</div>
+              <div className="text-xs flex items-center gap-1 opacity-75">{t('gbc.dashboard.open_module', locale)} <ArrowRight className="h-3 w-3" /></div>
             </Link>
           )
         })}
@@ -250,9 +252,7 @@ export default function GbcDashboardPage() {
       <div className="text-xs text-slate-500 flex items-start gap-2 p-3 rounded bg-slate-50 border border-slate-200">
         <Globe className="h-4 w-4 mt-0.5" />
         <div>
-          <strong>Tip :</strong> les modules avec statut <code className="bg-slate-100 px-1 rounded">na</code> (non-applicable)
-          ne sont actifs que pour les GBC1, Authorised Companies ou holdings. Pour activer une société comme GBC, change
-          <code className="bg-slate-100 px-1 rounded">societes.devise_fonctionnelle</code> ≠ MUR depuis la page société ou via SQL.
+          <strong>{t('gbc.dashboard.tip_label', locale)}</strong> {t('gbc.dashboard.tip_body', locale)}
         </div>
       </div>
     </div>
