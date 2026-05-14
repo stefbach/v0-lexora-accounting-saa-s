@@ -856,17 +856,17 @@ export default function GeolocalisationPage() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center justify-between">
                     <span className="flex items-center gap-2"><MapPin className="w-4 h-4" style={{ color: GOLD }} /> {zone}</span>
-                    <Badge variant="outline" className="text-xs">{emps.length} employé(s)</Badge>
+                    <Badge variant="outline" className="text-xs">{t('rha.b.geo.n_employees', locale).replace('{n}', String(emps.length))}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-xs">Employé</TableHead>
-                        <TableHead className="text-xs">Poste</TableHead>
-                        <TableHead className="text-xs">Adresse</TableHead>
-                        <TableHead className="text-xs">Shift</TableHead>
+                        <TableHead className="text-xs">{t('rha.b.geo.col_employee', locale)}</TableHead>
+                        <TableHead className="text-xs">{t('rha.b.geo.col_position', locale)}</TableHead>
+                        <TableHead className="text-xs">{t('rha.b.geo.col_address', locale)}</TableHead>
+                        <TableHead className="text-xs">{t('rha.b.geo.col_shift', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -877,7 +877,7 @@ export default function GeolocalisationPage() {
                             {p.groupe_nom && <Badge className="ml-2 text-[9px]" style={{ backgroundColor: `${GOLD}20`, color: GOLD }}>{p.groupe_nom}</Badge>}
                           </TableCell>
                           <TableCell className="py-2 text-xs text-gray-500">{p.poste || "—"}</TableCell>
-                          <TableCell className="py-2 text-xs text-gray-500 max-w-[200px] truncate">{p.adresse || "Non renseignée"}</TableCell>
+                          <TableCell className="py-2 text-xs text-gray-500 max-w-[200px] truncate">{p.adresse || t('rha.b.geo.address_missing', locale)}</TableCell>
                           <TableCell className="py-2">
                             <Badge className="text-[10px]" style={{ backgroundColor: shiftColor(p.shift_today) + "20", color: shiftColor(p.shift_today) }}>
                               {p.shift_label}{p.heure_debut ? ` ${p.heure_debut}-${p.heure_fin}` : ""}
@@ -911,7 +911,7 @@ export default function GeolocalisationPage() {
                 </div>
 
                 {ramassageGroups.filter(g => filterTime === "all" || g.time === filterTime).length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-4">Aucun employé en service avec adresse</p>
+                  <p className="text-sm text-gray-400 text-center py-4">{t('rha.b.geo.no_in_service', locale)}</p>
                 ) : ramassageGroups.filter(g => filterTime === "all" || g.time === filterTime).map((g, i) => (
                   <div key={i} className="p-3 rounded-xl" style={{ backgroundColor: `${BLUE}06`, border: `1px solid ${BLUE}12` }}>
                     <div className="flex items-center justify-between mb-2">
@@ -939,12 +939,12 @@ export default function GeolocalisationPage() {
             {/* Légende */}
             <Card className="rounded-2xl shadow-sm">
               <CardContent className="p-4 space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase">Légende</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase">{t('rha.b.geo.legend', locale)}</p>
                 {[
-                  { color: BLUE, label: "En service aujourd'hui" },
-                  { color: "#9ca3af", label: "Repos" },
-                  { color: GREEN, label: "Congé" },
-                  { color: "#d1d5db", label: "Non planifié" },
+                  { color: BLUE, label: t('rha.b.geo.legend_in_service', locale) },
+                  { color: "#9ca3af", label: t('rha.b.geo.legend_rest', locale) },
+                  { color: GREEN, label: t('rha.b.geo.legend_leave', locale) },
+                  { color: "#d1d5db", label: t('rha.b.geo.legend_unplanned', locale) },
                 ].map(l => (
                   <div key={l.label} className="flex items-center gap-2 text-xs text-gray-600">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: l.color }} />
@@ -962,10 +962,10 @@ export default function GeolocalisationPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2 text-white">
             <Bot className="w-5 h-5" style={{ color: GOLD }} />
-            <span>Assistant IA Planning</span>
+            <span>{t('rha.b.geo.assistant_title', locale)}</span>
             <Badge className="text-[9px] ml-2" style={{ backgroundColor: `${GOLD}30`, color: GOLD }}>Beta</Badge>
           </CardTitle>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>Posez une question sur le planning, le ramassage ou les employes</p>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>{t('rha.b.geo.assistant_subtitle', locale)}</p>
         </CardHeader>
         <CardContent className="space-y-3">
           <form onSubmit={(e) => { e.preventDefault(); if (aiQuery.trim()) { setAiResponse(generateAIResponse(aiQuery, filteredPositions, ramassageGroups)); } }} className="flex gap-2">

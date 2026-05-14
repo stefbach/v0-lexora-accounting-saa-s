@@ -211,7 +211,7 @@ export default function ProvisionsCongesPage() {
     return (
       <ClientPageShell>
         <div className="flex items-center gap-2 text-slate-500 p-6">
-          <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+          <Loader2 className="h-4 w-4 animate-spin" /> {t('rha.b.provc.loading', locale)}
         </div>
       </ClientPageShell>
     )
@@ -223,8 +223,8 @@ export default function ProvisionsCongesPage() {
           <CardContent className="p-6 flex items-start gap-3">
             <ShieldAlert className="h-5 w-5 text-red-600 mt-1" />
             <div>
-              <div className="font-semibold">Accès refusé</div>
-              <div className="text-sm text-slate-600">Cette page est réservée aux rôles admin et rh.</div>
+              <div className="font-semibold">{t('rha.b.provc.access_denied', locale)}</div>
+              <div className="text-sm text-slate-600">{t('rha.b.provc.access_msg', locale)}</div>
             </div>
           </CardContent>
         </Card>
