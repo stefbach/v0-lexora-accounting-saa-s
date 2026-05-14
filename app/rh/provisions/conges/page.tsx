@@ -246,13 +246,13 @@ export default function ProvisionsCongesPage() {
 
         {/* Sélection + actions */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Mois de provision</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t('rha.b.provc.month_title', locale)}</CardTitle></CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-4 gap-3">
               <div>
-                <Label>Société</Label>
+                <Label>{t('rha.b.provc.lbl_societe', locale)}</Label>
                 <Select value={societeId} onValueChange={setSocieteId}>
-                  <SelectTrigger><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('rha.b.provc.select', locale)} /></SelectTrigger>
                   <SelectContent>
                     {societes.map(s => (
                       <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
@@ -261,7 +261,7 @@ export default function ProvisionsCongesPage() {
                 </Select>
               </div>
               <div>
-                <Label>Date de snapshot (fin de mois)</Label>
+                <Label>{t('rha.b.provc.lbl_snapshot_date', locale)}</Label>
                 <Input
                   type="date"
                   value={dateSnapshot}
@@ -269,20 +269,20 @@ export default function ProvisionsCongesPage() {
                 />
               </div>
               <div>
-                <Label>Charges patronales</Label>
+                <Label>{t('rha.b.provc.lbl_employer_charges', locale)}</Label>
                 <Input value={`${(chargesPct * 100).toFixed(1)} %`} disabled />
               </div>
               <div className="flex items-end gap-2">
                 <Button onClick={handleCalculer} disabled={calculating || !societeId}
                   className="gap-2" style={{ backgroundColor: NAVY, color: 'white' }}>
                   {calculating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
-                  Aperçu
+                  {t('rha.b.provc.btn_preview', locale)}
                 </Button>
                 {isAdmin && (
                   <Button onClick={handleComptabiliser} disabled={comptabilizing || !societeId}
                     className="gap-2" style={{ backgroundColor: GOLD, color: NAVY }}>
                     {comptabilizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookOpenCheck className="h-4 w-4" />}
-                    Comptabiliser
+                    {t('rha.b.provc.btn_book', locale)}
                   </Button>
                 )}
               </div>
@@ -298,32 +298,32 @@ export default function ProvisionsCongesPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
-                Aperçu — {libellePeriodeLocal(snapshotCalc.date_snapshot)}
+                {t('rha.b.provc.preview_for', locale)} {libellePeriodeLocal(snapshotCalc.date_snapshot)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid md:grid-cols-4 gap-3">
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">Provision totale</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.provc.kpi_total', locale)}</div>
                   <div className="text-xl font-semibold" style={{ color: NAVY }}>
                     {formaterMUR(snapshotCalc.provision_total_mur)}
                   </div>
                 </div>
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">Mois précédent</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.provc.kpi_prev_month', locale)}</div>
                   <div className="text-xl font-semibold text-slate-700">
                     {formaterMUR(snapshotPrecedent?.provision_total_mur || 0)}
                   </div>
                 </div>
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">Variation</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.provc.kpi_variation', locale)}</div>
                   <div className="text-xl font-semibold"
                     style={{ color: (variation || 0) >= 0 ? '#166534' : '#b91c1c' }}>
                     {(variation || 0) >= 0 ? '+' : ''}{formaterMUR(variation || 0)}
                   </div>
                 </div>
                 <div className="p-3 rounded border bg-slate-50">
-                  <div className="text-xs text-slate-500">Employés concernés</div>
+                  <div className="text-xs text-slate-500">{t('rha.b.provc.kpi_employees', locale)}</div>
                   <div className="text-xl font-semibold text-slate-700">
                     {snapshotCalc.details_par_employe.filter(e => e.provision_mur > 0).length}
                     <span className="text-xs text-slate-500"> / {snapshotCalc.details_par_employe.length}</span>
@@ -333,19 +333,19 @@ export default function ProvisionsCongesPage() {
 
               <div>
                 <div className="text-sm font-medium mb-2" style={{ color: NAVY }}>
-                  Détail par employé
+                  {t('rha.b.provc.detail_per_emp', locale)}
                 </div>
                 <div className="overflow-x-auto border rounded">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employé</TableHead>
-                        <TableHead className="text-right">AL acquis</TableHead>
-                        <TableHead className="text-right">AL pris</TableHead>
-                        <TableHead className="text-right">Non pris</TableHead>
-                        <TableHead className="text-right">Salaire base</TableHead>
-                        <TableHead className="text-right">Coût/jour (+ch)</TableHead>
-                        <TableHead className="text-right">Provision MUR</TableHead>
+                        <TableHead>{t('rha.b.provc.col_employee', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.provc.col_al_acquired', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.provc.col_al_taken', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.provc.col_unused', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.provc.col_base_salary', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.provc.col_cost_day', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.provc.col_provision_mur', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -369,7 +369,7 @@ export default function ProvisionsCongesPage() {
 
               <div className="border rounded p-3 bg-amber-50/50">
                 <div className="text-sm font-medium mb-2" style={{ color: NAVY }}>
-                  Écritures qui seront générées
+                  {t('rha.b.provc.entries_to_gen', locale)}
                 </div>
                 <div className="text-xs font-mono space-y-1">
                   <div className="flex justify-between border-b pb-1">
@@ -403,11 +403,11 @@ export default function ProvisionsCongesPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center justify-between">
-              <span>Historique des snapshots</span>
+              <span>{t('rha.b.provc.history_title', locale)}</span>
               <Select value={filtreAnnee} onValueChange={setFiltreAnnee}>
                 <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes</SelectItem>
+                  <SelectItem value="all">{t('rha.b.provc.all', locale)}</SelectItem>
                   {anneesDisponibles.map(y => (
                     <SelectItem key={y} value={y}>{y}</SelectItem>
                   ))}
@@ -418,21 +418,21 @@ export default function ProvisionsCongesPage() {
           <CardContent>
             {loadingHistorique ? (
               <div className="flex items-center gap-2 text-slate-500 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+                <Loader2 className="h-4 w-4 animate-spin" /> {t('rha.b.provc.loading', locale)}
               </div>
             ) : historique.length === 0 ? (
-              <div className="text-sm text-slate-500 italic">Aucun snapshot pour cette société.</div>
+              <div className="text-sm text-slate-500 italic">{t('rha.b.provc.no_snapshot', locale)}</div>
             ) : (
               <div className="overflow-x-auto border rounded">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Mois</TableHead>
-                      <TableHead className="text-right">Provision</TableHead>
-                      <TableHead className="text-right">Charges pat.</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Écritures</TableHead>
-                      {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+                      <TableHead>{t('rha.b.provc.col_month', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.provc.col_provision', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.provc.col_charges', locale)}</TableHead>
+                      <TableHead>{t('rha.b.provc.col_status', locale)}</TableHead>
+                      <TableHead>{t('rha.b.provc.col_entries', locale)}</TableHead>
+                      {isAdmin && <TableHead className="text-right">{t('rha.b.provc.col_actions', locale)}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -454,7 +454,7 @@ export default function ProvisionsCongesPage() {
                             : <span className="italic">—</span>}
                           {s.ecriture_extourne_debit_id && (
                             <span className="ml-2 inline-flex items-center gap-1 text-amber-700">
-                              <RotateCcw className="h-3 w-3" /> extourné
+                              <RotateCcw className="h-3 w-3" /> {t('rha.b.provc.reversed', locale)}
                             </span>
                           )}
                         </TableCell>
@@ -486,7 +486,7 @@ export default function ProvisionsCongesPage() {
         <Card>
           <CardContent className="p-4 text-xs text-slate-600 space-y-1">
             <div className="flex items-center gap-2 font-medium" style={{ color: NAVY }}>
-              <AlertTriangle className="h-3 w-3" /> Rappel IAS 19 (§11-14)
+              <AlertTriangle className="h-3 w-3" /> {t('rha.b.provc.reminder_title', locale)}
             </div>
             <div>
               Les congés payés accumulés doivent être provisionnés au fur et à mesure de leur acquisition.
