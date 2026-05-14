@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { assertWebhookSecret, resolveChatContext, sendTelegramMessage, logAction } from '@/lib/telegram/auth'
+import {
+  assertWebhookSecret,
+  resolveChatContext,
+  sendTelegramMessage,
+  logAction,
+  answerCallbackQuery,
+  editMessageText,
+} from '@/lib/telegram/auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 
 /**
@@ -26,7 +33,14 @@ export async function POST(req: NextRequest) {
   if (!msg || !fromUser) return NextResponse.json({ ok: true })
 
   const chatId: number = msg.chat.id
-  const text: string = update.message?.text || update.callback_query?.data || ''
+
+  // --- Callback query (clic sur inline button) --------------------------------
+  // On gère AVANT le reste : un callback_query n'est PAS une commande slash.
+  if (update.callback_query) {
+    return await handleCallbackQuery(update.callback_query)
+  }
+
+  const text: string = update.message?.text || ''
 
   // --- Commande /start CODE ----------------------------------------------------
   if (text.startsWith('/start')) {
@@ -103,7 +117,7 @@ export async function POST(req: NextRequest) {
         role,
         locale: ctx.language_code,
         first_name: ctx.telegram_firstname,
-        message: update.message || update.callback_query,
+        message: update.message,
       }),
     })
   } catch (e: any) {
@@ -213,6 +227,169 @@ async function handleSocieteSelect(chatId: number, target: string) {
 
   await admin.from('telegram_users').update({ current_societe_id: chosen.societe_id }).eq('chat_id', chatId)
   await sendTelegramMessage(chatId, `✅ Société active : <b>${chosen.societes.nom}</b>`)
+  return NextResponse.json({ ok: true })
+}
+
+/**
+ * Gère un clic sur un bouton inline.
+ *
+ * Format conventionnel `callback_data` : `intent:param1:param2` (max 64 bytes).
+ * Intents supportés :
+ *   - leave.approve:<demande_id>
+ *   - leave.reject:<demande_id>
+ *   - payroll.approve:<periode>:confirm   (ex: payroll.approve:2025-05:confirm)
+ *   - invoice.confirm:<prompt_hash>       (placeholder — endpoint à venir)
+ *
+ * Pipeline :
+ *   1. resolveChatContext → auth (sinon refus)
+ *   2. parse intent + params
+ *   3. POST sur l'endpoint interne Lexora correspondant (X-Internal-Token)
+ *   4. answerCallbackQuery (toast) + editMessageText (grisé du message original)
+ */
+async function handleCallbackQuery(cb: any) {
+  const chatId: number = cb.message?.chat?.id
+  const messageId: number | undefined = cb.message?.message_id
+  const callbackId: string = cb.id
+  const data: string = cb.data || ''
+  const originalText: string = cb.message?.text || cb.message?.caption || ''
+
+  // Auth
+  const ctx = await resolveChatContext(chatId)
+  if (!ctx) {
+    await answerCallbackQuery(callbackId, '⚠️ Compte non vérifié.', true)
+    return NextResponse.json({ ok: true })
+  }
+  if (!ctx.current_societe_id) {
+    await answerCallbackQuery(callbackId, '⚠️ Aucune société active.', true)
+    return NextResponse.json({ ok: true })
+  }
+
+  const [rawIntent, ...params] = data.split(':')
+  const intent = rawIntent || 'unknown'
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.LEXORA_BASE_URL || ''
+  const internalToken = process.env.INTERNAL_API_TOKEN || ''
+
+  if (!baseUrl || !internalToken) {
+    await answerCallbackQuery(callbackId, '⚠️ Configuration serveur incomplète.', true)
+    return NextResponse.json({ ok: true })
+  }
+
+  const callInternal = async (path: string, body: Record<string, unknown>) => {
+    const res = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Token': internalToken,
+      },
+      body: JSON.stringify({
+        ...body,
+        user_id: ctx.user_id,
+        societe_id: ctx.current_societe_id,
+      }),
+    })
+    const json = await res.json().catch(() => ({}))
+    return { ok: res.ok, status: res.status, json }
+  }
+
+  const started = Date.now()
+  try {
+    let popup = '✅ Traité'
+    let updatedLine = ''
+
+    if (intent === 'leave.approve' || intent === 'leave.reject') {
+      const demandeId = params[0]
+      if (!demandeId) {
+        await answerCallbackQuery(callbackId, 'Paramètre manquant.', true)
+        return NextResponse.json({ ok: true })
+      }
+      const decision = intent === 'leave.approve' ? 'approuve' : 'refuse'
+      const r = await callInternal('/api/telegram/internal/leave-decide', {
+        demande_id: demandeId,
+        decision,
+      })
+      if (!r.ok) {
+        popup = `⚠️ ${r.json?.error || 'Erreur'}`
+        await answerCallbackQuery(callbackId, popup, true)
+        await logAction({
+          chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+          intent, payload: { demande_id: demandeId }, result: r.json,
+          status: 'error', error_msg: r.json?.error, duration_ms: Date.now() - started,
+        })
+        return NextResponse.json({ ok: true })
+      }
+      popup = decision === 'approuve' ? '✅ Congé approuvé' : '❌ Congé refusé'
+      updatedLine = decision === 'approuve'
+        ? '\n\n<i>✅ Approuvé via Telegram</i>'
+        : '\n\n<i>❌ Refusé via Telegram</i>'
+    } else if (intent === 'payroll.approve') {
+      const periode = params[0]
+      const confirm = params[1] === 'confirm'
+      if (!periode || !confirm) {
+        await answerCallbackQuery(callbackId, 'Paramètres manquants.', true)
+        return NextResponse.json({ ok: true })
+      }
+      const r = await callInternal('/api/telegram/internal/payroll-approve', {
+        periode,
+        confirm: true,
+      })
+      if (!r.ok) {
+        popup = `⚠️ ${r.json?.error || 'Erreur'}`
+        await answerCallbackQuery(callbackId, popup, true)
+        await logAction({
+          chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+          intent, payload: { periode }, result: r.json,
+          status: 'error', error_msg: r.json?.error, duration_ms: Date.now() - started,
+        })
+        return NextResponse.json({ ok: true })
+      }
+      popup = `✅ Paie ${periode} validée`
+      updatedLine = `\n\n<i>✅ Validée via Telegram (${periode})</i>`
+    } else if (intent === 'invoice.confirm') {
+      // Placeholder : endpoint /api/telegram/internal/invoice-confirm pas encore implémenté.
+      popup = '⏳ Confirmation facture non disponible (endpoint à venir).'
+      await answerCallbackQuery(callbackId, popup, true)
+      await logAction({
+        chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+        intent, payload: { params }, status: 'pending',
+        error_msg: 'endpoint not implemented', duration_ms: Date.now() - started,
+      })
+      return NextResponse.json({ ok: true })
+    } else {
+      await answerCallbackQuery(callbackId, `Action inconnue : ${intent}`, true)
+      return NextResponse.json({ ok: true })
+    }
+
+    // Toast confirmation
+    await answerCallbackQuery(callbackId, popup, false)
+
+    // Édite le message d'origine pour griser le bouton
+    if (messageId) {
+      try {
+        await editMessageText(
+          chatId,
+          messageId,
+          `${originalText}${updatedLine}`,
+          { reply_markup: { inline_keyboard: [] } },
+        )
+      } catch {
+        // Non-bloquant si le message ne peut pas être édité
+      }
+    }
+
+    await logAction({
+      chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+      intent, payload: { params }, status: 'success',
+      duration_ms: Date.now() - started,
+    })
+  } catch (e: any) {
+    await answerCallbackQuery(callbackId, '⚠️ Erreur interne.', true)
+    await logAction({
+      chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+      intent, status: 'error', error_msg: e.message,
+      duration_ms: Date.now() - started,
+    })
+  }
+
   return NextResponse.json({ ok: true })
 }
 
