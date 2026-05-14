@@ -21,7 +21,7 @@ export async function POST() {
   const results: string[] = []
   const errors: string[] = []
 
-  // 1. Fix role constraint — drop and recreate with ALL roles
+  // 1. Fix role constraint — drop and recreate with ALL roles (inclut team_leader, mig 261)
   try {
     const { error: e1 } = await supabase.rpc('exec_sql', {
       sql: `
@@ -30,12 +30,28 @@ export async function POST() {
           CHECK (role IN (
             'admin','super_admin','client_admin','client_user','client_assistant',
             'comptable','comptable_dedie','rh','rh_manager','juridique',
-            'employe','manager','direction','salarie'
+            'employe','manager','team_leader','direction','salarie'
           ));
+        -- user_societes.role : même liste si la colonne existe
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='user_societes' AND column_name='role'
+          ) THEN
+            ALTER TABLE public.user_societes DROP CONSTRAINT IF EXISTS user_societes_role_check;
+            ALTER TABLE public.user_societes ADD CONSTRAINT user_societes_role_check
+              CHECK (role IN (
+                'admin','super_admin','client_admin','client_user','client_assistant',
+                'comptable','comptable_dedie','rh','rh_manager','juridique',
+                'employe','manager','team_leader','direction','salarie'
+              ));
+          END IF;
+        END $$;
       `
     })
     if (e1) errors.push(`Role constraint (rpc): ${e1.message}`)
-    else results.push('Role constraint updated')
+    else results.push('Role constraint updated (incl. team_leader)')
   } catch (e: any) {
     errors.push(`Role constraint: ${e.message}`)
   }

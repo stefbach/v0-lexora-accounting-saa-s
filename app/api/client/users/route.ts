@@ -7,6 +7,54 @@ export const dynamic = 'force-dynamic'
 
 const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe', 'manager', 'team_leader', 'direction']
 
+/**
+ * Détecte si la migration 261 (rôle team_leader) n'a pas été appliquée
+ * et tente de la rejouer via la fonction RPC `exec_sql` (admin-only).
+ * Retourne true si le constraint a été mis à jour, false sinon.
+ *
+ * Filet de sécurité : évite que la création d'un team_leader échoue
+ * silencieusement quand la migration n'a pas été lancée en prod.
+ */
+async function tryAutoFixRoleConstraint(supabase: ReturnType<typeof getAdminClient>): Promise<boolean> {
+  try {
+    const { error } = await supabase.rpc('exec_sql', {
+      sql: `
+        ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+        ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check
+          CHECK (role IN (
+            'admin','super_admin','client_admin','client_user','client_assistant',
+            'comptable','comptable_dedie','rh','rh_manager','juridique',
+            'employe','manager','team_leader','direction','salarie'
+          ));
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='user_societes' AND column_name='role'
+          ) THEN
+            ALTER TABLE public.user_societes DROP CONSTRAINT IF EXISTS user_societes_role_check;
+            ALTER TABLE public.user_societes ADD CONSTRAINT user_societes_role_check
+              CHECK (role IN (
+                'admin','super_admin','client_admin','client_user','client_assistant',
+                'comptable','comptable_dedie','rh','rh_manager','juridique',
+                'employe','manager','team_leader','direction','salarie'
+              ));
+          END IF;
+        END $$;
+      `,
+    })
+    if (error) {
+      console.warn('[tryAutoFixRoleConstraint] exec_sql RPC failed:', error.message)
+      return false
+    }
+    console.log('[tryAutoFixRoleConstraint] role constraint updated (team_leader incl.)')
+    return true
+  } catch (e: any) {
+    console.warn('[tryAutoFixRoleConstraint] exception:', e?.message || e)
+    return false
+  }
+}
+
 async function getAuthUser() {
   const supabaseAuth = await createServerClient()
   const { data: { user }, error } = await supabaseAuth.auth.getUser()
@@ -231,7 +279,33 @@ export async function POST(request: NextRequest) {
 
     if (profileError) {
       console.error('[client/users] Profile upsert error:', profileError.message)
-      return NextResponse.json({ error: `Erreur profil: ${profileError.message}` }, { status: 500 })
+      // Détection check_constraint sur le rôle — migration 261 (team_leader)
+      // probablement pas appliquée. Tentative d'auto-fix via exec_sql.
+      if (/profiles_role_check|user_societes_role_check|violates check constraint/i.test(profileError.message)) {
+        const fixed = await tryAutoFixRoleConstraint(supabase)
+        if (fixed) {
+          const { error: retryError } = await supabase.from('profiles').upsert({
+            id: authData.user.id,
+            email, full_name, role,
+            phone: phone || null,
+            societe_id: societe_id || null,
+            comptable_id: comptable_id || null,
+            modules_utilisateur: modules_utilisateur || null,
+          }, { onConflict: 'id' })
+          if (retryError) {
+            return NextResponse.json({
+              error: `Auto-fix tenté mais l'insert a encore échoué : ${retryError.message}`,
+            }, { status: 500 })
+          }
+          console.log('[client/users] Auto-fix role constraint OK, profile créé après retry')
+        } else {
+          return NextResponse.json({
+            error: `Le rôle "${role}" n'est pas autorisé par la base. Lance manuellement la migration supabase/migrations/261_team_leader_role.sql dans Supabase Studio (ou POST /api/admin/fix-db en admin).`,
+          }, { status: 400 })
+        }
+      } else {
+        return NextResponse.json({ error: `Erreur profil: ${profileError.message}` }, { status: 500 })
+      }
     }
 
     // Link to sociétés + create dossiers
@@ -283,6 +357,10 @@ export async function PATCH(request: NextRequest) {
 
     const isGlobalAdmin = ['admin', 'super_admin'].includes(authUser.role)
 
+    if (role !== undefined && !VALID_ROLES.includes(role)) {
+      return NextResponse.json({ error: `Rôle invalide: ${role}` }, { status: 400 })
+    }
+
     // Non-admin: verify target user is in caller's societes
     if (!isGlobalAdmin) {
       const mySocieteIds = await getUserSocieteIds(authUser.id)
@@ -316,6 +394,11 @@ export async function PATCH(request: NextRequest) {
     const { error } = await supabase.from('profiles').update(updates).eq('id', user_id)
     if (error) {
       console.error('[PATCH] profile update error:', error.message)
+      if (/profiles_role_check|user_societes_role_check|violates check constraint/i.test(error.message)) {
+        return NextResponse.json({
+          error: `Le rôle "${role}" n'est pas autorisé par la base de données. Si vous venez d'ajouter "team_leader", lancez la migration supabase/migrations/261_team_leader_role.sql dans Supabase Studio.`,
+        }, { status: 400 })
+      }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
