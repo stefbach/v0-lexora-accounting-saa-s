@@ -80,8 +80,8 @@ export async function getUserSocieteIds(userId: string): Promise<string[]> {
     for (const cs of comptableSocietes || []) if (cs.societe_id) ids.add(cs.societe_id)
   }
 
-  // 7. Fallback for client_admin/client_user: check clients table → get all sociétés for that client
-  if (ids.size === 0 && ['client_admin', 'client_user', 'rh', 'rh_manager'].includes(profile.role)) {
+  // 7. Fallback for client_admin/client_user/manager: check clients table → get all sociétés for that client
+  if (ids.size === 0 && ['client_admin', 'client_user', 'rh', 'rh_manager', 'manager', 'team_leader'].includes(profile.role)) {
     // Try to find client via profiles → clients relationship
     const { data: clientLinks } = await supabase
       .from('clients')

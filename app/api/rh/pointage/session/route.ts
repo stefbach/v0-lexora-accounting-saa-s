@@ -17,7 +17,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { resolveOwnership } from '@/lib/rh/ownership'
+import { resolveOwnership, canManageEmploye } from '@/lib/rh/ownership'
 import {
   getResumeJour,
   ouvrirSession,
@@ -59,7 +59,7 @@ async function ensurePointageActif(
       .select('role')
       .eq('id', userId)
       .maybeSingle()
-    const bypass = ['admin', 'super_admin', 'rh', 'rh_manager']
+    const bypass = ['admin', 'super_admin', 'rh', 'rh_manager', 'manager', 'team_leader']
     if (!prof || !bypass.includes((prof as any).role)) {
       return {
         ok: false,
@@ -114,12 +114,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
     }
 
-    // Self ou RH uniquement.
-    if (!ownership.isRH && ownership.employe_id !== employe_id) {
-      return NextResponse.json(
-        { error: 'Accès refusé — vous ne pouvez pointer que pour vous-même.' },
-        { status: 403 },
-      )
+    // RH/Admin tous, Manager/Team Leader scope groupe, sinon self.
+    const canManage = await canManageEmploye(supabase, ownership, employe_id)
+    if (!canManage) {
+      const msg = ownership.isManagerScoped
+        ? 'Accès refusé — cet employé n\'appartient pas à votre équipe.'
+        : 'Accès refusé — vous ne pouvez pointer que pour vous-même.'
+      return NextResponse.json({ error: msg }, { status: 403 })
     }
 
     // Guards (pointage_actif, congés).

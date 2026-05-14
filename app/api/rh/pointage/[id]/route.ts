@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { resolveOwnership, canManageEmploye } from '@/lib/rh/ownership'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,12 +59,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params
     const body = await request.json()
 
-    // Récupérer le pointage existant + societe_id de l'employé pour isFerieDb.
+    // Récupérer le pointage existant + societe_id + employe_id pour la
+    // vérification d'accès et le recalcul OT (isFerieDb a besoin de la
+    // société pour matcher les jours fériés spécifiques).
     const { data: existing } = await supabase
       .from('pointages')
-      .select('*, employe:employes(societe_id)')
+      .select('*, employe:employes(societe_id, groupe_id)')
       .eq('id', id).single()
     if (!existing) return NextResponse.json({ error: 'Pointage non trouvé' }, { status: 404 })
+
+    // Sécurité — RH/Admin tous, Manager/Team Leader scope groupe, sinon self.
+    const ownership = await resolveOwnership(supabase, user.id)
+    const canManage = await canManageEmploye(supabase, ownership, existing.employe_id)
+    if (!canManage) {
+      const msg = ownership.isManagerScoped
+        ? 'Accès refusé — cet employé n\'appartient pas à votre équipe.'
+        : 'Accès refusé — vous ne pouvez modifier que vos propres pointages.'
+      return NextResponse.json({ error: msg }, { status: 403 })
+    }
 
     const updates: any = {}
 

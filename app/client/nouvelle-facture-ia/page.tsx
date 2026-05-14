@@ -29,7 +29,6 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
-import { t, getLocale, type Locale } from "@/lib/i18n"
 
 interface ChatMessage {
   role: "user" | "assistant"
@@ -80,7 +79,6 @@ function fmtMontant(n: number, dev = "MUR") {
 }
 
 export default function NouvelleFactureIAPage() {
-  const locale = getLocale()
   const router = useRouter()
   const { societeId } = useSocieteActive()
   const [contexte, setContexte] = useState<Contexte | null>(null)
@@ -100,29 +98,27 @@ export default function NouvelleFactureIAPage() {
     try {
       const r = await fetch(`/api/client/factures-ia/contexte?societe_id=${societeId}`)
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || t('inv.nfia.err_context', locale))
+      if (!r.ok) throw new Error(j.error || "Erreur contexte")
       setContexte(j)
       // Message d'accueil construit localement (économise un round trip Claude)
       const nbContacts = j.contacts?.length || 0
       const nbCat = j.catalogue?.length || 0
       const nbFac = j.factures_recentes?.length || 0
       const recap: string[] = []
-      if (nbContacts > 0) recap.push(`${nbContacts} ${nbContacts > 1 ? t('inv.nfia.clients_many', locale) : t('inv.nfia.clients_one', locale)}`)
-      if (nbCat > 0) recap.push(`${nbCat} ${nbCat > 1 ? t('inv.nfia.articles_many', locale) : t('inv.nfia.articles_one', locale)}`)
-      if (nbFac > 0) recap.push(`${nbFac} ${nbFac > 1 ? t('inv.nfia.invoice_many', locale) : t('inv.nfia.invoice_one', locale)}`)
-      const ctxRecap = recap.length > 0 ? `${t('inv.nfia.welcome_have_access', locale)} ${recap.join(', ')}.\n\n` : ''
+      if (nbContacts > 0) recap.push(`${nbContacts} client${nbContacts > 1 ? 's' : ''}`)
+      if (nbCat > 0) recap.push(`${nbCat} article${nbCat > 1 ? 's' : ''} au catalogue`)
+      if (nbFac > 0) recap.push(`${nbFac} facture${nbFac > 1 ? 's' : ''} récente${nbFac > 1 ? 's' : ''}`)
+      const ctxRecap = recap.length > 0 ? `J'ai accès à : ${recap.join(', ')}.\n\n` : ''
       setMessages([{
         role: "assistant",
-        content: t('inv.nfia.welcome', locale)
-          .replace('{nom}', j.societe?.nom || '?')
-          .replace('{recap}', ctxRecap),
+        content: `Bonjour ! Je suis **Lexora Factures IA**. Je vais t'aider à créer une facture (ou devis / avoir / note de débit) pour **${j.societe?.nom || '?'}** en quelques échanges.\n\n${ctxRecap}Pour démarrer : pour quel client veux-tu facturer, et que faut-il facturer ?\n\n(Tu peux dire par exemple "Une facture pour Jean Dupont, comme la dernière fois", ou "Devis pour Acme Ltd : conseil stratégique 5 jours à 25000 MUR".)`,
       }])
     } catch (e: any) {
-      setErrorMsg(e?.message || t('inv.nfia.err_load_context', locale))
+      setErrorMsg(e?.message || "Erreur chargement contexte")
     } finally {
       setLoadingContexte(false)
     }
-  }, [societeId, locale])
+  }, [societeId])
 
   useEffect(() => { loadContexte() }, [loadContexte])
 
@@ -149,11 +145,11 @@ export default function NouvelleFactureIAPage() {
         }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || t('inv.nfia.err_ia', locale))
+      if (!r.ok) throw new Error(j.error || "Erreur IA")
       setMessages(prev => [...prev, { role: "assistant", content: j.message }])
       setAnalyse(j.analyse || null)
     } catch (e: any) {
-      setErrorMsg(e?.message || t('inv.nfia.err_ia', locale))
+      setErrorMsg(e?.message || "Erreur IA")
       // On retire le message user pour permettre re-essai propre
       setMessages(prev => prev.slice(0, -1))
       setInput(userMsg.content)
@@ -176,11 +172,11 @@ export default function NouvelleFactureIAPage() {
         }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || t('inv.nfia.err_generate', locale))
+      if (!r.ok) throw new Error(j.error || "Erreur génération")
       // Redirige vers l'aperçu
       router.push(j.preview_url || "/client/factures")
     } catch (e: any) {
-      setErrorMsg(e?.message || t('inv.nfia.err_generate', locale))
+      setErrorMsg(e?.message || "Erreur génération")
     } finally {
       setGenerating(false)
     }
@@ -198,20 +194,20 @@ export default function NouvelleFactureIAPage() {
           <div className="flex items-center gap-3">
             <Link href="/client/nouvelle-facture">
               <Button variant="ghost" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-1" /> {t('inv.nfia.classic_mode', locale)}
+                <ArrowLeft className="h-4 w-4 mr-1" /> Mode classique
               </Button>
             </Link>
             <div>
               <h1 className="text-xl font-bold flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-amber-500" />
-                {t('inv.nfia.title', locale)}
+                Nouvelle facture — Assistant IA
               </h1>
               {contexte?.societe && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
                   <Building2 className="h-3 w-3" />
-                  {t('inv.nfia.for', locale)} <span className="font-medium">{contexte.societe.nom}</span>
-                  {contexte.societe.brn && <span className="text-muted-foreground">· {t('inv.nfia.brn_label', locale)} {contexte.societe.brn}</span>}
-                  {contexte.societe.vat_number && <span className="text-muted-foreground">· {t('inv.nfia.vat_label', locale)} {contexte.societe.vat_number}</span>}
+                  Pour <span className="font-medium">{contexte.societe.nom}</span>
+                  {contexte.societe.brn && <span className="text-muted-foreground">· BRN {contexte.societe.brn}</span>}
+                  {contexte.societe.vat_number && <span className="text-muted-foreground">· VAT {contexte.societe.vat_number}</span>}
                 </p>
               )}
             </div>
@@ -231,7 +227,7 @@ export default function NouvelleFactureIAPage() {
             <CardHeader className="border-b pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-amber-500" />
-                {t('inv.nfia.conversation', locale)}
+                Conversation
                 {loadingContexte && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
               </CardTitle>
             </CardHeader>
@@ -251,7 +247,7 @@ export default function NouvelleFactureIAPage() {
                 {sending && (
                   <div className="flex justify-start">
                     <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-gray-500 flex items-center gap-2">
-                      <Loader2 className="h-3 w-3 animate-spin" /> {t('inv.nfia.thinking', locale)}
+                      <Loader2 className="h-3 w-3 animate-spin" /> L'IA réfléchit…
                     </div>
                   </div>
                 )}
@@ -266,7 +262,7 @@ export default function NouvelleFactureIAPage() {
                       sendMessage()
                     }
                   }}
-                  placeholder={t('inv.nfia.input_ph', locale)}
+                  placeholder="Écris ton message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"
                   className="resize-none flex-1 min-h-[48px] max-h-[120px]"
                   disabled={sending || loadingContexte}
                 />
@@ -282,51 +278,51 @@ export default function NouvelleFactureIAPage() {
             <CardHeader className="border-b pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Receipt className="h-4 w-4" />
-                {t('inv.nfia.preview', locale)}
+                Aperçu
                 {analyse?.pret_a_generer && (
                   <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-[10px] ml-auto">
-                    {t('inv.nfia.ready', locale)}
+                    ✓ Prêt
                   </Badge>
                 )}
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto p-3 space-y-3 text-sm">
               {!analyse && (
-                <p className="text-muted-foreground italic">{t('inv.nfia.placeholder_intro', locale)}</p>
+                <p className="text-muted-foreground italic">Continue la conversation pour voir l'aperçu se construire ici.</p>
               )}
               {analyse && (
                 <>
-                  <Section title={t('inv.nfia.sec_type', locale)}>
+                  <Section title="Type">
                     <Badge variant="outline" className="capitalize">
-                      {params.type_document?.replace('_', ' ') || t('inv.nfia.default_doc', locale)}
+                      {params.type_document?.replace('_', ' ') || 'facture'}
                     </Badge>
                   </Section>
-                  <Section title={t('inv.nfia.sec_client', locale)}>
-                    {params.tiers || <Empty locale={locale} />}
+                  <Section title="Client">
+                    {params.tiers || <Empty />}
                     {params.contact_id && (
-                      <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] ml-2">{t('inv.nfia.linked_contact', locale)}</Badge>
+                      <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] ml-2">contact lié</Badge>
                     )}
                   </Section>
-                  <Section title={t('inv.nfia.sec_dates', locale)}>
-                    {t('inv.nfia.issue', locale)} : {params.date_facture || <Empty locale={locale} />}<br />
-                    {t('inv.nfia.due', locale)} : {params.date_echeance || <Empty locale={locale} />}
+                  <Section title="Dates">
+                    Émission : {params.date_facture || <Empty />}<br />
+                    Échéance : {params.date_echeance || <Empty />}
                   </Section>
                   {params.devise && (
-                    <Section title={t('inv.nfia.sec_currency', locale)}>
+                    <Section title="Devise">
                       {params.devise}
                       {params.taux_change && params.devise !== "MUR" && (
-                        <span className="text-muted-foreground ml-2">({t('inv.nfia.rate', locale)} {params.taux_change})</span>
+                        <span className="text-muted-foreground ml-2">(taux {params.taux_change})</span>
                       )}
                     </Section>
                   )}
-                  <Section title={`${t('inv.nfia.sec_lines', locale)} (${params.lignes?.length || 0})`}>
-                    {!params.lignes || params.lignes.length === 0 ? <Empty locale={locale} /> : (
+                  <Section title={`Lignes (${params.lignes?.length || 0})`}>
+                    {!params.lignes || params.lignes.length === 0 ? <Empty /> : (
                       <ul className="space-y-1 text-xs">
                         {params.lignes.map((l, i) => (
                           <li key={i} className="border-l-2 border-amber-300 pl-2">
                             <div className="font-medium">{l.description}</div>
                             <div className="text-muted-foreground">
-                              {l.quantite} {l.unite || ''} × {fmtMontant(l.prix_unitaire, params.devise || 'MUR')} ({t('inv.nfia.vat_in_line', locale)} {l.taux_tva}%)
+                              {l.quantite} {l.unite || ''} × {fmtMontant(l.prix_unitaire, params.devise || 'MUR')} (TVA {l.taux_tva}%)
                             </div>
                           </li>
                         ))}
@@ -334,31 +330,31 @@ export default function NouvelleFactureIAPage() {
                     )}
                   </Section>
                   {(params.lignes?.length || 0) > 0 && (
-                    <Section title={t('inv.nfia.sec_totals', locale)}>
+                    <Section title="Totaux">
                       <div className="text-xs space-y-0.5">
-                        <div>{t('inv.nfia.ht', locale)} : {fmtMontant(totalLignesHT, params.devise || 'MUR')}</div>
-                        <div>{t('inv.nfia.vat', locale)} : {fmtMontant(totalLignesTVA, params.devise || 'MUR')}</div>
+                        <div>HT : {fmtMontant(totalLignesHT, params.devise || 'MUR')}</div>
+                        <div>TVA : {fmtMontant(totalLignesTVA, params.devise || 'MUR')}</div>
                         {(params.remise_pct || params.remise_montant) && (
                           <div className="text-amber-700">
-                            {t('inv.nfia.discount', locale)} : {params.remise_pct ? `${params.remise_pct}%` : fmtMontant(params.remise_montant || 0, params.devise || 'MUR')}
+                            Remise : {params.remise_pct ? `${params.remise_pct}%` : fmtMontant(params.remise_montant || 0, params.devise || 'MUR')}
                           </div>
                         )}
                         <div className="font-semibold text-base pt-1 border-t">
-                          {t('inv.nfia.ttc', locale)} : {fmtMontant(totalTTC, params.devise || 'MUR')}
+                          TTC : {fmtMontant(totalTTC, params.devise || 'MUR')}
                         </div>
                       </div>
                     </Section>
                   )}
                   {params.recurrent && (
-                    <Section title={t('inv.nfia.sec_recurrence', locale)}>
+                    <Section title="Récurrence">
                       <Badge className="bg-purple-50 text-purple-700 border-purple-200 text-[10px]">
-                        {params.recurrence_periodicite || t('inv.nfia.monthly', locale)}
+                        {params.recurrence_periodicite || 'mensuelle'}
                       </Badge>
                     </Section>
                   )}
                   {analyse.informations_manquantes && analyse.informations_manquantes.length > 0 && (
                     <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs">
-                      <div className="font-semibold mb-1">{t('inv.nfia.still_need', locale)}</div>
+                      <div className="font-semibold mb-1">Encore besoin de :</div>
                       <ul className="list-disc list-inside space-y-0.5">
                         {analyse.informations_manquantes.map((m, i) => <li key={i}>{m}</li>)}
                       </ul>
@@ -374,14 +370,14 @@ export default function NouvelleFactureIAPage() {
                 className="w-full bg-emerald-600 hover:bg-emerald-700"
               >
                 {generating ? (
-                  <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> {t('inv.nfia.creating', locale)}</>
+                  <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Création…</>
                 ) : (
-                  <><CheckCircle2 className="h-4 w-4 mr-1.5" /> {t('inv.nfia.create_doc', locale)} {params.type_document || t('inv.nfia.default_doc', locale)}</>
+                  <><CheckCircle2 className="h-4 w-4 mr-1.5" /> Créer la {params.type_document || 'facture'}</>
                 )}
               </Button>
               {!analyse?.pret_a_generer && analyse && (
                 <p className="text-[11px] text-muted-foreground text-center mt-1">
-                  {t('inv.nfia.continue_hint', locale)}
+                  Continue la conversation pour compléter les infos
                 </p>
               )}
             </div>
@@ -401,6 +397,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function Empty({ locale }: { locale: Locale }) {
-  return <span className="text-muted-foreground italic text-xs">{t('inv.nfia.empty_value', locale)}</span>
+function Empty() {
+  return <span className="text-muted-foreground italic text-xs">non défini</span>
 }

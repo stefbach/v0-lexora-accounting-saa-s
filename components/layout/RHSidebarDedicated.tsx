@@ -22,7 +22,7 @@ interface NavLink {
 
 const ALL_LINKS: NavLink[] = [
   { href: '/rh', label: 'Tableau de bord', labelKey: 'nav.dashboard', icon: Clock, exact: true, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
-  { href: '/rh/manager', label: 'Mon équipe', labelKey: 'comp.rh_sidebar.manager_team', icon: Users, exact: true, roles: ['manager'] },
+  { href: '/rh/manager', label: 'Mon équipe', labelKey: 'comp.rh_sidebar.manager_team', icon: Users, exact: true, roles: ['manager', 'team_leader'] },
   { href: '/rh/employes', label: 'Employés', labelKey: 'hr.employees', icon: Users, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/juridique', label: 'Contrats Travail', labelKey: 'comp.rh_sidebar.work_contracts', icon: FilePen, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'direction'] },
   { href: '/rh/groupes', label: 'Groupes / Équipes', labelKey: 'comp.rh_sidebar.groups_teams', icon: Users, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
@@ -33,12 +33,12 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/provisions/conges', label: 'IAS 19 — Congés payés', labelKey: 'comp.rh_sidebar.ias19_leave', icon: BookOpenCheck, roles: ['admin', 'rh'] },
   // G8 Phase 2 — Provisions EOY Bonus IAS 19. Admin/rh.
   { href: '/rh/provisions/eoy', label: 'IAS 19 — EOY Bonus', labelKey: 'comp.rh_sidebar.ias19_eoy', icon: Gift, roles: ['admin', 'rh'] },
-  { href: '/rh/planning', label: 'Planning', labelKey: 'hr.planning', icon: CalendarDays, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager'] },
+  { href: '/rh/planning', label: 'Planning', labelKey: 'hr.planning', icon: CalendarDays, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager', 'team_leader'] },
   // Sprint 5 FIX 7 — lien "Regles planning" supprimé du menu : la page
   // /rh/planning a déjà un bouton "Règles" intégré, le lien sidebar était
   // redondant et créait de la confusion. La route reste accessible via
   // le bouton interne de /rh/planning et par URL directe.
-  { href: '/rh/geolocalisation', label: 'Carte collaborateurs', labelKey: 'comp.rh_sidebar.geo_map', icon: MapPin, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager'] },
+  { href: '/rh/geolocalisation', label: 'Carte collaborateurs', labelKey: 'comp.rh_sidebar.geo_map', icon: MapPin, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager', 'team_leader'] },
   { href: '/rh/pointage', label: 'Pointage', labelKey: 'hr.time_clock', icon: Clock },
   { href: '/rh/conges', label: 'Absences & Congés', labelKey: 'rh.absences_leave', icon: Calendar },
   { href: '/rh/conges/parametres', label: 'Règles congés', labelKey: 'comp.rh_sidebar.leave_rules', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
@@ -103,7 +103,7 @@ export function RHSidebarDedicated() {
     return l.roles.includes(userRole)
   })
 
-  const isManager = userRole === 'manager'
+  const isManager = userRole === 'manager' || userRole === 'team_leader'
   const subtitle = isManager ? t('comp.rh_sidebar.manager_space', locale) : t('rh.module_title', locale)
 
   return (

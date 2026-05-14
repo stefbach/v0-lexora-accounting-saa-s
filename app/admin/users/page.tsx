@@ -95,36 +95,35 @@ function PermissionsEditor({ modules, onChange, role, locale }: { modules: Modul
 }
 interface Societe { id: string; nom: string; brn: string }
 
-const buildRoles = (locale: Locale) => [
-  { value: 'admin', label: t('adm.users.role_admin', locale), color: 'bg-red-100 text-red-800' },
-  { value: 'super_admin', label: t('adm.users.role_super_admin', locale), color: 'bg-red-200 text-red-900' },
-  { value: 'comptable', label: t('adm.users.role_accountant', locale), color: 'bg-blue-100 text-blue-800' },
-  { value: 'comptable_dedie', label: t('adm.users.role_dedicated_accountant', locale), color: 'bg-blue-100 text-blue-800' },
-  { value: 'client_admin', label: t('adm.users.role_client_admin', locale), color: 'bg-green-100 text-green-800' },
-  { value: 'client_user', label: t('adm.users.role_client_user', locale), color: 'bg-green-50 text-green-700' },
-  { value: 'rh', label: t('adm.users.role_hr', locale), color: 'bg-orange-100 text-orange-800' },
-  { value: 'juridique', label: t('adm.users.role_legal', locale), color: 'bg-purple-100 text-purple-800' },
-  { value: 'manager', label: t('adm.users.role_manager', locale), color: 'bg-teal-100 text-teal-800' },
-  { value: 'client_assistant', label: t('adm.users.role_assistant', locale), color: 'bg-cyan-100 text-cyan-800' },
-  { value: 'direction', label: t('adm.users.role_direction', locale), color: 'bg-indigo-100 text-indigo-800' },
-  { value: 'employe', label: t('adm.users.role_employee', locale), color: 'bg-gray-100 text-gray-700' },
+const ROLES = [
+  { value: 'admin', label: 'Admin Plateforme', color: 'bg-red-100 text-red-800' },
+  { value: 'super_admin', label: 'Super Admin', color: 'bg-red-200 text-red-900' },
+  { value: 'comptable', label: 'Comptable', color: 'bg-blue-100 text-blue-800' },
+  { value: 'comptable_dedie', label: 'Comptable Dédié', color: 'bg-blue-100 text-blue-800' },
+  { value: 'client_admin', label: 'Client (Dirigeant)', color: 'bg-green-100 text-green-800' },
+  { value: 'client_user', label: 'Client (Utilisateur)', color: 'bg-green-50 text-green-700' },
+  { value: 'rh', label: 'RH', color: 'bg-orange-100 text-orange-800' },
+  { value: 'juridique', label: 'Juridique', color: 'bg-purple-100 text-purple-800' },
+  { value: 'manager', label: 'Manager', color: 'bg-teal-100 text-teal-800' },
+  { value: 'team_leader', label: 'Team Leader', color: 'bg-teal-50 text-teal-700' },
+  { value: 'client_assistant', label: 'Assistant (Direction)', color: 'bg-cyan-100 text-cyan-800' },
+  { value: 'direction', label: 'Direction', color: 'bg-indigo-100 text-indigo-800' },
+  { value: 'employe', label: 'Employé', color: 'bg-gray-100 text-gray-700' },
 ]
 
-const NEEDS_SOCIETE = ['rh', 'juridique', 'employe', 'manager', 'direction', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie']
+const NEEDS_SOCIETE = ['rh', 'juridique', 'employe', 'manager', 'team_leader', 'direction', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie']
 
 function genPassword() {
   return Math.random().toString(36).slice(2, 8).toUpperCase() + Math.random().toString(36).slice(2, 8)
 }
 
-function RoleBadge({ role, locale }: { role: string; locale: Locale }) {
-  const ROLES = buildRoles(locale)
+function RoleBadge({ role }: { role: string; locale?: Locale }) {
   const r = ROLES.find(r => r.value === role)
   return <Badge className={`text-xs ${r?.color || 'bg-gray-100 text-gray-700'}`}>{r?.label || role}</Badge>
 }
 
 export default function UsersPage() {
   const locale = getLocale()
-  const ROLES = buildRoles(locale)
   const [users, setUsers] = useState<User[]>([])
   const [societes, setSocietes] = useState<Societe[]>([])
   const [loading, setLoading] = useState(true)
@@ -153,7 +152,7 @@ export default function UsersPage() {
 
   const creer = async () => {
     if (!form.prenom || !form.nom || !form.email || !form.role) return
-    const SOCIETE_OBLIGATOIRE = ['rh', 'juridique', 'employe', 'manager', 'direction']
+    const SOCIETE_OBLIGATOIRE = ['rh', 'juridique', 'employe', 'manager', 'team_leader', 'direction']
     if (SOCIETE_OBLIGATOIRE.includes(form.role) && !form.societe_id) return
     setSaving(true)
     const res = await fetch('/api/admin/users', {
@@ -233,7 +232,7 @@ export default function UsersPage() {
                 <div>
                   <Label>
                     {['client_assistant'].includes(form.role) ? t('adm.users.companies_multi', locale) : t('adm.users.company_single', locale)}
-                    {['rh','juridique','employe','manager','direction'].includes(form.role) && <span className="text-red-500"> *</span>}
+                    {['rh','juridique','employe','manager','team_leader','direction'].includes(form.role) && <span className="text-red-500"> *</span>}
                   </Label>
                   {['client_assistant', 'client_admin'].includes(form.role) && societes.length > 1 ? (
                     <div className="max-h-40 overflow-y-auto rounded-md border p-2 space-y-1 mt-1">
@@ -263,7 +262,7 @@ export default function UsersPage() {
                     {['client_assistant'].includes(form.role) && t('adm.users.hint_assistant', locale)}
                     {['client_admin','client_user'].includes(form.role) && t('adm.users.hint_client', locale)}
                     {['comptable','comptable_dedie'].includes(form.role) && t('adm.users.hint_accountant', locale)}
-                    {['rh','juridique','employe','manager','direction'].includes(form.role) && t('adm.users.hint_collab', locale)}
+                    {['rh','juridique','employe','manager','team_leader','direction'].includes(form.role) && t('adm.users.hint_collab', locale)}
                   </p>
                 </div>
               )}
@@ -281,7 +280,7 @@ export default function UsersPage() {
                 </div>
                 <p className="text-xs text-orange-600 mt-1">{t('adm.users.password_warn', locale)}</p>
               </div>
-              <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || (['rh','juridique','employe','manager','direction'].includes(form.role) && !form.societe_id)} className="w-full bg-[#0B0F2E]">
+              <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || (['rh','juridique','employe','manager','team_leader','direction'].includes(form.role) && !form.societe_id)} className="w-full bg-[#0B0F2E]">
                 {saving ? t('adm.users.creating', locale) : t('adm.users.create_account', locale)}
               </Button>
             </div>
