@@ -74,6 +74,8 @@ export default function TelegramPermissionsPage() {
   const [generatingFor, setGeneratingFor] = useState<string | null>(null)
   const [codeModal, setCodeModal] = useState<null | { employe_id: string; nom: string; code: string; deep_link: string; share_message: string }>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  // Rôle souhaité au moment de générer le code (par employé sans compte)
+  const [pendingRoleByEmpId, setPendingRoleByEmpId] = useState<Record<string, string>>({})
 
   const load = async () => {
     if (!societeId) return
@@ -90,19 +92,33 @@ export default function TelegramPermissionsPage() {
   }
   useEffect(() => { load() }, [societeId])
 
-  const generateCode = async (employe_id: string, nom: string) => {
+  const generateCode = async (employe_id: string, nom: string, role: string = 'employe') => {
     setGeneratingFor(employe_id); setError(null)
     try {
       const r = await fetch('/api/client/telegram-permissions/employee-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ societe_id: societeId, employe_id }),
+        body: JSON.stringify({ societe_id: societeId, employe_id, role }),
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Erreur')
       setCodeModal({ employe_id, nom, code: j.code, deep_link: j.deep_link, share_message: j.share_message })
       await load()
     } catch (e: any) { setError(e?.message || 'Erreur') } finally { setGeneratingFor(null) }
+  }
+
+  const updateEmployeeRole = async (auth_user_id: string, newRole: string) => {
+    setSavingUserId(auth_user_id); setError(null)
+    try {
+      const r = await fetch(`/api/client/telegram-permissions?societe_id=${societeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: auth_user_id, role: newRole }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Erreur')
+      await load()
+    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSavingUserId(null) }
   }
 
   const unlinkEmployee = async (employe_id: string, nom: string) => {
@@ -279,22 +295,68 @@ export default function TelegramPermissionsPage() {
                     <th className="py-2 px-2">Nom complet</th>
                     <th className="py-2 px-2">Poste</th>
                     <th className="py-2 px-2">Email</th>
-                    <th className="py-2 px-2">Compte Lexora</th>
+                    <th className="py-2 px-2">Rôle Telegram</th>
+                    <th className="py-2 px-2">Capabilities</th>
                     <th className="py-2 px-2">Telegram</th>
                     <th className="py-2 px-2 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {employees.map((e: any) => (
+                  {employees.map((e: any) => {
+                    const desiredRole = pendingRoleByEmpId[e.employe_id] || 'employe'
+                    return (
                     <tr key={e.employe_id} className="border-b">
                       <td className="py-2 px-2 font-mono text-xs">{e.code || '—'}</td>
                       <td className="py-2 px-2 font-medium">{e.nom_complet}</td>
                       <td className="py-2 px-2 text-xs text-slate-600">{e.poste || '—'}</td>
                       <td className="py-2 px-2 text-xs text-slate-600">{e.email || <span className="text-amber-700">manquant</span>}</td>
                       <td className="py-2 px-2">
-                        {e.has_auth_user
-                          ? <Badge className="bg-slate-100 text-slate-700 border-slate-300 text-xs">lié</Badge>
-                          : <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">pas de compte</Badge>}
+                        {e.has_auth_user && e.role ? (
+                          // Employé déjà rattaché → éditable directement
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={e.role}
+                              onValueChange={(v) => updateEmployeeRole(e.auth_user_id, v)}
+                              disabled={savingUserId === e.auth_user_id}>
+                              <SelectTrigger className="w-40 h-8 text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ALL_ROLES.map(r => (
+                                  <SelectItem key={r} value={r}>
+                                    {ROLE_LABELS[r]} <span className="opacity-50 ml-1 text-xs">L{roleMatrix[r]?.level}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {savingUserId === e.auth_user_id && <Loader2 className="animate-spin h-3 w-3 text-slate-400" />}
+                          </div>
+                        ) : (
+                          // Pas encore de compte → sélection du rôle à attribuer au moment du code
+                          <Select
+                            value={desiredRole}
+                            onValueChange={(v) => setPendingRoleByEmpId(prev => ({ ...prev, [e.employe_id]: v }))}>
+                            <SelectTrigger className="w-40 h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ALL_ROLES.map(r => (
+                                <SelectItem key={r} value={r}>
+                                  {ROLE_LABELS[r]} <span className="opacity-50 ml-1 text-xs">L{roleMatrix[r]?.level}</span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </td>
+                      <td className="py-2 px-2">
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {(e.capabilities || []).slice(0, 4).map((c: string) => (
+                            <span key={c} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">{CAPABILITY_LABELS[c] || c}</span>
+                          ))}
+                          {(e.capabilities || []).length > 4 && <span className="text-[10px] text-slate-400">+{e.capabilities.length - 4}</span>}
+                          {(!e.capabilities || e.capabilities.length === 0) && <span className="text-[10px] text-slate-400">à définir</span>}
+                        </div>
                       </td>
                       <td className="py-2 px-2">
                         {e.telegram_status === 'linked' ? (
@@ -317,7 +379,7 @@ export default function TelegramPermissionsPage() {
                           </Button>
                         ) : (
                           <Button
-                            onClick={() => generateCode(e.employe_id, e.nom_complet)}
+                            onClick={() => generateCode(e.employe_id, e.nom_complet, desiredRole)}
                             disabled={generatingFor === e.employe_id || !e.email}
                             size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                             {generatingFor === e.employe_id
@@ -328,7 +390,7 @@ export default function TelegramPermissionsPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>

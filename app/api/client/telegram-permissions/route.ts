@@ -105,15 +105,24 @@ export async function GET(req: NextRequest) {
 
   const employeeUserIds = (employes || []).map((e: any) => e.auth_user_id).filter(Boolean)
   let tgByEmpUser = new Map<string, any>()
+  let roleByEmpUser = new Map<string, string>()
   if (employeeUserIds.length > 0) {
     const { data: empTg } = await admin
       .from('telegram_users')
       .select('user_id, chat_id, telegram_username, telegram_firstname, verified, verification_code, verification_expires_at')
       .in('user_id', employeeUserIds)
     tgByEmpUser = new Map((empTg || []).map((t: any) => [t.user_id, t]))
+    // Rôles pour ces users dans la société courante
+    const { data: empRoles } = await admin
+      .from('user_societes')
+      .select('user_id, role')
+      .eq('societe_id', societeId)
+      .in('user_id', employeeUserIds)
+    roleByEmpUser = new Map((empRoles || []).map((r: any) => [r.user_id, r.role]))
   }
   const enrichedEmployes = (employes || []).map((e: any) => {
     const tg = e.auth_user_id ? tgByEmpUser.get(e.auth_user_id) : null
+    const role = e.auth_user_id ? (roleByEmpUser.get(e.auth_user_id) || null) : null
     return {
       employe_id: e.id,
       code: e.code,
@@ -123,6 +132,8 @@ export async function GET(req: NextRequest) {
       telephone: e.telephone || null,
       has_auth_user: !!e.auth_user_id,
       auth_user_id: e.auth_user_id || null,
+      role,                              // rôle Lexora dans cette société (null si pas de compte)
+      capabilities: role ? computeCapabilities(role) : [],
       telegram_status: tg?.verified
         ? 'linked'
         : tg?.verification_code && tg?.verification_expires_at && new Date(tg.verification_expires_at) > new Date()
