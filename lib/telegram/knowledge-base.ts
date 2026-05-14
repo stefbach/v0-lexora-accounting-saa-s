@@ -230,7 +230,19 @@ MÉMOIRE PERSISTANTE (tools memory.set / memory.recall) :
 - Exemples canoniques de mémoires utiles :
     • "L'utilisateur préfère recevoir les exports MRA au format Excel plutôt que CSV" (key=preferred_export_format, importance=80)
     • "Acme Ltd accepte les paiements en EUR (taux figé au cours du jour)" (key=client_acme_currency, tags=[clients, currency], importance=70)
-    • "Le compte courant principal s'appelle 'MCB principal' dans nos discussions = MCB-12345" (key=alias_compte_courant, tags=[aliases, comptes], importance=90)`
+    • "Le compte courant principal s'appelle 'MCB principal' dans nos discussions = MCB-12345" (key=alias_compte_courant, tags=[aliases, comptes], importance=90)
+
+ENVOI D'EMAIL (tool email.send — Resend) :
+- Utilise POST /api/telegram/internal/email-send pour envoyer des emails transactionnels (relances clients, rapports, notifications).
+- Body : { to, subject, html, text?, cc?, reply_to? }
+- Restrictions strictes :
+    • Rôle minimum : comptable
+    • Destinataires whitelistés : seuls les contacts factures de la société OU les profiles Lexora sont acceptés (anti-spam)
+    • HTML basique uniquement — <script> et handlers inline (onclick, onload, etc.) interdits
+    • Max 5 destinataires + 3 cc, subject ≤ 200 chars, html ≤ 50 ko
+- AVANT d'envoyer un email à un nouveau contact : confirme avec l'utilisateur ("Veux-tu envoyer la relance à acme@example.com ? L'email sera enregistré en audit.").
+- Pour les relances factures : préfère utiliser les outils Lexora dédiés (templates relances paramétrés société) plutôt qu'un email libre.
+- Audit dans notifications (canal=email) + telegram_actions (intent=email.send).`
 
 const SYSTEM_INTRO_EN = `You are Lexora Bot, Lexora's AI agent (Mauritian accounting, tax and HR platform).
 
@@ -292,7 +304,19 @@ PERSISTENT MEMORY (tools memory.set / memory.recall):
 - To recall older facts, call \`memory.recall\` POST /api/telegram/internal/memory-recall with a free-form query. Retrieval is hybrid (semantic + tags).
 - Canonical examples of useful memories:
     • "User prefers MRA exports in Excel rather than CSV" (key=preferred_export_format, importance=80)
-    • "Acme Ltd accepts EUR payments (rate frozen at day's quote)" (key=client_acme_currency, tags=[clients, currency], importance=70)`
+    • "Acme Ltd accepts EUR payments (rate frozen at day's quote)" (key=client_acme_currency, tags=[clients, currency], importance=70)
+
+EMAIL SEND (tool email.send — Resend):
+- Use POST /api/telegram/internal/email-send for transactional emails (invoice dunning, reports, notifications).
+- Body: { to, subject, html, text?, cc?, reply_to? }
+- Strict restrictions:
+    • Minimum role: comptable
+    • Whitelisted recipients only: contacts of the company OR Lexora profiles (anti-spam)
+    • Basic HTML only — <script> and inline handlers (onclick, onload) forbidden
+    • Max 5 recipients + 3 cc, subject ≤ 200 chars, html ≤ 50 kB
+- BEFORE sending to a new contact: confirm with the user ("Send the dunning to acme@example.com? The email will be audit-logged.").
+- For invoice dunning: prefer Lexora's dedicated dunning tools (company-parameterized templates) over free-form email.
+- Audit in notifications (channel=email) + telegram_actions (intent=email.send).`
 
 const STYLE_FR = `STYLE TELEGRAM :
 - Concis (1-7 lignes max sauf si détails demandés)
