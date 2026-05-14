@@ -864,7 +864,7 @@ export default function UtilisateursPage() {
               </div>
               {MULTI_SOCIETE_ROLES.includes(editForm.role) ? (
                 <div>
-                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societes</Label>
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {t('core.users.companies', locale)}</Label>
                   <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-lg p-2">
                     {societes.map(s => (
                       <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded">
@@ -875,15 +875,15 @@ export default function UtilisateursPage() {
                       </label>
                     ))}
                   </div>
-                  {editForm.societe_ids.length > 0 && <p className="text-xs text-gray-500 mt-1">{editForm.societe_ids.length} societe(s)</p>}
+                  {editForm.societe_ids.length > 0 && <p className="text-xs text-gray-500 mt-1">{editForm.societe_ids.length} {t('core.users.companies_count_suffix', locale)}</p>}
                 </div>
               ) : (
                 <div>
-                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Societe</Label>
+                  <Label className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {t('core.users.company', locale)}</Label>
                   <Select value={editForm.societe_id || "none"} onValueChange={(v) => setEditForm((f) => ({ ...f, societe_id: v === "none" ? "" : v }))}>
-                    <SelectTrigger><SelectValue placeholder="Aucune" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('core.users.none', locale)} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Aucune</SelectItem>
+                      <SelectItem value="none">{t('core.users.none', locale)}</SelectItem>
                       {societes.map((s) => (
                         <SelectItem key={s.id} value={s.id}>{s.nom}{s.brn ? ` -- ${s.brn}` : ""}</SelectItem>
                       ))}
@@ -895,11 +895,12 @@ export default function UtilisateursPage() {
                 modules={editForm.modules_utilisateur}
                 onChange={(m) => setEditForm((f) => ({ ...f, modules_utilisateur: m }))}
                 role={editForm.role}
+                locale={locale}
               />
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                 <div>
-                  <p className="font-medium text-sm text-[#0B0F2E]">Statut du compte</p>
-                  <p className="text-xs text-gray-500">{editForm.actif ? "Le compte est actif" : "Le compte est desactive"}</p>
+                  <p className="font-medium text-sm text-[#0B0F2E]">{t('core.users.account_status', locale)}</p>
+                  <p className="text-xs text-gray-500">{editForm.actif ? t('core.users.account_active', locale) : t('core.users.account_inactive', locale)}</p>
                 </div>
                 <Button
                   variant="outline"
@@ -908,11 +909,11 @@ export default function UtilisateursPage() {
                   onClick={() => setEditForm((f) => ({ ...f, actif: !f.actif }))}
                 >
                   {editForm.actif ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                  {editForm.actif ? "Actif" : "Inactif"}
+                  {editForm.actif ? t('core.users.active', locale) : t('core.users.inactive', locale)}
                 </Button>
               </div>
               <Button onClick={handleEdit} disabled={editSaving || !editForm.full_name || !editForm.email} className="w-full bg-[#0B0F2E] hover:bg-[#2a3d66]">
-                {editSaving ? "Enregistrement..." : "Enregistrer les modifications"}
+                {editSaving ? t('core.users.saving', locale) : t('core.users.save_changes', locale)}
               </Button>
             </div>
           )}
@@ -925,7 +926,7 @@ export default function UtilisateursPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
               <Key className="w-5 h-5 text-purple-600" />
-              Changer le mot de passe
+              {t('core.users.change_password_title', locale)}
             </DialogTitle>
           </DialogHeader>
           {pwdUser && !pwdSuccess && (
@@ -935,7 +936,7 @@ export default function UtilisateursPage() {
                 <p className="text-sm text-gray-500">{pwdUser.email}</p>
               </div>
               <div>
-                <Label>Nouveau mot de passe</Label>
+                <Label>{t('core.users.new_password', locale)}</Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
@@ -943,40 +944,38 @@ export default function UtilisateursPage() {
                       value={pwdValue}
                       onChange={(e) => setPwdValue(e.target.value)}
                       className="font-mono pr-10"
-                      placeholder="Mot de passe..."
+                      placeholder={t('core.users.ph.password', locale)}
                     />
                     <button
                       type="button"
                       onClick={() => setPwdVisible((v) => !v)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      title={pwdVisible ? "Masquer" : "Afficher"}
+                      title={pwdVisible ? t('core.users.hide', locale) : t('core.users.show', locale)}
                     >
                       {pwdVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => setPwdValue(genPassword())} title="Générer automatiquement">
-                    Générer
+                  <Button variant="outline" size="sm" onClick={() => setPwdValue(genPassword())} title={t('core.users.generate_auto', locale)}>
+                    {t('core.users.generate', locale)}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères.</p>
+                <p className="text-xs text-gray-500 mt-1">{t('core.users.min_chars', locale)}</p>
               </div>
               <div className="p-3 rounded bg-amber-50 border border-amber-200 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-800">
-                  <span className="font-semibold">Important :</span> le nouveau mot de passe remplace
-                  l'ancien immédiatement. Communiquez-le par un canal sécurisé — il ne sera plus visible
-                  après la confirmation.
+                  <span className="font-semibold">{t('core.users.important', locale)}</span>{t('core.users.pwd_warning', locale)}
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setPwdOpen(false)}>Annuler</Button>
+                <Button variant="outline" className="flex-1" onClick={() => setPwdOpen(false)}>{t('core.users.cancel', locale)}</Button>
                 <Button
                   onClick={handleChangePassword}
                   disabled={pwdSaving || !pwdValue || pwdValue.length < 6}
                   className="flex-1 bg-[#0B0F2E] text-white hover:bg-[#2a3d66]"
                 >
                   {pwdSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Key className="w-4 h-4 mr-2" />}
-                  Enregistrer
+                  {t('core.users.save_btn', locale)}
                 </Button>
               </div>
             </div>
@@ -986,20 +985,20 @@ export default function UtilisateursPage() {
               <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                 <p className="font-semibold text-green-800 mb-2 flex items-center gap-2">
                   <Check className="w-4 h-4" />
-                  Mot de passe modifié
+                  {t('core.users.password_changed', locale)}
                 </p>
                 <div className="space-y-1">
-                  <p className="text-sm">Utilisateur : <span className="font-semibold">{pwdUser.full_name || pwdUser.email}</span></p>
-                  <p className="text-sm">Email : <span className="font-mono font-bold">{pwdUser.email}</span></p>
-                  <p className="text-sm">Nouveau mot de passe : <span className="font-mono font-bold text-lg">{pwdValue}</span></p>
+                  <p className="text-sm">{t('core.users.user_label', locale)}<span className="font-semibold">{pwdUser.full_name || pwdUser.email}</span></p>
+                  <p className="text-sm">{t('core.users.email_label', locale)}<span className="font-mono font-bold">{pwdUser.email}</span></p>
+                  <p className="text-sm">{t('core.users.new_pwd_label', locale)}<span className="font-mono font-bold text-lg">{pwdValue}</span></p>
                 </div>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => copyToClipboard(pwdValue)}>
-                  <Copy className="w-4 h-4 mr-2" /> Copier
+                  <Copy className="w-4 h-4 mr-2" /> {t('core.users.copy', locale)}
                 </Button>
                 <Button className="flex-1 bg-[#0B0F2E] text-white" onClick={() => setPwdOpen(false)}>
-                  Fermer
+                  {t('core.users.close', locale)}
                 </Button>
               </div>
             </div>
