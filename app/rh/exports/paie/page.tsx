@@ -289,7 +289,15 @@ export default function ExportPaiePage() {
         return t('rha.b.expaie.csv_mode_bulk', locale)
       }
 
-      const headers = ["Code employé", "Nom", "Prénom", "Banque", "N° compte", "Mode paiement", "Net (MUR)"]
+      const headers = [
+        t('rha.b.expaie.csv_h_code', locale),
+        t('rha.b.expaie.csv_h_nom', locale),
+        t('rha.b.expaie.csv_h_prenom', locale),
+        t('rha.b.expaie.csv_h_banque', locale),
+        t('rha.b.expaie.csv_h_compte', locale),
+        t('rha.b.expaie.csv_h_mode', locale),
+        t('rha.b.expaie.csv_h_net', locale),
+      ]
       const dataRows = sortedBulletins.map(b => {
         const emp = empMap.get(b.employe_id) as (Employe & { code?: string; mode_paiement?: string }) | undefined
         const hasBank = !!(emp?.bank_name)
