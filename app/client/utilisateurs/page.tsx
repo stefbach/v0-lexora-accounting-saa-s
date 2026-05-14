@@ -68,6 +68,7 @@ function getRoles(locale: Locale) {
     { value: "rh", label: t('core.users.rl.rh', locale), color: "bg-orange-100 text-orange-800 border-orange-200" },
     { value: "juridique", label: t('core.users.rl.juridique', locale), color: "bg-purple-100 text-purple-800 border-purple-200" },
     { value: "manager", label: t('core.users.rl.manager', locale), color: "bg-teal-100 text-teal-800 border-teal-200" },
+    { value: "team_leader", label: "Team Leader", color: "bg-teal-50 text-teal-700 border-teal-200" },
     { value: "direction", label: t('core.users.rl.direction', locale), color: "bg-indigo-100 text-indigo-800 border-indigo-200" },
     { value: "employe", label: t('core.users.rl.employe', locale), color: "bg-gray-100 text-gray-700 border-gray-200" },
   ]
@@ -77,12 +78,13 @@ function getHrRoleGuide(locale: Locale) {
   return [
     { value: 'rh', label: t('core.users.rl.rh', locale), desc: t('core.users.hrg.rh_desc', locale), color: 'bg-orange-100 text-orange-800 border-orange-200' },
     { value: 'manager', label: t('core.users.rl.manager', locale), desc: t('core.users.hrg.manager_desc', locale), color: 'bg-teal-100 text-teal-800 border-teal-200' },
+    { value: 'team_leader', label: 'Team Leader', desc: "Chef d'équipe — mêmes droits que Manager (gestion pointage / planning de son groupe).", color: 'bg-teal-50 text-teal-700 border-teal-200' },
     { value: 'juridique', label: t('core.users.rl.juridique', locale), desc: t('core.users.hrg.juridique_desc', locale), color: 'bg-purple-100 text-purple-800 border-purple-200' },
     { value: 'employe', label: t('core.users.rl.employe', locale), desc: t('core.users.hrg.employe_desc', locale), color: 'bg-gray-100 text-gray-700 border-gray-200' },
   ]
 }
 
-const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "direction", "client_assistant", "client_admin", "client_user", "comptable", "comptable_dedie"]
+const NEEDS_SOCIETE = ["rh", "juridique", "employe", "manager", "team_leader", "direction", "client_assistant", "client_admin", "client_user", "comptable", "comptable_dedie"]
 const MULTI_SOCIETE_ROLES = ["client_assistant", "client_admin", "client_user", "rh", "comptable", "comptable_dedie"]
 
 function getModuleDefs(locale: Locale) {
