@@ -81,7 +81,7 @@ export async function GET() {
 
   // Fix 2: Role constraint
   if (results['client_assistant_role_allowed']?.startsWith('BLOCKED')) {
-    fixes.push('client_assistant role BLOCKED by CHECK constraint. Run manually: ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check; ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN (\'admin\',\'super_admin\',\'client_admin\',\'client_user\',\'client_assistant\',\'comptable\',\'comptable_dedie\',\'rh\',\'rh_manager\',\'juridique\',\'employe\',\'manager\',\'direction\',\'salarie\'));')
+    fixes.push('client_assistant role BLOCKED by CHECK constraint. Run manually: ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check; ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN (\'admin\',\'super_admin\',\'client_admin\',\'client_user\',\'client_assistant\',\'comptable\',\'comptable_dedie\',\'rh\',\'rh_manager\',\'juridique\',\'employe\',\'manager\',\'team_leader\',\'direction\',\'salarie\'));')
   }
 
   return NextResponse.json({ results, fixes, timestamp: new Date().toISOString() })

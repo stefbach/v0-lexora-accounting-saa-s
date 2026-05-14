@@ -17,7 +17,7 @@ async function requireAdmin() {
   return user
 }
 
-const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'rh_manager', 'juridique', 'employe', 'salarie', 'manager', 'direction']
+const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'rh_manager', 'juridique', 'employe', 'salarie', 'manager', 'team_leader', 'direction']
 
 export async function GET(request: NextRequest) {
   try {

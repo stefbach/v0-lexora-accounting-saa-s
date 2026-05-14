@@ -103,12 +103,13 @@ const ROLES = [
   { value: 'rh', label: 'RH', color: 'bg-orange-100 text-orange-800' },
   { value: 'juridique', label: 'Juridique', color: 'bg-purple-100 text-purple-800' },
   { value: 'manager', label: 'Manager', color: 'bg-teal-100 text-teal-800' },
+  { value: 'team_leader', label: 'Team Leader', color: 'bg-teal-50 text-teal-700' },
   { value: 'client_assistant', label: 'Assistant (Direction)', color: 'bg-cyan-100 text-cyan-800' },
   { value: 'direction', label: 'Direction', color: 'bg-indigo-100 text-indigo-800' },
   { value: 'employe', label: 'Employé', color: 'bg-gray-100 text-gray-700' },
 ]
 
-const NEEDS_SOCIETE = ['rh', 'juridique', 'employe', 'manager', 'direction', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie']
+const NEEDS_SOCIETE = ['rh', 'juridique', 'employe', 'manager', 'team_leader', 'direction', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie']
 
 function genPassword() {
   return Math.random().toString(36).slice(2, 8).toUpperCase() + Math.random().toString(36).slice(2, 8)
@@ -148,7 +149,7 @@ export default function UsersPage() {
 
   const creer = async () => {
     if (!form.prenom || !form.nom || !form.email || !form.role) return
-    const SOCIETE_OBLIGATOIRE = ['rh', 'juridique', 'employe', 'manager', 'direction']
+    const SOCIETE_OBLIGATOIRE = ['rh', 'juridique', 'employe', 'manager', 'team_leader', 'direction']
     if (SOCIETE_OBLIGATOIRE.includes(form.role) && !form.societe_id) return
     setSaving(true)
     const res = await fetch('/api/admin/users', {
@@ -228,7 +229,7 @@ export default function UsersPage() {
                 <div>
                   <Label>
                     {['client_assistant'].includes(form.role) ? 'Sociétés à gérer (multi-sélection)' : 'Société à associer'}
-                    {['rh','juridique','employe','manager','direction'].includes(form.role) && <span className="text-red-500"> *</span>}
+                    {['rh','juridique','employe','manager','team_leader','direction'].includes(form.role) && <span className="text-red-500"> *</span>}
                   </Label>
                   {['client_assistant', 'client_admin'].includes(form.role) && societes.length > 1 ? (
                     <div className="max-h-40 overflow-y-auto rounded-md border p-2 space-y-1 mt-1">
@@ -258,7 +259,7 @@ export default function UsersPage() {
                     {['client_assistant'].includes(form.role) && "L'assistant pourra numériser des documents pour toutes les sociétés cochées"}
                     {['client_admin','client_user'].includes(form.role) && "Le client sera lié à cette société via un dossier"}
                     {['comptable','comptable_dedie'].includes(form.role) && "Le comptable sera assigné à cette société"}
-                    {['rh','juridique','employe','manager','direction'].includes(form.role) && "La société principale de ce collaborateur"}
+                    {['rh','juridique','employe','manager','team_leader','direction'].includes(form.role) && "La société principale de ce collaborateur"}
                   </p>
                 </div>
               )}
@@ -275,7 +276,7 @@ export default function UsersPage() {
                 </div>
                 <p className="text-xs text-orange-600 mt-1">⚠️ Notez ce mot de passe — il ne sera plus affiché après création</p>
               </div>
-              <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || (['rh','juridique','employe','manager','direction'].includes(form.role) && !form.societe_id)} className="w-full bg-[#0B0F2E]">
+              <Button onClick={creer} disabled={saving || !form.prenom || !form.nom || !form.email || (['rh','juridique','employe','manager','team_leader','direction'].includes(form.role) && !form.societe_id)} className="w-full bg-[#0B0F2E]">
                 {saving ? 'Création...' : 'Créer le compte'}
               </Button>
             </div>

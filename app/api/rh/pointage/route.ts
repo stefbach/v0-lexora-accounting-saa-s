@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { resolveOwnership } from '@/lib/rh/ownership'
+import { resolveOwnership, canManageEmploye } from '@/lib/rh/ownership'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,7 +73,7 @@ async function resolveEmployeeFilter(
     .select('role, societe_id, groupe_gere_id')
     .eq('id', userId)
     .maybeSingle()
-  const isManagerScoped = profile?.role === 'manager' && profile?.groupe_gere_id
+  const isManagerScoped = (profile?.role === 'manager' || profile?.role === 'team_leader') && profile?.groupe_gere_id
 
   // Helper : restreindre un set d'IDs employés au groupe géré par le manager.
   const applyManagerGroupScope = async (allIds: string[]): Promise<string[]> => {
@@ -108,7 +108,7 @@ async function resolveEmployeeFilter(
     return applyManagerGroupScope(ids)
   }
 
-  if (profile?.role && ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager', 'direction'].includes(profile.role)) return null
+  if (profile?.role && ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'manager', 'team_leader', 'direction'].includes(profile.role)) return null
 
   const { data: dossiers } = await supabase.from('dossiers').select('societe_id').eq('client_id', userId)
   const { data: owned } = await supabase.from('societes').select('id').eq('created_by', userId)
@@ -483,10 +483,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'employe_id et type_pointage requis' }, { status: 400 })
     }
 
-    // P0 Sécurité — ownership check : un employé ne peut pointer que pour lui-même.
+    // P0 Sécurité — ownership check.
+    // RH/Admin : tous les employés. Manager/Team Leader : employés de leur groupe.
+    // Sinon : uniquement soi-même.
     const ownership = await resolveOwnership(supabase, user.id)
-    if (!ownership.isRH && ownership.employe_id && employe_id !== ownership.employe_id) {
-      return NextResponse.json({ error: 'Accès refusé — vous ne pouvez pointer que pour vous-même.' }, { status: 403 })
+    const canManage = await canManageEmploye(supabase, ownership, employe_id)
+    if (!canManage) {
+      const msg = ownership.isManagerScoped
+        ? 'Accès refusé — cet employé n\'appartient pas à votre équipe.'
+        : 'Accès refusé — vous ne pouvez pointer que pour vous-même.'
+      return NextResponse.json({ error: msg }, { status: 403 })
     }
 
     // Sprint 15 FIX 4 — enforcement pointage_actif=false.
@@ -501,7 +507,7 @@ export async function POST(request: Request) {
         if (socConfig && socConfig.pointage_actif === false) {
           const { data: prof } = await supabase.from('profiles')
             .select('role').eq('id', user.id).maybeSingle()
-          const bypassRoles = ['admin', 'super_admin', 'rh', 'rh_manager']
+          const bypassRoles = ['admin', 'super_admin', 'rh', 'rh_manager', 'manager', 'team_leader']
           if (!prof || !bypassRoles.includes(prof.role)) {
             return NextResponse.json({
               error: 'Le pointage n\'est pas activé pour cette société. Activez-le dans /rh/societe → Paramètres.',
