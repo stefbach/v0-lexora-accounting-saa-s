@@ -168,9 +168,9 @@ export default function EoyBonusPage() {
           <CardContent className="p-6 flex items-start gap-3">
             <ShieldAlert className="h-6 w-6 text-red-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-red-900">Accès refusé</p>
+              <p className="font-semibold text-red-900">{t('rha.b.eoy.access_denied', locale)}</p>
               <p className="text-sm text-red-800 mt-1">
-                Cette page est réservée aux RH et administrateurs.
+                {t('rha.b.eoy.access_msg', locale)}
               </p>
             </div>
           </CardContent>
@@ -206,11 +206,11 @@ export default function EoyBonusPage() {
         {/* Filtres + actions */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base" style={{ color: NAVY }}>Paramètres de calcul</CardTitle>
+            <CardTitle className="text-base" style={{ color: NAVY }}>{t('rha.b.eoy.params_title', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <Label className="text-sm">Société</Label>
+              <Label className="text-sm">{t('rha.b.eoy.lbl_societe', locale)}</Label>
               <Select value={societeId} onValueChange={setSocieteId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -219,7 +219,7 @@ export default function EoyBonusPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-sm">Année</Label>
+              <Label className="text-sm">{t('rha.b.eoy.lbl_year', locale)}</Label>
               <Select value={String(annee)} onValueChange={v => setAnnee(parseInt(v, 10))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -234,7 +234,7 @@ export default function EoyBonusPage() {
                 onClick={() => runAction('preview')}
               >
                 {processing === 'preview' ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
-                Aperçu
+                {t('rha.b.eoy.btn_preview', locale)}
               </Button>
             </div>
             <div className="flex items-end">
@@ -245,7 +245,7 @@ export default function EoyBonusPage() {
                 onClick={() => runAction('calculer')}
               >
                 {processing === 'save' ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Calculer & sauver
+                {t('rha.b.eoy.btn_calc_save', locale)}
               </Button>
             </div>
           </CardContent>
@@ -265,15 +265,15 @@ export default function EoyBonusPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Card className="border-2" style={{ borderColor: GOLD + '40' }}>
                 <CardContent className="p-4">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider">Total à payer</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">{t('rha.b.eoy.kpi_total', locale)}</p>
                   <p className="text-2xl font-bold mt-1" style={{ color: NAVY }}>{formaterMontantMUR(recap.total_bonus)}</p>
-                  <p className="text-[11px] text-gray-400 mt-1">{recap.nb_eligibles} employé{recap.nb_eligibles > 1 ? 's' : ''} éligible{recap.nb_eligibles > 1 ? 's' : ''}</p>
+                  <p className="text-[11px] text-gray-400 mt-1">{t('rha.b.eoy.kpi_eligible', locale).replace('{n}', String(recap.nb_eligibles))}</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-4">
                   <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center gap-1">
-                    <Wallet className="h-3 w-3" /> 75% avant
+                    <Wallet className="h-3 w-3" /> {t('rha.b.eoy.kpi_75_before', locale)}
                   </p>
                   <p className="text-xl font-bold mt-1" style={{ color: NAVY }}>{formaterMontantMUR(recap.total_75pct)}</p>
                   <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
@@ -284,7 +284,7 @@ export default function EoyBonusPage() {
               <Card>
                 <CardContent className="p-4">
                   <p className="text-xs text-gray-500 uppercase tracking-wider flex items-center gap-1">
-                    <Wallet className="h-3 w-3" /> 25% avant
+                    <Wallet className="h-3 w-3" /> {t('rha.b.eoy.kpi_25_before', locale)}
                   </p>
                   <p className="text-xl font-bold mt-1" style={{ color: NAVY }}>{formaterMontantMUR(recap.total_25pct)}</p>
                   <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
@@ -294,7 +294,7 @@ export default function EoyBonusPage() {
               </Card>
               <Card className={recap.nb_bulletins_manquants_total > 0 ? 'border-2 border-amber-300 bg-amber-50' : ''}>
                 <CardContent className="p-4">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider">Diagnostic</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">{t('rha.b.eoy.kpi_diagnostic', locale)}</p>
                   {recap.nb_bulletins_manquants_total > 0 ? (
                     <>
                       <p className="text-lg font-bold text-amber-700 mt-1 flex items-center gap-1">
@@ -306,7 +306,7 @@ export default function EoyBonusPage() {
                     </>
                   ) : (
                     <p className="text-lg font-bold text-emerald-700 mt-1 flex items-center gap-1">
-                      <CheckCircle2 className="h-4 w-4" /> Données complètes
+                      <CheckCircle2 className="h-4 w-4" /> {t('rha.b.eoy.complete_data', locale)}
                     </p>
                   )}
                   {recap.nb_non_eligibles > 0 && (
@@ -322,7 +322,7 @@ export default function EoyBonusPage() {
             <div className="rounded-md border-2 border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="text-sm text-amber-900">
-                <p className="font-semibold">Phase 1 — calculs uniquement</p>
+                <p className="font-semibold">{t('rha.b.eoy.phase1_title', locale)}</p>
                 <p className="text-[13px]">
                   Seuls les calculs sont disponibles. La génération automatique des bulletins
                   75/25 sera ajoutée en Phase 2 après validation visuelle. Pour l&apos;instant,
@@ -335,10 +335,10 @@ export default function EoyBonusPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center justify-between" style={{ color: NAVY }}>
-                  <span>Détail par employé ({calculs.length})</span>
+                  <span>{t('rha.b.eoy.detail_per_emp', locale).replace('{n}', String(calculs.length))}</span>
                   {savedFlag !== null && (
                     <Badge className={savedFlag ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}>
-                      {savedFlag ? 'Sauvegardé' : 'Aperçu'}
+                      {savedFlag ? t('rha.b.eoy.saved', locale) : t('rha.b.eoy.preview', locale)}
                     </Badge>
                   )}
                 </CardTitle>
@@ -348,24 +348,24 @@ export default function EoyBonusPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employé</TableHead>
-                        <TableHead className="text-right">Earnings</TableHead>
-                        <TableHead className="text-right">Mois</TableHead>
-                        <TableHead className="text-right">Moyenne</TableHead>
-                        <TableHead className="text-right">Sal. déc</TableHead>
-                        <TableHead className="text-right">Base</TableHead>
-                        <TableHead className="text-right">Prorata</TableHead>
-                        <TableHead className="text-right">Bonus</TableHead>
-                        <TableHead className="text-right">75% / 25%</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead>{t('rha.b.eoy.col_employee', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.eoy.col_earnings', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.eoy.col_months', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.eoy.col_avg', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.eoy.col_dec_salary', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.eoy.col_base', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.eoy.col_prorata', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.eoy.col_bonus', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.eoy.col_75_25', locale)}</TableHead>
+                        <TableHead>{t('rha.b.eoy.col_status', locale)}</TableHead>
+                        <TableHead className="text-right">{t('rha.b.eoy.col_actions', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {calculs.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={11} className="text-center text-gray-400 py-8">
-                            Aucun calcul. Cliquez sur <span className="font-semibold">Aperçu</span> ou <span className="font-semibold">Calculer &amp; sauver</span>.
+                            {t('rha.b.eoy.no_calc', locale)}
                           </TableCell>
                         </TableRow>
                       ) : calculs.map(c => {
@@ -403,7 +403,7 @@ export default function EoyBonusPage() {
                             </TableCell>
                             <TableCell>
                               {c.eligible ? (
-                                <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Éligible</Badge>
+                                <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">{t('rha.b.eoy.eligible', locale)}</Badge>
                               ) : (
                                 <Badge className="bg-red-100 text-red-700 text-[10px]" title={c.motif_non_eligible || ''}>
                                   {getMotifLabel(c.motif_non_eligible)}
@@ -433,7 +433,7 @@ export default function EoyBonusPage() {
           <Card>
             <CardContent className="text-center py-16 text-gray-500">
               <Gift className="h-10 w-10 mx-auto text-gray-300 mb-3" />
-              <p>Sélectionnez une société et une année, puis cliquez sur Aperçu ou Calculer & sauver.</p>
+              <p>{t('rha.b.eoy.empty_hint', locale)}</p>
             </CardContent>
           </Card>
         )}

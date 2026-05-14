@@ -58,16 +58,16 @@ interface ReconciliationPaire {
 const fmt = (n: number) =>
   new Intl.NumberFormat('fr-MU', { style: 'currency', currency: 'MUR', minimumFractionDigits: 0 }).format(n)
 
-const fmtDate = (d: string) => new Date(d).toLocaleDateString('fr-FR')
+const fmtDate = (d: string, locale: 'fr' | 'en' = 'fr') => new Date(d).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')
 
-const TYPE_FLUX_LABELS: Record<string, string> = {
-  mise_a_disposition: 'Mise à disposition',
-  refacturation: 'Refacturation',
-  pret: 'Prêt',
-  dividende: 'Dividende',
-  remboursement: 'Remboursement',
-  avance: 'Avance'
-}
+const getTypeFluxLabels = (locale: 'fr' | 'en'): Record<string, string> => ({
+  mise_a_disposition: t('cab.interco.type_mise', locale),
+  refacturation: t('cab.interco.type_refact', locale),
+  pret: t('cab.interco.type_loan', locale),
+  dividende: t('cab.interco.type_dividend', locale),
+  remboursement: t('cab.interco.type_refund', locale),
+  avance: t('cab.interco.type_advance', locale),
+})
 
 const RECONCILIATION_COLORS: Record<string, string> = {
   en_attente: 'bg-yellow-100 text-yellow-700',
@@ -79,6 +79,7 @@ const RECONCILIATION_COLORS: Record<string, string> = {
 
 export default function IntercoPage() {
   const locale = getLocale()
+  const TYPE_FLUX_LABELS = getTypeFluxLabels(locale)
   const [societes, setSocietes] = useState<Societe[]>([])
   const [flux, setFlux] = useState<FluxInterco[]>([])
   const [reconciliation, setReconciliation] = useState<ReconciliationPaire[]>([])
@@ -176,7 +177,7 @@ export default function IntercoPage() {
   }
 
   const handleExportCSV = () => {
-    const headers = ['Société A', 'Société B', 'Receivable A→B', 'Payable A←B', 'Écart', 'Statut', 'Nb flux']
+    const headers = [t('cab.interco.col_company_a', locale), t('cab.interco.col_company_b', locale), t('cab.interco.col_receivable', locale), t('cab.interco.col_payable', locale), t('cab.interco.col_gap', locale), t('cab.interco.col_status', locale), t('cab.interco.col_nb_flow', locale)]
     const rows = reconciliation.map(p => [
       p.societe_a_nom,
       p.societe_b_nom,
@@ -223,7 +224,7 @@ export default function IntercoPage() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleExportCSV}>
             <Download className="h-4 w-4 mr-2" />
-            Export CSV
+            {t('cab.interco.export_csv', locale)}
           </Button>
           <Dialog open={showNewFlux} onOpenChange={setShowNewFlux}>
             <DialogTrigger asChild>
@@ -234,14 +235,14 @@ export default function IntercoPage() {
             </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>Nouveau flux interco</DialogTitle>
+                <DialogTitle>{t('cab.interco.dialog_title', locale)}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>Société émettrice *</Label>
+                    <Label>{t('cab.interco.fld_emitter', locale)}</Label>
                     <Select value={newFlux.societe_emettrice_id} onValueChange={v => setNewFlux(f => ({ ...f, societe_emettrice_id: v }))}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder={t('cab.interco.choose', locale)} /></SelectTrigger>
                       <SelectContent>
                         {societes.map(s => (
                           <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
@@ -250,9 +251,9 @@ export default function IntercoPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label>Société réceptrice *</Label>
+                    <Label>{t('cab.interco.fld_receiver', locale)}</Label>
                     <Select value={newFlux.societe_receptrice_id} onValueChange={v => setNewFlux(f => ({ ...f, societe_receptrice_id: v }))}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder={t('cab.interco.choose', locale)} /></SelectTrigger>
                       <SelectContent>
                         {societes.filter(s => s.id !== newFlux.societe_emettrice_id).map(s => (
                           <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
@@ -263,7 +264,7 @@ export default function IntercoPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>Date *</Label>
+                    <Label>{t('cab.interco.fld_date', locale)}</Label>
                     <Input
                       type="date"
                       value={newFlux.date_flux}
@@ -272,7 +273,7 @@ export default function IntercoPage() {
                     />
                   </div>
                   <div>
-                    <Label>Type de flux</Label>
+                    <Label>{t('cab.interco.fld_type', locale)}</Label>
                     <Select value={newFlux.type_flux} onValueChange={v => setNewFlux(f => ({ ...f, type_flux: v }))}>
                       <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -284,17 +285,17 @@ export default function IntercoPage() {
                   </div>
                 </div>
                 <div>
-                  <Label>Description *</Label>
+                  <Label>{t('cab.interco.fld_description', locale)}</Label>
                   <Input
                     value={newFlux.description}
                     onChange={e => setNewFlux(f => ({ ...f, description: e.target.value }))}
-                    placeholder="Description du flux..."
+                    placeholder={t('cab.interco.desc_placeholder', locale)}
                     className="mt-1"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>Montant MUR *</Label>
+                    <Label>{t('cab.interco.fld_amount_mur', locale)}</Label>
                     <Input
                       type="number"
                       value={newFlux.montant_mur}
@@ -303,7 +304,7 @@ export default function IntercoPage() {
                     />
                   </div>
                   <div>
-                    <Label>Devise</Label>
+                    <Label>{t('cab.interco.fld_currency', locale)}</Label>
                     <Select value={newFlux.devise} onValueChange={v => setNewFlux(f => ({ ...f, devise: v }))}>
                       <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -321,7 +322,7 @@ export default function IntercoPage() {
                   className="w-full"
                   style={{ backgroundColor: '#0B0F2E', color: 'white' }}
                 >
-                  {creating ? 'Création...' : 'Créer le flux + Générer écritures'}
+                  {creating ? t('cab.interco.creating', locale) : t('cab.interco.create_btn', locale)}
                 </Button>
               </div>
             </DialogContent>
@@ -335,13 +336,13 @@ export default function IntercoPage() {
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle className="h-5 w-5 text-orange-600" />
             <span className="font-medium text-orange-700">
-              {ecartImportants.length} paire(s) avec écart &gt; 1 000 MUR
+              {ecartImportants.length} {t('cab.interco.alert_gap_pre', locale)}
             </span>
           </div>
           <div className="space-y-1">
             {ecartImportants.map((p, i) => (
               <p key={i} className="text-sm text-orange-600">
-                {p.societe_a_nom} ↔ {p.societe_b_nom} : écart {fmt(Math.abs(p.ecart))}
+                {p.societe_a_nom} ↔ {p.societe_b_nom} : {t('cab.interco.gap', locale)} {fmt(Math.abs(p.ecart))}
               </p>
             ))}
           </div>
@@ -353,11 +354,11 @@ export default function IntercoPage() {
         <CardContent className="pt-4">
           <div className="flex flex-wrap gap-3">
             <div>
-              <Label className="text-xs">Société</Label>
+              <Label className="text-xs">{t('cab.interco.fld_company', locale)}</Label>
               <Select value={filterSociete} onValueChange={setFilterSociete}>
                 <SelectTrigger className="w-48 mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les sociétés</SelectItem>
+                  <SelectItem value="all">{t('cab.interco.all_companies', locale)}</SelectItem>
                   {societes.map(s => (
                     <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
                   ))}
@@ -365,11 +366,11 @@ export default function IntercoPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Type de flux</Label>
+              <Label className="text-xs">{t('cab.interco.fld_type', locale)}</Label>
               <Select value={filterType} onValueChange={setFilterType}>
                 <SelectTrigger className="w-48 mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les types</SelectItem>
+                  <SelectItem value="all">{t('cab.interco.all_types', locale)}</SelectItem>
                   {Object.entries(TYPE_FLUX_LABELS).map(([v, l]) => (
                     <SelectItem key={v} value={v}>{l}</SelectItem>
                   ))}
@@ -377,11 +378,11 @@ export default function IntercoPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Du</Label>
+              <Label className="text-xs">{t('cab.interco.fld_from', locale)}</Label>
               <Input type="date" value={dateDebut} onChange={e => setDateDebut(e.target.value)} className="w-40 mt-1" />
             </div>
             <div>
-              <Label className="text-xs">Au</Label>
+              <Label className="text-xs">{t('cab.interco.fld_to', locale)}</Label>
               <Input type="date" value={dateFin} onChange={e => setDateFin(e.target.value)} className="w-40 mt-1" />
             </div>
             <div className="flex items-end">
@@ -402,7 +403,7 @@ export default function IntercoPage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <ArrowLeftRight className="h-5 w-5" style={{ color: '#D4AF37' }} />
-            <CardTitle className="text-base">Réconciliation par paire de sociétés</CardTitle>
+            <CardTitle className="text-base">{t('cab.interco.reconciliation_title', locale)}</CardTitle>
             {loadingRecon && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
         </CardHeader>
@@ -410,13 +411,13 @@ export default function IntercoPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Société A</TableHead>
-                <TableHead>Société B</TableHead>
-                <TableHead className="text-right">Receivable (A→B)</TableHead>
-                <TableHead className="text-right">Payable (A←B)</TableHead>
-                <TableHead className="text-right">Écart</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="text-right">Nb flux</TableHead>
+                <TableHead>{t('cab.interco.col_company_a', locale)}</TableHead>
+                <TableHead>{t('cab.interco.col_company_b', locale)}</TableHead>
+                <TableHead className="text-right">{t('cab.interco.col_receivable', locale)}</TableHead>
+                <TableHead className="text-right">{t('cab.interco.col_payable', locale)}</TableHead>
+                <TableHead className="text-right">{t('cab.interco.col_gap', locale)}</TableHead>
+                <TableHead>{t('cab.interco.col_status', locale)}</TableHead>
+                <TableHead className="text-right">{t('cab.interco.col_nb_flow', locale)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -433,7 +434,7 @@ export default function IntercoPage() {
                   </TableCell>
                   <TableCell>
                     <Badge className={RECONCILIATION_COLORS[p.statut] || ''}>
-                      {p.statut === 'en_attente' ? 'En attente' : p.statut === 'reconcilie' ? 'Réconcilié' : 'Litige'}
+                      {p.statut === 'en_attente' ? t('cab.interco.status_pending', locale) : p.statut === 'reconcilie' ? t('cab.interco.status_reconciled', locale) : t('cab.interco.status_dispute', locale)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">{p.nb_flux}</TableCell>
@@ -442,7 +443,7 @@ export default function IntercoPage() {
               {reconciliation.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    Aucun flux interco enregistré
+                    {t('cab.interco.no_flow_recorded', locale)}
                   </TableCell>
                 </TableRow>
               )}
@@ -455,7 +456,7 @@ export default function IntercoPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Flux de la période
+            {t('cab.interco.flows_period', locale)}
             <Badge variant="secondary" className="ml-2">{flux.length}</Badge>
           </CardTitle>
         </CardHeader>
@@ -463,19 +464,19 @@ export default function IntercoPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Émetteur</TableHead>
-                <TableHead>Récepteur</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Montant</TableHead>
-                <TableHead>Statut réconciliation</TableHead>
+                <TableHead>{t('cab.interco.col_date', locale)}</TableHead>
+                <TableHead>{t('cab.interco.col_emitter', locale)}</TableHead>
+                <TableHead>{t('cab.interco.col_receiver', locale)}</TableHead>
+                <TableHead>{t('cab.interco.col_description', locale)}</TableHead>
+                <TableHead>{t('cab.interco.col_type', locale)}</TableHead>
+                <TableHead className="text-right">{t('cab.interco.col_amount', locale)}</TableHead>
+                <TableHead>{t('cab.interco.col_recon_status', locale)}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {flux.map(f => (
                 <TableRow key={f.id}>
-                  <TableCell>{fmtDate(f.date_flux)}</TableCell>
+                  <TableCell>{fmtDate(f.date_flux, locale)}</TableCell>
                   <TableCell className="font-medium">{f.societe_emettrice?.nom}</TableCell>
                   <TableCell>{f.societe_receptrice?.nom}</TableCell>
                   <TableCell className="max-w-xs truncate">{f.description}</TableCell>
@@ -487,8 +488,8 @@ export default function IntercoPage() {
                   <TableCell className="text-right font-semibold">{fmt(f.montant_mur)}</TableCell>
                   <TableCell>
                     <Badge className={RECONCILIATION_COLORS[f.statut_reconciliation] || ''}>
-                      {f.statut_reconciliation === 'en_attente' ? 'En attente'
-                        : f.statut_reconciliation === 'reconcilie' ? 'Réconcilié' : 'Litige'}
+                      {f.statut_reconciliation === 'en_attente' ? t('cab.interco.status_pending', locale)
+                        : f.statut_reconciliation === 'reconcilie' ? t('cab.interco.status_reconciled', locale) : t('cab.interco.status_dispute', locale)}
                     </Badge>
                   </TableCell>
                 </TableRow>
@@ -496,7 +497,7 @@ export default function IntercoPage() {
               {flux.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    Aucun flux pour cette période
+                    {t('cab.interco.no_flow_period', locale)}
                   </TableCell>
                 </TableRow>
               )}

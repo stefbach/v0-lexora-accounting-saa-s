@@ -191,9 +191,9 @@ export default function SeverancePage() {
           <CardContent className="p-6 flex items-start gap-3">
             <ShieldAlert className="h-6 w-6 text-red-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-red-900">Accès refusé</p>
+              <p className="font-semibold text-red-900">{t('rha.b.sev.access_denied', locale)}</p>
               <p className="text-sm text-red-800 mt-1">
-                Cette page est réservée aux RH et administrateurs.
+                {t('rha.b.sev.access_msg', locale)}
               </p>
             </div>
           </CardContent>
@@ -224,11 +224,11 @@ export default function SeverancePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base" style={{ color: NAVY }}>Nouvelle simulation</CardTitle>
+            <CardTitle className="text-base" style={{ color: NAVY }}>{t('rha.b.sev.new_sim', locale)}</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <Label className="text-sm">Société</Label>
+              <Label className="text-sm">{t('rha.b.sev.lbl_societe', locale)}</Label>
               <Select value={societeId} onValueChange={setSocieteId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -237,9 +237,9 @@ export default function SeverancePage() {
               </Select>
             </div>
             <div>
-              <Label className="text-sm">Employé</Label>
+              <Label className="text-sm">{t('rha.b.sev.lbl_employee', locale)}</Label>
               <Select value={employeId} onValueChange={setEmployeId}>
-                <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rha.b.sev.choose', locale)} /></SelectTrigger>
                 <SelectContent>
                   {employes.map(e => (
                     <SelectItem key={e.id} value={e.id}>{e.prenom} {e.nom}</SelectItem>
@@ -248,11 +248,11 @@ export default function SeverancePage() {
               </Select>
             </div>
             <div>
-              <Label className="text-sm">Date de licenciement</Label>
+              <Label className="text-sm">{t('rha.b.sev.lbl_dismissal_date', locale)}</Label>
               <Input type="date" value={dateLicenciement} onChange={e => setDateLicenciement(e.target.value)} />
             </div>
             <div>
-              <Label className="text-sm">Motif</Label>
+              <Label className="text-sm">{t('rha.b.sev.lbl_motif', locale)}</Label>
               <Select value={motif} onValueChange={v => setMotif(v as MotifLicenciement)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -263,25 +263,25 @@ export default function SeverancePage() {
               </Select>
             </div>
             <div>
-              <Label className="text-sm">Déduction gratifications</Label>
+              <Label className="text-sm">{t('rha.b.sev.deduction_grats', locale)}</Label>
               <Input type="number" step="100" value={dGratif} onChange={e => setDGratif(e.target.value)} />
             </div>
             <div>
-              <Label className="text-sm">Déduction pension privée</Label>
+              <Label className="text-sm">{t('rha.b.sev.deduction_pension', locale)}</Label>
               <Input type="number" step="100" value={dPension} onChange={e => setDPension(e.target.value)} />
             </div>
             <div>
-              <Label className="text-sm">Déduction PRGF</Label>
+              <Label className="text-sm">{t('rha.b.sev.deduction_prgf', locale)}</Label>
               <Input type="number" step="100" value={dPrgf} onChange={e => setDPrgf(e.target.value)} />
             </div>
             <div className="md:col-span-2">
-              <Label className="text-sm">Commentaire (optionnel)</Label>
-              <Input value={commentaire} onChange={e => setCommentaire(e.target.value)} placeholder="Note interne sauvegardée avec la simulation" />
+              <Label className="text-sm">{t('rha.b.sev.lbl_comment', locale)}</Label>
+              <Input value={commentaire} onChange={e => setCommentaire(e.target.value)} placeholder={t('rha.b.sev.comment_ph', locale)} />
             </div>
             <div className="md:col-span-3 flex gap-2 justify-end pt-2">
               <Button variant="outline" disabled={calculating || !employeId} onClick={calculer}>
                 {calculating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Calculator className="w-4 h-4 mr-2" />}
-                Calculer (preview)
+                {t('rha.b.sev.btn_preview', locale)}
               </Button>
               <Button
                 disabled={saving || !resultat?.eligible}
@@ -290,7 +290,7 @@ export default function SeverancePage() {
                 style={{ backgroundColor: NAVY }}
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                Sauvegarder simulation
+                {t('rha.b.sev.btn_save_sim', locale)}
               </Button>
             </div>
           </CardContent>
@@ -306,29 +306,29 @@ export default function SeverancePage() {
           <Card className="border-2" style={{ borderColor: resultat.eligible ? GOLD + '50' : '#fca5a5' }}>
             <CardHeader>
               <CardTitle className="text-base flex items-center justify-between" style={{ color: NAVY }}>
-                <span>Résultat</span>
+                <span>{t('rha.b.sev.result', locale)}</span>
                 {resultat.eligible ? (
-                  <Badge className="bg-emerald-100 text-emerald-800">Éligible</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-800">{t('rha.b.sev.eligible', locale)}</Badge>
                 ) : (
                   <Badge className="bg-red-100 text-red-700">{getMotifNonEligibleLabel(resultat.motif_non_eligible)}</Badge>
                 )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Line label="Ancienneté" value={formaterAnciennete(resultat.anciennete_annees, resultat.anciennete_mois_additionnels)} hint={`${resultat.anciennete_total_mois.toFixed(2)} mois au total`} />
-              <Line label="Dernier mois complet" value={formaterSeverance(resultat.dernier_mois_remuneration)} />
-              <Line label="Moyenne 12 derniers mois" value={formaterSeverance(resultat.moyenne_12_mois)} />
+              <Line label={t('rha.b.sev.seniority', locale)} value={formaterAnciennete(resultat.anciennete_annees, resultat.anciennete_mois_additionnels)} hint={`${resultat.anciennete_total_mois.toFixed(2)} mois au total`} />
+              <Line label={t('rha.b.sev.last_complete_month', locale)} value={formaterSeverance(resultat.dernier_mois_remuneration)} />
+              <Line label={t('rha.b.sev.avg_12_months', locale)} value={formaterSeverance(resultat.moyenne_12_mois)} />
               <Line
-                label="Base retenue"
+                label={t('rha.b.sev.base_retained', locale)}
                 value={`${formaterSeverance(resultat.mois_remuneration_retenu)} (${resultat.base_mois_retenue === 'dernier_mois' ? 'dernier mois' : 'moyenne 12 mois'})`}
                 hint="Règle WRA S.70 : on retient le plus élevé des deux."
               />
               <div className="pt-2 border-t">
-                <Line label="Severance brut" value={formaterSeverance(resultat.severance_brut)} hint={`3 × ${formaterSeverance(resultat.mois_remuneration_retenu)} × (${resultat.anciennete_total_mois.toFixed(2)} / 12)`} />
-                <Line label="Déductions" value={`− ${formaterSeverance(resultat.deduction_total)}`} warning={resultat.deduction_total > 0} />
+                <Line label={t('rha.b.sev.gross', locale)} value={formaterSeverance(resultat.severance_brut)} hint={`3 × ${formaterSeverance(resultat.mois_remuneration_retenu)} × (${resultat.anciennete_total_mois.toFixed(2)} / 12)`} />
+                <Line label={t('rha.b.sev.deductions', locale)} value={`− ${formaterSeverance(resultat.deduction_total)}`} warning={resultat.deduction_total > 0} />
               </div>
               <div className="pt-2 border-t-2 border-gray-300">
-                <Line label="Severance net" value={formaterSeverance(resultat.severance_net)} big />
+                <Line label={t('rha.b.sev.net', locale)} value={formaterSeverance(resultat.severance_net)} big />
               </div>
             </CardContent>
           </Card>
@@ -337,15 +337,15 @@ export default function SeverancePage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center justify-between" style={{ color: NAVY }}>
-              <span>Historique simulations ({simulations.length})</span>
+              <span>{t('rha.b.sev.history_n', locale).replace('{n}', String(simulations.length))}</span>
               <Select value={filtreStatut} onValueChange={setFiltreStatut}>
                 <SelectTrigger className="w-44 h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous statuts</SelectItem>
-                  <SelectItem value="simulation">Simulation</SelectItem>
-                  <SelectItem value="valide">Validé</SelectItem>
-                  <SelectItem value="paye">Payé</SelectItem>
-                  <SelectItem value="annule">Annulé</SelectItem>
+                  <SelectItem value="all">{t('rha.b.sev.all_status', locale)}</SelectItem>
+                  <SelectItem value="simulation">{t('rha.b.sev.status_simulation', locale)}</SelectItem>
+                  <SelectItem value="valide">{t('rha.b.sev.status_validated', locale)}</SelectItem>
+                  <SelectItem value="paye">{t('rha.b.sev.status_paid', locale)}</SelectItem>
+                  <SelectItem value="annule">{t('rha.b.sev.status_cancelled', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </CardTitle>
@@ -354,21 +354,21 @@ export default function SeverancePage() {
             {loadingHistorique ? (
               <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
             ) : simulations.length === 0 ? (
-              <p className="text-center py-8 text-gray-500 text-sm">Aucune simulation.</p>
+              <p className="text-center py-8 text-gray-500 text-sm">{t('rha.b.sev.no_sim', locale)}</p>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employé</TableHead>
-                      <TableHead>Date licenciement</TableHead>
-                      <TableHead>Ancienneté</TableHead>
-                      <TableHead>Motif</TableHead>
-                      <TableHead className="text-right">Severance brut</TableHead>
-                      <TableHead className="text-right">Déductions</TableHead>
-                      <TableHead className="text-right">Net</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t('rha.b.sev.col_employee', locale)}</TableHead>
+                      <TableHead>{t('rha.b.sev.col_dismissal_date', locale)}</TableHead>
+                      <TableHead>{t('rha.b.sev.col_seniority', locale)}</TableHead>
+                      <TableHead>{t('rha.b.sev.col_motif', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.sev.col_gross', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.sev.col_deductions', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.sev.col_net', locale)}</TableHead>
+                      <TableHead>{t('rha.b.sev.col_status', locale)}</TableHead>
+                      <TableHead className="text-right">{t('rha.b.sev.col_actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -432,7 +432,7 @@ export default function SeverancePage() {
           <CardContent className="p-4 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-sm text-amber-900 space-y-1">
-              <p className="font-semibold">Rappels WRA 2019 S.70</p>
+              <p className="font-semibold">{t('rha.b.sev.reminders_title', locale)}</p>
               <p>Éligibilité : minimum 12 mois d&apos;ancienneté continue + licenciement non justifié ou redundancy injustifiée.</p>
               <p>La simulation utilise les bulletins de paie valides/comptabilisés/payés. Si aucun bulletin n&apos;est trouvé, dernier_mois / moyenne_12 sont à 0 — à compléter manuellement si besoin.</p>
             </div>

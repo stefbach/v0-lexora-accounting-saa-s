@@ -76,11 +76,11 @@ function typeBadgeClass(type: string) {
   return "border-green-300 bg-green-50 text-green-700"
 }
 
-function typeLabel(type: string) {
-  if (type === "fixe") return "Fixe"
-  if (type === "variable") return "Variable"
+function typeLabel(type: string, locale: Locale) {
+  if (type === "fixe") return t('rha.b.jf.fixed', locale)
+  if (type === "variable") return t('rha.b.jf.variable', locale)
   // Sprint 6 FIX 2 — clarifier que "custom" = jour propre à une société
-  return "Personnalisé société"
+  return t('rha.b.jf.custom_societe', locale)
 }
 
 // ─── Mini Calendar Component ───
@@ -172,7 +172,7 @@ function MiniCalendar({
 }
 
 // ─── Next Upcoming Holiday Banner ───
-function NextHolidayBanner({ holidays }: { holidays: HolidayDef[] }) {
+function NextHolidayBanner({ holidays, locale }: { holidays: HolidayDef[]; locale: Locale }) {
   const todayStr = (() => {
     const t = new Date()
     return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`
@@ -212,7 +212,7 @@ function NextHolidayBanner({ holidays }: { holidays: HolidayDef[] }) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-              Prochain jour férié
+              {t('rha.b.jf.next_holiday', locale)}
             </p>
             <p className="text-lg font-bold truncate" style={{ color: NAVY }}>
               {next.libelle}
@@ -225,13 +225,13 @@ function NextHolidayBanner({ holidays }: { holidays: HolidayDef[] }) {
               style={{ color: borderColor }}
             >
               {diffDays === 0 ? (
-                <span className="text-xl">Aujourd&apos;hui</span>
+                <span className="text-xl">{t('rha.b.jf.today', locale)}</span>
               ) : (
                 <>J-{diffDays}</>
               )}
             </div>
             <Badge variant="outline" className={typeBadgeClass(next.type)}>
-              {typeLabel(next.type)}
+              {typeLabel(next.type, locale)}
             </Badge>
           </div>
         </div>
@@ -246,11 +246,13 @@ function HolidayCard({
   isPast,
   onDelete,
   onEdit,
+  locale,
 }: {
   holiday: HolidayDef & { id?: string }
   isPast: boolean
   onDelete?: (id: string) => void
   onEdit?: () => void
+  locale: Locale
 }) {
   const d = new Date(holiday.date + "T00:00:00")
   const dayNum = d.getDate()
@@ -297,7 +299,7 @@ function HolidayCard({
             variant="outline"
             className={`text-[10px] px-1.5 py-0 h-4 ${typeBadgeClass(holiday.type)}`}
           >
-            {typeLabel(holiday.type)}
+            {typeLabel(holiday.type, locale)}
           </Badge>
           {/* Sprint 4 TÂCHE 3 — badge travail autorisé + majoration */}
           {holiday.travail_autorise && (
@@ -306,7 +308,7 @@ function HolidayCard({
               className="text-[10px] px-1.5 py-0 h-4 bg-emerald-50 text-emerald-700 border-emerald-200"
               title="Les employés peuvent travailler ce jour férié (WRA 2019 art. 21)"
             >
-              Travail +{holiday.majoration_pct ?? 100}%
+              {t('rha.b.jf.work_majoration', locale).replace('{n}', String(holiday.majoration_pct ?? 100))}
             </Badge>
           )}
         </div>
@@ -673,15 +675,15 @@ export default function JoursFeriesPage() {
             {t('rha.b.jf.title', locale)}
           </h1>
           <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
-            <MapPin size={12} /> Maurice (Mauritius) &mdash; Calendrier officiel
+            <MapPin size={12} /> {t('rha.b.jf.calendar_official', locale)}
           </p>
         </div>
         <Select value={societe} onValueChange={setSociete}>
           <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Toutes les sociétés" />
+            <SelectValue placeholder={t('rha.b.jf.all_societes', locale)} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Toutes les sociétés</SelectItem>
+            <SelectItem value="all">{t('rha.b.jf.all_societes', locale)}</SelectItem>
             {societes.map(s => (
               <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
             ))}
@@ -690,7 +692,7 @@ export default function JoursFeriesPage() {
       </div>
 
       {/* ─── Next upcoming holiday (across all years) ─── */}
-      <NextHolidayBanner holidays={allHolidays} />
+      <NextHolidayBanner holidays={allHolidays} locale={locale} />
 
       {/* ─── Year Tabs ─── */}
       <Tabs value={activeYear} onValueChange={setActiveYear}>
@@ -718,19 +720,19 @@ export default function JoursFeriesPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="rounded-xl border p-3 text-center" style={{ borderColor: `${BLUE}30`, backgroundColor: `${BLUE}08` }}>
                 <div className="text-2xl font-black" style={{ color: BLUE }}>{fixedCount}</div>
-                <div className="text-xs font-medium text-gray-500">Jours fixes</div>
+                <div className="text-xs font-medium text-gray-500">{t('rha.b.jf.fixed_days', locale)}</div>
               </div>
               <div className="rounded-xl border p-3 text-center" style={{ borderColor: `${GOLD}30`, backgroundColor: `${GOLD}08` }}>
                 <div className="text-2xl font-black" style={{ color: GOLD }}>{variableCount}</div>
-                <div className="text-xs font-medium text-gray-500">Jours variables</div>
+                <div className="text-xs font-medium text-gray-500">{t('rha.b.jf.variable_days', locale)}</div>
               </div>
               <div className="rounded-xl border p-3 text-center" style={{ borderColor: "#22c55e30", backgroundColor: "#22c55e08" }}>
                 <div className="text-2xl font-black" style={{ color: "#22c55e" }}>{customCount}</div>
-                <div className="text-xs font-medium text-gray-500">Personnalisés</div>
+                <div className="text-xs font-medium text-gray-500">{t('rha.b.jf.custom_days', locale)}</div>
               </div>
               <div className="rounded-xl border p-3 text-center bg-gray-50">
                 <div className="text-2xl font-black" style={{ color: NAVY }}>{allHolidays.length}</div>
-                <div className="text-xs font-medium text-gray-500">Total</div>
+                <div className="text-xs font-medium text-gray-500">{t('rha.b.jf.total', locale)}</div>
               </div>
             </div>
 
@@ -739,8 +741,7 @@ export default function JoursFeriesPage() {
               <Alert className="border-amber-300 bg-amber-50">
                 <Info className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-amber-800 text-sm">
-                  Aucun jour férié en base pour {y}. Importez depuis le calendrier
-                  officiel Maurice (Nager.Date) ou ajoutez-les manuellement.
+                  {t('rha.b.jf.no_holidays_year', locale).replace('{y}', String(y))}
                 </AlertDescription>
               </Alert>
             )}
@@ -755,7 +756,7 @@ export default function JoursFeriesPage() {
                 className="border-[#0B0F2E] text-[#0B0F2E]"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Importer depuis calendrier Maurice
+                {t('rha.b.jf.import_mu_calendar', locale)}
               </Button>
               <Button
                 onClick={() => {
@@ -768,7 +769,7 @@ export default function JoursFeriesPage() {
                 className="hover:opacity-90 font-semibold"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Ajouter un jour férié
+                {t('rha.b.jf.add_holiday', locale)}
               </Button>
               <Button
                 variant="outline"
@@ -777,7 +778,7 @@ export default function JoursFeriesPage() {
                 className="border-[#0B0F2E]/20 text-[#0B0F2E] hover:bg-[#0B0F2E]/5"
               >
                 {initializing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-                Synchroniser avec la base
+                {t('rha.b.jf.sync_db', locale)}
               </Button>
             </div>
 
@@ -792,7 +793,7 @@ export default function JoursFeriesPage() {
                 ) : allHolidays.length === 0 ? (
                   <div className="text-center py-16 text-gray-400">
                     <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>Aucun jour férié pour {y}</p>
+                    <p>{t('rha.b.jf.no_holiday_for_y', locale).replace('{y}', String(y))}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -809,6 +810,7 @@ export default function JoursFeriesPage() {
                               if (dbRow) openEditDialog(dbRow)
                             }
                           : undefined}
+                        locale={locale}
                       />
                     ))}
                   </div>
@@ -821,7 +823,7 @@ export default function JoursFeriesPage() {
                   <CardHeader className="pb-2 pt-4 px-4">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm font-semibold" style={{ color: NAVY }}>
-                        Calendrier {y}
+                        {t('rha.b.jf.calendar_y', locale).replace('{y}', String(y))}
                       </CardTitle>
                       <div className="flex items-center gap-1">
                         <Button
@@ -866,23 +868,23 @@ export default function JoursFeriesPage() {
 
                 {/* Legend */}
                 <div className="rounded-xl border border-gray-100 p-3 space-y-2">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Légende</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t('rha.b.jf.legend', locale)}</p>
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
                       <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: BLUE }} />
-                      <span className="text-xs text-gray-600">Jour férié fixe</span>
+                      <span className="text-xs text-gray-600">{t('rha.b.jf.legend_fixed', locale)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: GOLD }} />
-                      <span className="text-xs text-gray-600">Jour férié variable</span>
+                      <span className="text-xs text-gray-600">{t('rha.b.jf.legend_variable', locale)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: "#22c55e" }} />
-                      <span className="text-xs text-gray-600">Jour personnalisé (société)</span>
+                      <span className="text-xs text-gray-600">{t('rha.b.jf.legend_custom', locale)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="w-3 h-3 rounded-full ring-2 ring-[#0B0F2E] ring-offset-1 flex-shrink-0" style={{ width: 12, height: 12 }} />
-                      <span className="text-xs text-gray-600">Aujourd&apos;hui</span>
+                      <span className="text-xs text-gray-600">{t('rha.b.jf.today', locale)}</span>
                     </div>
                   </div>
                 </div>
@@ -898,7 +900,7 @@ export default function JoursFeriesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <RefreshCw className="w-5 h-5" style={{ color: GOLD }} />
-              Importer les jours fériés Maurice {yearNum}
+              {t('rha.b.jf.import_dialog_title', locale).replace('{y}', String(yearNum))}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 overflow-y-auto flex-1 pr-1">
@@ -909,7 +911,7 @@ export default function JoursFeriesPage() {
             {nagerLoading && (
               <div className="flex items-center gap-2 text-sm text-gray-500 py-6 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Chargement depuis Nager.Date…
+                {t('rha.b.jf.nager_loading', locale)}
               </div>
             )}
             {nagerError && (
@@ -939,7 +941,7 @@ export default function JoursFeriesPage() {
                       <span className="text-xs font-mono text-gray-500 shrink-0 w-24">{it.date}</span>
                       <span className="text-sm flex-1">{it.libelle}</span>
                       {it.already_exists && (
-                        <Badge variant="outline" className="text-[10px]">déjà importé</Badge>
+                        <Badge variant="outline" className="text-[10px]">{t('rha.b.jf.already_imported', locale)}</Badge>
                       )}
                     </label>
                   ))}
@@ -949,7 +951,7 @@ export default function JoursFeriesPage() {
           </div>
           <div className="flex justify-end gap-2 pt-3 border-t">
             <Button variant="outline" onClick={() => setNagerOpen(false)} disabled={nagerImporting}>
-              Annuler
+              {t('rha.b.jf.btn_cancel', locale)}
             </Button>
             <Button
               onClick={importSelectedNager}
@@ -957,7 +959,7 @@ export default function JoursFeriesPage() {
               style={{ backgroundColor: GOLD, color: NAVY }}
             >
               {nagerImporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-              Importer les sélectionnés
+              {t('rha.b.jf.btn_import_selected', locale)}
             </Button>
           </div>
         </DialogContent>
@@ -967,16 +969,16 @@ export default function JoursFeriesPage() {
       <Dialog open={!!editingHoliday} onOpenChange={(o) => { if (!o) setEditingHoliday(null) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Modifier le jour férié</DialogTitle>
+            <DialogTitle>{t('rha.b.jf.edit_dialog_title', locale)}</DialogTitle>
           </DialogHeader>
           {editingHoliday && (
             <div className="space-y-4">
               <div>
-                <Label className="text-sm">Date</Label>
+                <Label className="text-sm">{t('rha.b.jf.lbl_date', locale)}</Label>
                 <p className="text-sm font-medium">{editingHoliday.date}</p>
               </div>
               <div>
-                <Label className="text-sm">Libellé</Label>
+                <Label className="text-sm">{t('rha.b.jf.lbl_label', locale)}</Label>
                 <p className="text-sm font-medium">{editingHoliday.libelle}</p>
               </div>
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2">
@@ -987,7 +989,7 @@ export default function JoursFeriesPage() {
                     onChange={(e) => setEditTravailAutorise(e.target.checked)}
                     className="h-4 w-4"
                   />
-                  <span className="text-sm font-medium text-emerald-900">Travail autorisé ce jour</span>
+                  <span className="text-sm font-medium text-emerald-900">{t('rha.b.jf.work_authorized', locale)}</span>
                 </label>
                 <p className="text-xs text-emerald-800">
                   Si activé : les employés peuvent pointer ce jour. WRA 2019 art. 21 —
@@ -996,7 +998,7 @@ export default function JoursFeriesPage() {
               </div>
               {editTravailAutorise && (
                 <div>
-                  <Label className="text-sm">Majoration (%)</Label>
+                  <Label className="text-sm">{t('rha.b.jf.majoration_pct', locale)}</Label>
                   <Input
                     type="number"
                     value={editMajoration}
@@ -1020,7 +1022,7 @@ export default function JoursFeriesPage() {
           )}
           <div className="flex justify-end gap-2 pt-3 border-t">
             <Button variant="outline" onClick={() => setEditingHoliday(null)} disabled={editSaving}>
-              Annuler
+              {t('rha.b.jf.btn_cancel', locale)}
             </Button>
             <Button
               onClick={saveEditHoliday}
@@ -1028,7 +1030,7 @@ export default function JoursFeriesPage() {
               style={{ backgroundColor: GOLD, color: NAVY }}
             >
               {editSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Enregistrer
+              {t('rha.b.jf.btn_save', locale)}
             </Button>
           </div>
         </DialogContent>
@@ -1040,12 +1042,12 @@ export default function JoursFeriesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2" style={{ color: NAVY }}>
               <Plus size={18} style={{ color: GOLD }} />
-              Ajouter un jour férié
+              {t('rha.b.jf.add_holiday', locale)}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label>Date</Label>
+              <Label>{t('rha.b.jf.lbl_date', locale)}</Label>
               <Input
                 type="date"
                 value={newDate}
@@ -1053,9 +1055,9 @@ export default function JoursFeriesPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Libellé</Label>
+              <Label>{t('rha.b.jf.lbl_label', locale)}</Label>
               <Input
-                placeholder="Ex: Divali, Eid-Ul-Fitr..."
+                placeholder={t('rha.b.jf.holiday_label_ph', locale)}
                 value={newLibelle}
                 onChange={e => setNewLibelle(e.target.value)}
               />
@@ -1077,7 +1079,7 @@ export default function JoursFeriesPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Type</Label>
+              <Label>{t('rha.b.jf.lbl_type', locale)}</Label>
               <Select value={newType} onValueChange={(v: any) => setNewType(v)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -1086,19 +1088,19 @@ export default function JoursFeriesPage() {
                   <SelectItem value="fixe">
                     <span className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: BLUE }} />
-                      Fixe
+                      {t('rha.b.jf.fixed', locale)}
                     </span>
                   </SelectItem>
                   <SelectItem value="variable">
                     <span className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: GOLD }} />
-                      Variable
+                      {t('rha.b.jf.variable', locale)}
                     </span>
                   </SelectItem>
                   <SelectItem value="custom">
                     <span className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "#22c55e" }} />
-                      Personnalisé (société)
+                      {t('rha.b.jf.custom_societe', locale)}
                     </span>
                   </SelectItem>
                 </SelectContent>
@@ -1106,7 +1108,7 @@ export default function JoursFeriesPage() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                Annuler
+                {t('rha.b.jf.btn_cancel', locale)}
               </Button>
               <Button
                 onClick={handleAdd}
@@ -1115,7 +1117,7 @@ export default function JoursFeriesPage() {
                 className="text-white hover:opacity-90"
               >
                 {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Ajouter
+                {t('rha.b.jf.btn_add', locale)}
               </Button>
             </div>
           </div>

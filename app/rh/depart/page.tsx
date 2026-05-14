@@ -22,18 +22,21 @@ function fmtDate(d: string | null) {
   return new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  demission: "Démission",
-  licenciement: "Licenciement",
-  fin_contrat: "Fin de contrat",
-  retraite: "Retraite",
-  deces: "Décès",
+function getTypeLabels(locale: Locale): Record<string, string> {
+  return {
+    demission: t('rha.b.depart.type_demission', locale),
+    licenciement: t('rha.b.depart.type_licenciement', locale),
+    fin_contrat: t('rha.b.depart.type_fin_contrat', locale),
+    retraite: t('rha.b.depart.type_retraite', locale),
+    deces: t('rha.b.depart.type_deces', locale),
+  }
 }
 
 // ── Sub-component: Departure Form (isolated state) ──
-function DepartureForm({ societes, onCalculated }: {
+function DepartureForm({ societes, onCalculated, locale }: {
   societes: any[]
   onCalculated: (breakdown: any, formData: any) => void
+  locale: Locale
 }) {
   const [societeId, setSocieteId] = useState("")
   const [employes, setEmployes] = useState<any[]>([])
@@ -84,26 +87,26 @@ function DepartureForm({ societes, onCalculated }: {
       <CardHeader>
         <CardTitle className="text-[#0B0F2E] flex items-center gap-2">
           <UserMinus className="w-5 h-5" />
-          Nouveau départ
+          {t('rha.b.depart.new', locale)}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
-            <Label>Société *</Label>
+            <Label>{t('rha.b.depart.lbl_societe_req', locale)}</Label>
             <Select value={societeId} onValueChange={setSocieteId}>
-              <SelectTrigger><SelectValue placeholder="Choisir une société..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('rha.b.depart.choose_societe', locale)} /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label>Employé *</Label>
+            <Label>{t('rha.b.depart.lbl_employee_req', locale)}</Label>
             <Select value={employeId} onValueChange={setEmployeId} disabled={!societeId || loadingEmps}>
               <SelectTrigger>
-                <SelectValue placeholder={loadingEmps ? "Chargement..." : "Choisir un employé..."} />
+                <SelectValue placeholder={loadingEmps ? t('rha.b.depart.loading_emps', locale) : t('rha.b.depart.choose_employee', locale)} />
               </SelectTrigger>
               <SelectContent>
                 {employes.map(e => (
@@ -115,28 +118,28 @@ function DepartureForm({ societes, onCalculated }: {
             </Select>
           </div>
           <div>
-            <Label>Date de départ *</Label>
+            <Label>{t('rha.b.depart.lbl_date_req', locale)}</Label>
             <Input type="date" value={dateDepart} onChange={e => setDateDepart(e.target.value)} />
           </div>
           <div>
-            <Label>Type de départ *</Label>
+            <Label>{t('rha.b.depart.lbl_type_req', locale)}</Label>
             <Select value={typeDepart} onValueChange={setTypeDepart}>
-              <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('rha.b.depart.loading_emps', locale).replace('Chargement', 'Choisir').replace('Loading', 'Choose')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="demission">Démission</SelectItem>
-                <SelectItem value="licenciement">Licenciement</SelectItem>
-                <SelectItem value="fin_contrat">Fin de contrat</SelectItem>
-                <SelectItem value="retraite">Retraite</SelectItem>
-                <SelectItem value="deces">Décès</SelectItem>
+                <SelectItem value="demission">{t('rha.b.depart.type_demission', locale)}</SelectItem>
+                <SelectItem value="licenciement">{t('rha.b.depart.type_licenciement', locale)}</SelectItem>
+                <SelectItem value="fin_contrat">{t('rha.b.depart.type_fin_contrat', locale)}</SelectItem>
+                <SelectItem value="retraite">{t('rha.b.depart.type_retraite', locale)}</SelectItem>
+                <SelectItem value="deces">{t('rha.b.depart.type_deces', locale)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="md:col-span-2">
-            <Label>Motif / Raison</Label>
+            <Label>{t('rha.b.depart.lbl_reason', locale)}</Label>
             <Textarea
               value={raison}
               onChange={e => setRaison(e.target.value)}
-              placeholder="Raison du départ (optionnel)..."
+              placeholder={t('rha.b.depart.reason_ph', locale)}
               rows={2}
             />
           </div>
@@ -164,7 +167,7 @@ function DepartureForm({ societes, onCalculated }: {
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
             <UserMinus className="w-4 h-4 mr-2" />
-            Sortie manuelle (sans solde)
+            {t('rha.b.depart.btn_manual_exit', locale)}
           </Button>
           <Button
             onClick={handleCalculer}
@@ -173,7 +176,7 @@ function DepartureForm({ societes, onCalculated }: {
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
             <Calculator className="w-4 h-4 mr-2" />
-            Calculer le solde de tout compte
+            {t('rha.b.depart.btn_calculate_settlement', locale)}
           </Button>
         </div>
       </CardContent>

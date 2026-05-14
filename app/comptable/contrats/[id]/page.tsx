@@ -245,7 +245,7 @@ export default function ContratDetailPage() {
         {/* Changer statut */}
         {transitionsDisponibles.length > 0 && (
           <div className="p-3 border-b">
-            <p className="text-xs text-gray-500 font-medium mb-2">Changer le statut</p>
+            <p className="text-xs text-gray-500 font-medium mb-2">{t('cab.contrat.change_status', locale)}</p>
             <div className="space-y-1">
               {transitionsDisponibles.map(s => {
                 const cfg = STATUTS_CONTRATS.find(x => x.value === s)
@@ -267,7 +267,7 @@ export default function ContratDetailPage() {
 
         {/* Infos client */}
         <div className="p-3 border-b space-y-3">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Parties</p>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t('cab.contrat.parties', locale)}</p>
           
           {contrat.client && (
             <div className="flex items-start gap-2">
@@ -294,35 +294,35 @@ export default function ContratDetailPage() {
 
         {/* Paramètres structurés */}
         <div className="p-3 border-b space-y-2">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Paramètres extraits</p>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t('cab.contrat.params_extracted', locale)}</p>
           <div className="space-y-1.5">
             {contrat.montant_total && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Montant</span>
+                <span className="text-xs text-gray-500">{t('cab.contrat.amount', locale)}</span>
                 <span className="text-xs font-medium text-gray-800">
-                  {contrat.montant_total.toLocaleString('fr-FR')} {contrat.devise}
+                  {contrat.montant_total.toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR')} {contrat.devise}
                 </span>
               </div>
             )}
             {contrat.date_debut && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Début</span>
+                <span className="text-xs text-gray-500">{t('cab.contrat.start', locale)}</span>
                 <span className="text-xs font-medium text-gray-800">
-                  {new Date(contrat.date_debut).toLocaleDateString('fr-FR')}
+                  {new Date(contrat.date_debut).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}
                 </span>
               </div>
             )}
             {contrat.date_fin && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Fin</span>
+                <span className="text-xs text-gray-500">{t('cab.contrat.end', locale)}</span>
                 <span className="text-xs font-medium text-gray-800">
-                  {new Date(contrat.date_fin).toLocaleDateString('fr-FR')}
+                  {new Date(contrat.date_fin).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}
                 </span>
               </div>
             )}
             {!!contrat.parametres?.periodicite_facturation && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Facturation</span>
+                <span className="text-xs text-gray-500">{t('cab.contrat.billing', locale)}</span>
                 <span className="text-xs font-medium text-gray-800">
                   {String(contrat.parametres.periodicite_facturation)}
                 </span>
@@ -330,7 +330,7 @@ export default function ContratDetailPage() {
             )}
             {Array.isArray(contrat.parametres?.services) && (contrat.parametres.services as unknown[]).length > 0 && (
               <div>
-                <span className="text-xs text-gray-500 block mb-1">Services</span>
+                <span className="text-xs text-gray-500 block mb-1">{t('cab.contrat.services', locale)}</span>
                 <div className="flex flex-wrap gap-1">
                   {(contrat.parametres.services as unknown[]).slice(0, 3).map((s, i) => (
                     <span key={i} className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
@@ -347,12 +347,12 @@ export default function ContratDetailPage() {
         {contrat.contenu_html && (
           <div className="p-3 border-b">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-              Modifier une section
+              {t('cab.contrat.modify_section', locale)}
             </p>
             <Textarea
               value={instructionModif}
               onChange={e => setInstructionModif(e.target.value)}
-              placeholder="Ex: Remplace les honoraires par 20 000 MUR, ajoute une clause de renouvellement automatique..."
+              placeholder={t('cab.contrat.modify_placeholder', locale)}
               className="text-xs min-h-[70px] resize-none"
             />
             <Button
@@ -367,7 +367,7 @@ export default function ContratDetailPage() {
               ) : (
                 <RefreshCw className="w-3 h-3 mr-1" />
               )}
-              Appliquer la modification
+              {t('cab.contrat.apply_change', locale)}
             </Button>
           </div>
         )}
@@ -375,13 +375,13 @@ export default function ContratDetailPage() {
         {/* Notes internes */}
         <div className="p-3 flex-1">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-            Notes internes
+            {t('cab.contrat.internal_notes', locale)}
           </p>
           <Textarea
             value={notes}
             onChange={e => setNotes(e.target.value)}
             onBlur={sauvegarderNotes}
-            placeholder="Notes confidentielles (non incluses dans le contrat)..."
+            placeholder={t('cab.contrat.notes_placeholder', locale)}
             className="text-xs min-h-[80px] resize-none"
           />
         </div>
@@ -395,7 +395,7 @@ export default function ContratDetailPage() {
             >
               <span className="flex items-center gap-1">
                 <History className="w-3 h-3" />
-                {contrat.versions.length} version{contrat.versions.length > 1 ? 's' : ''}
+                {contrat.versions.length} {t('cab.contrat.version_label', locale)}{contrat.versions.length > 1 ? 's' : ''}
               </span>
               <ChevronDown className={`w-3 h-3 transition-transform ${showVersions ? 'rotate-180' : ''}`} />
             </button>
@@ -404,7 +404,7 @@ export default function ContratDetailPage() {
                 {contrat.versions.map(v => (
                   <div key={v.id} className="text-xs text-gray-500 flex justify-between">
                     <span>v{v.version} — {v.raison_modification}</span>
-                    <span>{new Date(v.created_at).toLocaleDateString('fr-FR')}</span>
+                    <span>{new Date(v.created_at).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}</span>
                   </div>
                 ))}
               </div>
@@ -420,14 +420,14 @@ export default function ContratDetailPage() {
           <span className="text-xs text-gray-500 font-medium">{typeLabel}</span>
           <span className="text-gray-300">·</span>
           <span className="text-xs text-gray-400">
-            Modifié le {new Date(contrat.updated_at).toLocaleDateString('fr-FR')}
+            {t('cab.contrat.modified_on', locale)} {new Date(contrat.updated_at).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}
           </span>
           {contrat.date_signature_client && (
             <>
               <span className="text-gray-300">·</span>
               <span className="text-xs text-green-600 font-medium flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                Signé le {new Date(contrat.date_signature_client).toLocaleDateString('fr-FR')}
+                {t('cab.contrat.signed_on', locale)} {new Date(contrat.date_signature_client).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}
               </span>
             </>
           )}
@@ -442,7 +442,7 @@ export default function ContratDetailPage() {
                 srcDoc={contrat.contenu_html}
                 className="w-full bg-white"
                 style={{ minHeight: '1000px', border: 'none' }}
-                title="Aperçu du contrat"
+                title={t('cab.contrat.preview_title', locale)}
                 onLoad={e => {
                   const iframe = e.target as HTMLIFrameElement
                   if (iframe.contentDocument) {

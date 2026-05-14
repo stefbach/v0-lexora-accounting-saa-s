@@ -164,7 +164,7 @@ export default function RedigerContratPage() {
         ...prev,
         {
           role: 'assistant',
-          content: "Désolé, une erreur s'est produite. Veuillez réessayer.",
+          content: t('cab.rediger.error_retry', locale),
           timestamp: new Date().toISOString(),
         },
       ])
@@ -203,10 +203,10 @@ export default function RedigerContratPage() {
 
   // Suggestions rapides pour démarrer
   const suggestions = [
-    "Lettre de mission pour tenue de comptabilité, 15 000 MUR/mois",
-    "Convention d'honoraires pour préparation déclarations fiscales annuelles",
-    "NDA avec un partenaire potentiel pour 2 ans",
-    "Contrat de prestation IT, forfait 50 000 MUR",
+    t('cab.rediger.sugg_1', locale),
+    t('cab.rediger.sugg_2', locale),
+    t('cab.rediger.sugg_3', locale),
+    t('cab.rediger.sugg_4', locale),
   ]
 
   if (loading) {

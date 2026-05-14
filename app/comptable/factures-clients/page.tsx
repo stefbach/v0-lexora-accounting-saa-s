@@ -98,7 +98,7 @@ export default function FacturesClientsPage() {
   )
 
   const handleCreate = async () => {
-    if (!formSociete || !formDate || !formTiers) { setError("Société, tiers et date requis"); return }
+    if (!formSociete || !formDate || !formTiers) { setError(t('cab.fc.err_required', locale)); return }
     setSaving(true); setError(null)
     try {
       const ht = parseFloat(formHT) || 0
@@ -121,7 +121,7 @@ export default function FacturesClientsPage() {
       setFormHT(""); setFormTVA(""); setFormDesc("")
       fetchData()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur")
+      setError(e instanceof Error ? e.message : t('cab.fc.err_generic', locale))
     } finally { setSaving(false) }
   }
 
@@ -149,43 +149,43 @@ export default function FacturesClientsPage() {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Nouvelle facture client</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t('cab.fc.dialog_title', locale)}</DialogTitle></DialogHeader>
             <div className="grid gap-3 py-2">
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Société *</Label>
+                  <Label>{t('cab.fc.fld_company', locale)}</Label>
                   <Select value={formSociete} onValueChange={setFormSociete}>
-                    <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('cab.fc.choose', locale)} /></SelectTrigger>
                     <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>N° Facture</Label>
+                  <Label>{t('cab.fc.fld_number', locale)}</Label>
                   <Input value={formNumero} onChange={e => setFormNumero(e.target.value)} placeholder="INV-001" />
                 </div>
               </div>
               <div>
-                <Label>Tiers / Client *</Label>
-                <Input value={formTiers} onChange={e => setFormTiers(e.target.value)} placeholder="Nom du client" />
+                <Label>{t('cab.fc.fld_party', locale)}</Label>
+                <Input value={formTiers} onChange={e => setFormTiers(e.target.value)} placeholder={t('cab.fc.party_placeholder', locale)} />
               </div>
               <div>
-                <Label>Description</Label>
-                <Input value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Objet de la facture" />
+                <Label>{t('cab.fc.fld_description', locale)}</Label>
+                <Input value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder={t('cab.fc.desc_placeholder', locale)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Date facture *</Label>
+                  <Label>{t('cab.fc.fld_date', locale)}</Label>
                   <Input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} />
                 </div>
                 <div>
-                  <Label>Échéance</Label>
+                  <Label>{t('cab.fc.fld_due', locale)}</Label>
                   <Input type="date" value={formEcheance} onChange={e => setFormEcheance(e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <Label>Devise</Label>
+                  <Label>{t('cab.fc.fld_currency', locale)}</Label>
                   <Select value={formDevise} onValueChange={setFormDevise}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -194,19 +194,19 @@ export default function FacturesClientsPage() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Montant HT</Label>
+                  <Label>{t('cab.fc.fld_amount_ht', locale)}</Label>
                   <Input type="number" value={formHT} onChange={e => setFormHT(e.target.value)} placeholder="0" />
                 </div>
                 <div>
-                  <Label>TVA</Label>
+                  <Label>{t('cab.fc.fld_vat', locale)}</Label>
                   <Input type="number" value={formTVA} onChange={e => setFormTVA(e.target.value)} placeholder="0" />
                 </div>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('cab.fc.cancel', locale)}</Button>
               <Button onClick={handleCreate} disabled={saving} className="bg-[#0B0F2E] text-white">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Créer
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} {t('cab.fc.create_btn', locale)}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -216,10 +216,10 @@ export default function FacturesClientsPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total AR", value: fmt(totaux.total_mur), icon: FileText, color: "text-blue-600" },
-          { label: "Factures", value: totaux.nb_factures, icon: TrendingUp, color: "text-green-600" },
-          { label: "En attente", value: totaux.nb_en_attente, icon: Clock, color: "text-yellow-600" },
-          { label: "En retard", value: totaux.nb_retard, icon: AlertCircle, color: "text-red-600" },
+          { label: t('cab.fc.kpi_total_ar', locale), value: fmt(totaux.total_mur), icon: FileText, color: "text-blue-600" },
+          { label: t('cab.fc.kpi_invoices', locale), value: totaux.nb_factures, icon: TrendingUp, color: "text-green-600" },
+          { label: t('cab.fc.kpi_pending', locale), value: totaux.nb_en_attente, icon: Clock, color: "text-yellow-600" },
+          { label: t('cab.fc.kpi_late', locale), value: totaux.nb_retard, icon: AlertCircle, color: "text-red-600" },
         ].map(k => (
           <Card key={k.label}>
             <CardContent className="p-4 flex items-center gap-3">
@@ -239,23 +239,23 @@ export default function FacturesClientsPage() {
           <div className="flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input className="pl-9" placeholder="Rechercher tiers, numéro..." value={search} onChange={e => setSearch(e.target.value)} />
+              <Input className="pl-9" placeholder={t('cab.fc.search_placeholder', locale)} value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <Select value={filterSociete} onValueChange={setFilterSociete}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="Toutes les sociétés" /></SelectTrigger>
+              <SelectTrigger className="w-48"><SelectValue placeholder={t('cab.fc.all_companies', locale)} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes les sociétés</SelectItem>
+                <SelectItem value="all">{t('cab.fc.all_companies', locale)}</SelectItem>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterStatut} onValueChange={setFilterStatut}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Tous statuts" /></SelectTrigger>
+              <SelectTrigger className="w-40"><SelectValue placeholder={t('cab.fc.all_status', locale)} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous statuts</SelectItem>
-                <SelectItem value="en_attente">En attente</SelectItem>
-                <SelectItem value="paye">Payé</SelectItem>
-                <SelectItem value="retard">En retard</SelectItem>
-                <SelectItem value="partiel">Partiel</SelectItem>
+                <SelectItem value="all">{t('cab.fc.all_status', locale)}</SelectItem>
+                <SelectItem value="en_attente">{t('cab.fc.status_pending', locale)}</SelectItem>
+                <SelectItem value="paye">{t('cab.fc.status_paid', locale)}</SelectItem>
+                <SelectItem value="retard">{t('cab.fc.status_late', locale)}</SelectItem>
+                <SelectItem value="partiel">{t('cab.fc.status_partial', locale)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -264,7 +264,7 @@ export default function FacturesClientsPage() {
 
       {/* Tableau */}
       <Card>
-        <CardHeader><CardTitle className="text-[#0B0F2E]">Factures ({filtered.length})</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-[#0B0F2E]">{t('cab.fc.invoices_label', locale)} ({filtered.length})</CardTitle></CardHeader>
         <CardContent className="p-0">
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
@@ -274,16 +274,16 @@ export default function FacturesClientsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>N°</TableHead>
-                  <TableHead>Tiers</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">HT</TableHead>
-                  <TableHead className="text-right">TVA</TableHead>
-                  <TableHead className="text-right">TTC</TableHead>
-                  <TableHead>Devise</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t('cab.fc.col_number', locale)}</TableHead>
+                  <TableHead>{t('cab.fc.col_party', locale)}</TableHead>
+                  <TableHead>{t('cab.fc.col_description', locale)}</TableHead>
+                  <TableHead>{t('cab.fc.col_date', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cab.fc.col_ht', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cab.fc.col_vat', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cab.fc.col_ttc', locale)}</TableHead>
+                  <TableHead>{t('cab.fc.col_currency', locale)}</TableHead>
+                  <TableHead>{t('cab.fc.col_status', locale)}</TableHead>
+                  <TableHead>{t('cab.fc.col_actions', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -292,7 +292,7 @@ export default function FacturesClientsPage() {
                     <TableCell className="font-mono text-xs">{f.numero_facture || "—"}</TableCell>
                     <TableCell className="font-medium">{f.tiers || "—"}</TableCell>
                     <TableCell className="text-sm text-gray-600 max-w-48 truncate">{f.description || "—"}</TableCell>
-                    <TableCell className="text-sm">{f.date_facture ? new Date(f.date_facture).toLocaleDateString("fr-FR") : "—"}</TableCell>
+                    <TableCell className="text-sm">{f.date_facture ? new Date(f.date_facture).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR') : "—"}</TableCell>
                     <TableCell className="text-right text-sm">{fmt(f.montant_ht, f.devise)}</TableCell>
                     <TableCell className="text-right text-sm">{f.montant_tva > 0 ? <span className="text-orange-600">{fmt(f.montant_tva, f.devise)}</span> : <span className="text-gray-400">0</span>}</TableCell>
                     <TableCell className="text-right font-semibold">{fmt(f.montant_ttc, f.devise)}</TableCell>
@@ -306,11 +306,11 @@ export default function FacturesClientsPage() {
                       <Select value={f.statut} onValueChange={v => updateStatut(f.id, v)}>
                         <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="en_attente">En attente</SelectItem>
-                          <SelectItem value="paye">Payé</SelectItem>
-                          <SelectItem value="partiel">Partiel</SelectItem>
-                          <SelectItem value="retard">Retard</SelectItem>
-                          <SelectItem value="annule">Annulé</SelectItem>
+                          <SelectItem value="en_attente">{t('cab.fc.status_pending', locale)}</SelectItem>
+                          <SelectItem value="paye">{t('cab.fc.status_paid', locale)}</SelectItem>
+                          <SelectItem value="partiel">{t('cab.fc.status_partial', locale)}</SelectItem>
+                          <SelectItem value="retard">{t('cab.fc.status_late_short', locale)}</SelectItem>
+                          <SelectItem value="annule">{t('cab.fc.status_cancelled', locale)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>

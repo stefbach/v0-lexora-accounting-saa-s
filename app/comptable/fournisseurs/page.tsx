@@ -90,7 +90,7 @@ export default function FournisseursPage() {
   )
 
   const handleCreate = async () => {
-    if (!formSociete || !formDate || !formTiers) { setError("Société, fournisseur et date requis"); return }
+    if (!formSociete || !formDate || !formTiers) { setError(t('cab.fournisseurs.err_required', locale)); return }
     setSaving(true); setError(null)
     try {
       const ht = parseFloat(formHT) || 0
@@ -109,7 +109,7 @@ export default function FournisseursPage() {
       setDialogOpen(false)
       setFormTiers(""); setFormDate(""); setFormHT(""); setFormTVA(""); setFormDesc("")
       fetchData()
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erreur") }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : t('cab.fournisseurs.err_generic', locale)) }
     finally { setSaving(false) }
   }
 
@@ -137,19 +137,19 @@ export default function FournisseursPage() {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Facture fournisseur</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t('cab.fournisseurs.dialog_title', locale)}</DialogTitle></DialogHeader>
             <div className="grid gap-3 py-2">
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Société *</Label>
+                  <Label>{t('cab.fournisseurs.fld_company', locale)}</Label>
                   <Select value={formSociete} onValueChange={setFormSociete}>
-                    <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('cab.fournisseurs.choose', locale)} /></SelectTrigger>
                     <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Devise</Label>
+                  <Label>{t('cab.fournisseurs.fld_currency', locale)}</Label>
                   <Select value={formDevise} onValueChange={setFormDevise}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{["MUR","EUR","USD","GBP"].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
@@ -157,26 +157,26 @@ export default function FournisseursPage() {
                 </div>
               </div>
               <div>
-                <Label>Fournisseur *</Label>
-                <Input value={formTiers} onChange={e => setFormTiers(e.target.value)} placeholder="Nom du fournisseur" />
+                <Label>{t('cab.fournisseurs.fld_supplier', locale)}</Label>
+                <Input value={formTiers} onChange={e => setFormTiers(e.target.value)} placeholder={t('cab.fournisseurs.supplier_placeholder', locale)} />
               </div>
               <div>
-                <Label>Description</Label>
-                <Input value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Nature de la dépense" />
+                <Label>{t('cab.fournisseurs.fld_description', locale)}</Label>
+                <Input value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder={t('cab.fournisseurs.desc_placeholder', locale)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Date *</Label><Input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} /></div>
-                <div><Label>Échéance</Label><Input type="date" value={formEcheance} onChange={e => setFormEcheance(e.target.value)} /></div>
+                <div><Label>{t('cab.fournisseurs.fld_date', locale)}</Label><Input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} /></div>
+                <div><Label>{t('cab.fournisseurs.fld_due', locale)}</Label><Input type="date" value={formEcheance} onChange={e => setFormEcheance(e.target.value)} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Montant HT</Label><Input type="number" value={formHT} onChange={e => setFormHT(e.target.value)} placeholder="0" /></div>
-                <div><Label>TVA</Label><Input type="number" value={formTVA} onChange={e => setFormTVA(e.target.value)} placeholder="0" /></div>
+                <div><Label>{t('cab.fournisseurs.fld_amount_ht', locale)}</Label><Input type="number" value={formHT} onChange={e => setFormHT(e.target.value)} placeholder="0" /></div>
+                <div><Label>{t('cab.fournisseurs.fld_vat', locale)}</Label><Input type="number" value={formTVA} onChange={e => setFormTVA(e.target.value)} placeholder="0" /></div>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('cab.fournisseurs.cancel', locale)}</Button>
               <Button onClick={handleCreate} disabled={saving} className="bg-[#0B0F2E] text-white">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Créer
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} {t('cab.fournisseurs.create_btn', locale)}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -185,10 +185,10 @@ export default function FournisseursPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total AP (MUR)", value: fmt(totaux.total_mur), icon: ShoppingCart, color: "text-purple-600" },
-          { label: "Factures", value: totaux.nb_factures, icon: TrendingDown, color: "text-blue-600" },
-          { label: "En attente", value: totaux.nb_en_attente, icon: Clock, color: "text-yellow-600" },
-          { label: "En retard", value: totaux.nb_retard, icon: AlertCircle, color: "text-red-600" },
+          { label: t('cab.fournisseurs.kpi_total_ap', locale), value: fmt(totaux.total_mur), icon: ShoppingCart, color: "text-purple-600" },
+          { label: t('cab.fournisseurs.kpi_invoices', locale), value: totaux.nb_factures, icon: TrendingDown, color: "text-blue-600" },
+          { label: t('cab.fournisseurs.kpi_pending', locale), value: totaux.nb_en_attente, icon: Clock, color: "text-yellow-600" },
+          { label: t('cab.fournisseurs.kpi_late', locale), value: totaux.nb_retard, icon: AlertCircle, color: "text-red-600" },
         ].map(k => (
           <Card key={k.label}><CardContent className="p-4 flex items-center gap-3">
             <k.icon className={`w-8 h-8 ${k.color}`} />
@@ -204,26 +204,26 @@ export default function FournisseursPage() {
             <Input className="pl-9" placeholder={t('cab.fournisseurs.search', locale)} value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <Select value={filterSociete} onValueChange={setFilterSociete}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="Toutes les sociétés" /></SelectTrigger>
+            <SelectTrigger className="w-48"><SelectValue placeholder={t('cab.fournisseurs.all_companies', locale)} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les sociétés</SelectItem>
+              <SelectItem value="all">{t('cab.fournisseurs.all_companies', locale)}</SelectItem>
               {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterStatut} onValueChange={setFilterStatut}>
-            <SelectTrigger className="w-40"><SelectValue placeholder="Tous statuts" /></SelectTrigger>
+            <SelectTrigger className="w-40"><SelectValue placeholder={t('cab.fournisseurs.all_status', locale)} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous statuts</SelectItem>
-              <SelectItem value="en_attente">En attente</SelectItem>
-              <SelectItem value="paye">Payé</SelectItem>
-              <SelectItem value="retard">En retard</SelectItem>
+              <SelectItem value="all">{t('cab.fournisseurs.all_status', locale)}</SelectItem>
+              <SelectItem value="en_attente">{t('cab.fournisseurs.status_pending', locale)}</SelectItem>
+              <SelectItem value="paye">{t('cab.fournisseurs.status_paid', locale)}</SelectItem>
+              <SelectItem value="retard">{t('cab.fournisseurs.status_late', locale)}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </CardContent></Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-[#0B0F2E]">Factures fournisseurs ({filtered.length})</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-[#0B0F2E]">{t('cab.fournisseurs.invoices_label', locale)} ({filtered.length})</CardTitle></CardHeader>
         <CardContent className="p-0">
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]" /></div>
@@ -233,14 +233,14 @@ export default function FournisseursPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Fournisseur</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Échéance</TableHead>
-                  <TableHead className="text-right">Montant TTC</TableHead>
-                  <TableHead>Devise</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Action</TableHead>
+                  <TableHead>{t('cab.fournisseurs.col_supplier', locale)}</TableHead>
+                  <TableHead>{t('cab.fournisseurs.col_description', locale)}</TableHead>
+                  <TableHead>{t('cab.fournisseurs.col_date', locale)}</TableHead>
+                  <TableHead>{t('cab.fournisseurs.col_due', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cab.fournisseurs.col_amount_ttc', locale)}</TableHead>
+                  <TableHead>{t('cab.fournisseurs.col_currency', locale)}</TableHead>
+                  <TableHead>{t('cab.fournisseurs.col_status', locale)}</TableHead>
+                  <TableHead>{t('cab.fournisseurs.col_action', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -248,8 +248,8 @@ export default function FournisseursPage() {
                   <TableRow key={f.id}>
                     <TableCell className="font-medium">{f.tiers || "—"}</TableCell>
                     <TableCell className="text-sm text-gray-600 max-w-48 truncate">{f.description || "—"}</TableCell>
-                    <TableCell className="text-sm">{f.date_facture ? new Date(f.date_facture).toLocaleDateString("fr-FR") : "—"}</TableCell>
-                    <TableCell className="text-sm">{f.date_echeance ? new Date(f.date_echeance).toLocaleDateString("fr-FR") : "—"}</TableCell>
+                    <TableCell className="text-sm">{f.date_facture ? new Date(f.date_facture).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR') : "—"}</TableCell>
+                    <TableCell className="text-sm">{f.date_echeance ? new Date(f.date_echeance).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR') : "—"}</TableCell>
                     <TableCell className="text-right font-semibold">{fmt(f.montant_ttc, f.devise)}</TableCell>
                     <TableCell><Badge variant="outline">{f.devise}</Badge></TableCell>
                     <TableCell>
@@ -261,10 +261,10 @@ export default function FournisseursPage() {
                       <Select value={f.statut} onValueChange={v => updateStatut(f.id, v)}>
                         <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="en_attente">En attente</SelectItem>
-                          <SelectItem value="paye">Payé</SelectItem>
-                          <SelectItem value="retard">Retard</SelectItem>
-                          <SelectItem value="annule">Annulé</SelectItem>
+                          <SelectItem value="en_attente">{t('cab.fournisseurs.status_pending', locale)}</SelectItem>
+                          <SelectItem value="paye">{t('cab.fournisseurs.status_paid', locale)}</SelectItem>
+                          <SelectItem value="retard">{t('cab.fournisseurs.status_late_short', locale)}</SelectItem>
+                          <SelectItem value="annule">{t('cab.fournisseurs.status_cancelled', locale)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>
