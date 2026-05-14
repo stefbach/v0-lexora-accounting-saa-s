@@ -519,9 +519,9 @@ export default function ExportPaiePage() {
 
   // -- StatusBadge component --
   const StatusBadge = ({ status }: { status: ExportStatus }) => {
-    if (status.loading) return <span className="flex items-center gap-1 text-xs text-blue-600"><Loader2 className="w-3 h-3 animate-spin" />En cours...</span>
+    if (status.loading) return <span className="flex items-center gap-1 text-xs text-blue-600"><Loader2 className="w-3 h-3 animate-spin" />{t('rha.b.expaie.in_progress', locale)}</span>
     if (status.error) return <span className="flex items-center gap-1 text-xs text-red-600"><AlertTriangle className="w-3 h-3" />{status.error}</span>
-    if (status.done) return <span className="flex items-center gap-1 text-xs text-green-600"><CheckCircle className="w-3 h-3" />Telecharge</span>
+    if (status.done) return <span className="flex items-center gap-1 text-xs text-green-600"><CheckCircle className="w-3 h-3" />{t('rha.b.expaie.downloaded', locale)}</span>
     return null
   }
 
@@ -541,7 +541,7 @@ export default function ExportPaiePage() {
         >
           {alertMsg.type === "success" ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
           {alertMsg.text}
-          <button onClick={() => setAlertMsg(null)} className="ml-auto text-xs opacity-60 hover:opacity-100">Fermer</button>
+          <button onClick={() => setAlertMsg(null)} className="ml-auto text-xs opacity-60 hover:opacity-100">{t('rha.b.expaie.close', locale)}</button>
         </div>
       )}
       {/* Debug: show all export errors */}
@@ -903,7 +903,7 @@ export default function ExportPaiePage() {
                     ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     : <Download className="h-4 w-4 mr-2" />
                   }
-                  Télécharger PRGF MRA (.csv)
+                  {t('rha.b.expaie.btn_dl_prgf', locale)}
                 </Button>
                 <StatusBadge status={prgfStatus} />
               </div>
@@ -966,7 +966,7 @@ export default function ExportPaiePage() {
                     ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     : <Download className="h-4 w-4 mr-2" />
                   }
-                  Generer declaration CSG/NSF
+                  {t('rha.b.expaie.btn_csg_nsf', locale)}
                 </Button>
                 <StatusBadge status={csgStatus} />
               </div>
@@ -1030,7 +1030,7 @@ export default function ExportPaiePage() {
                     ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     : <Download className="h-4 w-4 mr-2" />
                   }
-                  Generer PAYE Return
+                  {t('rha.b.expaie.btn_paye_return', locale)}
                 </Button>
                 <StatusBadge status={payeStatus} />
               </div>
@@ -1060,7 +1060,7 @@ export default function ExportPaiePage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
                 <Clock className="w-4 h-4" />
-                Echeances MRA
+                {t('rha.b.expaie.deadlines_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1075,7 +1075,7 @@ export default function ExportPaiePage() {
                     <p className="text-xs text-gray-500">15 du mois suivant</p>
                     <p className={`text-xs font-medium mt-1 ${isLate(deadlineCsg) ? "text-red-600" : "text-gray-600"}`}>
                       {formatDeadline(deadlineCsg)}
-                      {isLate(deadlineCsg) && " -- EN RETARD"}
+                      {isLate(deadlineCsg) && ` -- ${t('rha.b.expaie.late', locale)}`}
                     </p>
                   </div>
                 </div>
@@ -1090,7 +1090,7 @@ export default function ExportPaiePage() {
                     <p className="text-xs text-gray-500">20 du mois suivant</p>
                     <p className={`text-xs font-medium mt-1 ${isLate(deadlinePaye) ? "text-red-600" : "text-gray-600"}`}>
                       {formatDeadline(deadlinePaye)}
-                      {isLate(deadlinePaye) && " -- EN RETARD"}
+                      {isLate(deadlinePaye) && ` -- ${t('rha.b.expaie.late', locale)}`}
                     </p>
                   </div>
                 </div>
@@ -1105,7 +1105,7 @@ export default function ExportPaiePage() {
                     <p className="text-xs text-gray-500">Fin du mois</p>
                     <p className={`text-xs font-medium mt-1 ${isLate(deadlineNsf) ? "text-red-600" : "text-gray-600"}`}>
                       {formatDeadline(deadlineNsf)}
-                      {isLate(deadlineNsf) && " -- EN RETARD"}
+                      {isLate(deadlineNsf) && ` -- ${t('rha.b.expaie.late', locale)}`}
                     </p>
                   </div>
                 </div>

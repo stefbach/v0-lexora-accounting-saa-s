@@ -99,7 +99,7 @@ export default function ImmobilisationsPage() {
       setDialogOpen(false)
       setForm({ societe_id: "", designation: "", categorie: "materiel_informatique", fournisseur: "", date_acquisition: "", cout_acquisition: "", devise: "MUR", taux_change: "1", taux_amortissement: "50", methode: "lineaire" })
       fetchData()
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erreur") }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : t('cab.rapports.err_generic', locale)) }
     finally { setSaving(false) }
   }
 
@@ -123,14 +123,14 @@ export default function ImmobilisationsPage() {
                 {error && <p className="text-sm text-red-600">{error}</p>}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>Société *</Label>
+                    <Label>{t('cab.rapports.fld_company', locale)}</Label>
                     <Select value={form.societe_id} onValueChange={v => setForm(f => ({ ...f, societe_id: v }))}>
-                      <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t('cab.rapports.choose', locale)} /></SelectTrigger>
                       <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>Catégorie *</Label>
+                    <Label>{t('cab.rapports.fld_category', locale)}</Label>
                     <Select value={form.categorie} onValueChange={v => setForm(f => ({ ...f, categorie: v, taux_amortissement: String(TAUX_DEFAUT[v] || 20) }))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>{CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
@@ -138,41 +138,41 @@ export default function ImmobilisationsPage() {
                   </div>
                 </div>
                 <div>
-                  <Label>Désignation *</Label>
+                  <Label>{t('cab.rapports.fld_designation', locale)}</Label>
                   <Input value={form.designation} onChange={e => setForm(f => ({ ...f, designation: e.target.value }))} placeholder="Ex: Dell Laptop XPS 15" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label>Fournisseur</Label>
-                    <Input value={form.fournisseur} onChange={e => setForm(f => ({ ...f, fournisseur: e.target.value }))} placeholder="Nom du fournisseur" />
+                    <Label>{t('cab.rapports.fld_supplier', locale)}</Label>
+                    <Input value={form.fournisseur} onChange={e => setForm(f => ({ ...f, fournisseur: e.target.value }))} placeholder={t('cab.rapports.supplier_placeholder', locale)} />
                   </div>
                   <div>
-                    <Label>Date acquisition *</Label>
+                    <Label>{t('cab.rapports.fld_acq_date', locale)}</Label>
                     <Input type="date" value={form.date_acquisition} onChange={e => setForm(f => ({ ...f, date_acquisition: e.target.value }))} />
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <Label>Devise</Label>
+                    <Label>{t('cab.rapports.fld_currency', locale)}</Label>
                     <Select value={form.devise} onValueChange={v => setForm(f => ({ ...f, devise: v }))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>{["MUR","EUR","USD","GBP"].map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>Coût acquisition *</Label>
+                    <Label>{t('cab.rapports.fld_acq_cost', locale)}</Label>
                     <Input type="number" value={form.cout_acquisition} onChange={e => setForm(f => ({ ...f, cout_acquisition: e.target.value }))} placeholder="0" />
                   </div>
                   <div>
-                    <Label>Taux amort. %</Label>
+                    <Label>{t('cab.rapports.fld_amort_rate', locale)}</Label>
                     <Input type="number" value={form.taux_amortissement} onChange={e => setForm(f => ({ ...f, taux_amortissement: e.target.value }))} />
                   </div>
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>Annuler</Button>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('cab.rapports.cancel', locale)}</Button>
                 <Button onClick={handleCreate} disabled={saving} className="bg-[#0B0F2E] text-white">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Créer + Calculer amortissements
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} {t('cab.rapports.create_and_calc', locale)}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -183,9 +183,9 @@ export default function ImmobilisationsPage() {
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Coût total", value: fmt(totaux.cout_total), icon: Package, color: "text-blue-600" },
-          { label: "Amortissements cumulés", value: fmt(totaux.cumul_total), icon: TrendingDown, color: "text-orange-600" },
-          { label: "Valeur nette comptable", value: fmt(totaux.vnc_total), icon: AlertCircle, color: "text-green-600" },
+          { label: t('cab.rapports.kpi_total_cost', locale), value: fmt(totaux.cout_total), icon: Package, color: "text-blue-600" },
+          { label: t('cab.rapports.kpi_cumul', locale), value: fmt(totaux.cumul_total), icon: TrendingDown, color: "text-orange-600" },
+          { label: t('cab.rapports.kpi_vnc', locale), value: fmt(totaux.vnc_total), icon: AlertCircle, color: "text-green-600" },
         ].map(k => (
           <Card key={k.label}><CardContent className="p-4 flex items-center gap-3">
             <k.icon className={`w-8 h-8 ${k.color}`} />
@@ -215,13 +215,13 @@ export default function ImmobilisationsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Désignation</TableHead>
-                  <TableHead>Catégorie</TableHead>
-                  <TableHead>Date acq.</TableHead>
-                  <TableHead className="text-right">Coût MUR</TableHead>
-                  <TableHead className="text-right">Amort. cumulé</TableHead>
-                  <TableHead className="text-right">VNC</TableHead>
-                  <TableHead>Taux</TableHead>
+                  <TableHead>{t('cab.rapports.col_designation', locale)}</TableHead>
+                  <TableHead>{t('cab.rapports.col_category', locale)}</TableHead>
+                  <TableHead>{t('cab.rapports.col_acq_date', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cab.rapports.col_cost_mur', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cab.rapports.col_cumul', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cab.rapports.col_vnc', locale)}</TableHead>
+                  <TableHead>{t('cab.rapports.col_rate', locale)}</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
@@ -231,7 +231,7 @@ export default function ImmobilisationsPage() {
                     <TableRow key={immo.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setExpandedId(expandedId === immo.id ? null : immo.id)}>
                       <TableCell className="font-medium">{immo.designation}</TableCell>
                       <TableCell className="text-sm text-gray-600">{CATEGORIES.find(c => c.value === immo.categorie)?.label.split(" (")[0] || immo.categorie}</TableCell>
-                      <TableCell className="text-sm">{new Date(immo.date_acquisition).toLocaleDateString("fr-FR")}</TableCell>
+                      <TableCell className="text-sm">{new Date(immo.date_acquisition).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}</TableCell>
                       <TableCell className="text-right">{fmt(immo.cout_mur || immo.cout_acquisition)}</TableCell>
                       <TableCell className="text-right text-orange-600">{fmt(immo.cumul_amortissements)}</TableCell>
                       <TableCell className="text-right font-semibold text-green-700">{fmt(immo.valeur_nette_actuelle)}</TableCell>
@@ -241,9 +241,9 @@ export default function ImmobilisationsPage() {
                     {expandedId === immo.id && (
                       <TableRow key={`${immo.id}-detail`}>
                         <TableCell colSpan={8} className="bg-gray-50 p-4">
-                          <p className="text-xs font-semibold text-gray-600 mb-2">Plan d&apos;amortissement</p>
+                          <p className="text-xs font-semibold text-gray-600 mb-2">{t('cab.rapports.amort_plan', locale)}</p>
                           <table className="w-full text-xs">
-                            <thead><tr className="text-gray-500"><th className="text-left">Exercice</th><th className="text-right">Dotation</th><th className="text-right">Cumul</th><th className="text-right">VNC</th></tr></thead>
+                            <thead><tr className="text-gray-500"><th className="text-left">{t('cab.rapports.col_year', locale)}</th><th className="text-right">{t('cab.rapports.col_charge', locale)}</th><th className="text-right">{t('cab.rapports.col_cumul_short', locale)}</th><th className="text-right">{t('cab.rapports.col_vnc', locale)}</th></tr></thead>
                             <tbody>
                               {(immo.amortissements || []).map(a => (
                                 <tr key={a.exercice} className="border-t border-gray-200">

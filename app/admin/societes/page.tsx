@@ -47,6 +47,7 @@ import {
   UserPlus,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -83,6 +84,7 @@ interface Dossier {
 /* ------------------------------------------------------------------ */
 
 export default function SocietesPage() {
+  const locale = getLocale()
   // --------------- data state ---------------
   const [societes, setSocietes] = useState<Societe[]>([])
   const [users, setUsers] = useState<Profile[]>([])
@@ -161,15 +163,15 @@ export default function SocietesPage() {
         resDos.json(),
       ])
 
-      if (!resSoc.ok) throw new Error(dataSoc.error || "Erreur lors du chargement des societes")
-      if (!resUsr.ok) throw new Error(dataUsr.error || "Erreur lors du chargement des utilisateurs")
-      if (!resDos.ok) throw new Error(dataDos.error || "Erreur lors du chargement des dossiers")
+      if (!resSoc.ok) throw new Error(dataSoc.error || t('adm.socs.err_load_societes', locale))
+      if (!resUsr.ok) throw new Error(dataUsr.error || t('adm.socs.err_load_users', locale))
+      if (!resDos.ok) throw new Error(dataDos.error || t('adm.socs.err_load_dossiers', locale))
 
       setSocietes(dataSoc.societes ?? [])
       setUsers(dataUsr.users ?? [])
       setDossiers(dataDos.dossiers ?? [])
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue")
+      setError(err instanceof Error ? err.message : t('adm.socs.err_unknown', locale))
     } finally {
       setLoading(false)
     }
@@ -197,7 +199,7 @@ export default function SocietesPage() {
   // --------------- add societe handler ---------------
   const handleAdd = async () => {
     if (!addNom.trim()) {
-      setError("Le nom de la societe est requis.")
+      setError(t('adm.socs.name_required', locale))
       return
     }
     setAddSubmitting(true)
@@ -215,7 +217,7 @@ export default function SocietesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur lors de la creation")
+      if (!res.ok) throw new Error(data.error || t('adm.socs.err_create', locale))
 
       const newSociete = data.societe
 
@@ -238,13 +240,15 @@ export default function SocietesPage() {
         const failures = dossierResults.filter((r) => r.status === "rejected")
         if (failures.length > 0) {
           setSuccess(
-            `Societe creee. ${addClientIds.length - failures.length}/${addClientIds.length} client(s) lie(s) avec succes.`
+            t('adm.socs.created_partial', locale)
+              .replace('{ok}', String(addClientIds.length - failures.length))
+              .replace('{total}', String(addClientIds.length))
           )
         } else {
-          setSuccess("Societe creee et client(s) lie(s) avec succes.")
+          setSuccess(t('adm.socs.created_linked', locale))
         }
       } else {
-        setSuccess("Societe creee avec succes.")
+        setSuccess(t('adm.socs.created_ok', locale))
       }
 
       // Reset form
@@ -257,7 +261,7 @@ export default function SocietesPage() {
       setAddOpen(false)
       await fetchAll()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue")
+      setError(err instanceof Error ? err.message : t('adm.socs.err_unknown', locale))
     } finally {
       setAddSubmitting(false)
     }
@@ -266,7 +270,7 @@ export default function SocietesPage() {
   // --------------- link client handler ---------------
   const handleLinkClient = async () => {
     if (!linkSociete || !linkClientId) {
-      setError("Veuillez selectionner un client.")
+      setError(t('adm.socs.select_client_required', locale))
       return
     }
     setLinkSubmitting(true)
@@ -282,14 +286,14 @@ export default function SocietesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur lors de la liaison")
-      setSuccess("Client lie a la societe avec succes.")
+      if (!res.ok) throw new Error(data.error || t('adm.socs.err_link', locale))
+      setSuccess(t('adm.socs.linked_ok', locale))
       setLinkClientId("")
       setLinkSociete(null)
       setLinkOpen(false)
       await fetchAll()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue")
+      setError(err instanceof Error ? err.message : t('adm.socs.err_unknown', locale))
     } finally {
       setLinkSubmitting(false)
     }
@@ -309,7 +313,7 @@ export default function SocietesPage() {
   const handleEdit = async () => {
     if (!editSociete) return
     if (!editNom.trim()) {
-      setError("Le nom de la societe est requis.")
+      setError(t('adm.socs.name_required', locale))
       return
     }
     setEditSubmitting(true)
@@ -328,13 +332,13 @@ export default function SocietesPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur lors de la modification")
-      setSuccess("Societe modifiee avec succes.")
+      if (!res.ok) throw new Error(data.error || t('adm.socs.err_edit', locale))
+      setSuccess(t('adm.socs.edited_ok', locale))
       setEditOpen(false)
       setEditSociete(null)
       await fetchAll()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue")
+      setError(err instanceof Error ? err.message : t('adm.socs.err_unknown', locale))
     } finally {
       setEditSubmitting(false)
     }
@@ -357,13 +361,13 @@ export default function SocietesPage() {
         body: JSON.stringify({ id: deleteSociete.id }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur lors de la suppression")
-      setSuccess("Societe et dossiers associes supprimes avec succes.")
+      if (!res.ok) throw new Error(data.error || t('adm.socs.err_delete', locale))
+      setSuccess(t('adm.socs.deleted_ok', locale))
       setDeleteOpen(false)
       setDeleteSociete(null)
       await fetchAll()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue")
+      setError(err instanceof Error ? err.message : t('adm.socs.err_unknown', locale))
     } finally {
       setDeleteSubmitting(false)
     }
@@ -386,10 +390,10 @@ export default function SocietesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>
-            Societes
+            {t('adm.socs.title', locale)}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Gestion des societes enregistrees sur la plateforme
+            {t('adm.socs.subtitle', locale)}
           </p>
         </div>
 
@@ -398,21 +402,21 @@ export default function SocietesPage() {
           <DialogTrigger asChild>
             <Button style={{ backgroundColor: "#0B0F2E" }}>
               <Plus className="mr-2 h-4 w-4" />
-              Ajouter une societe
+              {t('adm.socs.add_btn', locale)}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>Nouvelle societe</DialogTitle>
+              <DialogTitle>{t('adm.socs.new_title', locale)}</DialogTitle>
               <DialogDescription>
-                Renseignez les informations de la societe a ajouter.
+                {t('adm.socs.new_desc', locale)}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               {/* Nom */}
               <div className="space-y-2">
                 <Label htmlFor="add-nom">
-                  Nom de la societe <span className="text-red-500">*</span>
+                  {t('adm.socs.name_label', locale)} <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="add-nom"
@@ -424,7 +428,7 @@ export default function SocietesPage() {
 
               {/* BRN */}
               <div className="space-y-2">
-                <Label htmlFor="add-brn">BRN</Label>
+                <Label htmlFor="add-brn">{t('adm.socs.brn', locale)}</Label>
                 <Input
                   id="add-brn"
                   placeholder="Ex: C12345678"
@@ -435,7 +439,7 @@ export default function SocietesPage() {
 
               {/* N TVA MRA */}
               <div className="space-y-2">
-                <Label htmlFor="add-tva">N° TVA MRA</Label>
+                <Label htmlFor="add-tva">{t('adm.socs.tva_number', locale)}</Label>
                 <Input
                   id="add-tva"
                   placeholder="Ex: VAT-20230001"
@@ -446,29 +450,29 @@ export default function SocietesPage() {
 
               {/* Statut TVA */}
               <div className="space-y-2">
-                <Label>Statut TVA</Label>
+                <Label>{t('adm.socs.tva_status', locale)}</Label>
                 <Select value={addStatutTva} onValueChange={setAddStatutTva}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selectionner le statut" />
+                    <SelectValue placeholder={t('adm.socs.select_status', locale)} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="assujetti">Assujetti</SelectItem>
-                    <SelectItem value="non_assujetti">Non assujetti</SelectItem>
+                    <SelectItem value="assujetti">{t('adm.socs.subject', locale)}</SelectItem>
+                    <SelectItem value="non_assujetti">{t('adm.socs.not_subject', locale)}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Comptable */}
               <div className="space-y-2">
-                <Label>Comptable assigne</Label>
+                <Label>{t('adm.socs.assigned_comptable', locale)}</Label>
                 <Select value={addComptableId} onValueChange={setAddComptableId}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selectionner un comptable" />
+                    <SelectValue placeholder={t('adm.socs.select_comptable', locale)} />
                   </SelectTrigger>
                   <SelectContent>
                     {comptables.length === 0 && (
                       <SelectItem value="_none" disabled>
-                        Aucun comptable disponible
+                        {t('adm.socs.no_comptable_avail', locale)}
                       </SelectItem>
                     )}
                     {comptables.map((c) => (
@@ -482,10 +486,10 @@ export default function SocietesPage() {
 
               {/* Clients a lier */}
               <div className="space-y-2">
-                <Label>Client(s) a lier</Label>
+                <Label>{t('adm.socs.clients_to_link', locale)}</Label>
                 {clients.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Aucun client disponible.
+                    {t('adm.socs.no_client_avail', locale)}
                   </p>
                 ) : (
                   <div className="max-h-40 overflow-y-auto rounded-md border p-3 space-y-2">
@@ -510,7 +514,7 @@ export default function SocietesPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddOpen(false)}>
-                Annuler
+                {t('adm.socs.cancel', locale)}
               </Button>
               <Button
                 style={{ backgroundColor: "#D4AF37" }}
@@ -520,7 +524,7 @@ export default function SocietesPage() {
                 {addSubmitting && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Creer la societe
+                {t('adm.socs.create', locale)}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -552,23 +556,23 @@ export default function SocietesPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Lier un client</DialogTitle>
+            <DialogTitle>{t('adm.socs.link_client_title', locale)}</DialogTitle>
             <DialogDescription>
-              Selectionnez un client a lier a la societe{" "}
+              {t('adm.socs.link_client_desc', locale)}{" "}
               <strong>{linkSociete?.nom}</strong>.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Client</Label>
+              <Label>{t('adm.socs.client', locale)}</Label>
               <Select value={linkClientId} onValueChange={setLinkClientId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selectionner un client" />
+                  <SelectValue placeholder={t('adm.socs.select_client', locale)} />
                 </SelectTrigger>
                 <SelectContent>
                   {clients.length === 0 && (
                     <SelectItem value="_none" disabled>
-                      Aucun client disponible
+                      {t('adm.socs.no_client_avail2', locale)}
                     </SelectItem>
                   )}
                   {clients.map((c) => (
@@ -582,7 +586,7 @@ export default function SocietesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinkOpen(false)}>
-              Annuler
+              {t('adm.socs.cancel', locale)}
             </Button>
             <Button
               style={{ backgroundColor: "#D4AF37" }}
@@ -592,7 +596,7 @@ export default function SocietesPage() {
               {linkSubmitting && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Lier le client
+              {t('adm.socs.link_client_btn', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -611,10 +615,10 @@ export default function SocietesPage() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle style={{ color: "#0B0F2E" }}>
-              Modifier la societe
+              {t('adm.socs.edit_title', locale)}
             </DialogTitle>
             <DialogDescription>
-              Modifiez les informations de la societe{" "}
+              {t('adm.socs.edit_desc', locale)}{" "}
               <strong>{editSociete?.nom}</strong>.
             </DialogDescription>
           </DialogHeader>
@@ -622,7 +626,7 @@ export default function SocietesPage() {
             {/* Nom */}
             <div className="space-y-2">
               <Label htmlFor="edit-nom">
-                Nom de la societe <span className="text-red-500">*</span>
+                {t('adm.socs.name_label', locale)} <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="edit-nom"
@@ -634,7 +638,7 @@ export default function SocietesPage() {
 
             {/* BRN */}
             <div className="space-y-2">
-              <Label htmlFor="edit-brn">BRN</Label>
+              <Label htmlFor="edit-brn">{t('adm.socs.brn', locale)}</Label>
               <Input
                 id="edit-brn"
                 placeholder="Ex: C12345678"
@@ -645,7 +649,7 @@ export default function SocietesPage() {
 
             {/* N TVA MRA */}
             <div className="space-y-2">
-              <Label htmlFor="edit-tva">N° TVA MRA</Label>
+              <Label htmlFor="edit-tva">{t('adm.socs.tva_number', locale)}</Label>
               <Input
                 id="edit-tva"
                 placeholder="Ex: VAT-20230001"
@@ -656,29 +660,29 @@ export default function SocietesPage() {
 
             {/* Statut TVA */}
             <div className="space-y-2">
-              <Label>Statut TVA</Label>
+              <Label>{t('adm.socs.tva_status', locale)}</Label>
               <Select value={editStatutTva} onValueChange={setEditStatutTva}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selectionner le statut" />
+                  <SelectValue placeholder={t('adm.socs.select_status', locale)} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="assujetti">Assujetti</SelectItem>
-                  <SelectItem value="non_assujetti">Non assujetti</SelectItem>
+                  <SelectItem value="assujetti">{t('adm.socs.subject', locale)}</SelectItem>
+                  <SelectItem value="non_assujetti">{t('adm.socs.not_subject', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* Comptable */}
             <div className="space-y-2">
-              <Label>Comptable assigne</Label>
+              <Label>{t('adm.socs.assigned_comptable', locale)}</Label>
               <Select value={editComptableId} onValueChange={setEditComptableId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selectionner un comptable" />
+                  <SelectValue placeholder={t('adm.socs.select_comptable', locale)} />
                 </SelectTrigger>
                 <SelectContent>
                   {comptables.length === 0 && (
                     <SelectItem value="_none" disabled>
-                      Aucun comptable disponible
+                      {t('adm.socs.no_comptable_avail', locale)}
                     </SelectItem>
                   )}
                   {comptables.map((c) => (
@@ -692,7 +696,7 @@ export default function SocietesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>
-              Annuler
+              {t('adm.socs.cancel', locale)}
             </Button>
             <Button
               style={{ backgroundColor: "#D4AF37" }}
@@ -702,7 +706,7 @@ export default function SocietesPage() {
               {editSubmitting && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Enregistrer les modifications
+              {t('adm.socs.save_changes', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -721,12 +725,11 @@ export default function SocietesPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-destructive">
-              Confirmer la suppression
+              {t('adm.socs.delete_title', locale)}
             </DialogTitle>
             <DialogDescription className="pt-2">
-              Etes-vous sur de vouloir supprimer{" "}
-              <strong>{deleteSociete?.nom}</strong> ? Cette action supprimera
-              egalement tous les dossiers lies.
+              {t('adm.socs.delete_desc1', locale)}{" "}
+              <strong>{deleteSociete?.nom}</strong> ? {t('adm.socs.delete_desc2', locale)}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -735,7 +738,7 @@ export default function SocietesPage() {
               onClick={() => setDeleteOpen(false)}
               disabled={deleteSubmitting}
             >
-              Annuler
+              {t('adm.socs.cancel', locale)}
             </Button>
             <Button
               variant="destructive"
@@ -745,7 +748,7 @@ export default function SocietesPage() {
               {deleteSubmitting && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Supprimer
+              {t('adm.socs.delete', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -758,13 +761,13 @@ export default function SocietesPage() {
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5" style={{ color: "#D4AF37" }} />
               <CardTitle style={{ color: "#0B0F2E" }}>
-                Liste des societes
+                {t('adm.socs.list_title', locale)}
               </CardTitle>
             </div>
             <CardDescription>
               {loading
-                ? "Chargement..."
-                : `${filtered.length} societe(s) trouvee(s)`}
+                ? t('adm.socs.loading', locale)
+                : t('adm.socs.found_n', locale).replace('{n}', String(filtered.length))}
             </CardDescription>
           </div>
         </CardHeader>
@@ -773,7 +776,7 @@ export default function SocietesPage() {
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Rechercher par nom ou BRN..."
+              placeholder={t('adm.socs.search_placeholder', locale)}
               className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -788,7 +791,7 @@ export default function SocietesPage() {
                 style={{ color: "#0B0F2E" }}
               />
               <span className="ml-3 text-muted-foreground">
-                Chargement des societes...
+                {t('adm.socs.loading_societes', locale)}
               </span>
             </div>
           )}
@@ -798,13 +801,13 @@ export default function SocietesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>BRN</TableHead>
-                  <TableHead>N° TVA MRA</TableHead>
-                  <TableHead>Statut TVA</TableHead>
-                  <TableHead>Comptable assigne</TableHead>
-                  <TableHead>Client(s)</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t('adm.socs.col_name', locale)}</TableHead>
+                  <TableHead>{t('adm.socs.col_brn', locale)}</TableHead>
+                  <TableHead>{t('adm.socs.col_tva', locale)}</TableHead>
+                  <TableHead>{t('adm.socs.col_tva_status', locale)}</TableHead>
+                  <TableHead>{t('adm.socs.col_comptable', locale)}</TableHead>
+                  <TableHead>{t('adm.socs.col_clients', locale)}</TableHead>
+                  <TableHead className="text-right">{t('adm.socs.col_actions', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -825,20 +828,20 @@ export default function SocietesPage() {
                               : "bg-gray-100 text-gray-600 border-gray-200"
                           }
                         >
-                          {s.statut_tva ? "Active" : "Inactive"}
+                          {s.statut_tva ? t('adm.socs.active', locale) : t('adm.socs.inactive', locale)}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         {s.comptable ? s.comptable.full_name : (
                           <span className="text-muted-foreground italic">
-                            Non assigne
+                            {t('adm.socs.not_assigned', locale)}
                           </span>
                         )}
                       </TableCell>
                       <TableCell>
                         {linkedClients.length === 0 ? (
                           <span className="text-muted-foreground italic">
-                            Aucun
+                            {t('adm.socs.none', locale)}
                           </span>
                         ) : (
                           <div className="flex flex-wrap gap-1">

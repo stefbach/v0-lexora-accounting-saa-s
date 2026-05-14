@@ -628,10 +628,10 @@ export default function AdminServicesPage() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle style={{ color: "#0B0F2E" }}>
-              Modifier le plan: {editingPlan?.nom}
+              {t('adm.services.edit_plan_title', locale)}: {editingPlan?.nom}
             </DialogTitle>
             <DialogDescription>
-              Activez ou desactivez les modules et definissez le prix mensuel.
+              {t('adm.services.edit_plan_desc', locale)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -649,26 +649,26 @@ export default function AdminServicesPage() {
               </div>
             ))}
             <div className="space-y-2">
-              <Label>Prix mensuel (Rs)</Label>
+              <Label>{t('adm.services.price_label', locale)}</Label>
               <Input
                 type="number"
                 min="0"
                 step="100"
                 value={editPrix}
                 onChange={(e) => setEditPrix(e.target.value)}
-                placeholder="0 = sur devis"
+                placeholder={t('adm.services.price_placeholder', locale)}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditPlanDialog(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setEditPlanDialog(false)}>{t('adm.services.cancel', locale)}</Button>
             <Button
               style={{ backgroundColor: "#D4AF37" }}
               onClick={handleSavePlan}
               disabled={savingPlan}
             >
               {savingPlan ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Enregistrer
+              {t('adm.services.save', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -681,18 +681,18 @@ export default function AdminServicesPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle style={{ color: "#0B0F2E" }}>
-              Changer de plan
+              {t('adm.services.assign_title', locale)}
             </DialogTitle>
             <DialogDescription>
-              Selectionner un plan pour <strong>{assignSociete?.nom}</strong>
+              {t('adm.services.assign_desc', locale)} <strong>{assignSociete?.nom}</strong>
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Plan</Label>
+              <Label>{t('adm.services.plan', locale)}</Label>
               <Select value={assignPlanCode} onValueChange={setAssignPlanCode}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selectionner un plan" />
+                  <SelectValue placeholder={t('adm.services.select_plan', locale)} />
                 </SelectTrigger>
                 <SelectContent>
                   {plans.map(p => (
@@ -709,7 +709,7 @@ export default function AdminServicesPage() {
               if (!selectedPlan) return null
               return (
                 <div className="rounded-lg border p-3 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Modules inclus:</p>
+                  <p className="text-xs font-medium text-muted-foreground">{t('adm.services.modules_included', locale)}</p>
                   {(Object.keys(MODULE_LABELS) as (keyof ModulesConfig)[]).map(key => (
                     <div key={key} className="flex items-center gap-2 text-sm">
                       {selectedPlan.modules[key] ? (
@@ -725,14 +725,14 @@ export default function AdminServicesPage() {
             })()}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignDialog(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setAssignDialog(false)}>{t('adm.services.cancel', locale)}</Button>
             <Button
               style={{ backgroundColor: "#D4AF37" }}
               onClick={handleAssignPlan}
               disabled={assignSaving || !assignPlanCode}
             >
               {assignSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Attribuer
+              {t('adm.services.assign_btn', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -745,11 +745,11 @@ export default function AdminServicesPage() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle style={{ color: "#0B0F2E" }}>
-              Plan personnalise
+              {t('adm.services.custom_title', locale)}
             </DialogTitle>
             <DialogDescription>
-              Configurez les modules pour <strong>{customSociete?.nom}</strong>.
-              Cela remplacera le plan standard par un plan personnalise.
+              {t('adm.services.custom_desc1', locale)} <strong>{customSociete?.nom}</strong>.
+              {' '}{t('adm.services.custom_desc2', locale)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-4">
@@ -768,14 +768,14 @@ export default function AdminServicesPage() {
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCustomDialog(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setCustomDialog(false)}>{t('adm.services.cancel', locale)}</Button>
             <Button
               style={{ backgroundColor: "#D4AF37" }}
               onClick={handleSaveCustom}
               disabled={customSaving}
             >
               {customSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Enregistrer
+              {t('adm.services.save', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

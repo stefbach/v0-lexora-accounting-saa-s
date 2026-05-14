@@ -54,15 +54,15 @@ interface TVARecord {
   interets_retard: number
 }
 
-function statutBadge(statut_declaration: string, date_limite: string) {
+function statutBadge(statut_declaration: string, date_limite: string, locale: 'fr' | 'en') {
   const now  = new Date()
   const lim  = new Date(date_limite)
   const late = now > lim && statut_declaration === 'a_faire'
 
-  if (late) return <Badge className="bg-red-100 text-red-800 gap-1"><AlertTriangle className="w-3 h-3" />En retard</Badge>
-  if (statut_declaration === 'declare') return <Badge className="bg-green-100 text-green-800 gap-1"><CheckCircle className="w-3 h-3" />Déclaré</Badge>
-  if (statut_declaration === 'paye')    return <Badge className="bg-blue-100 text-blue-800 gap-1"><CheckCircle className="w-3 h-3" />Payé</Badge>
-  return <Badge className="bg-orange-100 text-orange-800 gap-1"><Clock className="w-3 h-3" />À faire</Badge>
+  if (late) return <Badge className="bg-red-100 text-red-800 gap-1"><AlertTriangle className="w-3 h-3" />{t('cab.tva.status_late', locale)}</Badge>
+  if (statut_declaration === 'declare') return <Badge className="bg-green-100 text-green-800 gap-1"><CheckCircle className="w-3 h-3" />{t('cab.tva.status_declared', locale)}</Badge>
+  if (statut_declaration === 'paye')    return <Badge className="bg-blue-100 text-blue-800 gap-1"><CheckCircle className="w-3 h-3" />{t('cab.tva.status_paid', locale)}</Badge>
+  return <Badge className="bg-orange-100 text-orange-800 gap-1"><Clock className="w-3 h-3" />{t('cab.tva.status_todo', locale)}</Badge>
 }
 
 export default function TVAPage() {
@@ -106,11 +106,11 @@ export default function TVAPage() {
   // Calculer TVA depuis les écritures
   const handleCalculer = async () => {
     if (!selectedSociete || selectedSociete === "all") {
-      setCalcError("Sélectionnez une société")
+      setCalcError(t('cab.tva.err_select_company', locale))
       return
     }
     if (!selectedPeriode) {
-      setCalcError("Saisissez une période (YYYY-MM)")
+      setCalcError(t('cab.tva.err_select_period', locale))
       return
     }
     setCalculating(true)
@@ -123,7 +123,7 @@ export default function TVAPage() {
         body: JSON.stringify({ societe_id: selectedSociete, periode: selectedPeriode }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Erreur calcul TVA")
+      if (!res.ok) throw new Error(data.error || t('cab.tva.err_compute', locale))
       setCalcResult(data)
       // Refresh records
       const tvRes = await fetch(`/api/comptable/tva?societe_id=${selectedSociete}`)
@@ -192,7 +192,7 @@ export default function TVAPage() {
                 window.open(url, "_blank")
               }}
             >
-              <FileText className="w-4 h-4 mr-2" /> PDF — VAT Return MRA
+              <FileText className="w-4 h-4 mr-2" /> {t('cab.tva.export_pdf', locale)}
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
@@ -200,7 +200,7 @@ export default function TVAPage() {
                 window.open(url, "_blank")
               }}
             >
-              <FileSpreadsheet className="w-4 h-4 mr-2" /> CSV — Schedule B (ventes)
+              <FileSpreadsheet className="w-4 h-4 mr-2" /> {t('cab.tva.export_csv_sales', locale)}
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
@@ -208,7 +208,7 @@ export default function TVAPage() {
                 window.open(url, "_blank")
               }}
             >
-              <FileSpreadsheet className="w-4 h-4 mr-2" /> CSV — Schedule A (achats)
+              <FileSpreadsheet className="w-4 h-4 mr-2" /> {t('cab.tva.export_csv_purchases', locale)}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -218,24 +218,24 @@ export default function TVAPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <TrendingUp className="w-8 h-8 text-red-500 shrink-0" />
-          <div><p className="text-xs text-gray-500">TVA Collectée</p><p className="text-lg font-bold" style={{ color: NAVY }}>{fmt(totaux.collectee)} MUR</p></div>
+          <div><p className="text-xs text-gray-500">{t('cab.tva.kpi_output', locale)}</p><p className="text-lg font-bold" style={{ color: NAVY }}>{fmt(totaux.collectee)} MUR</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <TrendingDown className="w-8 h-8 text-green-500 shrink-0" />
-          <div><p className="text-xs text-gray-500">TVA Déductible</p><p className="text-lg font-bold" style={{ color: NAVY }}>{fmt(totaux.deductible)} MUR</p></div>
+          <div><p className="text-xs text-gray-500">{t('cab.tva.kpi_input', locale)}</p><p className="text-lg font-bold" style={{ color: NAVY }}>{fmt(totaux.deductible)} MUR</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <Calculator className={`w-8 h-8 shrink-0 ${totaux.nette >= 0 ? "text-red-500" : "text-green-500"}`} />
           <div>
-            <p className="text-xs text-gray-500">Solde Net</p>
+            <p className="text-xs text-gray-500">{t('cab.tva.kpi_net', locale)}</p>
             <p className={`text-lg font-bold ${totaux.nette >= 0 ? "text-red-600" : "text-green-600"}`}>{fmt(totaux.nette)} MUR</p>
-            <p className="text-xs text-gray-400">{totaux.nette >= 0 ? "À payer MRA" : "Crédit TVA"}</p>
+            <p className="text-xs text-gray-400">{totaux.nette >= 0 ? t('cab.tva.to_pay_mra', locale) : t('cab.tva.credit', locale)}</p>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <AlertTriangle className="w-8 h-8 text-orange-500 shrink-0" />
           <div>
-            <p className="text-xs text-gray-500">Pénalités cumulées</p>
+            <p className="text-xs text-gray-500">{t('cab.tva.kpi_penalties', locale)}</p>
             <p className="text-lg font-bold text-orange-600">{fmt(totaux.penalites)} MUR</p>
           </div>
         </CardContent></Card>
@@ -246,25 +246,25 @@ export default function TVAPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base" style={{ color: NAVY }}>
             <Calculator className="inline w-4 h-4 mr-2" style={{ color: GOLD }} />
-            Calculer TVA depuis les écritures
+            {t('cab.tva.compute_card_title', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-3 items-end">
             <div>
-              <Label className="text-xs">Société</Label>
+              <Label className="text-xs">{t('cab.tva.fld_company', locale)}</Label>
               <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-                <SelectTrigger className="w-48 h-8 text-sm"><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                <SelectTrigger className="w-48 h-8 text-sm"><SelectValue placeholder={t('cab.tva.choose', locale)} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">— Choisir —</SelectItem>
+                  <SelectItem value="all">{t('cab.tva.choose_dash', locale)}</SelectItem>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Période (YYYY-MM)</Label>
+              <Label className="text-xs">{t('cab.tva.fld_period', locale)}</Label>
               <Select value={selectedPeriode} onValueChange={setSelectedPeriode}>
-                <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder="Mois..." /></SelectTrigger>
+                <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder={t('cab.tva.month_placeholder', locale)} /></SelectTrigger>
                 <SelectContent>
                   {periodes.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                 </SelectContent>
@@ -289,22 +289,22 @@ export default function TVAPage() {
 
           {calcResult && (
             <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-              <p className="text-sm font-semibold text-green-700">✓ TVA calculée pour {calcResult.periode}</p>
+              <p className="text-sm font-semibold text-green-700">{t('cab.tva.computed_for', locale)} {calcResult.periode}</p>
               <div className="grid grid-cols-3 gap-4">
                 {/* 9 Boxes MRA */}
                 <div className="col-span-3">
-                  <p className="text-xs font-semibold uppercase text-gray-500 mb-2">9 Boxes MRA</p>
+                  <p className="text-xs font-semibold uppercase text-gray-500 mb-2">{t('cab.tva.boxes_title', locale)}</p>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { label: "Box 1 — TVA Collectée Standard", val: calcResult.boxes?.box1_tva_collectee_standard },
-                      { label: "Box 2 — Exports Taxables",        val: calcResult.boxes?.box2_exports_taxables },
-                      { label: "Box 3 — Ventes Exonérées",        val: calcResult.boxes?.box3_ventes_exonerees },
-                      { label: "Box 4 — Reverse Charge Output",   val: calcResult.boxes?.box4_reverse_charge_output },
-                      { label: "Box 5 — Reverse Charge Input",    val: calcResult.boxes?.box5_reverse_charge_input },
-                      { label: "Box 6 — Exports Zero-Rated",      val: calcResult.boxes?.box6_exports_zero_rated },
-                      { label: "Box 7 — Capital Goods",           val: calcResult.boxes?.box7_capital_goods },
-                      { label: "Box 8 — Bad Debt Relief",         val: calcResult.boxes?.box8_bad_debt_relief },
-                      { label: "Box 9 — TVA Déductible Autre",    val: calcResult.boxes?.box9_tva_deductible_autre },
+                      { label: t('cab.tva.box1', locale), val: calcResult.boxes?.box1_tva_collectee_standard },
+                      { label: t('cab.tva.box2', locale), val: calcResult.boxes?.box2_exports_taxables },
+                      { label: t('cab.tva.box3', locale), val: calcResult.boxes?.box3_ventes_exonerees },
+                      { label: t('cab.tva.box4', locale), val: calcResult.boxes?.box4_reverse_charge_output },
+                      { label: t('cab.tva.box5', locale), val: calcResult.boxes?.box5_reverse_charge_input },
+                      { label: t('cab.tva.box6', locale), val: calcResult.boxes?.box6_exports_zero_rated },
+                      { label: t('cab.tva.box7', locale), val: calcResult.boxes?.box7_capital_goods },
+                      { label: t('cab.tva.box8', locale), val: calcResult.boxes?.box8_bad_debt_relief },
+                      { label: t('cab.tva.box9', locale), val: calcResult.boxes?.box9_tva_deductible_autre },
                     ].map((b, i) => (
                       <div key={i} className="bg-white border rounded p-2">
                         <p className="text-[10px] text-gray-500">{b.label}</p>
@@ -319,18 +319,18 @@ export default function TVAPage() {
                 {calcResult.bases_ht && (
                   <div className="col-span-3 border-t pt-3">
                     <p className="text-xs font-semibold uppercase text-gray-500 mb-2">
-                      Chiffre d'affaires HT — base déclaration MRA
+                      {t('cab.tva.bases_ht_title', locale)}
                       <span className="ml-2 text-[10px] font-normal text-gray-400">
-                        ({calcResult.bases_ht.nb_factures || 0} facture(s){calcResult.bases_ht.nb_avoirs > 0 ? `, ${calcResult.bases_ht.nb_avoirs} avoir(s)` : ''})
+                        ({calcResult.bases_ht.nb_factures || 0} {t('cab.tva.invoices', locale)}{calcResult.bases_ht.nb_avoirs > 0 ? `, ${calcResult.bases_ht.nb_avoirs} ${t('cab.tva.credit_notes', locale)}` : ''})
                       </span>
                     </p>
                     <div className="grid grid-cols-5 gap-2">
                       {[
-                        { label: "Taxable 15% (HT)",      val: calcResult.bases_ht.taxable_standard_15pct, color: "text-blue-700" },
-                        { label: "Taxable autre taux",    val: calcResult.bases_ht.taxable_autre,           color: "text-blue-500" },
-                        { label: "Exports zero-rated",    val: calcResult.bases_ht.export_zero_rated,       color: "text-emerald-600" },
-                        { label: "Ventes exonérées",      val: calcResult.bases_ht.exonere,                 color: "text-amber-600" },
-                        { label: "Total CA HT",           val: calcResult.bases_ht.ca_ht_total,             color: "text-[#0B0F2E] font-extrabold" },
+                        { label: t('cab.tva.base_taxable_15', locale), val: calcResult.bases_ht.taxable_standard_15pct, color: "text-blue-700" },
+                        { label: t('cab.tva.base_taxable_other', locale), val: calcResult.bases_ht.taxable_autre, color: "text-blue-500" },
+                        { label: t('cab.tva.base_export_zero', locale), val: calcResult.bases_ht.export_zero_rated, color: "text-emerald-600" },
+                        { label: t('cab.tva.base_exempt', locale), val: calcResult.bases_ht.exonere, color: "text-amber-600" },
+                        { label: t('cab.tva.base_total_ca', locale), val: calcResult.bases_ht.ca_ht_total, color: "text-[#0B0F2E] font-extrabold" },
                       ].map((b, i) => (
                         <div key={i} className="bg-white border rounded p-2">
                           <p className="text-[10px] text-gray-500">{b.label}</p>
@@ -345,21 +345,21 @@ export default function TVAPage() {
                 {/* Synthèse */}
                 <div className="col-span-3 border-t pt-3 grid grid-cols-4 gap-3">
                   <div>
-                    <p className="text-xs text-gray-500">TVA Output</p>
+                    <p className="text-xs text-gray-500">{t('cab.tva.synth_output', locale)}</p>
                     <p className="text-sm font-bold text-red-600">{fmt(calcResult.synthese?.tva_output || 0)} MUR</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">TVA Input</p>
+                    <p className="text-xs text-gray-500">{t('cab.tva.synth_input', locale)}</p>
                     <p className="text-sm font-bold text-green-600">{fmt(calcResult.synthese?.tva_input || 0)} MUR</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">TVA Nette</p>
+                    <p className="text-xs text-gray-500">{t('cab.tva.synth_net', locale)}</p>
                     <p className={`text-sm font-bold ${(calcResult.synthese?.tva_nette || 0) >= 0 ? "text-red-600" : "text-green-600"}`}>
                       {fmt(calcResult.synthese?.tva_nette || 0)} MUR
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Total à payer</p>
+                    <p className="text-xs text-gray-500">{t('cab.tva.synth_total_due', locale)}</p>
                     <p className="text-sm font-bold text-orange-600">{fmt(calcResult.synthese?.total_a_payer || 0)} MUR</p>
                   </div>
                 </div>
@@ -368,7 +368,7 @@ export default function TVAPage() {
                     <Alert variant="destructive">
                       <AlertTriangle className="h-4 w-4" />
                       <AlertDescription>
-                        Déclaration en retard de {calcResult.synthese?.jours_retard || "?"} jours — Pénalités : {fmt(calcResult.synthese?.penalites)} MUR + Intérêts : {fmt(calcResult.synthese?.interets)} MUR
+                        {t('cab.tva.late_alert_pre', locale)} {calcResult.synthese?.jours_retard || "?"} {t('cab.tva.late_alert_days', locale)} — {t('cab.tva.late_penalties', locale)} : {fmt(calcResult.synthese?.penalites)} MUR + {t('cab.tva.late_interest', locale)} : {fmt(calcResult.synthese?.interets)} MUR
                       </AlertDescription>
                     </Alert>
                   </div>
@@ -383,13 +383,13 @@ export default function TVAPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle style={{ color: NAVY }}>
-            Timeline des déclarations
+            {t('cab.tva.timeline_title', locale)}
           </CardTitle>
           <div className="flex gap-2">
             <Select value={selectedSociete} onValueChange={setSelectedSociete}>
-              <SelectTrigger className="w-48 h-7 text-xs"><SelectValue placeholder="Toutes sociétés" /></SelectTrigger>
+              <SelectTrigger className="w-48 h-7 text-xs"><SelectValue placeholder={t('cab.tva.all_companies', locale)} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes les sociétés</SelectItem>
+                <SelectItem value="all">{t('cab.tva.all_companies', locale)}</SelectItem>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -408,15 +408,15 @@ export default function TVAPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50 text-xs">
-                  <TableHead>Période</TableHead>
-                  <TableHead>Société</TableHead>
-                  <TableHead>Box 1 — Collectée</TableHead>
-                  <TableHead>Box 9 — Déductible</TableHead>
-                  <TableHead>TVA Nette</TableHead>
-                  <TableHead>Date limite</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Pénalités</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t('cab.tva.col_period', locale)}</TableHead>
+                  <TableHead>{t('cab.tva.col_company', locale)}</TableHead>
+                  <TableHead>{t('cab.tva.col_box1', locale)}</TableHead>
+                  <TableHead>{t('cab.tva.col_box9', locale)}</TableHead>
+                  <TableHead>{t('cab.tva.col_net', locale)}</TableHead>
+                  <TableHead>{t('cab.tva.col_deadline', locale)}</TableHead>
+                  <TableHead>{t('cab.tva.col_status', locale)}</TableHead>
+                  <TableHead>{t('cab.tva.col_penalties', locale)}</TableHead>
+                  <TableHead>{t('cab.tva.col_actions', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -441,7 +441,7 @@ export default function TVAPage() {
                       <TableCell className={`text-sm ${isLate ? "text-red-600 font-semibold" : ""}`}>
                         {r.date_limite ? new Date(r.date_limite).toLocaleDateString("fr-FR") : "—"}
                       </TableCell>
-                      <TableCell>{statutBadge(r.statut_declaration, r.date_limite)}</TableCell>
+                      <TableCell>{statutBadge(r.statut_declaration, r.date_limite, locale)}</TableCell>
                       <TableCell className="text-right text-sm font-mono text-orange-600">
                         {r.penalites_retard > 0 ? fmt(r.penalites_retard) : "—"}
                       </TableCell>

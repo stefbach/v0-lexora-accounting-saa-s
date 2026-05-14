@@ -343,9 +343,9 @@ export default function JuridiquePage() {
 
       <Tabs defaultValue="contrats" className="space-y-4">
         <TabsList className="bg-white border">
-          <TabsTrigger value="contrats">📋 Contrats existants</TabsTrigger>
-          <TabsTrigger value="generer">✨ Générer un contrat</TabsTrigger>
-          <TabsTrigger value="verifier">🔍 Vérifier un contrat</TabsTrigger>
+          <TabsTrigger value="contrats">{t('rha.b.jur.tab_existing', locale)}</TabsTrigger>
+          <TabsTrigger value="generer">{t('rha.b.jur.tab_generate', locale)}</TabsTrigger>
+          <TabsTrigger value="verifier">{t('rha.b.jur.tab_verify', locale)}</TabsTrigger>
         </TabsList>
 
         {/* ══════════════════════════════════════════════════════════
@@ -355,23 +355,23 @@ export default function JuridiquePage() {
           <Card>
             <CardContent className="p-4 flex gap-3 flex-wrap">
               <Select value={filtSociete} onValueChange={setFiltSociete}>
-                <SelectTrigger className="w-48"><SelectValue placeholder="Toutes sociétés" /></SelectTrigger>
+                <SelectTrigger className="w-48"><SelectValue placeholder={t('rha.b.jur.filter_all_societes', locale)} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes sociétés</SelectItem>
+                  <SelectItem value="all">{t('rha.b.jur.filter_all_societes', locale)}</SelectItem>
                   {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filtType} onValueChange={setFiltType}>
-                <SelectTrigger className="w-40"><SelectValue placeholder="Type contrat" /></SelectTrigger>
+                <SelectTrigger className="w-40"><SelectValue placeholder={t('rha.b.jur.filter_contract_type', locale)} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous types</SelectItem>
-                  {TYPES_CONTRAT.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  <SelectItem value="all">{t('rha.b.jur.filter_all_types', locale)}</SelectItem>
+                  {TYPES_CONTRAT.map(tc => <SelectItem key={tc} value={tc}>{tc}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filtStatut} onValueChange={setFiltStatut}>
-                <SelectTrigger className="w-36"><SelectValue placeholder="Statut" /></SelectTrigger>
+                <SelectTrigger className="w-36"><SelectValue placeholder={t('rha.b.jur.filter_status', locale)} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous statuts</SelectItem>
+                  <SelectItem value="all">{t('rha.b.jur.filter_all_status', locale)}</SelectItem>
                   {Object.entries(STATUT_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -383,19 +383,19 @@ export default function JuridiquePage() {
               {loadingContrats ? (
                 <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
               ) : contrats.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">Aucun contrat trouvé</div>
+                <div className="text-center py-12 text-gray-500">{t('rha.b.jur.no_contract', locale)}</div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Employé</TableHead>
-                      <TableHead>Société</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Poste</TableHead>
-                      <TableHead>Date début</TableHead>
-                      <TableHead>Date fin</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead>{t('rha.b.jur.col_employee', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_societe', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_type', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_position', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_start', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_end', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_status', locale)}</TableHead>
+                      <TableHead>{t('rha.b.jur.col_actions', locale)}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -406,17 +406,17 @@ export default function JuridiquePage() {
                         <TableCell><Badge variant="outline" className="text-xs">{c.type_contrat}</Badge></TableCell>
                         <TableCell className="text-sm">{c.employe?.poste ?? "—"}</TableCell>
                         <TableCell className="text-sm font-mono">{c.date_debut ?? "—"}</TableCell>
-                        <TableCell className="text-sm font-mono">{c.date_fin ?? <span className="text-gray-400">Indéterminée</span>}</TableCell>
+                        <TableCell className="text-sm font-mono">{c.date_fin ?? <span className="text-gray-400">{t('rha.b.jur.indeterminate', locale)}</span>}</TableCell>
                         <TableCell><StatutBadge statut={c.statut} /></TableCell>
                         <TableCell>
                           <div className="flex gap-1 flex-wrap">
                             <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setViewContrat(c)}>
-                              <Eye className="w-3 h-3 mr-1" />Voir
+                              <Eye className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_view', locale)}
                             </Button>
                             {c.id && (
                               <a href={`/api/rh/contrats/${c.id}/pdf`} target="_blank" rel="noopener noreferrer">
                                 <Button size="sm" variant="outline" className="h-7 text-xs px-2">
-                                  <Download className="w-3 h-3 mr-1" />PDF
+                                  <Download className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_pdf', locale)}
                                 </Button>
                               </a>
                             )}
@@ -435,7 +435,7 @@ export default function JuridiquePage() {
                               >
                                 {genLienLoading === c.id
                                   ? <Loader2 className="w-3 h-3 animate-spin" />
-                                  : <><Link2 className="w-3 h-3 mr-1" />Signer</>
+                                  : <><Link2 className="w-3 h-3 mr-1" />{t('rha.b.jur.btn_sign', locale)}</>
                                 }
                               </Button>
                             )}
@@ -457,34 +457,34 @@ export default function JuridiquePage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-[#0B0F2E] flex items-center gap-2 text-base">
-                <FileText className="w-4 h-4" /> Générer un contrat de travail
+                <FileText className="w-4 h-4" /> {t('rha.b.jur.gen_title', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
-                  <Label>Société *</Label>
+                  <Label>{t('rha.b.jur.lbl_societe_req', locale)}</Label>
                   <Select value={genSociete} onValueChange={setGenSociete}>
-                    <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('rha.b.jur.choose', locale)} /></SelectTrigger>
                     <SelectContent>{societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Employé *</Label>
+                  <Label>{t('rha.b.jur.lbl_employee_req', locale)}</Label>
                   <Select value={genForm.employe_id} onValueChange={v => setGenForm(f => ({ ...f, employe_id: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('rha.b.jur.choose', locale)} /></SelectTrigger>
                     <SelectContent>{employes.map(e => <SelectItem key={e.id} value={e.id}>{e.prenom} {e.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Type de contrat</Label>
+                  <Label>{t('rha.b.jur.lbl_contract_type', locale)}</Label>
                   <Select value={genForm.type} onValueChange={v => setGenForm(f => ({ ...f, type: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{TYPES_CONTRAT.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    <SelectContent>{TYPES_CONTRAT.map(tc => <SelectItem key={tc} value={tc}>{tc}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>Secteur</Label>
+                  <Label>{t('rha.b.jur.lbl_sector', locale)}</Label>
                   <Select value={genForm.secteur} onValueChange={v => setGenForm(f => ({ ...f, secteur: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{SECTEURS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
@@ -492,30 +492,30 @@ export default function JuridiquePage() {
                 </div>
                 {/* Sprint 6 FIX 4 — Poste éditable (pré-rempli depuis fiche employé) */}
                 <div>
-                  <Label>Poste *</Label>
+                  <Label>{t('rha.b.jur.lbl_position_req', locale)}</Label>
                   <Input
                     value={genForm.poste}
                     onChange={e => setGenForm(f => ({ ...f, poste: e.target.value }))}
-                    placeholder="Ex: Développeur, Comptable..."
+                    placeholder={t('rha.b.jur.position_ph', locale)}
                   />
                 </div>
                 <div>
-                  <Label>Date de début *</Label>
+                  <Label>{t('rha.b.jur.lbl_start_req', locale)}</Label>
                   <Input type="date" value={genForm.date_debut} onChange={e => setGenForm(f => ({ ...f, date_debut: e.target.value }))} />
                 </div>
                 {(genForm.type === "CDD" || genForm.type === "Stage") && (
                   <div>
-                    <Label>Date de fin</Label>
+                    <Label>{t('rha.b.jur.lbl_end_date', locale)}</Label>
                     <Input type="date" value={genForm.date_fin} onChange={e => setGenForm(f => ({ ...f, date_fin: e.target.value }))} />
                   </div>
                 )}
                 <div>
-                  <Label>Salaire brut (MUR) *</Label>
+                  <Label>{t('rha.b.jur.lbl_gross_req', locale)}</Label>
                   <Input type="number" value={genForm.salaire} onChange={e => setGenForm(f => ({ ...f, salaire: e.target.value }))} placeholder="Ex: 45000" />
                 </div>
                 {/* Sprint 6 FIX 4 — Horaires semaine */}
                 <div>
-                  <Label>Heures / semaine</Label>
+                  <Label>{t('rha.b.jur.lbl_hours_week', locale)}</Label>
                   <Input
                     type="number"
                     min={1}
@@ -536,11 +536,11 @@ export default function JuridiquePage() {
                     onChange={e => setGenForm(f => ({ ...f, periode_essai_oui: e.target.checked }))}
                     className="h-4 w-4"
                   />
-                  <span className="font-medium text-[#0B0F2E]">Période d'essai</span>
+                  <span className="font-medium text-[#0B0F2E]">{t('rha.b.jur.lbl_trial_period', locale)}</span>
                 </label>
                 {genForm.periode_essai_oui && (
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs text-gray-600">Durée :</Label>
+                    <Label className="text-xs text-gray-600">{t('rha.b.jur.duration', locale)}</Label>
                     <Input
                       type="number"
                       min={1}
@@ -549,8 +549,8 @@ export default function JuridiquePage() {
                       onChange={e => setGenForm(f => ({ ...f, periode_essai_jours: e.target.value }))}
                       className="w-24 h-9"
                     />
-                    <span className="text-xs text-gray-600">jours</span>
-                    <span className="text-xs text-gray-400">(défaut 90j — WRA 2019 max 180j)</span>
+                    <span className="text-xs text-gray-600">{t('rha.b.jur.days', locale)}</span>
+                    <span className="text-xs text-gray-400">{t('rha.b.jur.trial_default', locale)}</span>
                   </div>
                 )}
               </div>
@@ -560,19 +560,19 @@ export default function JuridiquePage() {
                 disabled={generating || !genForm.employe_id || !genForm.date_debut || !genForm.salaire}
                 className="bg-[#0B0F2E] text-white"
               >
-                {generating ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Génération en cours...</> : "✨ Générer avec IA"}
+                {generating ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />{t('rha.b.jur.btn_generating', locale)}</> : t('rha.b.jur.btn_generate_ai', locale)}
               </Button>
 
               {genResult && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-[#0B0F2E]">Contrat généré</p>
+                    <p className="text-sm font-semibold text-[#0B0F2E]">{t('rha.b.jur.contract_generated', locale)}</p>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => imprimerContrat(genResult)}>
-                        <Printer className="w-4 h-4 mr-1" />Imprimer / PDF
+                        <Printer className="w-4 h-4 mr-1" />{t('rha.b.jur.btn_print_pdf', locale)}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => telechargerHTML(genResult, "contrat_nouveau")}>
-                        <Download className="w-4 h-4 mr-1" />Télécharger .html
+                        <Download className="w-4 h-4 mr-1" />{t('rha.b.jur.btn_dl_html', locale)}
                       </Button>
                       <Button
                         size="sm"
@@ -581,7 +581,7 @@ export default function JuridiquePage() {
                         disabled={saving || !!savedId}
                       >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-                        {savedId ? "✅ Sauvegardé" : "💾 Sauvegarder"}
+                        {savedId ? t('rha.b.jur.btn_saved', locale) : t('rha.b.jur.btn_save', locale)}
                       </Button>
                     </div>
                   </div>

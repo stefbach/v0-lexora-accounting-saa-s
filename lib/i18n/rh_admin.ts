@@ -525,7 +525,6 @@ const partB_fr: Record<string, string> = {
   'rha.b.fraiskm.approved': 'Approuvés',
   'rha.b.fraiskm.table_title': 'Frais kilométriques - {period}',
   'rha.b.fraiskm.btn_add': 'Ajouter',
-  'rha.b.fraiskm.no_data': 'Aucun frais kilométrique pour cette période.',
   'rha.b.fraiskm.col_employee': 'Employé',
   'rha.b.fraiskm.col_period': 'Période',
   'rha.b.fraiskm.col_km': 'Km parcourus',
@@ -719,7 +718,6 @@ const partB_fr: Record<string, string> = {
   'rha.b.sev.reminders_title': 'Rappels WRA 2019 S.70',
 
   // depart (deep body)
-  'rha.b.depart.new': 'Nouveau départ',
   'rha.b.depart.lbl_societe_req': 'Société *',
   'rha.b.depart.choose_societe': 'Choisir une société...',
   'rha.b.depart.lbl_employee_req': 'Employé *',
@@ -1442,7 +1440,6 @@ const partB_en: Record<string, string> = {
   'rha.b.fraiskm.approved': 'Approved',
   'rha.b.fraiskm.table_title': 'Mileage expenses - {period}',
   'rha.b.fraiskm.btn_add': 'Add',
-  'rha.b.fraiskm.no_data': 'No mileage expense for this period.',
   'rha.b.fraiskm.col_employee': 'Employee',
   'rha.b.fraiskm.col_period': 'Period',
   'rha.b.fraiskm.col_km': 'Km driven',
@@ -1636,7 +1633,6 @@ const partB_en: Record<string, string> = {
   'rha.b.sev.reminders_title': 'WRA 2019 S.70 reminders',
 
   // depart (deep body)
-  'rha.b.depart.new': 'New departure',
   'rha.b.depart.lbl_societe_req': 'Company *',
   'rha.b.depart.choose_societe': 'Choose a company...',
   'rha.b.depart.lbl_employee_req': 'Employee *',
