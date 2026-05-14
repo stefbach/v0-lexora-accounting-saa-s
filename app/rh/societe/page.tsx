@@ -1373,16 +1373,16 @@ export default function SocieteSettingsPage() {
       {/* Tab content — key forces full re-mount when société changes */}
       <div>
         {tab === "details" && (
-          <DetailsTab key={`details-${societeId}`} data={societe} onSave={handleSave} />
+          <DetailsTab key={`details-${societeId}`} data={societe} onSave={handleSave} locale={locale} />
         )}
         {tab === "contact" && (
-          <ContactTab key={`contact-${societeId}`} data={societe} onSave={handleSave} />
+          <ContactTab key={`contact-${societeId}`} data={societe} onSave={handleSave} locale={locale} />
         )}
         {tab === "bank" && (
-          <BankTab key={`bank-${societeId}`} data={societe} onSave={handleSave} />
+          <BankTab key={`bank-${societeId}`} data={societe} onSave={handleSave} locale={locale} />
         )}
         {tab === "rh" && (
-          <RhTab key={`rh-${societeId}`} data={societe} onSave={handleSave} />
+          <RhTab key={`rh-${societeId}`} data={societe} onSave={handleSave} locale={locale} />
         )}
         {tab === "fiscal" && (
           <FiscalTab
