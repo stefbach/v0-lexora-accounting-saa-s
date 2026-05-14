@@ -156,7 +156,7 @@ export default function ExportPaiePage() {
       }))
       setBulletins(buls)
     } catch {
-      setAlertMsg({ type: "error", text: "Erreur lors du chargement des donnees." })
+      setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_data_err', locale) })
     }
     setLoadingData(false)
   }, [societe, periode])
@@ -200,7 +200,7 @@ export default function ExportPaiePage() {
   // ========== Tab 1: Virements bancaires ==========
 
   const exportVirementMCB = async () => {
-    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    if (!societe) return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_pick_societe', locale) })
     setVirementStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const res = await fetch("/api/rh/exports/virement", {
@@ -223,9 +223,9 @@ export default function ExportPaiePage() {
         if (data.debug_stack) console.error('[exports/virement] server stack:', data.debug_stack)
         console.error('[exports/virement]', res.status, data?.error || data)
         if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
-          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le fichier de virement.`)
+          throw new Error(t('rha.b.expaie.err_lock_first', locale).replace('{p}', periode))
         }
-        throw new Error(data.error || `Erreur ${res.status} lors de la génération du virement.`)
+        throw new Error(data.error || t('rha.b.expaie.err_export_virement', locale))
       }
       // Response can have fichiers array or single content
       if (data.fichiers && Array.isArray(data.fichiers)) {
@@ -248,17 +248,17 @@ export default function ExportPaiePage() {
           error: null,
           summary: data.recap || null,
         })
-        setAlertMsg({ type: "success", text: `${downloaded} fichier(s) de virement telecharge(s).` })
+        setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_dl_n', locale).replace('{n}', String(downloaded)) })
       } else if (data.content) {
         downloadFile(data.content, data.filename || `virement_${periode}.txt`)
         setVirementStatus({ loading: false, done: true, error: null, summary: null })
-        setAlertMsg({ type: "success", text: "Fichier de virement telecharge." })
+        setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_dl_ok', locale) })
       } else {
         setVirementStatus({ loading: false, done: true, error: null, summary: data.recap || null })
-        setAlertMsg({ type: "success", text: "Export genere avec succes." })
+        setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_export_ok', locale) })
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur lors de l'export virement"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_export_virement', locale)
       setVirementStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -266,7 +266,7 @@ export default function ExportPaiePage() {
 
   const exportCSV = () => {
     if (!societe || bulletins.length === 0) {
-      return setAlertMsg({ type: "error", text: "Aucun bulletin a exporter." })
+      return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_no_bulletin', locale) })
     }
     setCsvExportStatus({ loading: true, done: false, error: null, summary: null })
     try {
@@ -284,9 +284,9 @@ export default function ExportPaiePage() {
 
       const modeLabel = (m?: string) => {
         const v = String(m ?? "bulk").trim().toLowerCase()
-        if (v === "especes") return "Espèces"
-        if (v === "individuel") return "Individuel"
-        return "Bulk MCB"
+        if (v === "especes") return t('rha.b.expaie.csv_mode_especes', locale)
+        if (v === "individuel") return t('rha.b.expaie.csv_mode_indiv', locale)
+        return t('rha.b.expaie.csv_mode_bulk', locale)
       }
 
       const headers = ["Code employé", "Nom", "Prénom", "Banque", "N° compte", "Mode paiement", "Net (MUR)"]
@@ -347,9 +347,9 @@ export default function ExportPaiePage() {
       XLSX.writeFile(wb, `virements_salaires_${socName}_${periode}.xlsx`)
 
       setCsvExportStatus({ loading: false, done: true, error: null, summary: null })
-      setAlertMsg({ type: "success", text: "Excel téléchargé." })
+      setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_excel_ok', locale) })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur Excel"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_excel', locale)
       setCsvExportStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -358,7 +358,7 @@ export default function ExportPaiePage() {
   // ========== Tab 2: Exports MRA ==========
 
   const exportCSGNSF = async () => {
-    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    if (!societe) return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_pick_societe', locale) })
     setCsgStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const res = await fetch("/api/rh/exports/csg-mra", {
@@ -377,9 +377,9 @@ export default function ExportPaiePage() {
         console.error('[exports/csg-mra]', res.status, data?.error || data)
         // Cas le plus fréquent : paie non verrouillée → message actionnable
         if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
-          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer la déclaration CSG/NSF.`)
+          throw new Error(t('rha.b.expaie.err_lock_csg', locale).replace('{p}', periode))
         }
-        throw new Error(data.error || `Erreur ${res.status} lors de la génération CSG/NSF.`)
+        throw new Error(data.error || t('rha.b.expaie.err_csg', locale))
       }
 
       // Download recap + detail CSVs
@@ -387,9 +387,9 @@ export default function ExportPaiePage() {
       if (data.detail_csv) setTimeout(() => downloadFile(data.detail_csv, data.filename_detail || `CSG_NSF_Detail_${periode}.csv`), 500)
 
       setCsgStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
-      setAlertMsg({ type: "success", text: `Declaration CSG/NSF generee (${data.nb_employes} employes).` })
+      setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_csg_ok', locale).replace('{n}', String(data.nb_employes)) })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur CSG/NSF"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_csg', locale)
       setCsgStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -399,7 +399,7 @@ export default function ExportPaiePage() {
   // Remplace l'upload manuel des 4 CSV legacy. Génère un fichier unique
   // paco<YYYYMMDD>.csv conforme au format attendu par le portail MRA e-Services.
   const exportPACO = async () => {
-    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    if (!societe) return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_pick_societe', locale) })
     setPacoStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const res = await fetch("/api/rh/exports/paco-mra", {
@@ -415,24 +415,24 @@ export default function ExportPaiePage() {
       if (!res.ok || data.error) {
         console.error('[exports/paco-mra]', res.status, data?.error || data)
         if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
-          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le PACO MRA.`)
+          throw new Error(t('rha.b.expaie.err_lock_paco', locale).replace('{p}', periode))
         }
-        throw new Error(data.error || `Erreur ${res.status} lors de la génération PACO.`)
+        throw new Error(data.error || t('rha.b.expaie.err_paco', locale))
       }
 
       if (data.csv) downloadFile(data.csv, data.filename || `paco_${periode}.csv`)
 
       setPacoStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
       const warningCount = Array.isArray(data.warnings) ? data.warnings.length : 0
-      const baseMsg = `PACO MRA généré (${data.totaux?.employes_inclus || '?'} employés).`
+      const baseMsg = t('rha.b.expaie.toast_paco_ok', locale).replace('{n}', String(data.totaux?.employes_inclus || '?'))
       if (warningCount > 0) {
         console.warn('[exports/paco-mra] warnings:', data.warnings)
-        setAlertMsg({ type: "success", text: `${baseMsg} ${warningCount} warning(s) — voir console.` })
+        setAlertMsg({ type: "success", text: baseMsg + t('rha.b.expaie.toast_paco_warns', locale).replace('{n}', String(warningCount)) })
       } else {
         setAlertMsg({ type: "success", text: baseMsg })
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur PACO"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_paco', locale)
       setPacoStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -441,7 +441,7 @@ export default function ExportPaiePage() {
   // PRGF Monthly Return — fichier séparé du PACO, à uploader sur le portail
   // PRGF dédié (https://eservices14.mra.mu/prgfcontribution/login).
   const exportPRGF = async () => {
-    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    if (!societe) return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_pick_societe', locale) })
     setPrgfStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const res = await fetch("/api/rh/exports/prgf-mra", {
@@ -457,9 +457,9 @@ export default function ExportPaiePage() {
       if (!res.ok || data.error) {
         console.error('[exports/prgf-mra]', res.status, data?.error || data)
         if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
-          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le PRGF.`)
+          throw new Error(t('rha.b.expaie.err_lock_prgf', locale).replace('{p}', periode))
         }
-        throw new Error(data.error || `Erreur ${res.status} lors de la génération PRGF.`)
+        throw new Error(data.error || t('rha.b.expaie.err_prgf', locale))
       }
 
       if (data.csv) downloadFile(data.csv, data.filename || `prgf_${periode}.csv`)
@@ -467,24 +467,24 @@ export default function ExportPaiePage() {
       setPrgfStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
       const warningCount = Array.isArray(data.warnings) ? data.warnings.length : 0
       const ecartCount = data.ecart_potentiel?.employes?.length || 0
-      let msg = `PRGF MRA généré (${data.totaux?.employes_inclus || '?'} employés).`
+      let msg = t('rha.b.expaie.toast_prgf_ok', locale).replace('{n}', String(data.totaux?.employes_inclus || '?'))
       if (ecartCount > 0) {
         console.warn('[exports/prgf-mra] écart potentiel:', data.ecart_potentiel)
-        msg += ` ${ecartCount} sur-déclaration(s) potentielle(s) — voir console.`
+        msg += t('rha.b.expaie.toast_prgf_over', locale).replace('{n}', String(ecartCount))
       }
       if (warningCount > 0) {
         console.warn('[exports/prgf-mra] warnings:', data.warnings)
       }
       setAlertMsg({ type: "success", text: msg })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur PRGF"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_prgf', locale)
       setPrgfStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
   }
 
   const exportPAYE = async () => {
-    if (!societe) return setAlertMsg({ type: "error", text: "Veuillez selectionner une societe." })
+    if (!societe) return setAlertMsg({ type: "error", text: t('rha.b.expaie.toast_pick_societe', locale) })
     setPayeStatus({ loading: true, done: false, error: null, summary: null })
     try {
       const res = await fetch("/api/rh/exports/paye-mra", {
@@ -500,18 +500,18 @@ export default function ExportPaiePage() {
         // du préfixe technique "[PAYE 403]" qui n'aide pas l'utilisateur.
         console.error('[exports/paye-mra]', res.status, data?.error || data)
         if (res.status === 403 && /verrouill/i.test(String(data?.error || ''))) {
-          throw new Error(`⚠️ Verrouillez d'abord la paie de ${periode} dans /rh/paie avant de générer le PAYE Return.`)
+          throw new Error(t('rha.b.expaie.err_lock_paye', locale).replace('{p}', periode))
         }
-        throw new Error(data.error || `Erreur ${res.status} lors de la génération PAYE.`)
+        throw new Error(data.error || t('rha.b.expaie.err_paye', locale))
       }
 
       if (data.recap_csv) downloadFile(data.recap_csv, data.filename_recap || `PAYE_Recap_${periode}.csv`)
       if (data.detail_csv) setTimeout(() => downloadFile(data.detail_csv, data.filename_detail || `PAYE_Detail_${periode}.csv`), 500)
 
       setPayeStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
-      setAlertMsg({ type: "success", text: `PAYE Return genere (${data.totaux?.nb_employes || "?"} employes).` })
+      setAlertMsg({ type: "success", text: t('rha.b.expaie.toast_paye_ok', locale).replace('{n}', String(data.totaux?.nb_employes || '?')) })
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Erreur PAYE"
+      const msg = e instanceof Error ? e.message : t('rha.b.expaie.err_paye', locale)
       setPayeStatus({ loading: false, done: false, error: msg, summary: null })
       setAlertMsg({ type: "error", text: msg })
     }
@@ -547,11 +547,11 @@ export default function ExportPaiePage() {
       {/* Debug: show all export errors */}
       {(virementStatus.error || csgStatus.error || payeStatus.error) && (
         <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 text-xs font-mono text-orange-800 space-y-1">
-          <p className="font-bold text-sm">Debug erreurs exports :</p>
+          <p className="font-bold text-sm">{t('rha.b.expaie.debug_title', locale)}</p>
           {virementStatus.error && <p>VIREMENT: {virementStatus.error}</p>}
           {csgStatus.error && <p>CSG/NSF: {csgStatus.error}</p>}
           {payeStatus.error && <p>PAYE: {payeStatus.error}</p>}
-          <p className="text-orange-500">Societe: {societe || 'non selectionnee'} | Periode: {periode}</p>
+          <p className="text-orange-500">{t('rha.b.expaie.debug_societe', locale)}: {societe || t('rha.b.expaie.debug_none_picked', locale)} | {t('rha.b.expaie.debug_periode', locale)}: {periode}</p>
         </div>
       )}
 
