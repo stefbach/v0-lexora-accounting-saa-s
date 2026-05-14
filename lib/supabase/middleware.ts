@@ -83,6 +83,8 @@ export async function updateSession(request: NextRequest) {
     '/api/telegram/send',
     '/api/telegram/societe',
     '/api/telegram/cron-alerts',
+    '/api/telegram/log',
+    '/api/telegram/memory',
   ]
   const isPublicApi =
     publicApiPrefixes.some((p) => pathname.startsWith(p)) ||
