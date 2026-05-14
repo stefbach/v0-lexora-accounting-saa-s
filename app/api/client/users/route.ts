@@ -314,9 +314,32 @@ export async function POST(request: NextRequest) {
       : societe_id ? [societe_id] : []
 
     for (const sid of societeIds) {
-      await supabase.from('user_societes').upsert({
+      let { error: usErr } = await supabase.from('user_societes').upsert({
         user_id: authData.user.id, societe_id: sid, role, actif: true
       }, { onConflict: 'user_id,societe_id' })
+      // Si user_societes_role_check rejette le rôle (migration 261 pas appliquée
+      // sur cette table), on tente l'auto-fix puis retry. Sans ce filet, le profile
+      // est créé mais l'user n'est lié à AUCUNE société → toute modif ultérieure
+      // renvoie "Accès non autorisé à cet utilisateur".
+      if (usErr && /user_societes_role_check|violates check constraint/i.test(usErr.message)) {
+        const fixed = await tryAutoFixRoleConstraint(supabase)
+        if (fixed) {
+          const retry = await supabase.from('user_societes').upsert({
+            user_id: authData.user.id, societe_id: sid, role, actif: true
+          }, { onConflict: 'user_id,societe_id' })
+          usErr = retry.error
+        }
+        if (usErr) {
+          return NextResponse.json({
+            error: `Impossible de lier l'utilisateur à la société (rôle "${role}" rejeté par user_societes_role_check). Lance le SQL du commit pour ajouter team_leader à user_societes_role_check.`,
+          }, { status: 400 })
+        }
+      } else if (usErr) {
+        console.error('[client/users] user_societes upsert error:', usErr.message)
+        return NextResponse.json({
+          error: `Erreur liaison société : ${usErr.message}`,
+        }, { status: 500 })
+      }
 
       if (['client_admin', 'client_user', 'client_assistant'].includes(role)) {
         const { data: existingDossier } = await supabase.from('dossiers')
