@@ -481,6 +481,13 @@ const partB_fr: Record<string, string> = {
   'rha.b.expaie.debug_societe': 'Société',
   'rha.b.expaie.debug_periode': 'Période',
   'rha.b.expaie.debug_none_picked': 'non sélectionnée',
+  'rha.b.expaie.csv_h_code': 'Code employé',
+  'rha.b.expaie.csv_h_nom': 'Nom',
+  'rha.b.expaie.csv_h_prenom': 'Prénom',
+  'rha.b.expaie.csv_h_banque': 'Banque',
+  'rha.b.expaie.csv_h_compte': 'N° compte',
+  'rha.b.expaie.csv_h_mode': 'Mode paiement',
+  'rha.b.expaie.csv_h_net': 'Net (MUR)',
 
   // exports/virement (deep body)
   'rha.b.virement.params': 'Paramètres',
@@ -1463,6 +1470,13 @@ const partB_en: Record<string, string> = {
   'rha.b.expaie.debug_societe': 'Company',
   'rha.b.expaie.debug_periode': 'Period',
   'rha.b.expaie.debug_none_picked': 'not selected',
+  'rha.b.expaie.csv_h_code': 'Employee code',
+  'rha.b.expaie.csv_h_nom': 'Last name',
+  'rha.b.expaie.csv_h_prenom': 'First name',
+  'rha.b.expaie.csv_h_banque': 'Bank',
+  'rha.b.expaie.csv_h_compte': 'Account no.',
+  'rha.b.expaie.csv_h_mode': 'Pay mode',
+  'rha.b.expaie.csv_h_net': 'Net (MUR)',
 
   // exports/virement (deep body)
   'rha.b.virement.params': 'Settings',
