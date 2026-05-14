@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Shield, MessageCircle, AlertCircle, CheckCircle2, XCircle, Activity } from "lucide-react"
+import { Loader2, Shield, MessageCircle, AlertCircle, CheckCircle2, XCircle, Activity, Users, Copy, Link2, Trash2 } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale } from "@/lib/i18n"
 
@@ -65,10 +65,15 @@ export default function TelegramPermissionsPage() {
   const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [members, setMembers] = useState<any[]>([])
+  const [employees, setEmployees] = useState<any[]>([])
+  const [botUsername, setBotUsername] = useState<string>('LexoraBot')
   const [roleMatrix, setRoleMatrix] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [savingUserId, setSavingUserId] = useState<string | null>(null)
+  const [generatingFor, setGeneratingFor] = useState<string | null>(null)
+  const [codeModal, setCodeModal] = useState<null | { employe_id: string; nom: string; code: string; deep_link: string; share_message: string }>(null)
+  const [copied, setCopied] = useState<string | null>(null)
 
   const load = async () => {
     if (!societeId) return
@@ -78,10 +83,46 @@ export default function TelegramPermissionsPage() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Erreur')
       setMembers(j.members || [])
+      setEmployees(j.employees || [])
       setRoleMatrix(j.role_matrix || {})
+      setBotUsername(j.bot_username || 'LexoraBot')
     } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId])
+
+  const generateCode = async (employe_id: string, nom: string) => {
+    setGeneratingFor(employe_id); setError(null)
+    try {
+      const r = await fetch('/api/client/telegram-permissions/employee-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId, employe_id }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Erreur')
+      setCodeModal({ employe_id, nom, code: j.code, deep_link: j.deep_link, share_message: j.share_message })
+      await load()
+    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setGeneratingFor(null) }
+  }
+
+  const unlinkEmployee = async (employe_id: string, nom: string) => {
+    if (!confirm(`Délier ${nom} de Telegram ? Il devra refaire /start CODE pour se reconnecter.`)) return
+    setError(null)
+    try {
+      const r = await fetch(`/api/client/telegram-permissions/employee-code?societe_id=${societeId}&employe_id=${employe_id}`, { method: 'DELETE' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Erreur')
+      await load()
+    } catch (e: any) { setError(e?.message || 'Erreur') }
+  }
+
+  const copyToClipboard = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(key)
+      setTimeout(() => setCopied(null), 2000)
+    } catch { /* ignore */ }
+  }
 
   const updateRole = async (user_id: string, newRole: string) => {
     setSavingUserId(user_id); setError(null)
@@ -214,6 +255,87 @@ export default function TelegramPermissionsPage() {
         </CardContent>
       </Card>
 
+      {/* ── Employés RH de la société ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center justify-between">
+            <span className="flex items-center gap-2"><Users className="h-4 w-4 text-blue-600" /> Employés RH ({employees.length})</span>
+            <Button onClick={load} variant="outline" size="sm">Rafraîchir</Button>
+          </CardTitle>
+          <p className="text-xs text-slate-500 mt-1">
+            Tous les employés actifs de la fiche RH. Génère un code Telegram pour leur permettre de se connecter au bot.
+            Si l'employé n'a pas encore de compte Lexora, il sera créé automatiquement (email requis dans la fiche).
+          </p>
+        </CardHeader>
+        <CardContent>
+          {employees.length === 0 ? (
+            <div className="text-sm text-slate-500 p-4 text-center">Aucun employé actif dans la fiche RH.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b text-left text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="py-2 px-2">Code</th>
+                    <th className="py-2 px-2">Nom complet</th>
+                    <th className="py-2 px-2">Poste</th>
+                    <th className="py-2 px-2">Email</th>
+                    <th className="py-2 px-2">Compte Lexora</th>
+                    <th className="py-2 px-2">Telegram</th>
+                    <th className="py-2 px-2 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map((e: any) => (
+                    <tr key={e.employe_id} className="border-b">
+                      <td className="py-2 px-2 font-mono text-xs">{e.code || '—'}</td>
+                      <td className="py-2 px-2 font-medium">{e.nom_complet}</td>
+                      <td className="py-2 px-2 text-xs text-slate-600">{e.poste || '—'}</td>
+                      <td className="py-2 px-2 text-xs text-slate-600">{e.email || <span className="text-amber-700">manquant</span>}</td>
+                      <td className="py-2 px-2">
+                        {e.has_auth_user
+                          ? <Badge className="bg-slate-100 text-slate-700 border-slate-300 text-xs">lié</Badge>
+                          : <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">pas de compte</Badge>}
+                      </td>
+                      <td className="py-2 px-2">
+                        {e.telegram_status === 'linked' ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-xs">
+                            <MessageCircle className="h-3 w-3 mr-1" />@{e.telegram_username || 'lié'}
+                          </Badge>
+                        ) : e.telegram_status === 'pending_code' ? (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">code en attente</Badge>
+                        ) : (
+                          <span className="text-xs text-slate-400">non lié</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        {e.telegram_status === 'linked' ? (
+                          <Button
+                            onClick={() => unlinkEmployee(e.employe_id, e.nom_complet)}
+                            variant="outline" size="sm"
+                            className="text-red-700 border-red-200 hover:bg-red-50">
+                            <Trash2 className="h-3 w-3 mr-1" /> Délier
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => generateCode(e.employe_id, e.nom_complet)}
+                            disabled={generatingFor === e.employe_id || !e.email}
+                            size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                            {generatingFor === e.employe_id
+                              ? <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              : <Link2 className="h-3 w-3 mr-1" />}
+                            Générer code
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="text-xs text-slate-500 flex items-start gap-2 p-3 rounded bg-slate-50 border border-slate-200">
         <Activity className="h-4 w-4 mt-0.5" />
         <div>
@@ -221,6 +343,72 @@ export default function TelegramPermissionsPage() {
           chat_id, user_id, société, intent, résultat, statut (succès/refusé/erreur), durée. Permet la conformité AML/CFT et le débogage.
         </div>
       </div>
+
+      {/* ── Modal code généré ── */}
+      {codeModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setCodeModal(null)}>
+          <div className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-emerald-600" />
+                Code Telegram pour {codeModal.nom}
+              </h3>
+              <button onClick={() => setCodeModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div className="rounded border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+              <div className="text-xs uppercase text-emerald-700 font-medium">Code de vérification</div>
+              <div className="flex items-center gap-2">
+                <code className="text-3xl font-mono font-bold tracking-wider text-emerald-900">{codeModal.code}</code>
+                <Button
+                  onClick={() => copyToClipboard(codeModal.code, 'code')}
+                  variant="outline" size="sm">
+                  <Copy className="h-3 w-3 mr-1" />
+                  {copied === 'code' ? 'Copié !' : 'Copier'}
+                </Button>
+              </div>
+              <div className="text-xs text-emerald-700">Expire dans 15 minutes</div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs uppercase text-slate-500 font-medium">Lien direct Telegram</div>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={codeModal.deep_link}
+                  className="flex-1 text-xs font-mono bg-slate-50 border border-slate-200 rounded px-2 py-1.5"
+                />
+                <Button
+                  onClick={() => copyToClipboard(codeModal.deep_link, 'link')}
+                  variant="outline" size="sm">
+                  <Copy className="h-3 w-3 mr-1" />
+                  {copied === 'link' ? 'Copié !' : 'Copier'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs uppercase text-slate-500 font-medium">Message prêt à envoyer à l'employé</div>
+              <textarea
+                readOnly
+                value={codeModal.share_message}
+                rows={7}
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded p-2 font-mono"
+              />
+              <Button
+                onClick={() => copyToClipboard(codeModal.share_message, 'msg')}
+                variant="outline" size="sm" className="w-full">
+                <Copy className="h-3 w-3 mr-1" />
+                {copied === 'msg' ? 'Copié dans le presse-papier !' : 'Copier le message complet'}
+              </Button>
+            </div>
+
+            <div className="text-xs text-slate-500 border-t pt-3">
+              Si l'employé n'avait pas de compte Lexora, un compte vient d'être créé avec son email.
+              Il recevra aussi un email d'invitation pour définir son mot de passe.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

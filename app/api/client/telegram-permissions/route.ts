@@ -93,7 +93,53 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return NextResponse.json({ members: enriched, role_matrix: ROLE_MATRIX })
+  // ── Liste des employés RH de la société (peuvent ne pas avoir de compte Lexora)
+  // On retourne TOUS les employés actifs + leur statut auth/Telegram pour que
+  // l'admin puisse leur générer un code de liaison Telegram à la volée.
+  const { data: employes } = await admin
+    .from('employes')
+    .select('id, code, nom, prenom, poste, email, telephone, auth_user_id, date_depart')
+    .eq('societe_id', societeId)
+    .is('date_depart', null)
+    .order('nom', { ascending: true })
+
+  const employeeUserIds = (employes || []).map((e: any) => e.auth_user_id).filter(Boolean)
+  let tgByEmpUser = new Map<string, any>()
+  if (employeeUserIds.length > 0) {
+    const { data: empTg } = await admin
+      .from('telegram_users')
+      .select('user_id, chat_id, telegram_username, telegram_firstname, verified, verification_code, verification_expires_at')
+      .in('user_id', employeeUserIds)
+    tgByEmpUser = new Map((empTg || []).map((t: any) => [t.user_id, t]))
+  }
+  const enrichedEmployes = (employes || []).map((e: any) => {
+    const tg = e.auth_user_id ? tgByEmpUser.get(e.auth_user_id) : null
+    return {
+      employe_id: e.id,
+      code: e.code,
+      nom_complet: `${e.prenom || ''} ${e.nom || ''}`.trim() || 'Sans nom',
+      poste: e.poste || null,
+      email: e.email || null,
+      telephone: e.telephone || null,
+      has_auth_user: !!e.auth_user_id,
+      auth_user_id: e.auth_user_id || null,
+      telegram_status: tg?.verified
+        ? 'linked'
+        : tg?.verification_code && tg?.verification_expires_at && new Date(tg.verification_expires_at) > new Date()
+          ? 'pending_code'
+          : 'none',
+      telegram_username: tg?.telegram_username || null,
+      pending_code: !tg?.verified ? (tg?.verification_code || null) : null,
+      pending_code_expires_at: !tg?.verified ? (tg?.verification_expires_at || null) : null,
+    }
+  })
+
+  return NextResponse.json({
+    members: enriched,
+    employees: enrichedEmployes,
+    role_matrix: ROLE_MATRIX,
+    bot_username: process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'LexoraBot',
+  })
 }
 
 /**
