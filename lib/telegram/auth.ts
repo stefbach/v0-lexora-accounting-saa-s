@@ -83,6 +83,33 @@ export async function sendTelegramDocument(
 }
 
 /**
+ * Upload un buffer (PDF, XLSX, CSV) en pièce jointe Telegram via multipart.
+ * Utilisé pour bulletins de paie, factures, exports MRA générés à la volée.
+ */
+export async function sendTelegramDocumentBuffer(
+  chat_id: number,
+  buffer: ArrayBuffer | Uint8Array | Buffer,
+  filename: string,
+  contentType: string,
+  caption?: string,
+) {
+  const blob = new Blob([buffer as any], { type: contentType })
+  const form = new FormData()
+  form.set('chat_id', String(chat_id))
+  if (caption) {
+    form.set('caption', caption)
+    form.set('parse_mode', 'HTML')
+  }
+  form.set('document', blob, filename)
+  const res = await fetch(telegramApi('sendDocument'), { method: 'POST', body: form })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Telegram sendDocument(buffer) failed: ${res.status} ${body}`)
+  }
+  return res.json()
+}
+
+/**
  * Inline keyboard button — `callback_data` est limité à 64 bytes par Telegram.
  * Format conventionnel utilisé par Lexora : `intent:param1:param2`
  *   ex : leave.approve:abc-123 / payroll.approve:2025-05:confirm
