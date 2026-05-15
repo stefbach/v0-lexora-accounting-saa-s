@@ -17,6 +17,10 @@ import { selectEmailAccount, sendEmail, sendEmailFallbackResend } from '@/lib/em
  *   - text          : string (optionnel)
  *   - reply_to      : string (optionnel)
  *   - account_id    : string (optionnel — sélection compte explicite)
+ *   - contact_id    : string | string[] (optionnel — IDs factures_contacts /
+ *                     profiles / employes résolus via contacts.search ;
+ *                     leurs emails sont ajoutés à `to` automatiquement et
+ *                     court-circuitent la whitelist)
  *
  * Sélection compte : account_id > default user > default société > fallback Resend env.
  * Whitelist destinataires : factures_contacts ou profiles Lexora (anti-spam).
@@ -38,7 +42,74 @@ async function isWhitelisted(email: string, societe_id: string): Promise<boolean
     .eq('societe_id', societe_id).eq('email', email.toLowerCase()).maybeSingle()
   if (c) return true
   const { data: p } = await admin.from('profiles').select('id').eq('email', email.toLowerCase()).maybeSingle()
-  return !!p
+  if (p) return true
+  // Employés de la société (utile pour envoyer un message RH interne)
+  const { data: e } = await admin.from('employes').select('id')
+    .eq('societe_id', societe_id).ilike('email', email).maybeSingle()
+  return !!e
+}
+
+/**
+ * Résout des contact_id (factures_contacts, profiles ou employes) en emails.
+ * Limite à la société active pour les contacts et employes ; les profiles
+ * sont globaux mais leur résolution reste sûre (whitelist par défaut).
+ *
+ * Retourne { resolved: string[] (emails uniques bas-de-casse), warnings: string[] }
+ */
+async function resolveContactIds(
+  contact_ids: string[],
+  societe_id: string,
+): Promise<{ resolved: string[]; warnings: string[] }> {
+  if (contact_ids.length === 0) return { resolved: [], warnings: [] }
+  const admin = getAdminClient()
+  const resolved = new Set<string>()
+  const warnings: string[] = []
+
+  // factures_contacts (scope société)
+  const { data: contacts } = await admin
+    .from('factures_contacts')
+    .select('id, email, nom, entreprise')
+    .eq('societe_id', societe_id)
+    .in('id', contact_ids)
+  const foundContact = new Set((contacts as any[] | null)?.map(c => c.id) || [])
+  for (const c of (contacts as any[]) || []) {
+    if (c.email && EMAIL_RE.test(c.email)) resolved.add(c.email.toLowerCase())
+    else warnings.push(`Contact "${c.entreprise || c.nom || c.id}" sans email valide`)
+  }
+
+  // profiles (global)
+  const restAfterContacts = contact_ids.filter(id => !foundContact.has(id))
+  if (restAfterContacts.length > 0) {
+    const { data: profiles } = await admin
+      .from('profiles')
+      .select('id, email, full_name')
+      .in('id', restAfterContacts)
+    const foundProfile = new Set((profiles as any[] | null)?.map(p => p.id) || [])
+    for (const p of (profiles as any[]) || []) {
+      if (p.email && EMAIL_RE.test(p.email)) resolved.add(p.email.toLowerCase())
+      else warnings.push(`Profil "${p.full_name || p.id}" sans email valide`)
+    }
+
+    // employes (scope société)
+    const restAfterProfiles = restAfterContacts.filter(id => !foundProfile.has(id))
+    if (restAfterProfiles.length > 0) {
+      const { data: employes } = await admin
+        .from('employes')
+        .select('id, email, prenom, nom')
+        .eq('societe_id', societe_id)
+        .in('id', restAfterProfiles)
+      const foundEmploye = new Set((employes as any[] | null)?.map(e => e.id) || [])
+      for (const e of (employes as any[]) || []) {
+        if (e.email && EMAIL_RE.test(e.email)) resolved.add(e.email.toLowerCase())
+        else warnings.push(`Employé "${[e.prenom, e.nom].filter(Boolean).join(' ') || e.id}" sans email valide`)
+      }
+      for (const id of restAfterProfiles) {
+        if (!foundEmploye.has(id)) warnings.push(`contact_id "${id}" introuvable`)
+      }
+    }
+  }
+
+  return { resolved: Array.from(resolved), warnings }
 }
 
 export async function POST(req: NextRequest) {
@@ -46,7 +117,7 @@ export async function POST(req: NextRequest) {
     if (!hasRole(ctx, 'comptable')) {
       return { result: null, status: 'denied', error_msg: 'Envoi d\'email réservé aux comptables et plus' }
     }
-    const to = normalizeEmails(body?.to).filter(e => EMAIL_RE.test(e)).slice(0, MAX_RECIPIENTS)
+    let to = normalizeEmails(body?.to).filter(e => EMAIL_RE.test(e))
     const cc = normalizeEmails(body?.cc).filter(e => EMAIL_RE.test(e)).slice(0, MAX_CC)
     const subject = String(body?.subject || '').trim().slice(0, 200)
     const html = String(body?.html || '').slice(0, MAX_HTML)
@@ -54,7 +125,30 @@ export async function POST(req: NextRequest) {
     const reply_to = body?.reply_to ? String(body.reply_to) : undefined
     const account_id = body?.account_id ? String(body.account_id) : undefined
 
-    if (to.length === 0) return { result: null, status: 'error', error_msg: 'au moins un destinataire valide requis' }
+    // contact_id : résolution depuis factures_contacts / profiles / employes
+    const contact_ids_raw = body?.contact_id
+    const contact_ids = Array.isArray(contact_ids_raw)
+      ? contact_ids_raw.map((x: unknown) => String(x)).filter(Boolean)
+      : (contact_ids_raw ? [String(contact_ids_raw)] : [])
+    let contactWarnings: string[] = []
+    const resolvedFromContact = new Set<string>()
+    if (contact_ids.length > 0) {
+      const { resolved, warnings } = await resolveContactIds(contact_ids, ctx.societe_id)
+      contactWarnings = warnings
+      for (const e of resolved) {
+        resolvedFromContact.add(e)
+        if (!to.includes(e)) to.push(e)
+      }
+    }
+
+    to = to.slice(0, MAX_RECIPIENTS)
+
+    if (to.length === 0) {
+      const reason = contact_ids.length > 0
+        ? `au moins un destinataire valide requis (contact_id résolus : ${contactWarnings.join('; ') || 'aucun'})`
+        : 'au moins un destinataire valide requis'
+      return { result: null, status: 'error', error_msg: reason }
+    }
     if (!subject) return { result: null, status: 'error', error_msg: 'subject requis' }
     if (!html) return { result: null, status: 'error', error_msg: 'html requis' }
 
@@ -63,9 +157,11 @@ export async function POST(req: NextRequest) {
       return { result: null, status: 'error', error_msg: 'HTML interdit (script ou handler inline)' }
     }
 
-    // Whitelist destinataires
-    const checks = await Promise.all([...to, ...cc].map(e => isWhitelisted(e, ctx.societe_id)))
-    const unauthorized = [...to, ...cc].filter((_, i) => !checks[i])
+    // Whitelist destinataires (les emails déjà résolus depuis contact_id la skippent — déjà
+    // dans nos tables donc whitelistés par construction).
+    const toCheck = [...to, ...cc].filter(e => !resolvedFromContact.has(e))
+    const checks = await Promise.all(toCheck.map(e => isWhitelisted(e, ctx.societe_id)))
+    const unauthorized = toCheck.filter((_, i) => !checks[i])
     if (unauthorized.length > 0) {
       return {
         result: null, status: 'denied',
@@ -100,6 +196,7 @@ export async function POST(req: NextRequest) {
         provider: result.provider,
         from: account ? account.from_email : 'onboarding@resend.dev (fallback)',
         to, cc, subject,
+        contact_warnings: contactWarnings.length > 0 ? contactWarnings : undefined,
       },
     }
   })
