@@ -1467,8 +1467,19 @@ export default function HomePage() {
         </section>
 
         {/* PILOTAGE TELEGRAM — Chief of Staff IA */}
-        <section className="py-16 md:py-24" style={{ background: "linear-gradient(135deg, #0B0F2E 0%, #1a2659 50%, #0B0F2E 100%)" }}>
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 text-center text-white">
+        <section className="relative py-16 md:py-24 overflow-hidden" style={{ background: "linear-gradient(135deg, #0B0F2E 0%, #1a2659 50%, #0B0F2E 100%)" }}>
+          {/* Glow décoratif */}
+          <div
+            aria-hidden="true"
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            style={{
+              width: 700,
+              height: 700,
+              background: "radial-gradient(circle, rgba(212,175,55,0.18) 0%, transparent 65%)",
+              filter: "blur(40px)",
+            }}
+          />
+          <div className="relative mx-auto max-w-6xl px-4 sm:px-6 text-center text-white">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium mb-6"
                  style={{ backgroundColor: "rgba(212,175,55,0.12)", borderColor: "rgba(212,175,55,0.4)", color: "#D4AF37" }}>
               <span style={{ fontFamily: "'Poppins', sans-serif" }}>
