@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle2, AlertCircle, Calendar, Link2, Trash2, Star, Loader2 } from 'lucide-react'
+import { PageHelp } from '@/components/help/PageHelp'
 
 type Account = {
   id: string
@@ -89,14 +90,17 @@ export default function GoogleAccountsPage() {
 
   return (
     <div className="container mx-auto py-6 max-w-4xl">
-      <div className="flex items-center gap-3 mb-6">
-        <Calendar className="h-6 w-6 text-blue-600" />
-        <div>
-          <h1 className="text-2xl font-semibold">Comptes Google connectés</h1>
-          <p className="text-sm text-muted-foreground">
-            Connecte ton agenda Google pour que l'agent Telegram puisse créer, modifier et lister tes rendez-vous (avec lien Meet auto si demandé).
-          </p>
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <Calendar className="h-6 w-6 text-blue-600" />
+          <div>
+            <h1 className="text-2xl font-semibold">Comptes Google connectés</h1>
+            <p className="text-sm text-muted-foreground">
+              Connecte ton agenda Google pour que l'agent Telegram puisse créer, modifier et lister tes rendez-vous (avec lien Meet auto si demandé).
+            </p>
+          </div>
         </div>
+        <PageHelp />
       </div>
 
       {banner && (

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, KeyRound, Eye, EyeOff, AlertCircle, CheckCircle2, Save } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { PageHelp } from "@/components/help/PageHelp"
 
 export default function MraCredentialsPage() {
   const { societeId } = useSocieteActive()
@@ -67,13 +68,16 @@ export default function MraCredentialsPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><KeyRound className="h-6 w-6 text-red-600" /> Credentials MRA</h1>
-        <p className="text-sm text-slate-500">
-          Identifiants du portail MRA utilisés par le bot Telegram pour soumettre automatiquement
-          les déclarations (PAYE, CSG/NSF, TDS, VAT). Stockés <b>chiffrés AES-256-GCM</b> côté serveur,
-          jamais lus en clair dans l'UI.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><KeyRound className="h-6 w-6 text-red-600" /> Credentials MRA</h1>
+          <p className="text-sm text-slate-500">
+            Identifiants du portail MRA utilisés par le bot Telegram pour soumettre automatiquement
+            les déclarations (PAYE, CSG/NSF, TDS, VAT). Stockés <b>chiffrés AES-256-GCM</b> côté serveur,
+            jamais lus en clair dans l'UI.
+          </p>
+        </div>
+        <PageHelp />
       </div>
 
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" />{error}</div>}

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Building2, Eye, EyeOff, AlertCircle, CheckCircle2, Save, Play } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { PageHelp } from "@/components/help/PageHelp"
 
 type Compte = {
   id: string
@@ -114,13 +115,16 @@ export default function BankCredentialsPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Building2 className="h-6 w-6 text-blue-600" /> Accès Bancaires (Scraping)</h1>
-        <p className="text-sm text-slate-500">
-          Configure les identifiants Internet Banking pour scrape quotidien automatique
-          des soldes et transactions. Secrets stockés chiffrés <b>AES-256-GCM</b>.
-          Banques supportées : MCB, SBM, ABC, MauBank, MyT Money, AfrAsia, Bank One.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Building2 className="h-6 w-6 text-blue-600" /> Accès Bancaires (Scraping)</h1>
+          <p className="text-sm text-slate-500">
+            Configure les identifiants Internet Banking pour scrape quotidien automatique
+            des soldes et transactions. Secrets stockés chiffrés <b>AES-256-GCM</b>.
+            Banques supportées : MCB, SBM, ABC, MauBank, MyT Money, AfrAsia, Bank One.
+          </p>
+        </div>
+        <PageHelp />
       </div>
 
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" />{error}</div>}
