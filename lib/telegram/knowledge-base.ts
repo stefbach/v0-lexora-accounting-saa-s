@@ -113,6 +113,68 @@ Concepts clés :
 - Numérotation factures : préfixe société + AAAA-NNNNN
 - Code TDS factures : 30k (services), 31k (loyer), 32k (commissions), 33k (intérêts)
 - Codes journal : VTE (ventes), ACH (achats), BNQ (banque), SAL (salaires), OD (opérations diverses)
+
+=== POINTAGE (Phase E quick wins) ===
+
+L'employé peut pointer entrée/sortie via Telegram :
+- Commandes : /in, /out, /pointage_in, /pointage_out
+- Langage naturel FR : "j'arrive", "je commence", "je suis là", "je pars", "je termine", "je quitte"
+- Langage naturel EN : "I'm in", "starting", "clocking in", "I'm out", "leaving", "done for today"
+Le webhook capte ces patterns AVANT l'agent IA (pas besoin de tool).
+
+Comportement :
+- /in → crée une session 'travail' ouverte (pointages_sessions, mig 171)
+- /out → ferme la session ouverte la plus récente + calcule la durée
+- Anti-spam : refus si même type pointé < 2 min auparavant
+- Oubli /out la veille → message d'alerte au prochain /in
+- Cumul jour = somme des sessions 'travail' du même jour calendrier
+- Réponse type : "✅ Pointage out enregistré · 14:32 → 18:05 · Durée 3h33 · Cumul jour 7h45"
+
+Si l'utilisateur demande à l'agent IA "j'ai fait mon pointage tout à l'heure" sans verbe d'action,
+NE PAS appeler de tool — c'est du conversationnel. L'agent ne crée jamais lui-même un pointage ;
+seules les commandes/expressions intercepteées par le webhook le font.
+
+=== VOICE — Messages vocaux (Phase E quick wins) ===
+
+L'utilisateur peut envoyer des messages vocaux Telegram :
+- Le webhook intercepte update.message.voice
+- Transcription via OpenAI Whisper (model whisper-1, hint langue = locale user)
+- Le texte transcrit est ensuite envoyé au pipeline n8n COMME SI c'était un message texte,
+  avec un préfixe "[Vocal] " et un champ is_voice:true dans le payload
+- L'agent traite le texte normalement (pas de changement de prompt nécessaire)
+- Si la transcription contient un /in /out / "je pars" etc → le pointage est exécuté directement par le webhook
+- Si la transcription contient /notes_de_frais → liste exécutée directement
+- Si échec : "Désolé, je n'ai pas pu comprendre ton message vocal. Réessaie en texte."
+
+Pré-requis env : OPENAI_API_KEY (sinon message d'erreur explicite).
+
+Quand tu réponds à un message marqué is_voice=true, tu peux mentionner brièvement "(j'ai compris ton message vocal)"
+si pertinent, mais reste concis.
+
+=== NOTES DE FRAIS (Phase E quick wins) ===
+
+Workflow standard :
+1. L'employé envoie une PHOTO de ticket via Telegram.
+2. Si la légende matche /^(frais|note|repas|taxi|essence|hotel|deplacement)/i → création AUTO :
+   - OCR via Claude vision (modèle sonnet) — extrait { vendor, date_facture, montant_ttc, devise, categorie_suggeree }
+   - INSERT notes_de_frais(statut='brouillon', employe_id, societe_id, document_id, ocr_raw)
+   - Confirmation Telegram : "📷 Note de frais ajoutée : 250 MUR · ACME · 14 mai · repas. À valider par comptable."
+3. Si pas de légende → l'agent propose via boutons inline "C'est une note de frais ? [Oui / Non]"
+   callback_data = expense.confirm:<doc_id> / expense.skip:<doc_id>
+4. Le comptable validera ensuite via l'UI Lexora (statut → en_validation → approuvee/refusee → remboursee).
+
+Tool :
+- expense.create POST /api/telegram/internal/expense-create
+  Body : { document_id?, vendor?, montant_ttc?, date_facture?, devise?, categorie?, description?, statut? }
+  Si document_id fourni : OCR Anthropic vision automatique. Les valeurs body écrasent l'OCR si présentes.
+
+Commande utilisateur :
+- /notes_de_frais : liste les notes en cours (statut brouillon | en_validation) de l'employé.
+
+Catégories autorisées : repas, taxi, essence, hotel, deplacement, divers.
+Devise par défaut : MUR (Maurice). OCR peut détecter EUR/USD si imprimé.
+
+Si l'OCR a une confidence < 0.5, encourage l'utilisateur à vérifier les champs en relisant la note via l'UI Lexora.
 `
 
 export const LEXORA_KB_EN = `
@@ -161,6 +223,64 @@ Severance S.70: 3 months salary per year of service.
 
 IFRS for SMEs default in Mauritius. Full IFRS for GBC. Key: IAS 21 (functional currency), IFRS 9 (3-stage ECL), IFRS 16 (leases on BS), IFRS 15 (revenue), IAS 19 (employee benefits provisions).
 For GBC: IFRS 10 (consolidation), IFRS 3 (goodwill), BEPS Pillar Two (top-up if ETR < 15% for MNE > €750M).
+
+=== POINTAGE / Time tracking (Phase E quick wins) ===
+
+Employees can clock in/out via Telegram:
+- Commands: /in, /out, /pointage_in, /pointage_out
+- Natural language EN: "I'm in", "starting", "clocking in", "I'm out", "leaving", "done for today"
+- Natural language FR: "j'arrive", "je commence", "je pars", "je termine"
+Webhook handles these BEFORE the AI agent (no tool needed).
+
+Behavior:
+- /in → opens a 'travail' session (pointages_sessions table)
+- /out → closes the latest open session + computes elapsed duration
+- Anti-spam: rejects same-type punch < 2 min apart
+- Forgot /out yesterday → warning on next /in
+- Daily cumul = sum of 'travail' sessions same calendar day
+- Reply example: "✅ Clock-out recorded · 14:32 → 18:05 · Duration 3h33 · Daily total 7h45"
+
+The agent NEVER creates a pointage itself — only the webhook does, from explicit commands/phrases.
+
+=== VOICE messages (Phase E quick wins) ===
+
+Users can send Telegram voice messages:
+- Webhook intercepts update.message.voice
+- Transcription via OpenAI Whisper (model whisper-1, language hint = user locale)
+- Transcribed text is forwarded to n8n AS IF it were a text message, with "[Vocal] " prefix
+  and is_voice:true field in the payload.
+- The agent processes it normally (no prompt change required).
+- If transcribed text contains a clock-in/out phrase or /notes_de_frais → handled directly by webhook.
+- On failure: "Sorry, I couldn't understand your voice message. Try again in text."
+
+Env requirement: OPENAI_API_KEY (otherwise explicit error message).
+
+When replying to is_voice=true, you may briefly note "(got your voice message)" if relevant.
+
+=== EXPENSE REPORTS / Notes de frais (Phase E quick wins) ===
+
+Standard workflow:
+1. Employee sends a PHOTO of a receipt via Telegram.
+2. If caption matches /^(frais|note|repas|taxi|essence|hotel|deplacement|expense)/i → AUTO creation:
+   - OCR via Claude vision (sonnet model) — extracts { vendor, date_facture, montant_ttc, devise, categorie_suggeree }
+   - INSERT notes_de_frais(statut='brouillon', employe_id, societe_id, document_id, ocr_raw)
+   - Telegram confirmation: "📷 Expense added: 250 MUR · ACME · 14 May · meals. Pending accountant validation."
+3. No caption → bot offers inline buttons "Is it an expense? [Yes / No]"
+   callback_data = expense.confirm:<doc_id> / expense.skip:<doc_id>
+4. Accountant later validates via Lexora UI (statut: brouillon → en_validation → approuvee/refusee → remboursee).
+
+Tool:
+- expense.create POST /api/telegram/internal/expense-create
+  Body: { document_id?, vendor?, montant_ttc?, date_facture?, devise?, categorie?, description?, statut? }
+  If document_id provided: automatic Anthropic vision OCR. Body values override OCR if present.
+
+User command:
+- /notes_de_frais : lists pending expense reports (brouillon | en_validation) for the employee.
+
+Allowed categories: repas, taxi, essence, hotel, deplacement, divers.
+Default currency: MUR (Mauritius). OCR detects EUR/USD if printed.
+
+If OCR confidence < 0.5, encourage the user to review the fields via Lexora UI.
 `
 
 export function buildSystemPrompt(locale: 'fr' | 'en'): string {
