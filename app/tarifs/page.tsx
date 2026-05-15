@@ -7,7 +7,7 @@ import { getLocale, setLocale, type Locale } from "@/lib/i18n"
 import {
   FileSearch, BookOpen, FileText, Users, Landmark, BellRing,
   HeartPulse, TrendingUp, Zap, ShieldCheck, Check, Minus,
-  Camera, Sparkles, Crown,
+  Camera, Sparkles, Crown, Send,
 } from "lucide-react"
 import { motion, useReducedMotion } from "framer-motion"
 import {
@@ -69,7 +69,7 @@ const frTexts = {
   perMonth: "/mois",
 
   // Module section
-  modulesTitle: "7 modules int\u00e9gr\u00e9s",
+  modulesTitle: "8 modules int\u00e9gr\u00e9s",
   modulesSub: "Chaque module est inclus dans votre formule. Pas de surprises, pas d\u2019options cach\u00e9es.",
   mod1: "OCR & Documents IA",
   mod1f: ["Upload ou photo de tout document (PDF, Excel, image, scan)", "L\u2019IA analyse, classe et g\u00e9n\u00e8re les \u00e9critures automatiquement", "Reconnaissance factures, relev\u00e9s bancaires, contrats, re\u00e7us"],
@@ -86,6 +86,9 @@ const frTexts = {
   mod7: "TIBOK Corporate",
   mod7sub: "Sant\u00e9 & Bien-\u00eatre Salari\u00e9s",
   mod7f: ["Bilan sant\u00e9 annuel inclus", "T\u00e9l\u00e9consultation m\u00e9dicale 24/7", "Programme bien-\u00eatre entreprise"],
+  mod8: "Chief of Staff IA \u2014 Telegram",
+  mod8sub: "Votre assistant de direction 24/7",
+  mod8f: ["Agenda, RDV, emails, alertes en langage naturel", "OCR, RH, banque pilot\u00e9s depuis Telegram", "Inclus d\u00e8s le plan Pro / Cabinet Team"],
 
   // Arguments
   argTitle: "Pourquoi Lexora ?",
@@ -184,6 +187,7 @@ const frTexts = {
     "Gestion inventaire",
     "API ouverte",
     "Support d\u00e9di\u00e9",
+    "Chief of Staff IA Telegram",
   ],
 
   // TIBOK features for RH tab
@@ -229,6 +233,10 @@ const frTexts = {
       category: "TIBOK Corporate",
       features: ["Bilan sant\u00e9 annuel", "T\u00e9l\u00e9consultation 24/7", "Programme bien-\u00eatre", "Dashboard sant\u00e9 employeur"],
       isGreen: true,
+    },
+    {
+      category: "Chief of Staff IA Telegram",
+      features: ["Agenda & RDV en langage naturel", "Envoi d\u2019emails & rappels automatiques", "OCR / banque / RH pilot\u00e9s depuis Telegram", "Workflows personnalis\u00e9s"],
     },
     {
       category: "Support & SLA",
@@ -306,7 +314,7 @@ const enTexts = {
   perMonth: "/month",
 
   // Module section
-  modulesTitle: "7 integrated modules",
+  modulesTitle: "8 integrated modules",
   modulesSub: "Every module is included in your plan. No surprises, no hidden add-ons.",
   mod1: "OCR & AI Documents",
   mod1f: ["Upload or photograph any document (PDF, Excel, image, scan)", "AI analyses, classifies and generates entries automatically", "Invoices, bank statements, contracts, receipts recognition"],
@@ -323,6 +331,9 @@ const enTexts = {
   mod7: "TIBOK Corporate",
   mod7sub: "Employee Health & Wellbeing",
   mod7f: ["Annual health check-up included", "24/7 medical teleconsultation", "Corporate wellbeing program"],
+  mod8: "Chief of Staff AI — Telegram",
+  mod8sub: "Your 24/7 executive assistant",
+  mod8f: ["Calendar, meetings, emails, alerts in natural language", "OCR, HR, banking driven from Telegram", "Included from Pro / Cabinet Team plan"],
 
   // Arguments
   argTitle: "Why Lexora?",
@@ -420,6 +431,7 @@ const enTexts = {
     "Inventory management",
     "Open API",
     "Dedicated support",
+    "Chief of Staff AI Telegram",
   ],
 
   tibokTitle: "TIBOK Corporate included",
@@ -464,6 +476,10 @@ const enTexts = {
       category: "TIBOK Corporate",
       features: ["Annual health check-up", "24/7 teleconsultation", "Wellbeing program", "Employer health dashboard"],
       isGreen: true,
+    },
+    {
+      category: "Chief of Staff AI Telegram",
+      features: ["Calendar & meetings in natural language", "Automatic emails & reminders", "OCR / banking / HR driven from Telegram", "Custom workflows"],
     },
     {
       category: "Support & SLA",
@@ -543,10 +559,10 @@ const paieIncluded = [
   [true,true,true,true,true,true,true,true,true,true,true],
 ]
 const bundleIncluded = [
-  [true,true,true,false,false,false,false,false,false,false],
-  [true,true,true,true,true,false,true,false,false,false],
-  [true,true,true,true,true,true,true,true,true,false],
-  [true,true,true,true,true,true,true,true,true,true],
+  [true,true,true,false,false,false,false,false,false,false,false],
+  [true,true,true,true,true,false,true,false,false,false,true],
+  [true,true,true,true,true,true,true,true,true,false,true],
+  [true,true,true,true,true,true,true,true,true,true,true],
 ]
 
 const matrixTiers: (boolean | string)[][][] = [
@@ -564,6 +580,8 @@ const matrixTiers: (boolean | string)[][][] = [
   [[true,true,true,true],[true,true,true,true],[true,true,true,true],[false,true,true,true],[false,true,true,true],[false,false,true,true],[false,false,true,true],[false,false,true,true],[false,false,false,true]],
   // TIBOK Corporate (4 features)
   [[false,true,true,true],[false,true,true,true],[false,false,true,true],[false,false,true,true]],
+  // Chief of Staff IA Telegram (4 features)
+  [[false,true,true,true],[false,true,true,true],[false,false,true,true],[false,false,false,true]],
   // Support & SLA (4 features)
   [[true,true,true,true],[false,false,true,true],[false,false,false,true],[false,false,false,true]],
 ]
@@ -1017,6 +1035,7 @@ export default function TarifsPage() {
     { name: txt.mod4, feats: txt.mod4f, icon: <Users className="w-6 h-6" />, color: C.blue },
     { name: txt.mod5, feats: txt.mod5f, icon: <Landmark className="w-6 h-6" />, color: C.orange },
     { name: txt.mod6, feats: txt.mod6f, icon: <BellRing className="w-6 h-6" />, color: C.gold },
+    { name: txt.mod8, feats: txt.mod8f, icon: <Send className="w-6 h-6" />, color: C.blue },
   ]
 
   return (
