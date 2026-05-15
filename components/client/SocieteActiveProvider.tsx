@@ -26,6 +26,11 @@ import {
 
 export const ACTIVE_SOCIETE_COOKIE = "active_societe_id"
 export const ACTIVE_SOCIETE_STORAGE_KEY = "lexora_active_societe"
+// Sprint 3 — Cookie spécifique au mode "Acting as client" pour un
+// comptable. Quand présent, il a priorité absolue sur le cookie normal :
+// l'expérience /client/* est alors celle du client cible, sans toucher
+// à la société active "personnelle" du comptable.
+export const ACTING_AS_SOCIETE_COOKIE = "lexora_acting_as_societe"
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30 // 30 days
 
 export interface Societe {
@@ -105,7 +110,12 @@ function deleteStorage(key: string) {
 }
 
 function readInitialSocieteId(): string | null {
-  return readCookie(ACTIVE_SOCIETE_COOKIE) || readStorage(ACTIVE_SOCIETE_STORAGE_KEY)
+  // Sprint 3 — Si un cookie acting_as est posé, il a priorité absolue.
+  // Le comptable qui entre dans le dossier d'un client doit voir cette
+  // société active dans /client/*, indépendamment de sa session normale.
+  return readCookie(ACTING_AS_SOCIETE_COOKIE)
+    || readCookie(ACTIVE_SOCIETE_COOKIE)
+    || readStorage(ACTIVE_SOCIETE_STORAGE_KEY)
 }
 
 export function SocieteActiveProvider({ children }: { children: ReactNode }) {

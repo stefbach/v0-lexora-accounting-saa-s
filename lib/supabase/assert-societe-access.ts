@@ -28,22 +28,35 @@ export async function getAccessibleSocieteIds(
   admin: SupabaseClient,
   userId: string,
 ): Promise<string[]> {
-  const [userSocietesRes, dossiersRes, ownedRes] = await Promise.all([
+  // Sprint 3 — Inclure les voies COMPTABLES :
+  //   - dossiers.comptable_id (le user est comptable du dossier)
+  //   - comptable_societes.comptable_id
+  //   - societes.comptable_id (lien direct historique)
+  //   - cabinet_collaborateurs_acces (collaborateur assigné par dirigeant)
+  // Sans ça, un comptable en mode "Acting as" ne peut pas appeler les API
+  // /api/client/* car assertSocieteAccess refuse.
+  const [
+    userSocietesRes, dossiersClientRes, ownedRes,
+    dossiersComptableRes, comptableSocietesRes, societesComptableRes,
+    cabinetAccesRes,
+  ] = await Promise.all([
     admin.from('user_societes').select('societe_id').eq('user_id', userId),
     admin.from('dossiers').select('societe_id').eq('client_id', userId),
     admin.from('societes').select('id').eq('created_by', userId),
+    admin.from('dossiers').select('societe_id').eq('comptable_id', userId),
+    admin.from('comptable_societes').select('societe_id').eq('comptable_id', userId),
+    admin.from('societes').select('id').eq('comptable_id', userId),
+    admin.from('cabinet_collaborateurs_acces').select('societe_id').eq('collaborateur_id', userId),
   ])
 
   const ids = new Set<string>()
-  for (const row of userSocietesRes.data ?? []) {
-    if (row?.societe_id) ids.add(row.societe_id as string)
-  }
-  for (const row of dossiersRes.data ?? []) {
-    if (row?.societe_id) ids.add(row.societe_id as string)
-  }
-  for (const row of ownedRes.data ?? []) {
-    if (row?.id) ids.add(row.id as string)
-  }
+  for (const row of userSocietesRes.data ?? []) if (row?.societe_id) ids.add(row.societe_id as string)
+  for (const row of dossiersClientRes.data ?? []) if (row?.societe_id) ids.add(row.societe_id as string)
+  for (const row of ownedRes.data ?? []) if (row?.id) ids.add(row.id as string)
+  for (const row of dossiersComptableRes.data ?? []) if (row?.societe_id) ids.add(row.societe_id as string)
+  for (const row of comptableSocietesRes.data ?? []) if (row?.societe_id) ids.add(row.societe_id as string)
+  for (const row of societesComptableRes.data ?? []) if (row?.id) ids.add(row.id as string)
+  for (const row of cabinetAccesRes.data ?? []) if (row?.societe_id) ids.add(row.societe_id as string)
   return Array.from(ids)
 }
 
