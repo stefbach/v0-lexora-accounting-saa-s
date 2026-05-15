@@ -155,6 +155,26 @@ export async function PUT(request: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!data) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+
+    // Propagation : si l'admin change ou délie le comptable de la société,
+    // on synchronise les dossiers liés (qui ont aussi un comptable_id).
+    // Sans ça, /api/comptable/cabinet voit encore la société dans le
+    // portefeuille de l'ancien comptable via la voie dossiers.
+    if ('comptable_id' in updates) {
+      const newComptableId = updates.comptable_id as string | null
+      const { error: dossierError } = await supabase
+        .from('dossiers')
+        .update({ comptable_id: newComptableId })
+        .eq('societe_id', id)
+      if (dossierError) {
+        console.warn('[PUT /admin/societes] propagation dossiers a échoué (non-bloquant):', dossierError.message)
+      }
+      // Idem pour comptable_societes (table d'assignation explicite)
+      if (newComptableId === null) {
+        await supabase.from('comptable_societes').delete().eq('societe_id', id)
+      }
+    }
+
     return NextResponse.json({ societe: data })
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
