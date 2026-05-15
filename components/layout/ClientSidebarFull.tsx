@@ -15,7 +15,7 @@ import {
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
-  Sparkles, Package, Send, Repeat
+  Sparkles, Package, Send, Repeat, MessageCircle
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -191,6 +191,8 @@ const MENU: MenuSection[] = [
     section: "Mon Compte", sectionKey: "account.my_account",
     items: [
       { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
+      { href: "/client/telegram-config", label: "Telegram Bot", labelKey: "account.telegram_bot", icon: MessageCircle } as any,
+      { href: "/client/telegram-permissions", label: "Permissions Bot", labelKey: "account.telegram_permissions", icon: MessageCircle, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
     ]
   },
 ]

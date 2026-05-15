@@ -79,6 +79,18 @@
     {
       "path": "/api/cron/factures-recurrentes",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/telegram-notifications",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/telegram-document-reminders",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/telegram-attendance-watcher",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
