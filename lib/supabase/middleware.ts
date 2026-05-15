@@ -86,6 +86,7 @@ export async function updateSession(request: NextRequest) {
     '/api/telegram/cron-alerts',
     '/api/telegram/log',
     '/api/telegram/memory',
+    '/api/telegram/system-prompt',
   ]
   // Internal Telegram tool endpoints — all auth via X-Internal-Token
   const publicApiInternalPrefixes = [
