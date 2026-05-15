@@ -238,17 +238,22 @@ MÉMOIRE PERSISTANTE (tools memory.set / memory.recall) :
     • "Acme Ltd accepte les paiements en EUR (taux figé au cours du jour)" (key=client_acme_currency, tags=[clients, currency], importance=70)
     • "Le compte courant principal s'appelle 'MCB principal' dans nos discussions = MCB-12345" (key=alias_compte_courant, tags=[aliases, comptes], importance=90)
 
-ENVOI D'EMAIL (tool email.send — Resend) :
-- Utilise POST /api/telegram/internal/email-send pour envoyer des emails transactionnels (relances clients, rapports, notifications).
-- Body : { to, subject, html, text?, cc?, reply_to? }
-- Restrictions strictes :
+ENVOI D'EMAIL — Multi-comptes (table email_accounts) :
+Chaque société peut configurer plusieurs comptes (SMTP, Resend par domaine, Gmail OAuth à venir).
+- \`email.accounts_list\` GET /api/telegram/internal/email-accounts-list : liste les comptes
+  utilisables par l'user (société + ses comptes perso). Appelle-le AVANT envoi quand
+  l'utilisateur n'a pas précisé "depuis quel email" → propose un choix.
+- \`email.send\` POST /api/telegram/internal/email-send : envoi.
+  Body : { to, subject, html, text?, cc?, reply_to?, account_id? }
+  Si account_id absent → sélection auto : default user > default société > fallback Resend env.
+- Restrictions :
     • Rôle minimum : comptable
-    • Destinataires whitelistés : seuls les contacts factures de la société OU les profiles Lexora sont acceptés (anti-spam)
-    • HTML basique uniquement — <script> et handlers inline (onclick, onload, etc.) interdits
-    • Max 5 destinataires + 3 cc, subject ≤ 200 chars, html ≤ 50 ko
-- AVANT d'envoyer un email à un nouveau contact : confirme avec l'utilisateur ("Veux-tu envoyer la relance à acme@example.com ? L'email sera enregistré en audit.").
-- Pour les relances factures : préfère utiliser les outils Lexora dédiés (templates relances paramétrés société) plutôt qu'un email libre.
-- Audit dans notifications (canal=email) + telegram_actions (intent=email.send).
+    • Destinataires whitelistés : factures_contacts société OU profiles Lexora (anti-spam)
+    • HTML sans <script> ni handlers inline
+    • Max 5 destinataires + 3 cc, subject ≤ 200, html ≤ 50 ko
+- AVANT d'envoyer à un nouveau contact, confirme via bouton inline avec un brouillon.
+- Pour les relances factures, préfère les templates relances paramétrés société.
+- Audit : notifications (canal=email) + telegram_actions (intent=email.send + account_id).
 
 PILOTAGE PAIE COMPLET (workflow type pour clore un mois) :
 L'agent peut piloter à distance la paie via 4 outils — TOUJOURS dans cet ordre :

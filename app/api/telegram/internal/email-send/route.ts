@@ -1,29 +1,25 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { selectEmailAccount, sendEmail, sendEmailFallbackResend } from '@/lib/email/router'
 
 /**
  * POST /api/telegram/internal/email-send
  *
- * Tool agent — envoi d'un email transactionnel via Resend.
- * Rôle minimum : comptable (envoi de relances / rapports) ou direction.
+ * Tool agent — envoi d'un email via les comptes email_accounts configurés.
+ * Rôle minimum : comptable.
  *
  * Body :
- *   - to        : string ou string[] (max 5 destinataires)
- *   - subject   : string
- *   - html      : string (corps HTML — l'agent doit fournir un HTML simple, sans scripts)
- *   - text      : string (optionnel, fallback plain-text)
- *   - reply_to  : string (optionnel)
- *   - cc        : string[] (optionnel, max 3)
+ *   - to            : string | string[] (max 5)
+ *   - cc            : string[] (optionnel, max 3)
+ *   - subject       : string
+ *   - html          : string
+ *   - text          : string (optionnel)
+ *   - reply_to      : string (optionnel)
+ *   - account_id    : string (optionnel — sélection compte explicite)
  *
- * Sécurité :
- *   - Tous les destinataires DOIVENT être validés contre la table profiles/factures_contacts
- *     ou whitelist explicitement par la société (anti-spam). Pour simplifier la v1, on
- *     accepte les emails dont le domaine matche la société active OU les contacts factures.
- *   - Audit dans telegram_actions.email.send + log dans notifications (canaux: email)
- *
- * Provider : Resend (env RESEND_API_KEY). From : "Lexora <onboarding@resend.dev>".
- * Pour un branding par société, configurer un domaine vérifié et changer `from`.
+ * Sélection compte : account_id > default user > default société > fallback Resend env.
+ * Whitelist destinataires : factures_contacts ou profiles Lexora (anti-spam).
  */
 const MAX_RECIPIENTS = 5
 const MAX_CC = 3
@@ -34,25 +30,14 @@ function normalizeEmails(v: unknown): string[] {
   if (Array.isArray(v)) return v.map(x => String(x))
   return []
 }
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 async function isWhitelisted(email: string, societe_id: string): Promise<boolean> {
   const admin = getAdminClient()
-  // 1. Contact société
-  const { data: c } = await admin
-    .from('factures_contacts')
-    .select('id')
-    .eq('societe_id', societe_id)
-    .eq('email', email.toLowerCase())
-    .maybeSingle()
+  const { data: c } = await admin.from('factures_contacts').select('id')
+    .eq('societe_id', societe_id).eq('email', email.toLowerCase()).maybeSingle()
   if (c) return true
-  // 2. User membre d'une société partagée
-  const { data: p } = await admin
-    .from('profiles')
-    .select('id')
-    .eq('email', email.toLowerCase())
-    .maybeSingle()
+  const { data: p } = await admin.from('profiles').select('id').eq('email', email.toLowerCase()).maybeSingle()
   return !!p
 }
 
@@ -67,12 +52,13 @@ export async function POST(req: NextRequest) {
     const html = String(body?.html || '').slice(0, MAX_HTML)
     const text = body?.text ? String(body.text).slice(0, MAX_HTML) : undefined
     const reply_to = body?.reply_to ? String(body.reply_to) : undefined
+    const account_id = body?.account_id ? String(body.account_id) : undefined
 
     if (to.length === 0) return { result: null, status: 'error', error_msg: 'au moins un destinataire valide requis' }
     if (!subject) return { result: null, status: 'error', error_msg: 'subject requis' }
     if (!html) return { result: null, status: 'error', error_msg: 'html requis' }
 
-    // Anti-XSS basique — l'agent NE DOIT PAS pouvoir injecter <script>
+    // Anti-XSS
     if (/<script\b/i.test(html) || /\bon\w+=/i.test(html)) {
       return { result: null, status: 'error', error_msg: 'HTML interdit (script ou handler inline)' }
     }
@@ -82,56 +68,39 @@ export async function POST(req: NextRequest) {
     const unauthorized = [...to, ...cc].filter((_, i) => !checks[i])
     if (unauthorized.length > 0) {
       return {
-        result: null,
-        status: 'denied',
+        result: null, status: 'denied',
         error_msg: `Destinataires non autorisés : ${unauthorized.join(', ')}. Ajoute-les comme contact dans Lexora d'abord.`,
       }
     }
 
-    const resendKey = process.env.RESEND_API_KEY
-    if (!resendKey) {
-      return { result: null, status: 'error', error_msg: 'RESEND_API_KEY non configuré côté serveur' }
+    // Sélection compte + envoi
+    const account = await selectEmailAccount({ societe_id: ctx.societe_id, user_id: ctx.user_id, account_id })
+    const msg = { to, cc, subject, html, text, reply_to }
+    const result = account
+      ? await sendEmail(account, msg)
+      : await sendEmailFallbackResend(msg)
+
+    if (!result.ok) {
+      return { result: null, status: 'error', error_msg: result.error || 'Envoi échoué' }
     }
 
-    try {
-      const { Resend } = await import('resend')
-      const resend = new Resend(resendKey)
-      const { data, error } = await resend.emails.send({
-        from: 'Lexora <onboarding@resend.dev>',
-        to,
-        cc: cc.length > 0 ? cc : undefined,
-        subject,
-        html,
-        text,
-        replyTo: reply_to,
-      } as any)
-      if (error) {
-        return { result: null, status: 'error', error_msg: `Resend: ${error.message}` }
-      }
-      // Trace dans notifications (audit cross-canal)
-      const admin = getAdminClient()
-      await admin.from('notifications').insert({
-        destinataire_id: ctx.user_id,
-        destinataire_type: 'client',
-        societe_id: ctx.societe_id,
-        type: 'telegram_agent_email',
-        titre: subject,
-        message: text?.slice(0, 500) || html.replace(/<[^>]+>/g, '').slice(0, 500),
-        niveau: 'info',
-        envoye_email: true,
-        cron_name: null,
-      }).then(() => {}, () => {})
+    // Audit cross-canal
+    const admin = getAdminClient()
+    await admin.from('notifications').insert({
+      destinataire_id: ctx.user_id, destinataire_type: 'client',
+      societe_id: ctx.societe_id, type: 'telegram_agent_email',
+      titre: subject, message: text?.slice(0, 500) || html.replace(/<[^>]+>/g, '').slice(0, 500),
+      niveau: 'info', envoye_email: true, cron_name: null,
+    }).then(() => {}, () => {})
 
-      return {
-        result: {
-          id: data?.id,
-          to,
-          cc,
-          subject,
-        },
-      }
-    } catch (e: any) {
-      return { result: null, status: 'error', error_msg: e.message }
+    return {
+      result: {
+        message_id: result.message_id,
+        account_id: result.account_id || null,
+        provider: result.provider,
+        from: account ? account.from_email : 'onboarding@resend.dev (fallback)',
+        to, cc, subject,
+      },
     }
   })
 }
