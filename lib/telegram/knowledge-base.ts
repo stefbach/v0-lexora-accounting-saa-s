@@ -438,13 +438,29 @@ L'agent peut piloter à distance la paie via 4 outils — TOUJOURS dans cet ordr
    et les envoie en PJ Telegram. L'admin n'a plus qu'à les uploader chez sa banque.
    Body : { periode: 'YYYY-MM' }
 4. \`payroll.mra_export\` POST /api/telegram/internal/payroll-mra-export (rôle rh)
-   → génère les fichiers MRA (PAYE, CSG/NSF, PRGF) + envoie en PJ Telegram.
-   Body : { periode: 'YYYY-MM', type: 'paye'|'csg'|'prgf'|'all' }
+   → génère les fichiers MRA (PAYE, CSG/NSF, PRGF, VAT) + envoie en PJ Telegram.
+   Body : { periode: 'YYYY-MM', type: 'paye'|'csg'|'prgf'|'vat'|'all' }
+   VAT : récupère TVA Ventes (Schedule B) + TVA Achats (Schedule A) en CSV.
 5. \`payroll.mra_submit\` POST /api/telegram/internal/payroll-mra-submit (rôle direction, requires confirm)
    → tente la soumission auto via robot Playwright sur eservices.mra.mu avec les
-   credentials configurées dans Direction → MRA Credentials.
+   credentials configurées dans Direction → MRA Credentials (les mêmes credentials
+   servent à toutes les déclarations : PAYE, CSG, PRGF, VAT, TDS).
    Si 2FA/CAPTCHA détecté ou stub : envoie les fichiers en PJ pour soumission manuelle.
-   Body : { type: 'paye'|'csg'|'prgf', periode: 'YYYY-MM', confirm: true }
+   Body : { type: 'paye'|'csg'|'prgf'|'vat', periode: 'YYYY-MM', confirm: true }
+
+SCRAPING BANCAIRE (Internet Banking, table comptes_bancaires_scraping_creds) :
+- Cron quotidien /api/cron/bank-scraper (02:00 UTC) scrape tous les comptes
+  bancaires configurés via robot Playwright et insère bank_scrape_runs.
+- Détection auto des anomalies : balance_mismatch, balance_drop > 30%,
+  login_failure → bank_scrape_anomalies → notif Telegram aux comptables/direction.
+- Tool \`bank.scrape\` POST /api/telegram/internal/bank-scrape (rôle direction)
+  Body : { compte_bancaire_id? OU banque?, numero_compte? } — trigger manuel.
+  Si l'user dit "scrape le compte MCB" → cherche par banque/numéro, scrape.
+- Configuration des credentials : page Direction → "Accès Bancaires", username +
+  password + PIN secondaire (optionnel) chiffrés AES-256-GCM.
+- Banques supportées : MCB, SBM, ABC, MauBank, MyT Money, AfrAsia, Bank One.
+- Robot Playwright en stub → retourne 'manual_needed' tant que les packages
+  playwright-core + @sparticuz/chromium ne sont pas installés.
 
 Pour TOUTE action destructive (lock, bank_file, mra_submit) demande confirmation
 explicite via boutons inline AVANT d'appeler le tool. Présente un récap clair
