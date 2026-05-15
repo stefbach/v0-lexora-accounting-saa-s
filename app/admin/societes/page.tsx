@@ -675,13 +675,16 @@ export default function SocietesPage() {
             {/* Comptable */}
             <div className="space-y-2">
               <Label>{t('adm.socs.assigned_comptable', locale)}</Label>
-              <Select value={editComptableId} onValueChange={setEditComptableId}>
+              <Select value={editComptableId || "__none__"} onValueChange={(v) => setEditComptableId(v === "__none__" ? "" : v)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder={t('adm.socs.select_comptable', locale)} />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">
+                    🔌 Aucun comptable (délier)
+                  </SelectItem>
                   {comptables.length === 0 && (
-                    <SelectItem value="_none" disabled>
+                    <SelectItem value="_unavail" disabled>
                       {t('adm.socs.no_comptable_avail', locale)}
                     </SelectItem>
                   )}
@@ -692,6 +695,9 @@ export default function SocietesPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Choisir "Aucun" pour délier la société de son comptable, ou en sélectionner un autre pour la transférer.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -832,11 +838,39 @@ export default function SocietesPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {s.comptable ? s.comptable.full_name : (
-                          <span className="text-muted-foreground italic">
-                            {t('adm.socs.not_assigned', locale)}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {s.comptable ? (
+                            <>
+                              <span className="text-sm">{s.comptable.full_name}</span>
+                              <button
+                                type="button"
+                                title="Délier ce comptable"
+                                className="text-[10px] px-1.5 py-0.5 rounded border border-amber-300 text-amber-700 hover:bg-amber-50"
+                                onClick={async () => {
+                                  if (!confirm(`Délier ${s.comptable!.full_name} de la société ${s.nom} ?`)) return
+                                  try {
+                                    const r = await fetch("/api/admin/societes", {
+                                      method: "PUT",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ id: s.id, comptable_id: null }),
+                                    })
+                                    if (!r.ok) throw new Error((await r.json()).error)
+                                    setSuccess(`Comptable délié de ${s.nom}.`)
+                                    await fetchAll()
+                                  } catch (e: any) {
+                                    setError(e?.message || "Erreur")
+                                  }
+                                }}
+                              >
+                                Délier
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground italic">
+                              {t('adm.socs.not_assigned', locale)}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {linkedClients.length === 0 ? (
