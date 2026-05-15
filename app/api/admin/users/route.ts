@@ -260,3 +260,78 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
+
+/**
+ * DELETE /api/admin/users?user_id=...&hard=1
+ *
+ * Par défaut : soft delete → is_active = false sur profiles.
+ *   Le user ne peut plus se logger mais ses données restent en base
+ *   (audit, historique factures, etc.).
+ *
+ * Avec ?hard=1 : hard delete → suppression définitive du compte
+ *   (auth.users + profiles + cascade). À utiliser pour les comptes
+ *   créés par erreur, pas pour des comptes ayant produit des données.
+ *
+ * Sécurité :
+ *   - admin/super_admin uniquement
+ *   - Refuse de supprimer son propre compte
+ *   - Refuse de supprimer un autre admin/super_admin (sauf si super_admin)
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const adminUser = await requireAdmin()
+    if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+    const { searchParams } = new URL(request.url)
+    const user_id = searchParams.get('user_id')
+    const hard = searchParams.get('hard') === '1'
+    if (!user_id) return NextResponse.json({ error: 'user_id requis' }, { status: 400 })
+
+    if (user_id === adminUser.id) {
+      return NextResponse.json({
+        error: 'Vous ne pouvez pas supprimer votre propre compte.',
+      }, { status: 400 })
+    }
+
+    const supabase = getAdminClient()
+
+    // Garde-fou : refuse la suppression d'un admin/super_admin sauf si on
+    // est soi-même super_admin
+    const { data: target } = await supabase
+      .from('profiles').select('role, email').eq('id', user_id).maybeSingle()
+    const { data: me } = await supabase
+      .from('profiles').select('role').eq('id', adminUser.id).maybeSingle()
+    if (target?.role && ['admin', 'super_admin'].includes(target.role)) {
+      if (me?.role !== 'super_admin') {
+        return NextResponse.json({
+          error: 'Seul un super_admin peut supprimer un compte admin.',
+        }, { status: 403 })
+      }
+    }
+
+    if (hard) {
+      // Suppression définitive (auth + profile + cascade)
+      try { await supabase.auth.admin.deleteUser(user_id) } catch (e: any) {
+        console.warn('[DELETE hard] auth.deleteUser warn:', e?.message)
+      }
+      // Le ON DELETE CASCADE de profiles.id → auth.users.id devrait nettoyer
+      // mais on supprime explicitement au cas où.
+      await supabase.from('user_societes').delete().eq('user_id', user_id)
+      await supabase.from('profiles').delete().eq('id', user_id)
+      return NextResponse.json({ success: true, mode: 'hard', email: target?.email })
+    }
+
+    // Soft delete : désactive le compte (is_active=false)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_active: false })
+      .eq('id', user_id)
+    if (error) {
+      return NextResponse.json({ error: `Erreur désactivation: ${error.message}` }, { status: 500 })
+    }
+    return NextResponse.json({ success: true, mode: 'soft', email: target?.email })
+  } catch (e: unknown) {
+    console.error('[DELETE /api/admin/users]', e)
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
