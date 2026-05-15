@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
+import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
 import {
   genererVirementBanque,
   genererVirementMCB_BPV1,
@@ -41,11 +42,19 @@ function getAdminClient() {
  */
 export async function POST(request: Request) {
   try {
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-
     const supabase = getAdminClient()
+
+    // Pilotage interne (bot Telegram) : auth via X-Internal-Token + user_id
+    const internal = resolveInternalAuth(request)
+    let user: { id: string; email?: string }
+    if (internal) {
+      user = { id: internal.user_id, email: internal.user_email }
+    } else {
+      const supabaseAuth = await createServerClient()
+      const { data: { user: sessionUser } } = await supabaseAuth.auth.getUser()
+      if (!sessionUser) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      user = { id: sessionUser.id, email: sessionUser.email }
+    }
 
     // Sprint 5 BUG D — role-check explicite avec 'admin' inclus
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
