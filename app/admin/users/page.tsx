@@ -22,7 +22,7 @@ interface ModulesUtilisateur {
   employe_portal?: boolean
 }
 
-interface User { id: string; email: string; full_name: string; role: string; societe_id?: string; created_at: string; modules_utilisateur?: ModulesUtilisateur | null }
+interface User { id: string; email: string; full_name: string; role: string; societe_id?: string; created_at: string; modules_utilisateur?: ModulesUtilisateur | null; actif?: boolean }
 
 const moduleDefs = (locale: Locale) => [
   { key: "documents", label: t('adm.users.mod_documents', locale), icon: FileText },
@@ -174,6 +174,21 @@ export default function UsersPage() {
     if (data.error) { alert(data.error); return }
     setLastPassword(form.password)
     setOpen(false)
+    // Si on vient de créer un client (admin / user / assistant) sans
+    // société rattachée, on guide l'admin vers la suite logique :
+    // créer ou lier les sociétés du client + définir le plan.
+    const isClient = ['client_admin', 'client_user', 'client_assistant'].includes(form.role)
+    if (isClient && !form.societe_id && !(form as any).societe_ids?.length) {
+      const newUserId = data.user?.id
+      const goNext = confirm(
+        `✅ Compte ${form.prenom} ${form.nom} créé.\n\n` +
+        `Étape suivante : créer/lier une ou plusieurs sociétés à ce client et choisir le plan.\n\n` +
+        `Aller à la gestion des sociétés maintenant ?`
+      )
+      if (goNext && newUserId) {
+        window.location.href = `/admin/societes?client_id=${newUserId}`
+      }
+    }
     setForm({ prenom: '', nom: '', email: '', password: genPassword(), role: 'client_admin', societe_id: '', comptable_id: '', modules_utilisateur: getDefaultModules('client_admin') })
     load()
   }
@@ -183,6 +198,39 @@ export default function UsersPage() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id, role })
+    })
+    load()
+  }
+
+  /**
+   * Suppression compte utilisateur. Par défaut soft (désactivation),
+   * hard si l'admin coche "Supprimer définitivement".
+   */
+  const deleteUser = async (u: User, hard: boolean) => {
+    const verb = hard ? 'supprimer DÉFINITIVEMENT' : 'désactiver'
+    if (!confirm(`Vraiment ${verb} le compte ${u.full_name || u.email} (${u.email}) ?\n\n${hard ? '⚠️ Cette action est IRRÉVERSIBLE — toutes les données associées seront perdues.' : 'Le compte sera désactivé (non supprimé). Tu peux le réactiver plus tard.'}`)) return
+    try {
+      const url = hard
+        ? `/api/admin/users?user_id=${u.id}&hard=1`
+        : `/api/admin/users?user_id=${u.id}`
+      const r = await fetch(url, { method: 'DELETE' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      alert(`Compte ${j.email || u.email} ${hard ? 'supprimé définitivement' : 'désactivé'}.`)
+      load()
+    } catch (e: any) {
+      alert(`Erreur : ${e?.message || 'inconnue'}`)
+    }
+  }
+
+  /**
+   * Réactivation d'un compte précédemment désactivé.
+   */
+  const reactivateUser = async (user_id: string) => {
+    await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id, actif: true }),
     })
     load()
   }
@@ -257,6 +305,15 @@ export default function UsersPage() {
                         {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom} {s.brn ? `— ${s.brn}` : ''}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                  )}
+                  {['client_admin', 'client_user', 'client_assistant'].includes(form.role) && (
+                    <p className="text-xs text-blue-600 mt-1.5 flex items-start gap-1">
+                      <span>💡</span>
+                      <span>
+                        Optionnel — tu peux laisser vide et créer/lier les sociétés
+                        ensuite (avec choix du plan par société).
+                      </span>
+                    </p>
                   )}
                   <p className="text-xs text-gray-500 mt-1">
                     {['client_assistant'].includes(form.role) && t('adm.users.hint_assistant', locale)}
@@ -344,6 +401,36 @@ export default function UsersPage() {
                         {ROLES.map(r => <SelectItem key={r.value} value={r.value} className="text-xs">{r.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    {u.actif === false ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => reactivateUser(u.id)}
+                        title="Réactiver ce compte"
+                      >
+                        Réactiver
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                        onClick={() => deleteUser(u, false)}
+                        title="Désactiver le compte (réversible)"
+                      >
+                        Désactiver
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs border-red-300 text-red-700 hover:bg-red-50"
+                      onClick={() => deleteUser(u, true)}
+                      title="Supprimer définitivement (irréversible)"
+                    >
+                      🗑
+                    </Button>
                   </div>
                 </div>
                 <PermissionsEditor
