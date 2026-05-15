@@ -217,8 +217,8 @@ export async function GET(request: Request) {
   try {
     // Internal bypass (bot Telegram / cron) ou session normale
     const internal = resolveInternalAuth(request)
+    const supabase = await createClient()
     if (!internal) {
-      const supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     }
