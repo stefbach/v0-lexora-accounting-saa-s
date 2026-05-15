@@ -491,7 +491,7 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // ========================================================================
   // COMPTABILITÉ — FACTURES FOURNISSEURS
   // ========================================================================
-  '/comptable/factures-fournisseurs': {
+  '/comptable/fournisseurs': {
     title: 'Factures fournisseurs',
     audience: 'comptable',
     intro:
@@ -557,7 +557,7 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // ========================================================================
   // COMPTABILITÉ — JOURNAL
   // ========================================================================
-  '/comptable/journal': {
+  '/client/ecritures': {
     title: 'Journal comptable',
     audience: 'comptable',
     intro:
@@ -575,7 +575,7 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // ========================================================================
   // COMPTABILITÉ — BALANCE
   // ========================================================================
-  '/comptable/balance': {
+  '/comptable/clients/[clientId]/[societeId]/balance': {
     title: 'Balance comptable',
     audience: 'comptable',
     intro:
@@ -593,7 +593,7 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // ========================================================================
   // COMPTABILITÉ — PLAN COMPTABLE
   // ========================================================================
-  '/comptable/plan-comptable': {
+  '/client/plan-comptable': {
     title: 'Plan comptable',
     audience: 'comptable',
     intro:
@@ -610,7 +610,7 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // ========================================================================
   // COMPTABILITÉ — TIERS
   // ========================================================================
-  '/comptable/tiers': {
+  '/client/contacts': {
     title: 'Tiers (clients & fournisseurs)',
     audience: 'comptable',
     intro:
@@ -688,7 +688,7 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // ========================================================================
   // RH — POINTAGES
   // ========================================================================
-  '/rh/pointages': {
+  '/rh/pointage': {
     title: 'Pointages',
     audience: 'all',
     intro:
@@ -762,7 +762,7 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // ========================================================================
   // FISCAL — TDS
   // ========================================================================
-  '/comptable/tds': {
+  '/client/mra-tds': {
     title: 'TDS (Tax Deducted at Source)',
     audience: 'comptable',
     intro:
@@ -785,7 +785,7 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // ========================================================================
   // FISCAL — CIT / APS
   // ========================================================================
-  '/comptable/cit': {
+  '/client/mra-cit': {
     title: 'CIT — Corporate Income Tax',
     audience: 'comptable',
     intro:
@@ -884,6 +884,543 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     ],
     tips: [
       "Tu peux envoyer une photo de document directement au bot Telegram — il l'ingère et te propose la création.",
+    ],
+  },
+
+  // ========================================================================
+  // FINANCIAL DASHBOARD + FACTURES (vue client)
+  // ========================================================================
+  '/client/tableau-de-bord-financier': {
+    title: 'Tableau de bord financier',
+    audience: 'client',
+    intro:
+      "Vue d'ensemble de la santé financière de ta société : trésorerie, chiffre d'affaires, dépenses, résultat. Tout est calculé en temps réel à partir des factures et écritures.",
+    steps: [
+      { title: "Sélectionne la période", body: "Mois en cours par défaut. Tu peux changer pour comparer." },
+      { title: "Lis les indicateurs clés", body: "<b>Trésorerie</b> = solde de tous les comptes bancaires. <b>CA</b> = factures clients émises. <b>Dépenses</b> = factures fournisseurs reçues. <b>Résultat</b> = CA - dépenses." },
+      { title: "Drill-down", body: "Clique sur un chiffre pour voir le détail (factures qui composent le CA, transactions de la trésorerie, etc.)." },
+      { title: "Compare avec le mois précédent", body: "La variation % est affichée. Une baisse forte = alerte à investiguer." },
+    ],
+    tips: [
+      "Demande au bot Telegram \"point financier\" pour un résumé mobile.",
+      "Pour le vrai bilan / compte de résultat comptable, va dans Comptabilité → Bilan / Grand-livre.",
+    ],
+  },
+
+  '/client/factures': {
+    title: 'Factures clients (vue)',
+    audience: 'client',
+    intro:
+      "Consulte toutes les factures émises à tes clients. Suis qui a payé, qui doit encore, et déclenche des relances.",
+    steps: [
+      { title: "Filtre", body: "Par statut (en attente / payée / en retard), par client, par période. Recherche dans tous les champs." },
+      { title: "Crée une facture", body: "Bouton <b>Nouvelle facture</b>. Choisis le client, ajoute les lignes (depuis catalogue ou libres), Lexora calcule TVA + total auto." },
+      { title: "Envoie au client", body: "Une facture en 'en attente' peut être envoyée par email avec PDF attaché." },
+      { title: "Enregistre les paiements", body: "Quand le client paie, ouvre la facture et clique <b>Enregistrer paiement</b>." },
+    ],
+    tips: [
+      "Crée une facture via Telegram : \"facture ACME 50000 MUR consulting\".",
+      "Pour les abonnements récurrents, va dans Récurrences.",
+    ],
+  },
+
+  '/client/nouvelle-facture': {
+    title: 'Nouvelle facture',
+    audience: 'client',
+    intro:
+      "Crée une nouvelle facture client. Lexora applique automatiquement la numérotation (préfixe société + AAAA-NNNNN) et calcule TVA + total TTC à partir des lignes.",
+    steps: [
+      { title: "Choisis le client", body: "Sélectionne dans la liste ou crée un nouveau contact (nom, BRN, email, adresse). BRN important pour la TVA." },
+      { title: "Ajoute les lignes", body: "Pour chaque prestation : description, quantité, prix unitaire, taux TVA. Tu peux piocher dans le catalogue services." },
+      { title: "Vérifie les totaux", body: "HT, TVA 15%, TTC. Si erreur, retourne aux lignes." },
+      { title: "Conditions et notes", body: "Date d'échéance (30j par défaut), conditions paiement, notes internes (non visibles client)." },
+      { title: "Émets ou brouillon", body: "<b>Brouillon</b> = modifiable. <b>Émettre</b> = PDF généré, numéro auto, comptabilisé, immutable." },
+    ],
+    pitfalls: [
+      "Émettre sans email contact → impossible d'envoyer automatiquement.",
+      "Mauvais taux TVA → ta déclaration TVA sera fausse.",
+    ],
+    tips: [
+      "Pour une facture similaire à une existante, clique <b>Dupliquer</b> sur l'ancienne.",
+    ],
+  },
+
+  '/client/nouvelle-facture-ia': {
+    title: 'Nouvelle facture par IA',
+    audience: 'client',
+    intro:
+      "Décris ta facture en langage naturel — l'IA Claude extrait automatiquement client, lignes, montants, TVA. Plus rapide que le formulaire.",
+    steps: [
+      { title: "Écris en français", body: "Exemple : \"Facture ACME Ltd, consulting septembre 2026, 50 000 MUR HT + 15% TVA, à 30 jours\"." },
+      { title: "L'IA propose un brouillon", body: "Lexora identifie le client (cherche dans ta base), crée les lignes, calcule TVA. Vérifie l'aperçu." },
+      { title: "Ajuste si besoin", body: "Modifie chaque ligne avant validation. L'IA est rapide mais pas parfaite pour cas complexes." },
+      { title: "Émets", body: "Clique <b>Émettre</b>. La facture passe en compta." },
+    ],
+    tips: [
+      "Idem depuis Telegram avec le bot.",
+    ],
+  },
+
+  '/client/recurrences': {
+    title: 'Factures récurrentes',
+    audience: 'client',
+    intro:
+      "Configure des factures qui se génèrent automatiquement chaque mois / trimestre / année (loyers, abonnements, contrats récurrents).",
+    steps: [
+      { title: "Crée un modèle", body: "Bouton <b>Nouveau modèle</b>. Client, lignes, fréquence, date début, jour d'émission, date fin optionnelle." },
+      { title: "Le cron quotidien", body: "Chaque jour à 06:00 UTC, Lexora vérifie les modèles dus et clone une facture en 'en attente'." },
+      { title: "Pause / reprise", body: "Tu peux suspendre un modèle sans le supprimer." },
+    ],
+    pitfalls: [
+      "Modifier les conditions → seules les FUTURES factures héritent.",
+    ],
+    tips: [
+      "Crée via Telegram : \"loyer ACME 50000 MUR tous les mois à partir du 1er juin\".",
+    ],
+  },
+
+  '/client/relances': {
+    title: 'Relances factures',
+    audience: 'client',
+    intro:
+      "Suivi automatique des factures impayées. Lexora envoie des relances par email selon une cadence configurable (J+7, J+15, J+30 après échéance).",
+    steps: [
+      { title: "Configure les délais", body: "Paramètres facturation. Ex: amicale J+7, ferme J+15, mise en demeure J+30. Personnalise les templates." },
+      { title: "Le cron quotidien envoie", body: "Chaque jour à 08:00 UTC, relances envoyées par email. Tu reçois un récap." },
+      { title: "Suspends une relance", body: "Pour un client en attente de paiement promis, suspends puis re-active plus tard." },
+      { title: "Historique", body: "Pour chaque facture, vois toutes les relances envoyées (date, niveau, mode)." },
+    ],
+    tips: [
+      "Le bot Telegram alerte chaque matin si > 5 factures en retard.",
+    ],
+  },
+
+  // ========================================================================
+  // ÉTATS FINANCIERS
+  // ========================================================================
+  '/client/bilan': {
+    title: 'Bilan comptable',
+    audience: 'client',
+    intro:
+      "État de la situation financière à une date donnée : ce que la société POSSÈDE (actif) versus ce qu'elle DOIT (passif). Référence pour mesurer la solidité.",
+    steps: [
+      { title: "Choisis la date", body: "Fin de mois, trimestre ou exercice. Lexora consolide toutes les écritures jusqu'à cette date." },
+      { title: "Lis l'actif", body: "Immobilisations, stocks, créances clients, trésorerie. Ce que la société 'possède'." },
+      { title: "Lis le passif", body: "Capital + résultats accumulés, dettes fournisseurs/bancaires, charges sociales à payer." },
+      { title: "Équilibre", body: "Total actif = Total passif. Si écart, une écriture est manquante / erronée." },
+      { title: "Export PDF", body: "Format conforme IFRS for SMEs / Full IFRS. À remettre au banquier ou commissaire." },
+    ],
+    pitfalls: [
+      "Solde non nul sur compte d'attente (47x) → régularise avant édition officielle.",
+    ],
+  },
+
+  '/client/grand-livre': {
+    title: 'Grand-livre',
+    audience: 'client',
+    intro:
+      "Détail compte par compte de toutes les écritures. Pour chaque compte du plan comptable, ses mouvements et son solde.",
+    steps: [
+      { title: "Choisis un compte", body: "Liste à gauche, ou recherche par numéro / libellé." },
+      { title: "Filtre la période", body: "Date début / date fin. Solde initial + mouvements + solde final." },
+      { title: "Drill-down", body: "Clic sur une écriture pour voir la pièce d'origine (facture, paiement, OD)." },
+      { title: "Export", body: "PDF ou CSV (FEC pour auditeur)." },
+    ],
+  },
+
+  '/client/ecritures': {
+    title: 'Écritures comptables',
+    audience: 'client',
+    intro:
+      "Liste chronologique de toutes les écritures comptables, classées par code journal (VTE ventes, ACH achats, BNQ banque, SAL salaires, OD opérations diverses).",
+    steps: [
+      { title: "Filtre par journal", body: "La plupart sont auto-générées. Tu peux aussi en saisir manuellement (OD)." },
+      { title: "Saisie OD manuelle", body: "Bouton <b>Nouvelle écriture</b>. Journal OD, lignes débit/crédit (équilibre obligatoire), libellé clair." },
+      { title: "Export comptable", body: "PDF récap ou CSV (FEC, IFRS) pour le commissaire / auditeur." },
+    ],
+    pitfalls: [
+      "Écriture déséquilibrée → Lexora bloque. Mais saisie sur mauvais comptes possible : double-vérifie.",
+    ],
+  },
+
+  // ========================================================================
+  // MRA HUB + DÉCLARATIONS SPÉCIFIQUES
+  // ========================================================================
+  '/client/mra-hub': {
+    title: 'Hub MRA — toutes tes obligations fiscales',
+    audience: 'all',
+    intro:
+      "Vue centralisée de toutes les déclarations MRA : TVA, PAYE, CSG/NSF, PRGF, TDS, CIT, ROC, FSC, SFT. Échéances et statuts au même endroit.",
+    steps: [
+      { title: "Liste des déclarations dues", body: "Triées par échéance. Les déclarations dans les 7 prochains jours sont en évidence." },
+      { title: "Ouvre une déclaration", body: "Tu accèdes au formulaire / récap selon le type (TVA, PAYE, CIT…)." },
+      { title: "Soumets à la MRA", body: "Lexora génère les fichiers. Charge manuellement sur eservices.mra.mu OU laisse le robot Telegram soumettre (cf. Accès MRA)." },
+    ],
+    externalLinks: [
+      { label: "Portail MRA eServices", url: "https://eservices.mra.mu" },
+      { label: "Calendrier MRA officiel", url: "https://www.mra.mu/index.php/eservices/tax-calendar" },
+    ],
+    tips: [
+      "Active les notifications Telegram pour des rappels J-7 / J-3 / J-1.",
+    ],
+  },
+
+  '/client/mra-cit': {
+    title: 'Déclaration CIT — Impôt sur les sociétés',
+    audience: 'all',
+    intro:
+      "Impôt sur les bénéfices à 15% (3% effectif si GBC1 avec Partial Exemption Regime). Déclaration annuelle 6 mois après clôture + APS trimestriels.",
+    steps: [
+      { title: "Résultat fiscal", body: "Lexora part du résultat comptable et applique les retraitements (charges non déductibles, etc.) pour la base imposable." },
+      { title: "Calcule l'APS du trimestre", body: "Système d'avances : 25% de l'impôt estimé à payer avant fin trimestre." },
+      { title: "Déclaration annuelle", body: "6 mois après clôture. Lexora consolide tout, déduit les APS, affiche le solde à payer/rembourser." },
+      { title: "Soumets à MRA", body: "Formulaire CIT, charge sur eservices.mra.mu, paie le solde." },
+    ],
+    pitfalls: [
+      "Sous-estimer l'APS → pénalité si solde annuel > 25% au-dessus des avances.",
+      "Pour GBC1 : oublier de documenter la substance (CIGA) → perte du régime 3%.",
+    ],
+    externalLinks: [
+      { label: "Portail MRA CIT", url: "https://eservices.mra.mu" },
+      { label: "Guide CIT MRA", url: "https://www.mra.mu/index.php/eservices/income-tax-companies" },
+    ],
+  },
+
+  '/client/mra-tds': {
+    title: 'TDS — Tax Deducted at Source',
+    audience: 'comptable',
+    intro:
+      "Retenues à la source (Section 111A ITA Maurice). 5% services prof. résidents (10% non-résidents), 15% intérêts non-résidents, 5% loyers, 3% commission.",
+    steps: [
+      { title: "Paiements concernés", body: "Lexora flagge auto les factures fournisseurs éligibles." },
+      { title: "Retiens et provisionne", body: "Au paiement, retiens la TDS (compte 4421) et paie le solde au fournisseur." },
+      { title: "Déclaration mensuelle", body: "Bouton <b>Déclarer TDS du mois</b>. CSV à soumettre sur eservices.mra.mu avant le 20 du mois suivant." },
+      { title: "Paie à la MRA", body: "Virement pour le total TDS. Marque comme <b>payée</b>." },
+    ],
+    pitfalls: [
+      "Oublier la TDS → pénalité 5% + intérêts.",
+      "Retard > 20 → pénalités automatiques.",
+    ],
+    externalLinks: [
+      { label: "Portail MRA TDS", url: "https://eservices.mra.mu" },
+    ],
+  },
+
+  '/client/mra-roc': {
+    title: 'ROC Annual Return',
+    audience: 'all',
+    intro:
+      "Déclaration annuelle obligatoire auprès du Registrar of Companies. À déposer dans les 28 jours suivant l'AGM.",
+    steps: [
+      { title: "Tiens ton AGM", body: "Assemblée Générale dans les 15 mois après incorporation, puis annuelle. PV à rédiger." },
+      { title: "Prépare les états financiers", body: "Bilan + compte de résultat audités si requis. Lexora génère les états." },
+      { title: "Dépose l'Annual Return", body: "Sur eROC, ou via un secrétaire. Frais : ~2 000 MUR." },
+      { title: "Suis l'échéance", body: "28 jours après AGM. Au-delà : pénalités + risque de radiation." },
+    ],
+    externalLinks: [
+      { label: "Portail eROC Maurice", url: "https://onlinebrd.govmu.org/" },
+    ],
+  },
+
+  '/client/mra-sft': {
+    title: 'SFT — Statement of Financial Transactions',
+    audience: 'comptable',
+    intro:
+      "Déclaration AML/CFT obligatoire à la FIU/MRA des transactions financières inhabituelles (seuils : 500k MUR cash, 100k USD wire transfer).",
+    steps: [
+      { title: "Identifie", body: "Cash > 500k MUR, virements internationaux > 100k USD, ou pattern inhabituel (structuration, contre-partie suspecte)." },
+      { title: "Documente", body: "Pour chaque transaction : montant, parties, motif déclaré, justificatifs. Conservation 7 ans." },
+      { title: "Déclare à la FIU", body: "Bouton <b>Soumettre SFT</b>. Format STR/CTR. Délai 5 jours ouvrés après détection." },
+    ],
+    pitfalls: [
+      "Non-déclaration → pénalité jusqu'à 100k MUR + peine de prison pour le dirigeant.",
+      "Tipping-off (informer le client) → infraction grave.",
+    ],
+    externalLinks: [
+      { label: "FIU Maurice", url: "https://www.fiumauritius.org" },
+    ],
+  },
+
+  '/client/echeances': {
+    title: 'Échéances fiscales',
+    audience: 'all',
+    intro:
+      "Calendrier de toutes les obligations fiscales et sociales : VAT (20 du mois), PAYE/CSG/NSF (20), CIT trimestriel, ROC annuel, FSC GBC, etc.",
+    steps: [
+      { title: "Vue chronologique", body: "Échéances triées par date la plus proche. Dans 7 jours = orange, < 3 jours = rouge." },
+      { title: "Marque comme déclaré / payé", body: "Une fois soumis et payé, marque-le pour qu'il disparaisse." },
+      { title: "Filtre par type", body: "Affiche seulement les échéances TVA, ou paye, ou tout." },
+    ],
+    tips: [
+      "Le bot Telegram t'envoie des rappels J-7 / J-3 / J-1.",
+    ],
+  },
+
+  '/client/declarations-sociales': {
+    title: 'Déclarations sociales (CSG, NSF, PRGF)',
+    audience: 'all',
+    intro:
+      "Cotisations sociales mensuelles : CSG, NSF, PRGF. Échéance le 20 du mois suivant.",
+    steps: [
+      { title: "Calcule la paie", body: "RH → Paie. CSG / NSF / PRGF calculés auto sur chaque bulletin." },
+      { title: "Génère les fichiers MRA", body: "RH → Paie → Exports MRA. CSV pour CSG/NSF et PRGF." },
+      { title: "Soumets à la MRA", body: "Sur eservices.mra.mu, charge les fichiers, valide, paie le solde avant le 20." },
+    ],
+    pitfalls: [
+      "Erreur sur la base (basic + allowances + primes) → toutes les cotisations sont fausses.",
+      "Retard > 20 → pénalité 5% + intérêts.",
+    ],
+  },
+
+  // ========================================================================
+  // GBC
+  // ========================================================================
+  '/client/gbc-dashboard': {
+    title: 'GBC — Dashboard Global Business',
+    audience: 'all',
+    intro:
+      "Vue d'ensemble des obligations GBC : substance, Transfer Pricing, CRS/FATCA, Pillar Two, UBO.",
+    steps: [
+      { title: "Statut société", body: "GBC1 (Partial Exemption 80% → 3% effectif) ou Authorised Company (15% mais exempt si non-résident)." },
+      { title: "Échéances clés", body: "Annual Return FSC (6 mois après clôture, 1 750 USD GBC1 / 350 USD AC), audit, Country-by-Country si MNE > €750M." },
+      { title: "Substance & CIGA", body: "Pour garder le 3%, documente les Core Income-Generating Activities (employés qualifiés Maurice, dépenses opé, conseil d'administration)." },
+    ],
+    externalLinks: [
+      { label: "FSC Maurice", url: "https://www.fscmauritius.org" },
+    ],
+  },
+
+  // ========================================================================
+  // RH — DÉPART, SEVERANCE, EOY, PROVISIONS
+  // ========================================================================
+  '/rh/depart': {
+    title: 'Départ d\'un employé',
+    audience: 'all',
+    intro:
+      "Process de départ : démission, licenciement, fin de CDD, retraite. Calcule severance, solde de tout compte, certificat, déclarations.",
+    steps: [
+      { title: "Saisis la date de départ", body: "Fiche employé → date_depart. Déclenche les calculs auto." },
+      { title: "Notice respectée", body: "WRA 2019 : 30 jours minimum si ≥ 1 an de service. Notice donnée et payée si non effectuée." },
+      { title: "Calcul severance", body: "S.70 WRA : 3 mois × années de service (sauf retraite ≥ 60 ans : 1 mois × années). Lexora calcule auto." },
+      { title: "Solde de tout compte", body: "Salaire prorata + congés payés + 13e mois prorata + severance. Dernier bulletin." },
+      { title: "Certificat & déclarations", body: "Génère le certificat de travail. Déclare le départ à la MRA via PAYE Exit Statement." },
+    ],
+    pitfalls: [
+      "Oublier la notice → litige Prud'hommes mauriciens.",
+      "Mauvais calcul severance → litige coûteux. Vérifie le WRA.",
+    ],
+    externalLinks: [
+      { label: "WRA 2019 — Severance", url: "https://labour.govmu.org/Pages/Workers-Rights-Act-2019.aspx" },
+    ],
+  },
+
+  '/rh/severance': {
+    title: 'Calcul Severance',
+    audience: 'comptable',
+    intro:
+      "Calcul détaillé de l'indemnité de fin de contrat (WRA S.70). Outil de simulation.",
+    steps: [
+      { title: "Paramètres", body: "Employé, date d'arrivée, date de départ envisagée, motif (démission / licenciement / retraite)." },
+      { title: "Calcul détaillé", body: "Mois × salaire moyen × années de service. Formule S.70 WRA appliquée." },
+      { title: "Provision", body: "Si tu anticipes un départ : Provisions → Severance." },
+    ],
+    tips: [
+      "Retraite ≥ 60 ans : 1 mois × années au lieu de 3. Différence majeure.",
+    ],
+  },
+
+  '/rh/eoy-bonus': {
+    title: 'End-of-Year Bonus (13e mois)',
+    audience: 'comptable',
+    intro:
+      "Prime de fin d'année obligatoire WRA 2019 : 1/12 du salaire annuel par mois travaillé. Versée en décembre.",
+    steps: [
+      { title: "Éligibilité", body: "Tous les employés ayant travaillé ≥ 1 mois dans l'année. Saisonniers / temps partiel inclus." },
+      { title: "Lance le calcul", body: "Bouton <b>Calculer EOY {année}</b>. (salaire moyen × mois travaillés) / 12." },
+      { title: "Valide et paie", body: "Bulletin EOY séparé du bulletin mensuel régulier." },
+    ],
+    pitfalls: [
+      "Oublier les saisonniers → litige.",
+      "Calculer sur salaire de base seulement → erreur. WRA dit 'remuneration' incluant allowances.",
+    ],
+  },
+
+  '/rh/declarations-mra': {
+    title: 'Déclarations MRA paye',
+    audience: 'comptable',
+    intro:
+      "Déclarations mensuelles paye à la MRA : PAYE, CSG/NSF, PRGF. Échéance : 20 du mois suivant.",
+    steps: [
+      { title: "Verrouille la paie", body: "Avant de déclarer, verrouille la période. Bulletins validés et comptabilisés." },
+      { title: "Génère les fichiers", body: "Onglets PAYE-MRA, CSG/NSF-MRA, PRGF-MRA. Récap PDF + détail CSV chacun." },
+      { title: "Soumets via eservices.mra.mu", body: "Connecte-toi, charge les CSV. Note la référence de soumission." },
+      { title: "Paie", body: "Solde à payer avant le 20 du mois suivant." },
+    ],
+    externalLinks: [
+      { label: "Portail MRA — eServices", url: "https://eservices.mra.mu" },
+    ],
+    tips: [
+      "Configure Credentials MRA dans Direction → Accès MRA pour soumission auto via Telegram.",
+    ],
+  },
+
+  '/rh/provisions/conges': {
+    title: 'Provisions congés payés (IAS 19)',
+    audience: 'comptable',
+    intro:
+      "Provision comptable pour les congés acquis non pris. Obligation IAS 19. Lexora calcule auto chaque mois.",
+    steps: [
+      { title: "Calcul mensuel auto", body: "Fin de mois : jours de congés acquis × taux journalier par employé. Total = provision à passer." },
+      { title: "Écriture auto", body: "Débit 6411 Salaires (charge), Crédit 4282 Provision congés. Reprise à la prise de congés." },
+      { title: "Suivi", body: "Provision en début de mois, mouvements (acquisitions, prises), provision en fin." },
+    ],
+  },
+
+  // ========================================================================
+  // CABINET
+  // ========================================================================
+  '/comptable/clients': {
+    title: 'Portfolio clients du cabinet',
+    audience: 'comptable',
+    intro:
+      "Tous les clients que ton cabinet suit. Sociétés, tâches en cours, statut, collaborateurs assignés.",
+    steps: [
+      { title: "Filtre et cherche", body: "Par nom, secteur, tag (urgent, VIP), collaborateur assigné." },
+      { title: "Ouvre un client", body: "Détail : sociétés du client, tâches du mois, dernières interactions, contact." },
+      { title: "Acting as", body: "Bascule en mode client : Lexora comme si tu étais le directeur. Pratique pour saisir / vérifier." },
+    ],
+    tips: [
+      "Assigne des collaborateurs à chaque client pour scoper qui voit/édite quoi.",
+    ],
+  },
+
+  '/comptable/equipe': {
+    title: 'Équipe du cabinet',
+    audience: 'comptable',
+    intro:
+      "Gestion des collaborateurs du cabinet : qui fait quoi, sur quels clients, avec quels droits.",
+    steps: [
+      { title: "Ajoute un collaborateur", body: "Bouton <b>Inviter</b>. Email, rôle, assignations clients." },
+      { title: "Assigne des clients", body: "Chacun ne voit que les clients assignés (sauf admin)." },
+      { title: "Suivi temps passé", body: "Optionnel : saisie de temps par client/tâche. Pratique pour facturer le cabinet." },
+    ],
+  },
+
+  // ========================================================================
+  // ALERTES + PARAMÈTRES + SOCIÉTÉS
+  // ========================================================================
+  '/client/alertes': {
+    title: 'Alertes et notifications',
+    audience: 'all',
+    intro:
+      "Centre d'alertes : échéances fiscales, factures en retard, documents manquants, anomalies bancaires.",
+    steps: [
+      { title: "Filtre par sévérité", body: "Critique (immédiat), Important (semaine), Info (à suivre)." },
+      { title: "Résous une alerte", body: "Clique pour accéder à la page concernée et traiter. Disparaît une fois résolue." },
+      { title: "Active Telegram", body: "Configure dans Permissions Bot. Alertes critiques en push." },
+    ],
+    tips: [
+      "Bot fait un point matinal 09:00 chaque jour.",
+    ],
+  },
+
+  '/client/facturation-settings': {
+    title: 'Paramètres facturation',
+    audience: 'client',
+    intro:
+      "Configure tout ce qui touche aux factures : numérotation, logo, conditions, relances, IBAN, mentions légales.",
+    steps: [
+      { title: "Numérotation", body: "Format : préfixe + AAAA + N° séquentiel. Personnalise le préfixe." },
+      { title: "Logo et coordonnées", body: "Upload logo. Vérifie adresse + BRN + N° VAT + IBAN affichés sur PDF." },
+      { title: "Conditions paiement", body: "Délai par défaut, mode (virement, chèque), texte sur facture." },
+      { title: "Cadence relances", body: "1ère J+7, 2e J+15, mise en demeure J+30. Personnalise templates." },
+    ],
+  },
+
+  '/client/parametres-rh': {
+    title: 'Paramètres RH',
+    audience: 'all',
+    intro:
+      "Règles RH : congés, heures de travail, paie, jours fériés.",
+    steps: [
+      { title: "Règles de congés", body: "Solde initial, acquisition (1.83j/mois pour AL), reports, période d'utilisation." },
+      { title: "Heures de travail", body: "45h/semaine WRA, 8h/jour, pauses. Sert au calcul heures sup." },
+      { title: "Paramètres paie", body: "Jour de paie, méthode (virement, chèque), comptes comptables par défaut." },
+    ],
+  },
+
+  '/client/societes': {
+    title: 'Mes sociétés',
+    audience: 'client',
+    intro:
+      "Liste des sociétés que tu gères. Bascule rapide entre l'une et l'autre, ajout d'une nouvelle.",
+    steps: [
+      { title: "Bascule", body: "Sélecteur en haut. Toute l'app filtre sur la société active." },
+      { title: "Crée une société", body: "Bouton <b>Nouvelle</b>. Nom, BRN, TAN MRA, secteur, date création." },
+      { title: "Modifie", body: "Coordonnées, logo, paramètres fiscaux, adresses, comptes bancaires." },
+    ],
+    pitfalls: [
+      "Ne supprime pas une société avec écritures comptables. Archive plutôt.",
+    ],
+  },
+
+  '/client/utilisateurs': {
+    title: 'Utilisateurs de la société',
+    audience: 'client',
+    intro:
+      "Qui peut accéder à cette société dans Lexora : directeurs, comptables, employés.",
+    steps: [
+      { title: "Invite", body: "Bouton <b>Inviter</b>. Email, rôle. Email envoyé pour créer le compte." },
+      { title: "Change un rôle", body: "Édite la ligne. Le rôle détermine les droits (matrice)." },
+      { title: "Désactive un compte", body: "Quand un collaborateur quitte. Historique préservé." },
+    ],
+    tips: [
+      "Pour le bot Telegram, va aussi dans Permissions Bot pour les capabilities fines.",
+    ],
+  },
+
+  // ========================================================================
+  // LEX IA + OCR + TAUX CHANGE
+  // ========================================================================
+  '/client/lex-factures': {
+    title: 'Lex — Factures IA',
+    audience: 'client',
+    intro:
+      "Module IA pour créer factures rapidement et détecter anomalies.",
+    steps: [
+      { title: "Crée en langage naturel", body: "\"facture acme 50k consulting septembre\" → l'IA extrait tout et propose un brouillon." },
+      { title: "Détection d'anomalies", body: "L'IA scanne pour repérer montants suspects (doublons, erreurs TVA, prix anormal client)." },
+      { title: "Relances intelligentes", body: "L'IA analyse l'historique de paiement et propose des messages personnalisés." },
+    ],
+  },
+
+  '/client/lex-ocr': {
+    title: 'Lex OCR — Reconnaissance documents',
+    audience: 'client',
+    intro:
+      "Dépose PDF / photo → l'IA Claude lit le contenu et extrait fournisseur, montants, dates, TVA.",
+    steps: [
+      { title: "Dépose un document", body: "PDF, JPG, PNG, XLSX. Max 20 Mo." },
+      { title: "L'IA analyse", body: "Claude Vision identifie le type et extrait les champs structurés." },
+      { title: "Valide ou corrige", body: "Récap proposé. 1 clic pour créer l'écriture/facture." },
+    ],
+    tips: [
+      "Envoie aussi au bot Telegram — pareil.",
+    ],
+  },
+
+  '/client/taux-change': {
+    title: 'Taux de change',
+    audience: 'comptable',
+    intro:
+      "Historique des taux MUR/EUR/USD/GBP. Mis à jour quotidiennement automatiquement.",
+    steps: [
+      { title: "Taux du jour", body: "Cours officiels MRA pour devises majeures." },
+      { title: "Historique", body: "Taux des derniers mois. Indispensable pour les écritures rétroactives (IAS 21)." },
+      { title: "Refresh manuel", body: "Si besoin (sinon auto à 05:30 chaque jour)." },
+    ],
+    externalLinks: [
+      { label: "Taux MRA officiels", url: "https://www.mra.mu/index.php/exchange-rates" },
     ],
   },
 }
