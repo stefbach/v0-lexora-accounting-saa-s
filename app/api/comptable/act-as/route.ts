@@ -75,9 +75,7 @@ async function canActAs(ctx: NonNullable<Awaited<ReturnType<typeof getCabinetCon
 
     // Voie E (fallback global) — cohérence avec /api/comptable/clients
     // legacy : un comptable (non dédié) accède à tous les clients
-    // de la plateforme. Sans ce fallback, le bouton "Entrer dans le
-    // dossier" du Sprint 2 dashboard refuserait pour des comptables
-    // dont la liaison n'est pas faite via les voies A-D.
+    // de la plateforme.
     if (profile.role === 'comptable') {
       const { data: anyClientLink } = await supabase
         .from('dossiers')

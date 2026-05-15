@@ -49,15 +49,11 @@ export async function GET() {
     if (isDirigeant || ['admin', 'super_admin'].includes(profile.role)) {
       // Dirigeant : 5 voies de découverte (legacy + nouvelles)
       //   A. dossiers.comptable_id (legacy comptable_dedie)
-      //   B. comptable_societes.comptable_id (legacy assignation directe)
-      //   C. societes.comptable_id (lien direct historique)
+      //   B. comptable_societes.comptable_id
+      //   C. societes.comptable_id
       //   D. profiles.comptable_id → clients → leurs dossiers
-      //   E. Fallback role 'comptable' (pas comptable_dedie) : si aucune
-      //      des voies ci-dessus ne retourne de société et que le role
-      //      est 'comptable'/'admin'/'super_admin', on tombe sur le
-      //      comportement de /api/comptable/clients (legacy) qui montre
-      //      TOUS les clients de la plateforme. Cohérence d'UX avec
-      //      la liste "Mes Clients" que le user voit déjà.
+      //   E. Fallback role 'comptable' : si aucune voie ne retourne, on
+      //      tombe sur tous les clients (cohérence /api/comptable/clients).
       const [dossiersRes, csRes, ownedRes, mesClientsRes] = await Promise.all([
         supabase.from('dossiers').select('societe_id').eq('comptable_id', user.id),
         supabase.from('comptable_societes').select('societe_id').eq('comptable_id', user.id),
