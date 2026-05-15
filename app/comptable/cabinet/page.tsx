@@ -100,7 +100,29 @@ export default function CabinetDashboardPage() {
   const [newTagLibelle, setNewTagLibelle] = useState("")
   const [newTagColor, setNewTagColor] = useState("#0B0F2E")
   const [creatingTag, setCreatingTag] = useState(false)
+  const [entering, setEntering] = useState<string | null>(null) // société_id en cours
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+
+  async function enterDossier(societeId: string, societeNom: string) {
+    setEntering(societeId)
+    try {
+      const r = await fetch("/api/comptable/act-as", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ societe_id: societeId }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || "Erreur entrée dossier")
+      showToast(`Entrée dans le dossier ${societeNom}`, "success")
+      // Petit délai pour laisser le toast s'afficher, puis bascule
+      setTimeout(() => {
+        window.location.href = "/client/tableau-de-bord"
+      }, 400)
+    } catch (e: any) {
+      showToast(e?.message || "Erreur", "error")
+      setEntering(null)
+    }
+  }
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
@@ -385,8 +407,18 @@ export default function CabinetDashboardPage() {
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                        <Button size="sm" variant="outline" className="h-7 text-[11px]" disabled title="Mode 'Acting as client' arrive au Sprint 3">
-                          Entrer dans le dossier <ChevronRight className="h-3 w-3 ml-1" />
+                        <Button
+                          size="sm"
+                          className="h-7 text-[11px] bg-[#0B0F2E] hover:bg-[#2a3d6b]"
+                          onClick={() => enterDossier(c.id, c.nom)}
+                          disabled={entering === c.id}
+                          title="Bascule sur la vue client de ce dossier avec bandeau cabinet"
+                        >
+                          {entering === c.id ? (
+                            <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Ouverture…</>
+                          ) : (
+                            <>Entrer dans le dossier <ChevronRight className="h-3 w-3 ml-1" /></>
+                          )}
                         </Button>
                         <Link href={`/comptable/cabinet/${c.id}/notes`} className="text-[10px] text-blue-600 hover:underline flex items-center gap-1">
                           <StickyNote className="h-3 w-3" /> Notes
