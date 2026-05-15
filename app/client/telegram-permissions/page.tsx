@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Shield, MessageCircle, AlertCircle, CheckCircle2, XCircle, Activity, Users, Copy, Link2, Trash2, Settings2, RotateCcw } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale } from "@/lib/i18n"
+import { PageHelp } from "@/components/help/PageHelp"
 
 const ROLE_LABELS: Record<string, string> = {
   employe: "Employé",
@@ -307,9 +308,12 @@ export default function TelegramPermissionsPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Shield className="h-6 w-6 text-emerald-600" /> Permissions Telegram Bot</h1>
-        <p className="text-sm text-slate-500">Configure qui peut faire quoi via le bot Telegram Lexora. Les changements prennent effet immédiatement.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Shield className="h-6 w-6 text-emerald-600" /> Permissions Telegram Bot</h1>
+          <p className="text-sm text-slate-500">Configure qui peut faire quoi via le bot Telegram Lexora. Les changements prennent effet immédiatement.</p>
+        </div>
+        <PageHelp />
       </div>
 
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" />{error}</div>}

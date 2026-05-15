@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Mail, Plus, Trash2, Star, StarOff, Send, AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { PageHelp } from "@/components/help/PageHelp"
 
 type EmailAccount = {
   id: string
@@ -151,13 +152,16 @@ export default function EmailAccountsPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
-      <div>
+      <div className="flex items-start justify-between gap-4">
+        <div>
         <h1 className="text-2xl font-bold flex items-center gap-2"><Mail className="h-6 w-6 text-blue-600" /> Comptes Email</h1>
         <p className="text-sm text-slate-500">
           Configure plusieurs comptes email pour l'envoi sortant (relances, rapports, notifications).
           Chaque société peut avoir N comptes partagés ; chaque utilisateur peut avoir ses propres comptes perso.
           Secrets stockés chiffrés <b>AES-256-GCM</b>.
         </p>
+        </div>
+        <PageHelp />
       </div>
 
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" />{error}</div>}
