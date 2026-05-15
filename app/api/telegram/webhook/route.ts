@@ -3,6 +3,7 @@ import {
   assertWebhookSecret,
   resolveChatContext,
   sendTelegramMessage,
+  sendTelegramInlineButtons,
   logAction,
   answerCallbackQuery,
   editMessageText,
@@ -10,6 +11,9 @@ import {
 import { getAdminClient } from '@/lib/supabase/admin'
 import { ingestTelegramDocument } from '@/lib/telegram/document-ingest'
 import { memoryRecall, formatMemoriesForPrompt } from '@/lib/telegram/memory'
+import { transcribeTelegramVoice } from '@/lib/telegram/voice-transcribe'
+import { detectPointageIntent, isExpensesListCommand } from '@/lib/telegram/pointage-nlp'
+import { captionLooksLikeExpense } from '@/lib/telegram/expense-ocr'
 
 /**
  * POST /api/telegram/webhook
@@ -91,6 +95,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  // --- Voice message → Whisper transcribe → forward as text -------------------
+  const tgVoice = update.message?.voice
+  if (tgVoice) {
+    return await handleVoiceMessage(chatId, ctx, tgVoice, update.message)
+  }
+
   // --- Document / photo → ingestion OCR ----------------------------------------
   const tgDoc = update.message?.document
   const tgPhoto = update.message?.photo // array of PhotoSize
@@ -98,20 +108,51 @@ export async function POST(req: NextRequest) {
     return await handleDocumentMessage(chatId, ctx.user_id, ctx.current_societe_id, tgDoc, tgPhoto, update.message?.caption)
   }
 
-  // Résout le rôle + capabilities + nom société (pour propagation à n8n).
-  // SELECT tolérant à la migration 266 manquante.
+  // --- Commande /in /out /pointage_in /pointage_out + langage naturel ----------
+  const pointageIntent = detectPointageIntent(text)
+  if (pointageIntent) {
+    return await handlePointageCommand(chatId, ctx, pointageIntent)
+  }
+
+  // --- Commande /notes_de_frais (liste des notes de frais en cours) -----------
+  if (isExpensesListCommand(text)) {
+    return await handleExpensesList(chatId, ctx)
+  }
+
+  await forwardToN8nAgent(chatId, ctx, update.message, text, {})
+  return NextResponse.json({ ok: true })
+}
+
+/**
+ * Forward un message (texte ou texte-issu-d'un-vocal-transcrit) à l'agent IA n8n.
+ * Centralisé pour pouvoir être appelé aussi depuis le handler voice.
+ *
+ * extras : champs additionnels insérés dans le payload (ex: is_voice, voice_duration_ms).
+ * Si `overrideMessage` est fourni, on l'utilise comme `message` du payload n8n
+ * (utilisé après transcription vocale : on injecte un message synthétique au
+ * format Telegram avec `text` préfixé "[Vocal] ").
+ */
+async function forwardToN8nAgent(
+  chatId: number,
+  ctx: Awaited<ReturnType<typeof resolveChatContext>>,
+  originalMessage: any,
+  textForMemoryQuery: string,
+  extras: Record<string, unknown> & { overrideMessage?: any },
+) {
+  if (!ctx) return
+
   const admin = getAdminClient()
   const [usRes, socRes] = await Promise.all([
     admin
       .from('user_societes')
       .select('role, telegram_capabilities')
       .eq('user_id', ctx.user_id)
-      .eq('societe_id', ctx.current_societe_id)
+      .eq('societe_id', ctx.current_societe_id!)
       .maybeSingle(),
     admin
       .from('societes')
       .select('id, nom, brn')
-      .eq('id', ctx.current_societe_id)
+      .eq('id', ctx.current_societe_id!)
       .maybeSingle(),
   ])
   let usRow: any = usRes.data
@@ -120,7 +161,7 @@ export async function POST(req: NextRequest) {
       .from('user_societes')
       .select('role')
       .eq('user_id', ctx.user_id)
-      .eq('societe_id', ctx.current_societe_id)
+      .eq('societe_id', ctx.current_societe_id!)
       .maybeSingle()
     usRow = fallback.data
   }
@@ -132,20 +173,18 @@ export async function POST(req: NextRequest) {
   const societeName = socRow?.nom || 'votre société'
   const roleLabel = ROLE_LABELS[role] || role
 
-  // --- Forward to n8n AI Agent webhook -----------------------------------------
   const N8N_AGENT_WEBHOOK = process.env.N8N_TELEGRAM_AGENT_WEBHOOK
   if (!N8N_AGENT_WEBHOOK) {
     await sendTelegramMessage(chatId, '⚠️ Agent IA non configuré côté serveur.')
-    return NextResponse.json({ ok: true })
+    return
   }
 
-  // Pré-charge les mémoires pertinentes (best-effort, ne bloque pas le forward)
   let memoryContext: string | null = null
   try {
     const memories = await memoryRecall({
-      societe_id: ctx.current_societe_id,
+      societe_id: ctx.current_societe_id!,
       user_id: ctx.user_id,
-      query: text || null,
+      query: textForMemoryQuery || null,
       top_k: 6,
     })
     memoryContext = formatMemoriesForPrompt(memories)
@@ -153,6 +192,7 @@ export async function POST(req: NextRequest) {
     console.warn('[webhook] memory recall failed:', e?.message)
   }
 
+  const { overrideMessage, ...extraFields } = extras
   try {
     await fetch(N8N_AGENT_WEBHOOK, {
       method: 'POST',
@@ -167,8 +207,9 @@ export async function POST(req: NextRequest) {
         capabilities,
         locale: ctx.language_code,
         first_name: ctx.telegram_firstname,
-        message: update.message,
-        memory_context: memoryContext, // injecté dans le system prompt côté n8n
+        message: overrideMessage || originalMessage,
+        memory_context: memoryContext,
+        ...extraFields,
       }),
     })
   } catch (e: any) {
@@ -178,8 +219,6 @@ export async function POST(req: NextRequest) {
     })
     await sendTelegramMessage(chatId, '⚠️ Erreur de communication avec l\'agent IA. Réessaie dans un instant.')
   }
-
-  return NextResponse.json({ ok: true })
 }
 
 async function handleStartVerification(chatId: number, code: string, fromUser: any) {
@@ -559,6 +598,33 @@ async function handleCallbackQuery(cb: any) {
         .maybeSingle()
       popup = emp?.telephone ? `📞 ${emp.telephone}` : '📞 Pas de téléphone enregistré'
       updatedLine = `\n\n<i>📞 Contact lancé via Telegram${emp?.telephone ? ' (' + emp.telephone + ')' : ''}</i>`
+    } else if (intent === 'expense.confirm') {
+      const documentId = params[0]
+      if (!documentId) {
+        await answerCallbackQuery(callbackId, 'Paramètre manquant.', true)
+        return NextResponse.json({ ok: true })
+      }
+      const r = await callInternal('/api/telegram/internal/expense-create', {
+        document_id: documentId,
+      })
+      if (!r.ok) {
+        popup = `⚠️ ${r.json?.error || 'Erreur'}`
+        await answerCallbackQuery(callbackId, popup, true)
+        await logAction({
+          chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+          intent, payload: { document_id: documentId }, result: r.json,
+          status: 'error', error_msg: r.json?.error, duration_ms: Date.now() - started,
+        })
+        return NextResponse.json({ ok: true })
+      }
+      const dataExp = r.json || {}
+      const montant = dataExp?.montant_ttc ? `${dataExp.montant_ttc} ${dataExp.devise || 'MUR'}` : 'à compléter'
+      const vendor = dataExp?.vendor || '(vendor à compléter)'
+      popup = `✅ Note de frais créée`
+      updatedLine = `\n\n<i>📷 Note de frais créée : ${vendor} · ${montant}</i>`
+    } else if (intent === 'expense.skip') {
+      popup = `📄 OK, gardé comme document classique`
+      updatedLine = `\n\n<i>📄 Conservé comme document classique</i>`
     } else {
       await answerCallbackQuery(callbackId, `Action inconnue : ${intent}`, true)
       return NextResponse.json({ ok: true })
@@ -658,6 +724,42 @@ async function handleDocumentMessage(
   }
 
   const tailleKo = Math.round(r.taille / 1024)
+
+  // --- Détection note de frais (Phase E quick wins) -------------------------
+  // Trigger si la caption matche /^(frais|note|repas|taxi|essence|hotel|deplacement)/i
+  // OU si l'image est manifestement un ticket (on demande à l'employé).
+  const isImage = r.type_fichier === 'jpeg' || r.type_fichier === 'png'
+  const captionMatches = captionLooksLikeExpense(caption)
+
+  if (isImage && captionMatches) {
+    // Auto-create expense draft via OCR
+    await handleExpensePhotoAuto(chatId, userId, societeId, r.doc_id, r.nom_fichier, tailleKo)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (isImage && !captionMatches) {
+    // Propose à l'employé via boutons inline
+    try {
+      await sendTelegramInlineButtons(
+        chatId,
+        `✅ <b>Document reçu</b>\n` +
+        `📄 ${r.nom_fichier} (${tailleKo} Ko)\n\n` +
+        `📷 C'est une <b>note de frais</b> ?`,
+        [[
+          { text: '✅ Oui (note de frais)', callback_data: `expense.confirm:${r.doc_id}` },
+          { text: '❌ Non (document classique)', callback_data: `expense.skip:${r.doc_id}` },
+        ]],
+      )
+    } catch {
+      // fallback texte simple
+      await sendTelegramMessage(
+        chatId,
+        `✅ <b>Document reçu</b>\n📄 ${r.nom_fichier} (${tailleKo} Ko)\n\n🤖 Traitement OCR en attente.`,
+      )
+    }
+    return NextResponse.json({ ok: true })
+  }
+
   await sendTelegramMessage(
     chatId,
     `✅ <b>Document reçu</b>\n` +
@@ -667,12 +769,272 @@ async function handleDocumentMessage(
   return NextResponse.json({ ok: true })
 }
 
+/**
+ * Auto-création d'une note de frais depuis une photo + caption "frais/repas/taxi/…".
+ * Appelle l'endpoint interne expense-create avec document_id. L'OCR est fait
+ * côté endpoint via Anthropic vision.
+ */
+async function handleExpensePhotoAuto(
+  chatId: number,
+  userId: string,
+  societeId: string,
+  documentId: string,
+  nomFichier: string,
+  tailleKo: number,
+) {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.LEXORA_BASE_URL || ''
+  const internalToken = process.env.INTERNAL_API_TOKEN || ''
+  if (!baseUrl || !internalToken) {
+    await sendTelegramMessage(chatId, `✅ Document reçu (${tailleKo} Ko)\n⚠️ OCR note de frais indisponible — config serveur incomplète.`)
+    return
+  }
+  try {
+    const res = await fetch(`${baseUrl}/api/telegram/internal/expense-create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Token': internalToken },
+      body: JSON.stringify({ chat_id: chatId, document_id: documentId }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      await sendTelegramMessage(
+        chatId,
+        `📷 <b>Document reçu</b> (${nomFichier})\n⚠️ Création note de frais échouée : ${json?.error || res.status}\nUn comptable pourra la traiter manuellement.`,
+      )
+      return
+    }
+    const data = json
+    const montant = data?.montant_ttc ? `${formatNumber(data.montant_ttc)} ${data.devise || 'MUR'}` : 'montant à compléter'
+    const vendor = data?.vendor || 'vendor à compléter'
+    const date = data?.date_facture || '(date manquante)'
+    const cat = data?.categorie ? ` · <i>${data.categorie}</i>` : ''
+    await sendTelegramMessage(
+      chatId,
+      `📷 <b>Note de frais ajoutée</b>\n` +
+      `${vendor} · ${montant} · ${date}${cat}\n\n` +
+      `📋 Statut : <b>brouillon</b> — à valider par comptable.\n` +
+      `Tape <code>/notes_de_frais</code> pour voir tes notes en cours.`,
+    )
+  } catch (e: any) {
+    await sendTelegramMessage(chatId, `⚠️ Erreur création note de frais : ${e?.message || 'inconnue'}`)
+  }
+}
+
+function formatNumber(n: number): string {
+  if (typeof n !== 'number' || !isFinite(n)) return String(n)
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
+function formatMinutes(m: number): string {
+  const h = Math.floor(m / 60)
+  const min = m % 60
+  if (h <= 0) return `${min} min`
+  return `${h}h${String(min).padStart(2, '0')}`
+}
+
+/**
+ * Voice message → Whisper transcription → forward to n8n agent as text.
+ * Best-effort : en cas d'échec on prévient l'utilisateur.
+ */
+async function handleVoiceMessage(
+  chatId: number,
+  ctx: NonNullable<Awaited<ReturnType<typeof resolveChatContext>>>,
+  voice: any,
+  originalMessage: any,
+) {
+  const t0 = Date.now()
+  // Ack rapide
+  await sendTelegramMessage(chatId, '🎤 Transcription en cours…').catch(() => {})
+
+  const langHint = ctx.language_code === 'en' ? 'en' : 'fr'
+  const tr = await transcribeTelegramVoice({
+    file_id: voice.file_id,
+    declared_duration_seconds: voice.duration,
+    language: langHint,
+  })
+
+  if (!tr.ok) {
+    await sendTelegramMessage(
+      chatId,
+      ctx.language_code === 'en'
+        ? '⚠️ Sorry, I couldn\'t understand your voice message. Try again in text.'
+        : '⚠️ Désolé, je n\'ai pas pu comprendre ton message vocal. Réessaie en texte.',
+    )
+    await logAction({
+      chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+      intent: 'voice.transcribe', status: 'error', error_msg: tr.error,
+      payload: { reason: (tr as any).reason || null, voice_duration: voice?.duration || null, file_size: voice?.file_size || null },
+      duration_ms: Date.now() - t0,
+    })
+    return NextResponse.json({ ok: true })
+  }
+
+  // Audit succès
+  await logAction({
+    chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+    intent: 'voice.transcribe', status: 'success',
+    payload: {
+      voice_duration: voice?.duration || null,
+      audio_bytes: tr.audio_bytes,
+      language: tr.language || null,
+    },
+    result: { text_length: tr.text.length },
+    duration_ms: tr.duration_ms,
+  })
+
+  // Détection pointage / expense list dans le texte transcrit
+  const ptg = detectPointageIntent(tr.text)
+  if (ptg) {
+    return await handlePointageCommand(chatId, ctx, ptg, { fromVoice: true })
+  }
+  if (isExpensesListCommand(tr.text)) {
+    return await handleExpensesList(chatId, ctx, { fromVoice: true })
+  }
+
+  // Forward au n8n avec un message synthétique : on copie la structure Telegram
+  // mais en remplaçant le `voice` par un `text` préfixé "[Vocal] ".
+  const prefixed = `[Vocal] ${tr.text}`
+  const syntheticMessage = {
+    ...originalMessage,
+    voice: undefined,
+    text: prefixed,
+  }
+  delete syntheticMessage.voice
+  await forwardToN8nAgent(chatId, ctx, originalMessage, prefixed, {
+    overrideMessage: syntheticMessage,
+    is_voice: true,
+    voice_duration_seconds: voice?.duration || null,
+    voice_transcribe_ms: tr.duration_ms,
+    voice_language: tr.language || null,
+  })
+  return NextResponse.json({ ok: true })
+}
+
+/**
+ * Commande /in /out (ou langage naturel équivalent) → POST pointage-create.
+ */
+async function handlePointageCommand(
+  chatId: number,
+  ctx: NonNullable<Awaited<ReturnType<typeof resolveChatContext>>>,
+  type: 'in' | 'out',
+  opts: { fromVoice?: boolean } = {},
+) {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.LEXORA_BASE_URL || ''
+  const internalToken = process.env.INTERNAL_API_TOKEN || ''
+  if (!baseUrl || !internalToken) {
+    await sendTelegramMessage(chatId, '⚠️ Configuration serveur incomplète (pointage).')
+    return NextResponse.json({ ok: true })
+  }
+  try {
+    const res = await fetch(`${baseUrl}/api/telegram/internal/pointage-create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Token': internalToken },
+      body: JSON.stringify({ chat_id: chatId, type }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      await sendTelegramMessage(chatId, `⚠️ ${json?.error || `Erreur pointage ${type}`}`)
+      return NextResponse.json({ ok: true })
+    }
+    const r = json
+    if (type === 'in') {
+      let txt =
+        `✅ <b>Pointage in enregistré</b>\n` +
+        `🕒 ${r.heure} · ${r.date}`
+      if (r.forgot_out_warning) {
+        txt += `\n\n⚠️ Oubli de pointage <b>out</b> détecté le ${r.forgot_out_warning.date_pointage} (début ${String(r.forgot_out_warning.heure_debut).slice(0, 5)}). Pense à corriger via l'UI RH.`
+      }
+      if (opts.fromVoice) txt += `\n\n<i>(via message vocal)</i>`
+      await sendTelegramMessage(chatId, txt)
+    } else {
+      const duree = typeof r.duree_minutes === 'number' ? formatMinutes(r.duree_minutes) : '—'
+      const cumul = typeof r.cumul_jour_minutes === 'number' ? formatMinutes(r.cumul_jour_minutes) : '—'
+      let txt =
+        `✅ <b>Pointage out enregistré</b>\n` +
+        `🕒 ${r.heure_in} → ${r.heure} · ${r.date}\n` +
+        `⏱ Durée session : <b>${duree}</b>\n` +
+        `📊 Cumul jour : ${cumul}`
+      if (r.cross_day) txt += `\n\n⚠️ Session ouverte la veille — durée calculée sur 24h+.`
+      if (opts.fromVoice) txt += `\n\n<i>(via message vocal)</i>`
+      await sendTelegramMessage(chatId, txt)
+    }
+  } catch (e: any) {
+    await sendTelegramMessage(chatId, `⚠️ Erreur pointage : ${e?.message || 'inconnue'}`)
+  }
+  return NextResponse.json({ ok: true })
+}
+
+/**
+ * Commande /notes_de_frais → GET expenses-list.
+ */
+async function handleExpensesList(
+  chatId: number,
+  ctx: NonNullable<Awaited<ReturnType<typeof resolveChatContext>>>,
+  opts: { fromVoice?: boolean } = {},
+) {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.LEXORA_BASE_URL || ''
+  const internalToken = process.env.INTERNAL_API_TOKEN || ''
+  if (!baseUrl || !internalToken) {
+    await sendTelegramMessage(chatId, '⚠️ Configuration serveur incomplète.')
+    return NextResponse.json({ ok: true })
+  }
+  try {
+    const res = await fetch(
+      `${baseUrl}/api/telegram/internal/expenses-list?chat_id=${chatId}`,
+      { headers: { 'X-Internal-Token': internalToken } },
+    )
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      await sendTelegramMessage(chatId, `⚠️ ${json?.error || 'Erreur expenses-list'}`)
+      return NextResponse.json({ ok: true })
+    }
+    const expenses = (json?.expenses || []) as any[]
+    if (expenses.length === 0) {
+      await sendTelegramMessage(
+        chatId,
+        `📋 Aucune note de frais en cours.\n\nEnvoie une <b>photo de ticket</b> avec la légende "<i>frais</i>", "<i>repas</i>", "<i>taxi</i>" pour en créer une.`,
+      )
+      return NextResponse.json({ ok: true })
+    }
+    const lines = expenses.slice(0, 10).map((e: any, i: number) => {
+      const m = typeof e.montant_ttc === 'number' ? formatNumber(e.montant_ttc) : '—'
+      const dev = e.devise || 'MUR'
+      const vendor = e.vendor || '(vendor manquant)'
+      const date = e.date_facture || '—'
+      const cat = e.categorie ? ` · ${e.categorie}` : ''
+      const st = e.statut === 'en_validation' ? '🟡' : '⚪'
+      return `${i + 1}. ${st} ${vendor} · ${m} ${dev} · ${date}${cat}`
+    }).join('\n')
+    const total = typeof json.total_mur === 'number' ? formatNumber(json.total_mur) : '0'
+    let txt =
+      `📋 <b>Notes de frais en cours</b> (${expenses.length})\n\n` +
+      `${lines}\n\n` +
+      `💰 Total MUR : <b>${total} MUR</b>\n` +
+      `⚪ brouillon · 🟡 en validation`
+    if (opts.fromVoice) txt += `\n\n<i>(via message vocal)</i>`
+    await sendTelegramMessage(chatId, txt)
+  } catch (e: any) {
+    await sendTelegramMessage(chatId, `⚠️ Erreur : ${e?.message || 'inconnue'}`)
+  }
+  return NextResponse.json({ ok: true })
+}
+
 function buildHelp() {
   return [
     '🤖 <b>Lexora Bot</b> — commandes & exemples',
     '',
     '<b>📑 Documents (OCR)</b>',
     '• Envoie une photo ou un PDF → je l\'ingère dans Lexora',
+    '',
+    '<b>🕒 Pointage</b>',
+    '• <code>/in</code> ou "j\'arrive" / "je commence" → pointe l\'entrée',
+    '• <code>/out</code> ou "je pars" / "je termine" → pointe la sortie + durée',
+    '',
+    '<b>🎤 Messages vocaux</b>',
+    '• Tu peux m\'envoyer un message vocal — je le transcris et je le traite',
+    '',
+    '<b>📷 Notes de frais</b>',
+    '• Photo de ticket + légende "frais" / "repas" / "taxi" → je crée la note',
+    '• <code>/notes_de_frais</code> — liste tes notes en cours',
     '',
     '<b>📊 Tableau de bord</b>',
     '• "kpis du mois" / "trésorerie" / "alertes"',
