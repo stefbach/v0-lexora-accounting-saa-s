@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
+import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
 import { lastDayOfMonth } from '@/lib/rh/period'
 
 export const dynamic = 'force-dynamic'
@@ -29,9 +30,16 @@ function getAdminClient() {
 
 export async function POST(request: Request) {
   try {
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    const internal = resolveInternalAuth(request)
+    let user: { id: string; email?: string }
+    if (internal) {
+      user = { id: internal.user_id, email: internal.user_email }
+    } else {
+      const supabaseAuth = await createServerClient()
+      const { data: { user: sessionUser } } = await supabaseAuth.auth.getUser()
+      if (!sessionUser) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      user = { id: sessionUser.id, email: sessionUser.email }
+    }
 
     const supabase = getAdminClient()
 
