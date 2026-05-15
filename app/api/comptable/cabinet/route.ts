@@ -47,13 +47,17 @@ export async function GET() {
     // ─── 1. Société IDs accessibles ──────────────────────────────────
     let societeIds: string[] = []
     if (isDirigeant || ['admin', 'super_admin'].includes(profile.role)) {
-      // Dirigeant : 4 voies de découverte (legacy + nouvelles)
+      // Dirigeant : 5 voies de découverte (legacy + nouvelles)
       //   A. dossiers.comptable_id (legacy comptable_dedie)
       //   B. comptable_societes.comptable_id (legacy assignation directe)
       //   C. societes.comptable_id (lien direct historique)
-      //   D. profiles.comptable_id → clients → leurs dossiers (legacy
-      //      cabinet ancien où le client a un comptable_id et chaque
-      //      société du client est rattachée via dossiers.client_id)
+      //   D. profiles.comptable_id → clients → leurs dossiers
+      //   E. Fallback role 'comptable' (pas comptable_dedie) : si aucune
+      //      des voies ci-dessus ne retourne de société et que le role
+      //      est 'comptable'/'admin'/'super_admin', on tombe sur le
+      //      comportement de /api/comptable/clients (legacy) qui montre
+      //      TOUS les clients de la plateforme. Cohérence d'UX avec
+      //      la liste "Mes Clients" que le user voit déjà.
       const [dossiersRes, csRes, ownedRes, mesClientsRes] = await Promise.all([
         supabase.from('dossiers').select('societe_id').eq('comptable_id', user.id),
         supabase.from('comptable_societes').select('societe_id').eq('comptable_id', user.id),
@@ -64,8 +68,6 @@ export async function GET() {
       ;(dossiersRes.data || []).forEach(r => r.societe_id && set.add(r.societe_id))
       ;(csRes.data || []).forEach(r => r.societe_id && set.add(r.societe_id))
       ;(ownedRes.data || []).forEach(r => r.id && set.add(r.id))
-
-      // Voie D : sociétés des clients rattachés
       const clientIds = (mesClientsRes.data || []).map(c => c.id).filter(Boolean)
       if (clientIds.length > 0) {
         const [dossiersClientsRes, societesClientRes] = await Promise.all([
@@ -76,6 +78,24 @@ export async function GET() {
         ;(societesClientRes.data || []).forEach(r => r.id && set.add(r.id))
       }
       societeIds = [...set]
+
+      // Voie E (fallback global) — cohérence avec /api/comptable/clients legacy
+      if (societeIds.length === 0 && ['comptable', 'admin', 'super_admin'].includes(profile.role)) {
+        const { data: allClients } = await supabase
+          .from('profiles')
+          .select('id')
+          .in('role', ['client_admin', 'client_user'])
+        const allClientIds = (allClients || []).map(c => c.id).filter(Boolean)
+        if (allClientIds.length > 0) {
+          const [allDossiers, allCreated] = await Promise.all([
+            supabase.from('dossiers').select('societe_id').in('client_id', allClientIds),
+            supabase.from('societes').select('id').in('created_by', allClientIds),
+          ])
+          ;(allDossiers.data || []).forEach(r => r.societe_id && set.add(r.societe_id))
+          ;(allCreated.data || []).forEach(r => r.id && set.add(r.id))
+          societeIds = [...set]
+        }
+      }
     } else {
       // Collaborateur : uniquement ses sociétés assignées
       const { data } = await supabase
