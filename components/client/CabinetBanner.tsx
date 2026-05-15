@@ -33,10 +33,30 @@ export function CabinetBanner() {
 
   useEffect(() => {
     let cancelled = false
-    fetch("/api/comptable/act-as", { cache: "no-store" })
-      .then(r => r.json())
-      .then(j => { if (!cancelled) setState(j) })
-      .catch(() => {})
+    async function load() {
+      try {
+        const r = await fetch("/api/comptable/act-as", { cache: "no-store" })
+        const j: ActingAsState = await r.json()
+        if (cancelled) return
+        // Fallback : si l'API a posé le cookie mais pas chargé le nom
+        // (par exemple : SELECT colonne manquante), on retrouve la
+        // société dans la liste accessible /api/client/societes.
+        if (j?.acting_as_societe_id && !j.societe?.nom) {
+          try {
+            const sr = await fetch("/api/client/societes", { cache: "no-store" })
+            const sj = await sr.json()
+            const match = (sj?.societes || []).find(
+              (s: any) => s?.id === j.acting_as_societe_id,
+            )
+            if (match) {
+              j.societe = { id: match.id, nom: match.nom, brn: match.brn, vat_number: match.vat_number }
+            }
+          } catch { /* silent fallback */ }
+        }
+        setState(j)
+      } catch {}
+    }
+    load()
     return () => { cancelled = true }
   }, [])
 
@@ -55,6 +75,13 @@ export function CabinetBanner() {
   }
 
   const societe = state.societe
+  // Fallback d'affichage si on a vraiment pas le nom (cas rare) :
+  // "Société #b010d75c" plutôt que l'UUID complet brut illisible.
+  const displayName = societe?.nom
+    || (state.acting_as_societe_id
+        ? `Société #${state.acting_as_societe_id.slice(0, 8)}`
+        : "Client inconnu")
+
   return (
     <div
       className="sticky top-0 z-50 bg-amber-500 text-amber-950 border-b-2 border-amber-700 shadow-md"
@@ -65,7 +92,7 @@ export function CabinetBanner() {
           <Building2 className="h-4 w-4 flex-shrink-0" />
           <span className="font-semibold">Vue cabinet</span>
           <span className="opacity-80">→</span>
-          <span className="font-bold">{societe?.nom || state.acting_as_societe_id}</span>
+          <span className="font-bold">{displayName}</span>
           {societe?.brn && (
             <span className="text-[11px] opacity-75 font-mono">BRN {societe.brn}</span>
           )}
