@@ -216,7 +216,7 @@ export default function HomePage() {
               {t('home.compliance', locale)}
             </a>
             <Link href="/pilotage-telegram" className="text-sm font-medium transition-colors hover:text-[#E8EAFC] inline-flex items-center gap-1" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
-              ✨ {locale === 'fr' ? 'Pilotage Telegram' : 'Telegram Control'}
+              {locale === 'fr' ? 'Assistant IA' : 'AI Assistant'}
             </Link>
             <Link href="/tarifs" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}>
               Tarifs
@@ -283,7 +283,7 @@ export default function HomePage() {
                       className="flex min-h-11 items-center rounded-lg px-3 text-base font-medium transition-colors hover:bg-white/5"
                       style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
                     >
-                      ✨ {locale === 'fr' ? 'Pilotage Telegram' : 'Telegram Control'}
+                      {locale === 'fr' ? 'Assistant IA' : 'AI Assistant'}
                     </Link>
                     <Link
                       href="/tarifs"
@@ -1466,38 +1466,37 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* PILOTAGE TELEGRAM — Bandeau / section teaser vers /pilotage-telegram */}
+        {/* PILOTAGE TELEGRAM — Chief of Staff IA */}
         <section className="py-16 md:py-24" style={{ background: "linear-gradient(135deg, #0B0F2E 0%, #1a2659 50%, #0B0F2E 100%)" }}>
           <div className="mx-auto max-w-6xl px-4 sm:px-6 text-center text-white">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-medium mb-6">
-              <span>✨</span>
-              <span style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}>
-                {locale === 'fr' ? 'NOUVEAU · Pilotage IA via Telegram' : 'NEW · AI control via Telegram'}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium mb-6"
+                 style={{ backgroundColor: "rgba(212,175,55,0.12)", borderColor: "rgba(212,175,55,0.4)", color: "#D4AF37" }}>
+              <span style={{ fontFamily: "'Poppins', sans-serif" }}>
+                {locale === 'fr' ? 'NOUVEAU · Chief of Staff IA' : 'NEW · AI Chief of Staff'}
               </span>
             </div>
             <h2 className="text-3xl md:text-5xl font-black leading-tight" style={{ fontFamily: "'Poppins', sans-serif" }}>
               {locale === 'fr' ? (
-                <>Toute ton entreprise <span style={{ color: "#D4AF37" }}>dans ta poche</span></>
+                <>Votre bras droit, <span style={{ color: "#D4AF37" }}>disponible 24h/7</span></>
               ) : (
-                <>Your entire business <span style={{ color: "#D4AF37" }}>in your pocket</span></>
+                <>Your right hand, <span style={{ color: "#D4AF37" }}>available 24/7</span></>
               )}
             </h2>
-            <p className="text-base md:text-lg mt-5 max-w-2xl mx-auto" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+            <p className="text-base md:text-lg mt-5 max-w-2xl mx-auto leading-relaxed" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {locale === 'fr'
-                ? 'OCR factures, pointage RH, banque, factures clients, agents IA — un message Telegram suffit. Pas d\'app à installer.'
-                : 'OCR invoices, HR timeclock, banking, client invoices, AI agents — one Telegram message is enough. No app to install.'}
+                ? "Lexora x Telegram n'est pas un chatbot — c'est un assistant de direction qui comprend votre business. Agenda, emails, comptabilité, RH, banque, contrats. Tout ce que vous délégueriez à votre assistante, en langage naturel."
+                : "Lexora x Telegram is not a chatbot — it's an executive assistant that understands your business. Calendar, emails, accounting, HR, banking, contracts. Everything you would delegate to your assistant, in plain language."}
             </p>
 
             <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
               {[
-                { emoji: '📷', label: locale === 'fr' ? 'OCR factures' : 'OCR invoices' },
-                { emoji: '⏱️', label: locale === 'fr' ? 'Pointage RH' : 'HR timeclock' },
-                { emoji: '💰', label: locale === 'fr' ? 'Banque' : 'Banking' },
-                { emoji: '🤖', label: locale === 'fr' ? '6 agents IA' : '6 AI agents' },
+                { label: locale === 'fr' ? 'Agenda & RDV' : 'Calendar & meetings' },
+                { label: locale === 'fr' ? 'Emails & relances' : 'Emails & follow-ups' },
+                { label: locale === 'fr' ? 'Comptabilité & banque' : 'Accounting & banking' },
+                { label: locale === 'fr' ? '6 agents experts IA' : '6 expert AI agents' },
               ].map((b) => (
-                <div key={b.label} className="rounded-xl bg-white/5 border border-white/10 p-4">
-                  <p className="text-3xl">{b.emoji}</p>
-                  <p className="text-xs mt-2" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}>{b.label}</p>
+                <div key={b.label} className="rounded-xl border border-white/10 p-4" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+                  <p className="text-sm font-bold" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}>{b.label}</p>
                 </div>
               ))}
             </div>
@@ -1508,7 +1507,7 @@ export default function HomePage() {
                 className="inline-flex items-center gap-2 px-7 py-3.5 rounded-lg font-bold text-base hover:opacity-95 transition-opacity"
                 style={{ backgroundColor: "#D4AF37", color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}
               >
-                {locale === 'fr' ? 'Découvrir les services Telegram' : 'Discover Telegram services'} →
+                {locale === 'fr' ? 'Découvrir le Chief of Staff IA' : 'Discover the AI Chief of Staff'} →
               </Link>
             </div>
           </div>
@@ -1973,7 +1972,7 @@ export default function HomePage() {
                 <li><a href="#ai" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Agents IA" : "AI Agents"}</a></li>
                 <li><a href="#offres" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Offres" : "Offers"}</a></li>
                 <li><Link href="/tarifs" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>Tarifs</Link></li>
-                <li><Link href="/pilotage-telegram" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === 'fr' ? 'Pilotage Telegram' : 'Telegram Control'}</Link></li>
+                <li><Link href="/pilotage-telegram" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === 'fr' ? 'Assistant IA' : 'AI Assistant'}</Link></li>
               </ul>
             </div>
 
