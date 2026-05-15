@@ -498,19 +498,44 @@ export default function FicheClientPage() {
                           </div>
                         </div>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 text-xs shrink-0"
-                        style={{ borderColor: NAVY, color: NAVY }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          router.push(`/comptable/clients/${clientId}/${soc.id}`)
-                        }}
-                      >
-                        {t('cabclt.client.open_file', locale)}
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          className="gap-1.5 text-xs bg-amber-500 hover:bg-amber-600 text-amber-950 font-semibold"
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            try {
+                              const r = await fetch("/api/comptable/act-as", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ societe_id: soc.id }),
+                              })
+                              const j = await r.json()
+                              if (!r.ok) throw new Error(j.error)
+                              window.location.href = "/client/tableau-de-bord"
+                            } catch (err: any) {
+                              alert(err?.message || "Erreur entrée dossier")
+                            }
+                          }}
+                          title="Bascule sur la vue client de ce dossier avec bandeau cabinet"
+                        >
+                          Entrer en mode client
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-xs"
+                          style={{ borderColor: NAVY, color: NAVY }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            router.push(`/comptable/clients/${clientId}/${soc.id}`)
+                          }}
+                        >
+                          {t('cabclt.client.open_file', locale)}
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
 

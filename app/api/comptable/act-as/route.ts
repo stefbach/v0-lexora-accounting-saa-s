@@ -65,12 +65,30 @@ async function canActAs(ctx: NonNullable<Awaited<ReturnType<typeof getCabinetCon
     const { data: mesClients } = await supabase
       .from('profiles').select('id').eq('comptable_id', user.id)
     const clientIds = (mesClients || []).map(c => c.id)
-    if (clientIds.length === 0) return false
-    const [dossierClient, societeClient] = await Promise.all([
-      supabase.from('dossiers').select('societe_id').in('client_id', clientIds).eq('societe_id', societeId).maybeSingle(),
-      supabase.from('societes').select('id').in('created_by', clientIds).eq('id', societeId).maybeSingle(),
-    ])
-    return !!(dossierClient.data || societeClient.data)
+    if (clientIds.length > 0) {
+      const [dossierClient, societeClient] = await Promise.all([
+        supabase.from('dossiers').select('societe_id').in('client_id', clientIds).eq('societe_id', societeId).maybeSingle(),
+        supabase.from('societes').select('id').in('created_by', clientIds).eq('id', societeId).maybeSingle(),
+      ])
+      if (dossierClient.data || societeClient.data) return true
+    }
+
+    // Voie E (fallback global) — cohérence avec /api/comptable/clients
+    // legacy : un comptable (non dédié) accède à tous les clients
+    // de la plateforme.
+    if (profile.role === 'comptable') {
+      const { data: anyClientLink } = await supabase
+        .from('dossiers')
+        .select('societe_id, profiles!client_id(role)')
+        .eq('societe_id', societeId)
+        .limit(5)
+      const hasClientLink = (anyClientLink || []).some((r: any) =>
+        ['client_admin', 'client_user'].includes(r?.profiles?.role)
+      )
+      if (hasClientLink) return true
+    }
+
+    return false
   }
 
   // Collaborateur : doit être listé dans cabinet_collaborateurs_acces
