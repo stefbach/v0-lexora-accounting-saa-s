@@ -23,6 +23,7 @@ import {
   TrendingUp, Building2,
 } from "lucide-react"
 import { LexoraLogo } from "@/components/LexoraLogo"
+import { BrainOrb3DLazy } from "@/components/3d/BrainOrb3DLoader"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -159,57 +160,111 @@ export default function PilotageTelegramPage() {
         </div>
       </nav>
 
-      {/* Hero — positionnement Chief of Staff */}
-      <section className="px-4 py-16 md:py-24">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium mb-6"
-               style={{ backgroundColor: `${GOLD}15`, borderColor: `${GOLD}55`, color: GOLD }}>
-            <Briefcase className="h-3.5 w-3.5" />
-            <span>Lexora x Telegram — Chief of Staff IA</span>
+      {/* Hero — Chief of Staff IA avec orbe 3D en pièce maîtresse */}
+      <section className="relative px-4 py-12 md:py-20 overflow-hidden">
+        {/* Glow décoratif autour de l'orbe */}
+        <div
+          aria-hidden="true"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+          style={{
+            width: 800,
+            height: 800,
+            background: `radial-gradient(circle, ${GOLD}25 0%, transparent 60%)`,
+            filter: "blur(40px)",
+          }}
+        />
+
+        <div className="relative max-w-6xl mx-auto">
+          {/* Badge */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium"
+                 style={{ backgroundColor: `${GOLD}15`, borderColor: `${GOLD}55`, color: GOLD }}>
+              <Briefcase className="h-3.5 w-3.5" />
+              <span>Lexora x Telegram — Chief of Staff IA</span>
+            </div>
           </div>
 
-          <h1 className="text-4xl md:text-6xl font-black leading-tight">
-            Votre bras droit,<br />
-            <span className="bg-gradient-to-r from-yellow-300 to-yellow-200 bg-clip-text text-transparent">
-              disponible 24 heures sur 24
-            </span>
-          </h1>
+          {/* Visuel 3D en pièce maîtresse */}
+          <div className="relative -my-4 md:-my-8">
+            <BrainOrb3DLazy height={520} />
 
-          <p className="text-lg md:text-xl text-white/80 mt-6 max-w-3xl mx-auto leading-relaxed">
-            Lexora sur Telegram n'est pas un chatbot. C'est un <strong className="text-white">assistant de direction</strong> qui comprend votre business :
-            agenda, rendez-vous, emails, comptabilité, RH, banque, contrats. Tout ce que vous déléguiez à votre assistante,
-            en <strong className="text-white">langage naturel</strong>.
-          </p>
-
-          <div className="mt-10 flex items-center justify-center gap-3 flex-wrap">
-            <Link
-              href="/inscription"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-bold hover:opacity-95"
-              style={{ backgroundColor: GOLD, color: NAVY }}
-            >
-              <Sparkles className="h-4 w-4" /> Activer mon assistant
-            </Link>
-            <Link
-              href="/tarifs"
-              className="inline-flex items-center gap-2 border border-white/30 text-white px-6 py-3 rounded-lg hover:bg-white/10"
-            >
-              Voir les tarifs <ChevronRight className="h-4 w-4" />
-            </Link>
+            {/* Labels qui orbitent visuellement autour de l'orbe (impression d'actions en cours) */}
+            <div className="absolute inset-0 pointer-events-none hidden lg:block">
+              {[
+                { label: "Agenda", x: "8%",  y: "20%", icon: CalendarDays },
+                { label: "Emails", x: "82%", y: "18%", icon: Inbox },
+                { label: "Banque", x: "5%",  y: "55%", icon: Banknote },
+                { label: "Contrats", x: "85%", y: "50%", icon: Scale },
+                { label: "OCR", x: "12%", y: "80%", icon: Camera },
+                { label: "RH", x: "80%", y: "78%", icon: Users },
+              ].map(l => {
+                const Icon = l.icon
+                return (
+                  <div
+                    key={l.label}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border backdrop-blur-md animate-pulse"
+                    style={{
+                      left: l.x,
+                      top: l.y,
+                      backgroundColor: `${NAVY}D0`,
+                      borderColor: `${GOLD}77`,
+                      color: GOLD,
+                      animationDuration: '3.5s',
+                    }}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {l.label}
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
-          {/* Différenciateurs clés */}
-          <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
-            {[
-              { label: "Langage naturel", value: "0 commande à apprendre" },
-              { label: "Domaines couverts", value: "9 services intégrés" },
-              { label: "Agents experts IA", value: "6 spécialistes" },
-              { label: "Disponibilité", value: "24h / 7j" },
-            ].map(s => (
-              <div key={s.label} className="rounded-xl p-4 border border-white/10" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
-                <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: GOLD }}>{s.label}</p>
-                <p className="text-sm font-bold mt-1.5 text-white">{s.value}</p>
-              </div>
-            ))}
+          {/* Titre + sous-titre */}
+          <div className="relative text-center mt-6 md:-mt-4">
+            <h1 className="text-4xl md:text-6xl font-black leading-tight">
+              Votre bras droit,<br />
+              <span className="bg-gradient-to-r from-yellow-300 to-yellow-200 bg-clip-text text-transparent">
+                disponible 24 heures sur 24
+              </span>
+            </h1>
+
+            <p className="text-lg md:text-xl text-white/80 mt-6 max-w-3xl mx-auto leading-relaxed">
+              Lexora sur Telegram n'est pas un chatbot. C'est un <strong className="text-white">assistant de direction</strong> qui comprend votre business :
+              agenda, rendez-vous, emails, comptabilité, RH, banque, contrats. Tout ce que vous déléguiez à votre assistante,
+              en <strong className="text-white">langage naturel</strong>.
+            </p>
+
+            <div className="mt-10 flex items-center justify-center gap-3 flex-wrap">
+              <Link
+                href="/inscription"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-bold hover:opacity-95 shadow-2xl"
+                style={{ backgroundColor: GOLD, color: NAVY, boxShadow: `0 10px 40px -10px ${GOLD}80` }}
+              >
+                <Sparkles className="h-4 w-4" /> Activer mon assistant
+              </Link>
+              <Link
+                href="/tarifs"
+                className="inline-flex items-center gap-2 border border-white/30 text-white px-6 py-3 rounded-lg hover:bg-white/10"
+              >
+                Voir les tarifs <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+
+            {/* Différenciateurs clés */}
+            <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
+              {[
+                { label: "Langage naturel", value: "0 commande à apprendre" },
+                { label: "Domaines couverts", value: "9 services intégrés" },
+                { label: "Agents experts IA", value: "6 spécialistes" },
+                { label: "Disponibilité", value: "24h / 7j" },
+              ].map(s => (
+                <div key={s.label} className="rounded-xl p-4 border border-white/10" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
+                  <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: GOLD }}>{s.label}</p>
+                  <p className="text-sm font-bold mt-1.5 text-white">{s.value}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
