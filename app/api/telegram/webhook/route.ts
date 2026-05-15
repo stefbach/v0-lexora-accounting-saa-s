@@ -405,6 +405,160 @@ async function handleCallbackQuery(cb: any) {
         error_msg: 'endpoint not implemented', duration_ms: Date.now() - started,
       })
       return NextResponse.json({ ok: true })
+    } else if (intent === 'doc.received' || intent === 'doc.snooze') {
+      // doc.received:<type>:<period>          → stoppe les rappels futurs
+      // doc.snooze:<type>:<period>:<days>     → reporte de <days> jours
+      const [docType, period, daysStr] = params
+      if (!docType || !period) {
+        await answerCallbackQuery(callbackId, 'Paramètres manquants.', true)
+        return NextResponse.json({ ok: true })
+      }
+      const admin = getAdminClient()
+      const isSnooze = intent === 'doc.snooze'
+      const days = isSnooze ? Math.max(1, Math.min(30, Number(daysStr) || 7)) : null
+
+      const row: Record<string, unknown> = {
+        societe_id: ctx.current_societe_id,
+        type: docType,
+        period,
+        status: isSnooze ? 'snoozed' : 'received',
+        snoozed_until: isSnooze
+          ? new Date(Date.now() + (days as number) * 86400_000).toISOString()
+          : null,
+        received_by: isSnooze ? null : ctx.user_id,
+        received_at: isSnooze ? null : new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+
+      const { error: upErr } = await admin
+        .from('telegram_doc_reminders_state')
+        .upsert(row, { onConflict: 'societe_id,type,period' })
+
+      if (upErr) {
+        popup = `⚠️ ${upErr.message}`
+        await answerCallbackQuery(callbackId, popup, true)
+        await logAction({
+          chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+          intent, payload: { type: docType, period, days }, status: 'error',
+          error_msg: upErr.message, duration_ms: Date.now() - started,
+        })
+        return NextResponse.json({ ok: true })
+      }
+
+      popup = isSnooze
+        ? `⏰ Reporté de ${days}j`
+        : '✅ Marqué comme reçu/soumis'
+      updatedLine = isSnooze
+        ? `\n\n<i>⏰ Reporté de ${days}j via Telegram</i>`
+        : '\n\n<i>✅ Reçu/Soumis (Telegram)</i>'
+    } else if (intent === 'attendance.pointed') {
+      // attendance.pointed:<employe_id>:<date>
+      const [employeId, date] = params
+      if (!employeId || !date) {
+        await answerCallbackQuery(callbackId, 'Paramètres manquants.', true)
+        return NextResponse.json({ ok: true })
+      }
+      const admin = getAdminClient()
+
+      const nowIso = new Date().toISOString()
+      const heureEntree = nowIso.slice(11, 19) // HH:MM:SS
+
+      // INSERT pointage si pas déjà existant aujourd'hui
+      const { data: existing } = await admin
+        .from('pointages')
+        .select('id, heure_entree')
+        .eq('employe_id', employeId)
+        .eq('date_pointage', date)
+        .maybeSingle()
+
+      if (existing?.heure_entree) {
+        popup = '✅ Déjà pointé aujourd\'hui'
+      } else if (existing) {
+        await admin
+          .from('pointages')
+          .update({ heure_entree: heureEntree, type_pointage: 'telegram' })
+          .eq('id', existing.id)
+        popup = '✅ Pointage in enregistré'
+      } else {
+        await admin.from('pointages').insert({
+          employe_id: employeId,
+          date_pointage: date,
+          heure_entree: heureEntree,
+          type_pointage: 'telegram',
+        })
+        popup = '✅ Pointage in enregistré'
+      }
+
+      await admin
+        .from('telegram_attendance_alerts')
+        .update({
+          status: 'pointed',
+          resolved_at: nowIso,
+          resolved_by: ctx.user_id,
+        })
+        .eq('employe_id', employeId)
+        .eq('date_planning', date)
+
+      updatedLine = '\n\n<i>✅ Pointé via Telegram</i>'
+    } else if (intent === 'attendance.sick') {
+      // attendance.sick:<employe_id>:<date> → invite à déclarer
+      const [, date] = params
+      popup = '🤒 Indique la durée'
+      updatedLine = '\n\n<i>🤒 Sick leave — réponds avec la durée (ex: "sick 3j")</i>'
+      await sendTelegramMessage(
+        chatId,
+        '🤒 <b>Sick leave</b>\n' +
+        `Combien de jours d'arrêt ? Réponds-moi avec par exemple :\n` +
+        `<code>sick 3j</code> ou <code>/sick</code>\n` +
+        `(date : ${date || 'aujourd\'hui'})`,
+      )
+    } else if (intent === 'attendance.leave') {
+      // attendance.leave:<employe_id>:<date> → invite à demander un congé urgent
+      const [, date] = params
+      popup = '🌴 Demande de congé'
+      updatedLine = '\n\n<i>🌴 Demande de congé urgent — réponds avec le motif et la durée</i>'
+      await sendTelegramMessage(
+        chatId,
+        '🌴 <b>Demande de congé urgent</b>\n' +
+        `Indique-moi le motif et le nombre de jours (ex: <code>congé urgent 1j famille</code>).\n` +
+        `(date : ${date || 'aujourd\'hui'})`,
+      )
+    } else if (intent === 'attendance.excused' || intent === 'attendance.unjustified') {
+      // attendance.excused | unjustified :<employe_id>:<date>
+      const [employeId, date] = params
+      if (!employeId || !date) {
+        await answerCallbackQuery(callbackId, 'Paramètres manquants.', true)
+        return NextResponse.json({ ok: true })
+      }
+      const admin = getAdminClient()
+      const newStatus = intent === 'attendance.excused' ? 'excused' : 'unjustified'
+
+      await admin
+        .from('telegram_attendance_alerts')
+        .update({
+          status: newStatus,
+          resolved_at: new Date().toISOString(),
+          resolved_by: ctx.user_id,
+          notes: newStatus === 'unjustified' ? 'Marqué non justifié via Telegram (manager)' : null,
+        })
+        .eq('employe_id', employeId)
+        .eq('date_planning', date)
+
+      popup = newStatus === 'excused' ? '✅ Absence excusée' : '⚠️ Absence non justifiée'
+      updatedLine = newStatus === 'excused'
+        ? '\n\n<i>✅ Excusé via Telegram</i>'
+        : '\n\n<i>⚠️ Marqué non justifié via Telegram</i>'
+    } else if (intent === 'attendance.contact') {
+      // attendance.contact:<employe_id>:<date> — non-destructif, simple ack
+      const [employeId] = params
+      const admin = getAdminClient()
+      const { data: emp } = await admin
+        .from('employes')
+        .select('telephone, prenom, nom')
+        .eq('id', employeId || '')
+        .maybeSingle()
+      popup = emp?.telephone ? `📞 ${emp.telephone}` : '📞 Pas de téléphone enregistré'
+      updatedLine = `\n\n<i>📞 Contact lancé via Telegram${emp?.telephone ? ' (' + emp.telephone + ')' : ''}</i>`
     } else {
       await answerCallbackQuery(callbackId, `Action inconnue : ${intent}`, true)
       return NextResponse.json({ ok: true })
