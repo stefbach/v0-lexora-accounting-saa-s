@@ -53,12 +53,24 @@ async function canActAs(ctx: NonNullable<Awaited<ReturnType<typeof getCabinetCon
 
   const isDirigeant = !profile.parent_comptable_id
   if (isDirigeant) {
+    // 4 voies (idem cabinet GET)
     const [d, cs, owned] = await Promise.all([
       supabase.from('dossiers').select('societe_id').eq('comptable_id', user.id).eq('societe_id', societeId).maybeSingle(),
       supabase.from('comptable_societes').select('societe_id').eq('comptable_id', user.id).eq('societe_id', societeId).maybeSingle(),
       supabase.from('societes').select('id').eq('comptable_id', user.id).eq('id', societeId).maybeSingle(),
     ])
-    return !!(d.data || cs.data || owned.data)
+    if (d.data || cs.data || owned.data) return true
+
+    // Voie D : société rattachée à un de mes clients (profiles.comptable_id)
+    const { data: mesClients } = await supabase
+      .from('profiles').select('id').eq('comptable_id', user.id)
+    const clientIds = (mesClients || []).map(c => c.id)
+    if (clientIds.length === 0) return false
+    const [dossierClient, societeClient] = await Promise.all([
+      supabase.from('dossiers').select('societe_id').in('client_id', clientIds).eq('societe_id', societeId).maybeSingle(),
+      supabase.from('societes').select('id').in('created_by', clientIds).eq('id', societeId).maybeSingle(),
+    ])
+    return !!(dossierClient.data || societeClient.data)
   }
 
   // Collaborateur : doit être listé dans cabinet_collaborateurs_acces

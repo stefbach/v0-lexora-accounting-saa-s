@@ -57,6 +57,23 @@ export async function getAccessibleSocieteIds(
   for (const row of comptableSocietesRes.data ?? []) if (row?.societe_id) ids.add(row.societe_id as string)
   for (const row of societesComptableRes.data ?? []) if (row?.id) ids.add(row.id as string)
   for (const row of cabinetAccesRes.data ?? []) if (row?.societe_id) ids.add(row.societe_id as string)
+
+  // Voie comptable D : profiles.comptable_id = userId → clients qui ont
+  // ce user comme comptable. On récupère leurs sociétés via dossiers
+  // (client_id) et via societes.created_by. Sans ça, un cabinet ancien
+  // qui ne renseigne PAS dossiers.comptable_id ne donne pas accès.
+  const { data: mesClientsAsComptable } = await admin
+    .from('profiles').select('id').eq('comptable_id', userId)
+  const clientIds = (mesClientsAsComptable || []).map((c: any) => c.id).filter(Boolean)
+  if (clientIds.length > 0) {
+    const [dossiersClient, societesClient] = await Promise.all([
+      admin.from('dossiers').select('societe_id').in('client_id', clientIds),
+      admin.from('societes').select('id').in('created_by', clientIds),
+    ])
+    for (const row of dossiersClient.data ?? []) if (row?.societe_id) ids.add(row.societe_id as string)
+    for (const row of societesClient.data ?? []) if (row?.id) ids.add(row.id as string)
+  }
+
   return Array.from(ids)
 }
 

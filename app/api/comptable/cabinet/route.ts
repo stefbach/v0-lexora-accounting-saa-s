@@ -47,16 +47,34 @@ export async function GET() {
     // ─── 1. Société IDs accessibles ──────────────────────────────────
     let societeIds: string[] = []
     if (isDirigeant || ['admin', 'super_admin'].includes(profile.role)) {
-      // Dirigeant : tous les clients via dossiers + comptable_societes + societes.comptable_id
-      const [dossiersRes, csRes, ownedRes] = await Promise.all([
+      // Dirigeant : 4 voies de découverte (legacy + nouvelles)
+      //   A. dossiers.comptable_id (legacy comptable_dedie)
+      //   B. comptable_societes.comptable_id (legacy assignation directe)
+      //   C. societes.comptable_id (lien direct historique)
+      //   D. profiles.comptable_id → clients → leurs dossiers (legacy
+      //      cabinet ancien où le client a un comptable_id et chaque
+      //      société du client est rattachée via dossiers.client_id)
+      const [dossiersRes, csRes, ownedRes, mesClientsRes] = await Promise.all([
         supabase.from('dossiers').select('societe_id').eq('comptable_id', user.id),
         supabase.from('comptable_societes').select('societe_id').eq('comptable_id', user.id),
         supabase.from('societes').select('id').eq('comptable_id', user.id),
+        supabase.from('profiles').select('id').eq('comptable_id', user.id),
       ])
       const set = new Set<string>()
       ;(dossiersRes.data || []).forEach(r => r.societe_id && set.add(r.societe_id))
       ;(csRes.data || []).forEach(r => r.societe_id && set.add(r.societe_id))
       ;(ownedRes.data || []).forEach(r => r.id && set.add(r.id))
+
+      // Voie D : sociétés des clients rattachés
+      const clientIds = (mesClientsRes.data || []).map(c => c.id).filter(Boolean)
+      if (clientIds.length > 0) {
+        const [dossiersClientsRes, societesClientRes] = await Promise.all([
+          supabase.from('dossiers').select('societe_id').in('client_id', clientIds),
+          supabase.from('societes').select('id').in('created_by', clientIds),
+        ])
+        ;(dossiersClientsRes.data || []).forEach(r => r.societe_id && set.add(r.societe_id))
+        ;(societesClientRes.data || []).forEach(r => r.id && set.add(r.id))
+      }
       societeIds = [...set]
     } else {
       // Collaborateur : uniquement ses sociétés assignées
