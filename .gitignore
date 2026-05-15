@@ -29,3 +29,6 @@ migration029_supabase.sql
 screen_supabase.png
 test-*.pdf
 tsconfig.tsbuildinfo
+
+# Claude Code worktrees (background agents)
+.claude/worktrees/
