@@ -228,12 +228,12 @@ export default function CabinetDashboardPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Building2 className="h-6 w-6 text-[#0B0F2E]" />
-            Dashboard Cabinet
+            <Users className="h-6 w-6 text-[#0B0F2E]" />
+            Mes Clients
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {data.user_info.is_dirigeant
-              ? "Pilotage portefeuille clients · gestion collaborateurs"
+              ? "Pilotage du portefeuille — KPIs, tags, collaborateurs, entrée dans le dossier"
               : "Vos clients assignés"}
           </p>
         </div>
