@@ -1028,21 +1028,6 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     ],
   },
 
-  '/client/ecritures': {
-    title: 'Écritures comptables',
-    audience: 'client',
-    intro:
-      "Liste chronologique de toutes les écritures comptables, classées par code journal (VTE ventes, ACH achats, BNQ banque, SAL salaires, OD opérations diverses).",
-    steps: [
-      { title: "Filtre par journal", body: "La plupart sont auto-générées. Tu peux aussi en saisir manuellement (OD)." },
-      { title: "Saisie OD manuelle", body: "Bouton <b>Nouvelle écriture</b>. Journal OD, lignes débit/crédit (équilibre obligatoire), libellé clair." },
-      { title: "Export comptable", body: "PDF récap ou CSV (FEC, IFRS) pour le commissaire / auditeur." },
-    ],
-    pitfalls: [
-      "Écriture déséquilibrée → Lexora bloque. Mais saisie sur mauvais comptes possible : double-vérifie.",
-    ],
-  },
-
   // ========================================================================
   // MRA HUB + DÉCLARATIONS SPÉCIFIQUES
   // ========================================================================
@@ -1062,47 +1047,6 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     ],
     tips: [
       "Active les notifications Telegram pour des rappels J-7 / J-3 / J-1.",
-    ],
-  },
-
-  '/client/mra-cit': {
-    title: 'Déclaration CIT — Impôt sur les sociétés',
-    audience: 'all',
-    intro:
-      "Impôt sur les bénéfices à 15% (3% effectif si GBC1 avec Partial Exemption Regime). Déclaration annuelle 6 mois après clôture + APS trimestriels.",
-    steps: [
-      { title: "Résultat fiscal", body: "Lexora part du résultat comptable et applique les retraitements (charges non déductibles, etc.) pour la base imposable." },
-      { title: "Calcule l'APS du trimestre", body: "Système d'avances : 25% de l'impôt estimé à payer avant fin trimestre." },
-      { title: "Déclaration annuelle", body: "6 mois après clôture. Lexora consolide tout, déduit les APS, affiche le solde à payer/rembourser." },
-      { title: "Soumets à MRA", body: "Formulaire CIT, charge sur eservices.mra.mu, paie le solde." },
-    ],
-    pitfalls: [
-      "Sous-estimer l'APS → pénalité si solde annuel > 25% au-dessus des avances.",
-      "Pour GBC1 : oublier de documenter la substance (CIGA) → perte du régime 3%.",
-    ],
-    externalLinks: [
-      { label: "Portail MRA CIT", url: "https://eservices.mra.mu" },
-      { label: "Guide CIT MRA", url: "https://www.mra.mu/index.php/eservices/income-tax-companies" },
-    ],
-  },
-
-  '/client/mra-tds': {
-    title: 'TDS — Tax Deducted at Source',
-    audience: 'comptable',
-    intro:
-      "Retenues à la source (Section 111A ITA Maurice). 5% services prof. résidents (10% non-résidents), 15% intérêts non-résidents, 5% loyers, 3% commission.",
-    steps: [
-      { title: "Paiements concernés", body: "Lexora flagge auto les factures fournisseurs éligibles." },
-      { title: "Retiens et provisionne", body: "Au paiement, retiens la TDS (compte 4421) et paie le solde au fournisseur." },
-      { title: "Déclaration mensuelle", body: "Bouton <b>Déclarer TDS du mois</b>. CSV à soumettre sur eservices.mra.mu avant le 20 du mois suivant." },
-      { title: "Paie à la MRA", body: "Virement pour le total TDS. Marque comme <b>payée</b>." },
-    ],
-    pitfalls: [
-      "Oublier la TDS → pénalité 5% + intérêts.",
-      "Retard > 20 → pénalités automatiques.",
-    ],
-    externalLinks: [
-      { label: "Portail MRA TDS", url: "https://eservices.mra.mu" },
     ],
   },
 
