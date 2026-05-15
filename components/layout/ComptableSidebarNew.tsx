@@ -70,6 +70,7 @@ const CABINET_SECTIONS: NavSection[] = [
     titleKey: "comptable.my_firm",
     items: [
       { href: "/comptable", label: "Dashboard", labelKey: "admin.dashboard", icon: LayoutDashboard },
+      { href: "/comptable/cabinet", label: "Dashboard Cabinet", labelKey: "comp.cab_sidebar.cabinet_dashboard", icon: Building2 },
       { href: "/comptable/clients", label: "Mes Clients", labelKey: "comptable.my_clients", icon: Users },
       { href: "/comptable/equipe", label: "Mon Équipe", labelKey: "comptable.my_team", icon: UsersRound },
       { href: "/comptable/contrats", label: "Contrats clients", labelKey: "comp.cab_sidebar.client_contracts", icon: FilePen },
