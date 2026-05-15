@@ -15,7 +15,7 @@ import {
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
-  Sparkles, Package, Send, Repeat, MessageCircle
+  Sparkles, Package, Send, Repeat, MessageCircle, Mail, KeyRound
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -193,6 +193,10 @@ const MENU: MenuSection[] = [
       { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
       { href: "/client/telegram-config", label: "Telegram Bot", labelKey: "account.telegram_bot", icon: MessageCircle } as any,
       { href: "/client/telegram-permissions", label: "Permissions Bot", labelKey: "account.telegram_permissions", icon: MessageCircle, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
+      { href: "/client/settings/google-accounts", label: "Comptes Google (Agenda)", labelKey: "account.google_accounts", icon: Calendar } as any,
+      { href: "/client/email-accounts", label: "Comptes Email", labelKey: "account.email_accounts", icon: Mail } as any,
+      { href: "/client/direction/mra-credentials", label: "Accès MRA (Direction)", labelKey: "account.mra_credentials", icon: KeyRound, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
+      { href: "/client/direction/bank-credentials", label: "Accès Bancaires (Direction)", labelKey: "account.bank_credentials", icon: Banknote, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
     ]
   },
 ]
