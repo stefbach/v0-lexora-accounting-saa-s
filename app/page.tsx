@@ -215,6 +215,9 @@ export default function HomePage() {
             <a href="#compliance" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.compliance', locale)}
             </a>
+            <Link href="/pilotage-telegram" className="text-sm font-medium transition-colors hover:text-[#E8EAFC] inline-flex items-center gap-1" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+              ✨ {locale === 'fr' ? 'Pilotage Telegram' : 'Telegram Control'}
+            </Link>
             <Link href="/tarifs" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}>
               Tarifs
             </Link>
@@ -274,6 +277,14 @@ export default function HomePage() {
                         {link.label}
                       </a>
                     ))}
+                    <Link
+                      href="/pilotage-telegram"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex min-h-11 items-center rounded-lg px-3 text-base font-medium transition-colors hover:bg-white/5"
+                      style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}
+                    >
+                      ✨ {locale === 'fr' ? 'Pilotage Telegram' : 'Telegram Control'}
+                    </Link>
                     <Link
                       href="/tarifs"
                       onClick={() => setMobileMenuOpen(false)}
@@ -1455,6 +1466,54 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* PILOTAGE TELEGRAM — Bandeau / section teaser vers /pilotage-telegram */}
+        <section className="py-16 md:py-24" style={{ background: "linear-gradient(135deg, #0B0F2E 0%, #1a2659 50%, #0B0F2E 100%)" }}>
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 text-center text-white">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-medium mb-6">
+              <span>✨</span>
+              <span style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}>
+                {locale === 'fr' ? 'NOUVEAU · Pilotage IA via Telegram' : 'NEW · AI control via Telegram'}
+              </span>
+            </div>
+            <h2 className="text-3xl md:text-5xl font-black leading-tight" style={{ fontFamily: "'Poppins', sans-serif" }}>
+              {locale === 'fr' ? (
+                <>Toute ton entreprise <span style={{ color: "#D4AF37" }}>dans ta poche</span></>
+              ) : (
+                <>Your entire business <span style={{ color: "#D4AF37" }}>in your pocket</span></>
+              )}
+            </h2>
+            <p className="text-base md:text-lg mt-5 max-w-2xl mx-auto" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+              {locale === 'fr'
+                ? 'OCR factures, pointage RH, banque, factures clients, agents IA — un message Telegram suffit. Pas d\'app à installer.'
+                : 'OCR invoices, HR timeclock, banking, client invoices, AI agents — one Telegram message is enough. No app to install.'}
+            </p>
+
+            <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
+              {[
+                { emoji: '📷', label: locale === 'fr' ? 'OCR factures' : 'OCR invoices' },
+                { emoji: '⏱️', label: locale === 'fr' ? 'Pointage RH' : 'HR timeclock' },
+                { emoji: '💰', label: locale === 'fr' ? 'Banque' : 'Banking' },
+                { emoji: '🤖', label: locale === 'fr' ? '6 agents IA' : '6 AI agents' },
+              ].map((b) => (
+                <div key={b.label} className="rounded-xl bg-white/5 border border-white/10 p-4">
+                  <p className="text-3xl">{b.emoji}</p>
+                  <p className="text-xs mt-2" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}>{b.label}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-10">
+              <Link
+                href="/pilotage-telegram"
+                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-lg font-bold text-base hover:opacity-95 transition-opacity"
+                style={{ backgroundColor: "#D4AF37", color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}
+              >
+                {locale === 'fr' ? 'Découvrir les services Telegram' : 'Discover Telegram services'} →
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {/* OFFRES — Deux offres claires : Client direct + Expert-Comptable */}
         <section id="offres" className="py-20 md:py-28" style={{ backgroundColor: "#FFFFFF" }}>
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -1914,6 +1973,7 @@ export default function HomePage() {
                 <li><a href="#ai" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Agents IA" : "AI Agents"}</a></li>
                 <li><a href="#offres" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === "fr" ? "Offres" : "Offers"}</a></li>
                 <li><Link href="/tarifs" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>Tarifs</Link></li>
+                <li><Link href="/pilotage-telegram" className="transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", textDecoration: "none" }}>{locale === 'fr' ? 'Pilotage Telegram' : 'Telegram Control'}</Link></li>
               </ul>
             </div>
 
