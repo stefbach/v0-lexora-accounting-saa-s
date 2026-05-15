@@ -108,12 +108,19 @@ export async function GET() {
   const cookie = cookieStore.get(COOKIE_NAME)
   if (!cookie?.value) return NextResponse.json({ acting_as_societe_id: null })
 
-  // Recharge la société liée pour permettre l'affichage du bandeau
-  const { data: societe } = await ctx.supabase
+  // Recharge la société liée pour permettre l'affichage du bandeau.
+  // SELECT minimal sur les colonnes qui existent à coup sûr (mig 001).
+  // Avant : on demandait `regime` (mig 258) et `devise_defaut` (variant)
+  // → si une colonne manque, l'erreur silencieuse renvoyait societe=null
+  // et le bandeau affichait l'UUID brut.
+  const { data: societe, error } = await ctx.supabase
     .from('societes')
-    .select('id, nom, brn, vat_number, regime, devise_defaut')
+    .select('id, nom, brn, vat_number')
     .eq('id', cookie.value)
     .maybeSingle()
+  if (error) {
+    console.warn('[act-as GET] societes select error:', error.message)
+  }
 
   return NextResponse.json({
     acting_as_societe_id: cookie.value,
@@ -136,10 +143,10 @@ export async function POST(request: Request) {
     }, { status: 403 })
   }
 
-  // Récupère le nom pour le retour (UI immédiat)
+  // Récupère le nom pour le retour (UI immédiat) — SELECT minimal
   const { data: societe } = await ctx.supabase
     .from('societes')
-    .select('id, nom, brn, vat_number, regime, devise_defaut')
+    .select('id, nom, brn, vat_number')
     .eq('id', societe_id)
     .maybeSingle()
 
