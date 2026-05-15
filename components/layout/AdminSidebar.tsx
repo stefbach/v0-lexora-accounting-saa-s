@@ -10,6 +10,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import {
   LayoutDashboard,
   Users,
+  UserCircle,
   Building2,
   UserCog,
   Briefcase,
@@ -29,6 +30,7 @@ const MENU = [
     section: "Administration", sectionKey: "admin.administration",
     items: [
       { href: "/admin", label: "Dashboard", labelKey: "admin.dashboard", icon: LayoutDashboard, exact: true },
+      { href: "/admin/demandes-inscription", label: "Demandes d'inscription", icon: UserCircle },
       { href: "/admin/users", label: "Utilisateurs", labelKey: "admin.users", icon: Users },
       { href: "/admin/clients", label: "Clients", labelKey: "admin.clients", icon: Briefcase },
       { href: "/admin/comptables", label: "Comptables", labelKey: "admin.accountants", icon: UserCog },

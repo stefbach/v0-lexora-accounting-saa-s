@@ -1,882 +1,509 @@
 "use client"
 
 /**
- * /inscription — futuristic adaptive lead capture.
+ * /inscription — Workflow d'inscription publique en wizard 3 étapes
  *
- * Two-role form (Expert-Comptable | Entreprise) with an "I don't know"
- * escape hatch. Each role surfaces a tailored set of fields (cabinet
- * profile vs. company profile) plus a shared needs-checklist over the
- * 7 Lexora modules and a free-form message. Submits to FormSubmit
- * (same backend pattern as components/contact.tsx).
+ * Sprint 3 du workflow d'inscription :
+ *  1. Profil : dirigeant ou comptable
+ *  2. Infos : compte + société (ou cabinet)
+ *  3. Plan : choix tarif + CGU/CGV
  *
- * Design: dark navy, live particle field, glassmorphic card, animated
- * role selector, check-grid for module needs, success state with
- * CheckCircle. Respects prefers-reduced-motion via the motion helpers.
+ * Submit → POST /api/inscription → email confirmation + notif admin
+ *          → page de succès
+ *
+ * NB : l'ancienne version (882 lignes, FormSubmit) est remplacée par
+ * ce wizard fonctionnel branché sur l'API.
  */
 
-import * as React from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import {
-  Sparkles,
-  Briefcase,
-  Building2,
-  HelpCircle,
-  Loader2,
-  CheckCircle2,
-  ArrowRight,
-  ArrowLeft,
-  FileSearch,
-  BookOpen,
-  FileText,
-  Users,
-  Scale,
-  Landmark,
-  HeartPulse,
-  type LucideIcon,
+  Sparkles, Briefcase, Building2, Loader2, CheckCircle2,
+  ArrowRight, ArrowLeft, Star, Check, Mail, AlertTriangle,
 } from "lucide-react"
 import { LexoraLogo } from "@/components/LexoraLogo"
-import { ParticleField } from "@/components/ParticleField"
-import { FadeSlide, PressableWrap } from "@/components/ui/motion"
-import { Button } from "@/components/ui/button"
-import { t, getLocale, type Locale } from "@/lib/i18n"
 
-type Role = "expert" | "entreprise" | "unknown"
+interface Plan {
+  id: string
+  code: string
+  nom: string
+  description: string | null
+  type_cible: 'dirigeant' | 'comptable' | 'tous'
+  prix_mensuel_mur: number
+  prix_annuel_mur: number | null
+  modules_inclus: Record<string, boolean>
+  limites: Record<string, any>
+  populaire: boolean
+}
 
-type Needs = Record<string, boolean>
+type Etape = 'profil' | 'infos' | 'plan' | 'success'
+type TypeDemandeur = 'dirigeant' | 'comptable'
 
-const buildModules = (locale: Locale): { key: string; label: string; icon: LucideIcon; accent: "blue" | "gold" | "green" }[] => [
-  { key: "ocr",       label: t('adm.inscription.mod_ocr', locale),         icon: FileSearch,  accent: "blue" },
-  { key: "compta",    label: t('adm.inscription.mod_compta', locale),      icon: BookOpen,    accent: "gold" },
-  { key: "facturation", label: t('adm.inscription.mod_facturation', locale), icon: FileText,    accent: "blue" },
-  { key: "rh",        label: t('adm.inscription.mod_rh', locale),          icon: Users,       accent: "gold" },
-  { key: "juridique", label: t('adm.inscription.mod_juridique', locale),   icon: Scale,       accent: "blue" },
-  { key: "fiscal",    label: t('adm.inscription.mod_fiscal', locale),      icon: Landmark,    accent: "gold" },
-  { key: "sante",     label: t('adm.inscription.mod_sante', locale),       icon: HeartPulse,  accent: "green" },
-]
+const MODULES_LABELS: Record<string, string> = {
+  comptabilite: "Comptabilité",
+  facturation: "Facturation",
+  rh: "RH & Paie",
+  fiscal: "Fiscal (TVA, MRA)",
+  etats_financiers: "États financiers",
+  juridique: "Juridique",
+  documents: "Documents & OCR",
+}
 
-const ACCENTS = {
-  blue: "#4191FF",
-  gold: "#D4AF37",
-  green: "#2ECC8A",
-} as const
+export default function InscriptionPage() {
+  const [etape, setEtape] = useState<Etape>('profil')
+  const [type, setType] = useState<TypeDemandeur>('dirigeant')
+  const [plans, setPlans] = useState<Plan[]>([])
+  const [loadingPlans, setLoadingPlans] = useState(true)
 
-const FONT = "'Poppins', sans-serif"
+  // Infos compte
+  const [prenom, setPrenom] = useState("")
+  const [nom, setNom] = useState("")
+  const [email, setEmail] = useState("")
+  const [telephone, setTelephone] = useState("")
+  const [poste, setPoste] = useState("")
 
-function InscriptionPageInner() {
-  const locale = getLocale()
-  const MODULES = buildModules(locale)
-  const prefersReducedMotion = useReducedMotion()
-  const params = useSearchParams()
-  const roleParam = params?.get("role") ?? null
-  const initialRole: Role =
-    roleParam === "expert" || roleParam === "expert-comptable"
-      ? "expert"
-      : roleParam === "unknown"
-        ? "unknown"
-        : "entreprise"
+  // Société (dirigeant)
+  const [societeNom, setSocieteNom] = useState("")
+  const [societeBrn, setSocieteBrn] = useState("")
+  const [societeVat, setSocieteVat] = useState("")
+  const [societeSecteur, setSocieteSecteur] = useState("")
+  const [societeAdresse, setSocieteAdresse] = useState("")
+  const [societeVille, setSocieteVille] = useState("")
 
-  const [role, setRole] = React.useState<Role>(initialRole)
+  // Cabinet (comptable)
+  const [cabinetNom, setCabinetNom] = useState("")
+  const [cabinetBrn, setCabinetBrn] = useState("")
+  const [cabinetClients, setCabinetClients] = useState("")
 
-  // Shared contact
-  const [firstName, setFirstName] = React.useState("")
-  const [lastName, setLastName] = React.useState("")
-  const [email, setEmail] = React.useState("")
-  const [phone, setPhone] = React.useState("")
-  const [message, setMessage] = React.useState("")
+  // Plan + CGU
+  const [planId, setPlanId] = useState<string>("")
+  const [periodicite, setPeriodicite] = useState<'mensuelle' | 'annuelle'>('mensuelle')
+  const [acceptCgu, setAcceptCgu] = useState(false)
+  const [acceptCgv, setAcceptCgv] = useState(false)
+  const [acceptMarketing, setAcceptMarketing] = useState(false)
+  const [message, setMessage] = useState("")
 
-  // Expert-Comptable specific
-  const [cabinetName, setCabinetName] = React.useState("")
-  const [mipaId, setMipaId] = React.useState("")
-  const [clientsCount, setClientsCount] = React.useState<string>("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Entreprise specific
-  const [companyName, setCompanyName] = React.useState("")
-  const [brn, setBrn] = React.useState("")
-  const [sector, setSector] = React.useState("")
-  const [employees, setEmployees] = React.useState<number>(10)
+  useEffect(() => {
+    fetch(`/api/plans?type=${type}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => setPlans(j.plans || []))
+      .catch(() => {})
+      .finally(() => setLoadingPlans(false))
+  }, [type])
 
-  const [needs, setNeeds] = React.useState<Needs>({})
-  const [agree, setAgree] = React.useState(false)
+  function validInfos() {
+    if (!prenom.trim() || !nom.trim() || !email.trim()) return false
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return false
+    if (type === 'dirigeant' && !societeNom.trim()) return false
+    if (type === 'comptable' && !cabinetNom.trim()) return false
+    return true
+  }
 
-  const [sending, setSending] = React.useState(false)
-  const [sent, setSent] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-
-  const toggleNeed = (key: string) =>
-    setNeeds((prev) => ({ ...prev, [key]: !prev[key] }))
-
-  const selectedNeeds = Object.entries(needs).filter(([, v]) => v).map(([k]) => k)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    if (!firstName || !email || !agree) {
-      setError(t('adm.inscription.req_required', locale))
+  async function submit() {
+    if (!acceptCgu || !acceptCgv) {
+      setError("Vous devez accepter les CGU et les CGV.")
       return
     }
-    setSending(true)
+    setSubmitting(true)
+    setError(null)
     try {
-      const roleLabel =
-        role === "expert" ? "Expert-Comptable"
-        : role === "entreprise" ? "Entreprise / Professionnel"
-        : "À préciser"
-
-      const body: Record<string, string> = {
-        Role: roleLabel,
-        Prénom: firstName,
-        Nom: lastName,
-        Email: email,
-        Téléphone: phone || "—",
-        Message: message || "—",
-        Modules_intéressés:
-          selectedNeeds.length > 0
-            ? selectedNeeds
-                .map((k) => MODULES.find((m) => m.key === k)?.label ?? k)
-                .join(", ")
-            : "Aucun précisé",
-        _subject: `[Lexora inscription] ${roleLabel} — ${firstName} ${lastName}`,
-        _template: "table",
-      }
-      if (role === "expert") {
-        body.Cabinet = cabinetName || "—"
-        body["N° MIPA"] = mipaId || "—"
-        body["Clients actifs"] = clientsCount || "—"
-      } else if (role === "entreprise") {
-        body.Société = companyName || "—"
-        body.BRN = brn || "—"
-        body.Secteur = sector || "—"
-        body["Effectif salariés"] = String(employees)
-      }
-
-      const res = await fetch(
-        "https://formsubmit.co/ajax/contact@lexora.finance",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }
-      )
-      if (!res.ok) {
-        setError(t('adm.inscription.err_send', locale))
-        return
-      }
-      setSent(true)
-    } catch {
-      setError(t('adm.inscription.err_connection', locale))
+      const r = await fetch('/api/inscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type_demandeur: type,
+          prenom: prenom.trim(),
+          nom: nom.trim(),
+          email: email.trim().toLowerCase(),
+          telephone: telephone.trim() || null,
+          poste: poste.trim() || null,
+          societe_data: type === 'dirigeant' ? {
+            nom: societeNom.trim(),
+            brn: societeBrn.trim() || null,
+            vat_number: societeVat.trim() || null,
+            secteur_activite: societeSecteur.trim() || null,
+            adresse: societeAdresse.trim() || null,
+            ville: societeVille.trim() || null,
+          } : null,
+          cabinet_data: type === 'comptable' ? {
+            nom_cabinet: cabinetNom.trim(),
+            brn: cabinetBrn.trim() || null,
+            nombre_clients_envisage: cabinetClients ? Number(cabinetClients) : null,
+          } : null,
+          plan_id: planId || null,
+          periodicite,
+          accept_cgu: acceptCgu,
+          accept_cgv: acceptCgv,
+          accept_marketing: acceptMarketing,
+          message: message.trim() || null,
+        }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)
+      setEtape('success')
+    } catch (e: any) {
+      setError(e?.message || 'Erreur lors de la soumission.')
     } finally {
-      setSending(false)
+      setSubmitting(false)
     }
   }
 
   return (
-    <div
-      className="relative min-h-screen overflow-hidden"
-      style={{ backgroundColor: "#0B0F2E", fontFamily: FONT }}
-    >
-      {/* Live particle field */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{ opacity: 0.5 }}
-      >
-        <ParticleField
-          density={0.9}
-          color="rgba(65,145,255,0.70)"
-          linkColor="rgba(65,145,255,0.20)"
-          linkDistance={140}
-          speed={0.25}
-        />
-      </div>
-      {/* Ambient glows */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            "radial-gradient(ellipse 45% 45% at 20% 20%, rgba(65,145,255,0.22) 0%, transparent 70%), radial-gradient(ellipse 45% 45% at 80% 80%, rgba(212,175,55,0.18) 0%, transparent 70%)",
-        }}
-      />
-
-      {/* NAV */}
-      <header
-        className="relative z-10"
-        style={{ borderBottom: "1px solid rgba(30,39,96,0.6)" }}
-      >
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
-          <LexoraLogo href="/" size="md" showBaseline />
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-white/5"
-            style={{
-              color: "#A8AFC7",
-              borderColor: "rgba(30,39,96,0.9)",
-            }}
-          >
-            <ArrowLeft size={14} aria-hidden="true" />
-            {t('adm.inscription.back', locale)}
+    <div className="min-h-screen bg-gradient-to-br from-[#0B0F2E] via-[#1a2659] to-[#0B0F2E] py-12 px-4">
+      <div className="max-w-3xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-flex items-center gap-2 text-white/80 hover:text-white">
+            <LexoraLogo size="lg" />
           </Link>
-        </div>
-      </header>
-
-      <main className="relative z-10 mx-auto max-w-6xl px-4 pb-24 pt-14 sm:px-6">
-        {/* HERO */}
-        <FadeSlide delay={0} y={16}>
-          <div className="mb-10 text-center">
-            <span
-              className="mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
-              style={{
-                backgroundColor: "rgba(212,175,55,0.10)",
-                color: "#D4AF37",
-                borderColor: "rgba(212,175,55,0.32)",
-              }}
-            >
-              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-              {t('adm.inscription.badge', locale)}
-            </span>
-            <h1
-              className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
-              style={{
-                color: "#E8EAFC",
-                fontWeight: 800,
-                letterSpacing: "-0.03em",
-                lineHeight: 1.05,
-              }}
-            >
-              {t('adm.inscription.hero_join', locale)}{" "}
-              <span
-                style={{
-                  backgroundImage:
-                    "linear-gradient(90deg, #4191FF 0%, #D4AF37 50%, #2ECC8A 100%)",
-                  WebkitBackgroundClip: "text",
-                  backgroundClip: "text",
-                  color: "transparent",
-                }}
-              >
-                Lexora
-              </span>
-            </h1>
-            <p
-              className="mx-auto max-w-2xl text-base md:text-lg"
-              style={{
-                color: "#A8AFC7",
-                fontWeight: 300,
-                lineHeight: 1.7,
-              }}
-            >
-              {t('adm.inscription.hero_desc', locale)}
+          <h1 className="text-3xl md:text-4xl font-bold text-white mt-6">
+            {etape === 'success' ? '✨ Demande reçue !' : 'Créer mon compte Lexora'}
+          </h1>
+          {etape !== 'success' && (
+            <p className="text-white/70 mt-2 text-sm">
+              Quelques infos et un admin vous activera sous 24-48h ouvrées.
             </p>
+          )}
+        </div>
+
+        {/* Progress bar (sauf success) */}
+        {etape !== 'success' && (
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <StepDot active={etape === 'profil'} done={etape !== 'profil'} label="Profil" />
+            <div className="w-12 h-px bg-white/30" />
+            <StepDot active={etape === 'infos'} done={etape === 'plan'} label="Infos" />
+            <div className="w-12 h-px bg-white/30" />
+            <StepDot active={etape === 'plan'} done={false} label="Plan" />
           </div>
-        </FadeSlide>
+        )}
 
-        {/* FORM CARD */}
-        <FadeSlide delay={0.15} y={20}>
-          <form
-            onSubmit={handleSubmit}
-            className="relative overflow-hidden rounded-3xl p-6 sm:p-10"
-            style={{
-              backgroundColor: "rgba(16,24,71,0.75)",
-              border: "1px solid rgba(65,145,255,0.28)",
-              backdropFilter: "blur(14px)",
-              WebkitBackdropFilter: "blur(14px)",
-              boxShadow:
-                "0 40px 80px -30px rgba(0,0,0,0.6), 0 0 0 1px rgba(232,234,252,0.04), inset 0 1px 0 rgba(255,255,255,0.06)",
-            }}
-          >
-            {sent ? (
-              <div className="py-14 text-center">
-                <motion.div
-                  initial={prefersReducedMotion ? false : { scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                  className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full"
-                  style={{
-                    background:
-                      "radial-gradient(circle, rgba(46,204,138,0.28) 0%, rgba(46,204,138,0.08) 100%)",
-                    border: "1px solid rgba(46,204,138,0.55)",
-                    boxShadow: "0 0 40px rgba(46,204,138,0.40)",
-                  }}
-                >
-                  <CheckCircle2
-                    size={36}
-                    strokeWidth={2}
-                    style={{ color: "#2ECC8A" }}
-                    aria-hidden="true"
-                  />
-                </motion.div>
-                <h2
-                  className="mb-3 text-2xl font-bold md:text-3xl"
-                  style={{ color: "#E8EAFC", letterSpacing: "-0.02em" }}
-                >
-                  {t('adm.inscription.thanks', locale)} {firstName || ""} — {t('adm.inscription.thanks_suffix', locale)}
-                </h2>
-                <p
-                  className="mx-auto max-w-md text-sm md:text-base"
-                  style={{ color: "#A8AFC7", lineHeight: 1.7 }}
-                >
-                  {t('adm.inscription.success_desc', locale)}
-                </p>
-                <div className="mt-8 flex flex-wrap justify-center gap-3">
-                  <PressableWrap>
-                    <Link href="/tarifs">
-                      <Button
-                        size="lg"
-                        className="px-6"
-                        style={{
-                          backgroundColor: "#4191FF",
-                          color: "#FFFFFF",
-                          fontWeight: 600,
-                          borderRadius: "10px",
-                        }}
-                      >
-                        {t('adm.inscription.see_pricing', locale)}
-                        <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-                      </Button>
-                    </Link>
-                  </PressableWrap>
-                  <PressableWrap>
-                    <Link href="/">
-                      <Button
-                        size="lg"
-                        variant="outline"
-                        className="px-6"
-                        style={{
-                          border: "1px solid rgba(232,234,252,0.20)",
-                          backgroundColor: "rgba(232,234,252,0.04)",
-                          color: "#E8EAFC",
-                          fontWeight: 500,
-                          borderRadius: "10px",
-                        }}
-                      >
-                        {t('adm.inscription.back_home', locale)}
-                      </Button>
-                    </Link>
-                  </PressableWrap>
-                </div>
+        {/* Carte principale */}
+        <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8">
+          {error && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" /> {error}
+            </div>
+          )}
+
+          {/* ─── ÉTAPE 1 : PROFIL ────────────────────────────────────── */}
+          {etape === 'profil' && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-[#0B0F2E]">Quel est votre profil ?</h2>
+              <div className="grid md:grid-cols-2 gap-4">
+                <ProfileCard
+                  active={type === 'dirigeant'}
+                  onClick={() => setType('dirigeant')}
+                  icon={<Building2 className="h-7 w-7" />}
+                  title="Dirigeant d'entreprise"
+                  desc="Je gère une ou plusieurs sociétés et je veux automatiser ma comptabilité, RH, fiscal."
+                />
+                <ProfileCard
+                  active={type === 'comptable'}
+                  onClick={() => setType('comptable')}
+                  icon={<Briefcase className="h-7 w-7" />}
+                  title="Cabinet comptable"
+                  desc="Je suis comptable indépendant ou en cabinet et je veux gérer plusieurs clients."
+                />
               </div>
-            ) : (
-              <>
-                {/* ROLE SELECTOR */}
-                <div className="mb-8">
-                  <label
-                    className="mb-3 block text-xs font-bold uppercase tracking-[0.16em]"
-                    style={{ color: "#D4AF37" }}
-                  >
-                    {t('adm.inscription.step1', locale)}
-                  </label>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <RoleCard
-                      selected={role === "entreprise"}
-                      onClick={() => setRole("entreprise")}
-                      icon={Building2}
-                      title={t('adm.inscription.role_entreprise', locale)}
-                      desc={t('adm.inscription.role_entreprise_desc', locale)}
-                      accent={ACCENTS.blue}
-                    />
-                    <RoleCard
-                      selected={role === "expert"}
-                      onClick={() => setRole("expert")}
-                      icon={Briefcase}
-                      title={t('adm.inscription.role_expert', locale)}
-                      desc={t('adm.inscription.role_expert_desc', locale)}
-                      accent={ACCENTS.gold}
-                    />
-                    <RoleCard
-                      selected={role === "unknown"}
-                      onClick={() => setRole("unknown")}
-                      icon={HelpCircle}
-                      title={t('adm.inscription.role_unknown', locale)}
-                      desc={t('adm.inscription.role_unknown_desc', locale)}
-                      accent={ACCENTS.green}
-                    />
-                  </div>
-                </div>
-
-                {/* ROLE-SPECIFIC FIELDS */}
-                <div className="mb-8">
-                  <label
-                    className="mb-3 block text-xs font-bold uppercase tracking-[0.16em]"
-                    style={{ color: "#D4AF37" }}
-                  >
-                    {role === "expert" ? t('adm.inscription.step2_cabinet', locale) : t('adm.inscription.step2_struct', locale)}
-                  </label>
-                  <AnimatePresence mode="wait">
-                    {role === "expert" && (
-                      <motion.div
-                        key="expert"
-                        initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={prefersReducedMotion ? undefined : { opacity: 0, y: -8 }}
-                        transition={{ duration: 0.25 }}
-                        className="grid gap-4 sm:grid-cols-2"
-                      >
-                        <Field
-                          label={t('adm.inscription.cabinet_name', locale)}
-                          value={cabinetName}
-                          onChange={setCabinetName}
-                          placeholder={t('adm.inscription.cabinet_name_ph', locale)}
-                        />
-                        <Field
-                          label={t('adm.inscription.mipa', locale)}
-                          value={mipaId}
-                          onChange={setMipaId}
-                          placeholder={t('adm.inscription.mipa_ph', locale)}
-                        />
-                        <Field
-                          label={t('adm.inscription.clients_active', locale)}
-                          value={clientsCount}
-                          onChange={setClientsCount}
-                          placeholder={t('adm.inscription.clients_active_ph', locale)}
-                          span={2}
-                        />
-                      </motion.div>
-                    )}
-
-                    {role === "entreprise" && (
-                      <motion.div
-                        key="entreprise"
-                        initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={prefersReducedMotion ? undefined : { opacity: 0, y: -8 }}
-                        transition={{ duration: 0.25 }}
-                        className="grid gap-4 sm:grid-cols-2"
-                      >
-                        <Field
-                          label={t('adm.inscription.company_name', locale)}
-                          value={companyName}
-                          onChange={setCompanyName}
-                          placeholder={t('adm.inscription.company_name_ph', locale)}
-                        />
-                        <Field
-                          label={t('adm.inscription.brn', locale)}
-                          value={brn}
-                          onChange={setBrn}
-                          placeholder={t('adm.inscription.brn_ph', locale)}
-                        />
-                        <Field
-                          label={t('adm.inscription.sector', locale)}
-                          value={sector}
-                          onChange={setSector}
-                          placeholder={t('adm.inscription.sector_ph', locale)}
-                          span={2}
-                        />
-                        <div className="sm:col-span-2">
-                          <label
-                            className="mb-2 block text-xs font-medium"
-                            style={{ color: "#A8AFC7" }}
-                          >
-                            {t('adm.inscription.employees_label', locale)}{" "}
-                            <strong style={{ color: "#D4AF37" }}>{employees}</strong>
-                          </label>
-                          <input
-                            type="range"
-                            min={1}
-                            max={200}
-                            value={employees}
-                            onChange={(e) => setEmployees(Number(e.target.value))}
-                            className="w-full"
-                            style={{
-                              appearance: "none",
-                              height: "6px",
-                              borderRadius: "3px",
-                              background: `linear-gradient(to right, #D4AF37 0%, #D4AF37 ${((employees - 1) / 199) * 100}%, rgba(232,234,252,0.10) ${((employees - 1) / 199) * 100}%, rgba(232,234,252,0.10) 100%)`,
-                              outline: "none",
-                            }}
-                          />
-                          <p
-                            className="mt-1 text-xs"
-                            style={{ color: "#A8AFC7" }}
-                          >
-                            {t('adm.inscription.employees_hint', locale)}
-                          </p>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {role === "unknown" && (
-                      <motion.div
-                        key="unknown"
-                        initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={prefersReducedMotion ? undefined : { opacity: 0, y: -8 }}
-                        transition={{ duration: 0.25 }}
-                        className="rounded-xl p-5"
-                        style={{
-                          backgroundColor: "rgba(46,204,138,0.08)",
-                          border: "1px solid rgba(46,204,138,0.35)",
-                          color: "#A8AFC7",
-                          fontSize: "14px",
-                          lineHeight: 1.65,
-                        }}
-                      >
-                        {t('adm.inscription.unknown_help', locale)}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* NEEDS */}
-                <div className="mb-8">
-                  <label
-                    className="mb-3 block text-xs font-bold uppercase tracking-[0.16em]"
-                    style={{ color: "#D4AF37" }}
-                  >
-                    {t('adm.inscription.step3', locale)}
-                  </label>
-                  <p className="mb-4 text-xs" style={{ color: "#A8AFC7" }}>
-                    {t('adm.inscription.step3_hint', locale)}
-                  </p>
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                    {MODULES.map((m) => {
-                      const checked = !!needs[m.key]
-                      const color = ACCENTS[m.accent]
-                      return (
-                        <button
-                          type="button"
-                          key={m.key}
-                          onClick={() => toggleNeed(m.key)}
-                          aria-pressed={checked}
-                          className="group relative flex flex-col items-start gap-2 rounded-xl p-4 text-left transition-all"
-                          style={{
-                            backgroundColor: checked
-                              ? `${color}1F`
-                              : "rgba(232,234,252,0.04)",
-                            border: `1px solid ${checked ? color : "rgba(232,234,252,0.08)"}`,
-                            boxShadow: checked
-                              ? `0 0 0 1px ${color}, 0 10px 24px -10px ${color}55`
-                              : "none",
-                          }}
-                        >
-                          <span
-                            className="flex h-10 w-10 items-center justify-center rounded-lg"
-                            style={{
-                              background: `linear-gradient(135deg, ${color}33 0%, ${color}11 100%)`,
-                              border: `1px solid ${color}40`,
-                            }}
-                            aria-hidden="true"
-                          >
-                            <m.icon size={18} strokeWidth={1.8} style={{ color }} />
-                          </span>
-                          <span
-                            className="text-sm font-semibold"
-                            style={{ color: "#E8EAFC", letterSpacing: "-0.005em" }}
-                          >
-                            {m.label}
-                          </span>
-                          {checked && (
-                            <CheckCircle2
-                              size={14}
-                              strokeWidth={2.5}
-                              className="absolute right-3 top-3"
-                              style={{ color }}
-                              aria-hidden="true"
-                            />
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* CONTACT */}
-                <div className="mb-8">
-                  <label
-                    className="mb-3 block text-xs font-bold uppercase tracking-[0.16em]"
-                    style={{ color: "#D4AF37" }}
-                  >
-                    {t('adm.inscription.step4', locale)}
-                  </label>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field
-                      label={t('adm.inscription.first_name', locale)}
-                      value={firstName}
-                      onChange={setFirstName}
-                      placeholder={t('adm.inscription.first_name_ph', locale)}
-                      required
-                    />
-                    <Field
-                      label={t('adm.inscription.last_name', locale)}
-                      value={lastName}
-                      onChange={setLastName}
-                      placeholder={t('adm.inscription.last_name_ph', locale)}
-                    />
-                    <Field
-                      label={t('adm.inscription.email', locale)}
-                      value={email}
-                      onChange={setEmail}
-                      placeholder={t('adm.inscription.email_ph', locale)}
-                      type="email"
-                      required
-                    />
-                    <Field
-                      label={t('adm.inscription.phone', locale)}
-                      value={phone}
-                      onChange={setPhone}
-                      placeholder={t('adm.inscription.phone_ph', locale)}
-                      type="tel"
-                    />
-                    <div className="sm:col-span-2">
-                      <label
-                        className="mb-2 block text-xs font-medium"
-                        style={{ color: "#A8AFC7" }}
-                      >
-                        {t('adm.inscription.message_label', locale)}
-                      </label>
-                      <textarea
-                        rows={4}
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        placeholder={t('adm.inscription.message_ph', locale)}
-                        className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-colors focus:ring-2"
-                        style={{
-                          backgroundColor: "rgba(11,15,46,0.7)",
-                          border: "1px solid rgba(232,234,252,0.10)",
-                          color: "#E8EAFC",
-                          fontFamily: FONT,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* CONSENT */}
-                <label
-                  className="mb-6 flex items-start gap-3 rounded-xl p-4"
-                  style={{
-                    backgroundColor: "rgba(232,234,252,0.04)",
-                    border: "1px solid rgba(232,234,252,0.08)",
-                    cursor: "pointer",
-                  }}
+              <div className="flex justify-end pt-4">
+                <button
+                  onClick={() => setEtape('infos')}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0B0F2E] text-white rounded-lg font-medium hover:bg-[#1a2659] transition-colors"
                 >
-                  <input
-                    type="checkbox"
-                    checked={agree}
-                    onChange={(e) => setAgree(e.target.checked)}
-                    className="mt-1 h-4 w-4 shrink-0 cursor-pointer"
-                    style={{ accentColor: "#4191FF" }}
-                  />
-                  <span className="text-xs" style={{ color: "#A8AFC7", lineHeight: 1.6 }}>
-                    {t('adm.inscription.consent_pre', locale)}{" "}
-                    <strong style={{ color: "#E8EAFC" }}>
-                      {t('adm.inscription.consent_org', locale)}
-                    </strong>{" "}
-                    {t('adm.inscription.consent_mid', locale)}{" "}
-                    <Link
-                      href="/protection-donnees"
-                      className="underline"
-                      style={{ color: "#4191FF" }}
-                    >
-                      {t('adm.inscription.consent_charter', locale)}
-                    </Link>{" "}
-                    {t('adm.inscription.consent_and', locale)}{" "}
-                    <Link
-                      href="/cgu"
-                      className="underline"
-                      style={{ color: "#4191FF" }}
-                    >
-                      {t('adm.inscription.consent_cgu', locale)}
-                    </Link>
-                    .
+                  Continuer <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ─── ÉTAPE 2 : INFOS ─────────────────────────────────────── */}
+          {etape === 'infos' && (
+            <div className="space-y-5">
+              <h2 className="text-xl font-bold text-[#0B0F2E]">Vos informations</h2>
+
+              <Section title="Votre compte">
+                <div className="grid md:grid-cols-2 gap-3">
+                  <Field label="Prénom *" value={prenom} onChange={setPrenom} />
+                  <Field label="Nom *" value={nom} onChange={setNom} />
+                  <Field label="Email *" type="email" value={email} onChange={setEmail} />
+                  <Field label="Téléphone" type="tel" value={telephone} onChange={setTelephone} />
+                  {type === 'dirigeant' && (
+                    <Field label="Fonction (CEO, CFO…)" value={poste} onChange={setPoste} />
+                  )}
+                </div>
+              </Section>
+
+              {type === 'dirigeant' ? (
+                <Section title="Votre société">
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <Field label="Nom de la société *" value={societeNom} onChange={setSocieteNom} />
+                    <Field label="BRN" value={societeBrn} onChange={setSocieteBrn} />
+                    <Field label="VAT Reg No." value={societeVat} onChange={setSocieteVat} />
+                    <Field label="Secteur d'activité" value={societeSecteur} onChange={setSocieteSecteur} />
+                    <Field label="Adresse" value={societeAdresse} onChange={setSocieteAdresse} />
+                    <Field label="Ville" value={societeVille} onChange={setSocieteVille} />
+                  </div>
+                </Section>
+              ) : (
+                <Section title="Votre cabinet">
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <Field label="Nom du cabinet *" value={cabinetNom} onChange={setCabinetNom} />
+                    <Field label="BRN" value={cabinetBrn} onChange={setCabinetBrn} />
+                    <Field label="Nombre de clients envisagé" type="number" value={cabinetClients} onChange={setCabinetClients} />
+                  </div>
+                </Section>
+              )}
+
+              <Section title="Un message ? (optionnel)">
+                <textarea
+                  value={message}
+                  onChange={e => setMessage(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B0F2E]"
+                  placeholder="Besoins spécifiques, contexte…"
+                />
+              </Section>
+
+              <div className="flex items-center justify-between pt-4">
+                <button
+                  onClick={() => setEtape('profil')}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-[#0B0F2E]"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Retour
+                </button>
+                <button
+                  onClick={() => setEtape('plan')}
+                  disabled={!validInfos()}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0B0F2E] text-white rounded-lg font-medium hover:bg-[#1a2659] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continuer <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ─── ÉTAPE 3 : PLAN ──────────────────────────────────────── */}
+          {etape === 'plan' && (
+            <div className="space-y-5">
+              <h2 className="text-xl font-bold text-[#0B0F2E]">Choisissez votre plan</h2>
+
+              {/* Toggle mensuel / annuel */}
+              <div className="flex items-center justify-center gap-1 bg-gray-100 p-1 rounded-lg w-fit mx-auto text-sm">
+                <button
+                  onClick={() => setPeriodicite('mensuelle')}
+                  className={`px-4 py-1.5 rounded ${periodicite === 'mensuelle' ? 'bg-white shadow font-semibold' : 'text-gray-600'}`}
+                >
+                  Mensuel
+                </button>
+                <button
+                  onClick={() => setPeriodicite('annuelle')}
+                  className={`px-4 py-1.5 rounded ${periodicite === 'annuelle' ? 'bg-white shadow font-semibold' : 'text-gray-600'}`}
+                >
+                  Annuel <span className="text-[10px] text-emerald-600 font-bold ml-1">-10%</span>
+                </button>
+              </div>
+
+              {loadingPlans ? (
+                <div className="py-8 text-center">
+                  <Loader2 className="h-6 w-6 mx-auto animate-spin text-muted-foreground" />
+                </div>
+              ) : plans.length === 0 ? (
+                <p className="py-6 text-center text-sm text-gray-500">
+                  Aucun plan disponible. L'admin vous proposera une offre adaptée après validation de votre demande.
+                </p>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {plans.map(p => (
+                    <PlanCard
+                      key={p.id}
+                      plan={p}
+                      periodicite={periodicite}
+                      active={planId === p.id}
+                      onClick={() => setPlanId(p.id === planId ? "" : p.id)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* CGU/CGV */}
+              <div className="space-y-2 border-t pt-5">
+                <label className="flex items-start gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" checked={acceptCgu} onChange={e => setAcceptCgu(e.target.checked)} className="mt-0.5" />
+                  <span>
+                    J'accepte les <Link href="/cgu" target="_blank" className="text-[#0B0F2E] underline">Conditions Générales d'Utilisation</Link> *
                   </span>
                 </label>
+                <label className="flex items-start gap-2 cursor-pointer text-sm">
+                  <input type="checkbox" checked={acceptCgv} onChange={e => setAcceptCgv(e.target.checked)} className="mt-0.5" />
+                  <span>
+                    J'accepte les <Link href="/cgv" target="_blank" className="text-[#0B0F2E] underline">Conditions Générales de Vente</Link> *
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-600">
+                  <input type="checkbox" checked={acceptMarketing} onChange={e => setAcceptMarketing(e.target.checked)} className="mt-0.5" />
+                  <span>J'accepte de recevoir des actualités Lexora par email (optionnel)</span>
+                </label>
+              </div>
 
-                {error && (
-                  <div
-                    role="alert"
-                    className="mb-5 rounded-xl px-4 py-3 text-sm"
-                    style={{
-                      backgroundColor: "rgba(232,168,76,0.10)",
-                      border: "1px solid rgba(232,168,76,0.40)",
-                      color: "#E8A84C",
-                    }}
-                  >
-                    {error}
-                  </div>
-                )}
-
-                {/* SUBMIT */}
-                <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
-                  <p className="text-xs" style={{ color: "#A8AFC7" }}>
-                    {t('adm.inscription.footer_note', locale)}
-                  </p>
-                  <PressableWrap>
-                    <Button
-                      type="submit"
-                      size="lg"
-                      disabled={sending}
-                      className="min-w-[240px] px-8 text-base font-bold"
-                      style={{
-                        background:
-                          "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                        color: "#0B0F2E",
-                        borderRadius: "12px",
-                        fontWeight: 700,
-                        boxShadow:
-                          "0 12px 28px -10px rgba(212,175,55,0.55), 0 0 0 1px rgba(212,175,55,0.25)",
-                      }}
-                    >
-                      {sending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                          {t('adm.inscription.sending', locale)}
-                        </>
-                      ) : (
-                        <>
-                          {t('adm.inscription.send', locale)}
-                          <ArrowRight className="ml-2 h-5 w-5" aria-hidden="true" />
-                        </>
-                      )}
-                    </Button>
-                  </PressableWrap>
-                </div>
-              </>
-            )}
-          </form>
-        </FadeSlide>
-
-        {/* REASSURANCE STRIP */}
-        {!sent && (
-          <FadeSlide delay={0.3} y={12}>
-            <div
-              className="mt-10 grid gap-4 text-sm sm:grid-cols-3"
-              style={{ color: "#A8AFC7" }}
-            >
-              {[
-                { k: t('adm.inscription.security', locale), v: t('adm.inscription.security_v', locale) },
-                { k: t('adm.inscription.compliance', locale), v: t('adm.inscription.compliance_v', locale) },
-                { k: t('adm.inscription.no_commitment', locale), v: t('adm.inscription.no_commitment_v', locale) },
-              ].map((item) => (
-                <div
-                  key={item.k}
-                  className="rounded-xl p-4"
-                  style={{
-                    backgroundColor: "rgba(232,234,252,0.04)",
-                    border: "1px solid rgba(232,234,252,0.08)",
-                  }}
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  onClick={() => setEtape('infos')}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-[#0B0F2E]"
                 >
-                  <div
-                    className="mb-1 text-xs font-bold uppercase tracking-widest"
-                    style={{ color: "#D4AF37" }}
-                  >
-                    {item.k}
-                  </div>
-                  <div style={{ color: "#E8EAFC", fontSize: "13px" }}>{item.v}</div>
-                </div>
-              ))}
+                  <ArrowLeft className="h-4 w-4" /> Retour
+                </button>
+                <button
+                  onClick={submit}
+                  disabled={submitting || !acceptCgu || !acceptCgv}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#0B0F2E] to-[#1a2659] text-white rounded-lg font-medium hover:opacity-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Envoyer ma demande
+                </button>
+              </div>
             </div>
-          </FadeSlide>
-        )}
-      </main>
+          )}
+
+          {/* ─── SUCCESS ─────────────────────────────────────────────── */}
+          {etape === 'success' && (
+            <div className="text-center py-6 space-y-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100">
+                <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-[#0B0F2E]">
+                Demande envoyée avec succès
+              </h2>
+              <p className="text-gray-600 max-w-md mx-auto">
+                Vous recevrez un email de confirmation dans quelques instants à <strong>{email}</strong>.
+              </p>
+              <p className="text-sm text-gray-500 max-w-md mx-auto">
+                Notre équipe va examiner votre dossier et vous recontacter sous <strong>24 à 48 heures ouvrées</strong> avec vos identifiants de connexion.
+              </p>
+              <div className="pt-4 flex gap-3 justify-center">
+                <Link
+                  href="/"
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+                >
+                  Retour à l'accueil
+                </Link>
+                <a
+                  href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'contact@lexora.finance'}`}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#0B0F2E] text-white rounded-lg text-sm hover:bg-[#1a2659]"
+                >
+                  <Mail className="h-3.5 w-3.5" /> Nous contacter
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <p className="text-center text-white/50 text-xs mt-6">
+          Vos données sont protégées et ne seront jamais partagées. Voir notre <Link href="/protection-donnees" className="underline hover:text-white/80">politique de confidentialité</Link>.
+        </p>
+      </div>
     </div>
   )
 }
 
-function RoleCard({
-  selected,
-  onClick,
-  icon: Icon,
-  title,
-  desc,
-  accent,
-}: {
-  selected: boolean
-  onClick: () => void
-  icon: LucideIcon
-  title: string
-  desc: string
-  accent: string
+function StepDot({ active, done, label }: { active: boolean; done: boolean; label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+        done ? 'bg-emerald-500 text-white' : active ? 'bg-[#D4AF37] text-[#0B0F2E]' : 'bg-white/20 text-white/60'
+      }`}>
+        {done ? <Check className="h-4 w-4" /> : (label[0])}
+      </div>
+      <span className={`text-[10px] font-medium ${active ? 'text-white' : 'text-white/60'}`}>{label}</span>
+    </div>
+  )
+}
+
+function ProfileCard({ active, onClick, icon, title, desc }: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; title: string; desc: string
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={selected}
-      className="group relative overflow-hidden rounded-2xl p-5 text-left transition-all"
-      style={{
-        backgroundColor: selected ? `${accent}1F` : "rgba(232,234,252,0.04)",
-        border: `1px solid ${selected ? accent : "rgba(232,234,252,0.08)"}`,
-        boxShadow: selected ? `0 10px 30px -10px ${accent}70, 0 0 0 1px ${accent}` : "none",
-      }}
+      className={`text-left p-5 rounded-xl border-2 transition-all ${
+        active
+          ? 'border-[#D4AF37] bg-[#D4AF37]/5 shadow-lg'
+          : 'border-gray-200 hover:border-[#0B0F2E]/30'
+      }`}
     >
-      <div className="mb-3 flex items-center justify-between">
-        <span
-          className="flex h-11 w-11 items-center justify-center rounded-xl"
-          style={{
-            background: `linear-gradient(135deg, ${accent}33 0%, ${accent}11 100%)`,
-            border: `1px solid ${accent}50`,
-          }}
-          aria-hidden="true"
-        >
-          <Icon size={20} strokeWidth={1.8} style={{ color: accent }} />
-        </span>
-        {selected && (
-          <CheckCircle2
-            size={18}
-            strokeWidth={2.5}
-            style={{ color: accent }}
-            aria-hidden="true"
-          />
-        )}
-      </div>
-      <div className="text-base font-bold" style={{ color: "#E8EAFC", letterSpacing: "-0.01em" }}>
-        {title}
-      </div>
-      <div className="mt-0.5 text-xs" style={{ color: "#A8AFC7" }}>
-        {desc}
-      </div>
+      <div className={`mb-3 ${active ? 'text-[#D4AF37]' : 'text-[#0B0F2E]'}`}>{icon}</div>
+      <h3 className="font-bold text-[#0B0F2E] mb-1">{title}</h3>
+      <p className="text-xs text-gray-600">{desc}</p>
     </button>
   )
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-  type = "text",
-  required,
-  span,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-  type?: "text" | "email" | "tel"
-  required?: boolean
-  span?: 2
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className={span === 2 ? "sm:col-span-2" : ""}>
-      <label
-        className="mb-2 block text-xs font-medium"
-        style={{ color: "#A8AFC7" }}
-      >
-        {label}
-      </label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        required={required}
-        className="w-full rounded-xl px-4 py-3 text-sm outline-none focus:ring-2"
-        style={{
-          backgroundColor: "rgba(11,15,46,0.7)",
-          border: "1px solid rgba(232,234,252,0.10)",
-          color: "#E8EAFC",
-          fontFamily: FONT,
-        }}
-      />
+    <div>
+      <h3 className="text-sm font-semibold text-[#0B0F2E] mb-2.5">{title}</h3>
+      {children}
     </div>
   )
 }
 
-// useSearchParams requires a Suspense boundary in App Router.
-export default function InscriptionPage() {
+function Field({ label, value, onChange, type = 'text' }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string
+}) {
   return (
-    <React.Suspense fallback={<div style={{ backgroundColor: "#0B0F2E", minHeight: "100vh" }} />}>
-      <InscriptionPageInner />
-    </React.Suspense>
+    <label className="block">
+      <span className="text-xs font-medium text-gray-600 block mb-1">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B0F2E]"
+      />
+    </label>
+  )
+}
+
+function PlanCard({ plan, periodicite, active, onClick }: {
+  plan: Plan; periodicite: 'mensuelle' | 'annuelle'; active: boolean; onClick: () => void
+}) {
+  const prix = periodicite === 'annuelle' ? plan.prix_annuel_mur : plan.prix_mensuel_mur
+  const suffix = periodicite === 'annuelle' ? '/an' : '/mois'
+  const modulesActifs = Object.entries(plan.modules_inclus || {}).filter(([, v]) => v).slice(0, 5)
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative text-left p-4 rounded-xl border-2 transition-all ${
+        active
+          ? 'border-[#D4AF37] bg-[#D4AF37]/5 shadow-lg'
+          : 'border-gray-200 hover:border-[#0B0F2E]/30'
+      }`}
+    >
+      {plan.populaire && (
+        <span className="absolute -top-2 left-4 inline-flex items-center gap-1 bg-[#D4AF37] text-[#0B0F2E] text-[10px] font-bold px-2 py-0.5 rounded">
+          <Star className="h-2.5 w-2.5" /> Recommandé
+        </span>
+      )}
+      <h3 className="font-bold text-[#0B0F2E]">{plan.nom}</h3>
+      {plan.description && (
+        <p className="text-[11px] text-gray-500 mt-0.5">{plan.description}</p>
+      )}
+      <p className="mt-3">
+        <span className="text-2xl font-black text-[#0B0F2E]">{prix?.toLocaleString('fr-FR') || '—'}</span>
+        <span className="text-xs text-gray-500 ml-1">MUR{suffix}</span>
+      </p>
+      <ul className="mt-3 space-y-1 text-[11px]">
+        {modulesActifs.map(([key]) => (
+          <li key={key} className="flex items-center gap-1.5">
+            <Check className="h-3 w-3 text-emerald-600 flex-shrink-0" />
+            <span>{MODULES_LABELS[key] || key}</span>
+          </li>
+        ))}
+      </ul>
+    </button>
   )
 }
