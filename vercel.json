@@ -91,6 +91,10 @@
     {
       "path": "/api/cron/telegram-attendance-watcher",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/bank-scraper",
+      "schedule": "0 2 * * *"
     }
   ]
 }

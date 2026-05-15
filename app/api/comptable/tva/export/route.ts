@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
 import { renderToBuffer, Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
 import React from 'react'
 
@@ -214,9 +215,13 @@ function buildPurchasesCsv(factures: any[]): string {
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    // Internal bypass (bot Telegram / cron) ou session normale
+    const internal = resolveInternalAuth(request)
+    if (!internal) {
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    }
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
