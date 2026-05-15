@@ -70,8 +70,12 @@ const CABINET_SECTIONS: NavSection[] = [
     titleKey: "comptable.my_firm",
     items: [
       { href: "/comptable", label: "Dashboard", labelKey: "admin.dashboard", icon: LayoutDashboard },
-      { href: "/comptable/cabinet", label: "Dashboard Cabinet", icon: Building2 },
-      { href: "/comptable/clients", label: "Mes Clients", labelKey: "comptable.my_clients", icon: Users },
+      // Sprint 2/3 — entrée unique du portefeuille clients. Remplace
+      // l'ancienne entrée "Mes Clients" qui pointait sur /comptable/clients
+      // (la route reste accessible pour rétro-compat mais n'apparaît plus
+      // dans le sidebar — un doublon avec /comptable/cabinet qui fait plus
+      // que la liste : KPIs, tags, collaborateurs, mode "Acting as client").
+      { href: "/comptable/cabinet", label: "Mes Clients", icon: Users },
       { href: "/comptable/equipe", label: "Mon Équipe", labelKey: "comptable.my_team", icon: UsersRound },
       { href: "/comptable/contrats", label: "Contrats clients", labelKey: "comp.cab_sidebar.client_contracts", icon: FilePen },
       { href: "/juridique/contrats", label: "Générateur IA (juridique)", labelKey: "comp.cab_sidebar.legal_ai_generator", icon: Gavel },
