@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
 import { renderToBuffer, Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
 import React from 'react'
@@ -215,10 +216,19 @@ function buildPurchasesCsv(factures: any[]): string {
 
 export async function GET(request: Request) {
   try {
-    // Internal bypass (bot Telegram / cron) ou session normale
+    // Internal bypass (bot Telegram / cron) ou session normale.
+    // Dans les deux cas on lit avec un client Supabase ; en mode internal on
+    // utilise le service-role pour bypasser RLS (auth déjà validée via header).
     const internal = resolveInternalAuth(request)
-    const supabase = await createClient()
-    if (!internal) {
+    let supabase: any
+    if (internal) {
+      supabase = createSupabaseAdmin(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } },
+      )
+    } else {
+      supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     }
