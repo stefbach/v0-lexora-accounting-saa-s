@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RHSidebarDedicated } from "@/components/layout/RHSidebarDedicated"
 import CommandSearch from "@/components/CommandSearch"
+import { FloatingPageHelp } from "@/components/help/FloatingPageHelp"
 
 const ALLOWED_ROLES = ['admin', 'super_admin', 'comptable', 'comptable_dedie', 'client_admin', 'client_user', 'rh', 'rh_manager', 'manager', 'team_leader', 'direction']
 
@@ -18,6 +19,7 @@ export default async function RHLayout({ children }: { children: React.ReactNode
       <RHSidebarDedicated />
       <main className="flex-1 overflow-auto md:ml-60">{children}</main>
       <CommandSearch />
+      <FloatingPageHelp />
     </div>
   )
 }

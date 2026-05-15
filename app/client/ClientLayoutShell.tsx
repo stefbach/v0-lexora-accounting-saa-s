@@ -3,6 +3,7 @@ import { ClientSidebarFull } from "@/components/layout/ClientSidebarFull"
 import { ComptableSidebarNew } from "@/components/layout/ComptableSidebarNew"
 import { SocieteActiveProvider } from "@/components/client/SocieteActiveProvider"
 import { CabinetBanner } from "@/components/client/CabinetBanner"
+import { FloatingPageHelp } from "@/components/help/FloatingPageHelp"
 import { useProfile } from "@/hooks/use-profile"
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
@@ -40,6 +41,7 @@ export function ClientLayoutShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen bg-gray-50">
         {useClientSidebar ? <ClientSidebarFull /> : <ComptableSidebarNew />}
         <main className="flex-1 overflow-auto md:ml-64">{children}</main>
+        <FloatingPageHelp />
       </div>
     </SocieteActiveProvider>
   )

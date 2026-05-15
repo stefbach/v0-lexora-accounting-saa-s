@@ -439,6 +439,453 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
       "Le bot connait le nom et le rôle de chaque personne — il les utilise naturellement dans ses réponses.",
     ],
   },
+
+  // ========================================================================
+  // COMPTABILITÉ — DASHBOARD
+  // ========================================================================
+  '/comptable': {
+    title: 'Tableau de bord comptable',
+    audience: 'comptable',
+    intro:
+      "Vue d'ensemble de l'activité de toutes les sociétés que tu suis : alertes du jour, factures en attente, échéances MRA, soldes bancaires, KPIs financiers. Le point de départ chaque matin.",
+    steps: [
+      { title: "Sélectionne une société", body: "Le selecteur en haut filtre tous les indicateurs sur la société active. Tu peux basculer entre clients via le menu Cabinet." },
+      { title: "Consulte les alertes du jour", body: "Documents manquants, factures en retard, échéances MRA imminentes (J-7 / J-3 / J-1). Clique sur chaque alerte pour la résoudre." },
+      { title: "Vérifie la trésorerie", body: "Soldes de tous les comptes bancaires actifs. Si scraping configuré, les soldes sont mis à jour chaque nuit (cf. Accès Bancaires)." },
+      { title: "Suis les KPIs du mois", body: "CA, dépenses, résultat, marge brute. Compare avec le mois précédent et l'année." },
+    ],
+    pitfalls: [
+      "Si un indicateur semble figé, vérifie que la société est bien sélectionnée et que ses données sont à jour (factures émises, écritures comptabilisées).",
+    ],
+    tips: [
+      "Demande au bot Telegram \"point du matin\" pour recevoir un résumé condensé en mobile.",
+      "Active les alertes Telegram (Permissions Bot) pour ne plus louper d'échéance.",
+    ],
+  },
+
+  // ========================================================================
+  // COMPTABILITÉ — FACTURES CLIENTS
+  // ========================================================================
+  '/comptable/factures-clients': {
+    title: 'Factures clients',
+    audience: 'comptable',
+    intro:
+      "Liste de toutes les factures émises aux clients de la société. Tu crées, valides, envoies par email, suis les paiements et déclenches les relances automatiques.",
+    steps: [
+      { title: "Crée une facture", body: "Bouton <b>Nouvelle facture</b>. Choisis le client (ou crée-le), ajoute les lignes (depuis le catalogue services ou libre), Lexora calcule TVA + TTC automatiquement." },
+      { title: "Émets la facture", body: "Quand tu passes de brouillon à <b>en_attente</b>, Lexora génère un PDF, attribue un numéro auto (préfixe société + AAAA-NNNNN) et crée les écritures comptables.", warning: "Une fois émise, tu ne peux plus modifier — seulement annuler par avoir." },
+      { title: "Envoie par email", body: "Bouton <b>Envoyer</b> → email avec PDF attaché vers le contact du client. L'envoi est tracé." },
+      { title: "Suis les paiements", body: "Quand le client paie, enregistre le paiement (montant, date, mode, référence). Lexora met à jour le solde et clôture si totalement payé." },
+      { title: "Relances automatiques", body: "Si non payée à l'échéance, les relances partent en J+7, J+15, J+30 selon les paramètres de la société. Tu peux désactiver pour un client donné." },
+    ],
+    pitfalls: [
+      "Oublier d'émettre (laisser en brouillon) → la facture n'est PAS comptée dans TVA collectée ni CA.",
+      "Émettre sans contact email → impossible d'envoyer automatiquement par email.",
+    ],
+    tips: [
+      "Crée une facture via Telegram : \"facture acme 50000 mur consulting septembre\" et le bot la prépare pour toi.",
+      "Pour les abonnements / loyers récurrents : utilise les <b>Factures récurrentes</b> (génération auto chaque mois).",
+    ],
+  },
+
+  // ========================================================================
+  // COMPTABILITÉ — FACTURES FOURNISSEURS
+  // ========================================================================
+  '/comptable/factures-fournisseurs': {
+    title: 'Factures fournisseurs',
+    audience: 'comptable',
+    intro:
+      "Saisie et suivi des factures reçues de tes fournisseurs. La TVA déductible est calculée pour la déclaration MRA, les écritures de classe 4 + 6 sont passées automatiquement.",
+    steps: [
+      { title: "Saisis ou importe", body: "Bouton <b>Nouvelle facture fournisseur</b> pour saisie manuelle. Sinon dépose le PDF dans Documents → l'OCR extrait fournisseur, montant, TVA, date. Tu valides et c'est créé." },
+      { title: "Affecte les comptes comptables", body: "Lexora suggère un compte de charge (classe 6) selon le libellé. Vérifie et ajuste si besoin (achats marchandises 60x vs services 62x vs frais bancaires 627, etc.)." },
+      { title: "Enregistre le paiement", body: "Quand tu paies le fournisseur, marque la facture comme <b>payée</b> avec la date et le mode (virement, chèque, carte). L'écriture de banque est passée." },
+    ],
+    pitfalls: [
+      "Saisir sans TVA alors que la facture en contient → tu perds de la TVA déductible.",
+      "Mauvais compte de charge → ton compte de résultat est faussé.",
+    ],
+    tips: [
+      "Tu peux envoyer une photo de ticket / facture au bot Telegram → il l'OCR et te propose la création.",
+    ],
+  },
+
+  // ========================================================================
+  // COMPTABILITÉ — BANQUE / RELEVÉS
+  // ========================================================================
+  '/comptable/banque': {
+    title: 'Relevés bancaires',
+    audience: 'comptable',
+    intro:
+      "Consulte et importe les relevés bancaires de chaque compte. Les transactions importées sont la matière première du rapprochement automatique.",
+    steps: [
+      { title: "Importe un relevé", body: "Dépose le PDF ou CSV de la banque (téléchargé depuis Internet Banking) dans Documents. L'OCR extrait les transactions et met à jour le compte." },
+      { title: "Active le scraping (recommandé)", body: "Direction → Accès Bancaires : configure une fois les identifiants Internet Banking et Lexora rapatrie automatiquement chaque nuit." },
+      { title: "Lance le rapprochement", body: "Une fois les transactions importées, va dans Rapprochement bancaire. Lexora propose des matches auto entre transactions et factures." },
+    ],
+    pitfalls: [
+      "Importer 2 fois le même relevé → doublons. Vérifie les dates de chevauchement.",
+      "Sans scraping ni import régulier → impossible de réconcilier proprement.",
+    ],
+    externalLinks: [
+      { label: "MCB Internet Banking", url: "https://ibank.mcb.mu" },
+      { label: "SBM Internet Banking", url: "https://internetbanking.sbmgroup.mu" },
+    ],
+  },
+
+  // ========================================================================
+  // COMPTABILITÉ — RAPPROCHEMENT
+  // ========================================================================
+  '/comptable/rapprochement': {
+    title: 'Rapprochement bancaire',
+    audience: 'comptable',
+    intro:
+      "Associe automatiquement les transactions bancaires aux factures clients/fournisseurs et aux écritures comptables. Sépare ce qui est lettré du restant à traiter.",
+    steps: [
+      { title: "Lance le rapprochement auto", body: "Bouton <b>Lancer rapprochement</b>. Les règles R1 à R7 s'appliquent : montant exact, libellé, période, références. Propose des matches que tu confirmes en 1 clic." },
+      { title: "Traite les non rapprochés", body: "Pour chaque transaction restée seule, soit tu l'associes manuellement à une facture, soit tu la passes en écriture libre (frais bancaires, transfert interne, etc.)." },
+      { title: "Verrouille le mois", body: "Quand tout est lettré, verrouille la période. Tu ne pourras plus modifier les écritures comptabilisées sauf déverrouillage explicite." },
+    ],
+    pitfalls: [
+      "Lettrer hâtivement une transaction avec la mauvaise facture → la facture reste impayée côté Lexora. Désassocie et corrige.",
+    ],
+    tips: [
+      "Les paiements de salaires sont lettrés automatiquement avec le journal SAL après verrouillage de la paie.",
+    ],
+  },
+
+  // ========================================================================
+  // COMPTABILITÉ — JOURNAL
+  // ========================================================================
+  '/comptable/journal': {
+    title: 'Journal comptable',
+    audience: 'comptable',
+    intro:
+      "Liste chronologique de toutes les écritures comptables, classées par code journal (VTE ventes, ACH achats, BNQ banque, SAL salaires, OD opérations diverses).",
+    steps: [
+      { title: "Filtre par journal et période", body: "Sélecteurs en haut. La plupart des écritures sont auto-générées (factures, paie, banque), tu peux aussi en saisir manuellement (OD)." },
+      { title: "Saisis une OD manuelle", body: "Bouton <b>Nouvelle écriture</b>. Choisis le journal OD, ajoute les lignes débit/crédit (équilibre obligatoire), libellé clair." },
+      { title: "Export comptable", body: "Bouton <b>Exporter</b> pour PDF récap ou CSV (FEC, IFRS) à fournir au commissaire aux comptes / auditeur." },
+    ],
+    pitfalls: [
+      "Saisir une écriture déséquilibrée → impossible (Lexora bloque). Mais une saisie sur les mauvais comptes peut fausser le bilan : double-vérifie avant validation.",
+    ],
+  },
+
+  // ========================================================================
+  // COMPTABILITÉ — BALANCE
+  // ========================================================================
+  '/comptable/balance': {
+    title: 'Balance comptable',
+    audience: 'comptable',
+    intro:
+      "Synthèse des soldes de tous les comptes du plan comptable à une date donnée. Outil de contrôle avant clôture mensuelle ou exercice.",
+    steps: [
+      { title: "Choisis la période", body: "Sélecteur en haut : balance cumulée à fin de mois, fin de trimestre, fin d'exercice." },
+      { title: "Vérifie l'équilibre", body: "Total débit = Total crédit. Si déséquilibre, une écriture est incohérente (Lexora indique laquelle)." },
+      { title: "Drill-down sur un compte", body: "Clique sur un solde anormal pour voir le détail des écritures qui le composent." },
+    ],
+    pitfalls: [
+      "Solde non nul sur un compte d'attente (47x) → une écriture est en suspens, à régulariser avant clôture.",
+    ],
+  },
+
+  // ========================================================================
+  // COMPTABILITÉ — PLAN COMPTABLE
+  // ========================================================================
+  '/comptable/plan-comptable': {
+    title: 'Plan comptable',
+    audience: 'comptable',
+    intro:
+      "Liste des comptes utilisés (classes 1 à 7). Lexora démarre avec un plan SYSCOHADA adapté Maurice ; tu peux créer des sous-comptes pour affiner.",
+    steps: [
+      { title: "Cherche un compte", body: "Recherche par numéro ou libellé. Les comptes utilisés ont un cadenas (non supprimables tant que des écritures référencent)." },
+      { title: "Crée un sous-compte", body: "Bouton <b>Nouveau compte</b>. Numéro = parent + 1 chiffre (ex: 6061 = sous-compte de 606). Libellé clair." },
+    ],
+    pitfalls: [
+      "Modifier un compte utilisé → toutes les écritures héritent du nouveau libellé. Tu peux mais réfléchis bien.",
+    ],
+  },
+
+  // ========================================================================
+  // COMPTABILITÉ — TIERS
+  // ========================================================================
+  '/comptable/tiers': {
+    title: 'Tiers (clients & fournisseurs)',
+    audience: 'comptable',
+    intro:
+      "Annuaire des clients et fournisseurs de la société : nom, BRN, email, téléphone, adresse, conditions paiement. Utilisé par les factures et les relances.",
+    steps: [
+      { title: "Crée un tiers", body: "Bouton <b>Nouveau</b>. Type (client / fournisseur / les deux), entreprise, BRN MRA, email, adresse, conditions de paiement (30j net, 60j, etc.)." },
+      { title: "Lie aux factures", body: "Quand tu crées une facture, choisis le tiers dans la liste. Les coordonnées remplissent le PDF automatiquement." },
+    ],
+    pitfalls: [
+      "BRN manquant ou incorrect → la déclaration TVA peut être rejetée par MRA si tiers > 100 000 MUR/an.",
+      "Email manquant → impossible d'envoyer la facture automatiquement.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — DASHBOARD
+  // ========================================================================
+  '/rh': {
+    title: 'Tableau de bord RH',
+    audience: 'all',
+    intro:
+      "Vue d'ensemble des ressources humaines : effectif, congés en attente, alertes (contrats expirant, retour maternité, ancienneté), prochaines paies.",
+    steps: [
+      { title: "Effectif actif", body: "Nombre d'employés actifs, par contrat (CDI, CDD, etc.). Clique pour la liste complète." },
+      { title: "Demandes en attente", body: "Congés à valider (manager / direction). Approuve ou refuse en 1 clic depuis ici ou via Telegram." },
+      { title: "Alertes RH", body: "Contrats CDD arrivant à échéance, retours de maternité, employés approchant 5 ans (droit VL), etc." },
+    ],
+    tips: [
+      "Le bot Telegram envoie des notifications proactives à 09:00 chaque jour : nouvelle demande de congé, employé en retard, etc.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — EMPLOYÉS
+  // ========================================================================
+  '/rh/employes': {
+    title: 'Employés',
+    audience: 'all',
+    intro:
+      "Liste de tous les employés (actifs + archivés). Crée, modifie, archive un employé. C'est la source de vérité pour la paie et la fiche RH.",
+    steps: [
+      { title: "Crée un employé", body: "Bouton <b>Nouveau</b>. Renseigne prénom, nom, poste, date d'arrivée, salaire de base, devise, coordonnées bancaires. Le code employé est généré auto." },
+      { title: "Renseigne email + téléphone", body: "Email obligatoire pour le bulletin de paie envoyé par email + lier au bot Telegram. Téléphone pour les notifications urgentes." },
+      { title: "Ajoute le contrat", body: "Onglet <b>Contrats</b> : type (CDI / CDD / Saisonnier...), date début/fin, salaire de base, primes fixes." },
+      { title: "Active la fiche RH", body: "Une fois complète, l'employé apparaît dans le calcul paie et peut recevoir un code Telegram via Permissions Bot." },
+    ],
+    pitfalls: [
+      "Date de départ saisie → l'employé sort du calcul paie à partir du mois suivant. Vérifie 2 fois avant.",
+      "RIB incomplet → l'employé sera dans le fichier 'SANS BANQUE' lors des virements salaires.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — CONGÉS
+  // ========================================================================
+  '/rh/conges': {
+    title: 'Congés',
+    audience: 'all',
+    intro:
+      "Gère les demandes de congés (AL, SL, VL, FML, ML, PL) et leur validation. Affiche le solde par employé et l'historique.",
+    steps: [
+      { title: "Soumets une demande (employé)", body: "Bouton <b>Demander un congé</b>. Type (annuel, maladie, vacances, familial, maternité, paternité), dates début/fin, motif optionnel." },
+      { title: "Le manager reçoit la notification", body: "Notification Telegram + apparaît dans 'En attente' ici. Boutons <em>Valider</em> / <em>Refuser</em> directement." },
+      { title: "Solde mis à jour", body: "Si validé, les jours sont décomptés du solde. Si refusé, l'employé reçoit la décision avec motif." },
+    ],
+    pitfalls: [
+      "Demande sur jours sans solde → refus auto (sauf si tu autorises le solde négatif pour cet employé).",
+      "Maladie sans certificat médical au-delà de 6 jours → le solde SL sur certificat (15j) ne se débloque pas. Demande le certificat à l'employé.",
+    ],
+    externalLinks: [
+      { label: "Workers Rights Act 2019 — Congés", url: "https://labour.govmu.org/Pages/Workers-Rights-Act-2019.aspx" },
+    ],
+  },
+
+  // ========================================================================
+  // RH — POINTAGES
+  // ========================================================================
+  '/rh/pointages': {
+    title: 'Pointages',
+    audience: 'all',
+    intro:
+      "Suivi des heures d'arrivée et départ des employés. Source de calcul des heures supplémentaires et des absences non justifiées.",
+    steps: [
+      { title: "Saisie manuelle", body: "Bouton <b>Nouveau pointage</b>. Employé, date, heure d'entrée et de sortie. Pour corrections occasionnelles." },
+      { title: "Pointage via Telegram", body: "Chaque employé lié au bot peut pointer en tapant <b>/in</b> et <b>/out</b> (ou \"je commence\" / \"je termine\" en langage naturel). Plus simple que badger." },
+      { title: "Surveillance no-show", body: "Si planning et pointage différent, le bot alerte le manager + l'employé après 10 min (cf. Permissions Bot)." },
+    ],
+    tips: [
+      "Pour le télétravail, le pointage Telegram suffit. Pas besoin de badgeuse physique.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — PLANNING
+  // ========================================================================
+  '/rh/planning': {
+    title: 'Planning',
+    audience: 'all',
+    intro:
+      "Plannings hebdomadaires des équipes (shifts, horaires). Sert de référence pour la détection des absences et le calcul des heures sup.",
+    steps: [
+      { title: "Crée un shift type", body: "Onglet <b>Modèles</b> : ex. \"Bureau 9h-18h\", \"Service du soir 14h-22h\". Heures, jours, pauses." },
+      { title: "Affecte un employé", body: "Glisse-dépose un employé sur un jour pour lui attribuer un shift. Tu peux faire des plannings sur 1 semaine ou 1 mois." },
+      { title: "Publie", body: "Une fois validé, publie. Les employés voient leur planning et le bot Telegram surveille les pointages selon ces horaires." },
+    ],
+    pitfalls: [
+      "Modifier un planning publié → les employés ne sont pas notifiés automatiquement. Préviens-les via Telegram ou email.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — PRIMES
+  // ========================================================================
+  '/rh/paie/primes': {
+    title: 'Primes',
+    audience: 'comptable',
+    intro:
+      "Ajoute des primes variables à la paie du mois en cours : performance, ancienneté, exceptionnelle. Elles s'ajoutent au salaire brut et impactent PAYE / CSG / NSF.",
+    steps: [
+      { title: "Sélectionne employé et période", body: "Choisis l'employé concerné et le mois. La prime sera intégrée au prochain bulletin." },
+      { title: "Type de prime", body: "Performance, ancienneté, prime exceptionnelle, 13e mois pro-rata, etc. Catalogue paramétrable." },
+      { title: "Montant en MUR", body: "Saisis le montant brut. PAYE / CSG / NSF sont automatiquement appliqués selon le barème." },
+    ],
+    tips: [
+      "Tu peux ajouter une prime via Telegram : \"prime 5000 mur pour marie mai\" — le bot écrit la prime ici automatiquement.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — HEURES SUP
+  // ========================================================================
+  '/rh/paie/ot': {
+    title: 'Heures supplémentaires',
+    audience: 'comptable',
+    intro:
+      "Saisie des heures sup réalisées par les employés sur le mois. Calculées 1.5x (10 premières heures hebdo OT) ou 2x (au-delà, dimanche, jour férié).",
+    steps: [
+      { title: "Choisis l'employé et le mois", body: "Sélecteur en haut. Tu vois les heures déjà saisies." },
+      { title: "Ajoute les heures", body: "Date, nb d'heures, taux (1.5x ou 2x), motif. Le calcul s'ajoute automatiquement au bulletin." },
+    ],
+    externalLinks: [
+      { label: "Workers Rights Act 2019 — Heures sup", url: "https://labour.govmu.org/Pages/Workers-Rights-Act-2019.aspx" },
+    ],
+    tips: [
+      "Via Telegram : \"Jean 8h OT 1.5x mai\" — le bot saisit automatiquement.",
+    ],
+  },
+
+  // ========================================================================
+  // FISCAL — TDS
+  // ========================================================================
+  '/comptable/tds': {
+    title: 'TDS (Tax Deducted at Source)',
+    audience: 'comptable',
+    intro:
+      "Retenues à la source sur les paiements (Section 111A ITA Maurice). Services prof. 5% résidents / 10% non-résidents, intérêts 15%, loyer 5%, royalties 15%, commission 3%, contracts > 300k MUR 0.75%.",
+    steps: [
+      { title: "Identifie les paiements concernés", body: "Lexora flagge automatiquement les factures fournisseurs qui relèvent de TDS (selon nature service + montant + statut résident)." },
+      { title: "Génère la déclaration mensuelle", body: "Bouton <b>Déclarer TDS du mois</b>. Lexora produit le fichier CSV et le récap à soumettre sur eservices.mra.mu avant le 20 du mois suivant." },
+      { title: "Paie le montant retenu", body: "Tu paies à la MRA. Marque la déclaration comme <b>payée</b> dans Lexora." },
+    ],
+    pitfalls: [
+      "Oublier la TDS sur un paiement éligible → pénalité de 5% + intérêts. Vérifie chaque facture flaggée." ,
+      "Retard > 20 du mois suivant → pénalités MRA automatiques.",
+    ],
+    externalLinks: [
+      { label: "Portail MRA TDS", url: "https://eservices.mra.mu" },
+      { label: "Section 111A ITA — Guide MRA", url: "https://www.mra.mu/index.php/eservices/tax-deduction-at-source-tds" },
+    ],
+  },
+
+  // ========================================================================
+  // FISCAL — CIT / APS
+  // ========================================================================
+  '/comptable/cit': {
+    title: 'CIT — Corporate Income Tax',
+    audience: 'comptable',
+    intro:
+      "Impôt sur les sociétés (15% standard, 3% effectif pour GBC1 avec Partial Exemption Regime 80%). Déclaration annuelle 6 mois après la clôture + APS trimestriels.",
+    steps: [
+      { title: "Suis le résultat fiscal", body: "Le compte de résultat te donne le résultat comptable. Lexora applique les retraitements fiscaux (charges non déductibles, etc.) pour obtenir la base imposable." },
+      { title: "Calcule l'APS", body: "Système trimestriel d'avances. Lexora calcule chaque trimestre 25% de l'impôt estimé. Soumets à MRA avant fin du trimestre." },
+      { title: "Déclaration annuelle", body: "6 mois après clôture de l'exercice. Lexora consolide tous les éléments + déduit les APS payés. Solde à payer ou remboursement." },
+    ],
+    pitfalls: [
+      "Sous-estimer l'APS → pénalité si solde annuel > 25% au-dessus des avances cumulées.",
+      "Pour GBC1 : oublier de documenter la substance (CIGA) → perte du régime 3% effectif.",
+    ],
+    externalLinks: [
+      { label: "Portail MRA CIT", url: "https://eservices.mra.mu" },
+      { label: "Guide CIT MRA", url: "https://www.mra.mu/index.php/eservices/income-tax-companies" },
+    ],
+  },
+
+  // ========================================================================
+  // CLIENT — PROFIL
+  // ========================================================================
+  '/client/profil': {
+    title: 'Mon Profil',
+    audience: 'client',
+    intro:
+      "Tes informations personnelles dans Lexora : nom, email, mot de passe, langue, préférences de notification. Et la liaison à Telegram pour utiliser le bot.",
+    steps: [
+      { title: "Mets à jour tes infos", body: "Nom complet, email, téléphone. Ces infos servent aux signatures et aux notifications." },
+      { title: "Change ton mot de passe", body: "Bouton dédié. Choisis un mot de passe fort (12 caractères mini, mix de tout)." },
+      { title: "Connecte Telegram", body: "Section Telegram : clique <b>Générer un code</b>, ouvre Telegram, cherche @LexoraAgent_bot, tape <b>/start CODE</b>. Tu pourras ensuite gérer ta compta depuis Telegram." },
+      { title: "Choisis ta langue", body: "Français (Maurice) ou English. Affecte l'UI et les réponses du bot Telegram." },
+    ],
+    tips: [
+      "Active la 2FA si Supabase le propose pour sécuriser ton compte.",
+    ],
+  },
+
+  // ========================================================================
+  // CLIENT — TELEGRAM CONFIG
+  // ========================================================================
+  '/client/telegram-config': {
+    title: 'Configuration Telegram (personnelle)',
+    audience: 'all',
+    intro:
+      "Lie ton compte Lexora à ton compte Telegram pour pouvoir utiliser le bot @LexoraAgent_bot — gestion factures, paie, agenda, banque depuis ton téléphone.",
+    steps: [
+      { title: "Génère un code", body: "Bouton <b>Générer un code</b>. Tu obtiens un code 6 caractères valable 15 min." },
+      { title: "Ouvre Telegram", body: "Sur ton téléphone, cherche <b>@LexoraAgent_bot</b> ou utilise le lien direct fourni." },
+      { title: "Tape /start CODE", body: "Démarre une conversation avec le bot et envoie <b>/start ABCXYZ</b> (remplace ABCXYZ par ton code). Le compte est lié." },
+      { title: "Teste", body: "Envoie \"bonjour\" au bot. Il doit te saluer par ton prénom et te dire à quoi il peut t'aider selon ton rôle." },
+    ],
+    pitfalls: [
+      "Code expiré (> 15 min) → regénère-en un.",
+      "Si tu changes de numéro Telegram, fais <b>/logout</b> sur l'ancien et reconnecte avec un nouveau code.",
+    ],
+    tips: [
+      "Si tu gères plusieurs sociétés, le bot te demande laquelle activer via <b>/societe</b>.",
+    ],
+  },
+
+  // ========================================================================
+  // CABINET — DASHBOARD
+  // ========================================================================
+  '/comptable/cabinet': {
+    title: 'Tableau de bord Cabinet',
+    audience: 'comptable',
+    intro:
+      "Vue agrégée de tous les clients du cabinet : tâches du mois par client (TVA, paye, MRA, factures), KPIs cumulés, alertes critiques, collaborateurs en charge.",
+    steps: [
+      { title: "Filtre par client", body: "Vue d'ensemble ou drill-down sur un client précis. Tu peux taguer les clients (urgent, en cours, en attente, etc.)." },
+      { title: "Travail en cours", body: "Liste des tâches assignées à toi (TVA mai, paye juin, etc.) avec deadline et statut." },
+      { title: "Acting as", body: "Bouton sur un client pour <b>basculer en mode client</b> : tu vois Lexora comme si tu étais le directeur de cette société. Pratique pour saisir." },
+    ],
+    tips: [
+      "Assigne des collaborateurs à chaque client (onglet Collaborateurs) — chacun voit son scope.",
+    ],
+  },
+
+  // ========================================================================
+  // DOCUMENTS
+  // ========================================================================
+  '/client/documents': {
+    title: 'Documents',
+    audience: 'all',
+    intro:
+      "Tous les documents (factures fournisseurs, relevés bancaires, contrats, justificatifs) déposés dans Lexora. L'OCR extrait les infos automatiquement pour les facturer / comptabiliser.",
+    steps: [
+      { title: "Dépose un document", body: "Drag-and-drop ou bouton <b>Importer</b>. Formats PDF, JPG, PNG, XLSX. Jusqu'à 20 Mo par fichier." },
+      { title: "OCR auto", body: "Lexora analyse via IA Claude : type de document détecté (facture fournisseur, relevé bancaire, fiche de paie...), montants extraits, fournisseur, date." },
+      { title: "Valide la création", body: "Si OCR correcte : 1 clic pour créer la facture fournisseur ou enregistrer le relevé. Sinon, corrige les champs avant de valider." },
+    ],
+    pitfalls: [
+      "Document de mauvaise qualité (photo floue, papier froissé) → OCR moins fiable, corrige manuellement.",
+      "Si statut 'erreur', clique <b>Réanalyser</b> pour relancer l'OCR.",
+    ],
+    tips: [
+      "Tu peux envoyer une photo de document directement au bot Telegram — il l'ingère et te propose la création.",
+    ],
+  },
 }
 
 /**

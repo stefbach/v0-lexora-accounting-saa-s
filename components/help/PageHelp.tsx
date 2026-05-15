@@ -1,29 +1,20 @@
 "use client"
 import { useState } from "react"
 import { usePathname } from "next/navigation"
-import { HelpCircle, ExternalLink, AlertTriangle, Lightbulb, BookOpen, X } from "lucide-react"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { HelpCircle } from "lucide-react"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { getHelpFor, type HelpEntry } from "@/lib/help/content"
+import { getHelpFor } from "@/lib/help/content"
+import { PageHelpDrawer } from "./PageHelpDrawer"
 
 /**
- * Bouton d'aide contextuelle. À placer dans le header de chaque page importante.
- *
- * Usage :
- *   <PageHelp />                      → résout automatiquement depuis usePathname()
- *   <PageHelp pathKey="/comptable/tva" />  → override explicite
- *
- * Design : sobre, premium, drawer latéral droit. Pas d'émoji, juste des icônes
- * Lucide discrètes. Espacements généreux, typographie soignée.
+ * Bouton d'aide contextuelle inline (dans le header d'une page).
+ * Pour un bouton flottant global, utiliser <FloatingPageHelp /> à la place.
  */
 type Props = {
   pathKey?: string
-  /** Texte du bouton (défaut "Aide") */
   label?: string
-  /** Variante du bouton (défaut "ghost" pour discrétion dans le header) */
   variant?: 'default' | 'ghost' | 'outline'
-  /** Taille (défaut "sm") */
   size?: 'sm' | 'default' | 'lg'
 }
 
@@ -31,208 +22,18 @@ export function PageHelp({ pathKey, label = "Aide", variant = 'ghost', size = 's
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const entry = getHelpFor(pathKey ?? pathname)
-
-  // Si pas de contenu pour cette page, on n'affiche rien (silencieux)
   if (!entry) return null
-
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button
-          variant={variant}
-          size={size}
-          className="gap-1.5 text-slate-600 hover:text-slate-900"
-        >
+        <Button variant={variant} size={size} className="gap-1.5 text-slate-600 hover:text-slate-900">
           <HelpCircle className="h-4 w-4" />
           <span className="font-normal">{label}</span>
         </Button>
       </SheetTrigger>
       <SheetContent side="right" className="w-full sm:max-w-[460px] p-0 overflow-y-auto bg-white">
-        <HelpDrawerContent entry={entry} onClose={() => setOpen(false)} />
+        <PageHelpDrawer entry={entry} onClose={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
-  )
-}
-
-function HelpDrawerContent({ entry, onClose }: { entry: HelpEntry; onClose: () => void }) {
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">
-              Aide
-            </div>
-            <h2 className="text-lg font-semibold text-slate-900 leading-tight">
-              {entry.title}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 transition-colors p-1 -m-1"
-            aria-label="Fermer"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        {entry.audience !== 'all' && (
-          <Badge
-            variant="outline"
-            className="mt-3 bg-slate-50 text-slate-700 border-slate-200 text-[10px] font-normal uppercase tracking-wider"
-          >
-            {entry.audience === 'comptable' ? 'Mode comptable' : 'Mode client'}
-          </Badge>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 px-6 py-5 space-y-7">
-        {/* Intro */}
-        <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-            À quoi sert cette page
-          </h3>
-          <p className="text-sm text-slate-700 leading-relaxed">{entry.intro}</p>
-        </section>
-
-        {/* Steps */}
-        <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
-            Comment faire
-          </h3>
-          <ol className="space-y-4">
-            {entry.steps.map((step, i) => (
-              <li key={i} className="flex gap-3">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-medium flex items-center justify-center">
-                  {i + 1}
-                </div>
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <h4 className="text-sm font-medium text-slate-900 mb-1">{step.title}</h4>
-                  <p
-                    className="text-sm text-slate-600 leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: step.body }}
-                  />
-                  {step.warning && (
-                    <div className="mt-2 flex items-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md">
-                      <AlertTriangle className="h-3.5 w-3.5 text-amber-700 flex-shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-900 leading-relaxed">{step.warning}</p>
-                    </div>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        {/* Pitfalls */}
-        {entry.pitfalls && entry.pitfalls.length > 0 && (
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
-              Pièges à éviter
-            </h3>
-            <ul className="space-y-2">
-              {entry.pitfalls.map((p, i) => (
-                <li
-                  key={i}
-                  className="flex items-start gap-2.5 text-sm text-slate-700 leading-relaxed"
-                >
-                  <span className="text-slate-400 flex-shrink-0 mt-1">•</span>
-                  <span>{p}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* External links */}
-        {entry.externalLinks && entry.externalLinks.length > 0 && (
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
-              Liens utiles
-            </h3>
-            <div className="space-y-2">
-              {entry.externalLinks.map((link, i) => (
-                <a
-                  key={i}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-start justify-between gap-3 px-3.5 py-2.5 border border-slate-200 rounded-md hover:border-slate-300 hover:bg-slate-50 transition-colors group"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-slate-900 group-hover:text-slate-900">
-                      {link.label}
-                    </div>
-                    {link.description && (
-                      <div className="text-xs text-slate-500 mt-0.5 leading-snug">
-                        {link.description}
-                      </div>
-                    )}
-                  </div>
-                  <ExternalLink className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600 flex-shrink-0 mt-0.5" />
-                </a>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Tips */}
-        {entry.tips && entry.tips.length > 0 && (
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
-              <Lightbulb className="h-3.5 w-3.5" /> Astuces
-            </h3>
-            <ul className="space-y-2">
-              {entry.tips.map((t, i) => (
-                <li
-                  key={i}
-                  className="flex items-start gap-2.5 text-sm text-slate-700 leading-relaxed"
-                >
-                  <span className="text-slate-400 flex-shrink-0 mt-1">•</span>
-                  <span>{t}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* Doc / video links */}
-        {(entry.docUrl || entry.videoUrl) && (
-          <section className="pt-3 border-t border-slate-100">
-            <div className="flex flex-col gap-2">
-              {entry.docUrl && (
-                <a
-                  href={entry.docUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-slate-700 hover:text-slate-900"
-                >
-                  <BookOpen className="h-4 w-4" /> Documentation complète
-                </a>
-              )}
-              {entry.videoUrl && (
-                <a
-                  href={entry.videoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-slate-700 hover:text-slate-900"
-                >
-                  <BookOpen className="h-4 w-4" /> Voir la vidéo tutoriel
-                </a>
-              )}
-            </div>
-          </section>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/50">
-        <p className="text-xs text-slate-500 leading-relaxed">
-          Besoin d'autre chose ? Demande au bot Telegram Lexora, il connaît
-          toutes les fonctionnalités et peut t'accompagner étape par étape.
-        </p>
-      </div>
-    </div>
   )
 }
