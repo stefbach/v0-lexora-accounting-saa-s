@@ -47,6 +47,8 @@ const MODULES_LABELS: Record<string, string> = {
   etats_financiers: "États financiers",
   juridique: "Juridique",
   documents: "Documents & OCR",
+  telegram: "Assistant IA Telegram",
+  employe_portal: "Portail employé",
 }
 
 export default function InscriptionPage() {
@@ -471,7 +473,11 @@ function PlanCard({ plan, periodicite, active, onClick }: {
 }) {
   const prix = periodicite === 'annuelle' ? plan.prix_annuel_mur : plan.prix_mensuel_mur
   const suffix = periodicite === 'annuelle' ? '/an' : '/mois'
-  const modulesActifs = Object.entries(plan.modules_inclus || {}).filter(([, v]) => v).slice(0, 5)
+  // Mise en avant : Telegram (Chief of Staff IA) en premier s'il est inclus.
+  const modulesActifs = Object.entries(plan.modules_inclus || {})
+    .filter(([, v]) => v)
+    .sort(([a], [b]) => (a === 'telegram' ? -1 : b === 'telegram' ? 1 : 0))
+    .slice(0, 6)
 
   return (
     <button

@@ -70,6 +70,7 @@ const TIERS: Tier[] = [
         "Jusqu'à 50 transactions / mois",
         "OCR IA illimité",
         "e-MRA : EDF5 basique",
+        "Assistant IA Telegram · en option (+Rs 990/mo)",
         "500 Mo de stockage",
       ],
       en: [
@@ -78,6 +79,7 @@ const TIERS: Tier[] = [
         "Up to 50 transactions / month",
         "Unlimited AI OCR",
         "e-MRA: basic EDF5",
+        "Telegram AI Assistant · optional (+Rs 990/mo)",
         "500 MB storage",
       ],
     },
@@ -95,6 +97,7 @@ const TIERS: Tier[] = [
     features: {
       fr: [
         "Tout Solo, +",
+        "Assistant IA Telegram · Chief of Staff inclus",
         "TIBOK Santé · téléconsultation illimitée",
         "Jusqu'à 200 transactions / mois",
         "e-MRA : EDF5 + VAT auto",
@@ -103,6 +106,7 @@ const TIERS: Tier[] = [
       ],
       en: [
         "Everything in Solo, plus",
+        "Telegram AI Assistant · Chief of Staff included",
         "TIBOK Health · unlimited telemedicine",
         "Up to 200 transactions / month",
         "e-MRA: EDF5 + auto VAT",
@@ -125,6 +129,7 @@ const TIERS: Tier[] = [
     features: {
       fr: [
         "Tout Business, +",
+        "Assistant IA Telegram · multi-utilisateurs",
         "TIBOK Santé · toute l'équipe couverte",
         "Jusqu'à 500 transactions / mois",
         "e-MRA : toutes déclarations",
@@ -134,6 +139,7 @@ const TIERS: Tier[] = [
       ],
       en: [
         "Everything in Business, plus",
+        "Telegram AI Assistant · multi-user",
         "TIBOK Health · whole team covered",
         "Up to 500 transactions / month",
         "e-MRA: all filings",
@@ -156,6 +162,7 @@ const TIERS: Tier[] = [
     features: {
       fr: [
         "Tout PME, +",
+        "Assistant IA Telegram · workflows personnalisés",
         "TIBOK Santé · suivi médecin du travail",
         "Transactions illimitées",
         "Audit trail e-MRA complet",
@@ -165,6 +172,7 @@ const TIERS: Tier[] = [
       ],
       en: [
         "Everything in PME, plus",
+        "Telegram AI Assistant · custom workflows",
         "TIBOK Health · occupational doctor",
         "Unlimited transactions",
         "Full e-MRA audit trail",
@@ -417,8 +425,10 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                       {/* Features */}
                       <ul className="mb-7 space-y-2.5">
                         {tier.features[locale].map((f, i) => {
-                          // Highlight the TIBOK line in every tier.
+                          // Highlight TIBOK (green) and Telegram (blue) lines.
                           const isTibok = /TIBOK/i.test(f)
+                          const isTelegram = /telegram/i.test(f)
+                          const isHighlighted = isTibok || isTelegram
                           return (
                             <li key={i} className="flex items-start gap-2.5">
                               <span
@@ -427,9 +437,11 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                                 style={{
                                   background: isTibok
                                     ? "linear-gradient(135deg, rgba(46,204,138,0.20) 0%, rgba(46,204,138,0.08) 100%)"
-                                    : isPopular
-                                      ? "rgba(212,175,55,0.18)"
-                                      : "linear-gradient(135deg, rgba(65,145,255,0.18) 0%, rgba(65,145,255,0.08) 100%)",
+                                    : isTelegram
+                                      ? "linear-gradient(135deg, rgba(36,164,237,0.22) 0%, rgba(36,164,237,0.08) 100%)"
+                                      : isPopular
+                                        ? "rgba(212,175,55,0.18)"
+                                        : "linear-gradient(135deg, rgba(65,145,255,0.18) 0%, rgba(65,145,255,0.08) 100%)",
                                 }}
                               >
                                 <Check
@@ -438,9 +450,11 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                                   style={{
                                     color: isTibok
                                       ? "#2ECC8A"
-                                      : isPopular
-                                        ? "#D4AF37"
-                                        : "#2A6FCC",
+                                      : isTelegram
+                                        ? "#24A4ED"
+                                        : isPopular
+                                          ? "#D4AF37"
+                                          : "#2A6FCC",
                                   }}
                                 />
                               </span>
@@ -450,7 +464,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                                   color: isPopular ? "#E8EAFC" : "#1E293B",
                                   fontFamily: "'Poppins', sans-serif",
                                   lineHeight: 1.5,
-                                  fontWeight: isTibok ? 600 : 400,
+                                  fontWeight: isHighlighted ? 600 : 400,
                                 }}
                               >
                                 {f}
