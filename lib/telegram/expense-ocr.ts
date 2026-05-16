@@ -12,7 +12,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || ''
-const OCR_MODEL = process.env.LEXORA_EXPENSE_OCR_MODEL || 'claude-sonnet-4-5'
+const OCR_MODEL = process.env.LEXORA_EXPENSE_OCR_MODEL || 'claude-haiku-4-5-20251001'
 
 export type ExpenseOcrOutput = {
   vendor: string | null
