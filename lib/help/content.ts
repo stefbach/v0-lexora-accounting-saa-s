@@ -51,6 +51,27 @@ export type HelpEntry = {
  */
 export const HELP_CONTENT: Record<string, HelpEntry> = {
   // ========================================================================
+  // RACINES — fallback générique pour toute page non couverte spécifiquement
+  // (le matcher remonte les segments jusqu'à trouver une entrée)
+  // ========================================================================
+  '/client': {
+    title: "Espace client — vue d'ensemble",
+    audience: 'client',
+    intro:
+      "Ton espace de pilotage : facturation, banque, fiscalité (TVA, CIT, TDS, ROC), RH/paie, GBC, documents. Chaque sous-page a son propre bouton d'aide en bas à droite — clique dessus pour obtenir des explications didactiques.",
+    steps: [
+      { title: "Navigation", body: "Le menu de gauche regroupe les modules : <b>Ventes</b> (factures, devis), <b>Compta</b> (banque, écritures, bilan), <b>Fiscal</b> (MRA hub, TVA, CIT, TDS, ROC), <b>RH</b> (employés, paie, congés), <b>Paramètres</b> (sociétés, utilisateurs, banque, MRA)." },
+      { title: "Société active", body: "Si tu gères plusieurs sociétés, le sélecteur en haut bascule entre elles. Toutes les pages réagissent au contexte actif." },
+      { title: "Aide contextuelle", body: "Sur chaque page, ce bouton t'explique <b>à quoi sert la page</b>, <b>comment l'utiliser</b>, les <b>pièges à éviter</b> et les <b>liens utiles</b> (portail MRA, banques, etc.)." },
+      { title: "Bot Telegram", body: "Pour toute question hors-page (analyse, conseil fiscal, création de facture par photo), demande au bot Lexora sur Telegram." },
+    ],
+    tips: [
+      "Le bouton d'aide est toujours là, en bas à droite. Si tu ne le vois pas sur une page, signale-le.",
+      "Pour aller plus vite : raccourci clavier `?` ouvre l'aide contextuelle.",
+    ],
+  },
+
+  // ========================================================================
   // FISCALITÉ — TVA
   // ========================================================================
   '/comptable/tva': {
@@ -1374,14 +1395,31 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
  * Essaye exact, puis remonte en supprimant les segments un par un.
  * Ex: /comptable/tva/2025-05 → essaye /comptable/tva/2025-05, puis /comptable/tva.
  */
-export function getHelpFor(pathname: string): HelpEntry | null {
+export function getHelpFor(pathname: string, locale: 'fr' | 'en' = 'fr'): HelpEntry | null {
+  const registry = locale === 'en' ? getEnRegistry() : HELP_CONTENT
   const cleaned = pathname.split('?')[0].replace(/\/$/, '')
-  if (HELP_CONTENT[cleaned]) return HELP_CONTENT[cleaned]
+  if (registry[cleaned]) return registry[cleaned]
+  // Fallback EN → FR si l'entrée n'a pas encore été traduite (migration progressive)
+  if (locale === 'en' && HELP_CONTENT[cleaned]) return HELP_CONTENT[cleaned]
   const parts = cleaned.split('/').filter(Boolean)
   while (parts.length > 1) {
     parts.pop()
     const candidate = '/' + parts.join('/')
-    if (HELP_CONTENT[candidate]) return HELP_CONTENT[candidate]
+    if (registry[candidate]) return registry[candidate]
+    if (locale === 'en' && HELP_CONTENT[candidate]) return HELP_CONTENT[candidate]
   }
   return null
+}
+
+// Lazy require pour éviter une dépendance circulaire si content-en.ts importe content.ts
+let _enRegistry: Record<string, HelpEntry> | null = null
+function getEnRegistry(): Record<string, HelpEntry> {
+  if (_enRegistry) return _enRegistry
+  try {
+    const mod = require('./content-en') as { HELP_CONTENT_EN: Record<string, HelpEntry> }
+    _enRegistry = mod.HELP_CONTENT_EN || {}
+  } catch {
+    _enRegistry = {}
+  }
+  return _enRegistry
 }
