@@ -119,7 +119,7 @@ export async function GET(request: Request) {
 
       const { data: departs } = await supabase
         .from('employes')
-        .select('id, nom, prenom, poste, date_arrivee, date_depart, date_depart_type, raison_depart, salaire_base, societe_id')
+        .select('id, nom, prenom, poste, date_arrivee, date_depart, date_depart_type, raison_depart, salaire_base, societe_id, email, email_personnel')
         .in('societe_id', accessibleIds)
         .not('date_depart', 'is', null)
         .order('date_depart', { ascending: false })
