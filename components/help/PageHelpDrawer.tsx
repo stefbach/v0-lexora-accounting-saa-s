@@ -2,19 +2,54 @@
 import { ExternalLink, AlertTriangle, Lightbulb, BookOpen, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import type { HelpEntry } from "@/lib/help/content"
+import type { Locale } from "@/lib/i18n"
+
+const LABELS = {
+  fr: {
+    aide: "Aide",
+    modeComptable: "Mode comptable",
+    modeClient: "Mode client",
+    aQuoiSert: "À quoi sert cette page",
+    commentFaire: "Comment faire",
+    piegesAEviter: "Pièges à éviter",
+    liensUtiles: "Liens utiles",
+    astuces: "Astuces",
+    docComplete: "Documentation complète",
+    voirVideo: "Voir la vidéo tutoriel",
+    fermer: "Fermer",
+    besoin: "Besoin d'autre chose ? Demande au bot Telegram Lexora, il connaît toutes les fonctionnalités et peut t'accompagner étape par étape.",
+  },
+  en: {
+    aide: "Help",
+    modeComptable: "Accountant mode",
+    modeClient: "Client mode",
+    aQuoiSert: "What this page is for",
+    commentFaire: "How to do it",
+    piegesAEviter: "Pitfalls to avoid",
+    liensUtiles: "Useful links",
+    astuces: "Tips",
+    docComplete: "Full documentation",
+    voirVideo: "Watch the video tutorial",
+    fermer: "Close",
+    besoin: "Need more help? Ask the Lexora Telegram bot — it knows every feature and can walk you through it step by step.",
+  },
+} as const
 
 /**
  * Drawer de contenu d'aide. Utilisé par <PageHelp /> et <FloatingPageHelp />.
  * Design sobre : palette grays + accent emerald, espacements généreux, aucun
- * émoji.
+ * émoji. Bilingue FR/EN via prop `locale`.
  */
 export function PageHelpDrawer({
   entry,
   onClose,
+  locale = 'fr',
 }: {
   entry: HelpEntry
   onClose: () => void
+  locale?: Locale
 }) {
+  const L = LABELS[locale] ?? LABELS.fr
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -22,7 +57,7 @@ export function PageHelpDrawer({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">
-              Aide
+              {L.aide}
             </div>
             <h2 className="text-lg font-semibold text-slate-900 leading-tight">
               {entry.title}
@@ -31,7 +66,7 @@ export function PageHelpDrawer({
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-700 transition-colors p-1 -m-1"
-            aria-label="Fermer"
+            aria-label={L.fermer}
           >
             <X className="h-5 w-5" />
           </button>
@@ -41,19 +76,19 @@ export function PageHelpDrawer({
             variant="outline"
             className="mt-3 bg-slate-50 text-slate-700 border-slate-200 text-[10px] font-normal uppercase tracking-wider"
           >
-            {entry.audience === 'comptable' ? 'Mode comptable' : 'Mode client'}
+            {entry.audience === 'comptable' ? L.modeComptable : L.modeClient}
           </Badge>
         )}
       </div>
 
       <div className="flex-1 px-6 py-5 space-y-7">
         <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">À quoi sert cette page</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">{L.aQuoiSert}</h3>
           <p className="text-sm text-slate-700 leading-relaxed">{entry.intro}</p>
         </section>
 
         <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Comment faire</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">{L.commentFaire}</h3>
           <ol className="space-y-4">
             {entry.steps.map((step, i) => (
               <li key={i} className="flex gap-3">
@@ -77,7 +112,7 @@ export function PageHelpDrawer({
 
         {entry.pitfalls && entry.pitfalls.length > 0 && (
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Pièges à éviter</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">{L.piegesAEviter}</h3>
             <ul className="space-y-2">
               {entry.pitfalls.map((p, i) => (
                 <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700 leading-relaxed">
@@ -91,7 +126,7 @@ export function PageHelpDrawer({
 
         {entry.externalLinks && entry.externalLinks.length > 0 && (
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Liens utiles</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">{L.liensUtiles}</h3>
             <div className="space-y-2">
               {entry.externalLinks.map((link, i) => (
                 <a
@@ -117,7 +152,7 @@ export function PageHelpDrawer({
         {entry.tips && entry.tips.length > 0 && (
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-1.5">
-              <Lightbulb className="h-3.5 w-3.5" /> Astuces
+              <Lightbulb className="h-3.5 w-3.5" /> {L.astuces}
             </h3>
             <ul className="space-y-2">
               {entry.tips.map((tip, i) => (
@@ -135,12 +170,12 @@ export function PageHelpDrawer({
             <div className="flex flex-col gap-2">
               {entry.docUrl && (
                 <a href={entry.docUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-slate-700 hover:text-slate-900">
-                  <BookOpen className="h-4 w-4" /> Documentation complète
+                  <BookOpen className="h-4 w-4" /> {L.docComplete}
                 </a>
               )}
               {entry.videoUrl && (
                 <a href={entry.videoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-slate-700 hover:text-slate-900">
-                  <BookOpen className="h-4 w-4" /> Voir la vidéo tutoriel
+                  <BookOpen className="h-4 w-4" /> {L.voirVideo}
                 </a>
               )}
             </div>
@@ -149,9 +184,7 @@ export function PageHelpDrawer({
       </div>
 
       <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/50">
-        <p className="text-xs text-slate-500 leading-relaxed">
-          Besoin d'autre chose ? Demande au bot Telegram Lexora, il connaît toutes les fonctionnalités et peut t'accompagner étape par étape.
-        </p>
+        <p className="text-xs text-slate-500 leading-relaxed">{L.besoin}</p>
       </div>
     </div>
   )

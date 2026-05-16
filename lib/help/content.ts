@@ -1395,14 +1395,31 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
  * Essaye exact, puis remonte en supprimant les segments un par un.
  * Ex: /comptable/tva/2025-05 → essaye /comptable/tva/2025-05, puis /comptable/tva.
  */
-export function getHelpFor(pathname: string): HelpEntry | null {
+export function getHelpFor(pathname: string, locale: 'fr' | 'en' = 'fr'): HelpEntry | null {
+  const registry = locale === 'en' ? getEnRegistry() : HELP_CONTENT
   const cleaned = pathname.split('?')[0].replace(/\/$/, '')
-  if (HELP_CONTENT[cleaned]) return HELP_CONTENT[cleaned]
+  if (registry[cleaned]) return registry[cleaned]
+  // Fallback EN → FR si l'entrée n'a pas encore été traduite (migration progressive)
+  if (locale === 'en' && HELP_CONTENT[cleaned]) return HELP_CONTENT[cleaned]
   const parts = cleaned.split('/').filter(Boolean)
   while (parts.length > 1) {
     parts.pop()
     const candidate = '/' + parts.join('/')
-    if (HELP_CONTENT[candidate]) return HELP_CONTENT[candidate]
+    if (registry[candidate]) return registry[candidate]
+    if (locale === 'en' && HELP_CONTENT[candidate]) return HELP_CONTENT[candidate]
   }
   return null
+}
+
+// Lazy require pour éviter une dépendance circulaire si content-en.ts importe content.ts
+let _enRegistry: Record<string, HelpEntry> | null = null
+function getEnRegistry(): Record<string, HelpEntry> {
+  if (_enRegistry) return _enRegistry
+  try {
+    const mod = require('./content-en') as { HELP_CONTENT_EN: Record<string, HelpEntry> }
+    _enRegistry = mod.HELP_CONTENT_EN || {}
+  } catch {
+    _enRegistry = {}
+  }
+  return _enRegistry
 }

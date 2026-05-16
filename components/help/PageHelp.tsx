@@ -1,10 +1,11 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { HelpCircle } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { getHelpFor } from "@/lib/help/content"
+import { getLocale, type Locale } from "@/lib/i18n"
 import { PageHelpDrawer } from "./PageHelpDrawer"
 
 /**
@@ -18,21 +19,26 @@ type Props = {
   size?: 'sm' | 'default' | 'lg'
 }
 
-export function PageHelp({ pathKey, label = "Aide", variant = 'ghost', size = 'sm' }: Props) {
+export function PageHelp({ pathKey, label, variant = 'ghost', size = 'sm' }: Props) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const entry = getHelpFor(pathKey ?? pathname)
+  const [locale, setLocaleState] = useState<Locale>('fr')
+  useEffect(() => {
+    setLocaleState(getLocale())
+  }, [])
+  const entry = getHelpFor(pathKey ?? pathname, locale)
   if (!entry) return null
+  const finalLabel = label ?? (locale === 'en' ? "Help" : "Aide")
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button variant={variant} size={size} className="gap-1.5 text-slate-600 hover:text-slate-900">
           <HelpCircle className="h-4 w-4" />
-          <span className="font-normal">{label}</span>
+          <span className="font-normal">{finalLabel}</span>
         </Button>
       </SheetTrigger>
       <SheetContent side="right" className="w-full sm:max-w-[460px] p-0 overflow-y-auto bg-white">
-        <PageHelpDrawer entry={entry} onClose={() => setOpen(false)} />
+        <PageHelpDrawer entry={entry} locale={locale} onClose={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   )
