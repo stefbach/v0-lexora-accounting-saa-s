@@ -1962,6 +1962,633 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     ],
   },
 
+  // ========================================================================
+  // CLIENT — RAPPROCHEMENT (vue dirigeant)
+  // ========================================================================
+  '/client/rapprochement': {
+    title: 'Rapprochement bancaire — Vue dirigeant',
+    audience: 'client',
+    intro:
+      "Vue de pilotage du rapprochement : tu vois en un coup d'œil quels comptes sont à jour, quel est le taux de matching, quelles transactions restent en suspens et quel est l'écart résiduel solde bancaire vs solde comptable. Pas la mécanique comptable (règles R1-R7, lettrage des comptes 411/401, écritures BNQ — ça c'est <em>/comptable/rapprochement</em>), juste le statut santé. Indispensable pour valider la fiabilité du bilan avant d'engager une décision (investissement, dividende, prêt bancaire).",
+    steps: [
+      { title: "1. Carte de santé par compte", body: "Pour chaque compte bancaire (MCB, SBM, AfrAsia, etc.) : <b>solde scrapé</b>, <b>solde comptable Lexora</b>, <b>écart</b>, <b>% transactions rapprochées</b>, date du dernier rapprochement. Vert si écart < 1%, orange 1-5%, rouge > 5%." },
+      { title: "2. Transactions en suspens", body: "Liste des transactions non encore rapprochées avec ancienneté. Au-delà de 30j, alerte : ton comptable a peut-être oublié, demande-lui." },
+      { title: "3. Approuve les lots", body: "Si ton comptable a préparé un lot de matches > 95% de confiance, tu valides en bloc d'un clic. Sinon tu le laisses traiter en détail." },
+      { title: "4. Pilote l'écart résiduel", body: "L'écart entre solde bancaire et comptable doit s'expliquer (chèques émis non débités, virements en cours). Lexora liste les justifications. Écart inexpliqué > 50 000 MUR = remontée Direction." },
+      { title: "5. État de rapprochement officiel", body: "Génère le PDF pour ton auditeur ou ton banquier : solde comptable + transactions en suspens = solde bancaire. Signé électroniquement." },
+      { title: "6. Drill vers le détail comptable", body: "Si tu veux comprendre une ligne précise, clic → tu bascules vers <b>/comptable/rapprochement</b> avec le contexte. Réservé aux profils Direction et Comptable." },
+      { title: "7. Verrouille la période", body: "Quand tu es satisfait, verrouille le mois. Plus de modification possible. Le bilan publié est figé.", warning: "Avant de verrouiller, vérifie qu'aucune transaction n'est restée en suspens depuis plus de 60 jours." },
+    ],
+    pitfalls: [
+      "Verrouiller un mois avec un écart inexpliqué > 5% → le bilan publié est faux, l'auditeur émet une réserve.",
+      "Approuver en bloc des matches < 90% de confiance → erreurs de lettrage qui se révèlent au bilan suivant.",
+      "Ignorer des transactions en suspens depuis 90j → c'est souvent une fraude ou un oubli de comptabilisation.",
+      "Confondre cette page (statut) avec /comptable/rapprochement (action) → tu cherches le bouton lettrer, il n'est pas ici.",
+    ],
+    tips: [
+      "Active l'alerte Telegram <em>écart bancaire</em> : tu reçois un push si l'écart dépasse ton seuil.",
+      "Pour les groupes : tableau de bord consolidé multi-sociétés avec taux de rapprochement global.",
+      "Multinationales : KPI <em>reconciliation maturity</em> par BU pour benchmark interne.",
+    ],
+  },
+
+  // ========================================================================
+  // CLIENT — CONTRATS JURIDIQUES
+  // ========================================================================
+  '/client/contrats': {
+    title: 'Contrats juridiques — Assistant IA',
+    audience: 'client',
+    intro:
+      "Module de génération et de gestion des contrats juridiques mauriciens, basé sur le <b>Code Civil Mauricien</b> (Loi de 1808, transposition Code Napoléon, articles 1101 à 1369 sur les obligations contractuelles) et le <b>Workers' Rights Act 2019</b> pour les contrats de travail. L'assistant IA propose <b>32 modèles</b> : bail commercial/résidentiel, CDI, CDD, NDA, vente immobilière, contrat de mission, prestation de services, mandat, prêt, caution, pacte d'associés, cession de parts, etc. Génération en moins de 2 minutes avec clauses adaptées à ton secteur.",
+    steps: [
+      { title: "1. Choisis le type de contrat", body: "Catalogue 32 types groupés en 5 familles : <b>Travail</b> (CDI, CDD, stage, freelance), <b>Immobilier</b> (bail commercial/résidentiel, vente, location-vente), <b>Commercial</b> (prestation, distribution, agence), <b>Société</b> (pacte associés, cession parts, augmentation capital), <b>Confidentialité</b> (NDA, non-concurrence, propriété intellectuelle)." },
+      { title: "2. Renseigne les parties", body: "Sélectionne contractants depuis Contacts (auto-rempli : BRN, adresse, représentant). Pour personne physique : NID Maurice + adresse + qualité (dirigeant, salarié, propriétaire)." },
+      { title: "3. Paramètres spécifiques", body: "Selon le type : montant, durée, lieu d'exécution, juridiction (tribunaux mauriciens compétents par défaut). L'IA propose les clauses standards et flagge les options sensibles (non-concurrence, exclusivité)." },
+      { title: "4. Clauses légales obligatoires", body: "L'IA injecte automatiquement les clauses imposées par la loi : <b>WRA s.5-12</b> pour contrats de travail (durée, rémunération, congés, préavis), <b>Code Civil art.1709-1762</b> pour louages d'immeuble, <b>Companies Act 2001 s.190</b> pour pactes d'associés.", warning: "Une clause illégale (renonciation à des droits non négociables WRA) rend tout le contrat nul. Lexora bloque." },
+      { title: "5. Personnalise et révise", body: "Éditeur WYSIWYG. L'IA propose <b>amélioration / simplification / durcissement</b> de chaque clause sur demande. Suivi des modifications activé." },
+      { title: "6. Valide juridiquement", body: "Bouton <b>Revue IA</b> : Claude analyse le contrat final, détecte incohérences, clauses manquantes, risques. Pour > 1 M MUR ou cas sensible, demande revue avocat externe (intégration <b>Lex Avocats Maurice</b> en option)." },
+      { title: "7. Signature électronique", body: "Envoi pour signature électronique conforme <b>Electronic Transactions Act 2000</b>. SMS/email aux signataires, suivi temps réel. PDF final horodaté." },
+      { title: "8. Archivage et alertes", body: "Stocké dans <b>Documents</b> avec tags. Alertes auto : fin de bail J-90, renouvellement CDD J-30, échéance NDA J-365. Pas de contrat oublié." },
+    ],
+    pitfalls: [
+      "Bail commercial sans clause d'indexation → loyer figé 9 ans, perte sèche bailleur. Lexora propose l'indice CCI Maurice.",
+      "CDD sans motif valable (Section 17 WRA : 4 motifs limitatifs) → requalification en CDI + dommages.",
+      "NDA sans durée limitée et périmètre défini → réputé non écrit par les tribunaux mauriciens.",
+      "Clause de non-concurrence sans contrepartie financière → invalide. Indemniser obligatoirement (Cour Suprême 2019).",
+      "Oublier la juridiction → litiges potentiellement portés à l'étranger, coûteux. Précise <em>tribunaux mauriciens</em>.",
+    ],
+    externalLinks: [
+      { label: "Code Civil Mauricien", url: "https://mauritiusassembly.govmu.org/Documents/Acts/MauritiusCivilCode.pdf", description: "Articles 1101 à 1369 — obligations et contrats." },
+      { label: "Workers' Rights Act 2019", url: "https://mauritiusassembly.govmu.org/Documents/Acts/WRA2019.pdf", description: "Contrats de travail mauriciens." },
+      { label: "Electronic Transactions Act 2000", url: "https://mauritiusassembly.govmu.org/Documents/Acts/ETA2000.pdf", description: "Signature électronique légale." },
+      { label: "Bar Council Mauritius", url: "https://barcouncil.mu", description: "Annuaire avocats pour revue externe." },
+    ],
+    tips: [
+      "Pour les groupes : bibliothèque de modèles personnalisés (clauses-types validées par l'avocat).",
+      "Multinationales : modèles par juridiction (Maurice, France OHADA, UK common law) avec choix automatique selon parties.",
+      "Active la revue automatique trimestrielle des contrats en vigueur : Lexora flagge ceux à renégocier.",
+      "Bot Telegram : <em>\"génère NDA pour fournisseur X\"</em> → brouillon prêt en 60 secondes.",
+    ],
+  },
+
+  // ========================================================================
+  // CLIENT — CATALOGUE PRODUITS / SERVICES
+  // ========================================================================
+  '/client/catalogue': {
+    title: 'Catalogue produits et services',
+    audience: 'client',
+    intro:
+      "Référentiel des produits et services facturables : désignation, prix unitaire HT, taux de TVA, code interne, compte de produit (classe 7). Sert à accélérer la facturation (sélection en 2 clics au lieu de tout retaper), à uniformiser les libellés sur les factures et à garantir la cohérence des taux de TVA (15% / 0% zero-rated / exempt selon VAT Act 1998 Schedules).",
+    steps: [
+      { title: "1. Crée un article", body: "<b>Nouveau</b>. Code interne (ex: CONS-DEV), désignation (telle qu'elle apparaîtra sur la facture), prix HT MUR, taux TVA (15% / 0% / exempt), compte produit (706 prestations, 707 ventes, 708 produits annexes)." },
+      { title: "2. Catégorise", body: "Tags : famille (services, marchandises, abonnements), saisonnier oui/non, actif/archivé. Filtres puissants pour catalogue > 100 lignes." },
+      { title: "3. Multi-devises", body: "Prix de base MUR + prix figés en USD/EUR pour les exports. Sinon Lexora convertit au taux du jour à la facturation (IAS 21)." },
+      { title: "4. Cas TVA zero-rated", body: "Exportation marchandises, transport international, biens Schedule 2 VAT Act → <b>0%</b> avec déduction amont. Joins justificatif douane à l'article pour audit.", warning: "Si tu mets 0% sans justification, MRA requalifie à 15% en contrôle + 5% pénalité + intérêts." },
+      { title: "5. Cas TVA exempt", body: "Riz, farine, médicaments essentiels, location résidentielle, services bancaires, soins médicaux, éducation → <b>exempt</b>. Pas de TVA collectée mais pas de déduction amont non plus." },
+      { title: "6. Import en masse", body: "CSV : code, désignation, prix, TVA, compte. Idéal pour catalogue venant d'un ERP/Excel. Template fourni dans Aide → Imports." },
+      { title: "7. Lien à la facture", body: "Dans <b>Nouvelle facture</b>, recherche par code ou désignation, ajout en 1 clic. Tarifs surchargeables ponctuellement (remise client)." },
+      { title: "8. Historique prix", body: "Toute modification de prix est tracée. Tu peux générer un rapport <em>évolution prix sur 12 mois</em> pour piloter la marge." },
+    ],
+    pitfalls: [
+      "Doublon de codes (CONS-DEV et CONS_DEV) → confusion en facturation. Active la déduplication.",
+      "Mauvais taux TVA sur un article récurrent → minoration TVA collectée sur des centaines de factures, redressement énorme.",
+      "Compte produit incorrect (706 au lieu de 707) → CA mal ventilé, analytique faussée.",
+      "Article supprimé alors qu'il est référencé dans des factures historiques → libellé conservé sur les anciennes mais erreur à l'audit.",
+      "Prix non actualisés depuis 2 ans → marge érodée. Programme une revue annuelle.",
+    ],
+    externalLinks: [
+      { label: "MRA — VAT Schedules 1 et 2", url: "https://www.mra.mu/download/VATAct.pdf", description: "Liste exonérations et zero-rated officielle." },
+    ],
+    tips: [
+      "Active le mode <em>recherche fuzzy</em> : tu tapes <em>consultance</em> et Lexora trouve <em>CONS-DEV Conseil développement</em>.",
+      "Pour les groupes : catalogue groupe + surcharges par société (utile cabinet conseil multi-pays).",
+      "Multinationales : codes <em>HS Code</em> douaniers pour les biens exportés, ventilation par pays automatique.",
+      "Bot Telegram : <em>\"facture acme 3 jours CONS-DEV\"</em> → utilise directement le tarif du catalogue.",
+    ],
+  },
+
+  // ========================================================================
+  // CLIENT — BANQUE (vue dirigeant multi-comptes)
+  // ========================================================================
+  '/client/banque': {
+    title: 'Banque — Vue d ensemble multi-comptes',
+    audience: 'client',
+    intro:
+      "Tableau de bord trésorerie multi-banques : soldes consolidés en temps réel (MCB, SBM, AfrAsia, ABC, MauBank, Bank One), alertes seuils, virements sortants en attente d'approbation, projections de trésorerie à 30/60/90 jours. Différent de <em>/comptable/banque</em> (qui gère les écritures BNQ, le journal et le lettrage) et de <em>/client/rapprochement</em> (statut du matching). Ici tu pilotes le <b>cash</b> sur tous tes comptes en un écran.",
+    steps: [
+      { title: "1. Vision consolidée", body: "Cartes par compte : nom banque, IBAN masqué, devise, solde actuel scrapé, solde 30j moyen, variation J-1. Total consolidé en MUR (conversion auto pour les comptes USD/EUR via taux du jour)." },
+      { title: "2. Alertes de seuil", body: "Configure pour chaque compte : seuil bas (ex: < 100 000 MUR → push Telegram), seuil haut (> 5 M MUR → suggère placement à terme). Auto-évaluation des opportunités." },
+      { title: "3. Virements en attente", body: "Liste des virements préparés par le comptable, en attente de validation Direction (workflow à 2 niveaux). Approuve/refuse en 1 clic avec MFA (Telegram OTP)." },
+      { title: "4. Projection 30/60/90j", body: "Lexora projette le solde futur en intégrant : factures clients à échéance (encaissements attendus), factures fournisseurs (décaissements), salaires (J+25 ou fin de mois), échéances MRA (J+20). Vert si positif, rouge si tu vas être à découvert." },
+      { title: "5. Drill par compte", body: "Clic sur une carte → dernières transactions, en clair (sortie / entrée), avec lettrage déjà fait par le comptable. Tu ne vois PAS les écritures, juste le mouvement." },
+      { title: "6. Export pour banquier", body: "PDF synthèse multi-comptes pour réunion banquier (négociation découvert, crédit, placement). Mise en forme professionnelle." },
+      { title: "7. Multi-devises", body: "Affichage en MUR + devise d'origine. Sensibilité change : si EUR baisse de 5%, impact sur ta trésorerie groupe estimé." },
+    ],
+    pitfalls: [
+      "Confondre solde scrapé (banque) et solde comptable (Lexora) : le scrapé est la vérité, le comptable peut accuser un retard de saisie.",
+      "Ignorer une alerte seuil bas → découvert non négocié = agios à 1,5% / mois.",
+      "Ne pas activer la double validation des virements > seuil → risque fraude (cas réel courant : faux mail dirigeant).",
+      "Oublier les retenues fiscales pendantes (PAYE, CSG, NSF, TVA) dans la projection → faux sentiment de trésorerie.",
+    ],
+    externalLinks: [
+      { label: "MCB Internet Banking", url: "https://ibank.mcb.mu" },
+      { label: "SBM Internet Banking", url: "https://internetbanking.sbmgroup.mu" },
+      { label: "Bank of Mauritius — Statistiques", url: "https://www.bom.mu" },
+    ],
+    tips: [
+      "Active la <em>position de groupe</em> si tu pilotes plusieurs sociétés : tu vois la trésorerie consolidée au niveau holding.",
+      "Bot Telegram : <em>\"point trésorerie\"</em> → récap multi-comptes envoyé à 09:00 chaque jour.",
+      "Pour les multinationales : agrégation cash multi-pays avec conversion USD reporting groupe (IFRS).",
+      "Lien rapide vers <b>/comptable/rapprochement</b> si tu vois un écart anormal — donne mandat au comptable d'enquêter.",
+    ],
+  },
+
+  // ========================================================================
+  // CLIENT — TVA (vue dirigeant)
+  // ========================================================================
+  '/client/tva': {
+    title: 'TVA — Vue dirigeant',
+    audience: 'client',
+    intro:
+      "Vue de pilotage TVA pour le dirigeant : combien tu dois payer ce mois, statut de la déclaration (préparée / soumise / payée), échéance MRA, comparaison historique. Pas la mécanique comptable (calcul Schedule A/B, génération VAT3, écritures TVA collectée/déductible — ça c'est <em>/comptable/tva</em>), juste l'essentiel pour décider et provisionner le cash. Cadre légal : <b>VAT Act 1998</b>, taux standard <b>15%</b>, échéance <b>20 du mois suivant</b>.",
+    steps: [
+      { title: "1. Le chiffre clé du mois", body: "Solde TVA à payer (TVA collectée - TVA déductible). Vert si < 100 000 MUR, orange < 500 000, rouge > 500 000. Provisionne le cash en conséquence." },
+      { title: "2. Statut de la déclaration", body: "<b>Brouillon</b> (comptable travaille), <b>Prête</b> (à valider Direction), <b>Soumise</b> (MRA accusé reçu), <b>Payée</b> (virement effectué). Chaque transition envoie notification Telegram." },
+      { title: "3. Échéance MRA", body: "Date butoir : 20 du mois suivant pour VAT3 (mensuelle si CA > 10 M MUR/an), 20 du mois suivant fin de trimestre pour VAT4. Compte à rebours visible.", warning: "Retard = <b>pénalité 5% du solde dû + 0,5% par mois d'intérêts</b>. Pour 1 M MUR de TVA, ça fait 50 000 MUR de pénalité instantanée." },
+      { title: "4. Tendance 12 mois", body: "Graphique TVA collectée vs déductible vs solde mensuel. Détecte les anomalies : pic inhabituel (gros contrat ?), creux suspect (facturation oubliée ?)." },
+      { title: "5. Comparaison historique", body: "Mois actuel vs même mois N-1. Si écart > 30%, Lexora alerte (changement activité réel ou erreur dans la saisie ?)." },
+      { title: "6. Validation 1 clic", body: "Si tu fais confiance à ton comptable : bouton <b>Valider et soumettre</b> avec MFA Telegram. Robot Playwright dépose sur eservices.mra.mu, paie reste à ta main." },
+      { title: "7. Suivi paiement", body: "Une fois soumise, l'app affiche les coordonnées de virement (référence TAN + période). Marque payée quand le virement est exécuté. Bouton de matching automatique avec relevé bancaire." },
+    ],
+    pitfalls: [
+      "Valider sans vérifier le récap → tu signes une erreur du comptable. Survole au moins les totaux et le ratio TVA/CA.",
+      "Oublier de payer même après soumission → pénalités courent quand même. La soumission n'est pas le paiement.",
+      "Provisionner pas assez de cash pour le 20 → découvert le jour J = agios + image dégradée auprès de la banque.",
+      "Ignorer la tendance : un solde qui monte continuellement peut signaler de la TVA déductible perdue (factures fournisseurs non saisies).",
+    ],
+    externalLinks: [
+      { label: "MRA — Portail eServices", url: "https://eservices.mra.mu", description: "Suivre l'accusé de soumission et payer." },
+      { label: "VAT Act 1998", url: "https://www.mra.mu/download/VATAct.pdf", description: "Loi de référence." },
+    ],
+    tips: [
+      "Active l'alerte Telegram J-7 / J-3 / J-1 : tu reçois rappel avec montant et lien direct vers la page.",
+      "Pour les groupes : tableau de bord TVA multi-sociétés en un écran, total consolidé à payer.",
+      "Multinationales : conversion en USD/EUR pour reporting groupe + sensibilité aux taux de change.",
+      "Si ton solde TVA est systématiquement créditeur (export pur), demande remboursement annuel via VAT22 — discute avec ton comptable.",
+    ],
+  },
+
+  // ========================================================================
+  // CLIENT — INCOME TAX RETURN FORM 3
+  // ========================================================================
+  '/client/it-form3': {
+    title: 'Income Tax Return Form 3 — Personnes physiques',
+    audience: 'client',
+    intro:
+      "La déclaration d'<b>Income Tax Return Form 3</b> (IT Form 3) est l'obligation annuelle des personnes physiques résidentes fiscales mauriciennes, en application de la <b>Section 95 Income Tax Act 1995 (ITA)</b> et des <b>Income Tax (Returns) Regulations</b>. Concerne dirigeants/actionnaires/salariés rémunérés par la société : déclare revenus mondiaux, déductions (intérêts immobiliers, médical, education, EDB), calcule l'impôt dû et solde après PAYE déjà retenu. Échéance : <b>30 septembre</b> de l'année suivant l'exercice fiscal (jul-juin) ou <b>15 octobre</b> en cas de dépôt électronique.",
+    steps: [
+      { title: "1. Vérifie ton statut", body: "Résident fiscal mauricien si tu passes <b>≥ 183 jours/an</b> à Maurice OU <b>≥ 270 jours sur 3 ans cumulés</b> (ITA s.73). Non-résident : seulement revenus de source mauricienne. Lexora calcule auto à partir de tes voyages déclarés." },
+      { title: "2. Renseigne ton TAN personnel", body: "Tax Account Number personnel (différent du TAN société) : 1 lettre + 9 chiffres, obtenu sur eservices.mra.mu lors du premier enregistrement personne physique. Sans TAN, pas de dépôt.", warning: "Ne confonds pas TAN personnel et TAN société. Erreur = rejet automatique MRA + amende 5 000 MUR." },
+      { title: "3. Récap des revenus", body: "<b>Salaires</b> (auto depuis ta paie Lexora si tu es employé de la société), <b>dividendes</b> (exemptés à Maurice depuis 2007 pour résidents — Section 7), <b>intérêts bancaires</b> (exemptés < 200 000 MUR/an), <b>revenus locatifs</b> nets, <b>revenus étrangers</b> (rapatriés ou non — ITA s.74)." },
+      { title: "4. Déductions Income Exemption Threshold (IET)", body: "Catégorie A célibataire sans dépendant : <b>325 000 MUR</b>. B (1 dépendant) : 435 000. C (2) : 535 000. D (3) : 600 000. E (4+) : 660 000. F (retraité) : 380 000. Lexora calcule selon ta situation familiale." },
+      { title: "5. Déductions spécifiques", body: "<b>Intérêts hypothécaires</b> résidence principale (plafond 300 000 MUR/an), <b>frais médicaux</b> (plafond 20 000 MUR/dépendant), <b>frais scolaires</b> (jusqu'à 135 000 MUR/enfant pour tertiaire), <b>dons</b> à œuvres approuvées MRA, <b>cotisations retraite privée</b> (jusqu'à 50 000 MUR)." },
+      { title: "6. Barème PAYE applicable", body: "<b>Solidarity Levy</b> 25% si revenu > 3 M MUR/an. Barème principal 2025-2026 : 0% jusqu'à 390 000 MUR, 2% jusqu'à 430 000, 4% jusqu'à 470 000, 6% jusqu'à 530 000, 8% jusqu'à 645 000, 10% jusqu'à 800 000, 12% jusqu'à 980 000, 14% jusqu'à 1,16 M, 16% jusqu'à 1,52 M, 18% jusqu'à 1,88 M, <b>20%</b> au-delà." },
+      { title: "7. PAYE déjà retenu", body: "Reprend le total PAYE retenu par l'employeur (info disponible sur ton Statement of Emoluments fourni par la société avant 15 août). Lexora le pré-remplit auto si tu es salarié dans le tenant." },
+      { title: "8. Solde à payer ou remboursement", body: "Solde = Impôt dû - PAYE retenu - APS (Advance Payment System si applicable). Si positif : à payer avant 30 septembre (ou 15 octobre dépôt électronique). Si négatif : remboursement MRA sous 60j." },
+      { title: "9. Dépose sur eservices.mra.mu", body: "Login avec TAN personnel + mot de passe. Module <b>Income Tax Return</b> → <b>Form 3</b>. Charge le PDF généré par Lexora. Note la référence MRA, c'est ton accusé légal." },
+      { title: "10. Archive et conserve 5 ans", body: "Conservation obligatoire <b>5 ans</b> (ITA s.96). Lexora archive auto avec horodatage. En cas de contrôle, tu produis en 1 clic." },
+    ],
+    pitfalls: [
+      "Oublier les revenus étrangers (intérêts, dividendes UK, immobilier France) → contrôle MRA = redressement + 50% pénalité + intérêts. Maurice échange via CRS avec 110+ pays.",
+      "Mauvaise catégorie IET (oublier un enfant à charge ou inversement compter un majeur) → différence d'impôt jusqu'à 300 000 MUR.",
+      "Retard de dépôt → pénalité <b>2 000 MUR</b> + 5% du solde dû + 0,5% intérêts mensuels (ITA s.122).",
+      "Confondre dépôt et paiement : déposer ne suffit pas, paye avant l'échéance.",
+      "Sous-estimer revenu si tu es dirigeant rémunéré par dividendes <em>déguisés</em> en remboursements de compte courant → requalification + Solidarity Levy.",
+      "Oublier APS (Advance Payment) si revenu > 4 M MUR/an : 4 acomptes trimestriels obligatoires.",
+    ],
+    externalLinks: [
+      { label: "Income Tax Act 1995", url: "https://mauritiusassembly.govmu.org/Documents/Acts/IncomeTaxAct1995.pdf", description: "Section 95 et suivants." },
+      { label: "Income Tax (Returns) Regulations", url: "https://www.mra.mu/download/IncomeTaxReturnsRegulations.pdf", description: "Modalités pratiques de dépôt." },
+      { label: "MRA — Form 3 Guide", url: "https://www.mra.mu/index.php/individual/income-tax-return", description: "Guide officiel personnes physiques." },
+      { label: "MRA — Income Exemption Threshold (IET)", url: "https://www.mra.mu/index.php/taxes-duties/individual/ind-income-exemption-threshold", description: "Catégories A à F mises à jour annuelles." },
+      { label: "ROC — Companies Act 2001", url: "https://mauritiusassembly.govmu.org/Documents/Acts/CompaniesAct2001.pdf", description: "Pour dirigeants : obligations de transparence." },
+    ],
+    tips: [
+      "Bot Telegram : <em>\"prépare mon Form 3\"</em> → Lexora génère le brouillon, tu valides depuis ton mobile.",
+      "Pour dirigeants de groupes : multi-tenants supportés, un seul Form 3 consolide tous tes revenus déclarés Maurice.",
+      "Multinationales : si tu es résident fiscal Maurice mais avec sources étrangères, vérifie les <b>conventions fiscales bilatérales</b> (Maurice en a > 45) pour éviter double imposition.",
+      "Module <b>Lex Tax Optimizer</b> (premium) : simule ton impôt pour 3 scenarii (salaire élevé vs salaire + dividendes vs salaire + remboursement frais), choisis le plus optimal légalement.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — JURIDIQUE
+  // ========================================================================
+  '/rh/juridique': {
+    title: 'Juridique RH — Contrats, ruptures, contentieux',
+    audience: 'comptable',
+    intro:
+      "Centre de gestion juridique RH : génération et suivi des contrats de travail (CDI, CDD, stage, freelance), avenants (modification salaire, fonction, durée du travail), procédures de rupture (démission, licenciement disciplinaire/économique, rupture conventionnelle, fin CDD), contentieux Industrial Court. Tout est conforme <b>Workers' Rights Act 2019</b> et jurisprudence Cour Suprême de Maurice. Indispensable pour éviter requalifications, dommages-intérêts (jusqu'à 24 mois de salaire) et amendes du Ministère du Travail.",
+    steps: [
+      { title: "1. Contrat initial WRA-conforme", body: "Modèles CDI / CDD / stage / freelance préchargés avec clauses obligatoires <b>Section 5 WRA</b> : identité parties, date d'entrée en fonction, lieu de travail, fonction, durée hebdo, rémunération, période d'essai, préavis, juridiction." },
+      { title: "2. Avenants", body: "Toute modification substantielle (salaire, fonction, durée travail, lieu) doit faire l'objet d'un avenant signé. Sans accord employé, l'employeur ne peut imposer (sauf cas exceptionnel article 38 WRA). Lexora génère, suit la signature, archive." },
+      { title: "3. Procédure disciplinaire (Section 64-69 WRA)", body: "Faute → <b>convocation écrite</b> 24h à 7j avant entretien → <b>entretien préalable</b> avec représentation possible → <b>notification sanction</b> écrite motivée. Sanctions : avertissement, blâme, mise à pied, licenciement. Lexora pilote chaque étape avec tampons horodatés.", warning: "Sauter une étape ou délai non respecté = licenciement abusif systématique au tribunal. Coût : 6 à 24 mois de salaire en dommages." },
+      { title: "4. Licenciement économique (Section 72A WRA)", body: "Justification : difficulté économique réelle (CA en chute, restructuration, fermeture). Procédure : <b>notification Ministère du Travail 30j avant</b>, recherche de reclassement, ordre des licenciements (ancienneté, charges famille, perf). Severance + notice." },
+      { title: "5. Rupture conventionnelle", body: "Accord mutuel formalisé : convention écrite signée, indemnité ≥ severance légale, homologation Ministère du Travail. Évite le contentieux. Lexora génère convention conforme." },
+      { title: "6. Contentieux Industrial Court", body: "En cas d'assignation : centralisation pièces (contrat, avenants, paie, sanctions, correspondances), constitution dossier, choix avocat (annuaire intégré), suivi audiences, provisionnement IFRS IAS 37 du litige." },
+      { title: "7. Mises à jour WRA", body: "Lexora suit les amendements WRA (2022, 2024) et flagge les contrats à mettre à jour : ex. obligation Vacation Leave 22j après 5 ans, EOY bonus inclusif allowances, etc." },
+      { title: "8. Audit juridique annuel", body: "Bouton <b>Audit RH</b> : Lexora vérifie chaque dossier employé pour conformité WRA. Rapport PDF avec écarts à corriger (clause manquante, sanction non motivée, etc.)." },
+    ],
+    pitfalls: [
+      "Licenciement verbal ou par SMS → nul de plein droit, requalification + dommages 12 mois de salaire minimum.",
+      "Procédure disciplinaire sans entretien préalable → licenciement abusif systématique.",
+      "CDD renouvelé > 2 fois ou > 24 mois cumulés (Section 19 WRA) → requalification automatique en CDI.",
+      "Non-déclaration au Ministère du Travail pour licenciement collectif > 10 personnes → amende jusqu'à 100 000 MUR + nullité.",
+      "Oublier de provisionner un contentieux probable (IAS 37) → bilan trompeur, auditeur émet réserve.",
+      "Clause de non-concurrence sans contrepartie financière → invalide depuis arrêt Cour Suprême 2019.",
+    ],
+    externalLinks: [
+      { label: "Workers' Rights Act 2019 (texte intégral)", url: "https://mauritiusassembly.govmu.org/Documents/Acts/WRA2019.pdf", description: "Texte de référence." },
+      { label: "Ministère du Travail Maurice", url: "https://labour.govmu.org", description: "Déclarations licenciement, conventions, conseil." },
+      { label: "Industrial Court Mauritius", url: "https://industrialcourt.govmu.org", description: "Juridiction compétente litiges travail." },
+      { label: "Bar Council Mauritius", url: "https://barcouncil.mu", description: "Annuaire avocats spécialisés droit social." },
+      { label: "Mauritius Employers' Federation", url: "https://mef.mu", description: "Conseil patronal, modèles, jurisprudence." },
+    ],
+    tips: [
+      "Active la <em>revue juridique trimestrielle</em> : Lexora flagge les contrats CDD à échéance, sanctions à archiver, contentieux à provisionner.",
+      "Pour les groupes : harmonisation des règles juridiques RH inter-sociétés via gabarits validés siège.",
+      "Multinationales : moteur de comparaison <em>droit social par pays</em> (Maurice WRA, France code du travail, UK ERA 1996) pour mobilités internationales.",
+      "Bot Telegram : <em>\"audit juridique RH\"</em> → rapport synthétique en PDF, escalation auto vers Direction si écart majeur.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — GROUPES D'EMPLOYÉS
+  // ========================================================================
+  '/rh/groupes': {
+    title: "Groupes d'employés — Équipes, départements, scope",
+    audience: 'all',
+    intro:
+      "Organisation hiérarchique des employés en groupes : <b>départements</b> (Finance, Commercial, Production, IT, RH), <b>équipes</b> (sous-départements), <b>scope managers</b> (qui voit/gère qui dans Lexora et Telegram), <b>hiérarchie de validation</b> (qui approuve quoi : congés, frais, virements). Fondation pour la délégation propre, la confidentialité des données salariales (Section 51 WRA : confidentialité paye) et la scalabilité (groupe > 50 employés).",
+    steps: [
+      { title: "1. Crée un département", body: "<b>Nouveau département</b>. Nom, code (FIN, COM, IT, etc.), responsable (un employé déjà créé), budget annuel optionnel pour suivi analytique. Centre de coût lié automatiquement (compta analytique)." },
+      { title: "2. Crée une équipe (sous-groupe)", body: "Dans le département : <b>Nouvelle équipe</b>. Nom, team lead, scope (clients, produits, zone géographique). Hiérarchie 3 niveaux supportée : société → département → équipe → employé." },
+      { title: "3. Affecte les employés", body: "Drag-and-drop ou multi-sélection. Un employé = 1 département principal + 0-N équipes secondaires (matrices possibles). Date d'effet de l'affectation tracée." },
+      { title: "4. Configure le scope manager", body: "Pour chaque manager : <b>quels employés voit-il ?</b> (équipe directe, descendants, tous). <b>Que peut-il approuver ?</b> (congés ≤ 5j, frais ≤ 10 000 MUR, paies non). Granularité fine." },
+      { title: "5. Hiérarchie de validation", body: "Workflow par type : congé > 5j → team lead → DRH. Frais > 50 000 MUR → manager → DAF. Virement > 500 000 MUR → comptable → Direction → MFA Telegram. Chaque étape tracée." },
+      { title: "6. Confidentialité salariale", body: "Section 51 WRA : la rémunération est confidentielle. Lexora masque par défaut le salaire des autres employés à tout manager (sauf DRH et Direction). Activation au cas par cas (besoin métier prouvé).", warning: "Une violation de confidentialité paye expose l'employeur à dommages-intérêts. Ne sur-attribue jamais les droits de visibilité salaire." },
+      { title: "7. Mobilité interne", body: "Changement de département / équipe sans rupture d'ancienneté. Avenant auto généré (Section 38 WRA si modification substantielle requiert accord employé). Historique préservé pour calcul severance." },
+      { title: "8. Reporting par groupe", body: "KPIs RH ventilés par département/équipe : effectif, masse salariale, turnover, absentéisme, taux OT. Comparaisons inter-équipes pour identifier les zones à risque." },
+    ],
+    pitfalls: [
+      "Manager avec scope trop large (voit toute la société) → fuite info salaire, conflit RH, démissions.",
+      "Hiérarchie de validation non configurée → tout remonte au DAF qui devient goulot d'étranglement.",
+      "Affectation rétroactive sans avenant → contestation employé (modification substantielle non consentie).",
+      "Suppression d'un département actif sans réaffectation → employés sans manager, paie en suspens.",
+      "Oublier de relier le département à un centre de coût analytique → analyse de marge par BU impossible.",
+    ],
+    externalLinks: [
+      { label: "Workers' Rights Act 2019 — Section 38 et 51", url: "https://mauritiusassembly.govmu.org/Documents/Acts/WRA2019.pdf", description: "Modification substantielle et confidentialité paye." },
+    ],
+    tips: [
+      "Active le <em>org chart visuel</em> (Settings → Affichage) : trombinoscope hiérarchique cliquable.",
+      "Pour les groupes : organisation matricielle multi-sociétés (un employé peut être dans plusieurs entités du groupe avec contrats différents).",
+      "Multinationales : groupes <em>cross-border</em> avec règles locales WRA Maurice / code travail FR / ERA UK automatiquement appliquées par localisation.",
+      "Bot Telegram : <em>/groupe FIN</em> → liste les membres et leurs statuts du jour (présents, en congé, en mission).",
+    ],
+  },
+
+  // ========================================================================
+  // RH — GÉOLOCALISATION
+  // ========================================================================
+  '/rh/geolocalisation': {
+    title: 'Géolocalisation des employés terrain',
+    audience: 'all',
+    intro:
+      "Suivi GPS temps réel des employés en mission terrain (BTP, livraison, gardiennage, services techniques, commerciaux). Pointages géolocalisés (entrée/sortie avec coordonnées vérifiées), suivi de trajets pour calcul indemnités kilométriques, alertes en cas de sortie de zone autorisée. Conformité <b>Data Protection Act 2017 Maurice</b> : consentement explicite employé requis + finalité limitée + droit d'accès.",
+    steps: [
+      { title: "1. Consentement employé (obligatoire)", body: "Formulaire de consentement signé électroniquement par chaque employé concerné, conforme <b>Data Protection Act 2017</b>. Précise : finalité (pointage/sécurité), données collectées (GPS, vitesse), durée conservation (12 mois max), droits d'accès et rectification. Sans consentement = collecte illégale.", warning: "Géolocaliser sans consentement = amende jusqu'à 200 000 MUR + dommages employé. Lexora bloque l'activation sans consentement archivé." },
+      { title: "2. Configure les zones autorisées", body: "Géofencing : dessine sur carte les zones légitimes (chantier, agence, périmètre de tournée). Sortie de zone → alerte manager (téléphone non couvert, urgence ?)." },
+      { title: "3. App mobile employé", body: "Téléchargement <b>Lexora Field</b> (Android/iOS). Connexion avec code Telegram. Pointage entrée/sortie = un bouton, GPS automatique. L'app ne tracke PAS en continu (seulement aux pointages + trajets validés)." },
+      { title: "4. Pointages géolocalisés", body: "Entrée : photo selfie + GPS + horodatage. Sortie idem. Anti-fraude : si GPS spoofé détecté (incohérence vitesse/altitude), pointage refusé." },
+      { title: "5. Trajets professionnels", body: "L'employé démarre un trajet via l'app, conduit, arrête à destination. Lexora calcule km parcourus, durée, vitesse moyenne. Lien automatique avec <b>/rh/trajets-km</b> pour remboursement." },
+      { title: "6. Dashboard manager", body: "Carte temps réel des employés actifs (avec consentement), historique trajets, taux de pointages géolocalisés validés. Filtres par équipe, zone, période." },
+      { title: "7. Conservation et purge", body: "Données GPS conservées 12 mois max, puis anonymisation automatique. Statistiques agrégées (km totaux par mois) conservées sans donnée personnelle." },
+      { title: "8. Droits employé", body: "Tout employé peut demander : accès à ses données, rectification, suppression, export. Lexora génère un PDF complet en 1 clic (conformité GDPR-like)." },
+    ],
+    pitfalls: [
+      "Activer sans consentement écrit → infraction grave DPA 2017, amende 200 000 MUR + plainte CNIL Maurice.",
+      "Géolocaliser un employé sédentaire (sans justification métier) → disproportionné, sanction DPC (Data Protection Commissioner).",
+      "Conservation au-delà de 12 mois sans justification → infraction DPA, purge auto.",
+      "Diffuser localisation à d'autres employés non habilités → fuite données personnelles.",
+      "Spoofing GPS non détecté → pointages fictifs, fraude salariale (heures non travaillées).",
+    ],
+    externalLinks: [
+      { label: "Data Protection Act 2017 Maurice", url: "https://mauritiusassembly.govmu.org/Documents/Acts/DPA2017.pdf", description: "Cadre légal protection données." },
+      { label: "Data Protection Office Mauritius", url: "https://dataprotection.govmu.org", description: "Autorité de contrôle, guidances." },
+      { label: "ICTA Mauritius", url: "https://www.icta.mu", description: "Régulateur télécoms et numérique." },
+    ],
+    tips: [
+      "Active la <em>vue agrégée</em> (heatmap zones d'activité) plutôt qu'individuel quand possible : moins intrusif, mieux accepté.",
+      "Pour les groupes BTP/sécurité : géofencing par chantier avec rotation auto des équipes.",
+      "Multinationales : conformité GDPR EU si employés expatriés temporairement en Europe.",
+      "Bot Telegram : <em>/equipe-terrain</em> → statut temps réel et alertes de sortie de zone.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — FRAIS KILOMÉTRIQUES (barème)
+  // ========================================================================
+  '/rh/frais-km': {
+    title: 'Barème kilométrique — Indemnités de transport',
+    audience: 'comptable',
+    intro:
+      "Configuration du barème de remboursement kilométrique appliqué aux trajets professionnels des employés (déplacements clients, chantiers, missions). Différent de <em>/rh/trajets-km</em> qui est la déclaration des trajets — ici tu configures les <b>règles de calcul</b>. À Maurice, pas de barème légal imposé : l'employeur fixe sa politique (taux par km, plafonds, types de véhicule), souvent inspirée du barème MRA pour véhicules de fonction ou des taux moyens de marché.",
+    steps: [
+      { title: "1. Définis les catégories de véhicule", body: "Typiquement : <b>Moto/Scooter</b>, <b>Voiture < 1300 cc</b>, <b>Voiture 1300-2000 cc</b>, <b>Voiture > 2000 cc</b>, <b>4x4/Utilitaire</b>. Chaque catégorie a un taux MUR/km différent reflétant le coût réel (carburant + usure + assurance)." },
+      { title: "2. Saisis les taux MUR/km", body: "Indicatif marché 2026 Maurice : moto 5-7 MUR/km, voiture petite 12-15 MUR/km, voiture moyenne 18-22 MUR/km, 4x4 25-30 MUR/km. Tu peux moduler selon ta politique (avantageuse ou stricte)." },
+      { title: "3. Plafond mensuel par employé", body: "Plafond optionnel pour éviter les abus : ex. 10 000 km/mois max ou 50 000 MUR/mois max. Au-delà, le surplus n'est pas remboursé (ou nécessite validation Direction)." },
+      { title: "4. Trajet domicile-travail", body: "À Maurice, le trajet domicile-travail n'est PAS un déplacement professionnel et n'est PAS remboursable au km (sauf accord employeur explicite). Lexora exclut auto sauf paramétrage contraire." },
+      { title: "5. Justificatifs requis", body: "Politique <b>justificatif obligatoire</b> au-delà d'un seuil (ex: > 5 000 MUR/mois) : ticket de péage, facture carburant, ordre de mission signé. Sinon refus. Conserve 7 ans (audit MRA)." },
+      { title: "6. Traitement fiscal", body: "Indemnités kilométriques correctement justifiées = <b>charges déductibles</b> société (Section 19 ITA) + <b>non imposables</b> côté employé (pas de PAYE/CSG/NSF). Si forfaitaire sans justificatifs = <b>requalification en salaire</b> par MRA, taxation complète.", warning: "Forfait kilométrique non justifié > 2 500 MUR/mois = avantage en nature requalifié, redressement MRA + 50% pénalité." },
+      { title: "7. Lien comptable", body: "Compte de charge : <b>6251 Frais kilométriques personnel</b> ou <b>6256 Indemnités de déplacement</b>. Centre de coût analytique selon mission/projet." },
+      { title: "8. Révision annuelle", body: "Recommandation : révise les taux chaque année en fonction inflation carburant (MRA STC), changement règles, retours employés. Lexora alerte si taux non révisé > 18 mois." },
+    ],
+    pitfalls: [
+      "Taux trop avantageux non justifié économiquement → MRA requalifie en salaire déguisé.",
+      "Pas de plafond mensuel → abus possibles, employés gonflent kilométrage.",
+      "Confondre déplacement pro et trajet domicile-travail → coûteux et fiscalement risqué.",
+      "Absence de justificatifs → MRA refuse déductibilité en contrôle, charge non opposable.",
+      "Taux unique pour tous les véhicules → injuste (4x4 coûte 5x plus qu'un scooter), retour des employés.",
+    ],
+    externalLinks: [
+      { label: "Income Tax Act 1995 — Section 19", url: "https://mauritiusassembly.govmu.org/Documents/Acts/IncomeTaxAct1995.pdf", description: "Déductibilité charges professionnelles." },
+      { label: "MRA — Statement of Tax Computation Guide", url: "https://www.mra.mu/index.php/taxes-duties/corporate", description: "Traitement charges déductibles." },
+    ],
+    tips: [
+      "Compare ton barème aux <em>practices</em> du secteur (MEF publie des benchmarks).",
+      "Pour les multinationales : barème par pays (Maurice MUR/km vs France EUR/km vs UK GBP/mile).",
+      "Active le calcul auto via géolocalisation (cf <em>/rh/geolocalisation</em>) : trajet GPS validé = remboursement déclenché sans saisie manuelle.",
+      "Bot Telegram : <em>\"barème km\"</em> → l'employé voit instantanément combien sera remboursé pour sa mission du jour.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — TRAJETS KM (déclaration)
+  // ========================================================================
+  '/rh/trajets-km': {
+    title: 'Trajets kilométriques — Déclaration et remboursement',
+    audience: 'all',
+    intro:
+      "Page où les employés déclarent leurs trajets professionnels (mission client, chantier, livraison) pour obtenir remboursement selon le barème configuré dans <em>/rh/frais-km</em>. Workflow : saisie employé → validation manager → calcul auto → intégration paie ou note de frais. Géolocalisation possible (via app mobile) pour validation automatique. Conformité fiscale assurée : justificatifs requis pour déductibilité société et exonération employé.",
+    steps: [
+      { title: "1. Saisie par l'employé", body: "Formulaire : date, départ, arrivée (saisie libre ou Google Maps intégré), motif (client X, chantier Y), km estimés ou GPS si app mobile activée, véhicule utilisé (selon catégories barème)." },
+      { title: "2. Justificatifs joints", body: "PDF/photo : ticket péage, facture carburant, ordre de mission. Au-delà du seuil configuré (ex: 5 000 MUR/mois), obligatoire. Sinon refus validation." },
+      { title: "3. Calcul automatique", body: "Lexora applique : km × taux MUR/km (selon catégorie véhicule) - plafond mensuel s'il y a. Affiche montant à valider par le manager." },
+      { title: "4. Validation manager", body: "Notification (web + Telegram). Manager voit le détail, approuve / refuse / demande correction. Délai cible 48h. Au-delà, escalade auto au DRH." },
+      { title: "5. Validation comptable", body: "Après manager, le comptable contrôle la cohérence (km vs durée mission, lien avec une facture client si refacturable). Pour les groupes : application des règles internes." },
+      { title: "6. Paiement", body: "Deux modes possibles : (a) intégré au bulletin de paie du mois suivant (ligne <em>indemnités km</em>), (b) note de frais séparée avec virement bancaire immédiat. Choix politique société." },
+      { title: "7. Refacturation client (si mission)", body: "Si la mission est facturable au client, Lexora propose d'inclure les km dans la prochaine facture client avec ou sans marge. Lien direct avec module facturation." },
+      { title: "8. Archive et audit", body: "Conservation 7 ans (durée prescription fiscale). En cas de contrôle MRA, production immédiate du détail (trajets + justificatifs) en 1 clic." },
+    ],
+    pitfalls: [
+      "Saisir des km sans justificatifs → refus comptable, employé non remboursé, conflit.",
+      "Trajets fictifs détectés a posteriori → faute disciplinaire grave + remboursement société (Section 65 WRA).",
+      "Oublier de catégoriser le véhicule → taux par défaut appliqué, écart de remboursement.",
+      "Manager qui approuve sans vérifier → fraude possible, responsabilité partagée.",
+      "Refacturer au client sans accord contractuel → litige client.",
+    ],
+    tips: [
+      "Active la <em>saisie via Telegram</em> : l'employé envoie <em>/trajet 45km client X 1300cc</em> et la déclaration est créée.",
+      "Lien avec géolocalisation : trajet GPS validé = déclaration auto, validation manager en 1 clic.",
+      "Pour les groupes : politique de validation harmonisée multi-sociétés.",
+      "Multinationales : devise locale du trajet (km Maurice en MUR, France en EUR, etc.) avec conversion auto pour reporting.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — EXPORTS PAIE
+  // ========================================================================
+  '/rh/exports/paie': {
+    title: 'Exports paie — Bulletins, virements, déclarations',
+    audience: 'comptable',
+    intro:
+      "Hub d'export de tous les fichiers paie générés par Lexora : <b>bulletins PDF</b> (envoi employés + archivage), <b>fichier virements bancaires</b> (CSV/XML SEPA-like Maurice), <b>déclarations MRA</b> (PAYE/CSG/NSF/PRGF en CSV/XML), <b>écritures comptables</b> (CSV format FEC ou IFRS). Différent de <em>/rh/declarations-mra</em> qui est l'écran de soumission MRA — ici tu exportes les fichiers bruts pour traitement externe (banque, autre système, audit). Cadre légal : <b>NSF Act 1976</b>, <b>CSG Act 2021</b>, <b>WRA 2019 Section 31</b> (bulletin obligatoire).",
+    steps: [
+      { title: "1. Sélectionne la période", body: "Mois ou trimestre ou année. Multi-sociétés si applicable (cabinet, groupe). Pré-requis : paie verrouillée (sinon les chiffres bougent encore)." },
+      { title: "2. Bulletins PDF individuels", body: "Génération en lot d'un PDF par employé conforme <b>Section 31 WRA</b> : brut, déductions détaillées (PAYE, NSF, CSG), allowances, net, charges patronales, cumul exercice. Envoi auto par email + archive dans Documents." },
+      { title: "3. Fichier virements bancaires", body: "Format MCB / SBM / AfrAsia / ABC (CSV propriétaire chaque banque) ou format SEPA-like. Pour chaque employé : IBAN, nom, montant net, référence (salaire mois/année). Import direct sur Internet Banking pour exécution en lot.", warning: "Vérifie IBAN avant export : un IBAN erroné = virement rejeté et frais bancaires (200-500 MUR/rejet)." },
+      { title: "4. Export PAYE MRA", body: "CSV format MRA strict avec colonnes : NID employé, nom, brut imposable, PAYE retenue, période. Compatible upload eservices.mra.mu. Lexora valide le format avant export.", warning: "Échéance MRA : <b>20 du mois suivant</b>. Au-delà, pénalité 5% + 0,5%/mois (Section 122 ITA)." },
+      { title: "5. Export CSG/NSF MRA", body: "CSV combiné employeur + employé avec catégories A (≤ 50 000 MUR) ou B (> 50 000 MUR). <b>NSF Act 1976</b> : plafond cotisation 19 700 MUR. <b>CSG Act 2021</b> : 1,5% ou 3% employé + 3% ou 6% employeur." },
+      { title: "6. Export PRGF", body: "CSV séparé. Calcul : <b>4,5%</b> du brut total tous employés sauf exemption FSC (pension privée équivalente attestée)." },
+      { title: "7. Export écritures comptables", body: "CSV au format <b>FEC</b> (Fichier des Écritures Comptables) ou IFRS pour intégration ERP. Comptes : 6411 Salaires bruts, 4310 Personnel net, 4311 PAYE, 4312 NSF, 4313 CSG, 4314 PRGF, 645x charges patronales." },
+      { title: "8. Archivage et conservation", body: "Tous les exports archivés automatiquement dans Documents avec horodatage. Conservation <b>10 ans</b> (audit + prescription MRA Section 113 ITA). Téléchargement à tout moment." },
+    ],
+    pitfalls: [
+      "Exporter avant verrouillage paie → chiffres incohérents avec ce que tu as soumis ensuite.",
+      "IBAN avec espaces/tirets dans le CSV → certaines banques rejettent en lot, retard de salaires (litige WRA).",
+      "Mauvaise catégorie CSG (A au lieu de B) → MRA recalcule, redressement + pénalité.",
+      "Oublier d'envoyer le bulletin à l'employé (Section 31 WRA exige) → infraction, amende jusqu'à 25 000 MUR par bulletin manquant.",
+      "Format CSV non conforme MRA (séparateur, encoding UTF-8 BOM) → rejet à l'upload, retard fatal le 20.",
+    ],
+    externalLinks: [
+      { label: "MRA — Portail eServices", url: "https://eservices.mra.mu", description: "Upload des fichiers PAYE/CSG/NSF." },
+      { label: "NSF Act 1976", url: "https://mauritiusassembly.govmu.org/Documents/Acts/NSFAct1976.pdf", description: "Loi National Savings Fund." },
+      { label: "Social Contributions and Social Benefits Act 2021 (CSG)", url: "https://mauritiusassembly.govmu.org/Documents/Acts/CSGAct2021.pdf", description: "Loi CSG remplaçant NPF." },
+      { label: "Workers' Rights Act 2019 — Section 31", url: "https://mauritiusassembly.govmu.org/Documents/Acts/WRA2019.pdf", description: "Bulletin de paie obligatoire." },
+    ],
+    tips: [
+      "Active la <em>signature électronique</em> des bulletins (employé + employeur) — opposable en cas de litige.",
+      "Pour les groupes : pack d'export consolidé multi-sociétés en un ZIP.",
+      "Multinationales : exports par pays (DSN France, FPS UK, ATO Single Touch Payroll Australie) avec moteur de mapping automatique.",
+      "Bot Telegram : <em>\"exports paie mai\"</em> → tous les fichiers générés et envoyés par PJ Telegram en 30 secondes.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — IMPORT VARIABLES PAIE
+  // ========================================================================
+  '/rh/import-paie': {
+    title: 'Import variables de paie — Excel en masse',
+    audience: 'comptable',
+    intro:
+      "Page d'import en masse des variables de paie du mois : primes exceptionnelles, heures supplémentaires non saisies via pointage, absences non justifiées, retenues spécifiques, allowances. Gain de temps majeur pour les sociétés > 30 employés ou avec beaucoup d'éléments variables (commerciaux à commissions, BTP avec OT, hôtellerie avec service charge). Format CSV/XLSX, validation pré-import, intégration directe au calcul paie du mois.",
+    steps: [
+      { title: "1. Télécharge le template", body: "Bouton <b>Template Excel</b>. Colonnes : code employé (ou NID), code variable (PRIM, OT15, ABS, RET, ALLOW), libellé, montant MUR ou heures, date d'effet. Une ligne = une variable." },
+      { title: "2. Remplis ton fichier", body: "Saisie depuis Excel ou export de ton outil de pointage / commission / KPI. Tu peux mixer types de variables dans un seul fichier. Plusieurs lignes par employé OK." },
+      { title: "3. Upload et pré-validation", body: "Drag-and-drop le fichier. Lexora valide : codes employés existants, codes variables connus, formats numériques OK, doublons détectés. Erreurs listées ligne par ligne." },
+      { title: "4. Aperçu impact", body: "Avant intégration : tableau récap par employé avec brut avant / variables / brut après. Tu vois l'impact total masse salariale du mois. Anomalies détectées (variable > 200% du salaire = vérifier)." },
+      { title: "5. Valide ou corrige", body: "Corrige directement dans Lexora (mode édition) ou ré-upload le fichier corrigé. Lexora garde l'historique des tentatives pour audit." },
+      { title: "6. Intégration au calcul paie", body: "Bouton <b>Intégrer</b>. Les variables alimentent le bulletin du mois (avec PAYE, NSF, CSG, PRGF recalculés auto sur la nouvelle base). Visible immédiatement dans <em>/rh/paie</em>.", warning: "Une fois intégré, modification possible uniquement par contre-passation (nouvelle ligne en négatif). Pas d'effacement direct pour traçabilité." },
+      { title: "7. Codes variables courants", body: "<b>PRIM</b> prime exceptionnelle, <b>OT15</b> heures sup × 1,5, <b>OT20</b> × 2 (dimanche/férié), <b>ABS</b> absence non payée, <b>RET</b> retenue (avance, prêt), <b>ALLOW</b> allocation (transport, repas), <b>COMM</b> commission, <b>BONUS</b> bonus performance." },
+      { title: "8. Archivage", body: "Fichier d'origine + log d'import archivé dans Documents avec horodatage. Conservation 10 ans (audit MRA / contentieux employé)." },
+    ],
+    pitfalls: [
+      "Mauvais code employé (NID erroné) → ligne ignorée, variable non payée, conflit avec employé.",
+      "Montant en EUR ou USD oublié de convertir → sur/sous-paiement énorme. Lexora flagge si > 200% du salaire base.",
+      "Importer un fichier 2 fois → doublons, sur-paiement. Lexora détecte hash du fichier et bloque.",
+      "Date d'effet hors période → variable rejetée (période close).",
+      "Confondre OT15 (1,5×) et OT20 (2×) → erreur récurrente, vérifie le code variable.",
+    ],
+    tips: [
+      "Crée tes templates personnalisés par contexte (mois de commissions vs mois de bonus annuel).",
+      "Pour les groupes : import multi-sociétés en un seul fichier avec colonne <em>société</em>.",
+      "Multinationales : devise par ligne (MUR, USD, EUR) avec conversion auto au taux du jour.",
+      "Bot Telegram : <em>\"variables paie mai\"</em> → statut import, anomalies à corriger, lien direct.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — HISTORIQUE PAIE
+  // ========================================================================
+  '/rh/historique-paie': {
+    title: 'Historique paie — Consultation bulletins',
+    audience: 'all',
+    intro:
+      "Consultation et ré-impression des bulletins de paie historiques : par employé, par période, par type (régulier, EOY, severance, prorata départ). Différent de <em>/rh/paie</em> qui est l'écran de saisie/validation du mois en cours — ici tu cherches dans les archives. Conservation obligatoire <b>10 ans</b> (Section 31 WRA + Section 96 ITA). Indispensable pour : reconstituer carrière d'un employé, fournir attestations, audit MRA, contentieux Industrial Court, calcul severance (salaire moyen 12 derniers mois).",
+    steps: [
+      { title: "1. Recherche par employé", body: "Sélecteur employé (actif ou archivé). Liste de tous ses bulletins du plus récent au plus ancien. Indicateurs : verrouillé, payé, modifié post-versement (si applicable)." },
+      { title: "2. Recherche par période", body: "Filtre par année / mois / trimestre. Tous les bulletins d'un mois donné en un écran (utile pour audit ou comparaison employés)." },
+      { title: "3. Ré-impression PDF", body: "Clic sur un bulletin → PDF identique à l'original (mention <em>duplicata</em> si réimprimé). Horodatage et signature électronique conservés.", warning: "Pas de modification possible d'un bulletin historique. Pour corriger : passe une contre-passation dans le mois courant (régularisation)." },
+      { title: "4. Statement of Emoluments annuel", body: "Génération auto chaque août pour exercice fiscal jul-juin : récap annuel par employé (brut, PAYE retenue, NSF, CSG) à fournir aux employés pour leur Income Tax Return Form 3 personnel.", warning: "Échéance légale : <b>15 août</b> de chaque année (Section 100 ITA). Au-delà : amende 5 000 MUR par employé manquant." },
+      { title: "5. Attestations sur demande", body: "Génère en 1 clic : attestation employeur, certificat de travail (départ), attestation salaire (banque, location, visa). Templates conformes WRA + Code Civil." },
+      { title: "6. Calcul salaire moyen 12 mois", body: "Pour severance (Section 70 WRA) ou indemnité : Lexora calcule le salaire moyen brut sur 12 derniers mois (incluant allowances, primes régulières, OT). Base juridiquement opposable." },
+      { title: "7. Export en masse pour audit", body: "Sélection multi-employés / multi-périodes → ZIP de tous les PDFs. Format demandé par auditeurs externes (PwC, KPMG, EY, BDO) ou MRA en contrôle." },
+      { title: "8. Recherche avancée", body: "Filtres : montant > X, primes > X, OT > X heures, employés > 5 ans ancienneté. Détecte anomalies historiques (audit interne RH)." },
+    ],
+    pitfalls: [
+      "Supprimer un bulletin historique → JAMAIS. Audit MRA exige préservation 10 ans (Section 96 ITA).",
+      "Ne pas générer Statement of Emoluments avant le 15 août → infraction ITA, amendes par employé.",
+      "Calculer le salaire moyen 12 mois sur le seul base salary (sans allowances) → severance sous-estimée, contentieux probable.",
+      "Réimprimer sans mention <em>duplicata</em> → confusion possible avec original, risque de double présentation.",
+      "Ne pas conserver les variables imports (Excel d'origine) → impossible de justifier un montant en contrôle.",
+    ],
+    externalLinks: [
+      { label: "Workers' Rights Act 2019 — Section 31", url: "https://mauritiusassembly.govmu.org/Documents/Acts/WRA2019.pdf", description: "Bulletin obligatoire et conservation." },
+      { label: "Income Tax Act 1995 — Sections 96 et 100", url: "https://mauritiusassembly.govmu.org/Documents/Acts/IncomeTaxAct1995.pdf", description: "Conservation 10 ans + Statement of Emoluments." },
+      { label: "MRA — Statement of Emoluments", url: "https://www.mra.mu/index.php/eservices/paye", description: "Procédure et template." },
+    ],
+    tips: [
+      "Active <em>l'accès employé</em> à son propre historique (auto-service) : il consulte ses bulletins sans solliciter RH.",
+      "Pour les groupes : historique consolidé inter-sociétés en cas de mobilité interne (préservation ancienneté).",
+      "Multinationales : historique multi-pays avec normalisation devise pour calculs comparatifs.",
+      "Bot Telegram : <em>\"bulletins Jean 2025\"</em> → tous les PDFs envoyés en PJ.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — ANNONCES
+  // ========================================================================
+  '/rh/annonces': {
+    title: 'Annonces internes — Communication employés',
+    audience: 'all',
+    intro:
+      "Centre de communication interne pour diffuser des annonces aux employés : informations générales (nouveaux process, événements, mouvements), rappels (échéances, jours fériés, formations), célébrations (anniversaires, promotions, naissances), changements (politique RH, organigramme). Diffusion multi-canaux : web Lexora (badge sidebar), push Telegram, email. Ciblage fin par département, équipe, statut. Pour PME et groupes, remplace WhatsApp groupe pro chaotique par un canal centralisé tracé.",
+    steps: [
+      { title: "1. Crée une annonce", body: "<b>Nouvelle annonce</b>. Titre, corps (riche : images, liens, listes), catégorie (info / rappel / célébration / changement / urgence), priorité (basse / moyenne / haute / critique)." },
+      { title: "2. Cible l'audience", body: "Toute la société, OU département(s), OU équipe(s), OU liste personnalisée. Exclusion possible (ex: tout sauf intérimaires). Lexora indique le nombre d'employés ciblés." },
+      { title: "3. Canaux de diffusion", body: "Coche : <b>Web Lexora</b> (badge sidebar avec compteur non lu), <b>Push Telegram</b> (notification mobile immédiate), <b>Email</b> (pour annonces formelles). Annonce critique → tous canaux obligatoires." },
+      { title: "4. Planification", body: "Publication immédiate OU planifiée (date + heure). Idéal pour annonces à effet J-3 (ex: <em>jour férié vendredi 12 mars, fermeture bureau</em>). Expiration auto possible après date." },
+      { title: "5. Demande d'accusé", body: "Coche <b>Demander accusé de lecture</b> pour les annonces critiques (changement politique, sécurité). Chaque employé doit cliquer <em>Lu et compris</em>. Reporting de couverture en temps réel." },
+      { title: "6. Modèles récurrents", body: "Sauvegarde tes annonces types : <em>jour férié</em>, <em>nouvel arrivant</em>, <em>fermeture exceptionnelle</em>, <em>rappel échéance</em>. Réutilise en 30 secondes." },
+      { title: "7. Statistiques", body: "Pour chaque annonce : taux d'ouverture (web + email), réactions (j'aime, commentaires si activés), accusés de lecture. Pilote la communication interne avec des KPIs." },
+      { title: "8. Archive", body: "Toutes les annonces archivées avec date, audience, métriques. Recherche full-text. Conservation indéfinie (mémoire d'entreprise)." },
+    ],
+    pitfalls: [
+      "Saturer les employés (> 10 annonces/semaine) → fatigue, plus personne ne lit. Discipline éditoriale.",
+      "Annonce sensible (licenciement collectif, fusion) diffusée sans préparation → panique, départs. Toujours valider avec Direction + RH.",
+      "Ne pas demander d'accusé sur annonce de sécurité (incendie, COVID) → tu ne sais pas qui est informé.",
+      "Cibler trop large → manque de pertinence, ignorée. Segmente fin.",
+      "Annonce sans expiration → encombre le fil indéfiniment, info périmée affichée.",
+    ],
+    tips: [
+      "Active les <em>annonces récurrentes</em> : ex. <em>tous les vendredis 16h, rappel reporting hebdo</em>.",
+      "Pour les groupes : annonces inter-sociétés possibles (ex. message PDG groupe à tous les employés des filiales).",
+      "Multinationales : traduction auto multi-langue (FR/EN/Mandarin/Hindi selon localisation employé).",
+      "Bot Telegram : commande <em>/annonces</em> → résumé des 5 dernières annonces actives en mobile.",
+      "Modère les commentaires si tu actives la fonction (évite dérapages WhatsApp-style).",
+    ],
+  },
+
+  // ========================================================================
+  // RH — PARAMÈTRES GLOBAUX
+  // ========================================================================
+  '/rh/parametres': {
+    title: 'Paramètres globaux RH — Règles transverses',
+    audience: 'comptable',
+    intro:
+      "Configuration des règles RH transverses applicables à toutes les sociétés du tenant : <b>jours fériés Maurice</b> officiels, <b>règles d'arrondi paye</b> (au MUR près, au 5 MUR près), <b>taux légaux NSF / CSG / PRGF</b>, <b>comptes comptables liés</b> à chaque ligne de paie. Distinct de <em>/rh/societe</em> qui est spécifique à une société (BRN, IBAN paie). Ici c'est la base réglementaire commune. Conformité <b>NSF Act 1976</b>, <b>CSG Act 2021</b>, <b>WRA 2019</b>.",
+    steps: [
+      { title: "1. Jours fériés Maurice", body: "Calendrier officiel maintenu par Lexora : 1 jan, 2 jan, Thaipoosam Cavadee, Maha Shivaratri, Independence Day (12 mars), Labour Day (1 mai), Eid-ul-Fitr, Assumption (15 août), Ganesh Chaturthi, Diwali, Arrival Indentured Labourers (2 nov), Christmas, Boxing Day. Tu peux ajouter fériés sectoriels ou conventionnels." },
+      { title: "2. Règles d'arrondi", body: "Net à payer arrondi : au MUR près (standard), au 5 MUR près (pratique virement), au 10 MUR près (rare). PAYE/NSF/CSG : toujours au MUR près (exigence MRA). Configure une fois pour toutes." },
+      { title: "3. Taux NSF (NSF Act 1976)", body: "<b>Employé</b> : 1% du salaire plafonné à <b>19 700 MUR/mois</b> (donc max 197 MUR/mois cotisation). <b>Employeur</b> : 2,5% du même plafond (max 492,5 MUR/mois). Lexora met à jour à chaque révision (rare, dernière 2017)." },
+      { title: "4. Taux CSG (CSG Act 2021)", body: "<b>Catégorie A</b> (salaire ≤ 50 000 MUR/mois) : 1,5% employé + 3% employeur. <b>Catégorie B</b> (> 50 000 MUR) : 3% employé + 6% employeur. Pas de plafond. Bascule A → B automatique au passage de seuil." },
+      { title: "5. Taux PRGF (Portable Retirement Gratuity Fund)", body: "<b>4,5% employeur</b> uniquement (rien employé). Sur brut total. Exemption si pension privée équivalente attestée par FSC (Section 13 PRGF Act 2019). Lexora applique exemption automatique si certificat FSC chargé." },
+      { title: "6. Comptes comptables liés", body: "Mapping standard à valider : <b>6411</b> Salaires bruts, <b>4310</b> Personnel net, <b>4311</b> PAYE à payer, <b>4312</b> NSF à payer, <b>4313</b> CSG à payer, <b>4314</b> PRGF à payer, <b>6451</b> Charges patronales NSF, <b>6452</b> Charges patronales CSG, <b>6453</b> Charges patronales PRGF. Modifiable selon PCM tenant." },
+      { title: "7. Période de paie", body: "Date de coupure (25 du mois, 30/31, libre). Jour de versement (25, 30/31, J+5). Délai génération bulletins (1 à 5 jours avant versement). Standard Maurice : coupure fin de mois, versement fin de mois ou 25." },
+      { title: "8. Audit automatique", body: "Lexora alerte si paramètre obsolète : ex. nouveau taux NSF voté → flag rouge jusqu'à revalidation. Évite l'oubli d'une révision législative." },
+    ],
+    pitfalls: [
+      "Mauvais taux NSF/CSG → toutes les paies fausses, redressement MRA + 50% pénalité + intérêts.",
+      "Compte comptable mal mappé (4310 confondu avec 411) → bilan faux, balance déséquilibrée.",
+      "Oublier la bascule A → B CSG quand un employé dépasse 50 000 MUR → sous-cotisation, redressement.",
+      "Jours fériés mal configurés → calcul OT erroné (les fériés travaillés = OT × 2, pas × 1,5).",
+      "Modifier les taux sans audit historique → impossible de comparer N vs N-1 proprement.",
+    ],
+    externalLinks: [
+      { label: "NSF Act 1976", url: "https://mauritiusassembly.govmu.org/Documents/Acts/NSFAct1976.pdf", description: "Loi National Savings Fund." },
+      { label: "Social Contributions and Social Benefits Act 2021 (CSG)", url: "https://mauritiusassembly.govmu.org/Documents/Acts/CSGAct2021.pdf", description: "Loi CSG." },
+      { label: "PRGF Act 2019", url: "https://mauritiusassembly.govmu.org/Documents/Acts/PRGFAct2019.pdf", description: "Portable Retirement Gratuity Fund." },
+      { label: "Workers' Rights Act 2019", url: "https://mauritiusassembly.govmu.org/Documents/Acts/WRA2019.pdf", description: "Règles paie et heures travail." },
+      { label: "Public Holidays Act", url: "https://mauritiusassembly.govmu.org/Documents/Acts/PublicHolidaysAct.pdf", description: "Jours fériés officiels Maurice." },
+    ],
+    tips: [
+      "Audit annuel des paramètres (chaque juillet pour exercice MRA jul-juin) : tout vérifier en 30 minutes.",
+      "Pour les groupes : paramètres communs au niveau holding + surcharges par société si convention sectorielle.",
+      "Multinationales : moteur multi-juridictions (Maurice WRA + France code travail + UK ERA + etc.).",
+      "Active la <em>veille législative</em> : Lexora s'abonne aux publications MRA / Ministère du Travail et alerte sur changements imminents.",
+    ],
+  },
+
+  // ========================================================================
+  // RH — PARAMÈTRES SOCIÉTÉ
+  // ========================================================================
+  '/rh/societe': {
+    title: 'Société — Paramètres RH spécifiques',
+    audience: 'comptable',
+    intro:
+      "Paramètres RH liés à <b>une société donnée</b> du tenant : <b>BRN</b> employeur, <b>numéro NSF employeur</b>, <b>TAN MRA</b> société, signataire des bulletins et certificats, <b>IBAN paie</b> (compte d'où sortent les virements salaires), logo et coordonnées affichés sur les bulletins. Distinct de <em>/rh/parametres</em> qui couvre les règles transverses (taux NSF/CSG, jours fériés). Ici c'est le carnet d'identité RH de la société, indispensable pour les déclarations MRA et les documents légaux opposables.",
+    steps: [
+      { title: "1. Identité société employeur", body: "<b>BRN</b> Business Registration Number (9 chiffres CBRD), <b>TAN</b> MRA (1 lettre + 9 chiffres), <b>NSF Employer Registration Number</b> (à demander à NSF au moment de la création société), date d'incorporation, secteur d'activité (NACE)." },
+      { title: "2. Signataire bulletins", body: "Identité du signataire (DRH, dirigeant) qui apparaît sur les bulletins et certificats : nom, fonction, signature scannée ou électronique. Opposable juridiquement (Section 31 WRA)." },
+      { title: "3. IBAN paie", body: "Compte bancaire d'où partent les virements salaires. Différent du compte général de la société si tu sépares trésorerie d'exploitation et paie (recommandé pour > 50 employés). IBAN format Maurice : MU + 24 caractères.", warning: "Si IBAN paie incorrect, tous les virements bulletins sont rejetés. Test à blanc recommandé avant première paie." },
+      { title: "4. Coordonnées sur bulletin", body: "Affichées en en-tête de chaque bulletin : raison sociale, adresse, téléphone, email RH, logo. Conformité Section 31 WRA + Image fidèle pour audit." },
+      { title: "5. Convention collective applicable", body: "Si secteur soumis à convention (hôtellerie, manufacturing, BTP, retail) : lien vers texte officiel + spécificités (durée travail 48h pour hôtellerie au lieu de 45h standard, taux OT majorés, primes sectorielles)." },
+      { title: "6. Politique paye interne", body: "Document interne (PDF) attaché : règles de promotion, grille salariale, périodes d'essai, conditions OT (autorisation préalable manager), allowances applicables. Référencé dans contrats." },
+      { title: "7. Période de paie société", body: "Si différente du standard tenant (cf <em>/rh/parametres</em>) : ex. holding paie le 25, filiale industrielle le 5 du mois suivant. Surcharge possible." },
+      { title: "8. Comptes spécifiques société", body: "Si tu surcharges les comptes comptables par défaut (ex. compte analytique BU différent), configure ici. Hérite des paramètres tenant sinon." },
+    ],
+    pitfalls: [
+      "BRN ou TAN incorrect → toutes les déclarations MRA mensuelles rejetées (PAYE, NSF, CSG, PRGF).",
+      "Pas de NSF Employer Registration Number → impossible de déclarer NSF, infraction NSF Act 1976.",
+      "Signataire non habilité (ex. simple manager non mandataire social) → bulletins contestables en cas de litige.",
+      "IBAN paie identique à IBAN encaissement client → confusion trésorerie, risque de paiement salaire avec encaissement non encore disponible (découvert).",
+      "Oublier la convention collective applicable → règles inadaptées appliquées, contentieux possible.",
+    ],
+    externalLinks: [
+      { label: "CBRD — Vérification BRN", url: "https://onlinebrd.govmu.org", description: "Validation de ton BRN." },
+      { label: "MRA — Enregistrement employeur", url: "https://www.mra.mu/index.php/eservices/employer-registration", description: "Obtention TAN société." },
+      { label: "NSF Mauritius", url: "https://socialsecurity.govmu.org/Communities/NSF", description: "Obtention NSF Employer Registration Number." },
+      { label: "Workers' Rights Act 2019", url: "https://mauritiusassembly.govmu.org/Documents/Acts/WRA2019.pdf", description: "Obligations employeur." },
+    ],
+    tips: [
+      "Test à blanc IBAN paie : fais un premier virement de 10 MUR à un compte interne pour valider le pipeline.",
+      "Pour les groupes : paramètres société hérités du tenant mais surchargeables (utile entités avec spécificités sectorielles).",
+      "Multinationales : profil <em>employer of record</em> par pays (Maurice, France, UK) si tu emploies à l'étranger.",
+      "Active la <em>vérification annuelle</em> : Lexora flagge si BRN/TAN/NSF non confirmés depuis > 12 mois.",
+    ],
+  },
+
 }
 
 /**
