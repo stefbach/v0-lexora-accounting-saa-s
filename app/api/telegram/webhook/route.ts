@@ -10,6 +10,10 @@ import {
 } from '@/lib/telegram/auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { ingestTelegramDocument } from '@/lib/telegram/document-ingest'
+
+// Le webhook Telegram doit répondre vite (Telegram retransmet sinon).
+// Le pipeline OCR canonique est appelé en fire-and-forget côté ingest.
+export const maxDuration = 60
 import { memoryRecall, formatMemoriesForPrompt } from '@/lib/telegram/memory'
 import { transcribeTelegramVoice } from '@/lib/telegram/voice-transcribe'
 import { detectPointageIntent, isExpensesListCommand } from '@/lib/telegram/pointage-nlp'
@@ -724,68 +728,41 @@ async function handleDocumentMessage(
   }
 
   const tailleKo = Math.round(r.taille / 1024)
-  const ocrSuccess = !!(r as any).ocr?.success
-  const typeDoc = (r as any).ocr?.type_document || 'autre'
-  const societeDetectee = (r as any).ocr?.societe_detectee
-  const ocrErr = (r as any).ocr?.error
-
-  // Le pipeline canonique /api/documents/process a déjà été appelé par
-  // ingestTelegramDocument (OCR Anthropic Haiku 4.5 + auto-création des
-  // écritures comptables V2). On enrichit le message Telegram avec le résultat.
   const isImage = r.type_fichier === 'jpeg' || r.type_fichier === 'png'
   const captionMatches = captionLooksLikeExpense(caption)
 
-  // Si la caption suggère une note de frais ET image, on crée aussi la note
-  // de frais (au-dessus du document déjà traité par le pipeline canonique).
+  // Si la caption matche /frais|taxi|.../ ET image → création de note de frais
+  // (qui consomme le doc déjà uploadé, OCR ciblé sur vendor/montant).
   if (isImage && captionMatches) {
     await handleExpensePhotoAuto(chatId, userId, societeId, r.doc_id, r.nom_fichier, tailleKo)
     return NextResponse.json({ ok: true })
   }
 
-  const typeLabel: Record<string, string> = {
-    facture_fournisseur: 'Facture fournisseur',
-    facture_client: 'Facture client',
-    releve_bancaire: 'Relevé bancaire',
-    fiche_paie: 'Fiche de paie',
-    charges_sociales: 'Charges sociales',
-    contrat: 'Contrat',
-    autre: 'Document',
-  }
-
-  if (ocrSuccess) {
-    const lines = [
-      `✅ <b>Document traité</b>`,
-      `📄 ${r.nom_fichier} (${tailleKo} Ko)`,
-      `📋 Type détecté : <b>${typeLabel[typeDoc] || typeDoc}</b>`,
-    ]
-    if (societeDetectee && societeDetectee !== 'INCONNU') {
-      lines.push(`🏢 Société : ${societeDetectee}`)
-    }
-    lines.push(``, `Disponible dans <b>Lexora → Documents</b>.`)
-    if (isImage && !captionMatches && typeDoc === 'autre') {
-      try {
-        await sendTelegramInlineButtons(
-          chatId,
-          lines.join('\n') + `\n\n📷 C'est aussi une <b>note de frais</b> ?`,
-          [[
-            { text: '✅ Oui (note de frais)', callback_data: `expense.confirm:${r.doc_id}` },
-            { text: '❌ Non', callback_data: `expense.skip:${r.doc_id}` },
-          ]],
-        )
-        return NextResponse.json({ ok: true })
-      } catch {}
-    }
-    await sendTelegramMessage(chatId, lines.join('\n'))
-    return NextResponse.json({ ok: true })
+  // OCR du pipeline canonique déclenché en fire-and-forget par ingestTelegramDocument.
+  // On confirme la réception immédiatement (Telegram ne timeout pas), l'utilisateur
+  // verra le résultat dans /client/documents quand le pipeline aura fini (10-30s).
+  if (isImage) {
+    try {
+      await sendTelegramInlineButtons(
+        chatId,
+        `✅ <b>Document reçu</b>\n` +
+        `📄 ${r.nom_fichier} (${tailleKo} Ko)\n\n` +
+        `🤖 Pipeline OCR en cours — résultat dans <b>Lexora → Documents</b> sous peu.\n\n` +
+        `📷 C'est aussi une <b>note de frais</b> ?`,
+        [[
+          { text: '✅ Oui (note de frais)', callback_data: `expense.confirm:${r.doc_id}` },
+          { text: '❌ Non', callback_data: `expense.skip:${r.doc_id}` },
+        ]],
+      )
+      return NextResponse.json({ ok: true })
+    } catch {}
   }
 
   await sendTelegramMessage(
     chatId,
     `✅ <b>Document reçu</b>\n` +
     `📄 ${r.nom_fichier} (${tailleKo} Ko, ${r.type_fichier.toUpperCase()})\n\n` +
-    (ocrErr
-      ? `⚠️ Pipeline OCR : ${String(ocrErr).slice(0, 200)}\nTu peux relancer depuis <b>Lexora → Documents → Reanalyser</b>.`
-      : `🤖 Traitement OCR en attente. Disponible dans <b>Lexora → Documents</b>.`),
+    `🤖 Pipeline OCR en cours — résultat dans <b>Lexora → Documents</b> sous peu.`,
   )
   return NextResponse.json({ ok: true })
 }

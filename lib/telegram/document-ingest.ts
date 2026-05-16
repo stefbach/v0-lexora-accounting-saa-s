@@ -154,29 +154,28 @@ export async function ingestTelegramDocument(args: {
     status: 'success',
   })
 
-  // 7. Déclenche le pipeline OCR canonique (/api/documents/process) — best effort.
-  //    Le bot Telegram s'aligne sur le même chemin que l'upload web : OCR Anthropic
-  //    Haiku 4.5, routing + extraction + auto-création écritures comptables.
-  //    Si l'appel rate, le document reste en statut='en_attente' (l'utilisateur
-  //    pourra relancer depuis /client/documents → Reanalyser).
+  // 7. Déclenche le pipeline OCR canonique (/api/documents/process) en
+  //    fire-and-forget. Le pipeline OCR peut prendre 10-30s (Anthropic vision),
+  //    or le webhook Telegram a un timeout court. Si on attendait la réponse,
+  //    Telegram retransmettrait l'update et créerait un duplicate.
+  //    L'utilisateur retrouve le résultat dans /client/documents (statut
+  //    passe de 'en_attente' à 'traite' quand l'OCR finit).
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.LEXORA_BASE_URL || ''
   const internalToken = process.env.INTERNAL_API_TOKEN || ''
-  let ocrResult: any = null
   if (baseUrl && internalToken) {
-    try {
-      const procRes = await fetch(`${baseUrl}/api/documents/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Internal-Token': internalToken },
-        body: JSON.stringify({
-          document_id: doc.id,
-          storage_path: storagePath,
-          nom_fichier: inferredName,
-        }),
-      })
-      ocrResult = await procRes.json().catch(() => null)
-    } catch {
-      // best-effort : on garde le doc en 'en_attente'
-    }
+    // Fire-and-forget : on ne await PAS la réponse pour ne pas bloquer le webhook.
+    fetch(`${baseUrl}/api/documents/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Token': internalToken },
+      body: JSON.stringify({
+        document_id: doc.id,
+        storage_path: storagePath,
+        nom_fichier: inferredName,
+      }),
+    }).catch(() => {
+      // best-effort : le doc reste en 'en_attente', l'utilisateur peut relancer
+      // depuis /client/documents → Reanalyser
+    })
   }
 
   return {
@@ -185,6 +184,5 @@ export async function ingestTelegramDocument(args: {
     nom_fichier: inferredName,
     type_fichier: typeFichier,
     taille: fileSize,
-    ocr: ocrResult,
   }
 }
