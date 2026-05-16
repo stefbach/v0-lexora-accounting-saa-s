@@ -14,8 +14,16 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale, type Locale } from "@/lib/i18n"
 
 function fmt(n: number) {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 0 }).format(n)
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "MUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(n) ? n : 0)
 }
+
+// Arrondi à 2 décimales (centimes).
+const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100
 
 function fmtDate(d: string | null) {
   if (!d) return "—"
@@ -187,6 +195,7 @@ function DepartureForm({ societes, onCalculated, locale }: {
 }
 
 // Recompute the global total from the (possibly edited) breakdown.
+// Arrondi à 2 décimales pour cohérence avec l'affichage MUR.
 function recomputeTotal(b: any): number {
   const lines = [
     b?.salaire_prorata?.montant,
@@ -198,17 +207,20 @@ function recomputeTotal(b: any): number {
     b?.indemnite_licenciement?.applicable ? b?.indemnite_licenciement?.montant : 0,
   ]
   const extras: Array<{ montant: number }> = Array.isArray(b?.lignes_extra) ? b.lignes_extra : []
-  return lines.reduce((s: number, v: any) => s + (Number(v) || 0), 0)
-       + extras.reduce((s, e) => s + (Number(e?.montant) || 0), 0)
+  const sum = lines.reduce((s: number, v: any) => s + (Number(v) || 0), 0)
+            + extras.reduce((s, e) => s + (Number(e?.montant) || 0), 0)
+  return r2(sum)
 }
 
-// Petit input numérique pour les cellules éditables
+// Petit input numérique pour les cellules éditables — accepte les centimes
+// (step 0.01), arrondit à 2 décimales en sortie.
 function MontantInput({ value, onChange, className = '' }: { value: number; onChange: (v: number) => void; className?: string }) {
   return (
     <Input
       type="number"
+      step="0.01"
       value={Number.isFinite(value) ? value : 0}
-      onChange={e => onChange(Math.round(Number(e.target.value) || 0))}
+      onChange={e => onChange(r2(Number(e.target.value) || 0))}
       className={`h-8 text-right text-sm w-32 ml-auto ${className}`}
     />
   )
@@ -242,7 +254,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
 
   const addExtraLine = () => {
     if (!newLibelle.trim()) return
-    const montant = Math.round(Number(newMontant) || 0)
+    const montant = r2(Number(newMontant) || 0)
     const next = JSON.parse(JSON.stringify(breakdown))
     if (!Array.isArray(next.lignes_extra)) next.lignes_extra = []
     next.lignes_extra.push({ libelle: newLibelle.trim(), montant })
@@ -476,8 +488,8 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-start justify-end gap-2">
-                    <Input type="number" value={newMontant} onChange={e => setNewMontant(e.target.value)}
-                           placeholder="0" className="h-8 text-right text-sm w-32" />
+                    <Input type="number" step="0.01" value={newMontant} onChange={e => setNewMontant(e.target.value)}
+                           placeholder="0.00" className="h-8 text-right text-sm w-32" />
                     <Button size="sm" onClick={addExtraLine} disabled={!newLibelle.trim()}
                             className="h-8 bg-[#D4AF37] hover:bg-[#C9A630] text-[#0B0F2E]">
                       <Plus className="w-3.5 h-3.5 mr-1" /> Ajouter
