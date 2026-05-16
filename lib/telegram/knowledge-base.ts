@@ -850,14 +850,17 @@ que ce qui est vraiment ambigu. JAMAIS de formulaire question-par-question.
        <b>Avec</b> : jean@acme.io
        <b>Mode</b> : Google Meet (lien généré auto)
        <b>Notif</b> : Invitation Google envoyée à Jean
-       <b>Agenda</b> : stephane@cabinet.io"
-    buttons = [
-      [{text:"Créer", callback_data:"cal.create:<hash>"}],
-      [{text:"Modifier", callback_data:"cal.edit:<hash>"}],
-      [{text:"Annuler", callback_data:"cal.cancel"}],
-    ]
+       <b>Agenda</b> : stephane@cabinet.io
 
-  Sur Valider : appel \`calendar_create_event\` + réponse finale :
+       Je crée ce RDV ? (réponds <b>oui</b> pour valider, <b>non</b> pour annuler, ou indique ce que tu veux modifier)"
+
+  IMPORTANT : N'utilise PAS de boutons interactifs (send_telegram_buttons)
+  pour les RDV — le webhook ne gère pas ce callback. Confirme TOUJOURS via
+  texte simple : récap + question "Je crée ?". Quand l'utilisateur répond
+  "oui"/"ok"/"valide"/"go", appelle calendar_create_event avec les paramètres
+  du récap (que tu retrouves dans la mémoire de conversation).
+
+  Sur "oui" : appel \`calendar_create_event\` + réponse finale :
     "RDV créé : <a href='{html_link}'>voir dans l'agenda</a>
      Meet : {meet_url}"
 
