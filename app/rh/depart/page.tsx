@@ -430,16 +430,22 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
 
             {/* Lignes additionnelles éditables */}
             {lignesExtra.map((l, i) => (
-              <TableRow key={`extra-${i}`} className="bg-amber-50/40">
+              <TableRow key={`extra-${i}`} className="bg-amber-50/40 align-top">
                 <TableCell className="font-medium">
                   {editMode
-                    ? <Input value={l.libelle} onChange={e => updateExtraLine(i, { libelle: e.target.value })} className="h-8 text-sm" />
-                    : l.libelle}
-                  {l.note && <p className="text-[10px] text-gray-500 mt-0.5">{l.note}</p>}
+                    ? <Textarea
+                        value={l.libelle}
+                        onChange={e => updateExtraLine(i, { libelle: e.target.value })}
+                        rows={Math.max(2, (l.libelle || '').split('\n').length)}
+                        className="text-sm min-h-[60px] resize-y"
+                        placeholder="Libellé (saute de ligne autorisé pour détailler)"
+                      />
+                    : <span className="whitespace-pre-wrap">{l.libelle}</span>}
+                  {l.note && <p className="text-[10px] text-gray-500 mt-0.5 whitespace-pre-wrap">{l.note}</p>}
                 </TableCell>
                 <TableCell className="text-center text-xs text-amber-700">Ajustement manuel</TableCell>
                 <TableCell className="text-right font-medium">
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-start justify-end gap-2">
                     {editMode
                       ? <MontantInput value={l.montant} onChange={v => updateExtraLine(i, { montant: v })} />
                       : <span className={l.montant < 0 ? 'text-red-700' : ''}>{fmt(l.montant)}</span>}
@@ -455,16 +461,21 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
 
             {/* Ajout d'une ligne — visible uniquement en mode édition */}
             {editMode && (
-              <TableRow className="bg-amber-50">
+              <TableRow className="bg-amber-50 align-top">
                 <TableCell>
-                  <Input value={newLibelle} onChange={e => setNewLibelle(e.target.value)}
-                         placeholder="Libellé (ex: Prime exceptionnelle, Avance à déduire…)" className="h-8 text-sm" />
+                  <Textarea
+                    value={newLibelle}
+                    onChange={e => setNewLibelle(e.target.value)}
+                    rows={Math.max(2, (newLibelle || '').split('\n').length)}
+                    placeholder={"Libellé multi-ligne autorisé\n(ex: Prime exceptionnelle\n— versée pour fidélité 2025)"}
+                    className="text-sm min-h-[60px] resize-y"
+                  />
                 </TableCell>
                 <TableCell className="text-center text-[11px] text-gray-500">
                   Saisir un montant négatif pour une déduction
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-start justify-end gap-2">
                     <Input type="number" value={newMontant} onChange={e => setNewMontant(e.target.value)}
                            placeholder="0" className="h-8 text-right text-sm w-32" />
                     <Button size="sm" onClick={addExtraLine} disabled={!newLibelle.trim()}
