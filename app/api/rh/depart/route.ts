@@ -180,12 +180,15 @@ export async function POST(request: Request) {
       const dateArrivee = emp.date_arrivee?.split('T')[0] || date_depart
       const dailySalary = salaireBase / 26 // Standard Mauritius: 26 working days/month
 
+      // Helper d'arrondi : conserve 2 décimales pour tous les montants monétaires
+      const r2 = (n: number) => Math.round(n * 100) / 100
+
       // 2. Ancienneté
       const anciennete = calculateAnciennete(dateArrivee, date_depart)
 
       // 3. Prorata salary for last month
       const lastMonth = daysWorkedLastMonth(date_depart)
-      const salaryProrata = Math.round((salaireBase / lastMonth.totalDaysInMonth) * lastMonth.days)
+      const salaryProrata = r2((salaireBase / lastMonth.totalDaysInMonth) * lastMonth.days)
 
       // 4. Prorata AL: (20 x months_worked_this_year / 12) - AL already taken
       const mWorked = monthsWorkedThisYear(dateArrivee, date_depart)
@@ -203,7 +206,7 @@ export async function POST(request: Request) {
 
       const alTaken = (alTakenData || []).reduce((s: number, c: any) => s + (c.nb_jours || 0), 0)
       const alRemaining = Math.max(0, Math.round((alEntitled - alTaken) * 100) / 100)
-      const alPayout = Math.round(alRemaining * dailySalary)
+      const alPayout = r2(alRemaining * dailySalary)
 
       // 5. SL restant — WRA Art. 48(2) : le Sick Leave non pris N'EST PAS
       // payable à la sortie. Seul l'Annual Leave est dû. On garde le calcul
@@ -223,28 +226,28 @@ export async function POST(request: Request) {
       const slPayout = 0 // WRA Art. 48(2) — SL non payable à la sortie
 
       // 6. Prorata 13th month (EOY bonus)
-      const treizMois = Math.round((salaireBase / 12) * mWorked)
+      const treizMois = r2((salaireBase / 12) * mWorked)
 
       // 7. Notice period (override 1 mois pour `licenciement_faute`)
       const notice = getNoticePeriod(anciennete.totalMonths, type_depart)
       const noticePayout = TYPES_AVEC_PREAVIS.has(type_depart)
-        ? notice.months * salaireBase
+        ? r2(notice.months * salaireBase)
         : 0
 
       // 8. Severance allowance — UNIQUEMENT licenciement économique standard.
       //    Pour `licenciement_faute`, pas d'indemnité de licenciement (WRA :
       //    faute = pas de severance pay, le préavis seul est versé).
       const severance = type_depart === 'licenciement'
-        ? Math.round(3 * salaireBase * anciennete.totalYears)
+        ? r2(3 * salaireBase * anciennete.totalYears)
         : 0
 
       // 9. Transport/petrol allowances prorata
       const transportAllowance = parseFloat(emp.transport_allowance) || 0
       const petrolAllowance = parseFloat(emp.petrol_allowance) || 0
-      const allowancesProrata = Math.round(((transportAllowance + petrolAllowance) / lastMonth.totalDaysInMonth) * lastMonth.days)
+      const allowancesProrata = r2(((transportAllowance + petrolAllowance) / lastMonth.totalDaysInMonth) * lastMonth.days)
 
       // Total
-      const total = salaryProrata + alPayout + slPayout + treizMois + noticePayout + severance + allowancesProrata
+      const total = r2(salaryProrata + alPayout + slPayout + treizMois + noticePayout + severance + allowancesProrata)
 
       const breakdown = {
         employe: {
@@ -277,14 +280,14 @@ export async function POST(request: Request) {
           droit_prorata: alEntitled,
           pris: alTaken,
           restant: alRemaining,
-          taux_journalier: Math.round(dailySalary),
+          taux_journalier: r2(dailySalary),
           montant: alPayout,
         },
         conges_sl: {
           droit_prorata: slEntitled,
           pris: slTaken,
           restant: slRemaining,
-          taux_journalier: Math.round(dailySalary),
+          taux_journalier: r2(dailySalary),
           montant: 0,
           non_payable_wra: true, // WRA Art. 48(2) — info UI
         },
