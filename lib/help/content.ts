@@ -51,6 +51,27 @@ export type HelpEntry = {
  */
 export const HELP_CONTENT: Record<string, HelpEntry> = {
   // ========================================================================
+  // RACINES — fallback générique pour toute page non couverte spécifiquement
+  // (le matcher remonte les segments jusqu'à trouver une entrée)
+  // ========================================================================
+  '/client': {
+    title: "Espace client — vue d'ensemble",
+    audience: 'client',
+    intro:
+      "Ton espace de pilotage : facturation, banque, fiscalité (TVA, CIT, TDS, ROC), RH/paie, GBC, documents. Chaque sous-page a son propre bouton d'aide en bas à droite — clique dessus pour obtenir des explications didactiques.",
+    steps: [
+      { title: "Navigation", body: "Le menu de gauche regroupe les modules : <b>Ventes</b> (factures, devis), <b>Compta</b> (banque, écritures, bilan), <b>Fiscal</b> (MRA hub, TVA, CIT, TDS, ROC), <b>RH</b> (employés, paie, congés), <b>Paramètres</b> (sociétés, utilisateurs, banque, MRA)." },
+      { title: "Société active", body: "Si tu gères plusieurs sociétés, le sélecteur en haut bascule entre elles. Toutes les pages réagissent au contexte actif." },
+      { title: "Aide contextuelle", body: "Sur chaque page, ce bouton t'explique <b>à quoi sert la page</b>, <b>comment l'utiliser</b>, les <b>pièges à éviter</b> et les <b>liens utiles</b> (portail MRA, banques, etc.)." },
+      { title: "Bot Telegram", body: "Pour toute question hors-page (analyse, conseil fiscal, création de facture par photo), demande au bot Lexora sur Telegram." },
+    ],
+    tips: [
+      "Le bouton d'aide est toujours là, en bas à droite. Si tu ne le vois pas sur une page, signale-le.",
+      "Pour aller plus vite : raccourci clavier `?` ouvre l'aide contextuelle.",
+    ],
+  },
+
+  // ========================================================================
   // FISCALITÉ — TVA
   // ========================================================================
   '/comptable/tva': {
