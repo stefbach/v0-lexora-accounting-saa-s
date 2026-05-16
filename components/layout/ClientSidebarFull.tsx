@@ -219,18 +219,24 @@ export function ClientSidebarFull() {
   // intersected with the per-user permissions.
   useEffect(() => {
     // Step 1: société plan modules (what the active company's plan allows)
+    //
+    // Important : gating STRICT. Une clé absente OU explicitement false ne
+    // donne PAS accès au module. Cela garantit qu'un paramétrage admin
+    // "RH & Paie seulement" cache effectivement les sections Comptabilité,
+    // Facturation, Fiscal, États Financiers, etc. — même quand le plan ne
+    // mentionne pas certaines clés.
     let planModules: ActiveModules = { ...DEFAULT_MODULES }
     if (societe?.modules_actifs) {
       const m = societe.modules_actifs
       planModules = {
-        comptabilite: m.comptabilite !== false,
-        rh: m.rh !== false,
-        juridique: m.juridique !== false,
-        facturation: m.facturation !== false,
-        documents: m.documents !== false,
-        fiscal: m.fiscal !== false,
-        etats_financiers: m.etats_financiers !== false,
-        employe_portal: m.employe_portal !== false,
+        comptabilite: m.comptabilite === true,
+        rh: m.rh === true,
+        juridique: m.juridique === true,
+        facturation: m.facturation === true,
+        documents: m.documents === true,
+        fiscal: m.fiscal === true,
+        etats_financiers: m.etats_financiers === true,
+        employe_portal: m.employe_portal === true,
       }
     }
 

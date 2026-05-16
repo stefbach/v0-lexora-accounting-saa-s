@@ -138,6 +138,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const { data: plan } = await supabase.from('plans').select('modules_inclus').eq('id', planEffectif).maybeSingle()
       modulesActifs = (plan as any)?.modules_inclus || null
     }
+    // Normalise : toutes les clés sidebar doivent être présentes (les
+    // absentes deviennent explicitement false). Sinon la sidebar afficherait
+    // les sections par défaut quand une clé manque.
+    if (modulesActifs && typeof modulesActifs === 'object') {
+      const keys = ['comptabilite','rh','juridique','facturation','documents','fiscal','etats_financiers','employe_portal']
+      const normalized: Record<string, boolean> = {}
+      for (const k of keys) normalized[k] = (modulesActifs as any)[k] === true
+      modulesActifs = normalized
+    }
 
     const { data: societe, error: socErr } = await supabase
       .from('societes')
