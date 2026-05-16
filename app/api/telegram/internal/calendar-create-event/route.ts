@@ -51,10 +51,11 @@ export async function POST(req: NextRequest) {
       summary,
       description,
       location,
-      start: { dateTime: startDate.toISOString() },
-      end: { dateTime: endDate.toISOString() },
-      attendees,
+      start: { dateTime: startDate.toISOString(), timeZone: 'Indian/Mauritius' },
+      end: { dateTime: endDate.toISOString(), timeZone: 'Indian/Mauritius' },
     }
+    // N'inclure attendees QUE si non vide (Google rejette parfois [])
+    if (attendees.length > 0) event.attendees = attendees
     if (type === 'meet') {
       event.conferenceData = {
         createRequest: {
@@ -64,19 +65,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const created = await googleCalendarFetch(
-      ctx.user_id,
-      account_email,
-      `/calendars/${encodeURIComponent(calendar_id)}/events`,
-      {
-        method: 'POST',
-        json: event,
-        query: {
-          conferenceDataVersion: type === 'meet' ? 1 : 0,
-          sendUpdates: send_invites ? 'all' : 'none',
+    let created: any
+    try {
+      created = await googleCalendarFetch(
+        ctx.user_id,
+        account_email,
+        `/calendars/${encodeURIComponent(calendar_id)}/events`,
+        {
+          method: 'POST',
+          json: event,
+          query: {
+            conferenceDataVersion: type === 'meet' ? 1 : 0,
+            sendUpdates: send_invites ? 'all' : 'none',
+          },
         },
-      },
-    )
+      )
+    } catch (e: any) {
+      // Log explicite côté Vercel + retour structuré au LLM
+      const msg = e?.message || String(e)
+      console.error('[calendar-create-event] Google API error:', {
+        user_id: ctx.user_id,
+        account_email,
+        calendar_id,
+        payload: event,
+        google_error: msg,
+      })
+      return {
+        result: null,
+        status: 'error',
+        error_msg: `${msg} | Payload envoyé : summary="${summary}", start="${startDate.toISOString()}", end="${endDate.toISOString()}", type=${type}, attendees=${attendees.length}, location="${location || ''}", account=${account_email || 'default'}`,
+      }
+    }
 
     return {
       result: {
