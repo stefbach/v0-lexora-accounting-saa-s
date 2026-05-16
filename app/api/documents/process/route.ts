@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 
 export const maxDuration = 300
 
@@ -205,7 +206,7 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
             const devise = (extraction.devise && typeof extraction.devise === 'string')
               ? extraction.devise.toUpperCase() : 'MUR'
             const taux = ht > 0 && tva > 0 ? Number(((tva / ht) * 100).toFixed(2)) : 15
-            const { error: facErr } = await supabase.from('factures').insert({
+            const { data: facInserted, error: facErr } = await supabase.from('factures').insert({
               societe_id: societeId,
               dossier_id: doc.dossier_id,
               numero_facture: extraction.numero_reference || extraction.numero_facture || null,
@@ -223,9 +224,31 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
               montant_mur: devise === 'MUR' ? ttc : ttc,
               statut: 'en_attente',
               document_id: documentId,
-            })
+            }).select('id').single()
             if (facErr) {
               console.error('[process] Insert factures failed:', facErr.message)
+            } else if (facInserted && dateValid) {
+              // Génère les écritures comptables au format PCM Maurice via le
+              // helper canonique (411/707 pour ventes, 401/607 pour achats,
+              // + 4457/4456 TVA). Sans ça, le CA dans le dashboard et les
+              // états financiers ne s'incrémente pas (calcul par compte 70x).
+              const ecrRes = await createEcrituresForFacture(supabase, {
+                id: facInserted.id,
+                societe_id: societeId,
+                numero_facture: extraction.numero_reference || extraction.numero_facture || `DOC-${facInserted.id.slice(0, 8)}`,
+                tiers: tiersStr || 'INCONNU',
+                date_facture: dateValid,
+                montant_ht: ht,
+                montant_tva: tva,
+                montant_ttc: ttc,
+                type_facture: typeDoc === 'facture_fournisseur' ? 'fournisseur' : 'client',
+                devise,
+                taux_change: 1,
+                montant_mur: ttc,
+              })
+              if (!ecrRes.ok) {
+                console.error('[process] createEcrituresForFacture failed:', ecrRes.error)
+              }
             }
           }
         }
