@@ -25,6 +25,34 @@ function fmt(n: number) {
 // Arrondi à 2 décimales (centimes).
 const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100
 
+// POST le body au backend, récupère le Blob PDF, l'ouvre dans un nouvel
+// onglet. Permet d'envoyer le breakdown édité (impossible en GET).
+async function openPdfPost(url: string, body: any, filename: string) {
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      alert(`Erreur : ${j.error || res.statusText}`)
+      return
+    }
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const win = window.open(blobUrl, '_blank')
+    if (!win) {
+      // popup bloqué : on télécharge à la place
+      const a = document.createElement('a')
+      a.href = blobUrl; a.download = filename; document.body.appendChild(a); a.click(); a.remove()
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000)
+  } catch (e: any) {
+    alert(`Erreur réseau : ${e?.message || e}`)
+  }
+}
+
 function fmtDate(d: string | null) {
   if (!d) return "—"
   return new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
@@ -529,19 +557,24 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
             >
               {t('rha.b.depart.btn_print_settlement', locale)}
             </Button>
-            {/* Sprint 14 BONUS — Certificat de travail WRA Art. 22(3) */}
+            {/* Documents officiels — POST avec breakdown (preview avant
+                confirmation : watermark BROUILLON sur le PDF). */}
             <Button
               variant="outline"
-              onClick={() => window.open(`/api/rh/depart/certificat?employe_id=${breakdown?.employe?.id}`, '_blank')}
+              onClick={() => openPdfPost('/api/rh/depart/certificat', {
+                employe_id: breakdown?.employe?.id, date_depart: formData.date_depart, type_depart: formData.type_depart,
+              }, `Certificat_${breakdown?.employe?.prenom}_${breakdown?.employe?.nom}.pdf`)}
               className="border-purple-300 text-purple-700"
               type="button"
             >
               {t('rha.b.depart.btn_work_certificate', locale)}
             </Button>
-            {/* Sprint 16 FIX 5 — Documents de fin de contrat */}
             <Button
               variant="outline"
-              onClick={() => window.open(`/api/rh/depart/solde-tout-compte?employe_id=${breakdown?.employe?.id}`, '_blank')}
+              onClick={() => openPdfPost('/api/rh/depart/solde-tout-compte', {
+                employe_id: breakdown?.employe?.id, date_depart: formData.date_depart, type_depart: formData.type_depart,
+                breakdown, raison_depart: formData.raison_depart,
+              }, `Solde_${breakdown?.employe?.prenom}_${breakdown?.employe?.nom}.pdf`)}
               className="border-emerald-300 text-emerald-700"
               type="button"
             >
@@ -549,18 +582,19 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
             </Button>
             <Button
               variant="outline"
-              onClick={() => window.open(`/api/rh/depart/attestation?employe_id=${breakdown?.employe?.id}`, '_blank')}
+              onClick={() => openPdfPost('/api/rh/depart/attestation', {
+                employe_id: breakdown?.employe?.id, date_depart: formData.date_depart, type_depart: formData.type_depart,
+              }, `Attestation_${breakdown?.employe?.prenom}_${breakdown?.employe?.nom}.pdf`)}
               className="border-blue-300 text-blue-700"
               type="button"
             >
               {t('rha.b.depart.btn_attestation', locale)}
             </Button>
-            {/* Sprint 16 FIX 4 — Déclaration Workfare TUB (licenciement économique uniquement,
-                 PAS pour licenciement_faute qui n'ouvre pas droit au Workfare). */}
-            {(formData.type_depart === 'licenciement' || breakdown?.type_depart === 'licenciement') && (
+            {/* Workfare TUB — uniquement licenciement économique (pas faute) */}
+            {formData.type_depart === 'licenciement' && (
               <Button
                 variant="outline"
-                onClick={() => window.open(`/api/rh/depart/workfare?employe_id=${breakdown?.employe?.id}`, '_blank')}
+                onClick={() => window.open(`/api/rh/depart/workfare?employe_id=${breakdown?.employe?.id}&date_depart=${encodeURIComponent(formData.date_depart || '')}`, '_blank')}
                 className="border-red-300 text-red-700"
                 type="button"
               >

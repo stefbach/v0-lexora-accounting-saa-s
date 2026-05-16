@@ -1,24 +1,28 @@
+/**
+ * Certificat de travail (WRA Art. 22(3)).
+ *
+ * Deux modes :
+ *   - GET  /api/rh/depart/certificat?employe_id=UUID
+ *           Mode "officiel" : exige que l'employé soit déjà sorti
+ *           (date_depart non null). Le certificat est définitif.
+ *
+ *   - POST /api/rh/depart/certificat
+ *           Body : { employe_id, date_depart, type_depart }
+ *           Mode "preview / brouillon" : avant confirmation du
+ *           départ. Le PDF porte le watermark BROUILLON.
+ */
+
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
 import React from 'react'
-import { renderToBuffer, Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
-
-/**
- * Sprint 14 BONUS — Certificat de travail (WRA Art. 22(3)).
- *
- * GET /api/rh/depart/certificat?employe_id=UUID
- *
- * L'employeur DOIT remettre un certificat de travail à tout
- * employé qui quitte l'entreprise. Mentions :
- *   - Nom/prénom employé + NIC
- *   - Poste occupé + département
- *   - Date d'entrée et de sortie
- *   - Type de départ
- *   - Nom société + ERN/BRN
- *   - Date d'émission
- */
+import { renderToBuffer, Document, Page, View, Text } from '@react-pdf/renderer'
+import {
+  sharedStyles as s,
+  TYPE_LABELS, fmtDate, ancienneteLabel,
+  PdfHeader, PdfFooter, PdfWatermark, SigBlock,
+} from '@/lib/rh/depart-pdf-shared'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,97 +34,93 @@ function getAdminClient() {
   )
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  demission: 'Démission',
-  licenciement: 'Licenciement',
-  fin_contrat: 'Fin de contrat',
-  retraite: 'Départ à la retraite',
-  deces: 'Décès',
-}
-
-const s = StyleSheet.create({
-  page: { padding: 50, fontFamily: 'Helvetica', fontSize: 11, color: '#1a1a1a', lineHeight: 1.6 },
-  header: { textAlign: 'center', marginBottom: 30 },
-  companyName: { fontSize: 16, fontWeight: 'bold', fontFamily: 'Helvetica-Bold', color: '#0B0F2E' },
-  companyInfo: { fontSize: 9, color: '#555', marginTop: 3 },
-  title: { fontSize: 18, fontWeight: 'bold', fontFamily: 'Helvetica-Bold', textAlign: 'center', marginVertical: 25, textTransform: 'uppercase', color: '#0B0F2E', borderBottomWidth: 2, borderBottomColor: '#D4AF37', paddingBottom: 10 },
-  body: { marginTop: 10 },
-  paragraph: { fontSize: 11, marginBottom: 12, textAlign: 'justify' },
-  bold: { fontFamily: 'Helvetica-Bold' },
-  footer: { marginTop: 50, flexDirection: 'row', justifyContent: 'space-between' },
-  signatureBlock: { width: '45%' },
-  signatureLabel: { fontSize: 9, color: '#555', marginBottom: 5 },
-  signatureLine: { borderBottomWidth: 1, borderBottomColor: '#333', marginTop: 50, marginBottom: 5 },
-  signatureName: { fontSize: 10, fontFamily: 'Helvetica-Bold' },
-  legal: { fontSize: 8, color: '#888', textAlign: 'center', marginTop: 40, borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 10 },
-})
-
-function fmtDate(d: string | null | undefined): string {
-  if (!d) return '—'
-  return new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
-}
-
-function CertificatPDF({ emp, soc }: { emp: any; soc: any }) {
-  const typeLabel = TYPE_LABELS[emp.type_depart] || emp.type_depart || 'Départ'
+function CertificatPDF({ emp, soc, dateDepart, typeDepart, draft }: {
+  emp: any; soc: any; dateDepart: string; typeDepart: string; draft: boolean
+}) {
+  const typeLabel = TYPE_LABELS[typeDepart] || 'Cessation du contrat'
+  const fullName = `${emp.prenom || ''} ${emp.nom || ''}`.trim() || '________'
+  const anc = ancienneteLabel(emp.date_arrivee, dateDepart)
+  const docNumber = `CT-${(emp.code || emp.id || '').toString().slice(0, 8).toUpperCase()}-${(dateDepart || '').replace(/-/g, '')}`
 
   return React.createElement(Document, {},
     React.createElement(Page, { size: 'A4', style: s.page },
-      React.createElement(View, { style: s.header },
-        React.createElement(Text, { style: s.companyName }, soc?.nom || 'Société'),
-        soc?.adresse ? React.createElement(Text, { style: s.companyInfo }, soc.adresse) : null,
-        React.createElement(Text, { style: s.companyInfo },
-          `BRN: ${soc?.brn || '—'}${soc?.ern ? ` | ERN: ${soc.ern}` : ''}${soc?.telephone ? ` | Tél: ${soc.telephone}` : ''}`
-        ),
-      ),
-      React.createElement(Text, { style: s.title }, 'CERTIFICAT DE TRAVAIL'),
-      React.createElement(View, { style: s.body },
+      draft ? React.createElement(PdfWatermark as any, {}) : null,
+
+      React.createElement(PdfHeader as any, { soc, docKind: 'Document RH officiel', docNumber }),
+
+      React.createElement(Text, { style: s.docTitle }, 'Certificat de travail'),
+      React.createElement(Text, { style: s.subTitle }, "Workers' Rights Act 2019 — Section 22(3)"),
+
+      React.createElement(View, { style: s.section },
         React.createElement(Text, { style: s.paragraph },
           React.createElement(Text, null, 'Je soussigné(e), représentant légal de la société '),
           React.createElement(Text, { style: s.bold }, soc?.nom || '________'),
-          React.createElement(Text, null, ', certifie que :'),
-        ),
-        React.createElement(Text, { style: s.paragraph },
-          React.createElement(Text, { style: s.bold }, `${emp.prenom || ''} ${emp.nom || ''}`),
-          emp.nic_number || emp.nic ? React.createElement(Text, null, ` (NIC: ${emp.nic_number || emp.nic})`) : null,
-          React.createElement(Text, null, ` a été employé(e) au sein de notre société en qualité de `),
-          React.createElement(Text, { style: s.bold }, emp.poste || '________'),
-          emp.departement ? React.createElement(Text, null, ` au département ${emp.departement}`) : null,
-          React.createElement(Text, null, '.'),
-        ),
-        React.createElement(Text, { style: s.paragraph },
-          React.createElement(Text, null, "Date d'entrée : "),
-          React.createElement(Text, { style: s.bold }, fmtDate(emp.date_arrivee)),
-          React.createElement(Text, null, '\nDate de sortie : '),
-          React.createElement(Text, { style: s.bold }, fmtDate(emp.date_depart)),
-          React.createElement(Text, null, '\nMotif de cessation : '),
-          React.createElement(Text, { style: s.bold }, typeLabel),
-        ),
-        React.createElement(Text, { style: s.paragraph },
-          `Ce certificat est délivré à l'intéressé(e) pour servir et valoir ce que de droit, conformément à l'article 22(3) du Workers' Rights Act 2019.`
-        ),
-        React.createElement(Text, { style: s.paragraph },
-          `Fait à Port Louis, le ${fmtDate(new Date().toISOString().slice(0, 10))}.`
+          React.createElement(Text, null, ', certifie par la présente que :'),
         ),
       ),
-      React.createElement(View, { style: s.footer },
-        React.createElement(View, { style: s.signatureBlock },
-          React.createElement(Text, { style: s.signatureLabel }, "Pour l'employeur"),
-          React.createElement(View, { style: s.signatureLine }),
-          React.createElement(Text, { style: s.signatureName }, soc?.nom || ''),
-          React.createElement(Text, { style: { fontSize: 8, color: '#888' } }, 'Signature et cachet'),
-        ),
-        React.createElement(View, { style: s.signatureBlock },
-          React.createElement(Text, { style: s.signatureLabel }, "L'employé(e)"),
-          React.createElement(View, { style: s.signatureLine }),
-          React.createElement(Text, { style: s.signatureName }, `${emp.prenom || ''} ${emp.nom || ''}`),
-          React.createElement(Text, { style: { fontSize: 8, color: '#888' } }, 'Lu et approuvé'),
+
+      // Bloc identité
+      React.createElement(View, { style: { backgroundColor: '#F8F9FC', padding: 12, marginVertical: 8, borderRadius: 2 } },
+        React.createElement(View, { style: s.infoGrid },
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Nom et prénom"),
+            React.createElement(Text, { style: s.infoValue }, fullName),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "N° NIC"),
+            React.createElement(Text, { style: s.infoValue }, emp.nic_number || emp.nic || '—'),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Fonction"),
+            React.createElement(Text, { style: s.infoValue }, emp.poste || '—'),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Département"),
+            React.createElement(Text, { style: s.infoValue }, emp.departement || '—'),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Date d'entrée"),
+            React.createElement(Text, { style: s.infoValue }, fmtDate(emp.date_arrivee)),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Date de sortie"),
+            React.createElement(Text, { style: s.infoValue }, fmtDate(dateDepart)),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Ancienneté"),
+            React.createElement(Text, { style: s.infoValue }, anc),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Motif de cessation"),
+            React.createElement(Text, { style: s.infoValue }, typeLabel),
+          ),
         ),
       ),
-      React.createElement(Text, { style: s.legal },
-        "Document généré par Lexora — Workers' Rights Act 2019, Art. 22(3). Ce certificat atteste uniquement des dates d'emploi et de la fonction exercée."
+
+      React.createElement(Text, { style: s.paragraph },
+        `Pendant la durée de son emploi, ${fullName} a exercé ses fonctions avec sérieux et professionnalisme. ` +
+        `Ce certificat est délivré à l'intéressé(e) pour servir et valoir ce que de droit, conformément à l'article 22(3) du Workers' Rights Act 2019.`
       ),
+
+      React.createElement(SigBlock as any, {
+        socName: soc?.nom || '',
+        empFullName: fullName,
+        dateLieu: `Fait à ${soc?.ville || 'Port-Louis'}, le ${fmtDate(new Date().toISOString().slice(0, 10))}.`,
+      }),
+
+      React.createElement(PdfFooter as any, {
+        legal: "Certificat de travail — atteste uniquement de la nature et de la durée de l'emploi. WRA 2019 §22(3)."
+      }),
     )
   )
+}
+
+async function loadEmpAndSoc(employe_id: string) {
+  const supabase = getAdminClient()
+  const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
+  if (!emp) return { error: 'Employé introuvable', status: 404 }
+  const { data: soc } = await supabase.from('societes').select('*').eq('id', emp.societe_id).single()
+  return { emp, soc }
 }
 
 export async function GET(request: Request) {
@@ -132,29 +132,66 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const employe_id = searchParams.get('employe_id')
     if (!employe_id) return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
+    if (!(await userHasAccessToEmploye(user.id, employe_id))) {
+      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
 
-    const hasAccess = await userHasAccessToEmploye(user.id, employe_id)
-    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    const r = await loadEmpAndSoc(employe_id)
+    if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status })
+    const { emp, soc } = r
 
-    const supabase = getAdminClient()
-    const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
-    if (!emp) return NextResponse.json({ error: 'Employé introuvable' }, { status: 404 })
-    if (!emp.date_depart) return NextResponse.json({ error: 'Employé toujours en poste — le certificat de travail ne peut être généré que pour un employé qui a quitté.' }, { status: 400 })
-
-    const { data: soc } = await supabase.from('societes').select('*').eq('id', emp.societe_id).single()
+    // Override possible via query (mode preview avant confirmation)
+    const dateDepart = searchParams.get('date_depart') || emp.date_depart
+    const typeDepart = searchParams.get('type_depart') || emp.date_depart_type || emp.type_depart || ''
+    if (!dateDepart) return NextResponse.json({
+      error: 'Date de départ manquante — passez ?date_depart=YYYY-MM-DD&type_depart=... pour un brouillon.',
+    }, { status: 400 })
+    const draft = !emp.date_depart // brouillon si l'employé n'est pas encore marqué sorti
 
     const buffer = await renderToBuffer(
-      React.createElement(CertificatPDF, { emp, soc }) as any
+      React.createElement(CertificatPDF, { emp, soc, dateDepart, typeDepart, draft }) as any
     )
-
-    return new NextResponse(buffer, {
+    return new NextResponse(buffer as any, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="Certificat_Travail_${emp.prenom}_${emp.nom}.pdf"`,
       },
     })
   } catch (e: unknown) {
-    console.error('[depart/certificat]', e)
+    console.error('[depart/certificat] GET', e)
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    const body = await request.json().catch(() => ({}))
+    const { employe_id, date_depart, type_depart } = body
+    if (!employe_id || !date_depart) return NextResponse.json({ error: 'employe_id + date_depart requis' }, { status: 400 })
+    if (!(await userHasAccessToEmploye(user.id, employe_id))) {
+      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    }
+
+    const r = await loadEmpAndSoc(employe_id)
+    if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status })
+    const { emp, soc } = r
+
+    const draft = !emp.date_depart
+    const buffer = await renderToBuffer(
+      React.createElement(CertificatPDF, { emp, soc, dateDepart: date_depart, typeDepart: type_depart || '', draft }) as any
+    )
+    return new NextResponse(buffer as any, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="Certificat_Travail_${emp.prenom}_${emp.nom}.pdf"`,
+      },
+    })
+  } catch (e: unknown) {
+    console.error('[depart/certificat] POST', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
