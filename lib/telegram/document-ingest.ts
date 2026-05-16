@@ -76,15 +76,41 @@ export async function ingestTelegramDocument(args: {
 
   const admin = getAdminClient()
 
-  // 3. Résoudre dossier_id (premier dossier de la société)
-  const { data: dossier } = await admin
-    .from('dossiers')
-    .select('id')
-    .eq('societe_id', args.societe_id)
-    .limit(1)
-    .maybeSingle()
-  if (!dossier?.id) {
-    return { ok: false, error: `Aucun dossier configuré pour cette société` }
+  // 3. Résoudre dossier_id (premier dossier de la société) — auto-création si absent
+  let dossierId: string | null = null
+  {
+    const { data: dossier } = await admin
+      .from('dossiers')
+      .select('id')
+      .eq('societe_id', args.societe_id)
+      .limit(1)
+      .maybeSingle()
+    if (dossier?.id) {
+      dossierId = dossier.id
+    } else {
+      // Auto-création : récupère créateur/comptable de la société, fallback sur l'uploader
+      const { data: soc } = await admin
+        .from('societes')
+        .select('created_by, comptable_id')
+        .eq('id', args.societe_id)
+        .maybeSingle()
+      const client_id = soc?.created_by || args.user_id
+      const comptable_id = soc?.comptable_id || client_id
+      const { data: newDossier, error: dossierErr } = await admin
+        .from('dossiers')
+        .insert({
+          societe_id: args.societe_id,
+          client_id,
+          comptable_id,
+          statut: 'actif',
+        })
+        .select('id')
+        .single()
+      if (dossierErr || !newDossier) {
+        return { ok: false, error: `Création dossier: ${dossierErr?.message || 'inconnu'}` }
+      }
+      dossierId = newDossier.id
+    }
   }
 
   // 4. Upload storage
@@ -102,7 +128,7 @@ export async function ingestTelegramDocument(args: {
   const { data: doc, error: dbErr } = await admin
     .from('documents')
     .insert({
-      dossier_id: dossier.id,
+      dossier_id: dossierId,
       uploaded_by: args.user_id,
       nom_fichier: inferredName,
       type_fichier: typeFichier,
