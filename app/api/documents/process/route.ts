@@ -3,6 +3,25 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
+import { getTauxChange } from '@/lib/taux-change'
+
+const DEVISE_SYMBOL_MAP: Record<string, string> = {
+  '€': 'EUR', 'EUR': 'EUR', 'EURO': 'EUR', 'EUROS': 'EUR',
+  '$': 'USD', 'USD': 'USD', 'US$': 'USD',
+  '£': 'GBP', 'GBP': 'GBP',
+  'Rs': 'MUR', 'MUR': 'MUR', 'RS': 'MUR', 'RUPEES': 'MUR',
+  'ZAR': 'ZAR', 'R': 'ZAR',
+}
+
+function normalizeDevise(raw: any): string {
+  if (!raw) return 'MUR'
+  const s = String(raw).trim().toUpperCase()
+  // Match prefix/exact
+  for (const [k, v] of Object.entries(DEVISE_SYMBOL_MAP)) {
+    if (s === k.toUpperCase() || s.startsWith(k.toUpperCase())) return v
+  }
+  return s.slice(0, 5)
+}
 
 export const maxDuration = 300
 
@@ -224,9 +243,23 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
             const ht = Number(extraction.montant_ht) || 0
             const tva = Number(extraction.montant_tva) || 0
             const ttc = Number(extraction.montant_ttc) || (ht + tva) || 0
-            const devise = (extraction.devise && typeof extraction.devise === 'string')
-              ? extraction.devise.toUpperCase() : 'MUR'
+            const devise = normalizeDevise(extraction.devise)
             const taux = ht > 0 && tva > 0 ? Number(((tva / ht) * 100).toFixed(2)) : 15
+            // Conversion en MUR pour alimenter le CA dashboard (qui somme montant_mur)
+            let tauxChange = 1
+            let montantMur = ttc
+            if (devise !== 'MUR') {
+              try {
+                const rates = await getTauxChange()
+                const r = rates[devise]
+                if (r && r > 0) {
+                  tauxChange = r
+                  montantMur = ttc * r
+                }
+              } catch (e: any) {
+                console.warn('[process] getTauxChange failed:', e?.message)
+              }
+            }
             const { data: facInserted, error: facErr } = await supabase.from('factures').insert({
               societe_id: societeId,
               dossier_id: doc.dossier_id,
@@ -237,12 +270,12 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
               date_facture: dateValid,
               date_echeance: dateEcheance,
               devise,
-              taux_change: 1,
+              taux_change: tauxChange,
               montant_ht: ht,
               montant_tva: tva,
               montant_ttc: ttc,
               taux_tva: taux,
-              montant_mur: devise === 'MUR' ? ttc : ttc,
+              montant_mur: montantMur,
               statut: 'en_attente',
               document_id: documentId,
             }).select('id').single()
@@ -264,8 +297,8 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
                 montant_ttc: ttc,
                 type_facture: typeDoc === 'facture_fournisseur' ? 'fournisseur' : 'client',
                 devise,
-                taux_change: 1,
-                montant_mur: ttc,
+                taux_change: tauxChange,
+                montant_mur: montantMur,
               })
               if (!ecrRes.ok) {
                 console.error('[process] createEcrituresForFacture failed:', ecrRes.error)
