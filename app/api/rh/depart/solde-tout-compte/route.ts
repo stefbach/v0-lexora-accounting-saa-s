@@ -194,7 +194,45 @@ function linesFromBreakdown(b: any): { lines: SoldeLine[]; total: number } {
   return { lines, total }
 }
 
-// Construit la liste depuis le bulletin sauvegardé (mode officiel)
+// Parse les "Ajustements : LIBELLE -1234.56 MUR ; LIBELLE2 +789 MUR (note)"
+// stockés dans bulletin.notes. Retourne les lignes_extra reconstruites +
+// la somme à déduire du total special_allowance_2 (treizMois pur).
+function parseAjustementsFromNotes(notes: string | null | undefined): {
+  ajustements: Array<{ libelle: string; montant: number; note?: string }>
+  total: number
+  rawRaison: string
+} {
+  const ajustements: Array<{ libelle: string; montant: number; note?: string }> = []
+  if (!notes) return { ajustements, total: 0, rawRaison: '' }
+
+  const segments = notes.split('|').map(s => s.trim()).filter(Boolean)
+  const ajustSeg = segments.find(s => /^Ajustements\s*:/i.test(s))
+  const rest = segments.filter(s => !/^Ajustements\s*:/i.test(s)).join(' — ')
+
+  if (!ajustSeg) return { ajustements, total: 0, rawRaison: rest }
+
+  const body = ajustSeg.replace(/^Ajustements\s*:\s*/i, '')
+  // Découpe sur ' ; ' — mais les libellés peuvent contenir des ';' isolés
+  // donc on coupe sur ' ; ' (espace-point-virgule-espace) comme à la sérialisation
+  const parts = body.split(/\s+;\s+/)
+
+  for (const raw of parts) {
+    // Trouve le DERNIER token "[-+]?<nombre> MUR (note optionnelle)"
+    // Tolère les espaces/sauts de ligne dans le libellé.
+    const m = raw.match(/^([\s\S]*?)\s*([-+]?\d+(?:[.,]\d+)?)\s*MUR\s*(?:\((.+?)\))?\s*$/)
+    if (m) {
+      const libelle = m[1].trim()
+      const montant = Number(m[2].replace(',', '.'))
+      const note = m[3]
+      ajustements.push({ libelle, montant, note })
+    }
+  }
+  const total = ajustements.reduce((s, a) => s + (a.montant || 0), 0)
+  return { ajustements, total, rawRaison: rest }
+}
+
+// Construit la liste depuis le bulletin sauvegardé (mode officiel).
+// Parse les notes pour ré-éclater les ajustements en lignes individuelles.
 async function linesFromBulletin(supabase: any, employe_id: string): Promise<{ lines: SoldeLine[]; total: number; raison?: string }> {
   const { data: bul } = await supabase.from('bulletins_paie')
     .select('salaire_base, transport_allowance, special_allowance_1, special_allowance_2, departure_notice, special_allowance_3, salaire_net, notes')
@@ -205,18 +243,30 @@ async function linesFromBulletin(supabase: any, employe_id: string): Promise<{ l
 
   if (!bul) return { lines: [], total: 0 }
 
+  // 1) Extraire les ajustements du champ notes
+  const { ajustements, total: ajustTotal, rawRaison } = parseAjustementsFromNotes(bul.notes)
+
+  // 2) special_allowance_2 = treizMois + ajustementsTotal → on isole le 13e mois pur
+  const treizPur = (Number(bul.special_allowance_2) || 0) - ajustTotal
+
   const lines: SoldeLine[] = []
   const add = (label: string, detail: string, montant: number) => {
     if (montant !== 0) lines.push({ label, detail, montant })
   }
-  add('Salaire prorata du dernier mois', '', Number(bul.salaire_base) || 0)
-  add('Indemnités proratisées', 'Transport / essence', Number(bul.transport_allowance) || 0)
-  add('Congés AL non pris', '', Number(bul.special_allowance_1) || 0)
-  add('13ème mois proratisé + ajustements', '', Number(bul.special_allowance_2) || 0)
-  add('Indemnité de préavis', '', Number(bul.departure_notice) || 0)
-  add('Indemnité de licenciement (WRA S.70)', '', Number(bul.special_allowance_3) || 0)
+  add('Salaire prorata du dernier mois', 'Dernier mois travaillé', Number(bul.salaire_base) || 0)
+  add('Indemnités proratisées',          'Transport + essence proratisés', Number(bul.transport_allowance) || 0)
+  add('Congés AL non pris',               'Indemnité compensatrice (AL acquis non utilisés)', Number(bul.special_allowance_1) || 0)
+  add('13ème mois proratisé',             'EOY Bonus — proratisé sur mois travaillés / 12', treizPur)
+  add('Indemnité de préavis',             'Préavis selon WRA §32 ou règle entreprise', Number(bul.departure_notice) || 0)
+  add('Indemnité de licenciement (WRA §70)', 'Severance Allowance — licenciement non fautif', Number(bul.special_allowance_3) || 0)
+
+  // 3) Lignes additionnelles reconstituées
+  for (const a of ajustements) {
+    add(a.libelle, a.note ? a.note : 'Ajustement manuel', a.montant)
+  }
+
   const total = Number(bul.salaire_net) || lines.reduce((s, l) => s + l.montant, 0)
-  return { lines, total, raison: bul.notes || undefined }
+  return { lines, total, raison: rawRaison || undefined }
 }
 
 export async function GET(request: Request) {
