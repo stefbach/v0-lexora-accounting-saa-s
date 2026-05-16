@@ -178,9 +178,6 @@ export function PdfHeader({ soc, docKind, docNumber }: { soc: any; docKind: stri
 
   return React.createElement(View, { style: sharedStyles.headerBar },
     React.createElement(View, { style: sharedStyles.headerLeft },
-      React.createElement(Text, { style: sharedStyles.headerLogo },
-        'LE', React.createElement(Text, { style: sharedStyles.headerLogoAccent }, 'X'), 'ORA',
-      ),
       React.createElement(Text, { style: sharedStyles.companyName }, soc?.nom || 'Société'),
       meta.length > 0 ? React.createElement(Text, { style: sharedStyles.companyMeta }, meta.join(' — ')) : null,
       ids.length > 0 ? React.createElement(Text, { style: sharedStyles.companyMeta }, ids.join(' · ')) : null,
@@ -198,7 +195,7 @@ export function PdfHeader({ soc, docKind, docNumber }: { soc: any; docKind: stri
 export function PdfFooter({ legal }: { legal?: string }) {
   return React.createElement(View, { style: sharedStyles.pageFooter, fixed: true } as any,
     React.createElement(Text, { style: sharedStyles.footerText },
-      legal || "Généré par Lexora — Conforme au Workers' Rights Act 2019 (Mauritius)."
+      legal || "Conforme au Workers' Rights Act 2019 (Mauritius)."
     ),
     React.createElement(Text, { style: sharedStyles.footerText, render: ({ pageNumber, totalPages }: any) => `${pageNumber} / ${totalPages}` } as any),
   )
