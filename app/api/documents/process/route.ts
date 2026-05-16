@@ -38,6 +38,16 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabase()
 
+    // Récupère le contexte société pour aider Claude à distinguer
+    // facture_client (émise par MA société) vs facture_fournisseur (reçue).
+    const { data: docCtx } = await supabase
+      .from('documents')
+      .select('dossier_id, dossiers!inner(societe_id, societes!inner(nom, brn))')
+      .eq('id', documentId)
+      .maybeSingle()
+    const myCompany = (docCtx as any)?.dossiers?.societes?.nom || null
+    const myBrn = (docCtx as any)?.dossiers?.societes?.brn || null
+
     // Step 1: Update status
     await supabase.from('documents').update({ statut: 'en_cours' }).eq('id', documentId)
 
@@ -69,7 +79,17 @@ export async function POST(request: NextRequest) {
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 2048,
       temperature: 0,
-      system: `Tu es un expert-comptable. Analyse ce document et retourne UN JSON (sans markdown, sans backticks):
+      system: `Tu es un expert-comptable mauricien.
+
+CONTEXTE UTILISATEUR :
+- Société active : "${myCompany || 'INCONNU'}"${myBrn ? ` (BRN ${myBrn})` : ''}
+
+RÈGLE DE CLASSIFICATION FACTURE :
+- type_document="facture_client" SI l'émetteur de la facture est "${myCompany || 'la société active'}" (= MA société émet la facture, c'est une VENTE).
+- type_document="facture_fournisseur" SI le destinataire/acheteur est "${myCompany || 'la société active'}" (= MA société reçoit la facture, c'est un ACHAT).
+- Si MA société ne figure ni comme émetteur ni comme destinataire identifiable → préfère facture_fournisseur par défaut (cas le plus courant : facture entrante).
+
+Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
 {
   "routing": {
     "societe": "<nom société ou INCONNU>",
@@ -80,6 +100,7 @@ export async function POST(request: NextRequest) {
     "emetteur": "",
     "destinataire": "",
     "date_document": "",
+    "date_echeance": "",
     "numero_reference": "",
     "devise": "",
     "montant_ht": 0,
