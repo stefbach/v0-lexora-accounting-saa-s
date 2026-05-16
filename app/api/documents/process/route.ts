@@ -156,6 +156,58 @@ export async function POST(request: NextRequest) {
         } else if (entries.length > 0 && !societeId) {
           console.warn(`[process] Skipping ecritures insert: dossier ${doc.dossier_id} has no societe_id`)
         }
+
+        // Step 6b: Auto-create row in `factures` (table métier — alimente
+        // /client/factures et le CA). On crée la facture uniquement pour les
+        // types facture_client / facture_fournisseur, et seulement si on n'a
+        // pas déjà créé une facture liée à ce document (idempotence).
+        if (societeId && (typeDoc === 'facture_fournisseur' || typeDoc === 'facture_client')) {
+          const { data: existing } = await supabase
+            .from('factures')
+            .select('id')
+            .eq('document_id', documentId)
+            .maybeSingle()
+          if (!existing) {
+            const tiersName = typeDoc === 'facture_fournisseur'
+              ? (extraction.emetteur || extraction.fournisseur || extraction.tiers || null)
+              : (extraction.destinataire || extraction.client || extraction.tiers || null)
+            const tiersStr = typeof tiersName === 'string'
+              ? tiersName
+              : (tiersName?.nom || tiersName?.name || tiersName?.raison_sociale || null)
+            const dateF = extraction.date_document || extraction.date_facture || null
+            const dateValid = dateF && /^\d{4}-\d{2}-\d{2}$/.test(dateF) ? dateF : null
+            const dateEcheance = extraction.date_echeance && /^\d{4}-\d{2}-\d{2}$/.test(extraction.date_echeance)
+              ? extraction.date_echeance : null
+            const ht = Number(extraction.montant_ht) || 0
+            const tva = Number(extraction.montant_tva) || 0
+            const ttc = Number(extraction.montant_ttc) || (ht + tva) || 0
+            const devise = (extraction.devise && typeof extraction.devise === 'string')
+              ? extraction.devise.toUpperCase() : 'MUR'
+            const taux = ht > 0 && tva > 0 ? Number(((tva / ht) * 100).toFixed(2)) : 15
+            const { error: facErr } = await supabase.from('factures').insert({
+              societe_id: societeId,
+              dossier_id: doc.dossier_id,
+              numero_facture: extraction.numero_reference || extraction.numero_facture || null,
+              type_facture: typeDoc === 'facture_fournisseur' ? 'fournisseur' : 'client',
+              tiers: tiersStr,
+              description: nomFichier,
+              date_facture: dateValid,
+              date_echeance: dateEcheance,
+              devise,
+              taux_change: 1,
+              montant_ht: ht,
+              montant_tva: tva,
+              montant_ttc: ttc,
+              taux_tva: taux,
+              montant_mur: devise === 'MUR' ? ttc : ttc,
+              statut: 'en_attente',
+              document_id: documentId,
+            })
+            if (facErr) {
+              console.error('[process] Insert factures failed:', facErr.message)
+            }
+          }
+        }
       }
     }
 
