@@ -62,8 +62,27 @@ export async function POST(request: NextRequest) {
     // Step 3: Prepare content
     const ext = nomFichier.split('.').pop()?.toLowerCase() || ''
     const isVisual = ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext)
+    const isExcel = ['xlsx', 'xls'].includes(ext)
     const arrayBuffer = await fileData.arrayBuffer()
     const base64 = Buffer.from(arrayBuffer).toString('base64')
+
+    // Pour les fichiers Excel, on parse le contenu en CSV/texte pour Claude
+    // (vision Anthropic n'accepte pas les xlsx).
+    let excelText = ''
+    if (isExcel) {
+      try {
+        const XLSX = await import('xlsx')
+        const wb = XLSX.read(Buffer.from(arrayBuffer), { type: 'buffer' })
+        const sheets = wb.SheetNames.map(name => {
+          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name], { FS: ';' })
+          return `=== Feuille : ${name} ===\n${csv.slice(0, 8000)}`
+        })
+        excelText = sheets.join('\n\n').slice(0, 30000)
+      } catch (e: any) {
+        await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: `Parse XLSX failed: ${e?.message}` } }).eq('id', documentId)
+        return NextResponse.json({ error: 'Parse XLSX failed', details: e?.message }, { status: 500 })
+      }
+    }
 
     const mediaType = ext === 'pdf' ? 'application/pdf'
       : ext === 'png' ? 'image/png'
@@ -115,7 +134,9 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
         role: 'user',
         content: isVisual
           ? [contentBlock, { type: 'text' as const, text: 'Analyse ce document comptable.' }]
-          : `Analyse ce document: ${await fileData.text()}`
+          : isExcel
+            ? `Voici le contenu d'un fichier Excel (CSV par feuille, séparateur ;). Analyse-le comme un document comptable mauricien :\n\n${excelText}`
+            : `Analyse ce document: ${await fileData.text()}`
       }],
     })
 
