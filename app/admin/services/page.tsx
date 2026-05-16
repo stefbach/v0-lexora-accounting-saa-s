@@ -33,6 +33,9 @@ interface ModulesConfig {
   juridique: boolean
   facturation: boolean
   documents: boolean
+  fiscal: boolean
+  etats_financiers: boolean
+  employe_portal: boolean
 }
 
 interface ServicePlan {
@@ -67,6 +70,9 @@ const moduleLabels = (locale: Locale): Record<keyof ModulesConfig, string> => ({
   juridique: t('adm.services.mod_juridique', locale),
   facturation: t('adm.services.mod_facturation', locale),
   documents: t('adm.services.mod_documents', locale),
+  fiscal: locale === 'en' ? 'Tax MRA (VAT, PAYE, CSG)' : 'Fiscal MRA (TVA, PAYE, CSG)',
+  etats_financiers: locale === 'en' ? 'Financial statements' : 'États financiers',
+  employe_portal: locale === 'en' ? 'Employee portal' : 'Portail employé',
 })
 
 const moduleDetails = (locale: Locale): Record<keyof ModulesConfig, string> => ({
@@ -75,6 +81,9 @@ const moduleDetails = (locale: Locale): Record<keyof ModulesConfig, string> => (
   juridique: t('adm.services.mod_juridique_desc', locale),
   facturation: t('adm.services.mod_facturation_desc', locale),
   documents: t('adm.services.mod_documents_desc', locale),
+  fiscal: locale === 'en' ? 'VAT, PAYE, CSG, TDS, IT Form, ROC, audit trail e-MRA.' : 'TVA, PAYE, CSG, TDS, IT Form, ROC, audit trail e-MRA.',
+  etats_financiers: locale === 'en' ? 'Balance sheet, P&L, IFRS 9 / 16, deadlines.' : 'Bilan, P&L, IFRS 9 / 16, échéances.',
+  employe_portal: locale === 'en' ? 'Employee self-service space (payslips, leave, expenses).' : 'Espace self-service salarié (bulletins, congés, frais).',
 })
 
 const PLAN_COLORS: Record<string, string> = {
@@ -91,6 +100,9 @@ const DEFAULT_MODULES: ModulesConfig = {
   juridique: true,
   facturation: true,
   documents: true,
+  fiscal: true,
+  etats_financiers: true,
+  employe_portal: true,
 }
 
 /* ------------------------------------------------------------------ */

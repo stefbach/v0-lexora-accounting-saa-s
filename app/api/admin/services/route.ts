@@ -9,6 +9,21 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+// Garantit que toutes les clés modules attendues par la sidebar sont
+// présentes (les clés manquantes sont mises à false). Évite que la sidebar
+// "tombe sur du undefined" et affiche la section par défaut.
+const MODULE_KEYS = [
+  'comptabilite', 'rh', 'juridique', 'facturation', 'documents',
+  'fiscal', 'etats_financiers', 'employe_portal',
+] as const
+
+function normalizeModules(input: Record<string, unknown> | null | undefined): Record<string, boolean> {
+  const src = (input && typeof input === 'object') ? input as Record<string, unknown> : {}
+  const out: Record<string, boolean> = {}
+  for (const k of MODULE_KEYS) out[k] = src[k] === true
+  return out
+}
+
 async function requireAdmin() {
   const supabaseAuth = await createServerClient()
   const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
@@ -113,7 +128,7 @@ export async function POST(request: NextRequest) {
           .update({
             plan_id: plan.id,
             plan_code: plan.code,
-            modules_actifs: plan.modules,
+            modules_actifs: normalizeModules(plan.modules),
           })
           .eq('id', societe_id)
 
@@ -131,7 +146,7 @@ export async function POST(request: NextRequest) {
           .from('societes')
           .update({
             plan_code: 'custom',
-            modules_actifs: modules,
+            modules_actifs: normalizeModules(modules),
           })
           .eq('id', societe_id)
 
