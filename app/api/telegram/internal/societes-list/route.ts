@@ -17,7 +17,15 @@ import { getAccessibleSocieteIds } from '@/lib/supabase/assert-societe-access'
  */
 async function fetchAccessibleSocietes(userId: string, currentSocieteId: string) {
   const admin = getAdminClient()
-  const ids = await getAccessibleSocieteIds(admin, userId)
+  let ids: string[] = []
+  try {
+    ids = await getAccessibleSocieteIds(admin, userId)
+  } catch {
+    ids = []
+  }
+  // Garantie minimum : la société active du chat doit TOUJOURS être listée,
+  // même si une voie du résolveur a planté silencieusement.
+  if (currentSocieteId && !ids.includes(currentSocieteId)) ids.push(currentSocieteId)
   if (ids.length === 0) return []
   const { data } = await admin
     .from('societes')
