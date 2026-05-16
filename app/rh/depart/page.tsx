@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote } from "lucide-react"
+import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote, Plus, Trash2, Edit2 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale, type Locale } from "@/lib/i18n"
 
@@ -26,6 +26,7 @@ function getTypeLabels(locale: Locale): Record<string, string> {
   return {
     demission: t('rha.b.depart.type_demission', locale),
     licenciement: t('rha.b.depart.type_licenciement', locale),
+    licenciement_faute: t('rha.b.depart.type_licenciement_faute', locale),
     fin_contrat: t('rha.b.depart.type_fin_contrat', locale),
     retraite: t('rha.b.depart.type_retraite', locale),
     deces: t('rha.b.depart.type_deces', locale),
@@ -128,6 +129,7 @@ function DepartureForm({ societes, onCalculated, locale }: {
               <SelectContent>
                 <SelectItem value="demission">{t('rha.b.depart.type_demission', locale)}</SelectItem>
                 <SelectItem value="licenciement">{t('rha.b.depart.type_licenciement', locale)}</SelectItem>
+                <SelectItem value="licenciement_faute">{t('rha.b.depart.type_licenciement_faute', locale)}</SelectItem>
                 <SelectItem value="fin_contrat">{t('rha.b.depart.type_fin_contrat', locale)}</SelectItem>
                 <SelectItem value="retraite">{t('rha.b.depart.type_retraite', locale)}</SelectItem>
                 <SelectItem value="deces">{t('rha.b.depart.type_deces', locale)}</SelectItem>
@@ -184,9 +186,38 @@ function DepartureForm({ societes, onCalculated, locale }: {
   )
 }
 
+// Recompute the global total from the (possibly edited) breakdown.
+function recomputeTotal(b: any): number {
+  const lines = [
+    b?.salaire_prorata?.montant,
+    b?.conges_al?.montant,
+    b?.conges_sl?.montant,         // toujours 0 (WRA)
+    b?.treizieme_mois?.montant,
+    b?.allocations_prorata?.montant,
+    b?.preavis?.applicable ? b?.preavis?.montant : 0,
+    b?.indemnite_licenciement?.applicable ? b?.indemnite_licenciement?.montant : 0,
+  ]
+  const extras: Array<{ montant: number }> = Array.isArray(b?.lignes_extra) ? b.lignes_extra : []
+  return lines.reduce((s: number, v: any) => s + (Number(v) || 0), 0)
+       + extras.reduce((s, e) => s + (Number(e?.montant) || 0), 0)
+}
+
+// Petit input numérique pour les cellules éditables
+function MontantInput({ value, onChange, className = '' }: { value: number; onChange: (v: number) => void; className?: string }) {
+  return (
+    <Input
+      type="number"
+      value={Number.isFinite(value) ? value : 0}
+      onChange={e => onChange(Math.round(Number(e.target.value) || 0))}
+      className={`h-8 text-right text-sm w-32 ml-auto ${className}`}
+    />
+  )
+}
+
 // ── Sub-component: Settlement Breakdown Display ──
-function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }: {
+function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confirming, locale }: {
   breakdown: any
+  setBreakdown: (b: any) => void
   formData: any
   onConfirm: () => void
   confirming: boolean
@@ -195,6 +226,47 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }
   const TYPE_LABELS = getTypeLabels(locale)
   const emp = breakdown.employe
   const anc = breakdown.anciennete
+  const [editMode, setEditMode] = useState(false)
+  const [newLibelle, setNewLibelle] = useState('')
+  const [newMontant, setNewMontant] = useState('')
+
+  // Helper : update a single field within breakdown and recompute total
+  const updateField = (path: string[], value: number) => {
+    const next = JSON.parse(JSON.stringify(breakdown))
+    let ref: any = next
+    for (let i = 0; i < path.length - 1; i++) ref = ref[path[i]]
+    ref[path[path.length - 1]] = value
+    next.total = recomputeTotal(next)
+    setBreakdown(next)
+  }
+
+  const addExtraLine = () => {
+    if (!newLibelle.trim()) return
+    const montant = Math.round(Number(newMontant) || 0)
+    const next = JSON.parse(JSON.stringify(breakdown))
+    if (!Array.isArray(next.lignes_extra)) next.lignes_extra = []
+    next.lignes_extra.push({ libelle: newLibelle.trim(), montant })
+    next.total = recomputeTotal(next)
+    setBreakdown(next)
+    setNewLibelle('')
+    setNewMontant('')
+  }
+
+  const removeExtraLine = (index: number) => {
+    const next = JSON.parse(JSON.stringify(breakdown))
+    next.lignes_extra = (next.lignes_extra || []).filter((_: any, i: number) => i !== index)
+    next.total = recomputeTotal(next)
+    setBreakdown(next)
+  }
+
+  const updateExtraLine = (index: number, patch: { libelle?: string; montant?: number }) => {
+    const next = JSON.parse(JSON.stringify(breakdown))
+    next.lignes_extra[index] = { ...next.lignes_extra[index], ...patch }
+    next.total = recomputeTotal(next)
+    setBreakdown(next)
+  }
+
+  const lignesExtra: Array<{ libelle: string; montant: number; note?: string }> = breakdown?.lignes_extra || []
 
   return (
     <Card className="border-2 border-[#D4AF37]">
@@ -208,16 +280,25 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }
         </p>
       </CardHeader>
       <CardContent className="p-6 space-y-4">
-        {/* Ancienneté */}
+        {/* Ancienneté + toggle édition */}
         <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
           <Clock className="w-5 h-5 text-blue-600" />
           <div>
             <p className="font-semibold text-[#0B0F2E]">{t('rha.b.depart.seniority', locale)}</p>
             <p className="text-sm text-gray-600">{anc.label}</p>
           </div>
-          <Badge variant="outline" className="ml-auto border-blue-300 text-blue-700">
+          <Badge variant="outline" className="ml-2 border-blue-300 text-blue-700">
             {TYPE_LABELS[formData.type_depart] || formData.type_depart}
           </Badge>
+          <Button
+            size="sm"
+            variant={editMode ? 'default' : 'outline'}
+            onClick={() => setEditMode(!editMode)}
+            className={`ml-auto ${editMode ? 'bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#C9A630]' : 'border-[#0B0F2E] text-[#0B0F2E]'}`}
+          >
+            <Edit2 className="w-3.5 h-3.5 mr-1.5" />
+            {editMode ? 'Verrouiller' : 'Éditer les montants'}
+          </Button>
         </div>
 
         {/* Breakdown table */}
@@ -236,7 +317,11 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }
               <TableCell className="text-center text-sm text-gray-500">
                 {breakdown.salaire_prorata.jours_travailles} / {breakdown.salaire_prorata.jours_mois} jours
               </TableCell>
-              <TableCell className="text-right font-medium">{fmt(breakdown.salaire_prorata.montant)}</TableCell>
+              <TableCell className="text-right font-medium">
+                {editMode
+                  ? <MontantInput value={breakdown.salaire_prorata.montant} onChange={v => updateField(['salaire_prorata', 'montant'], v)} />
+                  : fmt(breakdown.salaire_prorata.montant)}
+              </TableCell>
             </TableRow>
 
             {/* AL payout */}
@@ -245,7 +330,11 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }
               <TableCell className="text-center text-sm text-gray-500">
                 {breakdown.conges_al.restant} jours ({breakdown.conges_al.droit_prorata} acquis - {breakdown.conges_al.pris} pris) x {fmt(breakdown.conges_al.taux_journalier)}/j
               </TableCell>
-              <TableCell className="text-right font-medium">{fmt(breakdown.conges_al.montant)}</TableCell>
+              <TableCell className="text-right font-medium">
+                {editMode
+                  ? <MontantInput value={breakdown.conges_al.montant} onChange={v => updateField(['conges_al', 'montant'], v)} />
+                  : fmt(breakdown.conges_al.montant)}
+              </TableCell>
             </TableRow>
 
             {/* SL — WRA Art. 48(2) : NON payable à la sortie */}
@@ -270,17 +359,25 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }
               <TableCell className="text-center text-sm text-gray-500">
                 ({fmt(breakdown.employe.salaire_base)} / 12) x {breakdown.treizieme_mois.mois_travailles} mois
               </TableCell>
-              <TableCell className="text-right font-medium">{fmt(breakdown.treizieme_mois.montant)}</TableCell>
+              <TableCell className="text-right font-medium">
+                {editMode
+                  ? <MontantInput value={breakdown.treizieme_mois.montant} onChange={v => updateField(['treizieme_mois', 'montant'], v)} />
+                  : fmt(breakdown.treizieme_mois.montant)}
+              </TableCell>
             </TableRow>
 
             {/* Allocations prorata */}
-            {breakdown.allocations_prorata.montant > 0 && (
+            {(breakdown.allocations_prorata.montant > 0 || editMode) && (
               <TableRow>
                 <TableCell className="font-medium">{t('rha.b.depart.row_allowances', locale)}</TableCell>
                 <TableCell className="text-center text-sm text-gray-500">
                   Transport: {fmt(breakdown.allocations_prorata.transport)} + Essence: {fmt(breakdown.allocations_prorata.petrol)}
                 </TableCell>
-                <TableCell className="text-right font-medium">{fmt(breakdown.allocations_prorata.montant)}</TableCell>
+                <TableCell className="text-right font-medium">
+                  {editMode
+                    ? <MontantInput value={breakdown.allocations_prorata.montant} onChange={v => updateField(['allocations_prorata', 'montant'], v)} />
+                    : fmt(breakdown.allocations_prorata.montant)}
+                </TableCell>
               </TableRow>
             )}
 
@@ -289,12 +386,18 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }
               <TableRow className={breakdown.preavis.montant > 0 ? "bg-orange-50" : ""}>
                 <TableCell className="font-medium">
                   {t('rha.b.depart.row_notice', locale)}
-                  {!breakdown.preavis.applicable && <span className="text-xs text-gray-400 ml-2">(non applicable)</span>}
+                  {formData.type_depart === 'licenciement_faute' && (
+                    <span className="block text-[10px] text-orange-700 mt-0.5">Préavis 1 mois (faute)</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-center text-sm text-gray-500">
                   {breakdown.preavis.description} ({breakdown.preavis.duree_mois} mois x {fmt(breakdown.employe.salaire_base)})
                 </TableCell>
-                <TableCell className="text-right font-medium">{fmt(breakdown.preavis.montant)}</TableCell>
+                <TableCell className="text-right font-medium">
+                  {editMode
+                    ? <MontantInput value={breakdown.preavis.montant} onChange={v => updateField(['preavis', 'montant'], v)} />
+                    : fmt(breakdown.preavis.montant)}
+                </TableCell>
               </TableRow>
             )}
 
@@ -317,7 +420,59 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }
                 <TableCell className="text-center text-sm text-red-600">
                   {breakdown.indemnite_licenciement.formule} ({breakdown.indemnite_licenciement.annees_service} ans)
                 </TableCell>
-                <TableCell className="text-right font-bold text-red-800">{fmt(breakdown.indemnite_licenciement.montant)}</TableCell>
+                <TableCell className="text-right font-bold text-red-800">
+                  {editMode
+                    ? <MontantInput value={breakdown.indemnite_licenciement.montant} onChange={v => updateField(['indemnite_licenciement', 'montant'], v)} />
+                    : fmt(breakdown.indemnite_licenciement.montant)}
+                </TableCell>
+              </TableRow>
+            )}
+
+            {/* Lignes additionnelles éditables */}
+            {lignesExtra.map((l, i) => (
+              <TableRow key={`extra-${i}`} className="bg-amber-50/40">
+                <TableCell className="font-medium">
+                  {editMode
+                    ? <Input value={l.libelle} onChange={e => updateExtraLine(i, { libelle: e.target.value })} className="h-8 text-sm" />
+                    : l.libelle}
+                  {l.note && <p className="text-[10px] text-gray-500 mt-0.5">{l.note}</p>}
+                </TableCell>
+                <TableCell className="text-center text-xs text-amber-700">Ajustement manuel</TableCell>
+                <TableCell className="text-right font-medium">
+                  <div className="flex items-center justify-end gap-2">
+                    {editMode
+                      ? <MontantInput value={l.montant} onChange={v => updateExtraLine(i, { montant: v })} />
+                      : <span className={l.montant < 0 ? 'text-red-700' : ''}>{fmt(l.montant)}</span>}
+                    {editMode && (
+                      <Button size="sm" variant="ghost" onClick={() => removeExtraLine(i)} className="h-7 px-2 text-red-600 hover:bg-red-50">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+
+            {/* Ajout d'une ligne — visible uniquement en mode édition */}
+            {editMode && (
+              <TableRow className="bg-amber-50">
+                <TableCell>
+                  <Input value={newLibelle} onChange={e => setNewLibelle(e.target.value)}
+                         placeholder="Libellé (ex: Prime exceptionnelle, Avance à déduire…)" className="h-8 text-sm" />
+                </TableCell>
+                <TableCell className="text-center text-[11px] text-gray-500">
+                  Saisir un montant négatif pour une déduction
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <Input type="number" value={newMontant} onChange={e => setNewMontant(e.target.value)}
+                           placeholder="0" className="h-8 text-right text-sm w-32" />
+                    <Button size="sm" onClick={addExtraLine} disabled={!newLibelle.trim()}
+                            className="h-8 bg-[#D4AF37] hover:bg-[#C9A630] text-[#0B0F2E]">
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Ajouter
+                    </Button>
+                  </div>
+                </TableCell>
               </TableRow>
             )}
 
@@ -377,8 +532,9 @@ function BreakdownDisplay({ breakdown, formData, onConfirm, confirming, locale }
             >
               {t('rha.b.depart.btn_attestation', locale)}
             </Button>
-            {/* Sprint 16 FIX 4 — Déclaration Workfare TUB (licenciement économique) */}
-            {breakdown?.type_depart === 'licenciement' && (
+            {/* Sprint 16 FIX 4 — Déclaration Workfare TUB (licenciement économique uniquement,
+                 PAS pour licenciement_faute qui n'ouvre pas droit au Workfare). */}
+            {(formData.type_depart === 'licenciement' || breakdown?.type_depart === 'licenciement') && (
               <Button
                 variant="outline"
                 onClick={() => window.open(`/api/rh/depart/workfare?employe_id=${breakdown?.employe?.id}`, '_blank')}
@@ -486,6 +642,7 @@ function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: 
                     <TableCell>{fmtDate(depart)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={
+                        d.type_depart === "licenciement_faute" ? "border-red-500 text-red-800 bg-red-100" :
                         d.type_depart === "licenciement" ? "border-red-300 text-red-700 bg-red-50" :
                         d.type_depart === "demission" ? "border-orange-300 text-orange-700 bg-orange-50" :
                         d.type_depart === "retraite" ? "border-blue-300 text-blue-700 bg-blue-50" :
@@ -600,6 +757,7 @@ export default function DepartPage() {
       {breakdown && formData && (
         <BreakdownDisplay
           breakdown={breakdown}
+          setBreakdown={setBreakdown}
           formData={formData}
           onConfirm={handleConfirm}
           confirming={confirming}
