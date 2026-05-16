@@ -38,6 +38,7 @@ const MENU = [
       { href: "/admin/societes", label: "Societes", labelKey: "admin.companies", icon: Building2 },
       { href: "/admin/documents", label: "Documents", labelKey: "admin.documents", icon: FileText },
       { href: "/admin/services", label: "Services & Plans", labelKey: "admin.services", icon: Settings },
+      { href: "/admin/plans", label: "Catalogue tarifaire", icon: Briefcase },
       { href: "/admin/lexora-billing", label: "Facturation Lexora", icon: Receipt },
       { href: "/admin/lexora-tooling", label: "Lexora Tooling (IA)", icon: Brain },
     ],
