@@ -371,17 +371,30 @@ export async function POST(request: Request) {
           date_depart,
           date_depart_type: type_depart,
           raison_depart: raison_depart || null,
+          breakdown_depart: breakdown || null,
         })
         .eq('id', employe_id)
 
       if (err1) {
-        console.warn('[depart] Full update failed, trying minimal:', err1.message)
-        // Fallback: only update date_depart (always exists)
-        const { error: err2 } = await supabase
+        console.warn('[depart] Full update failed, trying without breakdown:', err1.message)
+        // Fallback : la colonne breakdown_depart n'est pas encore migrée
+        const { error: err1b } = await supabase
           .from('employes')
-          .update({ date_depart })
+          .update({
+            date_depart,
+            date_depart_type: type_depart,
+            raison_depart: raison_depart || null,
+          })
           .eq('id', employe_id)
-        updateErr = err2
+        if (err1b) {
+          console.warn('[depart] Without breakdown still failed, trying minimal:', err1b.message)
+          // Fallback final : seulement date_depart (toujours présent)
+          const { error: err2 } = await supabase
+            .from('employes')
+            .update({ date_depart })
+            .eq('id', employe_id)
+          updateErr = err2
+        }
       }
 
       if (updateErr) throw updateErr
