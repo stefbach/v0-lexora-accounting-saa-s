@@ -190,6 +190,51 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     created_societe_id: createdSocieteId,
   }).eq('id', id)
 
+  // 5bis. Génération automatique de la facture Lexora (DDS Ltd → client SaaS).
+  //       Idempotente : si une facture existe déjà pour la demande, réutilisée.
+  try {
+    const planEffectifId = plan_attribue_id || demande.plan_id || null
+    let planRow: any = null
+    if (planEffectifId) {
+      const { data: p } = await supabase.from('plans').select('code,nom,prix_mensuel_mur,prix_annuel_mur').eq('id', planEffectifId).maybeSingle()
+      planRow = p
+    }
+    const periodicite = (demande.periodicite || 'mensuelle') as 'mensuelle' | 'annuelle'
+    const planPriceFallback = planRow
+      ? (periodicite === 'annuelle' ? Number(planRow.prix_annuel_mur || 0) : Number(planRow.prix_mensuel_mur || 0))
+      : 0
+    const tarifFinal = tarif_final_mur != null ? Number(tarif_final_mur) : planPriceFallback
+    if (tarifFinal > 0) {
+      const { createLexoraInvoice } = await import('@/lib/lexora-billing/create-invoice')
+      const invoiceDate = (demande.created_at || new Date().toISOString()).slice(0, 10)
+      await createLexoraInvoice({
+        supabaseAdmin: supabase,
+        demande_id: id,
+        client_societe_id: createdSocieteId,
+        client_user_id: newUserId,
+        plan: planRow,
+        periodicite,
+        tarif_final_mur: tarifFinal,
+        invoice_date: invoiceDate,
+        cgv_accepted_at: demande.created_at || null,
+        customer: {
+          nom: demande.societe_data?.nom || `${demande.prenom} ${demande.nom}`.trim(),
+          brn: demande.societe_data?.brn || null,
+          vat: demande.societe_data?.vat_number || null,
+          adresse: demande.societe_data?.adresse || null,
+          ville: demande.societe_data?.ville || null,
+          dirigeant_nom: `${demande.prenom} ${demande.nom}`.trim(),
+          dirigeant_email: demande.email,
+          telephone: demande.telephone || demande.societe_data?.telephone || null,
+        },
+        created_by: adminUser.id,
+      })
+    }
+  } catch (e: any) {
+    console.warn('[validate] facture Lexora non créée :', e?.message)
+  }
+
+
   // 6. Email identifiants au prospect
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://lexora.finance'
   void sendEmail(
