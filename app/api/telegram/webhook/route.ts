@@ -724,39 +724,58 @@ async function handleDocumentMessage(
   }
 
   const tailleKo = Math.round(r.taille / 1024)
+  const ocrSuccess = !!(r as any).ocr?.success
+  const typeDoc = (r as any).ocr?.type_document || 'autre'
+  const societeDetectee = (r as any).ocr?.societe_detectee
+  const ocrErr = (r as any).ocr?.error
 
-  // --- Détection note de frais (Phase E quick wins) -------------------------
-  // Trigger si la caption matche /^(frais|note|repas|taxi|essence|hotel|deplacement)/i
-  // OU si l'image est manifestement un ticket (on demande à l'employé).
+  // Le pipeline canonique /api/documents/process a déjà été appelé par
+  // ingestTelegramDocument (OCR Anthropic Haiku 4.5 + auto-création des
+  // écritures comptables V2). On enrichit le message Telegram avec le résultat.
   const isImage = r.type_fichier === 'jpeg' || r.type_fichier === 'png'
   const captionMatches = captionLooksLikeExpense(caption)
 
+  // Si la caption suggère une note de frais ET image, on crée aussi la note
+  // de frais (au-dessus du document déjà traité par le pipeline canonique).
   if (isImage && captionMatches) {
-    // Auto-create expense draft via OCR
     await handleExpensePhotoAuto(chatId, userId, societeId, r.doc_id, r.nom_fichier, tailleKo)
     return NextResponse.json({ ok: true })
   }
 
-  if (isImage && !captionMatches) {
-    // Propose à l'employé via boutons inline
-    try {
-      await sendTelegramInlineButtons(
-        chatId,
-        `✅ <b>Document reçu</b>\n` +
-        `📄 ${r.nom_fichier} (${tailleKo} Ko)\n\n` +
-        `📷 C'est une <b>note de frais</b> ?`,
-        [[
-          { text: '✅ Oui (note de frais)', callback_data: `expense.confirm:${r.doc_id}` },
-          { text: '❌ Non (document classique)', callback_data: `expense.skip:${r.doc_id}` },
-        ]],
-      )
-    } catch {
-      // fallback texte simple
-      await sendTelegramMessage(
-        chatId,
-        `✅ <b>Document reçu</b>\n📄 ${r.nom_fichier} (${tailleKo} Ko)\n\n🤖 Traitement OCR en attente.`,
-      )
+  const typeLabel: Record<string, string> = {
+    facture_fournisseur: 'Facture fournisseur',
+    facture_client: 'Facture client',
+    releve_bancaire: 'Relevé bancaire',
+    fiche_paie: 'Fiche de paie',
+    charges_sociales: 'Charges sociales',
+    contrat: 'Contrat',
+    autre: 'Document',
+  }
+
+  if (ocrSuccess) {
+    const lines = [
+      `✅ <b>Document traité</b>`,
+      `📄 ${r.nom_fichier} (${tailleKo} Ko)`,
+      `📋 Type détecté : <b>${typeLabel[typeDoc] || typeDoc}</b>`,
+    ]
+    if (societeDetectee && societeDetectee !== 'INCONNU') {
+      lines.push(`🏢 Société : ${societeDetectee}`)
     }
+    lines.push(``, `Disponible dans <b>Lexora → Documents</b>.`)
+    if (isImage && !captionMatches && typeDoc === 'autre') {
+      try {
+        await sendTelegramInlineButtons(
+          chatId,
+          lines.join('\n') + `\n\n📷 C'est aussi une <b>note de frais</b> ?`,
+          [[
+            { text: '✅ Oui (note de frais)', callback_data: `expense.confirm:${r.doc_id}` },
+            { text: '❌ Non', callback_data: `expense.skip:${r.doc_id}` },
+          ]],
+        )
+        return NextResponse.json({ ok: true })
+      } catch {}
+    }
+    await sendTelegramMessage(chatId, lines.join('\n'))
     return NextResponse.json({ ok: true })
   }
 
@@ -764,7 +783,9 @@ async function handleDocumentMessage(
     chatId,
     `✅ <b>Document reçu</b>\n` +
     `📄 ${r.nom_fichier} (${tailleKo} Ko, ${r.type_fichier.toUpperCase()})\n\n` +
-    `🤖 Traitement OCR en attente. Tu retrouveras le document dans <b>Lexora → Documents</b>.`,
+    (ocrErr
+      ? `⚠️ Pipeline OCR : ${String(ocrErr).slice(0, 200)}\nTu peux relancer depuis <b>Lexora → Documents → Reanalyser</b>.`
+      : `🤖 Traitement OCR en attente. Disponible dans <b>Lexora → Documents</b>.`),
   )
   return NextResponse.json({ ok: true })
 }

@@ -14,9 +14,14 @@ function getSupabase() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabaseAuth = await createServerClient()
-  const { data: { user } } = await supabaseAuth.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Auth : soit session web (auth.getUser), soit X-Internal-Token (bot Telegram, n8n)
+  const internalToken = request.headers.get('x-internal-token')
+  const isInternal = !!internalToken && internalToken === process.env.INTERNAL_API_TOKEN
+  if (!isInternal) {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const startTime = Date.now()
   let documentId = ''
