@@ -28,24 +28,20 @@ const ALLOWED_STATUTS = ['brouillon', 'en_validation']
 
 export async function POST(req: NextRequest) {
   return withTelegramAuth(req, 'expense.create', async (ctx, body) => {
-    if (!ctx.employe_id) {
-      return {
-        result: null,
-        status: 'denied',
-        error_msg: 'Aucun employé lié à votre compte — impossible de créer une note de frais.',
-      }
-    }
-
     const admin = getAdminClient()
 
-    // Pré-validation employé / société
-    const { data: emp } = await admin
-      .from('employes')
-      .select('id, prenom, nom, societe_id')
-      .eq('id', ctx.employe_id)
-      .maybeSingle()
-    if (!emp || emp.societe_id !== ctx.societe_id) {
-      return { result: null, status: 'denied', error_msg: 'Employé hors société active' }
+    // Pré-validation employé / société (si l'user est un employé)
+    // employe_id reste optionnel : les dirigeants/admins peuvent aussi
+    // soumettre une note (table notes_de_frais.employe_id est nullable).
+    if (ctx.employe_id) {
+      const { data: emp } = await admin
+        .from('employes')
+        .select('id, prenom, nom, societe_id')
+        .eq('id', ctx.employe_id)
+        .maybeSingle()
+      if (emp && emp.societe_id !== ctx.societe_id) {
+        return { result: null, status: 'denied', error_msg: 'Employé hors société active' }
+      }
     }
 
     const documentId: string | null = body?.document_id ? String(body.document_id) : null
@@ -148,7 +144,7 @@ export async function POST(req: NextRequest) {
       .from('notes_de_frais')
       .insert({
         societe_id: ctx.societe_id,
-        employe_id: ctx.employe_id,
+        employe_id: ctx.employe_id || null,
         user_id: ctx.user_id,
         vendor: final.vendor,
         date_facture: final.date_facture,
