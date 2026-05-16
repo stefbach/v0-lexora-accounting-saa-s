@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote, Plus, Trash2, Edit2 } from "lucide-react"
+import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote, Plus, Trash2, Edit2, FileText, Mail, Download } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale, type Locale } from "@/lib/i18n"
 
@@ -617,12 +617,134 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
   )
 }
 
+// ── Dialog : récupérer / envoyer les documents d'un départ confirmé ──
+const DOCS_CATALOG: Array<{ key: string; label: string; path: string; restrictTo?: string }> = [
+  { key: 'certificat',  label: 'Certificat de travail',     path: '/api/rh/depart/certificat' },
+  { key: 'attestation', label: 'Attestation fin contrat',   path: '/api/rh/depart/attestation' },
+  { key: 'solde',       label: 'Solde de tout compte',      path: '/api/rh/depart/solde-tout-compte' },
+  { key: 'workfare',    label: 'Déclaration Workfare TUB',  path: '/api/rh/depart/workfare', restrictTo: 'licenciement' },
+]
+
+function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void }) {
+  const availableDocs = DOCS_CATALOG.filter(d => !d.restrictTo || d.restrictTo === depart.type_depart)
+  const [selected, setSelected] = useState<Set<string>>(new Set(availableDocs.map(d => d.key)))
+  const [recipientEmail, setRecipientEmail] = useState(depart.email || depart.email_personnel || '')
+  const [message, setMessage] = useState(
+    `Bonjour ${depart.prenom || ''},\n\nVous trouverez en pièces jointes les documents officiels relatifs à la fin de votre contrat de travail au sein de notre société.\n\nNous vous souhaitons une bonne continuation.\n\nCordialement.`
+  )
+  const [sending, setSending] = useState(false)
+  const [result, setResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  const toggle = (k: string) => {
+    const next = new Set(selected)
+    if (next.has(k)) next.delete(k); else next.add(k)
+    setSelected(next)
+  }
+
+  const downloadDoc = (path: string, filename: string) => {
+    const url = `${path}?employe_id=${depart.id}`
+    window.open(url, '_blank')
+    // déclencher un download — l'endpoint renvoie Content-Disposition: inline,
+    // donc l'onglet l'affiche ; on offre aussi un lien direct via <a download>
+  }
+
+  const sendEmail = async () => {
+    if (!recipientEmail) { setResult({ type: 'error', text: 'Saisis une adresse email.' }); return }
+    if (selected.size === 0) { setResult({ type: 'error', text: 'Sélectionne au moins un document.' }); return }
+    setSending(true); setResult(null)
+    try {
+      const res = await fetch('/api/rh/depart/envoyer-docs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employe_id: depart.id,
+          docs: Array.from(selected),
+          recipient_email: recipientEmail,
+          message,
+        }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Erreur')
+      setResult({ type: 'success', text: `Email envoyé à ${j.recipient} avec ${j.sent_docs?.length || 0} document(s).` })
+    } catch (e: any) {
+      setResult({ type: 'error', text: e?.message || 'Erreur' })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Dialog open={true} onOpenChange={o => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-[#0B0F2E]">
+            Documents de fin de contrat — {depart.prenom} {depart.nom}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold mb-2 text-[#0B0F2E]">Sélection des documents</p>
+            <div className="space-y-1">
+              {availableDocs.map(d => (
+                <div key={d.key} className="flex items-center justify-between p-2 border rounded-lg hover:bg-gray-50">
+                  <label className="flex items-center gap-2 flex-1 cursor-pointer">
+                    <input type="checkbox" checked={selected.has(d.key)} onChange={() => toggle(d.key)} />
+                    <FileText className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm">{d.label}</span>
+                  </label>
+                  <Button size="sm" variant="ghost" onClick={() => downloadDoc(d.path, d.label)}
+                          className="text-xs text-blue-700 hover:bg-blue-50">
+                    <Download className="w-3.5 h-3.5 mr-1" /> Télécharger
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-sm">Destinataire (email)</Label>
+            <Input type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)}
+                   placeholder="employe@example.com" />
+            {!depart.email && !depart.email_personnel && (
+              <p className="text-xs text-amber-700 mt-1">
+                ⚠ Aucun email enregistré sur la fiche employé — saisis l'adresse manuellement.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label className="text-sm">Message (optionnel)</Label>
+            <Textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} />
+          </div>
+
+          {result && (
+            <div className={`p-3 rounded-lg text-sm ${result.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+              {result.text}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>Fermer</Button>
+          <Button onClick={sendEmail} disabled={sending || selected.size === 0 || !recipientEmail}
+                  className="bg-[#D4AF37] hover:bg-[#C9A630] text-[#0B0F2E]">
+            {sending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
+            Envoyer par email
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ── Sub-component: Recent Departures List ──
 function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: number; onReintegrated?: () => void; locale: Locale }) {
   const TYPE_LABELS = getTypeLabels(locale)
   const [departs, setDeparts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [reintegratingId, setReintegratingId] = useState<string | null>(null)
+  const [docsFor, setDocsFor] = useState<any | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -712,16 +834,27 @@ function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: 
                     <TableCell className="text-sm">{ancLabel}</TableCell>
                     <TableCell className="text-sm text-gray-500 max-w-[200px] truncate">{d.raison_depart || "—"}</TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs border-green-300 text-green-700 hover:bg-green-50"
-                        onClick={() => reintegrer(d.id, `${d.prenom} ${d.nom}`)}
-                        disabled={reintegratingId === d.id}
-                      >
-                        {reintegratingId === d.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                        {t('rha.b.depart.btn_reintegrate', locale)}
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                          onClick={() => setDocsFor(d)}
+                          title="Récupérer ou envoyer les documents par email"
+                        >
+                          <FileText className="w-3 h-3 mr-1" /> Documents
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs border-green-300 text-green-700 hover:bg-green-50"
+                          onClick={() => reintegrer(d.id, `${d.prenom} ${d.nom}`)}
+                          disabled={reintegratingId === d.id}
+                        >
+                          {reintegratingId === d.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                          {t('rha.b.depart.btn_reintegrate', locale)}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
@@ -730,6 +863,7 @@ function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: 
           </Table>
         )}
       </CardContent>
+      {docsFor && <DocumentsDialog depart={docsFor} onClose={() => setDocsFor(null)} />}
     </Card>
   )
 }
