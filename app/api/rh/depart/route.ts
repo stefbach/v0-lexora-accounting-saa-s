@@ -83,12 +83,22 @@ function daysWorkedLastMonth(dateDepart: string): { days: number; totalDaysInMon
   return { days: d.getDate(), totalDaysInMonth }
 }
 
-/** Notice period per Mauritius WRA 2019 */
-function getNoticePeriod(ancienneteMonths: number): { months: number; description: string } {
+/** Notice period per Mauritius WRA 2019.
+ *  Override : `licenciement_faute` impose 1 mois fixe quel que soit l'ancienneté
+ *  (faute simple / négociée). Pour `faute grave` / `faute lourde`, l'employeur
+ *  est libre de licencier sans préavis, mais le module Lexora trace au moins
+ *  un mois pour permettre la procédure contradictoire. */
+function getNoticePeriod(ancienneteMonths: number, typeDepart?: string): { months: number; description: string } {
+  if (typeDepart === 'licenciement_faute') {
+    return { months: 1, description: '1 mois de préavis (licenciement pour faute)' }
+  }
   if (ancienneteMonths < 3) return { months: 0, description: 'Aucun préavis (< 3 mois)' }
   if (ancienneteMonths <= 36) return { months: 1, description: '1 mois de préavis (3 mois - 3 ans)' }
   return { months: 3, description: '3 mois de préavis (> 3 ans)' }
 }
+
+/** Liste des types de départ déclenchant une indemnité de préavis */
+const TYPES_AVEC_PREAVIS = new Set(['licenciement', 'fin_contrat', 'licenciement_faute'])
 
 // ─── GET: Preview departure calculation ───
 export async function GET(request: Request) {
@@ -215,14 +225,15 @@ export async function POST(request: Request) {
       // 6. Prorata 13th month (EOY bonus)
       const treizMois = Math.round((salaireBase / 12) * mWorked)
 
-      // 7. Notice period
-      const notice = getNoticePeriod(anciennete.totalMonths)
-      // If employer terminates without notice, notice indemnity is due
-      const noticePayout = (type_depart === 'licenciement' || type_depart === 'fin_contrat')
+      // 7. Notice period (override 1 mois pour `licenciement_faute`)
+      const notice = getNoticePeriod(anciennete.totalMonths, type_depart)
+      const noticePayout = TYPES_AVEC_PREAVIS.has(type_depart)
         ? notice.months * salaireBase
         : 0
 
-      // 8. Severance allowance (licenciement only): 3 months salary x years of service
+      // 8. Severance allowance — UNIQUEMENT licenciement économique standard.
+      //    Pour `licenciement_faute`, pas d'indemnité de licenciement (WRA :
+      //    faute = pas de severance pay, le préavis seul est versé).
       const severance = type_depart === 'licenciement'
         ? Math.round(3 * salaireBase * anciennete.totalYears)
         : 0
@@ -285,7 +296,7 @@ export async function POST(request: Request) {
           duree_mois: notice.months,
           description: notice.description,
           montant: noticePayout,
-          applicable: type_depart === 'licenciement' || type_depart === 'fin_contrat',
+          applicable: TYPES_AVEC_PREAVIS.has(type_depart),
         },
         indemnite_licenciement: {
           applicable: type_depart === 'licenciement',
@@ -298,6 +309,9 @@ export async function POST(request: Request) {
           petrol: petrolAllowance,
           montant: allowancesProrata,
         },
+        // Lignes additionnelles éditables côté UI (primes, déductions, etc.)
+        // chaque entrée : { libelle, montant (signé), note? }
+        lignes_extra: [] as Array<{ libelle: string; montant: number; note?: string }>,
         total,
       }
 
@@ -349,6 +363,15 @@ export async function POST(request: Request) {
 
       // 2. Create final settlement bulletin_paie
       const periodeDate = date_depart.slice(0, 7) + '-01' // YYYY-MM-01
+
+      // Lignes additionnelles ajoutées/éditées côté UI (primes, avances, etc.)
+      const lignesExtra: Array<{ libelle: string; montant: number; note?: string }> =
+        Array.isArray(breakdown?.lignes_extra) ? breakdown.lignes_extra : []
+      const lignesExtraTotal = lignesExtra.reduce((s, l) => s + (Number(l.montant) || 0), 0)
+
+      // Le total éditable côté UI est la source de vérité — il intègre déjà
+      // les éventuels ajustements manuels sur les lignes existantes ET les
+      // lignes additionnelles.
       const totalBrut = breakdown?.total || 0
 
       // Build bulletin insert — salaire_brut is GENERATED ALWAYS so must not be included
@@ -363,9 +386,21 @@ export async function POST(request: Request) {
 
       const typeLabel = type_depart === 'demission' ? 'Démission'
         : type_depart === 'licenciement' ? 'Licenciement'
+        : type_depart === 'licenciement_faute' ? 'Licenciement pour faute'
         : type_depart === 'fin_contrat' ? 'Fin de contrat'
         : type_depart === 'retraite' ? 'Retraite'
         : 'Décès'
+
+      // Notes du bulletin : on encode les lignes extra pour traçabilité
+      const notesParts = [`Solde de tout compte — ${typeLabel}`]
+      if (lignesExtra.length > 0) {
+        notesParts.push(
+          'Ajustements : ' + lignesExtra
+            .map(l => `${l.libelle} ${l.montant >= 0 ? '+' : ''}${l.montant} MUR${l.note ? ` (${l.note})` : ''}`)
+            .join(' ; ')
+        )
+      }
+      const bulletinNotes = notesParts.join(' | ')
 
       // Create or update final settlement bulletin
       const bulletinData = {
@@ -374,14 +409,17 @@ export async function POST(request: Request) {
         periode: periodeDate,
         salaire_base: salaireBaseBulletin,
         transport_allowance: transportBulletin,
+        // Les ajustements positifs s'ajoutent à treizBulletin, les négatifs
+        // se déduisent. Le total_deductions reste à 0 — c'est `salaire_net`
+        // qui reflète le total final éditable côté UI.
         special_allowance_1: alPayout + slPayout,
-        special_allowance_2: treizBulletin,
+        special_allowance_2: treizBulletin + lignesExtraTotal,
         departure_notice: preavisBulletin,
         special_allowance_3: severanceBulletin,
         salaire_net: totalBrut,
         total_deductions: 0,
         statut: 'valide',
-        notes: `Solde de tout compte — ${typeLabel}`,
+        notes: bulletinNotes,
       }
 
       let bulletin: any = null
