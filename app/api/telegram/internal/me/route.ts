@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { getAccessibleSocieteIds } from '@/lib/supabase/assert-societe-access'
 
 /**
  * GET /api/telegram/internal/me?chat_id=<n>
@@ -9,6 +10,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * - id user Lexora, role, société active (nom)
  * - employé lié (si applicable) + nb subordonnés (manager)
  * - capabilities Telegram autorisées par son rôle
+ * - LISTE des sociétés accessibles (pour permettre switch via tool)
  */
 export async function GET(req: NextRequest) {
   return withTelegramAuth(req, 'me.get', async (ctx) => {
@@ -29,6 +31,20 @@ export async function GET(req: NextRequest) {
       if (emp) employeName = `${emp.prenom} ${emp.nom}`.trim()
     }
 
+    // Liste des sociétés accessibles via TOUTES les voies (multi-voies multi-tenant)
+    const accessIds = await getAccessibleSocieteIds(admin, ctx.user_id)
+    let societes_accessibles: Array<{ id: string; nom: string; brn: string | null; active: boolean }> = []
+    if (accessIds.length > 0) {
+      const { data: socs } = await admin
+        .from('societes')
+        .select('id, nom, brn')
+        .in('id', accessIds)
+        .order('nom', { ascending: true })
+      societes_accessibles = (socs || []).map((s: any) => ({
+        id: s.id, nom: s.nom, brn: s.brn, active: s.id === ctx.societe_id,
+      }))
+    }
+
     // Capabilities par rôle
     const caps = computeCapabilities(ctx.role)
 
@@ -37,6 +53,8 @@ export async function GET(req: NextRequest) {
         chat_id: ctx.chat_id,
         user_id: ctx.user_id,
         societe: { id: ctx.societe_id, nom: soc?.nom, brn: soc?.brn },
+        societes_accessibles,
+        societes_count: societes_accessibles.length,
         role: ctx.role,
         language: ctx.language_code,
         firstname: ctx.telegram_firstname,

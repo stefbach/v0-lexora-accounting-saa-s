@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Building2, Eye, EyeOff, AlertCircle, CheckCircle2, Save, Play } from "lucide-react"
+import { Loader2, Building2, Eye, EyeOff, AlertCircle, CheckCircle2, Save, Play, Plus } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { PageHelp } from "@/components/help/PageHelp"
 
@@ -37,6 +37,8 @@ export default function BankCredentialsPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [scrapingNow, setScrapingNow] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [newAccount, setNewAccount] = useState({ banque: 'MCB', nom_compte: '', numero_compte: '', iban: '', swift: '', devise: 'MUR', compte_principal: false })
 
   // Form state per compte
   const [usernames, setUsernames] = useState<Record<string, string>>({})
@@ -91,6 +93,24 @@ export default function BankCredentialsPage() {
     } catch (e: any) { setError(e?.message || 'Erreur') }
   }
 
+  const createAccount = async () => {
+    if (!societeId) return
+    setError(null); setSuccess(null)
+    if (!newAccount.banque.trim()) { setError('Banque requise'); return }
+    try {
+      const r = await fetch(`/api/client/comptes-bancaires`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId, ...newAccount }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Erreur')
+      setSuccess('Compte bancaire créé.')
+      setCreating(false)
+      setNewAccount({ banque: 'MCB', nom_compte: '', numero_compte: '', iban: '', swift: '', devise: 'MUR', compte_principal: false })
+      await load()
+    } catch (e: any) { setError(e?.message || 'Erreur') }
+  }
+
   const scrapeNow = async (compteId: string) => {
     setScrapingNow(compteId); setError(null); setSuccess(null)
     try {
@@ -124,15 +144,118 @@ export default function BankCredentialsPage() {
             Banques supportées : MCB, SBM, ABC, MauBank, MyT Money, AfrAsia, Bank One.
           </p>
         </div>
-        <PageHelp />
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setCreating(v => !v)} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Plus className="h-4 w-4 mr-1" /> Ajouter un compte bancaire
+          </Button>
+          <PageHelp />
+        </div>
       </div>
 
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" />{error}</div>}
       {success && <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 flex items-start gap-2"><CheckCircle2 className="h-4 w-4 mt-0.5" />{success}</div>}
 
-      {comptes.length === 0 ? (
+      {creating && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Nouveau compte bancaire</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-slate-600">Banque <span className="text-red-500">*</span></label>
+                <select
+                  value={newAccount.banque}
+                  onChange={e => setNewAccount(s => ({ ...s, banque: e.target.value }))}
+                  className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                >
+                  <option>MCB</option>
+                  <option>SBM</option>
+                  <option>ABC Banking</option>
+                  <option>MauBank</option>
+                  <option>MyT Money</option>
+                  <option>AfrAsia</option>
+                  <option>Bank One</option>
+                  <option>Standard Chartered</option>
+                  <option>HSBC</option>
+                  <option>Barclays</option>
+                  <option>Autre</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Nom du compte (libellé)</label>
+                <input
+                  type="text"
+                  value={newAccount.nom_compte}
+                  onChange={e => setNewAccount(s => ({ ...s, nom_compte: e.target.value }))}
+                  placeholder="ex: Compte courant principal"
+                  className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Numéro de compte</label>
+                <input
+                  type="text"
+                  value={newAccount.numero_compte}
+                  onChange={e => setNewAccount(s => ({ ...s, numero_compte: e.target.value }))}
+                  placeholder="ex: 000123456789"
+                  className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5 font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Devise</label>
+                <select
+                  value={newAccount.devise}
+                  onChange={e => setNewAccount(s => ({ ...s, devise: e.target.value }))}
+                  className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5"
+                >
+                  <option>MUR</option>
+                  <option>EUR</option>
+                  <option>USD</option>
+                  <option>GBP</option>
+                  <option>ZAR</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">IBAN</label>
+                <input
+                  type="text"
+                  value={newAccount.iban}
+                  onChange={e => setNewAccount(s => ({ ...s, iban: e.target.value }))}
+                  placeholder="MU17BOMM0101101030300200000MUR"
+                  className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5 font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">SWIFT / BIC</label>
+                <input
+                  type="text"
+                  value={newAccount.swift}
+                  onChange={e => setNewAccount(s => ({ ...s, swift: e.target.value }))}
+                  placeholder="MCBLMUMU"
+                  className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5 font-mono"
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={newAccount.compte_principal}
+                onChange={e => setNewAccount(s => ({ ...s, compte_principal: e.target.checked }))}
+              />
+              <span>Marquer comme compte principal</span>
+            </label>
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setCreating(false)} variant="outline">Annuler</Button>
+              <Button onClick={createAccount} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                <Save className="h-4 w-4 mr-1" /> Créer le compte
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {comptes.length === 0 && !creating ? (
         <Card><CardContent className="py-8 text-center text-slate-500">
-          Aucun compte bancaire configuré pour cette société. Crée-en d'abord dans Comptabilité → Comptes bancaires.
+          Aucun compte bancaire configuré pour cette société. Clique sur <b>Ajouter un compte bancaire</b> ci-dessus pour en créer un.
         </CardContent></Card>
       ) : comptes.map(cb => (
         <Card key={cb.id}>
