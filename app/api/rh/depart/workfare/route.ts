@@ -67,7 +67,15 @@ export async function GET(request: Request) {
     const supabase = getAdminClient()
     const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
     if (!emp) return NextResponse.json({ error: 'Employé introuvable' }, { status: 404 })
-    if (!emp.date_depart) return NextResponse.json({ error: 'Employé toujours en poste' }, { status: 400 })
+
+    // Override possible via query string (mode preview avant confirmation)
+    const dateDepartParam = searchParams.get('date_depart') || emp.date_depart
+    if (!dateDepartParam) return NextResponse.json({
+      error: 'Date de départ manquante — utilisez ?date_depart=YYYY-MM-DD pour un brouillon.',
+    }, { status: 400 })
+    const draft = !emp.date_depart
+    const empForPdf = { ...emp, date_depart: dateDepartParam }
+
     const { data: soc } = await supabase.from('societes').select('*').eq('id', emp.societe_id).single()
 
     const { data: lastBulletins } = await supabase.from('bulletins_paie')
@@ -79,6 +87,12 @@ export async function GET(request: Request) {
 
     const pdf = React.createElement(Document, {},
       React.createElement(Page, { size: 'A4', style: s.page },
+        draft ? React.createElement(Text, {
+          style: { position: 'absolute', top: 320, left: 80, width: 440,
+                   transform: 'rotate(-22deg)', fontSize: 92, color: 'rgba(212,175,55,0.16)',
+                   fontFamily: 'Helvetica-Bold', textAlign: 'center', letterSpacing: 6 },
+          fixed: true,
+        } as any, 'BROUILLON') : null,
         React.createElement(View, { style: s.header },
           React.createElement(Text, { style: s.company }, soc?.nom || ''),
           React.createElement(Text, { style: s.info }, `BRN: ${soc?.brn || '—'}${soc?.ern ? ` | ERN: ${soc.ern}` : ''}`),
@@ -96,10 +110,10 @@ export async function GET(request: Request) {
 
         React.createElement(View, { style: s.section },
           React.createElement(Text, { style: s.sectionTitle }, "Informations employé licencié"),
-          React.createElement(View, { style: s.row }, React.createElement(Text, { style: s.label }, 'Nom complet :'), React.createElement(Text, { style: s.value }, `${emp.prenom || ''} ${emp.nom || ''}`)),
+          React.createElement(View, { style: s.row }, React.createElement(Text, { style: s.label }, 'Nom complet :'), React.createElement(Text, { style: s.value }, `${empForPdf.prenom || ''} ${empForPdf.nom || ''}`)),
           React.createElement(View, { style: s.row }, React.createElement(Text, { style: s.label }, 'NIC :'), React.createElement(Text, { style: s.value }, emp.nic_number || emp.nic || '—')),
           React.createElement(View, { style: s.row }, React.createElement(Text, { style: s.label }, 'Poste :'), React.createElement(Text, { style: s.value }, emp.poste || '—')),
-          React.createElement(View, { style: s.row }, React.createElement(Text, { style: s.label }, 'Date de départ :'), React.createElement(Text, { style: s.value }, fmtDate(emp.date_depart))),
+          React.createElement(View, { style: s.row }, React.createElement(Text, { style: s.label }, 'Date de départ :'), React.createElement(Text, { style: s.value }, fmtDate(empForPdf.date_depart))),
           React.createElement(View, { style: s.row }, React.createElement(Text, { style: s.label }, 'Motif :'), React.createElement(Text, { style: s.value }, 'Licenciement pour raison économique')),
           React.createElement(View, { style: s.row }, React.createElement(Text, { style: s.label }, 'Salaire mensuel moyen (3 derniers mois) :'), React.createElement(Text, { style: s.value }, fmtMur(avgSalary))),
         ),
@@ -118,14 +132,14 @@ export async function GET(request: Request) {
           React.createElement(View, { style: s.sigBox },
             React.createElement(Text, { style: s.sigLabel }, "Signature employé"),
             React.createElement(View, { style: s.sigLine }),
-            React.createElement(Text, { style: s.sigName }, `${emp.prenom || ''} ${emp.nom || ''}`),
+            React.createElement(Text, { style: s.sigName }, `${empForPdf.prenom || ''} ${empForPdf.nom || ''}`),
           ),
         ),
         React.createElement(Text, { style: s.legal }, "Document généré par Lexora — WRA 2019 + Workfare Programme. À soumettre aux autorités compétentes."),
       )
     )
     const buffer = await renderToBuffer(pdf as any)
-    return new NextResponse(buffer, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="Declaration_Workfare_TUB_${emp.prenom}_${emp.nom}.pdf"` } })
+    return new NextResponse(buffer as any, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="Declaration_Workfare_TUB_${empForPdf.prenom}_${empForPdf.nom}.pdf"` } })
   } catch (e: unknown) {
     console.error('[depart/workfare]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })

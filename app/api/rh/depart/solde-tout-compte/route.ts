@@ -1,45 +1,223 @@
+/**
+ * Solde de tout compte — PDF officiel.
+ *
+ * Mode preview (POST avec breakdown UI complet) :
+ *   POST { employe_id, date_depart, type_depart, breakdown }
+ *   Génère le PDF EXACTEMENT comme affiché à l'écran (montants éditables
+ *   + lignes additionnelles incluses). Watermark BROUILLON si non
+ *   confirmé.
+ *
+ * Mode officiel (GET, après confirmation) :
+ *   GET ?employe_id=…
+ *   Reconstruit le PDF depuis le bulletin_paie sauvegardé.
+ */
+
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { userHasAccessToEmploye } from '@/lib/rh/access'
 import React from 'react'
-import { renderToBuffer, Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
+import { renderToBuffer, Document, Page, View, Text } from '@react-pdf/renderer'
+import {
+  sharedStyles as s,
+  TYPE_LABELS, fmtDate, fmtMur, ancienneteLabel,
+  PdfHeader, PdfFooter, PdfWatermark, SigBlock,
+} from '@/lib/rh/depart-pdf-shared'
 
 export const dynamic = 'force-dynamic'
 
 function getAdminClient() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
 }
 
-const MOIS_FR = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"]
-function fmtDate(d: string | null | undefined): string {
-  if (!d) return '—'
-  const dt = new Date(d + 'T00:00:00')
-  return `${dt.getDate()} ${MOIS_FR[dt.getMonth()]} ${dt.getFullYear()}`
-}
-function fmtMur(n: number): string {
-  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n).replace(/[\u00A0\u202F\u2009]/g, ' ') + ' MUR'
+interface SoldeLine { label: string; detail?: string; montant: number }
+
+function SoldePDF({ emp, soc, dateDepart, typeDepart, lines, total, raison, draft }: {
+  emp: any; soc: any; dateDepart: string; typeDepart: string
+  lines: SoldeLine[]; total: number; raison?: string; draft: boolean
+}) {
+  const typeLabel = TYPE_LABELS[typeDepart] || 'Cessation du contrat'
+  const fullName = `${emp.prenom || ''} ${emp.nom || ''}`.trim() || '________'
+  const anc = ancienneteLabel(emp.date_arrivee, dateDepart)
+  const docNumber = `STC-${(emp.code || emp.id || '').toString().slice(0, 8).toUpperCase()}-${(dateDepart || '').replace(/-/g, '')}`
+
+  return React.createElement(Document, {},
+    React.createElement(Page, { size: 'A4', style: s.page },
+      draft ? React.createElement(PdfWatermark as any, {}) : null,
+      React.createElement(PdfHeader as any, { soc, docKind: 'Solde de tout compte', docNumber }),
+
+      React.createElement(Text, { style: s.docTitle }, 'Solde de tout compte'),
+      React.createElement(Text, { style: s.subTitle }, "Workers' Rights Act 2019 — Indemnité de fin de contrat"),
+
+      // Bloc identité
+      React.createElement(View, { style: { backgroundColor: '#F8F9FC', padding: 12, marginBottom: 10, borderRadius: 2 } },
+        React.createElement(View, { style: s.infoGrid },
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Salarié(e)"),
+            React.createElement(Text, { style: s.infoValue }, fullName),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Code / NIC"),
+            React.createElement(Text, { style: s.infoValue }, `${emp.code || '—'} · ${emp.nic_number || emp.nic || '—'}`),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Fonction"),
+            React.createElement(Text, { style: s.infoValue }, emp.poste || '—'),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Salaire de base mensuel"),
+            React.createElement(Text, { style: s.infoValue }, fmtMur(Number(emp.salaire_base) || 0)),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Date d'entrée"),
+            React.createElement(Text, { style: s.infoValue }, fmtDate(emp.date_arrivee)),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Date de fin de contrat"),
+            React.createElement(Text, { style: s.infoValue }, fmtDate(dateDepart)),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Ancienneté"),
+            React.createElement(Text, { style: s.infoValue }, anc),
+          ),
+          React.createElement(View, { style: s.infoCell },
+            React.createElement(Text, { style: s.infoLabel }, "Motif de cessation"),
+            React.createElement(Text, { style: s.infoValue }, typeLabel),
+          ),
+        ),
+      ),
+
+      // Tableau breakdown
+      React.createElement(View, { style: s.section },
+        React.createElement(Text, { style: s.sectionTitle }, 'Détail du solde'),
+        React.createElement(View, { style: s.tableHead },
+          React.createElement(Text, { style: [s.tableHeadCell, { flex: 5 }] }, 'Élément'),
+          React.createElement(Text, { style: [s.tableHeadCell, { flex: 4 }] }, 'Détail / Référence'),
+          React.createElement(Text, { style: [s.tableHeadCell, { flex: 2, textAlign: 'right' }] }, 'Montant'),
+        ),
+        ...lines.map((l, i) => {
+          const rowStyle = i % 2 === 1 ? [s.tableRow, s.tableRowAlt] : [s.tableRow]
+          const amountStyle = l.montant < 0 ? [s.cellAmount, { color: '#B91C1C' }] : [s.cellAmount]
+          return React.createElement(View, { key: String(i), style: rowStyle },
+            React.createElement(Text, { style: s.cellLabel }, l.label),
+            React.createElement(Text, { style: s.cellDetail }, l.detail || ''),
+            React.createElement(Text, { style: amountStyle }, fmtMur(l.montant)),
+          )
+        }),
+        React.createElement(View, { style: s.totalRow },
+          React.createElement(Text, { style: s.totalLabel }, 'TOTAL NET DÛ'),
+          React.createElement(Text, { style: s.totalValue }, fmtMur(total)),
+        ),
+      ),
+
+      raison ? React.createElement(View, { style: { marginTop: 10 } },
+        React.createElement(Text, { style: { fontSize: 8, color: '#6B7280' } }, 'Motif détaillé :'),
+        React.createElement(Text, { style: { fontSize: 9 } }, raison),
+      ) : null,
+
+      // Mentions légales
+      React.createElement(View, { style: { marginTop: 12, padding: 8, borderWidth: 0.5, borderColor: '#D4AF37', borderRadius: 2 } },
+        React.createElement(Text, { style: { fontSize: 8, color: '#374151', lineHeight: 1.4 } },
+          "Conformément au Workers' Rights Act 2019 : (i) les congés annuels acquis non pris sont indemnisés à raison du salaire journalier moyen ; " +
+          "(ii) le 13ème mois (EOY Bonus) est proratisé selon les mois travaillés dans l'année ; " +
+          "(iii) le préavis est dû selon l'ancienneté (1 mois pour 3 mois–3 ans, 3 mois au-delà) — sauf pour licenciement pour faute (1 mois fixe). " +
+          "L'indemnité de licenciement WRA S.70 n'est versée qu'en cas de licenciement économique non fautif."
+        ),
+      ),
+
+      React.createElement(SigBlock as any, {
+        socName: soc?.nom || '',
+        empFullName: fullName,
+        dateLieu: `Reçu en règlement définitif et pour solde de tout compte, à ${soc?.ville || 'Port-Louis'}, le ${fmtDate(new Date().toISOString().slice(0, 10))}.`,
+      }),
+
+      React.createElement(PdfFooter as any, {
+        legal: `Solde de tout compte — WRA 2019. Ref ${docNumber}. À conserver 5 ans (WRA S.69).`
+      }),
+    )
+  )
 }
 
-const s = StyleSheet.create({
-  page: { padding: 50, fontFamily: 'Helvetica', fontSize: 10, color: '#1a1a1a', lineHeight: 1.5 },
-  header: { textAlign: 'center', marginBottom: 20 },
-  company: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: '#0B0F2E' },
-  info: { fontSize: 8, color: '#555', marginTop: 2 },
-  title: { fontSize: 16, fontFamily: 'Helvetica-Bold', textAlign: 'center', marginVertical: 20, textTransform: 'uppercase', color: '#0B0F2E', borderBottomWidth: 2, borderBottomColor: '#D4AF37', paddingBottom: 8 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', padding: '4 0', borderBottomWidth: 0.5, borderBottomColor: '#eee' },
-  label: { fontSize: 10, flex: 1 },
-  value: { fontSize: 10, textAlign: 'right', width: 120, fontFamily: 'Helvetica-Bold' },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', padding: '6 0', borderTopWidth: 2, borderTopColor: '#0B0F2E', marginTop: 8 },
-  totalLabel: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#0B0F2E', flex: 1 },
-  totalValue: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#0B0F2E', textAlign: 'right', width: 120 },
-  sigBlock: { marginTop: 40, flexDirection: 'row', justifyContent: 'space-between' },
-  sigBox: { width: '45%' },
-  sigLabel: { fontSize: 8, color: '#555', marginBottom: 3 },
-  sigLine: { borderBottomWidth: 1, borderBottomColor: '#333', marginTop: 40, marginBottom: 4 },
-  sigName: { fontSize: 9, fontFamily: 'Helvetica-Bold' },
-  legal: { fontSize: 7, color: '#888', textAlign: 'center', marginTop: 30, borderTopWidth: 1, borderTopColor: '#ddd', paddingTop: 8 },
-})
+async function loadEmpAndSoc(employe_id: string) {
+  const supabase = getAdminClient()
+  const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
+  if (!emp) return { error: 'Employé introuvable', status: 404 }
+  const { data: soc } = await supabase.from('societes').select('*').eq('id', emp.societe_id).single()
+  return { emp, soc }
+}
+
+// Construit la liste de lignes à partir d'un breakdown UI (mode preview)
+function linesFromBreakdown(b: any): { lines: SoldeLine[]; total: number } {
+  const lines: SoldeLine[] = []
+  const add = (label: string, detail: string, montant: number) => {
+    if (montant !== 0) lines.push({ label, detail, montant })
+  }
+  if (b?.salaire_prorata) add(
+    'Salaire prorata du dernier mois',
+    `${b.salaire_prorata.jours_travailles || 0} / ${b.salaire_prorata.jours_mois || 0} jours travaillés`,
+    Number(b.salaire_prorata.montant) || 0,
+  )
+  if (b?.allocations_prorata?.montant) add(
+    'Indemnités proratisées',
+    `Transport ${fmtMur(b.allocations_prorata.transport || 0)} · Essence ${fmtMur(b.allocations_prorata.petrol || 0)}`,
+    Number(b.allocations_prorata.montant) || 0,
+  )
+  if (b?.conges_al) add(
+    'Congés annuels (AL) non pris',
+    `${b.conges_al.restant} j × ${fmtMur(b.conges_al.taux_journalier || 0)} (acquis ${b.conges_al.droit_prorata} — pris ${b.conges_al.pris})`,
+    Number(b.conges_al.montant) || 0,
+  )
+  if (b?.treizieme_mois) add(
+    '13ème mois proratisé (EOY Bonus)',
+    `${b.treizieme_mois.mois_travailles} mois travaillés / 12`,
+    Number(b.treizieme_mois.montant) || 0,
+  )
+  if (b?.preavis?.applicable) add(
+    'Indemnité de préavis',
+    `${b.preavis.duree_mois} mois — ${b.preavis.description || ''}`,
+    Number(b.preavis.montant) || 0,
+  )
+  if (b?.indemnite_licenciement?.applicable) add(
+    'Indemnité de licenciement (WRA S.70)',
+    `${b.indemnite_licenciement.formule} — ${b.indemnite_licenciement.annees_service} an(s)`,
+    Number(b.indemnite_licenciement.montant) || 0,
+  )
+  const extras: Array<{ libelle: string; montant: number; note?: string }> = Array.isArray(b?.lignes_extra) ? b.lignes_extra : []
+  for (const ex of extras) {
+    add(ex.libelle, ex.note || 'Ajustement manuel', Number(ex.montant) || 0)
+  }
+  const total = Number(b?.total) || lines.reduce((s, l) => s + l.montant, 0)
+  return { lines, total }
+}
+
+// Construit la liste depuis le bulletin sauvegardé (mode officiel)
+async function linesFromBulletin(supabase: any, employe_id: string): Promise<{ lines: SoldeLine[]; total: number; raison?: string }> {
+  const { data: bul } = await supabase.from('bulletins_paie')
+    .select('salaire_base, transport_allowance, special_allowance_1, special_allowance_2, departure_notice, special_allowance_3, salaire_net, notes')
+    .eq('employe_id', employe_id)
+    .order('periode', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!bul) return { lines: [], total: 0 }
+
+  const lines: SoldeLine[] = []
+  const add = (label: string, detail: string, montant: number) => {
+    if (montant !== 0) lines.push({ label, detail, montant })
+  }
+  add('Salaire prorata du dernier mois', '', Number(bul.salaire_base) || 0)
+  add('Indemnités proratisées', 'Transport / essence', Number(bul.transport_allowance) || 0)
+  add('Congés AL non pris', '', Number(bul.special_allowance_1) || 0)
+  add('13ème mois proratisé + ajustements', '', Number(bul.special_allowance_2) || 0)
+  add('Indemnité de préavis', '', Number(bul.departure_notice) || 0)
+  add('Indemnité de licenciement (WRA S.70)', '', Number(bul.special_allowance_3) || 0)
+  const total = Number(bul.salaire_net) || lines.reduce((s, l) => s + l.montant, 0)
+  return { lines, total, raison: bul.notes || undefined }
+}
 
 export async function GET(request: Request) {
   try {
@@ -50,84 +228,68 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const employe_id = searchParams.get('employe_id')
     if (!employe_id) return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
+    if (!(await userHasAccessToEmploye(user.id, employe_id))) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
-    const hasAccess = await userHasAccessToEmploye(user.id, employe_id)
-    if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+    const r = await loadEmpAndSoc(employe_id)
+    if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status })
+    const { emp, soc } = r
 
-    const supabase = getAdminClient()
-    const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
-    if (!emp) return NextResponse.json({ error: 'Employé introuvable' }, { status: 404 })
-    if (!emp.date_depart) return NextResponse.json({ error: 'Employé toujours en poste' }, { status: 400 })
-    const { data: soc } = await supabase.from('societes').select('*').eq('id', emp.societe_id).single()
+    const dateDepart = searchParams.get('date_depart') || emp.date_depart
+    const typeDepart = searchParams.get('type_depart') || emp.date_depart_type || emp.type_depart || ''
+    if (!dateDepart) return NextResponse.json({ error: 'Date de départ manquante — utilisez POST avec un breakdown.' }, { status: 400 })
 
-    const salaireBase = Number(emp.salaire_base) || 0
-    const dailySalary = salaireBase / 26
+    const admin = getAdminClient()
+    const { lines, total, raison } = await linesFromBulletin(admin, employe_id)
+    const draft = !emp.date_depart
 
-    const lines: { label: string; montant: number }[] = []
-
-    const lastBulletin = await supabase.from('bulletins_paie')
-      .select('salaire_net, eoy_bonus, departure_notice, special_allowance_3')
-      .eq('employe_id', employe_id).order('periode', { ascending: false }).limit(1).maybeSingle()
-    const bul = lastBulletin.data
-
-    if (bul?.salaire_net) lines.push({ label: 'Salaire dernier mois (net)', montant: Number(bul.salaire_net) || 0 })
-
-    const currentYear = new Date(emp.date_depart).getFullYear()
-    const { data: alTaken } = await supabase.from('demandes_conges').select('nb_jours')
-      .eq('employe_id', employe_id).eq('type_conge', 'AL').eq('statut', 'approuve')
-      .gte('date_debut', `${currentYear}-01-01`).lte('date_debut', `${currentYear}-12-31`)
-    const alUsed = (alTaken || []).reduce((s: number, c: any) => s + (Number(c.nb_jours) || 0), 0)
-    const alRemaining = Math.max(0, 20 - alUsed)
-    const alPayout = Math.round(alRemaining * dailySalary)
-    if (alPayout > 0) lines.push({ label: `Congés AL non pris (${alRemaining}j × ${Math.round(dailySalary)} MUR)`, montant: alPayout })
-
-    if (bul?.eoy_bonus && Number(bul.eoy_bonus) > 0) lines.push({ label: '13ème mois proratisé', montant: Number(bul.eoy_bonus) })
-    if (bul?.departure_notice && Number(bul.departure_notice) > 0) lines.push({ label: 'Indemnité de préavis', montant: Number(bul.departure_notice) })
-    if (bul?.special_allowance_3 && Number(bul.special_allowance_3) > 0) lines.push({ label: 'Indemnité de licenciement', montant: Number(bul.special_allowance_3) })
-
-    const total = lines.reduce((s, l) => s + l.montant, 0)
-
-    const pdf = React.createElement(Document, {},
-      React.createElement(Page, { size: 'A4', style: s.page },
-        React.createElement(View, { style: s.header },
-          React.createElement(Text, { style: s.company }, soc?.nom || ''),
-          React.createElement(Text, { style: s.info }, `BRN: ${soc?.brn || '—'}${soc?.ern ? ` | ERN: ${soc.ern}` : ''}`),
-        ),
-        React.createElement(Text, { style: s.title }, 'SOLDE DE TOUT COMPTE'),
-        React.createElement(Text, { style: { marginBottom: 15, fontSize: 10 } },
-          `Employé(e) : ${emp.prenom || ''} ${emp.nom || ''}\nPoste : ${emp.poste || '—'}\nDate de départ : ${fmtDate(emp.date_depart)}`
-        ),
-        ...lines.map((l, i) =>
-          React.createElement(View, { style: s.row, key: String(i) },
-            React.createElement(Text, { style: s.label }, l.label),
-            React.createElement(Text, { style: s.value }, fmtMur(l.montant)),
-          )
-        ),
-        React.createElement(View, { style: s.totalRow },
-          React.createElement(Text, { style: s.totalLabel }, 'TOTAL NET DÛ'),
-          React.createElement(Text, { style: s.totalValue }, fmtMur(total)),
-        ),
-        React.createElement(View, { style: s.sigBlock },
-          React.createElement(View, { style: s.sigBox },
-            React.createElement(Text, { style: s.sigLabel }, "L'employeur (lu et approuvé)"),
-            React.createElement(View, { style: s.sigLine }),
-            React.createElement(Text, { style: s.sigName }, soc?.nom || ''),
-          ),
-          React.createElement(View, { style: s.sigBox },
-            React.createElement(Text, { style: s.sigLabel }, "L'employé(e) (pour solde de tout compte)"),
-            React.createElement(View, { style: s.sigLine }),
-            React.createElement(Text, { style: s.sigName }, `${emp.prenom || ''} ${emp.nom || ''}`),
-          ),
-        ),
-        React.createElement(Text, { style: s.legal },
-          `Fait à Port Louis, le ${fmtDate(new Date().toISOString().slice(0, 10))}. Ce document atteste du règlement intégral des sommes dues au titre du contrat de travail. Généré par Lexora.`
-        ),
-      )
+    const buffer = await renderToBuffer(
+      React.createElement(SoldePDF, { emp, soc, dateDepart, typeDepart, lines, total, raison, draft }) as any
     )
-    const buffer = await renderToBuffer(pdf as any)
-    return new NextResponse(buffer, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="Solde_Tout_Compte_${emp.prenom}_${emp.nom}.pdf"` } })
+    return new NextResponse(buffer as any, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="Solde_Tout_Compte_${emp.prenom}_${emp.nom}.pdf"`,
+      },
+    })
   } catch (e: unknown) {
-    console.error('[depart/solde-tout-compte]', e)
+    console.error('[depart/solde] GET', e)
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    const body = await request.json().catch(() => ({}))
+    const { employe_id, date_depart, type_depart, breakdown, raison_depart } = body
+    if (!employe_id || !date_depart) return NextResponse.json({ error: 'employe_id + date_depart requis' }, { status: 400 })
+    if (!(await userHasAccessToEmploye(user.id, employe_id))) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+
+    const r = await loadEmpAndSoc(employe_id)
+    if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status })
+    const { emp, soc } = r
+
+    const { lines, total } = breakdown ? linesFromBreakdown(breakdown) : { lines: [], total: 0 }
+    const draft = !emp.date_depart
+
+    const buffer = await renderToBuffer(
+      React.createElement(SoldePDF, {
+        emp, soc,
+        dateDepart: date_depart, typeDepart: type_depart || '',
+        lines, total, raison: raison_depart, draft,
+      }) as any
+    )
+    return new NextResponse(buffer as any, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="Solde_Tout_Compte_${emp.prenom}_${emp.nom}.pdf"`,
+      },
+    })
+  } catch (e: unknown) {
+    console.error('[depart/solde] POST', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
