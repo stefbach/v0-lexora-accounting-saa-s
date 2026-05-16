@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { getAccessibleSocieteIds } from '@/lib/supabase/assert-societe-access'
 
 /**
  * GET /api/telegram/internal/me?chat_id=<n>
@@ -30,15 +31,19 @@ export async function GET(req: NextRequest) {
       if (emp) employeName = `${emp.prenom} ${emp.nom}`.trim()
     }
 
-    // Liste des sociétés accessibles à l'utilisateur (user_societes)
-    const { data: links } = await admin
-      .from('user_societes')
-      .select('societe_id, societes(id, nom, brn)')
-      .eq('user_id', ctx.user_id)
-    const societes_accessibles = (links || [])
-      .map((l: any) => l.societes)
-      .filter(Boolean)
-      .map((s: any) => ({ id: s.id, nom: s.nom, brn: s.brn, active: s.id === ctx.societe_id }))
+    // Liste des sociétés accessibles via TOUTES les voies (multi-voies multi-tenant)
+    const accessIds = await getAccessibleSocieteIds(admin, ctx.user_id)
+    let societes_accessibles: Array<{ id: string; nom: string; brn: string | null; active: boolean }> = []
+    if (accessIds.length > 0) {
+      const { data: socs } = await admin
+        .from('societes')
+        .select('id, nom, brn')
+        .in('id', accessIds)
+        .order('nom', { ascending: true })
+      societes_accessibles = (socs || []).map((s: any) => ({
+        id: s.id, nom: s.nom, brn: s.brn, active: s.id === ctx.societe_id,
+      }))
+    }
 
     // Capabilities par rôle
     const caps = computeCapabilities(ctx.role)
