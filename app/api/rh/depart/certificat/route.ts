@@ -98,8 +98,8 @@ function CertificatPDF({ emp, soc, dateDepart, typeDepart, draft }: {
       ),
 
       React.createElement(Text, { style: s.paragraph },
-        `Pendant la durée de son emploi, ${fullName} a exercé ses fonctions avec sérieux et professionnalisme. ` +
-        `Ce certificat est délivré à l'intéressé(e) pour servir et valoir ce que de droit, conformément à l'article 22(3) du Workers' Rights Act 2019.`
+        `Le présent certificat est délivré à l'intéressé(e) pour servir et valoir ce que de droit, ` +
+        `conformément à l'article 22(3) du Workers' Rights Act 2019 (Mauritius).`
       ),
 
       React.createElement(SigBlock as any, {

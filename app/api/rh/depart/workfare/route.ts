@@ -135,7 +135,7 @@ export async function GET(request: Request) {
             React.createElement(Text, { style: s.sigName }, `${empForPdf.prenom || ''} ${empForPdf.nom || ''}`),
           ),
         ),
-        React.createElement(Text, { style: s.legal }, "Document généré par Lexora — WRA 2019 + Workfare Programme. À soumettre aux autorités compétentes."),
+        React.createElement(Text, { style: s.legal }, "Workers' Rights Act 2019 + Workfare Programme. À soumettre aux autorités compétentes."),
       )
     )
     const buffer = await renderToBuffer(pdf as any)
