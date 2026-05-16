@@ -9,6 +9,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * - id user Lexora, role, société active (nom)
  * - employé lié (si applicable) + nb subordonnés (manager)
  * - capabilities Telegram autorisées par son rôle
+ * - LISTE des sociétés accessibles (pour permettre switch via tool)
  */
 export async function GET(req: NextRequest) {
   return withTelegramAuth(req, 'me.get', async (ctx) => {
@@ -29,6 +30,16 @@ export async function GET(req: NextRequest) {
       if (emp) employeName = `${emp.prenom} ${emp.nom}`.trim()
     }
 
+    // Liste des sociétés accessibles à l'utilisateur (user_societes)
+    const { data: links } = await admin
+      .from('user_societes')
+      .select('societe_id, societes(id, nom, brn)')
+      .eq('user_id', ctx.user_id)
+    const societes_accessibles = (links || [])
+      .map((l: any) => l.societes)
+      .filter(Boolean)
+      .map((s: any) => ({ id: s.id, nom: s.nom, brn: s.brn, active: s.id === ctx.societe_id }))
+
     // Capabilities par rôle
     const caps = computeCapabilities(ctx.role)
 
@@ -37,6 +48,8 @@ export async function GET(req: NextRequest) {
         chat_id: ctx.chat_id,
         user_id: ctx.user_id,
         societe: { id: ctx.societe_id, nom: soc?.nom, brn: soc?.brn },
+        societes_accessibles,
+        societes_count: societes_accessibles.length,
         role: ctx.role,
         language: ctx.language_code,
         firstname: ctx.telegram_firstname,
