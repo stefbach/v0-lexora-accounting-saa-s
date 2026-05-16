@@ -15,7 +15,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react"
 import Link from "next/link"
-import { Loader2, FileText, CheckCircle2, AlertCircle, Send, X, Eye, Settings, Repeat } from "lucide-react"
+import { Loader2, FileText, CheckCircle2, AlertCircle, Send, X, Eye, Settings, Repeat, Plus } from "lucide-react"
 
 type Status = 'brouillon' | 'emise' | 'partiellement_payee' | 'payee' | 'en_retard' | 'annulee'
 
@@ -71,6 +71,12 @@ export default function LexoraBillingPage() {
   const [payOpen, setPayOpen] = useState<Invoice | null>(null)
   const [payRef, setPayRef] = useState('')
   const [paySaving, setPaySaving] = useState(false)
+
+  const [emitOpen, setEmitOpen] = useState(false)
+  const [emitSocietes, setEmitSocietes] = useState<Array<{ id: string; nom: string; brn: string | null }>>([])
+  const [emitPlans, setEmitPlans] = useState<Array<{ id: string; nom: string; code: string; prix_mensuel_mur: number; prix_annuel_mur: number | null; type_cible: string }>>([])
+  const [emitForm, setEmitForm] = useState({ societe_id: '', plan_id: '', periodicite: 'mensuelle', tarif_ht_mur: '', designation: '', invoice_date: '' })
+  const [emitSaving, setEmitSaving] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -134,6 +140,49 @@ export default function LexoraBillingPage() {
     }
   }
 
+  const openEmit = async () => {
+    setEmitOpen(true); setEmitSaving(false)
+    setEmitForm({ societe_id: '', plan_id: '', periodicite: 'mensuelle', tarif_ht_mur: '', designation: '', invoice_date: new Date().toISOString().slice(0, 10) })
+    try {
+      const [socRes, planRes] = await Promise.all([
+        fetch('/api/admin/societes', { cache: 'no-store' }),
+        fetch('/api/admin/plans', { cache: 'no-store' }),
+      ])
+      const socJ = await socRes.json(); const planJ = await planRes.json()
+      setEmitSocietes((socJ.societes || socJ.data || []).map((s: any) => ({ id: s.id, nom: s.nom, brn: s.brn })).sort((a: any, b: any) => a.nom.localeCompare(b.nom)))
+      setEmitPlans((planJ.plans || []).filter((p: any) => p.actif))
+    } catch {
+      setEmitSocietes([]); setEmitPlans([])
+    }
+  }
+
+  const submitEmit = async () => {
+    if (!emitForm.societe_id) { setMessage({ type: 'error', text: 'Sélectionne une société.' }); return }
+    if (!emitForm.plan_id && !emitForm.tarif_ht_mur) { setMessage({ type: 'error', text: 'Choisis un plan ou saisis un tarif HT.' }); return }
+    setEmitSaving(true)
+    try {
+      const res = await fetch('/api/admin/lexora-billing/emit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          societe_id: emitForm.societe_id,
+          plan_id: emitForm.plan_id || undefined,
+          periodicite: emitForm.periodicite,
+          tarif_ht_mur: emitForm.tarif_ht_mur ? Number(emitForm.tarif_ht_mur) : undefined,
+          designation: emitForm.designation || undefined,
+          invoice_date: emitForm.invoice_date || undefined,
+        }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Erreur')
+      setMessage({ type: 'success', text: j.reused ? 'Facture déjà existante — réutilisée.' : `Facture ${j.invoice?.invoice_number} créée.` })
+      setEmitOpen(false); fetchData()
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.message || 'Erreur' })
+    } finally {
+      setEmitSaving(false)
+    }
+  }
+
   const cancel = async (inv: Invoice) => {
     if (!confirm(`Annuler la facture ${inv.invoice_number} ?`)) return
     const res = await fetch(`/api/admin/lexora-billing/${inv.id}`, {
@@ -152,6 +201,10 @@ export default function LexoraBillingPage() {
           <p className="text-sm text-gray-500 mt-1">Factures émises par Digital Data Solutions Ltd aux clients SaaS.</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={openEmit}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm" style={{ backgroundColor: '#D4AF37', color: '#0B0F2E' }}>
+            <Plus className="h-4 w-4" /> Émettre une facture
+          </button>
           <Link href="/admin/lexora-billing/rapprochement"
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm">
             <Repeat className="h-4 w-4" /> Rapprochement
@@ -315,6 +368,66 @@ export default function LexoraBillingPage() {
             <button onClick={triggerDunning} disabled={dunningSending || dunningChannels.length === 0}
                     className="px-3 py-2 rounded-lg text-sm text-white" style={{ backgroundColor: '#D4AF37', color: '#0B0F2E' }}>
               {dunningSending ? <Loader2 className="h-4 w-4 animate-spin inline" /> : 'Envoyer'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Emit-invoice dialog */}
+      {emitOpen && (
+        <Modal onClose={() => setEmitOpen(false)} title="Émettre une facture">
+          <div className="space-y-3">
+            <label className="block">
+              <span className="block text-xs font-medium text-gray-600 mb-1">Société cliente *</span>
+              <select value={emitForm.societe_id} onChange={e => setEmitForm({ ...emitForm, societe_id: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg text-sm">
+                <option value="">— Choisir —</option>
+                {emitSocietes.map(s => <option key={s.id} value={s.id}>{s.nom}{s.brn ? ` (${s.brn})` : ''}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-xs font-medium text-gray-600 mb-1">Plan tarifaire</span>
+              <select value={emitForm.plan_id} onChange={e => {
+                const p = emitPlans.find(x => x.id === e.target.value)
+                const period = emitForm.periodicite as 'mensuelle' | 'annuelle'
+                const price = p ? (period === 'annuelle' ? (p.prix_annuel_mur || 0) : p.prix_mensuel_mur) : 0
+                setEmitForm({ ...emitForm, plan_id: e.target.value, tarif_ht_mur: price ? String(price) : emitForm.tarif_ht_mur })
+              }} className="w-full px-3 py-2 border rounded-lg text-sm">
+                <option value="">— Aucun (tarif libre) —</option>
+                {emitPlans.map(p => <option key={p.id} value={p.id}>{p.nom} — {p.prix_mensuel_mur.toLocaleString('fr-FR')} MUR/mois</option>)}
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="block text-xs font-medium text-gray-600 mb-1">Périodicité</span>
+                <select value={emitForm.periodicite} onChange={e => setEmitForm({ ...emitForm, periodicite: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg text-sm">
+                  <option value="mensuelle">Mensuelle</option>
+                  <option value="annuelle">Annuelle</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="block text-xs font-medium text-gray-600 mb-1">Tarif HT (MUR)</span>
+                <input type="number" value={emitForm.tarif_ht_mur} onChange={e => setEmitForm({ ...emitForm, tarif_ht_mur: e.target.value })}
+                       className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="0" />
+              </label>
+            </div>
+            <label className="block">
+              <span className="block text-xs font-medium text-gray-600 mb-1">Désignation (override optionnel)</span>
+              <input type="text" value={emitForm.designation} onChange={e => setEmitForm({ ...emitForm, designation: e.target.value })}
+                     className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Abonnement Lexora — Plan X (mensuelle)" />
+            </label>
+            <label className="block">
+              <span className="block text-xs font-medium text-gray-600 mb-1">Date facture</span>
+              <input type="date" value={emitForm.invoice_date} onChange={e => setEmitForm({ ...emitForm, invoice_date: e.target.value })}
+                     className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </label>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <button onClick={() => setEmitOpen(false)} className="px-3 py-2 rounded-lg border text-sm">Annuler</button>
+            <button onClick={submitEmit} disabled={emitSaving}
+                    className="px-3 py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: '#D4AF37', color: '#0B0F2E' }}>
+              {emitSaving ? <Loader2 className="h-4 w-4 animate-spin inline" /> : 'Émettre'}
             </button>
           </div>
         </Modal>
