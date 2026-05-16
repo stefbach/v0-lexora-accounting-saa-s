@@ -117,16 +117,38 @@ export async function GET(request: Request) {
       const accessibleIds = await getUserSocieteIds(user.id)
       if (accessibleIds.length === 0) return NextResponse.json({ departs: [] })
 
-      const { data: departs } = await supabase
+      // Sélection défensive : si les colonnes email / email_personnel ne
+      // sont pas présentes sur certains environnements (migrations non
+      // appliquées), on retombe sur la sélection minimale plutôt que
+      // d'échouer et de masquer toute la liste.
+      const baseCols = 'id, nom, prenom, poste, date_arrivee, date_depart, date_depart_type, raison_depart, salaire_base, societe_id'
+      const extCols  = `${baseCols}, email, email_personnel`
+
+      let { data: departs, error } = await supabase
         .from('employes')
-        .select('id, nom, prenom, poste, date_arrivee, date_depart, date_depart_type, raison_depart, salaire_base, societe_id, email, email_personnel')
+        .select(extCols)
         .in('societe_id', accessibleIds)
         .not('date_depart', 'is', null)
         .order('date_depart', { ascending: false })
-        .limit(20)
+        .limit(20) as { data: any[] | null; error: any }
+
+      if (error) {
+        // Fallback : colonnes optionnelles manquantes → on récupère la base
+        const fb = await supabase
+          .from('employes')
+          .select(baseCols)
+          .in('societe_id', accessibleIds)
+          .not('date_depart', 'is', null)
+          .order('date_depart', { ascending: false })
+          .limit(20)
+        if (fb.error) {
+          return NextResponse.json({ error: fb.error.message }, { status: 500 })
+        }
+        departs = fb.data as any[]
+      }
 
       // Map date_depart_type → type_depart for frontend consistency
-      const mapped = (departs || []).map(d => ({
+      const mapped = (departs || []).map((d: any) => ({
         ...d,
         type_depart: d.date_depart_type,
       }))
