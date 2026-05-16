@@ -239,7 +239,24 @@ export async function GET(request: Request) {
     if (!dateDepart) return NextResponse.json({ error: 'Date de départ manquante — utilisez POST avec un breakdown.' }, { status: 400 })
 
     const admin = getAdminClient()
-    const { lines, total, raison } = await linesFromBulletin(admin, employe_id)
+
+    // 1) Source de vérité prioritaire : breakdown JSONB enregistré sur la
+    //    fiche employé au moment de la confirmation (préserve les libellés
+    //    des lignes_extra et tous les sous-détails de calcul).
+    // 2) Fallback : on reconstruit depuis bulletins_paie (agrégat) si le
+    //    breakdown n'a pas été persisté (départs antérieurs à la migration 281).
+    let lines: SoldeLine[] = []
+    let total = 0
+    let raison: string | undefined
+    if (emp.breakdown_depart && typeof emp.breakdown_depart === 'object') {
+      const r2 = linesFromBreakdown(emp.breakdown_depart)
+      lines = r2.lines; total = r2.total
+      raison = emp.raison_depart || undefined
+    } else {
+      const fb = await linesFromBulletin(admin, employe_id)
+      lines = fb.lines; total = fb.total; raison = fb.raison
+    }
+
     const draft = !emp.date_depart
 
     const buffer = await renderToBuffer(
