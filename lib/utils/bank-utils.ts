@@ -18,9 +18,20 @@ export const BANK_NAMES_BLACKLIST = [
   'vercel', 'anthropic', 'openai',
 ]
 
-export function isBankName(name: string): boolean {
-  if (!name) return false
-  const lower = name.toLowerCase().trim()
+/** Coerce n'importe quelle valeur en string non-vide (objet → "", number → str). */
+function toStr(v: any): string {
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'string') return v
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+  if (typeof v === 'object') {
+    // Claude renvoie parfois { nom, brn } pour destinataire/emetteur — on prend nom
+    return String(v.nom || v.name || v.raison_sociale || v.libelle || '')
+  }
+  return ''
+}
+
+export function isBankName(name: any): boolean {
+  const lower = toStr(name).toLowerCase().trim()
   if (!lower || lower.length < 2) return false
   return BANK_NAMES_BLACKLIST.some(b => lower.includes(b))
 }
@@ -54,13 +65,13 @@ export function validateAndCleanExtraction(
   }
 
   // Get candidate société name
-  const candidate = (
+  const candidate = toStr(
     extraction.nom_societe ||
     extraction.titulaire ||
     extraction.societe ||
     extraction.destinataire ||
     extraction.employeur ||
-    ''
+    '',
   ).toLowerCase().trim()
 
   if (!candidate) {

@@ -16,6 +16,7 @@
  *    (cf. /api/documents/[id]/reanalyze pour le déclenchement manuel)
  */
 import { getAdminClient } from '@/lib/supabase/admin'
+import { after } from 'next/server'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || ''
 const MAX_SIZE_BYTES = 20 * 1024 * 1024
@@ -154,29 +155,33 @@ export async function ingestTelegramDocument(args: {
     status: 'success',
   })
 
-  // 7. Déclenche le pipeline OCR canonique (/api/documents/process) — best effort.
-  //    Le bot Telegram s'aligne sur le même chemin que l'upload web : OCR Anthropic
-  //    Haiku 4.5, routing + extraction + auto-création écritures comptables.
-  //    Si l'appel rate, le document reste en statut='en_attente' (l'utilisateur
-  //    pourra relancer depuis /client/documents → Reanalyser).
+  // 7. Déclenche le pipeline OCR canonique (/api/documents/process) APRÈS la
+  //    réponse au webhook Telegram, via Next.js `after()`. Sans ce wrapper,
+  //    Vercel serverless tue la function dès le return → la promise fetch
+  //    est annulée et l'OCR ne tourne jamais ("tourne dans le vide").
+  //    `after()` garantit que la tâche continue après la réponse HTTP.
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.LEXORA_BASE_URL || ''
   const internalToken = process.env.INTERNAL_API_TOKEN || ''
-  let ocrResult: any = null
   if (baseUrl && internalToken) {
-    try {
-      const procRes = await fetch(`${baseUrl}/api/documents/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Internal-Token': internalToken },
-        body: JSON.stringify({
-          document_id: doc.id,
-          storage_path: storagePath,
-          nom_fichier: inferredName,
-        }),
-      })
-      ocrResult = await procRes.json().catch(() => null)
-    } catch {
-      // best-effort : on garde le doc en 'en_attente'
-    }
+    after(async () => {
+      try {
+        const res = await fetch(`${baseUrl}/api/documents/process`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Internal-Token': internalToken },
+          body: JSON.stringify({
+            document_id: doc.id,
+            storage_path: storagePath,
+            nom_fichier: inferredName,
+          }),
+        })
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '')
+          console.error('[document-ingest] /api/documents/process failed:', res.status, errText.slice(0, 500))
+        }
+      } catch (e: any) {
+        console.error('[document-ingest] /api/documents/process exception:', e?.message || String(e))
+      }
+    })
   }
 
   return {
@@ -185,6 +190,5 @@ export async function ingestTelegramDocument(args: {
     nom_fichier: inferredName,
     type_fichier: typeFichier,
     taille: fileSize,
-    ocr: ocrResult,
   }
 }
