@@ -22,10 +22,16 @@ export async function POST(req: NextRequest) {
   return withTelegramAuth(req, 'calendar.create_event', async (ctx, body) => {
     // Lit summary/start_iso/end_iso depuis body OU query string (n8n
     // placeholderDefinitions injecte les valeurs en URL params).
+    // Quand passé en query string, le '+' du timezone ISO (+04:00) est
+    // décodé en espace par URLSearchParams. On le rétablit.
+    const fixIsoSpace = (s: string): string => {
+      // Cas attendu : "2026-05-19T13:00:00 04:00" → "2026-05-19T13:00:00+04:00"
+      return s.replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?) (\d{2}:\d{2})$/, '$1+$2')
+    }
     const qp = req.nextUrl.searchParams
     const summary = String(body?.summary || qp.get('summary') || '').trim().slice(0, 200)
-    const start_iso = String(body?.start_iso || qp.get('start_iso') || '').trim()
-    const end_iso = String(body?.end_iso || qp.get('end_iso') || '').trim()
+    const start_iso = fixIsoSpace(String(body?.start_iso || qp.get('start_iso') || '').trim())
+    const end_iso = fixIsoSpace(String(body?.end_iso || qp.get('end_iso') || '').trim())
 
     // Champs manquants → status:'error' (sinon le LLM croit que c'est créé et
     // hallucine "RDV créé" auprès de l'utilisateur). error_msg = instruction
