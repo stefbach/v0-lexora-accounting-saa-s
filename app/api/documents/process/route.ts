@@ -150,6 +150,12 @@ RÈGLE DE CLASSIFICATION FACTURE :
 - type_document="facture_fournisseur" SI le destinataire/acheteur est "${myCompany || 'la société active'}" (= MA société reçoit la facture, c'est un ACHAT).
 - Si MA société ne figure ni comme émetteur ni comme destinataire identifiable → préfère facture_fournisseur par défaut (cas le plus courant : facture entrante).
 
+RÈGLE TVA / TAUX :
+- Si la facture mentionne explicitement un montant de TVA → renseigne montant_tva et taux_tva (15% standard à Maurice, parfois 0% sur certaines exemptions).
+- Si la facture est HORS TAXE / EXPORT / EXEMPTÉE / inter-UE / "TVA non applicable" / "VAT 0%" → montant_tva=0 ET taux_tva=0 ET montant_ht = montant_ttc (pas d'inflation artificielle).
+- Si tu vois "montant net" ou "subtotal" sans TVA explicite, et que le total final = ce montant → c'est HORS TAXE : taux_tva=0.
+- NE METS JAMAIS taux_tva=15 par défaut si la facture ne mentionne pas de TVA.
+
 Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
 {
   "routing": {
@@ -164,6 +170,7 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
     "date_echeance": "",
     "numero_reference": "",
     "devise": "",
+    "taux_tva": 0,
     "montant_ht": 0,
     "montant_tva": 0,
     "montant_ttc": 0,
@@ -303,7 +310,14 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
             const tva = Number(extraction.montant_tva) || 0
             const ttc = Number(extraction.montant_ttc) || (ht + tva) || 0
             const devise = normalizeDevise(extraction.devise)
-            const taux = ht > 0 && tva > 0 ? Number(((tva / ht) * 100).toFixed(2)) : 15
+            // taux_tva : priorité au champ explicite renvoyé par Claude.
+            // Sinon, calcul depuis HT/TVA si TVA > 0. Sinon 0 (hors taxe).
+            // NE PAS mettre 15 par défaut → le dashboard inférerait HT = TTC/1.15
+            // et sous-estimerait le CA.
+            const explicitTaux = extraction.taux_tva !== undefined ? Number(extraction.taux_tva) : null
+            const taux = explicitTaux !== null && !isNaN(explicitTaux)
+              ? explicitTaux
+              : (ht > 0 && tva > 0 ? Number(((tva / ht) * 100).toFixed(2)) : 0)
             // Conversion en MUR pour alimenter le CA dashboard (qui somme montant_mur)
             let tauxChange = 1
             let montantMur = ttc
