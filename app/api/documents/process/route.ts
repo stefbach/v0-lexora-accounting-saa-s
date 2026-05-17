@@ -204,7 +204,13 @@ export async function POST(request: NextRequest) {
 
         const chosen = best || { name: wb.SheetNames[0], csv: '', score: 0 }
         excelChosenSheet = chosen.name
-        excelText = `=== Feuille analysée : ${chosen.name} (score indices facture: ${chosen.score}/${FACTURE_KEYWORDS.length + 2}) ===\n${chosen.csv.slice(0, 24000)}`
+        // Compactage : supprime les lignes 100% vides ou ne contenant que des
+        // séparateurs ";". Sinon Claude se perd dans le bruit et classe 'autre'.
+        const compactedCsv = chosen.csv
+          .split('\n')
+          .filter(line => line.replace(/[;\s,]/g, '').length > 0)
+          .join('\n')
+        excelText = `=== Feuille analysée : ${chosen.name} (score indices facture: ${chosen.score}/${FACTURE_KEYWORDS.length + 2}) ===\n${compactedCsv.slice(0, 24000)}`
 
         if (excelSheetCount > 1) {
           excelText = `[INFO : ce fichier Excel contient ${excelSheetCount} feuilles (${wb.SheetNames.join(', ')}). On a sélectionné automatiquement la feuille "${chosen.name}" qui contient le plus d'indices facture (score ${chosen.score}). NE PAS additionner les montants entre feuilles ; analyser uniquement cette feuille.]\n\n${excelText}`
@@ -413,16 +419,25 @@ RAPPELS IMPORTANTS :
         content: isVisual
           ? [contentBlock, { type: 'text' as const, text: 'Analyse ce document.' }]
           : isExcel
-            ? `Voici le contenu d'un fichier Excel/CSV exporté d'un logiciel comptable. Sépareur de colonnes : ";".
+            ? `Voici le contenu d'un fichier Excel/CSV exporté d'un logiciel comptable. Séparateur : ";".
 
-RÈGLES STRICTES pour l'extraction des montants :
-1. Le montant_ttc = UN SEUL montant final (le grand total de la facture). NE PAS additionner plusieurs lignes "Total" ou "Sous-total".
-2. Si plusieurs montants candidats existent, choisis le PLUS GRAND qui apparaît UNE SEULE FOIS dans le document (= le grand total final), pas la somme des sous-totaux.
-3. Si le fichier contient un récap ou un cumul annuel d'une part, ET le détail d'une seule facture d'autre part, prends UNIQUEMENT le total de la facture individuelle (pas le cumul).
-4. Si tu n'es pas sûr, choisis le montant le plus petit cohérent plutôt que de risquer un cumul. Mets confiance_extraction faible (<60) pour signaler le doute.
+DÉTECTION FACTURE — OBLIGATOIRE :
+Ce fichier est une facture si tu vois N'IMPORTE LEQUEL de ces indices :
+- Le mot "Facture", "Invoice", "TVA", "VAT", "BRN"
+- Un en-tête émetteur (nom société, adresse)
+- Un destinataire (Nom, Adresse, RCS)
+- Une ligne "Montant Total", "Net à payer", "Total TTC"
+- Des prix unitaires + quantités
+NE CLASSE PAS en "autre" si tu vois ces indices. Force facture_client ou facture_fournisseur.
 
-DÉTECTION FACTURE :
-Ce type d'export contient TRÈS souvent une facture. Cherche : en-tête émetteur, BRN, n° facture, destinataire, date, montants HT/TVA/TTC. Si tu vois "Facture"/"Invoice"/"N°"/"Montant" → c'est une facture, ne classe PAS en "autre". Applique la règle émetteur=MA société → facture_client.
+RÈGLES STRICTES pour les montants :
+1. Cherche la ligne "Montant Total", "Net à payer" ou "Total TTC" (UNE seule, la finale en bas).
+2. **DEVISE PRINCIPALE** : si la facture affiche deux colonnes (ex: "EUR" et "MUR"), la DEVISE PRINCIPALE est celle où apparaissent les **prix unitaires des lignes** (souvent EUR pour une facture export française). NE PAS prendre le montant MUR comme montant_ttc — c'est juste la conversion locale.
+3. montant_ttc = le montant final dans la devise principale (ex: 19 349.32 EUR, PAS 1 026 481 MUR même si c'est plus grand).
+4. devise = la devise principale (ex: "EUR" si les prix sont en EUR avec MUR comme conversion).
+5. Si tu vois "Taux Euro en Roupie" ou "Taux de change" → confirme que la devise principale est EUR et que MUR est la conversion calculée.
+6. Pour le HT : prends "Base H.T." ou "Total HT" dans la devise principale.
+7. Pour la TVA : si "Taux de TVA" = 0% ou si HT == TTC → taux_tva = 0 (hors taxe / export).
 
 CONTENU :
 ${excelText}`
