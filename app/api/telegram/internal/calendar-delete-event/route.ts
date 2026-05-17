@@ -21,15 +21,37 @@ export async function POST(req: NextRequest) {
     }
     const send_cancellations = body?.send_cancellations === true
 
-    await googleCalendarFetch(
-      ctx.user_id,
-      account_email,
-      `/calendars/${encodeURIComponent(calendar_id)}/events/${encodeURIComponent(event_id)}`,
-      {
-        method: 'DELETE',
-        query: { sendUpdates: send_cancellations ? 'all' : 'none' },
-      },
-    )
+    try {
+      await googleCalendarFetch(
+        ctx.user_id,
+        account_email,
+        `/calendars/${encodeURIComponent(calendar_id)}/events/${encodeURIComponent(event_id)}`,
+        {
+          method: 'DELETE',
+          query: { sendUpdates: send_cancellations ? 'all' : 'none' },
+        },
+      )
+    } catch (e: any) {
+      const msg = e?.message || String(e)
+      // 410 Gone / 404 Not Found = event déjà supprimé → on traite comme succès idempotent
+      if (/\b(404|410)\b/.test(msg)) {
+        return {
+          result: { deleted: true, event_id, calendar_id, notified_attendees: false, already_deleted: true },
+        }
+      }
+      console.error('[calendar-delete-event] Google API error:', {
+        user_id: ctx.user_id,
+        account_email,
+        calendar_id,
+        event_id,
+        google_error: msg,
+      })
+      return {
+        result: null,
+        status: 'error',
+        error_msg: `${msg} | calendar=${calendar_id}, event=${event_id}, account=${account_email || 'default'}`,
+      }
+    }
 
     return {
       result: { deleted: true, event_id, calendar_id, notified_attendees: send_cancellations },
