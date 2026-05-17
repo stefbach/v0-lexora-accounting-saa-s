@@ -100,6 +100,9 @@ export async function POST(request: NextRequest) {
 
   const startTime = Date.now()
   let documentId = ''
+  // Collecte des alertes/warnings côté pipeline pour les remonter dans la
+  // réponse (le bot Telegram peut alors avertir l'utilisateur en direct).
+  const pipelineWarnings: string[] = []
 
   try {
     const body = await request.json()
@@ -663,6 +666,33 @@ ${excelText}`
             const dateF = extraction.date_document || extraction.date_facture || null
             const dateValid = parseDateAny(dateF) || new Date().toISOString().split('T')[0]
             const dateEcheance = parseDateAny(extraction.date_echeance)
+
+            // ─── ALERTE DATE SUSPECTE ─────────────────────────────────
+            // L'OCR confond souvent l'année (2025 vs 2026 en début d'année),
+            // ou inverse jour/mois. On lève une alerte (non-bloquante) si :
+            //   - date_facture > 6 mois dans le passé
+            //   - date_facture dans le futur
+            // L'admin reçoit une notif visible dans /client/alertes.
+            const dateWarnings: string[] = []
+            {
+              const facDate = new Date(dateValid + 'T00:00:00')
+              const today   = new Date()
+              const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate())
+              if (facDate.getTime() > today.getTime() + 24 * 3600 * 1000) {
+                dateWarnings.push(`Date dans le futur : ${dateValid}`)
+              }
+              if (facDate.getTime() < sixMonthsAgo.getTime()) {
+                dateWarnings.push(`Date suspecte : ${dateValid} (> 6 mois dans le passé). Vérifie le millésime — confusion OCR fréquente entre 2025/2026 en début d'année.`)
+              }
+              // Anomalie spécifique : différence d'année entre date_facture
+              // et date d'extraction (aujourd'hui), avec mois et jour matchant
+              // → presque toujours une mauvaise lecture du millésime.
+              if (facDate.getFullYear() !== today.getFullYear()
+                  && facDate.getMonth() === today.getMonth()
+                  && Math.abs(today.getFullYear() - facDate.getFullYear()) === 1) {
+                dateWarnings.push(`Millésime probablement erroné : ${dateValid} alors que nous sommes en ${today.getFullYear()}.`)
+              }
+            }
             const ht = rawHt
             const tva = rawTva
             const ttc = rawTtc || (ht + tva) || 0
@@ -735,6 +765,30 @@ ${excelText}`
             if (facErr) {
               console.error('[process] Insert factures failed:', facErr.message)
             } else if (facInserted) {
+              // ─── Alerte si anomalie de date détectée ───
+              if (dateWarnings.length > 0) {
+                pipelineWarnings.push(...dateWarnings)
+                try {
+                  await supabase.from('alertes').insert({
+                    societe_id: societeId,
+                    type_alerte: 'date_facture_suspecte',
+                    niveau: 'important',
+                    titre: `Date suspecte sur ${nomFichier}`,
+                    description: dateWarnings.join(' • ') +
+                      ` Vérifie la facture ${numeroFacture || facInserted.id.slice(0, 8)} dans /client/factures et corrige la date si besoin.`,
+                    montant_mur: montantMur,
+                    statut: 'active',
+                    metadata: {
+                      facture_id: facInserted.id,
+                      document_id: documentId,
+                      date_extraite: dateValid,
+                      warnings: dateWarnings,
+                    },
+                  })
+                } catch (alErr: any) {
+                  console.warn('[process] Insert alerte date_facture_suspecte failed:', alErr?.message)
+                }
+              }
               // Génère les écritures comptables au format PCM Maurice via le
               // helper canonique (411/707 pour ventes, 401/607 pour achats,
               // + 4457/4456 TVA).
@@ -843,6 +897,7 @@ ${excelText}`
       statut: finalStatut,
       processing_time_ms: duration,
       warning: lowConfidence ? 'Extraction peu fiable, vérification manuelle conseillée' : undefined,
+      warnings: pipelineWarnings.length > 0 ? pipelineWarnings : undefined,
     })
 
   } catch (e: any) {
