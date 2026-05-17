@@ -1,6 +1,12 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import {
+  ouvrirSession,
+  fermerSession,
+  getResumeJour,
+  getSessionEnCours,
+} from '@/lib/rh/pointage-sessions'
 
 /**
  * POST /api/telegram/internal/pointage-create
@@ -14,20 +20,21 @@ import { getAdminClient } from '@/lib/supabase/admin'
  *   - latitude?   : number
  *   - longitude?  : number
  *
- * Modèle :
- *   Lexora utilise `pointages_sessions` (sessions multiples par jour, table 171).
- *   - type='in'  → INSERT pointages_sessions(type_session='travail', heure_debut, heure_fin=NULL)
- *     Préalable : aucune session 'travail' ouverte aujourd'hui (sinon 409).
- *   - type='out' → UPDATE de la session 'travail' ouverte la plus récente
- *     (heure_fin=NULL) → set heure_fin = timestamp.
+ * Délègue à lib/rh/pointage-sessions :
+ *   - type='in'  → ouvrirSession(type='travail')
+ *   - type='out' → fermerSession(session_en_cours)
  *
- * Anti-spam : refus si un pointage du même type a déjà été créé dans les 120 s.
+ * Spécificités Telegram (non couvertes par les helpers web) :
+ *   - Anti-spam 120s sur l'audit telegram_actions
+ *   - forgot_out_warning si une session 'travail' antérieure (jour précédent)
+ *     est encore ouverte (oubli /out la veille)
+ *   - cross-day pour type='out' : si la session ouverte date d'un jour
+ *     différent, on flag cross_day=true et on log dans notes la durée réelle
+ *     (la trigger duree_minutes côté DB calcule TIME-TIME du même jour).
  *
- * Réponses utiles :
- *   - oubli_out : si type='in' mais qu'il existe une session 'travail' ouverte
- *     datée d'un jour antérieur, on flag `forgot_out_warning=true` après
- *     fermeture automatique à l'heure_debut du jour précédent + heure courante.
- *   - duree_minutes : pour type='out', durée écoulée depuis le 'in' fermé.
+ * NB : on conserve le calcul UTC (existant) pour la date d'ancrage du
+ * pointage, et non todayDateMU(), pour préserver la sémantique historique
+ * du bot et éviter une migration de données déjà créées.
  */
 
 const MAX_TS_FUTURE_MS = 5 * 60 * 1000 // 5 min de tolérance horloge
@@ -79,7 +86,6 @@ export async function POST(req: NextRequest) {
       }
       ts = t
     }
-    const tsIso = ts.toISOString()
 
     const lat = parseLatLng(body?.latitude)
     const lng = parseLatLng(body?.longitude)
@@ -128,22 +134,15 @@ export async function POST(req: NextRequest) {
     const heureStr = hhmmss(ts)
 
     if (type === 'in') {
-      // Sécurité : pas de session "travail" déjà ouverte aujourd'hui
-      const { data: openToday } = await admin
-        .from('pointages_sessions')
-        .select('id, heure_debut, date_pointage')
-        .eq('employe_id', ctx.employe_id)
-        .eq('date_pointage', dateStr)
-        .eq('type_session', 'travail')
-        .is('heure_fin', null)
-        .order('heure_debut', { ascending: false })
-        .limit(1)
-
-      if (openToday && openToday.length > 0) {
+      // Sécurité : pas de session "travail" déjà ouverte aujourd'hui.
+      // getSessionEnCours retourne la dernière session ouverte du JOUR donné
+      // (limit=1, order by heure_debut desc) — équivalent au check existant.
+      const enCoursAujourd = await getSessionEnCours(admin, ctx.employe_id, dateStr)
+      if (enCoursAujourd && enCoursAujourd.type_session === 'travail') {
         return {
           result: null,
           status: 'denied',
-          error_msg: `Une session est déjà ouverte aujourd'hui (depuis ${String((openToday[0] as any).heure_debut).slice(0, 5)}). Faites /out d'abord.`,
+          error_msg: `Une session est déjà ouverte aujourd'hui (depuis ${String(enCoursAujourd.heure_debut).slice(0, 5)}). Faites /out d'abord.`,
         }
       }
 
@@ -163,31 +162,25 @@ export async function POST(req: NextRequest) {
         forgotOutWarning = { date_pointage: o.date_pointage, heure_debut: String(o.heure_debut).slice(0, 8) }
       }
 
-      const { data: inserted, error } = await admin
-        .from('pointages_sessions')
-        .insert({
-          employe_id: ctx.employe_id,
-          date_pointage: dateStr,
-          type_session: 'travail',
-          heure_debut: heureStr,
-          heure_fin: null,
-          latitude: lat,
-          longitude: lng,
-          notes: 'Pointage Telegram',
-          created_by: ctx.user_id,
-        })
-        .select('id, date_pointage, heure_debut')
-        .single()
-      if (error) {
-        return { result: null, status: 'error', error_msg: `INSERT session: ${error.message}` }
+      // Ouvre la session 'travail' via helper (date/heure overrides pour ts custom)
+      const opened = await ouvrirSession(admin, ctx.employe_id, 'travail', {
+        date: dateStr,
+        heure: heureStr,
+        notes: 'Pointage Telegram',
+        latitude: lat,
+        longitude: lng,
+        createdBy: ctx.user_id,
+      })
+      if (!opened.ok || !opened.session) {
+        return { result: null, status: 'error', error_msg: `INSERT session: ${opened.error || 'inconnue'}` }
       }
 
       return {
         result: {
           type: 'in',
-          session_id: inserted!.id,
-          date: inserted!.date_pointage,
-          heure: String(inserted!.heure_debut).slice(0, 5),
+          session_id: opened.session.id,
+          date: opened.session.date_pointage,
+          heure: String(opened.session.heure_debut).slice(0, 5),
           source: 'telegram',
           forgot_out_warning: forgotOutWarning,
         },
@@ -195,7 +188,9 @@ export async function POST(req: NextRequest) {
     }
 
     // --- type='out' -----------------------------------------------------------
-    // Cherche la session 'travail' ouverte la plus récente (peut être hier en cas d'oubli)
+    // Cherche la session 'travail' ouverte la plus récente (peut être hier en
+    // cas d'oubli). On ne peut pas utiliser getSessionEnCours(date) qui filtre
+    // au jour ; on lit directement.
     const { data: openSessions, error: e1 } = await admin
       .from('pointages_sessions')
       .select('id, date_pointage, heure_debut')
@@ -218,25 +213,25 @@ export async function POST(req: NextRequest) {
 
     const session = openSessions[0] as any
 
-    // Si la session a été ouverte un jour différent de la date du timestamp,
-    // on ne tente pas de gérer les heures cross-day : on fixe heure_fin =
-    // heureStr mais on indique cross_day=true au caller pour information.
+    // Cross-day : si la session a été ouverte un jour différent, on ferme avec
+    // l'heure courante mais on indique cross_day=true pour info caller.
     const crossDay = session.date_pointage !== dateStr
 
-    // Calcule la durée en minutes (cross-day inclus, on utilise les datetime
-    // composés depuis date_pointage + heures).
+    // Durée réelle (cross-day inclus) — utile pour log + réponse LLM.
     const dtIn = new Date(`${session.date_pointage}T${session.heure_debut}Z`)
     const dureeMs = ts.getTime() - dtIn.getTime()
     const dureeMin = Math.max(0, Math.round(dureeMs / 60000))
 
-    const { error: e2 } = await admin
+    // Fermeture via helper (set heure_fin uniquement). On UPDATE ensuite les
+    // colonnes notes/lat/lng manuellement car fermerSession ne les touche pas.
+    const closed = await fermerSession(admin, session.id, heureStr)
+    if (!closed.ok) {
+      return { result: null, status: 'error', error_msg: `UPDATE session: ${closed.error}` }
+    }
+    // Patch notes/lat/lng (info Telegram + audit cross-day)
+    await admin
       .from('pointages_sessions')
       .update({
-        heure_fin: heureStr,
-        // Pour cross-day on garde la date_pointage d'origine (la trigger duree_minutes
-        // calculera avec TIME-TIME du même jour, on stocke la "vraie" durée via
-        // la colonne notes pour audit. duree_minutes côté DB sera donc faux en
-        // cross-day mais c'est un edge case — on log dans notes.)
         notes: crossDay
           ? `Telegram out (cross-day, durée réelle ${dureeMin} min)`
           : 'Pointage Telegram',
@@ -244,22 +239,11 @@ export async function POST(req: NextRequest) {
         longitude: lng,
       })
       .eq('id', session.id)
-    if (e2) {
-      return { result: null, status: 'error', error_msg: `UPDATE session: ${e2.message}` }
-    }
 
-    // Cumul jour = somme des durées des sessions 'travail' du même jour calendrier.
-    const dayKey = session.date_pointage
-    const { data: dayList } = await admin
-      .from('pointages_sessions')
-      .select('duree_minutes, heure_debut, heure_fin')
-      .eq('employe_id', ctx.employe_id)
-      .eq('date_pointage', dayKey)
-      .eq('type_session', 'travail')
-    const cumulMin = (dayList || []).reduce((acc: number, s: any) => {
-      if (typeof s?.duree_minutes === 'number') return acc + s.duree_minutes
-      return acc
-    }, 0)
+    // Cumul jour via helper (somme des durees_minutes des sessions travail du
+    // jour calendrier de la session fermée).
+    const resume = await getResumeJour(admin, ctx.employe_id, session.date_pointage)
+    const cumulMin = resume.total_travail_minutes
 
     return {
       result: {
