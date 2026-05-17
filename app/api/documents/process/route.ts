@@ -5,6 +5,28 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 import { getTauxChange } from '@/lib/taux-change'
 
+function parseDateAny(raw: any): string | null {
+  if (!raw) return null
+  const s = String(raw).trim()
+  // Déjà ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  // DD/MM/YYYY ou DD-MM-YYYY ou DD.MM.YYYY
+  let m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/)
+  if (m) {
+    const dd = m[1].padStart(2, '0'), mm = m[2].padStart(2, '0'), yy = m[3]
+    return `${yy}-${mm}-${dd}`
+  }
+  // YYYY/MM/DD
+  m = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/)
+  if (m) {
+    return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
+  }
+  // Fallback : Date.parse
+  const d = new Date(s)
+  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0]
+  return null
+}
+
 const DEVISE_SYMBOL_MAP: Record<string, string> = {
   '€': 'EUR', 'EUR': 'EUR', 'EURO': 'EUR', 'EUROS': 'EUR',
   '$': 'USD', 'USD': 'USD', 'US$': 'USD',
@@ -275,9 +297,8 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
               ? tiersName
               : (tiersName?.nom || tiersName?.name || tiersName?.raison_sociale || null)
             const dateF = extraction.date_document || extraction.date_facture || null
-            const dateValid = dateF && /^\d{4}-\d{2}-\d{2}$/.test(dateF) ? dateF : null
-            const dateEcheance = extraction.date_echeance && /^\d{4}-\d{2}-\d{2}$/.test(extraction.date_echeance)
-              ? extraction.date_echeance : null
+            const dateValid = parseDateAny(dateF) || new Date().toISOString().split('T')[0]
+            const dateEcheance = parseDateAny(extraction.date_echeance)
             const ht = Number(extraction.montant_ht) || 0
             const tva = Number(extraction.montant_tva) || 0
             const ttc = Number(extraction.montant_ttc) || (ht + tva) || 0
@@ -343,7 +364,7 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
             }).select('id').single()
             if (facErr) {
               console.error('[process] Insert factures failed:', facErr.message)
-            } else if (facInserted && dateValid) {
+            } else if (facInserted) {
               // Génère les écritures comptables au format PCM Maurice via le
               // helper canonique (411/707 pour ventes, 401/607 pour achats,
               // + 4457/4456 TVA). Sans ça, le CA dans le dashboard et les
