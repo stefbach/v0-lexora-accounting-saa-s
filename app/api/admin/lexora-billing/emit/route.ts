@@ -54,18 +54,28 @@ export async function POST(req: Request) {
     if (p) { dirigeantNom = p.full_name; dirigeantEmail = p.email; clientUserId = p.id }
   }
 
-  // Plan (optionnel)
+  // Plan : si non fourni, utilise le plan_id de la société (abonnement actuel)
   let plan: any = null
-  if (plan_id) {
-    const { data } = await admin.from('plans').select('code,nom,prix_mensuel_mur,prix_annuel_mur').eq('id', plan_id).maybeSingle()
+  const effectivePlanId = plan_id || societe.plan_id
+  if (effectivePlanId) {
+    const { data } = await admin.from('plans').select('code,nom,prix_mensuel_mur,prix_annuel_mur').eq('id', effectivePlanId).maybeSingle()
     plan = data
   }
-  const period = (periodicite === 'annuelle' ? 'annuelle' : 'mensuelle') as 'mensuelle' | 'annuelle'
+  // Périodicité : prefer body, fallback société, default mensuelle
+  const period = ((periodicite || societe.periodicite) === 'annuelle' ? 'annuelle' : 'mensuelle') as 'mensuelle' | 'annuelle'
+
+  // Prix par défaut : prix effectif de la société (plan + addons, calculé
+  // lors de l'attribution d'abonnement). Sinon prix du plan brut.
+  // Override possible via tarif_ht_mur.
+  const subscriptionPrice = period === 'annuelle'
+    ? Number(societe.prix_periode_effectif || 0)
+    : Number(societe.prix_mensuel_effectif || 0)
   const planPrice = plan
     ? (period === 'annuelle' ? Number(plan.prix_annuel_mur || 0) : Number(plan.prix_mensuel_mur || 0))
     : 0
-  const ht = tarif_ht_mur != null ? Number(tarif_ht_mur) : planPrice
-  if (!(ht > 0)) return NextResponse.json({ error: 'tarif_ht_mur ou plan_id avec prix > 0 requis' }, { status: 400 })
+  const ht = tarif_ht_mur != null ? Number(tarif_ht_mur)
+           : (subscriptionPrice > 0 ? subscriptionPrice : planPrice)
+  if (!(ht > 0)) return NextResponse.json({ error: 'tarif_ht_mur ou plan_id avec prix > 0 requis (ou abonnement configuré sur la société)' }, { status: 400 })
 
   const date = invoice_date || new Date().toISOString().slice(0, 10)
 

@@ -1,814 +1,423 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+/**
+ * /admin/services — Attribution d'un abonnement (plan + add-ons) à une société.
+ *
+ * Source de vérité unique : la table `plans` (catalogue /tarifs).
+ * Plus de double-table service_plans/plans : on lit les 12 packs +
+ * 2 add-ons + 3 cabinets et on assigne directement.
+ *
+ * Workflow :
+ *   1) Sélection d'une société dans la liste
+ *   2) Modal d'abonnement :
+ *      - choix du Plan (parmi les packs visibles)
+ *      - périodicité Mensuelle / Annuelle
+ *      - cases Add-ons (Telegram, TIBOK seul)
+ *      - prix mensuel + prix période calculés en temps réel
+ *      - modules effectifs (merge plan + add-ons) affichés
+ *   3) Save → PUT /api/admin/societes/[id]/subscription
+ *      → met à jour plan_id, addons_actifs, periodicite,
+ *        prix_mensuel_effectif, prix_periode_effectif, modules_actifs
+ */
+
+import { useEffect, useState, useCallback, useMemo } from "react"
+import Link from "next/link"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog"
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
-import {
-  Loader2, Settings, Check, X, Building2, Users, CreditCard,
-  Pencil, Save, ChevronDown, ChevronUp,
+  Loader2, CheckCircle2, AlertCircle, Settings, Search,
+  Briefcase, Star, Building2,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
-import { t, getLocale, type Locale } from "@/lib/i18n"
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-
-interface ModulesConfig {
-  // ── Modules visibles sur /tarifs ──
-  documents: boolean         // « OCR & Documents IA »
-  comptabilite: boolean      // « Comptabilité Automatisée »
-  facturation: boolean       // « Facturation MRA Agréée »
-  rh: boolean                // « RH & Paie Maurice »
-  fiscal: boolean            // « Fiscal MRA »
-  alertes_ia: boolean        // « Alertes IA & Pilotage »
-  tibok: boolean             // « TIBOK Corporate » (Santé salariés)
-  telegram: boolean          // « Chief of Staff IA — Telegram »
-  // ── Sous-modules avancés (internes, non listés sur /tarifs) ──
-  juridique: boolean
-  etats_financiers: boolean
-  employe_portal: boolean
-}
-
-interface ServicePlan {
+interface Plan {
   id: string
   code: string
   nom: string
   description: string | null
-  modules: ModulesConfig
-  prix_mensuel: number
+  type_cible: 'dirigeant' | 'comptable'
+  prix_mensuel_mur: number
+  prix_annuel_mur: number | null
+  modules_inclus: Record<string, boolean>
+  populaire: boolean
   actif: boolean
-  created_at: string
+  pack: 'compta' | 'paie' | 'bundle' | 'addon' | 'cabinet' | 'legacy' | null
+  taille_entreprise: 'solo' | 'petite' | 'pme' | 'grande' | null
+  is_addon: boolean
+  prix_visible: boolean
 }
 
-interface SocieteWithClients {
+interface Societe {
   id: string
   nom: string
   brn: string | null
   plan_id: string | null
-  plan_code: string | null
-  modules_actifs: ModulesConfig | null
-  created_at: string
-  clients: { id: string; full_name: string; email: string }[]
+  addons_actifs: string[] | null
+  periodicite: string | null
+  prix_mensuel_effectif: number | null
+  prix_periode_effectif: number | null
 }
 
-/* ------------------------------------------------------------------ */
-/*  Constants                                                          */
-/* ------------------------------------------------------------------ */
-
-const moduleLabels = (locale: Locale): Record<keyof ModulesConfig, string> => ({
-  // ─── Modules /tarifs ───
-  documents:       locale === 'en' ? 'OCR & AI Documents' : 'OCR & Documents IA',
-  comptabilite:    locale === 'en' ? 'Automated Accounting' : 'Comptabilité Automatisée',
-  facturation:     locale === 'en' ? 'MRA-Approved Invoicing' : 'Facturation MRA Agréée',
-  rh:              locale === 'en' ? 'Mauritius HR & Payroll' : 'RH & Paie Maurice',
-  fiscal:          locale === 'en' ? 'MRA Tax' : 'Fiscal MRA',
-  alertes_ia:      locale === 'en' ? 'AI Alerts & Monitoring' : 'Alertes IA & Pilotage',
-  tibok:           locale === 'en' ? 'TIBOK Corporate (Employee Health)' : 'TIBOK Corporate (Santé salariés)',
-  telegram:        locale === 'en' ? 'Chief of Staff AI — Telegram' : 'Chief of Staff IA — Telegram',
-  // ─── Sous-modules avancés ───
-  juridique:       t('adm.services.mod_juridique', locale),
-  etats_financiers: locale === 'en' ? 'Financial statements (advanced)' : 'États financiers (avancé)',
-  employe_portal:  locale === 'en' ? 'Employee portal (self-service)' : 'Portail employé (self-service)',
-})
-
-const moduleDetails = (locale: Locale): Record<keyof ModulesConfig, string> => ({
-  documents:       locale === 'en' ? 'Upload/scan any document — AI extracts and classifies entries.' : 'Upload ou photo de tout document — IA analyse, classe et génère les écritures.',
-  comptabilite:    locale === 'en' ? 'General Ledger, balance sheet, P&L, auto bank reconciliation, multi-currency.' : 'Grand Livre, Balance, Bilan & P&L, rapprochement bancaire auto, multi-devises.',
-  facturation:     locale === 'en' ? 'MRA-compliant invoices (IRN + QR), quotes, credit notes, auto-reminders.' : 'Factures conformes MRA (IRN + QR), devis, avoirs, relances auto.',
-  rh:              locale === 'en' ? 'Compliant payslips (CSG/NSF/PAYE), digital time clock, leave per WRA 2019.' : 'Bulletins conformes (CSG/NSF/PAYE), pointeuse, congés WRA 2019.',
-  fiscal:          locale === 'en' ? 'VAT 9-Box, CSG/NSF/PAYE auto, IT Form 3, Annual Return ROC, e-MRA XML.' : 'TVA 9-Box, CSG/NSF/PAYE auto, IT Form 3, Annual Return ROC, export XML e-MRA.',
-  alertes_ia:      locale === 'en' ? 'AI agent for tax deadlines, budget forecasting, strategic recommendations.' : 'Agent IA échéances fiscales, prévisionnel Budget vs Réel, recommandations stratégiques IA.',
-  tibok:           locale === 'en' ? 'Annual health check-up, 24/7 teleconsultation, corporate wellbeing program.' : 'Bilan santé annuel, téléconsultation médicale 24/7, programme bien-être entreprise.',
-  telegram:        locale === 'en' ? 'Chief of Staff AI on Telegram — calendar, meetings, emails, OCR, HR, banking in natural language.' : 'Chief of Staff IA sur Telegram — agenda, RDV, emails, OCR, RH, banque en langage naturel.',
-  juridique:       t('adm.services.mod_juridique_desc', locale),
-  etats_financiers: locale === 'en' ? 'Balance sheet, P&L, IFRS 9/16, deadlines (sub-feature of accounting).' : 'Bilan, P&L, IFRS 9/16, échéances (sous-module de la compta).',
-  employe_portal:  locale === 'en' ? 'Employee self-service space (payslips, leave, expenses).' : 'Espace self-service salarié (bulletins, congés, frais).',
-})
-
-const PLAN_COLORS: Record<string, string> = {
-  premium: "#D4AF37",
-  comptabilite: "#2563eb",
-  rh_paie: "#16a34a",
-  compta_rh: "#7c3aed",
-  custom: "#6b7280",
+interface Subscription {
+  plan_id: string | null
+  plan: Plan | null
+  addon_codes: string[]
+  addons: Plan[]
+  periodicite: 'mensuelle' | 'annuelle'
+  prix_mensuel_effectif: number | null
+  prix_periode_effectif: number | null
+  modules_actifs: Record<string, boolean> | null
 }
 
-const DEFAULT_MODULES: ModulesConfig = {
-  documents: true,
-  comptabilite: true,
-  facturation: true,
-  rh: true,
-  fiscal: true,
-  alertes_ia: true,
-  tibok: true,
-  telegram: false,           // option payante, off par défaut
-  juridique: true,
-  etats_financiers: true,
-  employe_portal: true,
+const MODULE_LABELS: Record<string, string> = {
+  documents: 'OCR & Documents IA',
+  comptabilite: 'Comptabilité Automatisée',
+  facturation: 'Facturation MRA',
+  rh: 'RH & Paie Maurice',
+  fiscal: 'Fiscal MRA',
+  alertes_ia: 'Alertes IA & Pilotage',
+  tibok: 'TIBOK Corporate',
+  telegram: 'Chief of Staff IA Telegram',
+  juridique: 'Juridique',
+  etats_financiers: 'États financiers',
+  employe_portal: 'Portail employé',
 }
 
-/* ------------------------------------------------------------------ */
-/*  Page component                                                     */
-/* ------------------------------------------------------------------ */
+const PACK_LABELS: Record<string, string> = {
+  compta: 'Comptabilité + Facturation',
+  paie: 'RH & Paie + TIBOK',
+  bundle: 'Pack Complet ERP',
+  cabinet: 'Cabinet comptable',
+  addon: 'Add-on',
+  legacy: 'Legacy',
+}
+const TAILLE_LABELS: Record<string, string> = {
+  solo: 'Solo (1–3)',
+  petite: 'Petite (4–15)',
+  pme: 'PME (16–50)',
+  grande: 'Grande (50+)',
+}
+
+function fmt(n: number | null | undefined) {
+  if (n == null) return '—'
+  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n)
+}
 
 export default function AdminServicesPage() {
-  const locale = getLocale()
-  const MODULE_LABELS = moduleLabels(locale)
-  const MODULE_DETAILS = moduleDetails(locale)
+  const [societes, setSocietes] = useState<Societe[]>([])
+  const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
-  const [plans, setPlans] = useState<ServicePlan[]>([])
-  const [societes, setSocietes] = useState<SocieteWithClients[]>([])
-  const [success, setSuccess] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [editing, setEditing] = useState<Societe | null>(null)
 
-  // Plan editing
-  const [editingPlan, setEditingPlan] = useState<ServicePlan | null>(null)
-  const [editModules, setEditModules] = useState<ModulesConfig>(DEFAULT_MODULES)
-  const [editPrix, setEditPrix] = useState("")
-  const [editPlanDialog, setEditPlanDialog] = useState(false)
-  const [savingPlan, setSavingPlan] = useState(false)
-
-  // Assign plan
-  const [assignDialog, setAssignDialog] = useState(false)
-  const [assignSociete, setAssignSociete] = useState<SocieteWithClients | null>(null)
-  const [assignPlanCode, setAssignPlanCode] = useState("")
-  const [assignSaving, setAssignSaving] = useState(false)
-
-  // Custom modules
-  const [customDialog, setCustomDialog] = useState(false)
-  const [customSociete, setCustomSociete] = useState<SocieteWithClients | null>(null)
-  const [customModules, setCustomModules] = useState<ModulesConfig>(DEFAULT_MODULES)
-  const [customSaving, setCustomSaving] = useState(false)
-
-  // Section collapse
-  const [section1Open, setSection1Open] = useState(true)
-  const [section2Open, setSection2Open] = useState(true)
-  const [section3Open, setSection3Open] = useState(true)
-
-  // ----------------------------------------------------------------
-  // Fetch
-  // ----------------------------------------------------------------
-  const fetchData = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
     try {
-      const res = await fetch("/api/admin/services")
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || t('adm.services.error', locale))
-      setPlans(data.plans || [])
-      setSocietes(data.societes || [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('adm.services.load_err', locale))
+      const [sRes, pRes] = await Promise.all([
+        fetch('/api/admin/societes', { cache: 'no-store' }).then(r => r.json()),
+        fetch('/api/admin/plans', { cache: 'no-store' }).then(r => r.json()),
+      ])
+      setSocietes((sRes.societes || sRes.data || []) as Societe[])
+      setPlans((pRes.plans || []).filter((p: Plan) => p.actif))
+    } catch (e: any) {
+      setMsg({ type: 'error', text: e?.message || 'Erreur' })
     } finally {
       setLoading(false)
     }
   }, [])
+  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => { if (msg) { const t = setTimeout(() => setMsg(null), 4000); return () => clearTimeout(t) } }, [msg])
 
-  useEffect(() => { fetchData() }, [fetchData])
-  useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(null), 5000); return () => clearTimeout(t) } }, [success])
-  useEffect(() => { if (error) { const t = setTimeout(() => setError(null), 6000); return () => clearTimeout(t) } }, [error])
+  const filtered = useMemo(() => {
+    if (!search) return societes
+    const q = search.toLowerCase()
+    return societes.filter(s => s.nom.toLowerCase().includes(q) || (s.brn || '').toLowerCase().includes(q))
+  }, [societes, search])
 
-  // ----------------------------------------------------------------
-  // Plan editing handlers
-  // ----------------------------------------------------------------
-  const openEditPlan = (plan: ServicePlan) => {
-    setEditingPlan(plan)
-    setEditModules({ ...plan.modules })
-    setEditPrix(String(plan.prix_mensuel || 0))
-    setEditPlanDialog(true)
-  }
+  const planMap = useMemo(() => {
+    const m = new Map<string, Plan>()
+    plans.forEach(p => m.set(p.id, p))
+    return m
+  }, [plans])
 
-  const handleSavePlan = async () => {
-    if (!editingPlan) return
-    setSavingPlan(true)
-    try {
-      const res = await fetch("/api/admin/services", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "update_plan",
-          plan_id: editingPlan.id,
-          modules: editModules,
-          prix_mensuel: parseFloat(editPrix) || 0,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || t('adm.services.error', locale))
-      setSuccess(t('adm.services.plan_updated', locale).replace('{name}', editingPlan.nom))
-      setEditPlanDialog(false)
-      setEditingPlan(null)
-      fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('adm.services.error', locale))
-    } finally {
-      setSavingPlan(false)
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // Assign plan handlers
-  // ----------------------------------------------------------------
-  const openAssignDialog = (soc: SocieteWithClients) => {
-    setAssignSociete(soc)
-    setAssignPlanCode(soc.plan_code || "premium")
-    setAssignDialog(true)
-  }
-
-  const handleAssignPlan = async () => {
-    if (!assignSociete || !assignPlanCode) return
-    setAssignSaving(true)
-    try {
-      const res = await fetch("/api/admin/services", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "assign_plan",
-          societe_id: assignSociete.id,
-          plan_code: assignPlanCode,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || t('adm.services.error', locale))
-      setSuccess(t('adm.services.plan_assigned', locale).replace('{name}', assignSociete.nom))
-      setAssignDialog(false)
-      setAssignSociete(null)
-      fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('adm.services.error', locale))
-    } finally {
-      setAssignSaving(false)
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // Custom modules handlers
-  // ----------------------------------------------------------------
-  const openCustomDialog = (soc: SocieteWithClients) => {
-    setCustomSociete(soc)
-    setCustomModules(soc.modules_actifs || DEFAULT_MODULES)
-    setCustomDialog(true)
-  }
-
-  const handleSaveCustom = async () => {
-    if (!customSociete) return
-    setCustomSaving(true)
-    try {
-      const res = await fetch("/api/admin/services", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "custom_modules",
-          societe_id: customSociete.id,
-          modules: customModules,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || t('adm.services.error', locale))
-      setSuccess(t('adm.services.custom_saved', locale).replace('{name}', customSociete.nom))
-      setCustomDialog(false)
-      setCustomSociete(null)
-      fetchData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('adm.services.error', locale))
-    } finally {
-      setCustomSaving(false)
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // Stats
-  // ----------------------------------------------------------------
-  const planStats = plans.map(p => {
-    const count = societes.filter(s => s.plan_code === p.code).length
-    return { ...p, count }
-  })
-  const customCount = societes.filter(s => s.plan_code === "custom").length
-  const noPlanCount = societes.filter(s => !s.plan_code || !plans.some(p => p.code === s.plan_code) && s.plan_code !== "custom").length
-
-  const getPlanBadge = (code: string | null) => {
-    if (!code) return <Badge variant="outline" className="text-xs">{t('adm.services.plan_undefined', locale)}</Badge>
-    const plan = plans.find(p => p.code === code)
-    const color = PLAN_COLORS[code] || "#6b7280"
-    return (
-      <Badge
-        className="text-xs text-white"
-        style={{ backgroundColor: color }}
-      >
-        {plan?.nom || (code === "custom" ? t('adm.services.plan_custom', locale) : code)}
-      </Badge>
-    )
-  }
-
-  // ----------------------------------------------------------------
-  // Loading
-  // ----------------------------------------------------------------
-  if (loading) {
-    return (
-      <div className="p-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('adm.services.title', locale)}</h1>
-          <p className="text-muted-foreground mt-1">{t('adm.services.loading', locale)}</p>
-        </div>
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#0B0F2E" }} />
-        </div>
-      </div>
-    )
-  }
-
-  // ----------------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------------
   return (
     <ClientPageShell hideHero disableParticles>
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-5 max-w-7xl mx-auto p-6">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "#0B0F2E" }}>{t('adm.services.title', locale)}</h1>
-        <p className="text-muted-foreground mt-1">
-          {t('adm.services.subtitle', locale)}
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">Abonnements clients</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Attribue à chaque société un plan du catalogue <Link href="/admin/plans" className="underline text-blue-700">/admin/plans</Link>{' '}
+          + add-ons optionnels. Le prix mensuel/annuel et les modules actifs sont automatiquement calculés et appliqués.
         </p>
       </div>
 
-      {/* Feedback */}
-      {success && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {success}
-        </div>
-      )}
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {error}
+      {msg && (
+        <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${msg.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+          {msg.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          {msg.text}
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* SECTION 1 — Plans disponibles                                 */}
-      {/* ============================================================ */}
-      <Card>
-        <CardHeader>
-          <button
-            onClick={() => setSection1Open(!section1Open)}
-            className="w-full flex items-center justify-between"
-          >
-            <div className="flex items-center gap-2">
-              <Settings className="h-5 w-5" style={{ color: "#D4AF37" }} />
-              <CardTitle style={{ color: "#0B0F2E" }}>{t('adm.services.section_plans', locale)}</CardTitle>
-            </div>
-            {section1Open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-          </button>
-        </CardHeader>
-        {section1Open && (
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {plans.map(plan => {
-                const color = PLAN_COLORS[plan.code] || "#6b7280"
-                const moduleKeys = Object.keys(plan.modules) as (keyof ModulesConfig)[]
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Input value={search} onChange={e => setSearch(e.target.value)}
+               placeholder="Rechercher une société (nom ou BRN)…"
+               className="pl-9 h-10" />
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
+      ) : filtered.length === 0 ? (
+        <Card><CardContent className="p-12 text-center text-gray-500">Aucune société.</CardContent></Card>
+      ) : (
+        <div className="bg-white border rounded-lg overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left">
+              <tr>
+                <th className="px-4 py-2 font-semibold text-gray-600">Société</th>
+                <th className="px-4 py-2 font-semibold text-gray-600">Plan actuel</th>
+                <th className="px-4 py-2 font-semibold text-gray-600">Add-ons</th>
+                <th className="px-4 py-2 font-semibold text-gray-600">Périodicité</th>
+                <th className="px-4 py-2 font-semibold text-gray-600 text-right">Prix mensuel</th>
+                <th className="px-4 py-2 font-semibold text-gray-600 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(s => {
+                const plan = s.plan_id ? planMap.get(s.plan_id) : null
+                const addons = Array.isArray(s.addons_actifs) ? s.addons_actifs : []
                 return (
-                  <Card key={plan.id} className="relative overflow-hidden">
-                    <div className="h-1.5" style={{ backgroundColor: color }} />
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-base" style={{ color: "#0B0F2E" }}>
-                          {plan.nom}
-                        </CardTitle>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditPlan(plan)}
-                          title={t('adm.services.edit_plan_tooltip', locale)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" style={{ color: "#D4AF37" }} />
-                        </Button>
-                      </div>
-                      <CardDescription className="text-xs">{plan.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3 overflow-x-auto">
-                      <div className="space-y-1.5">
-                        {moduleKeys.map(key => (
-                          <div key={key} className="flex items-center gap-2 text-sm">
-                            {plan.modules[key] ? (
-                              <Check className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-                            ) : (
-                              <X className="h-4 w-4 text-gray-300 flex-shrink-0" />
-                            )}
-                            <span className={plan.modules[key] ? "text-gray-900" : "text-gray-400"}>
-                              {MODULE_LABELS[key]}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="pt-2 border-t">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">{t('adm.services.monthly_price', locale)}</span>
-                          <span className="font-semibold text-sm" style={{ color: "#0B0F2E" }}>
-                            {plan.prix_mensuel > 0 ? `Rs ${Number(plan.prix_mensuel).toLocaleString(locale === 'fr' ? "fr-FR" : "en-GB")}` : t('adm.services.on_quote', locale)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs text-muted-foreground">{t('adm.services.societes', locale)}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {planStats.find(p => p.id === plan.id)?.count || 0}
+                  <tr key={s.id} className="border-t hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{s.nom}</p>
+                      {s.brn && <p className="text-xs text-gray-500 font-mono">BRN {s.brn}</p>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {plan ? (
+                        <div className="flex items-center gap-1.5">
+                          <Badge className="bg-blue-50 text-blue-800 text-[10px]">
+                            {plan.pack ? PACK_LABELS[plan.pack] : '—'}
+                            {plan.taille_entreprise && ` · ${TAILLE_LABELS[plan.taille_entreprise].split(' ')[0]}`}
                           </Badge>
+                          <span className="text-sm font-medium">{plan.nom}</span>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      ) : <span className="text-xs text-amber-700">Pas d'abonnement</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {addons.length === 0 ? <span className="text-xs text-gray-400">—</span> :
+                        <div className="flex gap-1 flex-wrap">
+                          {addons.map((c: string) => (
+                            <Badge key={c} className="bg-purple-50 text-purple-800 text-[10px]">+{c.replace(/^addon_/, '')}</Badge>
+                          ))}
+                        </div>}
+                    </td>
+                    <td className="px-4 py-3 text-xs">{s.periodicite || 'mensuelle'}</td>
+                    <td className="px-4 py-3 text-right font-bold">
+                      {s.prix_mensuel_effectif != null ? `${fmt(s.prix_mensuel_effectif)} MUR` : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button size="sm" variant="outline" onClick={() => setEditing(s)} className="h-8 text-xs">
+                        <Settings className="w-3.5 h-3.5 mr-1" /> Configurer
+                      </Button>
+                    </td>
+                  </tr>
                 )
               })}
-            </div>
-          </CardContent>
-        )}
-      </Card>
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {/* ============================================================ */}
-      {/* SECTION 2 — Attribution par societe                           */}
-      {/* ============================================================ */}
-      <Card>
-        <CardHeader>
-          <button
-            onClick={() => setSection2Open(!section2Open)}
-            className="w-full flex items-center justify-between"
-          >
-            <div className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" style={{ color: "#D4AF37" }} />
-              <CardTitle style={{ color: "#0B0F2E" }}>{t('adm.services.section_assign', locale)}</CardTitle>
-            </div>
-            <div className="flex items-center gap-2">
-              <CardDescription>{societes.length} {t('adm.services.societe_suffix', locale)}</CardDescription>
-              {section2Open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </div>
-          </button>
-        </CardHeader>
-        {section2Open && (
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('adm.services.col_societe', locale)}</TableHead>
-                  <TableHead>{t('adm.services.col_brn', locale)}</TableHead>
-                  <TableHead>{t('adm.services.col_clients', locale)}</TableHead>
-                  <TableHead>{t('adm.services.col_current_plan', locale)}</TableHead>
-                  <TableHead>{t('adm.services.col_active_modules', locale)}</TableHead>
-                  <TableHead>{t('adm.services.col_created', locale)}</TableHead>
-                  <TableHead className="text-right">{t('adm.services.col_actions', locale)}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {societes.map(soc => {
-                  const modules = soc.modules_actifs || DEFAULT_MODULES
-                  const activeCount = (Object.keys(modules) as (keyof ModulesConfig)[]).filter(k => modules[k]).length
-                  return (
-                    <TableRow key={soc.id}>
-                      <TableCell className="font-medium">{soc.nom}</TableCell>
-                      <TableCell className="font-mono text-sm">{soc.brn || "\u2014"}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {soc.clients.length > 0
-                            ? soc.clients.map(c => (
-                                <Badge key={c.id} variant="outline" className="text-xs" style={{ borderColor: "#D4AF37", color: "#0B0F2E" }}>
-                                  {c.full_name}
-                                </Badge>
-                              ))
-                            : <span className="text-xs text-muted-foreground">{t('adm.services.none', locale)}</span>
-                          }
-                        </div>
-                      </TableCell>
-                      <TableCell>{getPlanBadge(soc.plan_code)}</TableCell>
-                      <TableCell>
-                        <span className="text-xs text-muted-foreground">{t('adm.services.modules_count', locale).replace('{n}', String(activeCount))}</span>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {new Date(soc.created_at).toLocaleDateString(locale === 'fr' ? "fr-FR" : "en-GB")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-xs"
-                            onClick={() => openAssignDialog(soc)}
-                          >
-                            {t('adm.services.change_plan', locale)}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs"
-                            style={{ color: "#D4AF37" }}
-                            onClick={() => openCustomDialog(soc)}
-                          >
-                            {t('adm.services.customize', locale)}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-                {societes.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      {t('adm.services.no_societe', locale)}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        )}
-      </Card>
-
-      {/* ============================================================ */}
-      {/* SECTION 3 — Statistiques                                      */}
-      {/* ============================================================ */}
-      <Card>
-        <CardHeader>
-          <button
-            onClick={() => setSection3Open(!section3Open)}
-            className="w-full flex items-center justify-between"
-          >
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" style={{ color: "#D4AF37" }} />
-              <CardTitle style={{ color: "#0B0F2E" }}>{t('adm.services.section_stats', locale)}</CardTitle>
-            </div>
-            {section3Open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-          </button>
-        </CardHeader>
-        {section3Open && (
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2">
-              {/* Societes par plan */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" style={{ color: "#D4AF37" }} />
-                    <CardTitle className="text-sm">{t('adm.services.stats_societes_by_plan', locale)}</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {planStats.map(ps => {
-                    const color = PLAN_COLORS[ps.code] || "#6b7280"
-                    const pct = societes.length > 0 ? Math.round((ps.count / societes.length) * 100) : 0
-                    return (
-                      <div key={ps.id} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <span style={{ color: "#0B0F2E" }}>{ps.nom}</span>
-                          <span className="font-medium">{ps.count} {t('adm.services.societe_suffix', locale)}</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all"
-                            style={{ width: `${pct}%`, backgroundColor: color }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {customCount > 0 && (
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span style={{ color: "#0B0F2E" }}>{t('adm.services.plan_custom', locale)}</span>
-                        <span className="font-medium">{customCount} {t('adm.services.societe_suffix', locale)}</span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-gray-400 transition-all"
-                          style={{ width: `${societes.length > 0 ? Math.round((customCount / societes.length) * 100) : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {noPlanCount > 0 && (
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">{t('adm.services.plan_undefined', locale)}</span>
-                        <span className="font-medium">{noPlanCount} {t('adm.services.societe_suffix', locale)}</span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-gray-200 transition-all"
-                          style={{ width: `${societes.length > 0 ? Math.round((noPlanCount / societes.length) * 100) : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Revenue par plan */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="h-4 w-4" style={{ color: "#D4AF37" }} />
-                    <CardTitle className="text-sm">{t('adm.services.stats_revenue', locale)}</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {planStats.map(ps => {
-                    const color = PLAN_COLORS[ps.code] || "#6b7280"
-                    const revenue = ps.count * (Number(ps.prix_mensuel) || 0)
-                    return (
-                      <div key={ps.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-                          <div>
-                            <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{ps.nom}</p>
-                            <p className="text-xs text-muted-foreground">{ps.count} {t('adm.services.societe_suffix', locale)}</p>
-                          </div>
-                        </div>
-                        <span className="font-semibold text-sm" style={{ color: "#0B0F2E" }}>
-                          {revenue > 0 ? `Rs ${revenue.toLocaleString(locale === 'fr' ? "fr-FR" : "en-GB")}` : t('adm.services.on_quote', locale)}
-                        </span>
-                      </div>
-                    )
-                  })}
-                  <div className="pt-3 border-t">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{t('adm.services.total_monthly', locale)}</span>
-                      <span className="font-bold" style={{ color: "#D4AF37" }}>
-                        Rs {planStats.reduce((sum, ps) => sum + ps.count * (Number(ps.prix_mensuel) || 0), 0).toLocaleString(locale === 'fr' ? "fr-FR" : "en-GB")}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      {/* ============================================================ */}
-      {/* DIALOG — Edit plan                                            */}
-      {/* ============================================================ */}
-      <Dialog open={editPlanDialog} onOpenChange={(o) => { setEditPlanDialog(o); if (!o) setEditingPlan(null) }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle style={{ color: "#0B0F2E" }}>
-              {t('adm.services.edit_plan_title', locale)}: {editingPlan?.nom}
-            </DialogTitle>
-            <DialogDescription>
-              {t('adm.services.edit_plan_desc', locale)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {(Object.keys(MODULE_LABELS) as (keyof ModulesConfig)[]).map(key => (
-              <div key={key} className="flex items-center justify-between p-3 rounded-lg border">
-                <div>
-                  <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{MODULE_LABELS[key]}</p>
-                  <p className="text-xs text-muted-foreground">{MODULE_DETAILS[key]}</p>
-                </div>
-                <Switch
-                  checked={editModules[key]}
-                  onCheckedChange={(checked) => setEditModules(prev => ({ ...prev, [key]: checked }))}
-                  disabled={key === "documents"}
-                />
-              </div>
-            ))}
-            <div className="space-y-2">
-              <Label>{t('adm.services.price_label', locale)}</Label>
-              <Input
-                type="number"
-                min="0"
-                step="100"
-                value={editPrix}
-                onChange={(e) => setEditPrix(e.target.value)}
-                placeholder={t('adm.services.price_placeholder', locale)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditPlanDialog(false)}>{t('adm.services.cancel', locale)}</Button>
-            <Button
-              style={{ backgroundColor: "#D4AF37" }}
-              onClick={handleSavePlan}
-              disabled={savingPlan}
-            >
-              {savingPlan ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {t('adm.services.save', locale)}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ============================================================ */}
-      {/* DIALOG — Assign plan to societe                               */}
-      {/* ============================================================ */}
-      <Dialog open={assignDialog} onOpenChange={(o) => { setAssignDialog(o); if (!o) setAssignSociete(null) }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle style={{ color: "#0B0F2E" }}>
-              {t('adm.services.assign_title', locale)}
-            </DialogTitle>
-            <DialogDescription>
-              {t('adm.services.assign_desc', locale)} <strong>{assignSociete?.nom}</strong>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>{t('adm.services.plan', locale)}</Label>
-              <Select value={assignPlanCode} onValueChange={setAssignPlanCode}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t('adm.services.select_plan', locale)} />
-                </SelectTrigger>
-                <SelectContent>
-                  {plans.map(p => (
-                    <SelectItem key={p.code} value={p.code}>
-                      {p.nom} -- {p.description}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {/* Preview modules for selected plan */}
-            {assignPlanCode && (() => {
-              const selectedPlan = plans.find(p => p.code === assignPlanCode)
-              if (!selectedPlan) return null
-              return (
-                <div className="rounded-lg border p-3 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">{t('adm.services.modules_included', locale)}</p>
-                  {(Object.keys(MODULE_LABELS) as (keyof ModulesConfig)[]).map(key => (
-                    <div key={key} className="flex items-center gap-2 text-sm">
-                      {selectedPlan.modules[key] ? (
-                        <Check className="h-3.5 w-3.5 text-emerald-600" />
-                      ) : (
-                        <X className="h-3.5 w-3.5 text-gray-300" />
-                      )}
-                      <span className={selectedPlan.modules[key] ? "" : "text-gray-400"}>{MODULE_LABELS[key]}</span>
-                    </div>
-                  ))}
-                </div>
-              )
-            })()}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignDialog(false)}>{t('adm.services.cancel', locale)}</Button>
-            <Button
-              style={{ backgroundColor: "#D4AF37" }}
-              onClick={handleAssignPlan}
-              disabled={assignSaving || !assignPlanCode}
-            >
-              {assignSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {t('adm.services.assign_btn', locale)}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ============================================================ */}
-      {/* DIALOG — Custom modules per societe                           */}
-      {/* ============================================================ */}
-      <Dialog open={customDialog} onOpenChange={(o) => { setCustomDialog(o); if (!o) setCustomSociete(null) }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle style={{ color: "#0B0F2E" }}>
-              {t('adm.services.custom_title', locale)}
-            </DialogTitle>
-            <DialogDescription>
-              {t('adm.services.custom_desc1', locale)} <strong>{customSociete?.nom}</strong>.
-              {' '}{t('adm.services.custom_desc2', locale)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-4">
-            {(Object.keys(MODULE_LABELS) as (keyof ModulesConfig)[]).map(key => (
-              <div key={key} className="flex items-center justify-between p-3 rounded-lg border">
-                <div>
-                  <p className="text-sm font-medium" style={{ color: "#0B0F2E" }}>{MODULE_LABELS[key]}</p>
-                  <p className="text-xs text-muted-foreground">{MODULE_DETAILS[key]}</p>
-                </div>
-                <Switch
-                  checked={customModules[key]}
-                  onCheckedChange={(checked) => setCustomModules(prev => ({ ...prev, [key]: checked }))}
-                  disabled={key === "documents"}
-                />
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCustomDialog(false)}>{t('adm.services.cancel', locale)}</Button>
-            <Button
-              style={{ backgroundColor: "#D4AF37" }}
-              onClick={handleSaveCustom}
-              disabled={customSaving}
-            >
-              {customSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {t('adm.services.save', locale)}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {editing && (
+        <SubscriptionDialog societe={editing} plans={plans} onClose={() => setEditing(null)}
+                            onSaved={() => { setEditing(null); fetchAll(); setMsg({ type: 'success', text: 'Abonnement mis à jour.' }) }} />
+      )}
     </div>
     </ClientPageShell>
+  )
+}
+
+function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
+  societe: Societe; plans: Plan[]; onClose: () => void; onSaved: () => void
+}) {
+  const [planId, setPlanId] = useState<string | null>(societe.plan_id)
+  const [addons, setAddons] = useState<string[]>(Array.isArray(societe.addons_actifs) ? societe.addons_actifs : [])
+  const [periodicite, setPeriodicite] = useState<'mensuelle' | 'annuelle'>(societe.periodicite === 'annuelle' ? 'annuelle' : 'mensuelle')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const packPlans = plans.filter(p => !p.is_addon && p.pack && ['compta', 'paie', 'bundle', 'cabinet'].includes(p.pack))
+  const addonPlans = plans.filter(p => p.is_addon)
+
+  const selectedPlan = plans.find(p => p.id === planId) || null
+  const selectedAddons = plans.filter(p => addons.includes(p.code))
+
+  // Calcul local en temps réel
+  const prixMensuel = (selectedPlan?.prix_mensuel_mur || 0) + selectedAddons.reduce((s, a) => s + (a.prix_mensuel_mur || 0), 0)
+  const prixPeriode = periodicite === 'annuelle'
+    ? ((selectedPlan?.prix_annuel_mur ?? (selectedPlan?.prix_mensuel_mur || 0) * 12) +
+       selectedAddons.reduce((s, a) => s + (a.prix_annuel_mur ?? (a.prix_mensuel_mur || 0) * 12), 0))
+    : prixMensuel
+  const modulesActifs: Record<string, boolean> = {}
+  if (selectedPlan?.modules_inclus) Object.assign(modulesActifs, selectedPlan.modules_inclus)
+  for (const a of selectedAddons) {
+    for (const [k, v] of Object.entries(a.modules_inclus || {})) {
+      if (v) modulesActifs[k] = true
+    }
+  }
+  const activeModuleKeys = Object.entries(modulesActifs).filter(([, v]) => v).map(([k]) => k)
+
+  const toggleAddon = (code: string) => {
+    setAddons(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code])
+  }
+
+  const save = async () => {
+    if (!planId) { setError('Choisis un plan'); return }
+    setSaving(true); setError(null)
+    try {
+      const res = await fetch(`/api/admin/societes/${societe.id}/subscription`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_id: planId, addon_codes: addons, periodicite }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error || 'Erreur')
+      onSaved()
+    } catch (e: any) {
+      setError(e?.message || 'Erreur')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Groupage des plans par pack pour l'UI
+  const byPack: Record<string, Plan[]> = { compta: [], paie: [], bundle: [], cabinet: [] }
+  for (const p of packPlans) if (p.pack && byPack[p.pack]) byPack[p.pack].push(p)
+  Object.values(byPack).forEach(arr => arr.sort((a, b) => {
+    const order = { solo: 1, petite: 2, pme: 3, grande: 4, null: 5 } as any
+    return (order[a.taille_entreprise || 'null'] || 99) - (order[b.taille_entreprise || 'null'] || 99)
+  }))
+
+  return (
+    <Dialog open={true} onOpenChange={o => { if (!o) onClose() }}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Building2 className="w-5 h-5" /> {societe.nom} — Abonnement
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5 mt-4">
+          {/* Périodicité */}
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Périodicité de facturation</p>
+            <div className="inline-flex rounded-lg border p-1 bg-gray-50">
+              {(['mensuelle', 'annuelle'] as const).map(p => (
+                <button key={p} onClick={() => setPeriodicite(p)}
+                        className={`px-4 py-1.5 rounded text-sm ${periodicite === p ? 'bg-white shadow font-semibold' : 'text-gray-600'}`}>
+                  {p === 'mensuelle' ? 'Mensuelle' : 'Annuelle (économie 17%)'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Plans par pack */}
+          {(['compta', 'paie', 'bundle', 'cabinet'] as const).map(pack => byPack[pack].length > 0 && (
+            <div key={pack}>
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">{PACK_LABELS[pack]}</p>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                {byPack[pack].map(p => {
+                  const selected = planId === p.id
+                  const prix = periodicite === 'annuelle' ? (p.prix_annuel_mur ?? p.prix_mensuel_mur * 12) : p.prix_mensuel_mur
+                  return (
+                    <button key={p.id} onClick={() => setPlanId(p.id)}
+                            className={`text-left p-3 rounded-lg border-2 transition-colors ${selected ? 'border-[#D4AF37] bg-amber-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] uppercase tracking-wider font-bold text-gray-500">
+                          {p.taille_entreprise ? TAILLE_LABELS[p.taille_entreprise] : p.pack}
+                        </p>
+                        {p.populaire && <Star className="w-3 h-3 text-amber-600 fill-amber-400" />}
+                      </div>
+                      <p className="font-semibold text-sm mt-1" style={{ color: '#0B0F2E' }}>{p.nom}</p>
+                      {p.prix_visible !== false ? (
+                        <p className="mt-1 text-sm font-bold">
+                          {fmt(prix)} <span className="text-[10px] text-gray-500 font-normal">MUR/{periodicite === 'annuelle' ? 'an' : 'mois'}</span>
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-xs italic text-gray-500">Tarif sur devis</p>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Add-ons */}
+          {addonPlans.length > 0 && (
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Add-ons</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {addonPlans.map(a => {
+                  const checked = addons.includes(a.code)
+                  const prix = periodicite === 'annuelle' ? (a.prix_annuel_mur ?? a.prix_mensuel_mur * 12) : a.prix_mensuel_mur
+                  return (
+                    <label key={a.id} className={`flex items-start gap-2 p-3 rounded-lg border-2 cursor-pointer ${checked ? 'border-purple-400 bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleAddon(a.code)} className="mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-sm">{a.nom}</p>
+                        {a.description && <p className="text-[11px] text-gray-500 mt-0.5">{a.description}</p>}
+                        <p className="text-xs font-bold mt-1">+{fmt(prix)} MUR/{periodicite === 'annuelle' ? 'an' : 'mois'}</p>
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Résumé */}
+          {selectedPlan && (
+            <div className="p-4 bg-[#0B0F2E] text-white rounded-lg">
+              <p className="text-xs uppercase tracking-wider text-amber-400 font-bold mb-2">Résumé de l'abonnement</p>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <p className="text-[10px] uppercase text-white/60">Prix mensuel</p>
+                  <p className="text-2xl font-bold text-amber-300">{fmt(prixMensuel)} <span className="text-xs text-white/60">MUR/mois</span></p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-white/60">Facturé en {periodicite}</p>
+                  <p className="text-2xl font-bold text-amber-300">{fmt(prixPeriode)} <span className="text-xs text-white/60">MUR/{periodicite === 'annuelle' ? 'an' : 'mois'}</span></p>
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase text-white/60 mb-1">Modules actifs ({activeModuleKeys.length})</p>
+                <div className="flex flex-wrap gap-1">
+                  {activeModuleKeys.length === 0 ? <span className="text-xs text-white/40">Aucun</span> :
+                    activeModuleKeys.map(k => (
+                      <span key={k} className="inline-block px-2 py-0.5 rounded text-[10px] bg-white/10 border border-white/20">
+                        {MODULE_LABELS[k] || k}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {error && <div className="p-2 bg-red-50 text-red-800 text-sm rounded">{error}</div>}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button onClick={save} disabled={saving || !planId} className="bg-[#D4AF37] hover:bg-[#C9A630] text-[#0B0F2E]">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+            Appliquer l'abonnement
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
