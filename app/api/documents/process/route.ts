@@ -528,7 +528,15 @@ ${excelText}`
         file_size_bytes: fileSizeBytes,
         image_oversize: imageTooLarge || undefined,
         image_hard_oversize: imageHardOversize || undefined,
+        excel_sheet_count: excelSheetCount || undefined,
+        excel_sheet_names: excelSheetNames.length > 0 ? excelSheetNames : undefined,
+        excel_chosen_sheet: excelChosenSheet || undefined,
       },
+    }
+    // Pour les Excel : si Claude n'a rien détecté de pertinent, on stocke
+    // un échantillon du contenu envoyé pour permettre debug post-mortem.
+    if (isExcel && (typeDoc === 'autre' || confianceExtraction === 0)) {
+      n8nResult.debug_excel_content = excelText.slice(0, 6000)
     }
     if (lowConfidence) {
       n8nResult.warning = 'Extraction peu fiable, vérification manuelle conseillée'
