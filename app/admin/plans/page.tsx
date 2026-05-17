@@ -37,15 +37,19 @@ interface Plan {
 }
 
 const MODULES: Array<{ key: string; label: string; desc: string }> = [
-  { key: 'comptabilite',     label: 'Comptabilité',       desc: 'Grand Livre, balance, bilan, rapprochement.' },
-  { key: 'facturation',      label: 'Facturation',        desc: 'Factures MRA, devis, relances clients.' },
-  { key: 'documents',        label: 'Documents & OCR',    desc: 'Upload, classification, OCR IA.' },
-  { key: 'rh',               label: 'RH & Paie',          desc: 'Bulletins, congés, pointage.' },
-  { key: 'fiscal',           label: 'Fiscal MRA',         desc: 'TVA, PAYE, CSG, IT Form, ROC.' },
-  { key: 'etats_financiers', label: 'États financiers',   desc: 'Bilan, P&L, IFRS 9/16, échéances.' },
-  { key: 'juridique',        label: 'Juridique',          desc: 'Contrats, AGM, conformité.' },
-  { key: 'employe_portal',   label: 'Portail employé',    desc: 'Self-service salarié (bulletins, congés).' },
-  { key: 'telegram',         label: 'Assistant IA Telegram', desc: 'Chief of Staff IA — agenda, RDV, emails.' },
+  // Modules listés sur /tarifs (visibles côté prospect)
+  { key: 'documents',        label: 'OCR & Documents IA',     desc: 'Upload, classification, OCR IA, lecture factures/relevés.' },
+  { key: 'comptabilite',     label: 'Comptabilité Automatisée', desc: 'Grand Livre, Balance, Bilan & P&L, rapprochement bancaire.' },
+  { key: 'facturation',      label: 'Facturation MRA Agréée', desc: 'Factures conformes MRA (IRN + QR), devis, avoirs, relances.' },
+  { key: 'rh',               label: 'RH & Paie Maurice',      desc: 'Bulletins (CSG/NSF/PAYE), pointeuse, congés WRA 2019.' },
+  { key: 'fiscal',           label: 'Fiscal MRA',             desc: 'TVA, PAYE, CSG, TDS, IT Form, ROC, e-MRA.' },
+  { key: 'alertes_ia',       label: 'Alertes IA & Pilotage',  desc: 'Agent IA échéances fiscales, prévisionnel, recommandations.' },
+  { key: 'tibok',            label: 'TIBOK Corporate (Santé)', desc: 'Bilan santé annuel, téléconsultation 24/7, bien-être.' },
+  { key: 'telegram',         label: 'Chief of Staff IA Telegram', desc: 'Assistant IA Telegram — agenda, RDV, emails, langage naturel.' },
+  // Sous-modules avancés (internes, non listés sur /tarifs)
+  { key: 'juridique',        label: 'Juridique (avancé)',     desc: 'Contrats, AGM, conformité.' },
+  { key: 'etats_financiers', label: 'États financiers (avancé)', desc: 'IFRS 9/16, échéances détaillées.' },
+  { key: 'employe_portal',   label: 'Portail employé',        desc: 'Self-service salarié (bulletins, congés, frais).' },
 ]
 
 const EMPTY_PLAN = (): Plan => ({
