@@ -77,29 +77,70 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
 
   const admin = getAdminClient()
 
-  // Compute via la fonction SQL (cohérence avec d'autres usages)
+  // Calcul : tente d'abord la fonction SQL (mig 284), fallback JS sinon.
+  let prixMensuel = 0
+  let prixPeriode = 0
+  let modulesInclus: Record<string, boolean> = {}
+
   const { data: comp, error: cErr } = await admin.rpc('compute_subscription', {
     p_plan_id: plan_id, p_addon_codes: addons, p_periodicite: period,
   })
-  if (cErr) return NextResponse.json({ error: `compute: ${cErr.message}` }, { status: 500 })
-  const row = Array.isArray(comp) ? comp[0] : comp
+  if (!cErr && comp) {
+    const row = Array.isArray(comp) ? comp[0] : comp
+    prixMensuel = Number(row?.prix_mensuel || 0)
+    prixPeriode = Number(row?.prix_periode || 0)
+    modulesInclus = row?.modules_inclus || {}
+  } else {
+    // Fallback JS si la fonction SQL n'est pas (encore) déployée.
+    const { data: planRow } = await admin.from('plans').select('*').eq('id', plan_id).maybeSingle()
+    if (!planRow) return NextResponse.json({ error: 'Plan introuvable' }, { status: 404 })
+    let addonRows: any[] = []
+    if (addons.length > 0) {
+      const { data } = await admin.from('plans').select('*').in('code', addons)
+      addonRows = data || []
+    }
+    prixMensuel = Number(planRow.prix_mensuel_mur || 0)
+    prixPeriode = period === 'annuelle'
+      ? Number(planRow.prix_annuel_mur ?? planRow.prix_mensuel_mur * 12 ?? 0)
+      : prixMensuel
+    modulesInclus = { ...(planRow.modules_inclus || {}) }
+    for (const a of addonRows) {
+      prixMensuel += Number(a.prix_mensuel_mur || 0)
+      prixPeriode += period === 'annuelle'
+        ? Number(a.prix_annuel_mur ?? a.prix_mensuel_mur * 12 ?? 0)
+        : Number(a.prix_mensuel_mur || 0)
+      for (const [k, v] of Object.entries(a.modules_inclus || {})) {
+        if (v) modulesInclus[k] = true
+      }
+    }
+  }
 
-  // Persiste sur la société : plan_id + addons + periodicite + prix cache +
-  // modules_actifs (merge plan + add-ons)
-  const { error: uErr } = await admin.from('societes').update({
+  // Persiste sur la société. Si certaines colonnes n'existent pas (mig 284
+  // pas appliquée), on retombe sur l'écriture minimale.
+  const fullPayload = {
     plan_id,
     addons_actifs: addons,
     periodicite: period,
-    prix_mensuel_effectif: row?.prix_mensuel ?? null,
-    prix_periode_effectif: row?.prix_periode ?? null,
-    modules_actifs: row?.modules_inclus ?? {},
-  }).eq('id', id)
-  if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
+    prix_mensuel_effectif: prixMensuel,
+    prix_periode_effectif: prixPeriode,
+    modules_actifs: modulesInclus,
+  }
+  const { error: uErr } = await admin.from('societes').update(fullPayload).eq('id', id)
+  if (uErr) {
+    // Tente une update partielle : seulement les colonnes qui existaient
+    // avant la mig 284 (plan_id, modules_actifs).
+    const fb = await admin.from('societes')
+      .update({ plan_id, modules_actifs: modulesInclus })
+      .eq('id', id)
+    if (fb.error) return NextResponse.json({
+      error: `Échec persistance : ${uErr.message}. La migration 284 doit être appliquée pour persister addons + prix.`,
+    }, { status: 500 })
+  }
 
   return NextResponse.json({
     success: true,
-    prix_mensuel: row?.prix_mensuel,
-    prix_periode: row?.prix_periode,
-    modules_inclus: row?.modules_inclus,
+    prix_mensuel: prixMensuel,
+    prix_periode: prixPeriode,
+    modules_inclus: modulesInclus,
   })
 }

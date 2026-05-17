@@ -93,6 +93,7 @@ const PACK_LABELS: Record<string, string> = {
   cabinet: 'Cabinet comptable',
   addon: 'Add-on',
   legacy: 'Legacy',
+  autres: 'Plans disponibles',
 }
 const TAILLE_LABELS: Record<string, string> = {
   solo: 'Solo (1–3)',
@@ -250,8 +251,14 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const packPlans = plans.filter(p => !p.is_addon && p.pack && ['compta', 'paie', 'bundle', 'cabinet'].includes(p.pack))
-  const addonPlans = plans.filter(p => p.is_addon)
+  // Fallback : si les colonnes pack/is_addon n'existent pas (mig 283 pas
+  // appliquée), on affiche tous les plans actifs comme « Autres plans »
+  // pour ne pas bloquer l'attribution.
+  const hasPackData = plans.some(p => p.pack)
+  const packPlans = hasPackData
+    ? plans.filter(p => !p.is_addon && p.pack && ['compta', 'paie', 'bundle', 'cabinet'].includes(p.pack))
+    : plans.filter(p => !p.is_addon)
+  const addonPlans = plans.filter(p => p.is_addon || (p.code || '').startsWith('addon_'))
 
   const selectedPlan = plans.find(p => p.id === planId) || null
   const selectedAddons = plans.filter(p => addons.includes(p.code))
@@ -293,9 +300,13 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
     }
   }
 
-  // Groupage des plans par pack pour l'UI
-  const byPack: Record<string, Plan[]> = { compta: [], paie: [], bundle: [], cabinet: [] }
-  for (const p of packPlans) if (p.pack && byPack[p.pack]) byPack[p.pack].push(p)
+  // Groupage des plans par pack pour l'UI (avec fallback "autres" si pas
+  // de pack défini).
+  const byPack: Record<string, Plan[]> = { compta: [], paie: [], bundle: [], cabinet: [], autres: [] }
+  for (const p of packPlans) {
+    const key = p.pack && ['compta', 'paie', 'bundle', 'cabinet'].includes(p.pack) ? p.pack : 'autres'
+    byPack[key].push(p)
+  }
   Object.values(byPack).forEach(arr => arr.sort((a, b) => {
     const order = { solo: 1, petite: 2, pme: 3, grande: 4, null: 5 } as any
     return (order[a.taille_entreprise || 'null'] || 99) - (order[b.taille_entreprise || 'null'] || 99)
@@ -325,7 +336,7 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
           </div>
 
           {/* Plans par pack */}
-          {(['compta', 'paie', 'bundle', 'cabinet'] as const).map(pack => byPack[pack].length > 0 && (
+          {(['compta', 'paie', 'bundle', 'cabinet', 'autres'] as const).map(pack => byPack[pack].length > 0 && (
             <div key={pack}>
               <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">{PACK_LABELS[pack]}</p>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
