@@ -1,49 +1,38 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole, type TelegramContext } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { callLexoraHeaders, getLexoraBaseUrl } from '@/lib/lexora-internal-auth'
 import {
   extraireParametresFacture,
   type ContexteFactureIA,
   type MessageFactureIA,
 } from '@/lib/factures/ia-assistant'
+import { prochaineDateGeneration, type Frequence } from '@/lib/recurrences/recurrences-factures'
 
 /**
  * POST /api/telegram/internal/recurring-invoice-create
  *
- * Tool agent — crée un MODÈLE de facture récurrente (template) qui sera
- * automatiquement cloné par le cron quotidien aux périodes configurées.
+ * Tool agent — crée un MODÈLE de facture récurrente (statut='modele'). Le
+ * cron quotidien (lib/recurrences/recurrences-factures.ts) génère ensuite
+ * les vraies factures à chaque échéance.
  *
  * Rôles autorisés : direction, comptable, comptable_dedie, client_admin
- * (admin/super_admin via hiérarchie). Identique à invoice.create.
+ * (admin/super_admin via hiérarchie).
  *
  * Body :
  *   - chat_id      (résolu par l'auth wrapper)
- *   - prompt       : string — description libre incluant fréquence + dates
- *                    (ex: "Loyer ACME 50 000 MUR tous les mois à partir du 1er juin 2026")
+ *   - prompt       : string — description libre (ex: "Loyer ACME 50 000 MUR
+ *                    tous les mois à partir du 1er juin 2026")
  *   - frequence?   : 'mensuel' | 'trimestriel' | 'annuel'  (override clarification)
  *   - date_debut?  : YYYY-MM-DD                            (override clarification)
  *   - date_fin?    : YYYY-MM-DD                            (optionnel)
  *   - jour_emission? : 1..28                                (optionnel)
  *
- * Stratégie :
- *   1. Réutilise `extraireParametresFacture` pour parser tiers + lignes
- *      (même contexte société que invoice.create).
- *   2. Détermine la fréquence depuis params.recurrence_periodicite
- *      (hebdomadaire mappée sur mensuel — non supporté côté cron) ou body override.
- *   3. Si fréquence ou date_debut manquante → retourne needs_clarification
- *      pour que l'agent re-pose la question via boutons inline.
- *   4. INSERT dans public.factures avec :
- *        recurrent=true
- *        statut='modele'                   (cf. migration 241)
- *        recurrent_frequence              ('mensuel'|'trimestriel'|'annuel')
- *        recurrence_date_debut            (DATE)
- *        recurrence_date_fin?             (DATE | NULL)
- *        recurrence_jour_du_mois?         (1..28)
+ * Stratégie : extraction IA → délégation à /api/client/factures-ia/generer
+ * avec parametres.recurrent=true (la route web force alors statut='modele'
+ * et stocke recurrent_frequence / recurrence_date_debut / etc.).
  *
- * Le cron quotidien (lib/recurrences/recurrences-factures.ts) prendra le relais
- * et générera les factures réelles aux échéances.
- *
- * Retour : { facture_id, numero, frequence, date_debut, ... }
+ * Retour : { facture_id, numero, frequence, date_debut, prochaine_emission, ... }
  */
 
 const ROLES_ALLOWED = ['direction', 'comptable', 'comptable_dedie', 'client_admin']
@@ -52,7 +41,7 @@ function roleAllowed(ctx: TelegramContext): boolean {
   return ROLES_ALLOWED.includes(ctx.role) || hasRole(ctx, 'admin')
 }
 
-type FrequenceDb = 'mensuel' | 'trimestriel' | 'annuel'
+type FrequenceDb = Frequence
 
 function normalizeFrequence(input: unknown): FrequenceDb | null {
   if (!input) return null
@@ -115,28 +104,6 @@ async function buildContexte(societe_id: string): Promise<ContexteFactureIA> {
   } as unknown as ContexteFactureIA
 }
 
-async function generateNumero(societe_id: string): Promise<string> {
-  const admin = getAdminClient()
-  try {
-    const { data } = await admin
-      .from('societes')
-      .select('facture_prefixe, facture_prochain_numero')
-      .eq('id', societe_id)
-      .maybeSingle()
-    const row = data as any
-    if (row && (row.facture_prefixe || row.facture_prochain_numero)) {
-      const prefixe = (row.facture_prefixe as string) || 'INV-'
-      const prochain = Number(row.facture_prochain_numero) || 1
-      await admin
-        .from('societes')
-        .update({ facture_prochain_numero: prochain + 1 })
-        .eq('id', societe_id)
-      return `${prefixe}REC-${String(prochain).padStart(4, '0')}`
-    }
-  } catch {}
-  return `REC-${Date.now().toString().slice(-6)}`
-}
-
 export async function POST(req: NextRequest) {
   return withTelegramAuth(req, 'recurring_invoice.create', async (ctx, body) => {
     if (!roleAllowed(ctx)) {
@@ -183,7 +150,7 @@ export async function POST(req: NextRequest) {
     const frequenceFromIA = normalizeFrequence(params?.recurrence_periodicite)
     const frequence = frequenceFromBody || frequenceFromIA
 
-    // 4) date_debut : body override > extraction IA > aujourd'hui (si frequence est claire)
+    // 4) date_debut : body override > extraction IA
     const today = new Date().toISOString().slice(0, 10)
     const date_debut_body = isIsoDate(body?.date_debut) ? (body.date_debut as string) : null
     const date_debut_ia = isIsoDate(params?.date_facture) ? (params.date_facture as string) : null
@@ -228,35 +195,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 6) Calculs totaux (identique à invoice.create) pour stocker les valeurs
-    const lignes = (params.lignes as any[]).filter(l => l && l.description)
-    if (lignes.length === 0) {
-      return { result: null, status: 'error', error_msg: 'Aucune ligne valide' }
-    }
-    let montant_ht = 0
-    let montant_tva = 0
-    const lignesNorm = lignes.map(l => {
-      const q = Number(l.quantite) || 0
-      const pu = Number(l.prix_unitaire) || 0
-      const tva = Number(l.taux_tva ?? contexte.tva_defaut ?? 15)
-      const lht = q * pu
-      const ltva = lht * (tva / 100)
-      montant_ht += lht
-      montant_tva += ltva
-      return {
-        description: String(l.description || '').trim(),
-        quantite: q,
-        prix_unitaire: pu,
-        taux_tva: tva,
-        unite: l.unite || undefined,
-        total: lht + ltva,
-      }
-    })
-    const remise_pct = Number(params.remise_pct) || 0
-    const remise_montant = Number(params.remise_montant) || 0
-    const remise = remise_pct > 0 ? montant_ht * (remise_pct / 100) : remise_montant
-    const montant_ttc = montant_ht + montant_tva - remise
-
+    // Garde-fou taux change minimal côté Telegram pour erreur claire
     const devise = String(params.devise || contexte.societe?.devise_defaut || 'MUR').toUpperCase()
     const taux_change = Number(params.taux_change) || (devise === 'MUR' ? 1 : 0)
     if (devise !== 'MUR' && taux_change <= 1.0001) {
@@ -267,73 +206,64 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const numero = await generateNumero(ctx.societe_id)
-    const mur = devise === 'MUR' ? montant_ttc : montant_ttc * taux_change
-
-    // 7) Insert MODÈLE (recurrent=true, statut='modele')
-    const admin = getAdminClient()
-    const { data: created, error } = await admin
-      .from('factures')
-      .insert({
+    // 6) Délégation à /api/client/factures-ia/generer avec champs récurrence.
+    //    /factures-ia/generer forward les recurrent_* à /factures qui force
+    //    alors statut='modele' (cf. ligne 203 factures/route.ts).
+    const baseUrl = getLexoraBaseUrl()
+    const res = await fetch(`${baseUrl}/api/client/factures-ia/generer`, {
+      method: 'POST',
+      headers: callLexoraHeaders(ctx.user_id),
+      body: JSON.stringify({
         societe_id: ctx.societe_id,
-        type_facture: 'client',
-        numero_facture: numero,
-        tiers: String(params.tiers).trim(),
-        contact_id: params.contact_id || null,
-        description: params.description || null,
-        date_facture: date_debut,
-        date_echeance: date_debut, // template — sera recalculé à la génération
-        conditions_paiement: Number(params.conditions_paiement) || contexte.conditions_paiement_defaut || 30,
-        devise,
-        taux_change: devise === 'MUR' ? 1 : taux_change,
-        montant_ht: Math.round(montant_ht * 100) / 100,
-        montant_tva: Math.round(montant_tva * 100) / 100,
-        montant_ttc: Math.round(montant_ttc * 100) / 100,
-        montant_mur: Math.round(mur * 100) / 100,
-        remise_pct,
-        remise_montant: remise_pct > 0 ? 0 : remise_montant,
-        client_offshore: !!params.client_offshore,
-        mode_paiement: params.mode_paiement || 'banque',
-        template: 'standard',
-        lignes: lignesNorm,
-        notes_internes:
-          params.notes_internes ||
-          `Modèle récurrence créé via Telegram bot (chat ${ctx.chat_id}) — fréquence ${frequence}`,
-        termes: params.termes || null,
-        statut: 'modele',
-        type_document: 'facture',
-        recurrent: true,
-        recurrent_frequence: frequence,
-        recurrence_date_debut: date_debut,
-        recurrence_date_fin: date_fin,
-        recurrence_jour_du_mois: jour_emission,
-      })
-      .select(
-        'id, numero_facture, recurrent_frequence, recurrence_date_debut, recurrence_date_fin, recurrence_jour_du_mois, montant_ttc, devise, statut',
-      )
-      .single()
-
-    if (error || !created) {
+        parametres: {
+          ...params,
+          devise,
+          taux_change,
+          date_facture: date_debut,
+          notes_internes:
+            params.notes_internes ||
+            `Modèle récurrence créé via Telegram bot (chat ${ctx.chat_id}) — fréquence ${frequence}`,
+          // Drapeaux récurrence (forward par /factures-ia/generer → /factures)
+          recurrent: true,
+          recurrent_frequence: frequence,
+          recurrence_date_debut: date_debut,
+          recurrence_date_fin: date_fin,
+          recurrence_jour_du_mois: jour_emission,
+        },
+      }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) {
       return {
         result: null,
         status: 'error',
-        error_msg: `Erreur création modèle: ${error?.message || 'inconnue'}`,
+        error_msg: `Erreur création modèle: ${j?.error || `HTTP ${res.status}`}`,
       }
+    }
+
+    const fac = j?.facture || {}
+    // Prochaine émission théorique (même règle que le cron quotidien).
+    let prochaine_emission: string | null = null
+    try {
+      prochaine_emission = prochaineDateGeneration(date_debut, frequence, jour_emission)
+    } catch {
+      prochaine_emission = null
     }
 
     return {
       result: {
-        facture_id: created.id,
-        numero: created.numero_facture,
-        frequence: created.recurrent_frequence,
-        date_debut: created.recurrence_date_debut,
-        date_fin: created.recurrence_date_fin,
-        jour_emission: created.recurrence_jour_du_mois,
-        montant_ttc: Number(created.montant_ttc),
-        devise: created.devise,
-        statut: created.statut,
+        facture_id: fac.id || null,
+        numero: fac.numero_facture || null,
+        frequence: fac.recurrent_frequence || frequence,
+        date_debut: fac.recurrence_date_debut || date_debut,
+        date_fin: fac.recurrence_date_fin || date_fin,
+        jour_emission: fac.recurrence_jour_du_mois ?? jour_emission,
+        montant_ttc: Number(fac.montant_ttc || 0),
+        devise: fac.devise || devise,
+        statut: fac.statut || 'modele',
         tiers: params.tiers,
-        nb_lignes: lignesNorm.length,
+        nb_lignes: Array.isArray(params.lignes) ? params.lignes.length : 0,
+        prochaine_emission,
         note:
           'Modèle récurrent créé. Le cron quotidien générera automatiquement une nouvelle facture en attente à chaque échéance.',
       },
