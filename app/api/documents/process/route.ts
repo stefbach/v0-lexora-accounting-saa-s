@@ -161,15 +161,26 @@ export async function POST(request: NextRequest) {
     // Pour les fichiers Excel, on parse le contenu en CSV/texte pour Claude
     // (vision Anthropic n'accepte pas les xlsx).
     let excelText = ''
+    let excelSheetCount = 0
+    let excelSheetNames: string[] = []
     if (isExcel) {
       try {
         const XLSX = await import('xlsx')
         const wb = XLSX.read(Buffer.from(arrayBuffer), { type: 'buffer' })
-        const sheets = wb.SheetNames.map(name => {
-          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name], { FS: ';' })
-          return `=== Feuille : ${name} ===\n${csv.slice(0, 8000)}`
-        })
-        excelText = sheets.join('\n\n').slice(0, 30000)
+        excelSheetNames = wb.SheetNames
+        excelSheetCount = wb.SheetNames.length
+        // Stratégie : par défaut, on ne prend QUE la première feuille (cas
+        // typique d'une facture simple en .xls/.xlsx). Si plusieurs feuilles,
+        // on prévient Claude pour qu'il ne cumule pas les montants entre
+        // feuilles (cas d'un export multi-mois ou récap consolidé).
+        // L'utilisateur peut envoyer le fichier feuille par feuille s'il
+        // veut traiter chaque mois séparément.
+        const firstSheetName = wb.SheetNames[0]
+        const csv = XLSX.utils.sheet_to_csv(wb.Sheets[firstSheetName], { FS: ';' })
+        excelText = `=== Feuille : ${firstSheetName} ===\n${csv.slice(0, 24000)}`
+        if (excelSheetCount > 1) {
+          excelText = `[ATTENTION : ce fichier contient ${excelSheetCount} feuilles (${wb.SheetNames.join(', ')}). On n'analyse que la PREMIÈRE.\nNE PAS additionner les montants entre feuilles. Le montant total de la facture = UNIQUEMENT le total final de la première feuille ci-dessous.]\n\n${excelText}`
+        }
       } catch (e: any) {
         await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: `Parse XLSX failed: ${e?.message}` } }).eq('id', documentId)
         return NextResponse.json({ error: 'Parse XLSX failed', details: e?.message }, { status: 500 })
@@ -374,7 +385,19 @@ RAPPELS IMPORTANTS :
         content: isVisual
           ? [contentBlock, { type: 'text' as const, text: 'Analyse ce document.' }]
           : isExcel
-            ? `Voici le contenu d'un fichier Excel/CSV exporté d'un logiciel comptable. Sépareur de colonnes : ";".\n\nIMPORTANT : ce type d'export contient TRÈS souvent une facture (client ou fournisseur) ou un relevé bancaire. Cherche activement :\n- Un en-tête avec nom d'émetteur, BRN, adresse, n° facture\n- Un destinataire/client\n- Des lignes de prestation/produits avec montants HT/TVA/TTC\n- Une date de facture\n- Si tu vois "Facture", "Invoice", "N°", "Montant", "TVA" → c'est une facture, ne classe PAS en "autre"\n\nApplique la même règle de classification émetteur=MA société → facture_client que pour un PDF.\n\nContenu :\n${excelText}`
+            ? `Voici le contenu d'un fichier Excel/CSV exporté d'un logiciel comptable. Sépareur de colonnes : ";".
+
+RÈGLES STRICTES pour l'extraction des montants :
+1. Le montant_ttc = UN SEUL montant final (le grand total de la facture). NE PAS additionner plusieurs lignes "Total" ou "Sous-total".
+2. Si plusieurs montants candidats existent, choisis le PLUS GRAND qui apparaît UNE SEULE FOIS dans le document (= le grand total final), pas la somme des sous-totaux.
+3. Si le fichier contient un récap ou un cumul annuel d'une part, ET le détail d'une seule facture d'autre part, prends UNIQUEMENT le total de la facture individuelle (pas le cumul).
+4. Si tu n'es pas sûr, choisis le montant le plus petit cohérent plutôt que de risquer un cumul. Mets confiance_extraction faible (<60) pour signaler le doute.
+
+DÉTECTION FACTURE :
+Ce type d'export contient TRÈS souvent une facture. Cherche : en-tête émetteur, BRN, n° facture, destinataire, date, montants HT/TVA/TTC. Si tu vois "Facture"/"Invoice"/"N°"/"Montant" → c'est une facture, ne classe PAS en "autre". Applique la règle émetteur=MA société → facture_client.
+
+CONTENU :
+${excelText}`
             : `Analyse ce document: ${await fileData.text()}`
       }],
     })
