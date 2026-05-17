@@ -16,6 +16,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
+import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -32,9 +33,17 @@ interface LignePayload {
 export async function POST(request: Request) {
   try {
     const supabase = getAdminClient()
-    const authClient = await createClient()
-    const { data: { user }, error: authError } = await authClient.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    // Auth : soit session web, soit X-Internal-Token (bot Telegram, n8n)
+    const internal = resolveInternalAuth(request)
+    let user: { id: string; email?: string }
+    if (internal) {
+      user = { id: internal.user_id, email: internal.user_email || 'system' }
+    } else {
+      const authClient = await createClient()
+      const { data: { user: u }, error: authError } = await authClient.auth.getUser()
+      if (authError || !u) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+      user = { id: u.id, email: u.email }
+    }
 
     const body = await request.json()
     const societe_id: string = body.societe_id
@@ -107,7 +116,7 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
-    const facturePayload = {
+    const facturePayload: Record<string, unknown> = {
       societe_id,
       tiers: tiersResolu,
       contact_id: params.contact_id || null,
@@ -136,15 +145,31 @@ export async function POST(request: Request) {
       termes: params.termes || null,
     }
 
+    // Forward des champs récurrence si demandés (création modèle récurrent)
+    if (params.recurrent === true) {
+      facturePayload.recurrent = true
+      if (params.recurrent_frequence) facturePayload.recurrent_frequence = params.recurrent_frequence
+      if (params.recurrence_date_debut) facturePayload.recurrence_date_debut = params.recurrence_date_debut
+      if (params.recurrence_date_fin) facturePayload.recurrence_date_fin = params.recurrence_date_fin
+      if (params.recurrence_jour_du_mois) facturePayload.recurrence_jour_du_mois = params.recurrence_jour_du_mois
+    }
+
     // POST sur l'endpoint existant — il gère numérotation auto, écritures
     // comptables et toute la logique métier sans qu'on duplique.
+    // Si auth interne (Telegram bot), on forward le token + user-id ;
+    // sinon on forward le cookie de session.
+    const downstreamHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (internal) {
+      downstreamHeaders['x-internal-token'] = request.headers.get('x-internal-token') || ''
+      downstreamHeaders['x-internal-user-id'] = request.headers.get('x-internal-user-id') || ''
+      const emailHdr = request.headers.get('x-internal-user-email')
+      if (emailHdr) downstreamHeaders['x-internal-user-email'] = emailHdr
+    } else {
+      downstreamHeaders.cookie = request.headers.get('cookie') || ''
+    }
     const insertRes = await fetch(`${request.url.replace(/\/factures-ia\/generer.*$/, '/factures')}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // Forward cookie pour auth
-        cookie: request.headers.get('cookie') || '',
-      },
+      headers: downstreamHeaders,
       body: JSON.stringify(facturePayload),
     })
     const insertJson = await insertRes.json()

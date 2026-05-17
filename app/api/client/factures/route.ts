@@ -8,6 +8,7 @@ import {
   mapSocieteAccessError,
   ResourceNotFoundError,
 } from '@/lib/supabase/assert-societe-access'
+import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,9 +84,17 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const supabase = getAdminClient()
-    const authClient = await createClient()
-    const { data: { user }, error: authError } = await authClient.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
+    // Auth : session web OU X-Internal-Token (bot Telegram, n8n)
+    const internal = resolveInternalAuth(request)
+    let user: { id: string; email?: string }
+    if (internal) {
+      user = { id: internal.user_id, email: internal.user_email || 'system' }
+    } else {
+      const authClient = await createClient()
+      const { data: { user: u }, error: authError } = await authClient.auth.getUser()
+      if (authError || !u) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
+      user = { id: u.id, email: u.email }
+    }
 
     const body = await request.json()
     const {

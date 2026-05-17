@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole, type TelegramContext } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { callLexoraHeaders, getLexoraBaseUrl } from '@/lib/lexora-internal-auth'
 import {
   extraireParametresFacture,
   type ContexteFactureIA,
@@ -20,11 +21,14 @@ import {
  *
  * Stratégie : on charge le contexte société (contacts + catalogue + factures
  * récentes), on demande à l'IA Factures Lexora d'extraire les paramètres
- * en un seul tour, puis on insère via getAdminClient() (bypass auth user)
- * dans `factures`. La logique d'écritures comptables / numérotation auto /
- * récurrence n'est PAS dupliquée ici — la facture est créée en statut
- * 'brouillon' et l'utilisateur la valide depuis l'UI web (le passage en
- * 'en_attente' déclenche les écritures via /api/client/factures).
+ * en un seul tour, puis on délègue à /api/client/factures-ia/generer
+ * via fetch interne (X-Internal-Token). Le serveur web s'occupe de la
+ * numérotation, calcul totaux, écritures comptables et conversion MUR.
+ *
+ * NB : la route web crée la facture en 'en_attente' (déclenche les
+ * écritures comptables). Le bot peut basculer en 'brouillon' depuis l'UI
+ * si besoin. Ce comportement est plus conforme au workflow web que
+ * l'ancienne version qui créait en 'brouillon'.
  *
  * Retour : { facture_id, numero, montant_ttc, devise, statut,
  *            preview_url, params_used, missing? }
@@ -83,48 +87,6 @@ async function buildContexte(societe_id: string): Promise<ContexteFactureIA> {
   } as unknown as ContexteFactureIA
 }
 
-async function generateNumero(societe_id: string, type_document: string): Promise<string> {
-  const admin = getAdminClient()
-  const colMap: Record<string, { prefCol: string; numCol: string; defaultPrefix: string }> = {
-    facture: { prefCol: 'facture_prefixe', numCol: 'facture_prochain_numero', defaultPrefix: 'INV-' },
-    devis: { prefCol: 'devis_prefixe', numCol: 'devis_prochain_numero', defaultPrefix: 'DEV-' },
-    avoir: { prefCol: 'avoir_prefixe', numCol: 'avoir_prochain_numero', defaultPrefix: 'AV-' },
-    note_debit: { prefCol: 'note_debit_prefixe', numCol: 'note_debit_prochain_numero', defaultPrefix: 'ND-' },
-  }
-  const cfg = colMap[type_document] || colMap.facture
-  try {
-    const { data } = await admin
-      .from('societes')
-      .select(`${cfg.prefCol}, ${cfg.numCol}`)
-      .eq('id', societe_id)
-      .maybeSingle()
-    const row = data as Record<string, any> | null
-    if (row && (row[cfg.prefCol] || row[cfg.numCol])) {
-      const prefixe = (row[cfg.prefCol] as string) || cfg.defaultPrefix
-      const prochain = Number(row[cfg.numCol]) || 1
-      await admin.from('societes').update({ [cfg.numCol]: prochain + 1 }).eq('id', societe_id)
-      return `${prefixe}${String(prochain).padStart(4, '0')}`
-    }
-  } catch {}
-  // Fallback parse last
-  const { data: last } = await admin
-    .from('factures')
-    .select('numero_facture')
-    .eq('societe_id', societe_id)
-    .eq('type_facture', 'client')
-    .eq('type_document', type_document)
-    .not('numero_facture', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  let n = 1
-  if (last?.numero_facture) {
-    const m = String(last.numero_facture).match(/(\d+)$/)
-    if (m) n = parseInt(m[1], 10) + 1
-  }
-  return `${cfg.defaultPrefix}${String(n).padStart(4, '0')}`
-}
-
 export async function POST(req: NextRequest) {
   return withTelegramAuth(req, 'invoice.create', async (ctx, body) => {
     if (!roleAllowed(ctx)) {
@@ -163,35 +125,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3) Validation + calcul totaux (réutilisation logique de /factures-ia/generer)
-    const lignes = (params.lignes as any[]).filter(l => l && l.description)
-    if (lignes.length === 0) {
-      return { result: null, status: 'error', error_msg: 'Aucune ligne valide' }
-    }
-    let montant_ht = 0
-    let montant_tva = 0
-    const lignesNorm = lignes.map(l => {
-      const q = Number(l.quantite) || 0
-      const pu = Number(l.prix_unitaire) || 0
-      const tva = Number(l.taux_tva ?? contexte.tva_defaut ?? 15)
-      const lht = q * pu
-      const ltva = lht * (tva / 100)
-      montant_ht += lht
-      montant_tva += ltva
-      return {
-        description: String(l.description || '').trim(),
-        quantite: q,
-        prix_unitaire: pu,
-        taux_tva: tva,
-        unite: l.unite || undefined,
-        total: lht + ltva,
-      }
-    })
-    const remise_pct = Number(params.remise_pct) || 0
-    const remise_montant = Number(params.remise_montant) || 0
-    const remise = remise_pct > 0 ? montant_ht * (remise_pct / 100) : remise_montant
-    const montant_ttc = montant_ht + montant_tva - remise
-
+    // Garde-fou taux change minimal côté Telegram pour message d'erreur clair —
+    // la route web fait le même check mais on évite un round-trip si évident.
     const devise = String(params.devise || contexte.societe?.devise_defaut || 'MUR').toUpperCase()
     const taux_change = Number(params.taux_change) || (devise === 'MUR' ? 1 : 0)
     if (devise !== 'MUR' && taux_change <= 1.0001) {
@@ -202,74 +137,50 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const today = new Date().toISOString().slice(0, 10)
-    const echeance = (() => {
-      if (params.date_echeance) return String(params.date_echeance)
-      const j = Number(params.conditions_paiement) || contexte.conditions_paiement_defaut || 30
-      const d = new Date()
-      d.setDate(d.getDate() + j)
-      return d.toISOString().slice(0, 10)
-    })()
-
-    const type_document = String(params.type_document || 'facture')
-    const numero = await generateNumero(ctx.societe_id, type_document)
-    const mur = devise === 'MUR' ? montant_ttc : montant_ttc * taux_change
-
-    const admin = getAdminClient()
-    // On crée en 'brouillon' — la finalisation/validation (qui déclenche
-    // les écritures comptables) se fait depuis l'UI web. Cela évite de
-    // dupliquer createEcrituresShared() ici.
-    const { data: created, error } = await admin
-      .from('factures')
-      .insert({
+    // 3) Délégation à la route web canonique. Elle gère :
+    //    - numérotation auto par type (societes.<type>_prefixe + compteur)
+    //    - calcul HT/TVA/TTC + remise + conversion MUR
+    //    - écritures comptables (statut='en_attente' déclenche createEcrituresShared)
+    const baseUrl = getLexoraBaseUrl()
+    const res = await fetch(`${baseUrl}/api/client/factures-ia/generer`, {
+      method: 'POST',
+      headers: callLexoraHeaders(ctx.user_id),
+      body: JSON.stringify({
         societe_id: ctx.societe_id,
-        type_facture: 'client',
-        numero_facture: numero,
-        tiers: String(params.tiers).trim(),
-        contact_id: params.contact_id || null,
-        description: params.description || null,
-        date_facture: params.date_facture || today,
-        date_echeance: echeance,
-        conditions_paiement: Number(params.conditions_paiement) || contexte.conditions_paiement_defaut || 30,
-        devise,
-        taux_change: devise === 'MUR' ? 1 : taux_change,
-        montant_ht: Math.round(montant_ht * 100) / 100,
-        montant_tva: Math.round(montant_tva * 100) / 100,
-        montant_ttc: Math.round(montant_ttc * 100) / 100,
-        montant_mur: Math.round(mur * 100) / 100,
-        remise_pct,
-        remise_montant: remise_pct > 0 ? 0 : remise_montant,
-        client_offshore: !!params.client_offshore,
-        mode_paiement: params.mode_paiement || 'banque',
-        template: 'standard',
-        lignes: lignesNorm,
-        notes_internes: params.notes_internes || `Créée via Telegram bot (chat ${ctx.chat_id})`,
-        termes: params.termes || null,
-        statut: 'brouillon',
-        type_document,
-      })
-      .select('id, numero_facture, montant_ttc, devise, statut')
-      .single()
-
-    if (error || !created) {
-      return { result: null, status: 'error', error_msg: `Erreur création facture: ${error?.message || 'inconnue'}` }
+        parametres: {
+          ...params,
+          devise,
+          taux_change,
+          notes_internes:
+            params.notes_internes || `Créée via Telegram bot (chat ${ctx.chat_id})`,
+        },
+      }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return {
+        result: null,
+        status: 'error',
+        error_msg: `Erreur création facture: ${j?.error || `HTTP ${res.status}`}`,
+      }
     }
 
+    const fac = j?.facture || {}
     return {
       result: {
-        facture_id: created.id,
-        numero: created.numero_facture,
-        montant_ttc: Number(created.montant_ttc),
-        devise: created.devise,
-        statut: created.statut,
-        preview_url: `/client/facture-preview?facture_id=${created.id}`,
+        facture_id: fac.id || null,
+        numero: fac.numero_facture || null,
+        montant_ttc: Number(fac.montant_ttc || 0),
+        devise: fac.devise || devise,
+        statut: fac.statut || 'en_attente',
+        preview_url: fac.id ? `/client/facture-preview?facture_id=${fac.id}` : null,
         params_used: {
           tiers: params.tiers,
-          nb_lignes: lignesNorm.length,
+          nb_lignes: Array.isArray(params.lignes) ? params.lignes.length : 0,
           devise,
-          type_document,
+          type_document: params.type_document || 'facture',
         },
-        note: 'Facture créée en brouillon. Validez-la depuis l\'app Lexora pour générer les écritures comptables.',
+        note: 'Facture créée. Visualisez-la dans Lexora pour finaliser/imprimer.',
       },
     }
   })

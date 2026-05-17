@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { ajouterOtAggregate } from '@/lib/rh/ot-aggregate'
 
 /**
  * POST /api/telegram/internal/ot-add
@@ -14,8 +15,9 @@ import { getAdminClient } from '@/lib/supabase/admin'
  *   - heures      : nombre (>0) d'heures supplémentaires à ajouter
  *   - taux        : 1.5 | 2 (majoration applicable)
  *
- * UPSERT dans `heures_travaillees` (pointage_id = null, agrégat période) : on
- * agrège manuellement les heures sup hors pointage (saisie Telegram).
+ * Saisie agrégat mensuel (hors planning) — utilise `ajouterOtAggregate`
+ * depuis lib/rh/ot-aggregate.ts. La saisie détaillée par jour reste sur
+ * /api/rh/paie/ot/save (UI web, source planning + jours fériés).
  *
  * Retour : { employe_id, employe_nom, periode, heures, taux,
  *            taux_horaire_mur, montant_estime_mur }
@@ -29,7 +31,7 @@ export async function POST(req: NextRequest) {
     const employe_id = String(body?.employe_id || '')
     const periode = String(body?.periode || '')
     const heures = Number(body?.heures)
-    const taux = Number(body?.taux)
+    const tauxRaw = Number(body?.taux)
 
     if (!employe_id) {
       return { result: null, status: 'error', error_msg: 'employe_id requis' }
@@ -40,9 +42,10 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(heures) || heures <= 0) {
       return { result: null, status: 'error', error_msg: 'heures doit être > 0' }
     }
-    if (taux !== 1.5 && taux !== 2) {
+    if (tauxRaw !== 1.5 && tauxRaw !== 2) {
       return { result: null, status: 'error', error_msg: 'taux doit valoir 1.5 ou 2' }
     }
+    const taux = tauxRaw as 1.5 | 2
 
     const admin = getAdminClient()
 
@@ -59,67 +62,16 @@ export async function POST(req: NextRequest) {
       return { result: null, status: 'denied', error_msg: 'Employé hors société active' }
     }
 
-    const salaire_base = Number(emp.salaire_base || 0)
-    // Taux horaire MU : 45h/sem * 52/12 = ~195h/mois (WRA 2019)
-    const taux_horaire = salaire_base > 0 ? salaire_base / ((45 * 52) / 12) : 0
-    const heures_arr = Math.round(heures * 100) / 100
-    const montant = Math.round(heures_arr * taux_horaire * taux * 100) / 100
-    const taux_horaire_r = Math.round(taux_horaire * 100) / 100
+    const res = await ajouterOtAggregate(admin, {
+      employe_id,
+      periode,
+      heures,
+      taux,
+      salaire_base: Number(emp.salaire_base || 0),
+    })
 
-    const periodeDate = `${periode}-01`
-
-    // On UPSERT en colonne dédiée (ot_1_5x ou ot_2x) en agrégeant la valeur
-    // déjà saisie pour la période (pas de unique key sur (employe, periode)
-    // garantie). On lit l'existant 'sans pointage_id' pour ce mois et l'ajoute.
-    const colHeures = taux === 1.5 ? 'heures_ot_1_5x' : 'heures_ot_2x'
-    const colMontant = taux === 1.5 ? 'montant_ot_1_5x' : 'montant_ot_2x'
-
-    let upsertOk = false
-    let upsertError: string | undefined
-    try {
-      const { data: existing } = await admin
-        .from('heures_travaillees')
-        .select(`id, ${colHeures}, ${colMontant}`)
-        .eq('employe_id', employe_id)
-        .eq('periode', periodeDate)
-        .is('pointage_id', null)
-        .maybeSingle()
-
-      if (existing) {
-        const prevH = Number((existing as any)[colHeures] || 0)
-        const prevM = Number((existing as any)[colMontant] || 0)
-        const { error: upErr } = await admin
-          .from('heures_travaillees')
-          .update({
-            [colHeures]: Math.round((prevH + heures_arr) * 100) / 100,
-            [colMontant]: Math.round((prevM + montant) * 100) / 100,
-            montant_ot: Math.round((prevM + montant) * 100) / 100,
-            taux_horaire: taux_horaire_r,
-          })
-          .eq('id', (existing as any).id)
-        if (upErr) upsertError = upErr.message
-        else upsertOk = true
-      } else {
-        const payload: any = {
-          employe_id,
-          pointage_id: null,
-          date: periodeDate,
-          periode: periodeDate,
-          taux_horaire: taux_horaire_r,
-          montant_ot: montant,
-        }
-        payload[colHeures] = heures_arr
-        payload[colMontant] = montant
-        const { error: insErr } = await admin.from('heures_travaillees').insert(payload)
-        if (insErr) upsertError = insErr.message
-        else upsertOk = true
-      }
-    } catch (e: any) {
-      upsertError = e?.message || String(e)
-    }
-
-    if (!upsertOk) {
-      return { result: null, status: 'error', error_msg: `Erreur enregistrement OT: ${upsertError || 'inconnue'}` }
+    if (!res.ok) {
+      return { result: null, status: 'error', error_msg: `Erreur enregistrement OT: ${res.error || 'inconnue'}` }
     }
 
     return {
@@ -127,10 +79,10 @@ export async function POST(req: NextRequest) {
         employe_id,
         employe_nom: `${emp.prenom || ''} ${emp.nom || ''}`.trim(),
         periode,
-        heures: heures_arr,
+        heures: res.heures_arrondies,
         taux,
-        taux_horaire_mur: taux_horaire_r,
-        montant_estime_mur: montant,
+        taux_horaire_mur: res.taux_horaire_mur,
+        montant_estime_mur: res.montant_estime_mur,
       },
     }
   })
