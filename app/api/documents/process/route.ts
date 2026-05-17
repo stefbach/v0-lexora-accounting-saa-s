@@ -220,11 +220,15 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
     await supabase.from('documents').update(updateData).eq('id', documentId)
 
     // Step 6: Auto-create accounting entries
-    // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
-    // V2 exige societe_id (NOT NULL) → on le récupère via le dossier du document.
-    // Renommage : compte → numero_compte, debit → debit_mur, credit → credit_mur.
-    const ecritures = extraction.ecritures_comptables
-    if (Array.isArray(ecritures) && ecritures.length > 0) {
+    // ⚠️ Pour les factures (client/fournisseur), on SAUTE les écritures
+    // brutes de Claude (elles sont souvent en devise étrangère sans conversion
+    // MUR → fausses sur debit_mur/credit_mur). C'est `createEcrituresForFacture`
+    // (helper canonique) qui génère les bonnes écritures avec conversion devise.
+    // Pour relevés bancaires, charges sociales, fiches paie, etc. → on garde
+    // les écritures Claude (pas d'helper canonique pour ces cas).
+    const isFactureType = typeDoc === 'facture_client' || typeDoc === 'facture_fournisseur'
+    const ecritures = isFactureType ? [] : (extraction.ecritures_comptables || [])
+    {
       const { data: doc } = await supabase.from('documents').select('dossier_id').eq('id', documentId).single()
       if (doc?.dossier_id) {
         // Lookup societe_id from dossier (NOT NULL on V2).
@@ -294,11 +298,35 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
                 console.warn('[process] getTauxChange failed:', e?.message)
               }
             }
+            // Génère un numéro unique pour éviter la contrainte unique
+            // (societe_id, numero_facture, type_facture). Si Claude renvoie
+            // un numero déjà présent (ex: la date "04/07/2025"), on suffixe.
+            const typeFacture = typeDoc === 'facture_fournisseur' ? 'fournisseur' : 'client'
+            let numeroFacture = extraction.numero_reference || extraction.numero_facture || null
+            if (numeroFacture) {
+              numeroFacture = String(numeroFacture).trim().slice(0, 100)
+              const { data: existingNum } = await supabase
+                .from('factures')
+                .select('numero_facture')
+                .eq('societe_id', societeId)
+                .eq('type_facture', typeFacture)
+                .like('numero_facture', `${numeroFacture}%`)
+              const existingNumbers = new Set((existingNum || []).map((r: any) => r.numero_facture))
+              if (existingNumbers.has(numeroFacture)) {
+                let suffix = 2
+                let candidate = `${numeroFacture}-${suffix}`
+                while (existingNumbers.has(candidate)) {
+                  suffix++
+                  candidate = `${numeroFacture}-${suffix}`
+                }
+                numeroFacture = candidate
+              }
+            }
             const { data: facInserted, error: facErr } = await supabase.from('factures').insert({
               societe_id: societeId,
               dossier_id: doc.dossier_id,
-              numero_facture: extraction.numero_reference || extraction.numero_facture || null,
-              type_facture: typeDoc === 'facture_fournisseur' ? 'fournisseur' : 'client',
+              numero_facture: numeroFacture,
+              type_facture: typeFacture,
               tiers: tiersStr,
               description: nomFichier,
               date_facture: dateValid,
@@ -323,13 +351,13 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
               const ecrRes = await createEcrituresForFacture(supabase, {
                 id: facInserted.id,
                 societe_id: societeId,
-                numero_facture: extraction.numero_reference || extraction.numero_facture || `DOC-${facInserted.id.slice(0, 8)}`,
+                numero_facture: numeroFacture || `DOC-${facInserted.id.slice(0, 8)}`,
                 tiers: tiersStr || 'INCONNU',
                 date_facture: dateValid,
                 montant_ht: ht,
                 montant_tva: tva,
                 montant_ttc: ttc,
-                type_facture: typeDoc === 'facture_fournisseur' ? 'fournisseur' : 'client',
+                type_facture: typeFacture,
                 devise,
                 taux_change: tauxChange,
                 montant_mur: montantMur,
