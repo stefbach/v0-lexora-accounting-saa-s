@@ -234,6 +234,25 @@ export async function withTelegramAuth(
     try { body = await req.clone().json() } catch {}
   }
 
+  // Fusionne query string → body. Workaround pour le bug n8n
+  // toolHttpRequest + $fromAI qui n'expose pas les propriétés dans le schema
+  // envoyé à Claude (résultat : tool appelé avec body vide). Les tools n8n
+  // utilisent maintenant placeholderDefinitions + URL params → on lit la query.
+  // Body prime sur query (rétrocompat).
+  if (!body || typeof body !== 'object') body = {}
+  for (const [k, v] of req.nextUrl.searchParams.entries()) {
+    if (k === 'chat_id') continue  // déjà géré par resolveTelegramContext
+    if (body[k] === undefined) body[k] = v
+  }
+  // Normalise les dates ISO 8601 dont le '+' du timezone a été décodé en espace
+  // par URLSearchParams (ex: "2026-05-19T13:00:00 04:00" → "...+04:00").
+  for (const k of Object.keys(body)) {
+    const v = body[k]
+    if (typeof v === 'string') {
+      body[k] = v.replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?) (\d{2}:\d{2})$/, '$1+$2')
+    }
+  }
+
   const t0 = Date.now()
   const admin = getAdminClient()
   let status: 'success' | 'denied' | 'error' = 'success'
