@@ -163,23 +163,51 @@ export async function POST(request: NextRequest) {
     let excelText = ''
     let excelSheetCount = 0
     let excelSheetNames: string[] = []
+    let excelChosenSheet = ''
     if (isExcel) {
       try {
         const XLSX = await import('xlsx')
         const wb = XLSX.read(Buffer.from(arrayBuffer), { type: 'buffer' })
         excelSheetNames = wb.SheetNames
         excelSheetCount = wb.SheetNames.length
-        // Stratégie : par défaut, on ne prend QUE la première feuille (cas
-        // typique d'une facture simple en .xls/.xlsx). Si plusieurs feuilles,
-        // on prévient Claude pour qu'il ne cumule pas les montants entre
-        // feuilles (cas d'un export multi-mois ou récap consolidé).
-        // L'utilisateur peut envoyer le fichier feuille par feuille s'il
-        // veut traiter chaque mois séparément.
-        const firstSheetName = wb.SheetNames[0]
-        const csv = XLSX.utils.sheet_to_csv(wb.Sheets[firstSheetName], { FS: ';' })
-        excelText = `=== Feuille : ${firstSheetName} ===\n${csv.slice(0, 24000)}`
+
+        // Détection intelligente : on cherche la feuille qui contient le plus
+        // d'indices "facture". Évite de tomber sur une feuille de garde vide
+        // ou un récap annuel qui contient un cumul cumulé.
+        const FACTURE_KEYWORDS = [
+          'facture', 'invoice', 'tva', 'vat', 'ht', 'ttc', 'total',
+          'devise', 'eur', 'mur', 'montant', 'destinataire', 'emetteur',
+          'client', 'fournisseur', 'brn', 'siret', 'n°', 'reference',
+        ]
+
+        let best: { name: string; csv: string; score: number } | null = null
+        for (const name of wb.SheetNames) {
+          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name], { FS: ';' })
+          const lower = csv.toLowerCase()
+          let score = 0
+          for (const kw of FACTURE_KEYWORDS) {
+            if (lower.includes(kw)) score += 1
+          }
+          // Bonus si la feuille contient des chiffres (= a des données)
+          if (/\d{3,}/.test(csv)) score += 2
+          // Malus si la feuille est trop courte (= probablement vide ou garde)
+          if (csv.length < 200) score -= 3
+          // Malus si "recap", "cumul", "annuel" → probablement pas la facture cherchée
+          if (/(recap|récap|cumul|annuel|yearly|ytd)/i.test(name) ||
+              /(recap|récap|cumul|annuel|yearly|ytd)/i.test(lower.slice(0, 500))) {
+            score -= 4
+          }
+          if (!best || score > best.score) {
+            best = { name, csv, score }
+          }
+        }
+
+        const chosen = best || { name: wb.SheetNames[0], csv: '', score: 0 }
+        excelChosenSheet = chosen.name
+        excelText = `=== Feuille analysée : ${chosen.name} (score indices facture: ${chosen.score}/${FACTURE_KEYWORDS.length + 2}) ===\n${chosen.csv.slice(0, 24000)}`
+
         if (excelSheetCount > 1) {
-          excelText = `[ATTENTION : ce fichier contient ${excelSheetCount} feuilles (${wb.SheetNames.join(', ')}). On n'analyse que la PREMIÈRE.\nNE PAS additionner les montants entre feuilles. Le montant total de la facture = UNIQUEMENT le total final de la première feuille ci-dessous.]\n\n${excelText}`
+          excelText = `[INFO : ce fichier Excel contient ${excelSheetCount} feuilles (${wb.SheetNames.join(', ')}). On a sélectionné automatiquement la feuille "${chosen.name}" qui contient le plus d'indices facture (score ${chosen.score}). NE PAS additionner les montants entre feuilles ; analyser uniquement cette feuille.]\n\n${excelText}`
         }
       } catch (e: any) {
         await supabase.from('documents').update({ statut: 'erreur', n8n_result: { error: `Parse XLSX failed: ${e?.message}` } }).eq('id', documentId)
