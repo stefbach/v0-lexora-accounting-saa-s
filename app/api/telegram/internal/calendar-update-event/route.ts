@@ -26,16 +26,53 @@ export async function POST(req: NextRequest) {
     if (patch.summary !== undefined) body_patch.summary = String(patch.summary).slice(0, 200)
     if (patch.description !== undefined) body_patch.description = String(patch.description).slice(0, 4000)
     if (patch.location !== undefined) body_patch.location = String(patch.location).slice(0, 500)
+
+    let startDate: Date | null = null
+    let endDate: Date | null = null
     if (patch.start_iso) {
       const d = new Date(patch.start_iso)
       if (Number.isNaN(d.getTime())) return { result: null, status: 'error', error_msg: 'start_iso invalide' }
-      body_patch.start = { dateTime: d.toISOString() }
+      startDate = d
     }
     if (patch.end_iso) {
       const d = new Date(patch.end_iso)
       if (Number.isNaN(d.getTime())) return { result: null, status: 'error', error_msg: 'end_iso invalide' }
-      body_patch.end = { dateTime: d.toISOString() }
+      endDate = d
     }
+
+    // Si on ne patche qu'un seul côté (start ou end), on récupère l'existant
+    // pour calculer l'autre. Sinon Google retourne 400 si end <= start.
+    if ((startDate && !endDate) || (!startDate && endDate)) {
+      try {
+        const existing = await googleCalendarFetch(
+          ctx.user_id,
+          account_email,
+          `/calendars/${encodeURIComponent(calendar_id)}/events/${encodeURIComponent(event_id)}`,
+          { method: 'GET' },
+        )
+        const existingStart = existing?.start?.dateTime ? new Date(existing.start.dateTime) : null
+        const existingEnd = existing?.end?.dateTime ? new Date(existing.end.dateTime) : null
+        if (existingStart && existingEnd) {
+          const duration = existingEnd.getTime() - existingStart.getTime()
+          if (startDate && !endDate) {
+            endDate = new Date(startDate.getTime() + duration)
+          } else if (endDate && !startDate) {
+            startDate = new Date(endDate.getTime() - duration)
+          }
+        }
+      } catch (e: any) {
+        return { result: null, status: 'error', error_msg: `Lecture event existant échouée : ${e?.message || e}` }
+      }
+    }
+
+    if (startDate && endDate) {
+      if (endDate.getTime() <= startDate.getTime()) {
+        return { result: null, status: 'error', error_msg: 'end_iso doit être après start_iso' }
+      }
+      body_patch.start = { dateTime: startDate.toISOString(), timeZone: 'Indian/Mauritius' }
+      body_patch.end = { dateTime: endDate.toISOString(), timeZone: 'Indian/Mauritius' }
+    }
+
     if (Array.isArray(patch.attendees)) {
       body_patch.attendees = patch.attendees
         .map((a: any) => ({ email: String(a?.email || '').trim(), displayName: a?.name ? String(a.name) : undefined }))
@@ -49,16 +86,34 @@ export async function POST(req: NextRequest) {
 
     const send_updates = body?.send_updates === true
 
-    const updated = await googleCalendarFetch(
-      ctx.user_id,
-      account_email,
-      `/calendars/${encodeURIComponent(calendar_id)}/events/${encodeURIComponent(event_id)}`,
-      {
-        method: 'PATCH',
-        json: body_patch,
-        query: { sendUpdates: send_updates ? 'all' : 'none' },
-      },
-    )
+    let updated: any
+    try {
+      updated = await googleCalendarFetch(
+        ctx.user_id,
+        account_email,
+        `/calendars/${encodeURIComponent(calendar_id)}/events/${encodeURIComponent(event_id)}`,
+        {
+          method: 'PATCH',
+          json: body_patch,
+          query: { sendUpdates: send_updates ? 'all' : 'none' },
+        },
+      )
+    } catch (e: any) {
+      const msg = e?.message || String(e)
+      console.error('[calendar-update-event] Google API error:', {
+        user_id: ctx.user_id,
+        account_email,
+        calendar_id,
+        event_id,
+        payload: body_patch,
+        google_error: msg,
+      })
+      return {
+        result: null,
+        status: 'error',
+        error_msg: `${msg} | Patch envoyé : ${JSON.stringify(body_patch)} | calendar=${calendar_id}, event=${event_id}, account=${account_email || 'default'}`,
+      }
+    }
 
     return {
       result: {

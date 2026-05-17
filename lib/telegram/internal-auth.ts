@@ -58,8 +58,11 @@ export async function resolveTelegramContext(req: NextRequest): Promise<Telegram
     throw NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // chat_id peut être dans query string ou body
-  let chatIdRaw = req.nextUrl.searchParams.get('chat_id')
+  // chat_id peut être dans : header X-Chat-Id, query string, ou body.
+  // Header en premier : c'est le plus robuste pour l'AI Agent n8n qui ne
+  // contrôle pas toujours le body (le LLM construit la requête).
+  let chatIdRaw: string | null = req.headers.get('x-chat-id')
+  if (!chatIdRaw) chatIdRaw = req.nextUrl.searchParams.get('chat_id')
   if (!chatIdRaw && req.method !== 'GET') {
     try {
       const body = await req.clone().json()

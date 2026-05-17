@@ -23,6 +23,31 @@ export async function POST(req: NextRequest) {
     const summary = String(body?.summary || '').trim().slice(0, 200)
     const start_iso = String(body?.start_iso || '').trim()
     const end_iso = String(body?.end_iso || '').trim()
+
+    // Champs manquants → on guide le LLM au lieu de relayer une erreur technique
+    // (status:'success' évite que le bot affiche "Erreur:" à l'utilisateur).
+    const missing: string[] = []
+    if (!summary) missing.push('summary')
+    if (!start_iso) missing.push('start_iso')
+    if (!end_iso) missing.push('end_iso')
+    if (missing.length > 0) {
+      const fieldHints: Record<string, string> = {
+        summary: 'titre du RDV (ex "RDV MRA", "Call client X", "Réunion équipe")',
+        start_iso: 'date+heure de début au format ISO 8601 AVEC offset Maurice +04:00 (ex "2026-05-19T13:00:00+04:00")',
+        end_iso: 'date+heure de fin au format ISO 8601 AVEC offset Maurice +04:00 (ex "2026-05-19T14:00:00+04:00"). Si la durée n\'est pas précisée par l\'utilisateur, prends +60min après start_iso',
+      }
+      return {
+        result: {
+          action_required: 'collect_missing_fields',
+          missing_fields: missing,
+          instructions_for_assistant:
+            `Tu dois RELIRE le message original de l'utilisateur dans la conversation et EXTRAIRE les champs manquants : ${missing.join(', ')}. ` +
+            `Pour chacun : ${missing.map(m => `${m} = ${fieldHints[m]}`).join(' | ')}. ` +
+            `Si tu as déjà toutes les infos dans le message utilisateur, RÉAPPELLE calendar_create_event immédiatement avec les bons paramètres extraits (ex: utilisateur dit "RDV mardi 19 13h-14h MRA" → summary="RDV MRA", start_iso="<mardi 19 prochain>T13:00:00+04:00", end_iso="<mardi 19 prochain>T14:00:00+04:00"). ` +
+            `Si une info manque vraiment, demande-la à l'utilisateur en français, en UNE seule question courte.`,
+        },
+      }
+    }
     if (!summary) return { result: null, status: 'error', error_msg: 'summary requis' }
     if (!start_iso || !end_iso) return { result: null, status: 'error', error_msg: 'start_iso et end_iso requis (ISO 8601)' }
 
