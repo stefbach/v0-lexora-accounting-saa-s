@@ -91,7 +91,6 @@ export async function updateSession(request: NextRequest) {
     '/api/documents/process',
     '/api/client/factures-ia/generer',
     '/api/client/factures',
-    '/api/rh/paie/ot/save',
   ]
   // Internal Telegram tool endpoints — all auth via X-Internal-Token
   const publicApiInternalPrefixes = [
