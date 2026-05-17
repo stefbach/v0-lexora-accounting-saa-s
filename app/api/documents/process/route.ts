@@ -450,10 +450,26 @@ ${excelText}`
       .map(b => b.text).join('')
 
     let parsed: any = {}
+    let parseError: string | null = null
     try {
+      // Tentative 1 : JSON pur
       parsed = JSON.parse(text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim())
     } catch {
-      parsed = { routing: { type_document: 'autre', societe: 'INCONNU', confiance_type: 0 }, extraction: {} }
+      // Tentative 2 : extraction du premier bloc JSON (entre { ... }) dans la réponse
+      // (Claude peut ajouter un préambule textuel comme "Voici l'analyse :")
+      const match = text.match(/\{[\s\S]*\}/)
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0])
+        } catch (e: any) {
+          parseError = `JSON malformé: ${e?.message?.slice(0, 200)}`
+        }
+      } else {
+        parseError = 'Aucun bloc JSON trouvé dans la réponse Claude'
+      }
+      if (!parsed || Object.keys(parsed).length === 0) {
+        parsed = { routing: { type_document: 'autre', societe: 'INCONNU', confiance_type: 0 }, extraction: {} }
+      }
     }
 
     let typeDoc = parsed.routing?.type_document || 'autre'
@@ -552,6 +568,8 @@ ${excelText}`
     // un échantillon du contenu envoyé pour permettre debug post-mortem.
     if (isExcel && (typeDoc === 'autre' || confianceExtraction === 0)) {
       n8nResult.debug_excel_content = excelText.slice(0, 6000)
+      n8nResult.debug_claude_raw = text.slice(0, 4000)
+      if (parseError) n8nResult.debug_parse_error = parseError
     }
     if (lowConfidence) {
       n8nResult.warning = 'Extraction peu fiable, vérification manuelle conseillée'
