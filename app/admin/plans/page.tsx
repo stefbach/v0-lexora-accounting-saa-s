@@ -16,8 +16,9 @@
  */
 
 import { useEffect, useState, useCallback, useMemo } from "react"
-import { Loader2, Plus, Edit2, Trash2, Star, Check, AlertCircle, CheckCircle2, Power, PowerOff, Briefcase, UserCog } from "lucide-react"
+import { Loader2, Plus, Edit2, Trash2, Star, Check, AlertCircle, CheckCircle2, Power, PowerOff, Briefcase, UserCog, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 
 type TypeCible = 'dirigeant' | 'comptable'
 type Pack = 'compta' | 'paie' | 'bundle' | 'addon' | 'cabinet' | 'legacy' | null
@@ -541,14 +542,14 @@ function EditDialog({ plan, setPlan, onSave, saving }: { plan: Plan; setPlan: (p
   const setModule = (key: string, value: boolean) => setPlan({ ...plan, modules_inclus: { ...plan.modules_inclus, [key]: value } })
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPlan(null)}>
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b flex items-center justify-between sticky top-0 bg-white z-10">
+    <Dialog open={true} onOpenChange={o => { if (!o) setPlan(null) }}>
+      <DialogContent className="max-w-3xl p-0 gap-0 max-h-[90vh] flex flex-col">
+        <div className="px-6 py-4 border-b flex items-center justify-between flex-shrink-0 bg-white">
           <h2 className="text-xl font-bold" style={{ color: '#0B0F2E' }}>{isNew ? 'Nouveau plan' : `Éditer ${plan.nom}`}</h2>
-          <button onClick={() => setPlan(null)} className="text-gray-400 hover:text-gray-700">✕</button>
+          <button onClick={() => setPlan(null)} className="text-gray-400 hover:text-gray-700"><X className="h-5 w-5" /></button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Profil */}
           <Section title="Profil cible">
             <div className="grid grid-cols-2 gap-3">
@@ -624,7 +625,7 @@ function EditDialog({ plan, setPlan, onSave, saving }: { plan: Plan; setPlan: (p
           </Section>
         </div>
 
-        <div className="px-6 py-4 border-t flex justify-end gap-2 sticky bottom-0 bg-white">
+        <div className="px-6 py-4 border-t flex justify-end gap-2 flex-shrink-0 bg-white">
           <button onClick={() => setPlan(null)} className="px-4 py-2 rounded-lg border text-sm">Annuler</button>
           <button onClick={onSave} disabled={saving}
                   className="px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-2" style={{ backgroundColor: '#D4AF37', color: '#0B0F2E' }}>
@@ -632,8 +633,8 @@ function EditDialog({ plan, setPlan, onSave, saving }: { plan: Plan; setPlan: (p
             {isNew ? 'Créer' : 'Enregistrer'}
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
