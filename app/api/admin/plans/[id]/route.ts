@@ -51,6 +51,10 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   if (body.populaire !== undefined) payload.populaire = !!body.populaire
   if (body.ordre !== undefined) payload.ordre = Number(body.ordre)
   if (body.actif !== undefined) payload.actif = !!body.actif
+  if (body.pack !== undefined) payload.pack = body.pack || null
+  if (body.taille_entreprise !== undefined) payload.taille_entreprise = body.taille_entreprise || null
+  if (body.is_addon !== undefined) payload.is_addon = !!body.is_addon
+  if (body.prix_visible !== undefined) payload.prix_visible = !!body.prix_visible
 
   const { data, error } = await admin.from('plans').update(payload).eq('id', id).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

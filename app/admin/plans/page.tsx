@@ -17,8 +17,11 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { Loader2, Plus, Edit2, Trash2, Star, Check, AlertCircle, CheckCircle2, Power, PowerOff, Briefcase, UserCog } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 type TypeCible = 'dirigeant' | 'comptable'
+type Pack = 'compta' | 'paie' | 'bundle' | 'addon' | 'cabinet' | 'legacy' | null
+type Taille = 'solo' | 'petite' | 'pme' | 'grande' | null
 
 interface Plan {
   id: string
@@ -32,6 +35,10 @@ interface Plan {
   populaire: boolean
   ordre: number
   actif: boolean
+  pack?: Pack
+  taille_entreprise?: Taille
+  is_addon?: boolean
+  prix_visible?: boolean
   created_at: string
   updated_at: string | null
 }
@@ -92,24 +99,34 @@ export default function AdminPlansPage() {
   useEffect(() => { fetchAll() }, [fetchAll])
   useEffect(() => { if (msg) { const t = setTimeout(() => setMsg(null), 4000); return () => clearTimeout(t) } }, [msg])
 
-  const filtered = useMemo(() => {
-    return plans
-      .filter(p => filter === 'all' || p.type_cible === filter)
-      .filter(p => showInactive || p.actif)
-  }, [plans, filter, showInactive])
+  const visible = useMemo(() => plans.filter(p => showInactive || p.actif), [plans, showInactive])
 
-  const grouped = useMemo(() => {
-    const g: Record<TypeCible, Plan[]> = { dirigeant: [], comptable: [] }
-    for (const p of filtered) g[p.type_cible].push(p)
-    return g
-  }, [filtered])
+  // Groupage par pack et par taille pour la vue grille.
+  const grid = useMemo(() => {
+    const byPack: Record<string, Record<string, Plan>> = { compta: {}, paie: {}, bundle: {} }
+    const addons: Plan[] = []
+    const cabinets: Plan[] = []
+    const legacy: Plan[] = []
+    for (const p of visible) {
+      if (p.is_addon || p.pack === 'addon') { addons.push(p); continue }
+      if (p.pack === 'cabinet') { cabinets.push(p); continue }
+      if (p.pack && p.taille_entreprise && byPack[p.pack]) {
+        byPack[p.pack][p.taille_entreprise] = p
+        continue
+      }
+      legacy.push(p)
+    }
+    return { byPack, addons, cabinets, legacy }
+  }, [visible])
 
   const stats = useMemo(() => ({
-    dirigeant_total: plans.filter(p => p.type_cible === 'dirigeant').length,
-    dirigeant_actif: plans.filter(p => p.type_cible === 'dirigeant' && p.actif).length,
-    comptable_total: plans.filter(p => p.type_cible === 'comptable').length,
-    comptable_actif: plans.filter(p => p.type_cible === 'comptable' && p.actif).length,
-  }), [plans])
+    packs_actifs: ['compta', 'paie', 'bundle']
+      .map(p => Object.values(grid.byPack[p] || {}).filter(x => x?.actif).length)
+      .reduce((s, n) => s + n, 0),
+    addons_actifs: grid.addons.filter(p => p.actif).length,
+    cabinets_actifs: grid.cabinets.filter(p => p.actif).length,
+    total: plans.length,
+  }), [grid, plans])
 
   const savePlan = async () => {
     if (!edit) return
@@ -181,36 +198,28 @@ export default function AdminPlansPage() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-white border rounded-xl p-4 flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center"><Briefcase className="h-6 w-6 text-blue-700" /></div>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-gray-500">Plans Dirigeants</p>
-            <p className="text-xl font-bold" style={{ color: '#0B0F2E' }}>{stats.dirigeant_actif} <span className="text-sm text-gray-400 font-normal">/ {stats.dirigeant_total}</span></p>
-          </div>
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="bg-white border rounded-xl p-4">
+          <p className="text-xs uppercase tracking-wider text-gray-500">Plans packs</p>
+          <p className="text-xl font-bold" style={{ color: '#0B0F2E' }}>{stats.packs_actifs} <span className="text-sm text-gray-400 font-normal">/ 12</span></p>
         </div>
-        <div className="bg-white border rounded-xl p-4 flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-amber-50 flex items-center justify-center"><UserCog className="h-6 w-6 text-amber-700" /></div>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-gray-500">Plans Cabinets comptables</p>
-            <p className="text-xl font-bold" style={{ color: '#0B0F2E' }}>{stats.comptable_actif} <span className="text-sm text-gray-400 font-normal">/ {stats.comptable_total}</span></p>
-          </div>
+        <div className="bg-white border rounded-xl p-4">
+          <p className="text-xs uppercase tracking-wider text-gray-500">Add-ons</p>
+          <p className="text-xl font-bold" style={{ color: '#0B0F2E' }}>{stats.addons_actifs}</p>
+        </div>
+        <div className="bg-white border rounded-xl p-4">
+          <p className="text-xs uppercase tracking-wider text-gray-500">Cabinets comptables</p>
+          <p className="text-xl font-bold" style={{ color: '#0B0F2E' }}>{stats.cabinets_actifs}</p>
+          <p className="text-[10px] text-amber-600 mt-0.5">Tarif négocié — non affiché</p>
+        </div>
+        <div className="bg-white border rounded-xl p-4">
+          <p className="text-xs uppercase tracking-wider text-gray-500">Total catalogue</p>
+          <p className="text-xl font-bold" style={{ color: '#0B0F2E' }}>{stats.total}</p>
         </div>
       </div>
 
-      {/* Filtres */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        {([
-          { key: 'all', label: 'Tous' },
-          { key: 'dirigeant', label: 'Dirigeants' },
-          { key: 'comptable', label: 'Cabinets' },
-        ] as const).map(f => (
-          <button key={f.key} onClick={() => setFilter(f.key as any)}
-                  className={`px-3 py-1.5 rounded-lg text-sm border ${filter === f.key ? 'bg-[#0B0F2E] text-white border-[#0B0F2E]' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-            {f.label}
-          </button>
-        ))}
-        <label className="ml-3 inline-flex items-center gap-2 text-sm text-gray-600">
+      <div className="flex items-center justify-end gap-2 mb-4">
+        <label className="inline-flex items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
           Afficher les inactifs
         </label>
@@ -219,32 +228,215 @@ export default function AdminPlansPage() {
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
       ) : (
-        <>
-          {(filter === 'all' || filter === 'dirigeant') && (
-            <GroupSection title="Dirigeants" subtitle="Plans pour les entreprises (clients finaux)" icon={Briefcase}>
-              {grouped.dirigeant.length === 0 ? (
-                <Empty text="Aucun plan dirigeant." />
-              ) : (
-                <PlanTable plans={grouped.dirigeant} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
-              )}
+        <div className="space-y-6">
+          <PackGrid title="Comptabilité + Facturation" subtitle="Pour la gestion comptable et la facturation MRA agréée"
+                    icon={Briefcase} color="#2563eb"
+                    plans={grid.byPack.compta} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
+
+          <PackGrid title="RH & Paie + TIBOK" subtitle="Pour la gestion des salariés (bulletins, congés, santé)"
+                    icon={Briefcase} color="#16a34a"
+                    plans={grid.byPack.paie} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
+
+          <PackGrid title="Pack Complet ERP" subtitle="Compta + Facturation + RH + Paie + TIBOK + Juridique"
+                    icon={Briefcase} color="#D4AF37"
+                    plans={grid.byPack.bundle} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
+
+          <AddonsSection plans={grid.addons} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
+
+          <CabinetsSection plans={grid.cabinets} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
+
+          {grid.legacy.length > 0 && (
+            <GroupSection title="Plans non classés (legacy)" subtitle="Anciens plans à migrer ou supprimer" icon={UserCog}>
+              <PlanTable plans={grid.legacy} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
             </GroupSection>
           )}
-          {(filter === 'all' || filter === 'comptable') && (
-            <GroupSection title="Cabinets comptables" subtitle="Plans pour comptables indépendants ou cabinets" icon={UserCog}>
-              {grouped.comptable.length === 0 ? (
-                <Empty text="Aucun plan comptable." />
-              ) : (
-                <PlanTable plans={grouped.comptable} onEdit={setEdit} onToggle={toggleActif} onDelete={del} deletingId={deletingId} />
-              )}
-            </GroupSection>
-          )}
-        </>
+        </div>
       )}
 
       {edit && (
         <EditDialog plan={edit} setPlan={setEdit} onSave={savePlan} saving={saving} />
       )}
     </div>
+  )
+}
+
+const TAILLE_LABELS: Record<string, { label: string; sub: string }> = {
+  solo:   { label: 'Solo',                  sub: '1–3 personnes' },
+  petite: { label: 'Petite entreprise',     sub: '4–15 personnes' },
+  pme:    { label: 'PME',                   sub: '16–50 personnes' },
+  grande: { label: 'Grande entreprise',     sub: '50+ personnes' },
+}
+const TAILLES_ORDER = ['solo', 'petite', 'pme', 'grande']
+
+function PackGrid({ title, subtitle, icon: Icon, color, plans, onEdit, onToggle, onDelete, deletingId }: {
+  title: string; subtitle: string; icon: any; color: string
+  plans: Record<string, Plan>
+  onEdit: (p: Plan) => void; onToggle: (p: Plan) => void; onDelete: (p: Plan) => void; deletingId: string | null
+}) {
+  return (
+    <section>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="h-9 w-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
+          <Icon className="h-5 w-5" style={{ color }} />
+        </div>
+        <div>
+          <h2 className="font-bold text-base" style={{ color: '#0B0F2E' }}>{title}</h2>
+          <p className="text-xs text-gray-500">{subtitle}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        {TAILLES_ORDER.map(t => {
+          const p = plans[t]
+          const meta = TAILLE_LABELS[t]
+          if (!p) return (
+            <div key={t} className="bg-gray-50/60 border border-dashed rounded-xl p-4 text-center">
+              <p className="text-xs uppercase tracking-wider text-gray-400">{meta.label}</p>
+              <p className="text-xs text-gray-500 mt-1">{meta.sub}</p>
+              <p className="text-xs text-gray-400 mt-3 italic">Aucun plan configuré</p>
+            </div>
+          )
+          return <PackCard key={p.id} plan={p} sizeMeta={meta} accentColor={color}
+                           onEdit={onEdit} onToggle={onToggle} onDelete={onDelete} deletingId={deletingId} />
+        })}
+      </div>
+    </section>
+  )
+}
+
+function PackCard({ plan, sizeMeta, accentColor, onEdit, onToggle, onDelete, deletingId }: {
+  plan: Plan; sizeMeta: { label: string; sub: string }; accentColor: string
+  onEdit: (p: Plan) => void; onToggle: (p: Plan) => void; onDelete: (p: Plan) => void; deletingId: string | null
+}) {
+  const modulesActifs = Object.entries(plan.modules_inclus || {}).filter(([, v]) => v).map(([k]) => k)
+  const economie = plan.prix_annuel_mur && plan.prix_mensuel_mur
+    ? Math.max(0, plan.prix_mensuel_mur * 12 - plan.prix_annuel_mur) : 0
+
+  return (
+    <div className={`bg-white border-2 rounded-xl p-4 ${!plan.actif ? 'opacity-50' : ''}`}
+         style={{ borderColor: plan.populaire ? accentColor : '#E5E7EB' }}>
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: accentColor }}>{sizeMeta.label}</p>
+          <p className="text-[10px] text-gray-500">{sizeMeta.sub}</p>
+        </div>
+        {plan.populaire && <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800"><Star className="h-2.5 w-2.5" />POPULAIRE</span>}
+      </div>
+      <p className="font-semibold text-sm mb-2" style={{ color: '#0B0F2E' }}>{plan.nom}</p>
+      <div className="flex items-baseline gap-1 mb-1">
+        <span className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>{fmt(plan.prix_mensuel_mur)}</span>
+        <span className="text-xs text-gray-500">MUR/mois</span>
+      </div>
+      {plan.prix_annuel_mur && (
+        <p className="text-[11px] text-gray-500 mb-2">
+          {fmt(plan.prix_annuel_mur)} MUR/an
+          {economie > 0 && <span className="ml-1 text-green-700 font-semibold">(−{fmt(economie)})</span>}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-1 mb-3 min-h-[40px]">
+        {modulesActifs.length === 0 ? <span className="text-xs text-gray-400">Aucun module</span> :
+          modulesActifs.slice(0, 6).map(k => {
+            const m = MODULES.find(x => x.key === k); if (!m) return null
+            return <span key={k} className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-800">{m.label.split(' ')[0]}</span>
+          })}
+        {modulesActifs.length > 6 && <span className="text-[10px] text-gray-400">+{modulesActifs.length - 6}</span>}
+      </div>
+      <div className="flex items-center gap-1">
+        <Button size="sm" variant="outline" onClick={() => onEdit(plan)} className="flex-1 h-7 text-xs">
+          <Edit2 className="w-3 h-3 mr-1" /> Éditer
+        </Button>
+        <button onClick={() => onToggle(plan)} className="h-7 px-2 rounded hover:bg-gray-100" title={plan.actif ? 'Désactiver' : 'Activer'}>
+          {plan.actif ? <PowerOff className="h-3.5 w-3.5 text-amber-600" /> : <Power className="h-3.5 w-3.5 text-green-600" />}
+        </button>
+        <button onClick={() => onDelete(plan)} disabled={deletingId === plan.id} className="h-7 px-2 rounded hover:bg-gray-100" title="Supprimer">
+          {deletingId === plan.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 text-red-600" />}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function AddonsSection({ plans, onEdit, onToggle, onDelete, deletingId }: {
+  plans: Plan[]
+  onEdit: (p: Plan) => void; onToggle: (p: Plan) => void; onDelete: (p: Plan) => void; deletingId: string | null
+}) {
+  return (
+    <section>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="h-9 w-9 rounded-lg bg-purple-50 flex items-center justify-center">
+          <Star className="h-5 w-5 text-purple-700" />
+        </div>
+        <div>
+          <h2 className="font-bold text-base" style={{ color: '#0B0F2E' }}>Add-ons</h2>
+          <p className="text-xs text-gray-500">Options à ajouter à n'importe quel pack (Telegram, TIBOK, etc.)</p>
+        </div>
+      </div>
+      {plans.length === 0 ? (
+        <Empty text="Aucun add-on configuré." />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {plans.map(p => (
+            <div key={p.id} className={`bg-white border rounded-xl p-4 ${!p.actif ? 'opacity-50' : ''}`}>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-purple-700">Add-on</p>
+              <p className="font-semibold text-sm mt-1" style={{ color: '#0B0F2E' }}>{p.nom}</p>
+              {p.description && <p className="text-[11px] text-gray-500 mt-0.5">{p.description}</p>}
+              <p className="mt-2"><span className="text-xl font-bold">{fmt(p.prix_mensuel_mur)}</span> <span className="text-xs text-gray-500">MUR/mois</span></p>
+              {p.prix_annuel_mur && <p className="text-[11px] text-gray-500">{fmt(p.prix_annuel_mur)} MUR/an</p>}
+              <div className="flex items-center gap-1 mt-3">
+                <Button size="sm" variant="outline" onClick={() => onEdit(p)} className="flex-1 h-7 text-xs"><Edit2 className="w-3 h-3 mr-1" /> Éditer</Button>
+                <button onClick={() => onToggle(p)} className="h-7 px-2 rounded hover:bg-gray-100">
+                  {p.actif ? <PowerOff className="h-3.5 w-3.5 text-amber-600" /> : <Power className="h-3.5 w-3.5 text-green-600" />}
+                </button>
+                <button onClick={() => onDelete(p)} disabled={deletingId === p.id} className="h-7 px-2 rounded hover:bg-gray-100">
+                  {deletingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 text-red-600" />}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function CabinetsSection({ plans, onEdit, onToggle, onDelete, deletingId }: {
+  plans: Plan[]
+  onEdit: (p: Plan) => void; onToggle: (p: Plan) => void; onDelete: (p: Plan) => void; deletingId: string | null
+}) {
+  return (
+    <section>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="h-9 w-9 rounded-lg bg-amber-50 flex items-center justify-center">
+          <UserCog className="h-5 w-5 text-amber-700" />
+        </div>
+        <div>
+          <h2 className="font-bold text-base" style={{ color: '#0B0F2E' }}>Cabinets comptables</h2>
+          <p className="text-xs text-gray-500">Plans pour cabinets — tarif négocié au cas par cas, non affiché côté prospect</p>
+        </div>
+      </div>
+      {plans.length === 0 ? (
+        <Empty text="Aucun plan cabinet." />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {plans.map(p => (
+            <div key={p.id} className={`bg-white border rounded-xl p-4 ${!p.actif ? 'opacity-50' : ''}`}>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-amber-700">Cabinet</p>
+              <p className="font-semibold text-sm mt-1" style={{ color: '#0B0F2E' }}>{p.nom}</p>
+              {p.description && <p className="text-[11px] text-gray-500 mt-0.5">{p.description}</p>}
+              <p className="text-xs italic text-gray-400 mt-2">Tarif sur devis</p>
+              <div className="flex items-center gap-1 mt-3">
+                <Button size="sm" variant="outline" onClick={() => onEdit(p)} className="flex-1 h-7 text-xs"><Edit2 className="w-3 h-3 mr-1" /> Éditer</Button>
+                <button onClick={() => onToggle(p)} className="h-7 px-2 rounded hover:bg-gray-100">
+                  {p.actif ? <PowerOff className="h-3.5 w-3.5 text-amber-600" /> : <Power className="h-3.5 w-3.5 text-green-600" />}
+                </button>
+                <button onClick={() => onDelete(p)} disabled={deletingId === p.id} className="h-7 px-2 rounded hover:bg-gray-100">
+                  {deletingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 text-red-600" />}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
