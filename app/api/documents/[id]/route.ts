@@ -218,6 +218,22 @@ export async function DELETE(
     // Supprimer toutes les données liées (FK vers documents)
     // NOTE: comptes_bancaires.solde_actuel is NOT rolled back on deletion — known limitation
     const warnings: string[] = []
+
+    // ÉTAPE 1 : récupère les factures liées AVANT suppression pour pouvoir
+    // supprimer les écritures (qui ont facture_id REFERENCES factures ON DELETE SET NULL
+    // — donc si on delete factures sans cleanup, les écritures restent en place).
+    const { data: facturesLiees } = await supabase
+      .from('factures').select('id').eq('document_id', id)
+    const factureIds = (facturesLiees || []).map((f: any) => f.id).filter(Boolean)
+
+    // ÉTAPE 2 : supprime les écritures comptables liées via plusieurs voies.
+    // ref_folio peut être 'FAC-<id>' (helper canonique) OU document.id (legacy)
+    if (factureIds.length > 0) {
+      const refFolios = factureIds.map(fid => `FAC-${fid}`)
+      await supabase.from('ecritures_comptables_v2').delete().in('ref_folio', refFolios)
+      await supabase.from('ecritures_comptables_v2').delete().in('facture_id', factureIds)
+    }
+
     // ⚠️ V2 ONLY (mig 230). Legacy : `piece_justificative` était l'ancien nom V1
     // de `ref_folio` ; certaines écritures historiques ont leur ref_folio = document.id.
     const childDeletes = [
@@ -225,6 +241,7 @@ export async function DELETE(
       { table: 'factures', field: 'document_id' },
       { table: 'ecritures_comptables_v2', field: 'ref_folio' },
       { table: 'ecritures_comptables_v2', field: 'document_id' },
+      { table: 'ecritures_comptables_v2', field: 'piece_justificative' },
       { table: 'transactions_bancaires', field: 'document_lie_id' },
       { table: 'messages_document', field: 'document_id' },
       { table: 'immobilisations', field: 'document_id' },
