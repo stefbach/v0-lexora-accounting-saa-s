@@ -374,7 +374,7 @@ RAPPELS IMPORTANTS :
         content: isVisual
           ? [contentBlock, { type: 'text' as const, text: 'Analyse ce document.' }]
           : isExcel
-            ? `Voici le contenu d'un fichier Excel (CSV par feuille, séparateur ;). Analyse-le comme un document comptable mauricien :\n\n${excelText}`
+            ? `Voici le contenu d'un fichier Excel/CSV exporté d'un logiciel comptable. Sépareur de colonnes : ";".\n\nIMPORTANT : ce type d'export contient TRÈS souvent une facture (client ou fournisseur) ou un relevé bancaire. Cherche activement :\n- Un en-tête avec nom d'émetteur, BRN, adresse, n° facture\n- Un destinataire/client\n- Des lignes de prestation/produits avec montants HT/TVA/TTC\n- Une date de facture\n- Si tu vois "Facture", "Invoice", "N°", "Montant", "TVA" → c'est une facture, ne classe PAS en "autre"\n\nApplique la même règle de classification émetteur=MA société → facture_client que pour un PDF.\n\nContenu :\n${excelText}`
             : `Analyse ce document: ${await fileData.text()}`
       }],
     })
