@@ -75,6 +75,10 @@ export async function POST(req: Request) {
     populaire: !!body.populaire,
     ordre: body.ordre != null ? Number(body.ordre) : 100,
     actif: body.actif !== false,
+    pack: body.pack || null,
+    taille_entreprise: body.taille_entreprise || null,
+    is_addon: !!body.is_addon,
+    prix_visible: body.prix_visible !== false,
   }
   const { data, error } = await admin.from('plans').insert(payload).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
