@@ -20,8 +20,11 @@
  *    `releves_bancaires.transactions_json` (JSONB array) — that's what the
  *    rapprochement engine reads (see app/api/agent/rapprochement/route.ts,
  *    app/api/comptable/rapprochement/*).
- *    We DO NOT insert into `transactions_bancaires` (legacy table, only used
- *    for cascading delete + telegram db-search).
+ *
+ *    On insère AUSSI une ligne par transaction dans `transactions_bancaires`
+ *    pour permettre la recherche libre depuis le bot Telegram
+ *    (`/api/telegram/internal/db-search` filtre par `libelle` ILIKE). Best
+ *    effort — l'insert peut échouer sans bloquer la création du relevé.
  */
 
 import { getCompteComptable } from "@/lib/accounting/comptes-bancaires"
@@ -437,6 +440,49 @@ export async function processReleveBancaire(
       ok: false,
       reason: `releve_insert_failed: ${releveErr?.message || "unknown"}`,
     }
+  }
+
+  // -- Best-effort: insert per-row into `transactions_bancaires` -------------
+  // Schema cible (mig 010 + 014) : date_transaction / libelle_banque / debit /
+  // credit / reference (cf supabase/migrations/010_financial_modules.sql).
+  // Cette table sert à la recherche libre depuis le bot Telegram
+  // (`/api/telegram/internal/db-search`). Elle n'est PAS lue par le moteur de
+  // rapprochement (qui utilise `releves_bancaires.transactions_json`).
+  // Soft-fail : si l'insert plante, on garde le relevé en place.
+  try {
+    const txRows = normalized
+      .map((t) => {
+        const dt = normalizeDate(t.date) || periodeFin
+        const debit = Number(t.debit) || 0
+        const credit = Number(t.credit) || 0
+        // Skip transactions sans date valide ni montant — pollueraient le table.
+        if (!dt || (debit === 0 && credit === 0)) return null
+        return {
+          releve_id: inserted.id,
+          compte_bancaire_id: bankAccount!.id,
+          societe_id: societeId,
+          date_transaction: dt,
+          libelle_banque: (t.libelle || "(sans libellé)").slice(0, 500),
+          reference: ((t as any).reference || null) as string | null,
+          debit,
+          credit,
+          tiers_identifie: (t.tiers_detecte || null) as string | null,
+          statut_lettrage: "a_lettrer",
+        }
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+    if (txRows.length > 0) {
+      const { error: txErr } = await supabase
+        .from("transactions_bancaires")
+        .insert(txRows)
+      if (txErr) {
+        console.warn(
+          `[process-releve] transactions_bancaires insert failed (releve persisté quand même): ${txErr.message}`,
+        )
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[process-releve] transactions_bancaires bulk insert threw: ${e?.message}`)
   }
 
   // -- Best-effort: update compte_bancaire's solde_actuel / date_dernier_releve
