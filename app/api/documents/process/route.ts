@@ -170,10 +170,44 @@ Analyse ce document et retourne UN JSON (sans markdown, sans backticks) :
       parsed = { routing: { type_document: 'autre', societe: 'INCONNU', confiance_type: 0 }, extraction: {} }
     }
 
-    const typeDoc = parsed.routing?.type_document || 'autre'
+    let typeDoc = parsed.routing?.type_document || 'autre'
     const societe = parsed.routing?.societe || 'INCONNU'
     const extraction = parsed.extraction || {}
     const duration = Date.now() - startTime
+
+    // Post-validation : si Claude classe en client/fournisseur, on vérifie
+    // que sa décision est cohérente avec MA société active. Si destinataire
+    // = MA société → forcer fournisseur. Si émetteur = MA société → forcer
+    // client. Évite les erreurs de classement quand le logo de l'autre
+    // partie est plus visible.
+    if (myCompany && (typeDoc === 'facture_client' || typeDoc === 'facture_fournisseur')) {
+      const normalize = (s: any) => {
+        const str = typeof s === 'string' ? s
+          : (s?.nom || s?.name || s?.raison_sociale || '')
+        return String(str)
+          .toLowerCase()
+          .replace(/\s*(ltd|limited|sarl|sas|sa|co|company|cie|llc)\s*/gi, '')
+          .replace(/[^a-z0-9]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+      }
+      const me = normalize(myCompany)
+      const emet = normalize(extraction.emetteur)
+      const dest = normalize(extraction.destinataire)
+      const matchesMe = (s: string) =>
+        s && me && (s === me || s.includes(me) || me.includes(s))
+      if (matchesMe(dest) && !matchesMe(emet)) {
+        if (typeDoc !== 'facture_fournisseur') {
+          console.log(`[process] override: dest='${dest}' = me → forcing facture_fournisseur (Claude said ${typeDoc})`)
+          typeDoc = 'facture_fournisseur'
+        }
+      } else if (matchesMe(emet) && !matchesMe(dest)) {
+        if (typeDoc !== 'facture_client') {
+          console.log(`[process] override: emet='${emet}' = me → forcing facture_client (Claude said ${typeDoc})`)
+          typeDoc = 'facture_client'
+        }
+      }
+    }
 
     // Step 5: Save results
     const updateData: any = {
