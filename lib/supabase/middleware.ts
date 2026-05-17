@@ -89,6 +89,9 @@ export async function updateSession(request: NextRequest) {
     '/api/telegram/system-prompt',
     // Routes accessibles via X-Internal-Token (auth gérée dans la route elle-même)
     '/api/documents/process',
+    '/api/client/factures-ia/generer',
+    '/api/client/factures',
+    '/api/rh/paie/ot/save',
   ]
   // Internal Telegram tool endpoints — all auth via X-Internal-Token
   const publicApiInternalPrefixes = [
