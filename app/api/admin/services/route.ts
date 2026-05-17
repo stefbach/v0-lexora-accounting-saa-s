@@ -13,8 +13,11 @@ function getAdminClient() {
 // présentes (les clés manquantes sont mises à false). Évite que la sidebar
 // "tombe sur du undefined" et affiche la section par défaut.
 const MODULE_KEYS = [
-  'comptabilite', 'rh', 'juridique', 'facturation', 'documents',
-  'fiscal', 'etats_financiers', 'employe_portal',
+  // Modules visibles sur /tarifs
+  'documents', 'comptabilite', 'facturation', 'rh', 'fiscal',
+  'alertes_ia', 'tibok', 'telegram',
+  // Sous-modules avancés internes
+  'juridique', 'etats_financiers', 'employe_portal',
 ] as const
 
 function normalizeModules(input: Record<string, unknown> | null | undefined): Record<string, boolean> {

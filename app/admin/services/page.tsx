@@ -28,12 +28,17 @@ import { t, getLocale, type Locale } from "@/lib/i18n"
 /* ------------------------------------------------------------------ */
 
 interface ModulesConfig {
-  comptabilite: boolean
-  rh: boolean
+  // ── Modules visibles sur /tarifs ──
+  documents: boolean         // « OCR & Documents IA »
+  comptabilite: boolean      // « Comptabilité Automatisée »
+  facturation: boolean       // « Facturation MRA Agréée »
+  rh: boolean                // « RH & Paie Maurice »
+  fiscal: boolean            // « Fiscal MRA »
+  alertes_ia: boolean        // « Alertes IA & Pilotage »
+  tibok: boolean             // « TIBOK Corporate » (Santé salariés)
+  telegram: boolean          // « Chief of Staff IA — Telegram »
+  // ── Sous-modules avancés (internes, non listés sur /tarifs) ──
   juridique: boolean
-  facturation: boolean
-  documents: boolean
-  fiscal: boolean
   etats_financiers: boolean
   employe_portal: boolean
 }
@@ -65,25 +70,33 @@ interface SocieteWithClients {
 /* ------------------------------------------------------------------ */
 
 const moduleLabels = (locale: Locale): Record<keyof ModulesConfig, string> => ({
-  comptabilite: t('adm.services.mod_comptabilite', locale),
-  rh: t('adm.services.mod_rh', locale),
-  juridique: t('adm.services.mod_juridique', locale),
-  facturation: t('adm.services.mod_facturation', locale),
-  documents: t('adm.services.mod_documents', locale),
-  fiscal: locale === 'en' ? 'Tax MRA (VAT, PAYE, CSG)' : 'Fiscal MRA (TVA, PAYE, CSG)',
-  etats_financiers: locale === 'en' ? 'Financial statements' : 'États financiers',
-  employe_portal: locale === 'en' ? 'Employee portal' : 'Portail employé',
+  // ─── Modules /tarifs ───
+  documents:       locale === 'en' ? 'OCR & AI Documents' : 'OCR & Documents IA',
+  comptabilite:    locale === 'en' ? 'Automated Accounting' : 'Comptabilité Automatisée',
+  facturation:     locale === 'en' ? 'MRA-Approved Invoicing' : 'Facturation MRA Agréée',
+  rh:              locale === 'en' ? 'Mauritius HR & Payroll' : 'RH & Paie Maurice',
+  fiscal:          locale === 'en' ? 'MRA Tax' : 'Fiscal MRA',
+  alertes_ia:      locale === 'en' ? 'AI Alerts & Monitoring' : 'Alertes IA & Pilotage',
+  tibok:           locale === 'en' ? 'TIBOK Corporate (Employee Health)' : 'TIBOK Corporate (Santé salariés)',
+  telegram:        locale === 'en' ? 'Chief of Staff AI — Telegram' : 'Chief of Staff IA — Telegram',
+  // ─── Sous-modules avancés ───
+  juridique:       t('adm.services.mod_juridique', locale),
+  etats_financiers: locale === 'en' ? 'Financial statements (advanced)' : 'États financiers (avancé)',
+  employe_portal:  locale === 'en' ? 'Employee portal (self-service)' : 'Portail employé (self-service)',
 })
 
 const moduleDetails = (locale: Locale): Record<keyof ModulesConfig, string> => ({
-  comptabilite: t('adm.services.mod_comptabilite_desc', locale),
-  rh: t('adm.services.mod_rh_desc', locale),
-  juridique: t('adm.services.mod_juridique_desc', locale),
-  facturation: t('adm.services.mod_facturation_desc', locale),
-  documents: t('adm.services.mod_documents_desc', locale),
-  fiscal: locale === 'en' ? 'VAT, PAYE, CSG, TDS, IT Form, ROC, audit trail e-MRA.' : 'TVA, PAYE, CSG, TDS, IT Form, ROC, audit trail e-MRA.',
-  etats_financiers: locale === 'en' ? 'Balance sheet, P&L, IFRS 9 / 16, deadlines.' : 'Bilan, P&L, IFRS 9 / 16, échéances.',
-  employe_portal: locale === 'en' ? 'Employee self-service space (payslips, leave, expenses).' : 'Espace self-service salarié (bulletins, congés, frais).',
+  documents:       locale === 'en' ? 'Upload/scan any document — AI extracts and classifies entries.' : 'Upload ou photo de tout document — IA analyse, classe et génère les écritures.',
+  comptabilite:    locale === 'en' ? 'General Ledger, balance sheet, P&L, auto bank reconciliation, multi-currency.' : 'Grand Livre, Balance, Bilan & P&L, rapprochement bancaire auto, multi-devises.',
+  facturation:     locale === 'en' ? 'MRA-compliant invoices (IRN + QR), quotes, credit notes, auto-reminders.' : 'Factures conformes MRA (IRN + QR), devis, avoirs, relances auto.',
+  rh:              locale === 'en' ? 'Compliant payslips (CSG/NSF/PAYE), digital time clock, leave per WRA 2019.' : 'Bulletins conformes (CSG/NSF/PAYE), pointeuse, congés WRA 2019.',
+  fiscal:          locale === 'en' ? 'VAT 9-Box, CSG/NSF/PAYE auto, IT Form 3, Annual Return ROC, e-MRA XML.' : 'TVA 9-Box, CSG/NSF/PAYE auto, IT Form 3, Annual Return ROC, export XML e-MRA.',
+  alertes_ia:      locale === 'en' ? 'AI agent for tax deadlines, budget forecasting, strategic recommendations.' : 'Agent IA échéances fiscales, prévisionnel Budget vs Réel, recommandations stratégiques IA.',
+  tibok:           locale === 'en' ? 'Annual health check-up, 24/7 teleconsultation, corporate wellbeing program.' : 'Bilan santé annuel, téléconsultation médicale 24/7, programme bien-être entreprise.',
+  telegram:        locale === 'en' ? 'Chief of Staff AI on Telegram — calendar, meetings, emails, OCR, HR, banking in natural language.' : 'Chief of Staff IA sur Telegram — agenda, RDV, emails, OCR, RH, banque en langage naturel.',
+  juridique:       t('adm.services.mod_juridique_desc', locale),
+  etats_financiers: locale === 'en' ? 'Balance sheet, P&L, IFRS 9/16, deadlines (sub-feature of accounting).' : 'Bilan, P&L, IFRS 9/16, échéances (sous-module de la compta).',
+  employe_portal:  locale === 'en' ? 'Employee self-service space (payslips, leave, expenses).' : 'Espace self-service salarié (bulletins, congés, frais).',
 })
 
 const PLAN_COLORS: Record<string, string> = {
@@ -95,12 +108,15 @@ const PLAN_COLORS: Record<string, string> = {
 }
 
 const DEFAULT_MODULES: ModulesConfig = {
-  comptabilite: true,
-  rh: true,
-  juridique: true,
-  facturation: true,
   documents: true,
+  comptabilite: true,
+  facturation: true,
+  rh: true,
   fiscal: true,
+  alertes_ia: true,
+  tibok: true,
+  telegram: false,           // option payante, off par défaut
+  juridique: true,
   etats_financiers: true,
   employe_portal: true,
 }

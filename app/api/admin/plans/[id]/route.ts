@@ -14,8 +14,11 @@ async function requireAdmin() {
 }
 
 const NORMALIZED_KEYS = [
-  'comptabilite','rh','juridique','facturation','documents',
-  'fiscal','etats_financiers','employe_portal','telegram',
+  // Modules /tarifs
+  'documents','comptabilite','facturation','rh','fiscal',
+  'alertes_ia','tibok','telegram',
+  // Sous-modules avancés internes
+  'juridique','etats_financiers','employe_portal',
 ] as const
 
 function normalizeModules(input: any): Record<string, boolean> {

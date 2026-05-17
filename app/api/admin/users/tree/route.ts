@@ -84,11 +84,16 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const supabase = getAdminClient()
 
-    const [profilesRes, societesRes, userSocietesRes, dossiersRes] = await Promise.all([
+    const [profilesRes, societesRes, userSocietesRes, dossiersRes, employesRes] = await Promise.all([
       supabase.from('profiles').select('id, full_name, email, role, is_active, phone, modules_utilisateur, societe_id').order('full_name'),
       supabase.from('societes').select('id, nom, brn, created_by, client_id').order('nom'),
       supabase.from('user_societes').select('user_id, societe_id, role, actif'),
       supabase.from('dossiers').select('client_id, societe_id'),
+      // Employés : leur lien vers un profile passe par `auth_user_id`
+      // et leur société par `societe_id`. Indispensable pour ne pas
+      // afficher les employés en "orphelins" (cas typique : compte
+      // créé via /rh/employes/.../create-account).
+      supabase.from('employes').select('auth_user_id, societe_id'),
     ])
     if (profilesRes.error) return NextResponse.json({ error: profilesRes.error.message }, { status: 500 })
 
@@ -96,6 +101,11 @@ export async function GET() {
     const societes: any[]       = societesRes.data || []
     const userSocietes: any[]   = userSocietesRes.data || []
     const dossiers: any[]       = dossiersRes.data || []
+    // Tolère l'absence de la colonne auth_user_id (anciens schémas) :
+    // si la requête a échoué on prend un tableau vide.
+    const employes: any[] = employesRes.error
+      ? []
+      : (employesRes.data || []).filter((e: any) => e.auth_user_id && e.societe_id)
 
     // Map profile by id
     const profileById = new Map<string, any>()
@@ -105,7 +115,8 @@ export async function GET() {
     const societeById = new Map<string, any>()
     for (const s of societes) societeById.set(s.id, s)
 
-    // Index : société → users (via profile.societe_id OU user_societes)
+    // Index : société → users (via profile.societe_id OU user_societes OU
+    // employes.auth_user_id → employes.societe_id)
     const usersBySociete = new Map<string, Set<string>>()
     for (const p of profiles) {
       if (p.societe_id) {
@@ -117,6 +128,10 @@ export async function GET() {
       if (!us.societe_id || !us.user_id) continue
       if (!usersBySociete.has(us.societe_id)) usersBySociete.set(us.societe_id, new Set())
       usersBySociete.get(us.societe_id)!.add(us.user_id)
+    }
+    for (const e of employes) {
+      if (!usersBySociete.has(e.societe_id)) usersBySociete.set(e.societe_id, new Set())
+      usersBySociete.get(e.societe_id)!.add(e.auth_user_id)
     }
 
     // Index : client_admin → ses sociétés (created_by OR client_id OR dossiers)
