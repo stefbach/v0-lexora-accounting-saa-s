@@ -8,7 +8,7 @@ import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import {
   Clock, Users, Calendar, CreditCard, TrendingUp, Banknote,
-  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle, ShieldCheck, Gift, Wallet, BookOpenCheck, FileBarChart,
+  Settings, LogOut, ArrowLeft, Menu, X, CalendarDays, Car, Bot, CheckCircle, Upload, UserMinus, Megaphone, MapPin, Route, Shield, FilePen, UserCircle, ShieldCheck, Gift, Wallet, BookOpenCheck, FileBarChart, MessageCircle,
 } from "lucide-react"
 
 interface NavLink {
@@ -61,6 +61,9 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/prgf/exit-statements', label: 'Exit Statements PRGF', labelKey: 'comp.rh_sidebar.exit_statements_prgf', icon: LogOut, roles: ['admin', 'rh'] },
   { href: '/rh/annonces', label: 'Annonces', labelKey: 'comp.rh_sidebar.announcements', icon: Megaphone, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/chat', label: 'CLARA — Assistant IA', labelKey: 'comp.rh_sidebar.clara', icon: Bot },
+  // Telegram Bot — accès RH/manager/dirigeant pour configurer les permissions
+  { href: '/client/telegram-config', label: 'Telegram Bot', labelKey: 'account.telegram_bot', icon: MessageCircle },
+  { href: '/client/telegram-permissions', label: 'Permissions Bot', labelKey: 'account.telegram_permissions', icon: MessageCircle, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'client_assistant', 'direction'] },
   // Sprint 2 — hub central de paramètres en plus des sous-pages spécifiques.
   { href: '/rh/parametres', label: 'Paramètres (hub)', labelKey: 'comp.rh_sidebar.settings_hub', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
   { href: '/rh/societe', label: 'Paramètres société', labelKey: 'comp.rh_sidebar.company_settings', icon: Settings, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin'] },
