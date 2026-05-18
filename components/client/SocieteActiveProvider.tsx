@@ -168,6 +168,21 @@ export function SocieteActiveProvider({ children }: { children: ReactNode }) {
     }
   }, [societeId, societes])
 
+  // Auto-sélection : si l'utilisateur n'a pas de société active mais en a
+  // au moins une accessible, on prend la première (par défaut tri par nom
+  // via l'API). Évite l'écran 'Aucune société sélectionnée' bloquant pour
+  // les rôles RH/manager/direction qui n'ont pas le flow select-societe.
+  useEffect(() => {
+    if (!hasLoadedOnce.current) return
+    if (societeId) return
+    if (societes.length === 0) return
+    const first = societes[0]
+    if (!first?.id) return
+    writeCookie(ACTIVE_SOCIETE_COOKIE, first.id, COOKIE_MAX_AGE_SECONDS)
+    writeStorage(ACTIVE_SOCIETE_STORAGE_KEY, first.id)
+    setSocieteId(first.id)
+  }, [societeId, societes])
+
   const switchSociete = useCallback(
     (id: string) => {
       if (!id) return
