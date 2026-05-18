@@ -105,7 +105,7 @@ function CertificatPDF({ emp, soc, dateDepart, typeDepart, draft }: {
       React.createElement(SigBlock as any, {
         socName: soc?.nom || '',
         empFullName: fullName,
-        dateLieu: `Fait à ${soc?.ville || 'Port-Louis'}, le ${fmtDate(new Date().toISOString().slice(0, 10))}.`,
+        dateLieu: `Fait à ${soc?.ville || 'Ebène'}, le ${fmtDate(new Date().toISOString().slice(0, 10))}.`,
       }),
 
       React.createElement(PdfFooter as any, {

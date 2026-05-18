@@ -132,7 +132,7 @@ function SoldePDF({ emp, soc, dateDepart, typeDepart, lines, total, raison, draf
       React.createElement(SigBlock as any, {
         socName: soc?.nom || '',
         empFullName: fullName,
-        dateLieu: `Reçu en règlement définitif et pour solde de tout compte, à ${soc?.ville || 'Port-Louis'}, le ${fmtDate(new Date().toISOString().slice(0, 10))}.`,
+        dateLieu: `Reçu en règlement définitif et pour solde de tout compte, à ${soc?.ville || 'Ebène'}, le ${fmtDate(new Date().toISOString().slice(0, 10))}.`,
       }),
 
       React.createElement(PdfFooter as any, {
