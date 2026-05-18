@@ -20,8 +20,21 @@ export default async function ClientLayout({ children }: { children: React.React
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  const role = profile?.role || ''
-  if (!ALLOWED_ROLES.includes(role)) redirect('/redirect')
+  const profileRole = profile?.role || ''
+  let allowed = ALLOWED_ROLES.includes(profileRole)
+  // Fallback : si profiles.role ne suffit pas, accepte aussi quand l'user a
+  // un rôle autorisé dans AU MOINS UNE société via user_societes (cas fréquent :
+  // un compte 'employe' au niveau profil mais 'rh'/'manager'/'direction'/
+  // 'client_admin' dans une société donnée).
+  if (!allowed) {
+    const { data: roles } = await supabase
+      .from('user_societes')
+      .select('role')
+      .eq('user_id', user.id)
+    const societeRoles = (roles || []).map((r: any) => r.role)
+    allowed = societeRoles.some((r: string) => ALLOWED_ROLES.includes(r))
+  }
+  if (!allowed) redirect('/redirect')
 
   return <ClientLayoutShell>{children}</ClientLayoutShell>
 }
