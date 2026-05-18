@@ -735,11 +735,26 @@ export async function POST(request: Request) {
       const { id, date_debut, date_fin, type_conge, motif, demi_journee } = body
       if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
-      // Check the request exists and is pending
+      // Check the request exists
       const { data: existing } = await supabase.from('demandes_conges').select('*').eq('id', id).single()
       if (!existing) return NextResponse.json({ error: 'Demande non trouvee' }, { status: 404 })
-      if (existing.statut !== 'en_attente') {
-        return NextResponse.json({ error: 'Impossible de modifier une demande deja traitee' }, { status: 400 })
+      // On autorise la modification d'une demande en attente OU approuvée
+      // (congé déjà pris) — le RH doit pouvoir corriger dates/catégorie a
+      // posteriori. Le solde est recompute plus bas si approuvée. Une
+      // demande refusée ou annulée n'est pas modifiable (statut terminal).
+      if (!['en_attente', 'approuve'].includes(existing.statut)) {
+        return NextResponse.json({ error: `Impossible de modifier une demande ${existing.statut}` }, { status: 400 })
+      }
+
+      // Contrôle d'accès : l'utilisateur doit avoir accès à la société de
+      // l'employé (mirror du soft-DELETE). Évite toute édition cross-tenant.
+      {
+        const { data: empAcc } = await supabase
+          .from('employes').select('societe_id').eq('id', existing.employe_id).maybeSingle()
+        const accessibleIds = await getUserSocieteIds(user.id)
+        if (!empAcc || !accessibleIds.includes(empAcc.societe_id)) {
+          return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+        }
       }
 
       const updates: any = {}
