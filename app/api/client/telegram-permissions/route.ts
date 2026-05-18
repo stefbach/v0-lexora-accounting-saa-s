@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     .eq('societe_id', societeId)
     .maybeSingle()
   const callerRole = caller?.role || ''
-  if (!['admin', 'super_admin', 'direction', 'client_admin', 'rh'].includes(callerRole)) {
+  if (!['admin', 'super_admin', 'direction', 'client_admin', 'client_assistant', 'rh'].includes(callerRole)) {
     return NextResponse.json({ error: 'Accès refusé. Rôle direction, RH ou admin requis.' }, { status: 403 })
   }
 
@@ -221,7 +221,7 @@ export async function PATCH(req: NextRequest) {
     .eq('societe_id', societeId)
     .maybeSingle()
   const callerRole = caller?.role || ''
-  if (!['admin', 'super_admin', 'direction', 'client_admin', 'rh'].includes(callerRole)) {
+  if (!['admin', 'super_admin', 'direction', 'client_admin', 'client_assistant', 'rh'].includes(callerRole)) {
     return NextResponse.json({ error: 'Accès refusé. Rôle direction, RH ou admin requis.' }, { status: 403 })
   }
 
