@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
     .eq('societe_id', societeId)
     .maybeSingle()
   const callerRole = caller?.role || ''
-  if (!['admin', 'super_admin', 'direction', 'client_admin'].includes(callerRole)) {
-    return NextResponse.json({ error: 'Accès refusé. Rôle direction ou admin requis.' }, { status: 403 })
+  if (!['admin', 'super_admin', 'direction', 'client_admin', 'rh'].includes(callerRole)) {
+    return NextResponse.json({ error: 'Accès refusé. Rôle direction, RH ou admin requis.' }, { status: 403 })
   }
 
   const admin = getAdminClient()
@@ -233,7 +233,7 @@ export async function DELETE(req: NextRequest) {
   const { data: caller } = await supabase
     .from('user_societes').select('role')
     .eq('user_id', user.id).eq('societe_id', societeId).maybeSingle()
-  if (!['admin', 'super_admin', 'direction', 'client_admin'].includes(caller?.role || '')) {
+  if (!['admin', 'super_admin', 'direction', 'client_admin', 'rh'].includes(caller?.role || '')) {
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
   }
 
