@@ -31,8 +31,8 @@ export async function GET(req: NextRequest) {
     .eq('societe_id', societeId)
     .maybeSingle()
   const callerRole = caller?.role || ''
-  if (!['admin', 'super_admin', 'direction', 'client_admin'].includes(callerRole)) {
-    return NextResponse.json({ error: 'Accès refusé. Rôle direction ou admin requis.' }, { status: 403 })
+  if (!['admin', 'super_admin', 'direction', 'client_admin', 'rh'].includes(callerRole)) {
+    return NextResponse.json({ error: 'Accès refusé. Rôle direction, RH ou admin requis.' }, { status: 403 })
   }
 
   const admin = getAdminClient()
@@ -221,8 +221,8 @@ export async function PATCH(req: NextRequest) {
     .eq('societe_id', societeId)
     .maybeSingle()
   const callerRole = caller?.role || ''
-  if (!['admin', 'super_admin', 'direction', 'client_admin'].includes(callerRole)) {
-    return NextResponse.json({ error: 'Accès refusé. Rôle direction ou admin requis.' }, { status: 403 })
+  if (!['admin', 'super_admin', 'direction', 'client_admin', 'rh'].includes(callerRole)) {
+    return NextResponse.json({ error: 'Accès refusé. Rôle direction, RH ou admin requis.' }, { status: 403 })
   }
 
   const body = await req.json().catch(() => null)

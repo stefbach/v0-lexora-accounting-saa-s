@@ -318,6 +318,66 @@ export default function TelegramPermissionsPage() {
 
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2"><AlertCircle className="h-4 w-4 mt-0.5" />{error}</div>}
 
+      {/* ── Qui peut paramétrer le bot ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4 text-emerald-600" /> Qui peut accéder à cette page ?</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm space-y-3">
+          <p className="text-slate-600">
+            L'administration des permissions Telegram (génération de codes, attribution de rôles, personnalisation des droits)
+            est ouverte aux profils suivants :
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="border rounded p-3 bg-emerald-50/50">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300" variant="outline">Dirigeant client</Badge>
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300" variant="outline">Direction</Badge>
+              </div>
+              <p className="text-slate-700">
+                <strong>Propriétaire du compte.</strong> Accès complet : génère les codes de liaison Telegram,
+                modifie les rôles, personnalise les permissions individuelles, configure les alertes,
+                voit l'audit log.
+              </p>
+            </div>
+            <div className="border rounded p-3 bg-amber-50/50">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge className="bg-amber-100 text-amber-700 border-amber-300" variant="outline">RH</Badge>
+              </div>
+              <p className="text-slate-700">
+                <strong>Responsable RH.</strong> Donne et gère les accès Telegram aux employés (code de liaison,
+                rôle employé/manager), surtout pour le pointage, les bulletins de paie, les demandes de congés.
+                Idéal pour onboarder rapidement les nouveaux salariés.
+              </p>
+            </div>
+            <div className="border rounded p-3 bg-red-50/50">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge className="bg-red-100 text-red-700 border-red-300" variant="outline">Administrateur</Badge>
+                <Badge className="bg-purple-100 text-purple-700 border-purple-300" variant="outline">Super Admin</Badge>
+              </div>
+              <p className="text-slate-700">
+                <strong>Équipe Lexora.</strong> Tous droits, toutes sociétés. Réservé au support.
+              </p>
+            </div>
+            <div className="border rounded p-3 bg-slate-50">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge className="bg-slate-100 text-slate-600 border-slate-300" variant="outline">Comptable</Badge>
+                <Badge className="bg-blue-100 text-blue-700 border-blue-300" variant="outline">Manager</Badge>
+                <Badge className="bg-slate-100 text-slate-600 border-slate-300" variant="outline">Employé</Badge>
+              </div>
+              <p className="text-slate-700">
+                <strong>Pas d'accès à cette page.</strong> Ils utilisent le bot avec les droits que tu leur as
+                attribués (voir la matrice ci-dessous).
+              </p>
+            </div>
+          </div>
+          <div className="text-xs text-slate-500 italic mt-2">
+            💡 La matrice détaillée des capabilities par rôle est en bas de page. Tu peux aussi sur-mesurer
+            par utilisateur via le bouton « Permissions » (override des défauts du rôle).
+          </div>
+        </CardContent>
+      </Card>
+
       {!capsOverrideSupported && (
         <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5" />
