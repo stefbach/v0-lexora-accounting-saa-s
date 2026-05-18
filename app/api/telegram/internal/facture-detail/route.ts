@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const admin = getAdminClient()
     let q = admin
       .from('factures')
-      .select('id, numero_facture, tiers, contact_id, type_facture, type_document, statut, date_facture, date_echeance, devise, montant_ht, montant_tva, montant_ttc, montant_mur, solde_non_paye, lignes, conditions_paiement, recurrent, recurrence_frequence, pdf_url, notes_internes, created_at, updated_at')
+      .select('id, numero_facture, tiers, contact_id, type_facture, type_document, statut, date_facture, date_echeance, devise, montant_ht, montant_tva, montant_ttc, montant_mur, solde_non_paye, lignes, conditions_paiement, recurrent, recurrent_frequence, notes_internes, created_at, updated_at')
       .eq('societe_id', ctx.societe_id)
     if (id) q = q.eq('id', id)
     else q = q.eq('numero_facture', numero!)
