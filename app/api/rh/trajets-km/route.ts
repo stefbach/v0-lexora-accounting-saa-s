@@ -24,6 +24,106 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return Math.round(R * c * 100) / 100
 }
 
+// Taux IK par défaut (MUR/km) si parametres_km absent pour la société.
+// Cohérent avec le coût réel à Maurice (carburant Rs ~64/L + usure).
+const DEFAULT_TAUX_KM = { voiture: 7, moto: 4, velo: 2 } as const
+
+function tauxFromParams(params: any, vehicule: string | null | undefined): number {
+  const v = (vehicule || 'voiture').toLowerCase()
+  if (v === 'moto') return Number(params?.taux_moto) || DEFAULT_TAUX_KM.moto
+  if (v === 'velo') return Number(params?.taux_velo) || DEFAULT_TAUX_KM.velo
+  return Number(params?.taux_voiture) || DEFAULT_TAUX_KM.voiture
+}
+
+/**
+ * Pont GPS → paie. Agrège les trajets VALIDÉS d'un employé pour le mois
+ * de `dateTrajet` et écrit/actualise la ligne frais_km_mois (approuvée,
+ * source='gps') que le moteur de paie consomme. Idempotent : recalcule
+ * le total du mois à chaque appel (pas de double comptage entre trajets).
+ *
+ * Réconciliation : si une ligne frais_km_mois existe déjà pour
+ * (employe, periode) avec une source ≠ 'gps' ET des km > 0 (saisie
+ * manuelle RH), on NE l'écrase PAS — on retourne un avertissement pour
+ * que le RH réconcilie, évitant tout double comptage manuel/GPS.
+ */
+async function syncFraisKmMoisFromTrajets(
+  supabase: ReturnType<typeof getAdminClient>,
+  employe_id: string,
+  societe_id: string | null,
+  dateTrajet: string,
+): Promise<{ ok: boolean; skipped?: string; km?: number; montant?: number }> {
+  const d = String(dateTrajet || '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { ok: false }
+  const periode = `${d.slice(0, 7)}-01`           // 1er du mois (DATE)
+  const moisDebut = `${d.slice(0, 7)}-01`
+  const moisFinExcl = (() => {
+    const [y, m] = d.slice(0, 7).split('-').map(Number)
+    const nm = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
+    return `${nm}-01`
+  })()
+
+  // Taux société (fallback défaut). Lu une fois pour le mois.
+  let params: any = null
+  if (societe_id) {
+    const { data } = await supabase.from('parametres_km').select('*').eq('societe_id', societe_id).maybeSingle()
+    params = data
+  }
+
+  // Tous les trajets VALIDÉS de l'employé sur le mois.
+  const { data: trajetsMois } = await supabase
+    .from('trajets_kilometriques')
+    .select('id, distance_totale_km, vehicule')
+    .eq('employe_id', employe_id)
+    .eq('statut', 'valide')
+    .gte('date_trajet', moisDebut)
+    .lt('date_trajet', moisFinExcl)
+
+  const trajets = trajetsMois || []
+  const totalKm = trajets.reduce((s: number, t: any) => s + (Number(t.distance_totale_km) || 0), 0)
+  // Indemnité = somme(km_i × taux(véhicule_i)) → gère les mois mixtes
+  // voiture/moto. tarif_applique = indemnité / km (montant est GENERATED).
+  const totalIndemnite = trajets.reduce(
+    (s: number, t: any) => s + (Number(t.distance_totale_km) || 0) * tauxFromParams(params, t.vehicule), 0,
+  )
+  const tarifEffectif = totalKm > 0 ? Math.round((totalIndemnite / totalKm) * 10000) / 10000 : 0
+
+  // Réconciliation avec une éventuelle saisie manuelle.
+  const { data: existing } = await supabase
+    .from('frais_km_mois')
+    .select('id, km_parcourus, source')
+    .eq('employe_id', employe_id)
+    .eq('periode', periode)
+    .maybeSingle()
+
+  if (existing && existing.source !== 'gps' && Number(existing.km_parcourus) > 0) {
+    return { ok: false, skipped: 'saisie_manuelle_existante' }
+  }
+
+  const { error: upErr } = await supabase
+    .from('frais_km_mois')
+    .upsert({
+      employe_id,
+      periode,
+      km_parcourus: Math.round(totalKm * 100) / 100,
+      tarif_applique: tarifEffectif,
+      approuve: true,
+      source: 'gps',
+    }, { onConflict: 'employe_id,periode' })
+  if (upErr) {
+    console.error('[trajets-km sync paie] upsert frais_km_mois:', upErr.message)
+    return { ok: false }
+  }
+
+  // Traçabilité : marquer les trajets du mois intégrés à la paie.
+  if (trajets.length > 0) {
+    await supabase.from('trajets_kilometriques')
+      .update({ integre_paie: true })
+      .in('id', trajets.map((t: any) => t.id))
+  }
+  return { ok: true, km: Math.round(totalKm * 100) / 100, montant: Math.round(totalIndemnite * 100) / 100 }
+}
+
+
 // GET /api/rh/trajets-km?societe_id=...&employe_id=...&date_debut=...&date_fin=...&statut=...
 export async function GET(request: Request) {
   try {
@@ -304,29 +404,20 @@ export async function POST(request: Request) {
         .eq('id', trajet_id)
         .single()
 
-      let tauxKm = 0.50 // default
+      let tauxKm: number = DEFAULT_TAUX_KM.voiture // default
       if (trajet) {
         const societeId = trajet.societe_id
         const vehiculeType = trajet.vehicule || 'voiture'
-
+        let params: any = null
         if (societeId) {
-          // Look up parametres_km for this société
-          const { data: params } = await supabase
+          const { data } = await supabase
             .from('parametres_km')
             .select('*')
             .eq('societe_id', societeId)
             .maybeSingle()
-
-          if (params) {
-            if (vehiculeType === 'moto' && params.taux_moto) {
-              tauxKm = Number(params.taux_moto)
-            } else if (vehiculeType === 'velo' && params.taux_velo) {
-              tauxKm = Number(params.taux_velo)
-            } else if (params.taux_voiture) {
-              tauxKm = Number(params.taux_voiture)
-            }
-          }
+          params = data
         }
+        tauxKm = tauxFromParams(params, vehiculeType)
       }
 
       const indemnite = Math.round(roundedDist * tauxKm * 100) / 100
@@ -379,7 +470,39 @@ export async function POST(request: Request) {
         .single()
 
       if (error) throw error
-      return NextResponse.json({ trajet: data, message: `Trajet ${finalStatut === 'rejete' ? 'rejeté' : 'validé'}` })
+
+      // Rafraîchit le montant affiché du trajet avec le taux société
+      // courant (les anciens trajets pouvaient avoir un taux périmé).
+      if (data?.id && finalStatut !== 'rejete') {
+        let prm: any = null
+        if (data.societe_id) {
+          const { data: p } = await supabase.from('parametres_km').select('*').eq('societe_id', data.societe_id).maybeSingle()
+          prm = p
+        }
+        const tx = tauxFromParams(prm, data.vehicule)
+        const dist = Number(data.distance_totale_km) || 0
+        await supabase.from('trajets_kilometriques')
+          .update({ taux_km_applique: tx, montant_indemnite: Math.round(dist * tx * 100) / 100 })
+          .eq('id', data.id)
+      }
+
+      // Pont GPS → paie : recalcule le total km validé du mois et
+      // l'écrit dans frais_km_mois (que la paie lit). Appelé que le
+      // trajet soit validé OU rejeté → un rejet retire ses km du total.
+      let paieSync: { ok: boolean; skipped?: string; km?: number; montant?: number } | null = null
+      if (data?.employe_id && data?.date_trajet) {
+        paieSync = await syncFraisKmMoisFromTrajets(
+          supabase, data.employe_id, data.societe_id, data.date_trajet,
+        )
+      }
+
+      const baseMsg = `Trajet ${finalStatut === 'rejete' ? 'rejeté' : 'validé'}`
+      const message = paieSync?.skipped === 'saisie_manuelle_existante'
+        ? `${baseMsg}. ⚠ Saisie manuelle de frais km déjà présente ce mois — non écrasée, à réconcilier.`
+        : paieSync?.ok
+          ? `${baseMsg}. Paie mise à jour : ${paieSync.km} km ce mois (${paieSync.montant} MUR).`
+          : baseMsg
+      return NextResponse.json({ trajet: data, message, paie_sync: paieSync })
     }
 
     // ── Parametres km (get/set rates) ───────────────────────────────────
