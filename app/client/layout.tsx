@@ -8,6 +8,11 @@ const ALLOWED_ROLES = [
   // Comptables accèdent à /client pour consulter les sociétés de leurs
   // clients (le shell leur affiche ComptableSidebarNew à la place).
   'comptable', 'comptable_dedie',
+  // RH / manager / direction accèdent à /client pour les pages
+  // d'administration partagées : telegram-config, telegram-permissions,
+  // google-accounts, email-accounts. Le shell choisit le bon sidebar
+  // selon le rôle ; les API gates protègent les actions sensibles.
+  'rh', 'rh_manager', 'manager', 'team_leader', 'direction',
 ]
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
