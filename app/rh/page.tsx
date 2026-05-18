@@ -114,14 +114,14 @@ export default function RHDashboard() {
   const [deptData, setDeptData] = useState<any[]>([])
   const periode = new Date().toISOString().slice(0, 7)
 
-  // Check if manager -> redirect to manager dashboard
+  // Check if manager / team_leader -> redirect to scoped team dashboard
   useEffect(() => {
     import("@/lib/supabase/client").then(({ createClient }) => {
       const supabase = createClient()
       supabase.auth.getUser().then(({ data: { user } }) => {
         if (!user) return
         supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data }) => {
-          if (data?.role === "manager") {
+          if (data?.role === "manager" || data?.role === "team_leader") {
             window.location.href = "/rh/manager"
           }
           setUserRole(data?.role || "")

@@ -175,7 +175,7 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url)
       }
 
-      if (isRhRoute && !['admin', 'super_admin', 'direction', 'comptable', 'comptable_dedie', 'rh', 'manager', 'client_admin', 'client_user'].includes(role)) {
+      if (isRhRoute && !['admin', 'super_admin', 'direction', 'comptable', 'comptable_dedie', 'rh', 'rh_manager', 'manager', 'team_leader', 'client_admin', 'client_user'].includes(role)) {
         const url = request.nextUrl.clone()
         url.pathname = '/redirect'
         return NextResponse.redirect(url)

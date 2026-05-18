@@ -104,7 +104,11 @@ export function RHSidebarDedicated() {
   })
 
   const isManager = userRole === 'manager' || userRole === 'team_leader'
-  const subtitle = isManager ? t('comp.rh_sidebar.manager_space', locale) : t('rh.module_title', locale)
+  const subtitle = userRole === 'team_leader'
+    ? t('comp.rh_sidebar.team_leader_space', locale)
+    : isManager
+      ? t('comp.rh_sidebar.manager_space', locale)
+      : t('rh.module_title', locale)
 
   return (
     <>
