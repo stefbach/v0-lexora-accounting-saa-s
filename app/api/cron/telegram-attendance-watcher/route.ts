@@ -275,6 +275,38 @@ export async function GET(request: Request) {
       if (ok) { stats.alerts_sent++; anySent = true } else stats.errors++
     }
 
+    // 6c. Push RH / Direction / Client_admin / Client_assistant (rôles managériaux
+    // de la société). Une alerte par personne par employé absent, mais
+    // l'idempotence (max 3 alertes/jour, 30 min gap) s'applique au record
+    // d'absence, pas par destinataire — ces rôles reçoivent UNIQUEMENT lors
+    // de la première alerte du jour (alert_count == 0 avant cet incrément).
+    const isFirstAlertOfDay = !existing || (existing.alert_count ?? 0) === 0
+    if (isFirstAlertOfDay) {
+      const { data: managerialUsers } = await supabase
+        .from('user_societes')
+        .select('user_id, role')
+        .eq('societe_id', societe_id)
+        .in('role', ['rh', 'direction', 'client_admin', 'client_assistant'])
+      const recipientUserIds = new Set<string>()
+      // Évite double-envoi : l'employé et son manager déjà notifiés ne reçoivent pas en plus
+      for (const u of managerialUsers || []) {
+        if (u.user_id === emp.user_id) continue
+        recipientUserIds.add(u.user_id)
+      }
+      for (const uid of recipientUserIds) {
+        const chat = await chatIdForUser(supabase, uid)
+        if (!chat || chat === managerChat) continue
+        const rhText =
+          `🚨 <b>Absent : ${fullName}</b>\n` +
+          `Retard ${elapsedMin} min — Planning ${shiftLabel} (début ${startStr}).\n` +
+          `Aucun pointage, aucun congé déclaré.`
+        const ok = await safeSend(supabase, chat, societe_id, rhText, [], {
+          employe_id: emp.id, target: 'rh_direction', elapsed_min: elapsedMin, date: today,
+        })
+        if (ok) { stats.alerts_sent++; anySent = true } else stats.errors++
+      }
+    }
+
     // 7. Upsert idempotence
     if (anySent) {
       stats.employees_alerted++
