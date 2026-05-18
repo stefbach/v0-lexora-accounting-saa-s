@@ -25,8 +25,10 @@ export default function ManagerDashboard() {
   const [pointages, setPointages] = useState<any[]>([])
   const [conges, setConges] = useState<any[]>([])
   const [balances, setBalances] = useState<any[]>([])
+  const [role, setRole] = useState("")
 
   const today = new Date().toISOString().split("T")[0]
+  const isTeamLeader = role === "team_leader"
 
   // Load sociétés + auto-detect manager's assigned group
   useEffect(() => {
@@ -45,6 +47,9 @@ export default function ManagerDashboard() {
       const supabase = createClient()
       supabase.auth.getUser().then(({ data: { user } }) => {
         if (!user) return
+        supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data }) => {
+          if (data?.role) setRole(data.role)
+        })
         supabase.from("profiles").select("groupe_gere_id, societe_id").eq("id", user.id).single().then(({ data }) => {
           if (data?.groupe_gere_id) setSelectedGroupe(data.groupe_gere_id)
           if (data?.societe_id && !societe) setSociete(data.societe_id)
@@ -102,9 +107,9 @@ export default function ManagerDashboard() {
 
   return (
     <ClientPageShell
-      breadcrumbs={[{ label: t('rha.a.dash.bc_rh', locale), href: "/rh" }, { label: t('rha.a.mgr.bc_manager', locale) }]}
+      breadcrumbs={[{ label: t('rha.a.dash.bc_rh', locale), href: "/rh" }, { label: isTeamLeader ? t('rha.a.mgr.bc_tl', locale) : t('rha.a.mgr.bc_manager', locale) }]}
       kicker={`${t('rha.a.mgr.kicker_mon_equipe', locale)} · ${employes.length} ${employes.length > 1 ? t('rha.a.mgr.collaborateurs', locale) : t('rha.a.mgr.collaborateur', locale)}`}
-      title={t('rha.a.mgr.title', locale)}
+      title={isTeamLeader ? t('rha.a.mgr.title_tl', locale) : t('rha.a.mgr.title', locale)}
       subtitle={t('rha.a.mgr.subtitle', locale)}
       actions={
         <>

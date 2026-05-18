@@ -46,6 +46,7 @@ function getReturnConfig(locale: Locale): Record<string, { href: string; label: 
     admin:            { href: "/rh",               label: rh },
     super_admin:      { href: "/rh",               label: rh },
     manager:          { href: "/rh",               label: rh },
+    team_leader:      { href: "/rh",               label: rh },
     direction:        { href: "/rh",               label: rh },
     client_admin:     { href: "/client",           label: cli },
     client_assistant: { href: "/client/assistant", label: asst },
