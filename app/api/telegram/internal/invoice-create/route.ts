@@ -45,7 +45,7 @@ async function buildContexte(societe_id: string): Promise<ContexteFactureIA> {
   const [societeRes, contactsRes, catalogueRes, facturesRes, settingsRes] = await Promise.all([
     admin
       .from('societes')
-      .select('id, nom, brn, vat_number, numero_tva_mra, adresse, devise_defaut, banque_iban, banque_swift, mra_fiscalisation_active')
+      .select('id, nom, brn, numero_tva_mra, adresse, devise_principale, banque_swift, mra_fiscalisation_active')
       .eq('id', societe_id)
       .maybeSingle(),
     admin
