@@ -204,17 +204,33 @@ export async function GET(request: Request) {
       }
     }
 
+    // Taux courant par société (parametres_km, fallback défaut). On
+    // recalcule l'indemnité affichée au taux ACTUEL plutôt que d'utiliser
+    // montant_indemnite figé au moment du "terminé" (qui pouvait avoir un
+    // taux périmé). Cohérent avec ce qui part en paie.
+    const societeIds = [...new Set((trajets || []).map((t: any) => t.societe_id).filter(Boolean))]
+    const paramsBySociete: Record<string, any> = {}
+    if (societeIds.length > 0) {
+      const { data: prm } = await supabase
+        .from('parametres_km').select('*').in('societe_id', societeIds)
+      for (const p of prm || []) paramsBySociete[p.societe_id] = p
+    }
+
     // Build enriched results
     const result = (trajets || []).map((t: any) => {
       const emp = empMap[t.employe_id] || {}
+      const dist = Number(t.distance_totale_km) || 0
+      const tx = tauxFromParams(paramsBySociete[t.societe_id], t.vehicule)
+      const indemnite = Math.round(dist * tx * 100) / 100
       return {
         ...t,
         employe_nom: emp.nom || '',
         employe_prenom: emp.prenom || '',
         employe_poste: emp.poste || '',
         steps: stepsMap[t.id] || [],
-        distance_km: Number(t.distance_totale_km) || 0,
-        indemnite: Number(t.montant_indemnite) || 0,
+        distance_km: dist,
+        taux_km: tx,
+        indemnite,
       }
     })
 
