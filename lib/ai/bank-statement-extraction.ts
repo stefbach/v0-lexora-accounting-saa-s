@@ -132,10 +132,23 @@ export async function extractBankStatement(
   const extraTransactions: any[] = []
   let nbContinuations = 0
 
+  // Détecte le cas "header extrait mais 0 transaction" : Claude a renvoyé un
+  // JSON valide avec soldes/totaux mais transactions vide → forcer une
+  // continuation pour extraire le tableau de lignes.
+  const initialTxCount = Array.isArray(parsed?.transactions)
+    ? parsed.transactions.length
+    : (Array.isArray(parsed?.lignes) ? parsed.lignes.length : 0)
+  const hasHeaderButNoTx =
+    parsed != null &&
+    initialTxCount === 0 &&
+    (parsed.solde_ouverture != null || parsed.solde_cloture != null ||
+     parsed.total_debits != null || parsed.total_credits != null)
+
   while (
     nbContinuations < maxContinuations &&
     (stopReason === 'max_tokens' ||
-      (stopReason === 'end_turn' && rawText.length > 60000 && nbContinuations === 0))
+      (stopReason === 'end_turn' && rawText.length > 60000 && nbContinuations === 0) ||
+      (hasHeaderButNoTx && nbContinuations === 0))
   ) {
     nbContinuations++
     // Compute landmark from current accumulated state
@@ -145,7 +158,9 @@ export async function extractBankStatement(
 
     const hint = lm.date && lm.desc
       ? `La dernière transaction extraite était : { date: "${lm.date}", description: "${(lm.desc || '').slice(0, 80)}" }. Reprends APRÈS celle-ci uniquement.`
-      : `Tu as déjà extrait ${extraTransactions.length} transactions supplémentaires. Reprends APRÈS la dernière.`
+      : hasHeaderButNoTx && nbContinuations === 1
+        ? `Tu as renvoyé le résumé du relevé (soldes ${parsed?.solde_ouverture || '?'} → ${parsed?.solde_cloture || '?'}, débits ${parsed?.total_debits || '?'}, crédits ${parsed?.total_credits || '?'}) mais AUCUNE transaction. Extrais MAINTENANT TOUTES les lignes du tableau de transactions (date, libellé, débit, crédit, solde après).`
+        : `Tu as déjà extrait ${extraTransactions.length} transactions supplémentaires. Reprends APRÈS la dernière.`
 
     console.log(`[bank-extract] continuation ${nbContinuations}/${maxContinuations} — landmark=${lm.date}/${lm.desc?.slice(0, 30)}`)
 
