@@ -125,7 +125,12 @@ export async function extractBankStatement(
     const { extractText, getDocumentProxy } = await import('unpdf')
     const pdf = await getDocumentProxy(pdfBytes)
     const result = await extractText(pdf, { mergePages: true })
-    const text = typeof result?.text === 'string' ? result.text : Array.isArray(result?.text) ? result.text.join('\n') : ''
+    const raw: unknown = (result as any)?.text
+    const text = typeof raw === 'string'
+      ? raw
+      : Array.isArray(raw)
+        ? raw.join('\n')
+        : ''
     if (text && text.trim().length > 200) {
       extractedText = text
       console.log(`[bank-extract] unpdf success: ${text.length} chars from PDF`)
