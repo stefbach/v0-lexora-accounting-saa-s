@@ -114,13 +114,44 @@ export async function extractBankStatement(
     maxContinuations = 5,
   } = options
 
+  // --- Phase 0 : tenter une extraction de texte côté serveur (unpdf/pdfjs).
+  // Claude lit les PDFs comme images et galère sur les tableaux denses
+  // (>50 transactions). En envoyant le TEXTE structuré extrait du PDF, on
+  // multiplie par 10 la fiabilité d'extraction des tableaux bancaires.
+  // Fallback sur PDF base64 si l'extraction texte échoue (PDF scanné image).
+  let extractedText: string | null = null
+  try {
+    const pdfBytes = Uint8Array.from(Buffer.from(base64, 'base64'))
+    const { extractText, getDocumentProxy } = await import('unpdf')
+    const pdf = await getDocumentProxy(pdfBytes)
+    const result = await extractText(pdf, { mergePages: true })
+    const text = typeof result?.text === 'string' ? result.text : Array.isArray(result?.text) ? result.text.join('\n') : ''
+    if (text && text.trim().length > 200) {
+      extractedText = text
+      console.log(`[bank-extract] unpdf success: ${text.length} chars from PDF`)
+    } else {
+      console.log('[bank-extract] unpdf returned too little text, falling back to PDF base64')
+    }
+  } catch (e: any) {
+    console.warn('[bank-extract] unpdf failed, falling back to PDF base64:', e?.message)
+  }
+
   // --- Initial extraction ---
+  // Si on a réussi à extraire le texte, on envoie le texte (plus fiable).
+  // Sinon on envoie le PDF base64 (fallback vision Claude).
+  const initialMessages = extractedText
+    ? [{ role: 'user' as const, content: [{
+        type: 'text' as const,
+        text: `Voici le contenu texte d'un relevé bancaire (extrait via pdfjs côté serveur). Lis TOUTES les lignes du tableau de transactions et retourne le JSON structuré demandé dans le system prompt.\n\n---DEBUT_RELEVE---\n${extractedText}\n---FIN_RELEVE---\n\n${initialUserPrompt}`,
+      }]}]
+    : [{ role: 'user' as const, content: [
+        { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+        { type: 'text' as const, text: initialUserPrompt },
+      ]}]
+
   const initialStream = anthropic.messages.stream({
     model, max_tokens: maxTokens, temperature, system: systemPrompt,
-    messages: [{ role: 'user', content: [
-      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-      { type: 'text', text: initialUserPrompt },
-    ]}],
+    messages: initialMessages,
   })
   const initialResponse = await initialStream.finalMessage()
   let rawText = initialResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
@@ -170,13 +201,21 @@ export async function extractBankStatement(
     console.log(`[bank-extract] continuation ${nbContinuations}/${maxContinuations} — landmark=${lm.date}/${lm.desc?.slice(0, 30)}`)
 
     try {
+      // Continuation : utilise le texte extrait s'il est disponible (plus fiable),
+      // sinon refait passer le PDF base64.
+      const contMessages = extractedText
+        ? [{ role: 'user' as const, content: [{
+            type: 'text' as const,
+            text: `Voici le contenu texte du relevé bancaire (mêmes données qu'à l'appel initial).\n\n---DEBUT_RELEVE---\n${extractedText}\n---FIN_RELEVE---\n\n${hint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].`,
+          }]}]
+        : [{ role: 'user' as const, content: [
+            { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+            { type: 'text' as const, text: `${hint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].` },
+          ]}]
       const contStream = anthropic.messages.stream({
         model, max_tokens: maxTokens, temperature,
         system: 'Tu continues à extraire les transactions d\'un relevé bancaire. Retourne UNIQUEMENT un tableau JSON `[ {...}, {...} ]` avec les nouvelles transactions, sans aucune métadonnée, sans markdown, sans texte avant ou après. Si toutes les transactions sont déjà extraites, retourne `[]`.',
-        messages: [{ role: 'user', content: [
-          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-          { type: 'text', text: `${hint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].` },
-        ]}],
+        messages: contMessages,
       })
       const contResponse = await contStream.finalMessage()
       const contText = contResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
