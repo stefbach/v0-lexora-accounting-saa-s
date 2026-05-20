@@ -54,6 +54,18 @@ function ninetyDaysAgo(): string {
 }
 
 export async function POST(request: Request) {
+  try {
+    return await handlePost(request)
+  } catch (err: any) {
+    console.error("[agent/rapprochement] Unhandled error:", err?.message || err)
+    return NextResponse.json(
+      { error: err?.message || "Erreur interne du serveur" },
+      { status: 500 }
+    )
+  }
+}
+
+async function handlePost(request: Request): Promise<Response> {
   let body: any
   try {
     body = await request.json()
@@ -234,7 +246,10 @@ export async function POST(request: Request) {
   for (const d of txDates) {
     for (const dev of txDevises) tuples.push({ date: d, devise: dev })
   }
-  const ratesByKey = await getHistoricalRatesForDates(sb, tuples)
+  const ratesByKey = await getHistoricalRatesForDates(sb, tuples).catch((e: any) => {
+    console.warn("[agent/rapprochement] historical rates lookup failed (non-fatal):", e?.message)
+    return {} as Record<string, number>
+  })
   // Le moteur attend Record<DEVISE, taux> "global" — on fait moyenne par devise
   const rates: Record<string, number> = { MUR: 1 }
   const accByDevise: Record<string, { sum: number; n: number }> = {}
