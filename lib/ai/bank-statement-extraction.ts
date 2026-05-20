@@ -135,14 +135,18 @@ export async function extractBankStatement(
   // Détecte le cas "header extrait mais 0 transaction" : Claude a renvoyé un
   // JSON valide avec soldes/totaux mais transactions vide → forcer une
   // continuation pour extraire le tableau de lignes.
-  const initialTxCount = Array.isArray(parsed?.transactions)
-    ? parsed.transactions.length
-    : (Array.isArray(parsed?.lignes) ? parsed.lignes.length : 0)
+  // Le prompt bancaire renvoie soit {routing, extraction:{transactions, soldes...}},
+  // soit directement {transactions, soldes...}. On cherche dans les deux.
+  const txContainer = parsed?.extraction ?? parsed
+  const headerContainer = parsed?.extraction ?? parsed
+  const initialTxCount = Array.isArray(txContainer?.transactions)
+    ? txContainer.transactions.length
+    : (Array.isArray(txContainer?.lignes) ? txContainer.lignes.length : 0)
   const hasHeaderButNoTx =
     parsed != null &&
     initialTxCount === 0 &&
-    (parsed.solde_ouverture != null || parsed.solde_cloture != null ||
-     parsed.total_debits != null || parsed.total_credits != null)
+    (headerContainer?.solde_ouverture != null || headerContainer?.solde_cloture != null ||
+     headerContainer?.total_debits != null || headerContainer?.total_credits != null)
 
   while (
     nbContinuations < maxContinuations &&
@@ -151,15 +155,16 @@ export async function extractBankStatement(
       (hasHeaderButNoTx && nbContinuations === 0))
   ) {
     nbContinuations++
-    // Compute landmark from current accumulated state
-    const synthetic = parsed ? { ...parsed } : {}
-    const allTxs = [...(synthetic.transactions || synthetic.lignes || []), ...extraTransactions]
+    // Compute landmark from current accumulated state.
+    // Cherche les transactions soit au top-level, soit sous extraction.* (wrapper).
+    const ctn = parsed?.extraction ?? parsed
+    const allTxs = [...(ctn?.transactions || ctn?.lignes || []), ...extraTransactions]
     const lm = computeLandmark({ transactions: allTxs })
 
     const hint = lm.date && lm.desc
       ? `La dernière transaction extraite était : { date: "${lm.date}", description: "${(lm.desc || '').slice(0, 80)}" }. Reprends APRÈS celle-ci uniquement.`
       : hasHeaderButNoTx && nbContinuations === 1
-        ? `Tu as renvoyé le résumé du relevé (soldes ${parsed?.solde_ouverture || '?'} → ${parsed?.solde_cloture || '?'}, débits ${parsed?.total_debits || '?'}, crédits ${parsed?.total_credits || '?'}) mais AUCUNE transaction. Extrais MAINTENANT TOUTES les lignes du tableau de transactions (date, libellé, débit, crédit, solde après).`
+        ? `Tu as renvoyé le résumé du relevé (soldes ${headerContainer?.solde_ouverture || '?'} → ${headerContainer?.solde_cloture || '?'}, débits ${headerContainer?.total_debits || '?'}, crédits ${headerContainer?.total_credits || '?'}) mais AUCUNE transaction. Extrais MAINTENANT TOUTES les lignes du tableau de transactions (date, libellé, débit, crédit, solde après).`
         : `Tu as déjà extrait ${extraTransactions.length} transactions supplémentaires. Reprends APRÈS la dernière.`
 
     console.log(`[bank-extract] continuation ${nbContinuations}/${maxContinuations} — landmark=${lm.date}/${lm.desc?.slice(0, 30)}`)
@@ -202,10 +207,15 @@ export async function extractBankStatement(
   let added = 0
   let skipped = 0
   if (parsed && typeof parsed === 'object' && extraTransactions.length > 0) {
-    const targetKey = Array.isArray(parsed.transactions)
+    // Détecte le container : top-level OR parsed.extraction (format
+    // bancaire avec wrapper {routing, extraction}).
+    const target = parsed.extraction && typeof parsed.extraction === 'object'
+      ? parsed.extraction
+      : parsed
+    const targetKey = Array.isArray(target.transactions)
       ? 'transactions'
-      : (Array.isArray(parsed.lignes) ? 'lignes' : 'transactions')
-    const existing: any[] = parsed[targetKey] || []
+      : (Array.isArray(target.lignes) ? 'lignes' : 'transactions')
+    const existing: any[] = target[targetKey] || []
     const dedupKey = (t: any) =>
       `${t.date || ''}|${t.description || t.libelle || ''}|${t.debit || 0}|${t.credit || 0}|${t.solde || ''}`
     const seen = new Set(existing.map(dedupKey))
@@ -216,10 +226,11 @@ export async function extractBankStatement(
       seen.add(key)
       added++
     }
-    parsed[targetKey] = existing
+    target[targetKey] = existing
   }
 
-  console.log(`[bank-extract] DONE — continuations=${nbContinuations}, tx_added=${added}, dup_skipped=${skipped}, final_count=${parsed?.transactions?.length || parsed?.lignes?.length || 0}`)
+  const finalContainer = parsed?.extraction ?? parsed
+  console.log(`[bank-extract] DONE — continuations=${nbContinuations}, tx_added=${added}, dup_skipped=${skipped}, final_count=${finalContainer?.transactions?.length || finalContainer?.lignes?.length || 0}`)
 
   return {
     parsed,
