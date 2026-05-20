@@ -1860,6 +1860,7 @@ export async function POST(request: Request) {
           fournisseur: '401',
           client: '411',
           compte_courant_associe: '455',
+          cca: '455',
           remboursement_associe: '108',
           avance_personnel: '425',
           charge_diverse: '658',
