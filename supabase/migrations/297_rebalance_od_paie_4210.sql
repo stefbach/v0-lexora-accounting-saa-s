@@ -40,40 +40,25 @@ FROM (
 -- Attendu : nb_folios ≈ 156, total ≈ 6,004,772.95
 
 -- ============================================================================
--- CORRECTION
+-- CORRECTION — INSERT direct (sans TEMP TABLE ni BEGIN/COMMIT pour compat
+-- Supabase SQL Editor qui ne maintient pas la session entre exécutions)
 -- ============================================================================
 
-BEGIN;
-
--- Sauvegarde de la liste des folios concernés (utile pour rollback)
-CREATE TEMP TABLE pcm297_folios_corriges AS
-SELECT
-  ref_folio,
-  societe_id,
-  MAX(date_ecriture) AS date_max,
-  ROUND((SUM(debit_mur) - SUM(credit_mur))::numeric, 2) AS deficit
-FROM ecritures_comptables_v2
-WHERE journal = 'OD-PAIE' AND ref_folio IS NOT NULL
-GROUP BY ref_folio, societe_id
-HAVING SUM(debit_mur) - SUM(credit_mur) > 0.01;
-
-SELECT COUNT(*) AS nb_folios_a_corriger,
-       ROUND(SUM(deficit)::numeric, 2) AS total
-FROM pcm297_folios_corriges;
-
--- Insertion des contre-parties CR 4210
 INSERT INTO ecritures_comptables_v2
   (societe_id, journal, date_ecriture, numero_compte, libelle, debit_mur, credit_mur, ref_folio)
 SELECT
   societe_id,
   'OD-PAIE',
-  date_max,
+  MAX(date_ecriture),
   '4210',
   'Rééquilibrage net à payer — fiche de paie incomplète (retenues non ventilées, à régulariser)',
   0,
-  deficit,
+  ROUND((SUM(debit_mur) - SUM(credit_mur))::numeric, 2),
   ref_folio
-FROM pcm297_folios_corriges;
+FROM ecritures_comptables_v2
+WHERE journal = 'OD-PAIE' AND ref_folio IS NOT NULL
+GROUP BY societe_id, ref_folio
+HAVING SUM(debit_mur) - SUM(credit_mur) > 0.01;
 
 -- ── VÉRIFICATION 1 : OD-PAIE doit maintenant être équilibré ─────────────────
 SELECT
@@ -107,8 +92,6 @@ FROM ecritures_comptables_v2
 WHERE numero_compte LIKE '421%'
 GROUP BY societe_id
 ORDER BY societe;
-
-COMMIT;
 
 -- ============================================================================
 -- ROLLBACK : DELETE FROM ecritures_comptables_v2
