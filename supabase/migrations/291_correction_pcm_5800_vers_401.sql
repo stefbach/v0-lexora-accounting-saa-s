@@ -1,19 +1,25 @@
 -- ============================================================================
--- Migration 291 — Correction PCM : reclasser paiements 5800 → compte réel
+-- Migration 291 — Correction PCM : reclasser DR 5800 orphelins → 451 (Groupe)
 -- ============================================================================
 -- CONTEXTE :
 --   512 Banque   : D 5.25M  / C 21.66M = -16.41M  (sorties sans imputations)
 --   5800 Transit : D 10.18M / C  3.93M = +6.25M   (devrait être ≈ 0)
---   401 Fourn.   : D 0.00   / C  1.21M             (aucun paiement débité)
+--   401 Fourn.   : D 0.00   / C  1.21M
 --
--- CAUSE : Paiements classés 'virement_interne' au moment du rapprochement
---         → DR 5800 / CR 512 au lieu de DR 401 / CR 512
---         La 2ème jambe (DR destinataire / CR 5800) n'existe jamais.
+-- DIAGNOSTIC (TEMPS 1) : Les DR 5800 orphelins sont des transferts
+-- inter-sociétés DIGITAL DATA SOLUTIONS LTD ↔ OBESITY CARE CLINIC LTD
+-- ("virement_interne — <Société>") dont la 2ème jambe (DR 512_destinataire
+-- / CR 5800 ou DR 451 / CR 5800) n'a jamais été enregistrée car la société
+-- réceptrice n'est pas dans Lexora ou le dépôt n'a pas été rapproché.
+--
+-- TRAITEMENT COMPTABLE :
+--   Deux sociétés du même actionnaire = sociétés liées (groupe) →
+--   compte 451 "Comptes courants — Groupe" (PCG mauricien, IAS 24 related parties)
 --
 -- STRATÉGIE :
 --   1. Identifier les DR 5800 BNQ "orphelins" (pas de CR 5800 correspondant)
---      = ce sont des paiements mal classés, pas de vrais virements internes
---   2. Reclasser selon le libellé (401 fournisseur par défaut)
+--   2. Reclasser selon libellé : virement_interne/DDS/OCC → 451, salaires → 4210,
+--      CCA → 455, fournisseurs nommés → 401, défaut → 451
 --   3. Vérifier l'équilibre PCM résultant
 -- ============================================================================
 
@@ -126,23 +132,32 @@ SELECT
 FROM pcm291_avant;
 
 -- Reclasser vers le bon compte selon le libellé
+-- NB : Les libellés "virement_interne — <Société>" sont des transferts
+--      inter-sociétés du même groupe (DDS ↔ OCC) → compte 451 (Groupe).
 UPDATE ecritures_comptables_v2
 SET numero_compte = CASE
+  WHEN libelle ILIKE '%virement_interne%'
+    OR libelle ILIKE '%digital data sol%'
+    OR libelle ILIKE '%obesity care clinic%'
+    OR libelle ILIKE '%inter-societ%'
+    OR libelle ILIKE '%inter societ%'             THEN '451'
   WHEN libelle ILIKE '%salaire%'
     OR libelle ILIKE '%paie%'
-    OR libelle ILIKE '%remuneration%'              THEN '4210'
+    OR libelle ILIKE '%remuneration%'             THEN '4210'
   WHEN libelle ILIKE '%cca%'
-    OR libelle ILIKE '%compte courant%'
-    OR libelle ILIKE '%associe%'
-    OR libelle ILIKE '%apport%'                   THEN '455'
+    OR libelle ILIKE '%compte courant associ%'
+    OR libelle ILIKE '%avance associ%'
+    OR libelle ILIKE '%apport associ%'            THEN '455'
   WHEN libelle ILIKE '%client%'
     OR libelle ILIKE '%remboursement client%'     THEN '411'
-  WHEN libelle ILIKE '%loyer%'
+  WHEN libelle ILIKE '%fournisseur%'
+    OR libelle ILIKE '%facture%'
+    OR libelle ILIKE '%loyer%'
     OR libelle ILIKE '%bail%'
     OR libelle ILIKE '%electricite%'
     OR libelle ILIKE '%telephone%'
     OR libelle ILIKE '%assurance%'                THEN '401'
-  ELSE '401'   -- Par défaut : fournisseurs (paiements sortants non identifiés)
+  ELSE '451'   -- Par défaut : Groupe (cas le plus fréquent ici, transferts DDS↔OCC)
 END
 WHERE id IN (SELECT id FROM pcm291_avant);
 
