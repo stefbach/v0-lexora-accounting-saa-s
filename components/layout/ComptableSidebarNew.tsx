@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
+import { SantePCMBadge } from "@/components/comptable/SantePCMBadge"
 import {
   LayoutDashboard,
   Users,
@@ -329,6 +330,33 @@ export function ComptableSidebarNew() {
             <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: "#141C4A", border: "1px solid #1E2760" }}>
               <span className="text-sm font-bold" style={{ color: "#E8EAFC" }}>L<span style={{ color: GOLD }}>X</span></span>
             </div>
+          )}
+        </div>
+
+        {/* Santé PCM — pastille santé globale, refresh 5min + au focus
+            (gérés par le composant). Pulse en rouge quand déséquilibre.
+            Le clic est porté par <SantePCMBadge /> qui contient déjà son
+            propre <Link> vers /comptable/sante-pcm — ne pas l'envelopper
+            dans un autre <Link> (HTML invalide). */}
+        <div
+          className={cn(
+            "mx-3 mt-3 flex items-center gap-2 px-3 py-2 rounded-xl flex-shrink-0",
+            collapsed && "justify-center",
+          )}
+          style={{
+            border: "1px solid rgba(232,234,252,0.08)",
+            background: "rgba(232,234,252,0.04)",
+          }}
+        >
+          <SantePCMBadge compact />
+          {!collapsed && (
+            <Link
+              href="/comptable/sante-pcm"
+              className="text-xs font-semibold hover:underline"
+              style={{ color: "#E8EAFC" }}
+            >
+              Santé PCM
+            </Link>
           )}
         </div>
 
