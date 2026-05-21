@@ -907,33 +907,6 @@ export function autoClassify(
       continue
     }
 
-    // ── Virement inter-sociétés (groupe DDS↔OCC) ──
-    // Détection : le tiers ou le libellé match le nom d'une société SŒUR
-    // (autre société du même groupe). Compte 451 Comptes courants Groupe
-    // (IAS 24 related parties).
-    const sisterNamesRaw = context.sisterSocieteNames || []
-    const sisterNamesNorm = sisterNamesRaw
-      .map(n => n.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim())
-      .filter(n => n.length > 3)
-    const isInterSocieteByTiers = sisterNamesNorm.some(sn => isSelfMatchEngine(sn, tiersNorm))
-    const libNorm = lib.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()
-    const isInterSocieteByLib = sisterNamesNorm.some(sn => {
-      const sw = sn.split(/\s+/).filter(w => w.length > 3)
-      return sw.length > 0 && sw.every(w => libNorm.includes(w))
-    })
-
-    if (isInterSocieteByTiers || isInterSocieteByLib) {
-      console.log(`[autoClassify] INTER-SOCIÉTÉS: tiers="${tiers}" lib="${lib.substring(0,40)}" sisters=[${sisterNamesNorm.join(',')}]`)
-      results.push({
-        transactionKey: txKey(tx), transaction: tx,
-        type: 'virement_inter_societe',
-        note: 'Virement inter-sociétés (groupe) détecté',
-        confidence: 0.92,
-      })
-      matchedTxKeys.add(txKey(tx))
-      continue
-    }
-
     // ── Frais bancaires ──
     if (BANK_FEE_PATTERNS.some(p => lib.includes(p))) {
       let ecritureId: string | undefined
