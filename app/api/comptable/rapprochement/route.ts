@@ -13,6 +13,8 @@ import { accountClass } from '@/lib/accounting/classification-rules'
 import { validateLettrageGroup } from '@/lib/accounting/accounting-rules'
 import { classifyTransaction, detectDirector, getComplianceSeverity, type ClassificationRule } from '@/lib/accounting/classification-engine'
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
+import { resolveInterSocieteForTransaction, COMPTE_GROUPE_451 } from '@/lib/comptable/inter-societes'
+import { userHasAccessToSociete } from '@/lib/rh/access'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -361,6 +363,170 @@ export async function GET(request: Request) {
     console.error('[rapprochement GET]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Helper inter-sociétés — création du miroir comptable dans la société dest.
+//
+// Quand une tx bancaire est détectée comme virement vers une autre société
+// du même groupe, on crée :
+//   • Société SOURCE  (déjà géré par le caller) : DR 451 / CR 512_source
+//   • Société DEST    (ce helper)                : DR 512_dest / CR 451
+//
+// Le miroir n'est créé QUE si :
+//   1. L'utilisateur a accès à la société dest (userHasAccessToSociete)
+//   2. Il existe un dossier comptable pour la société dest
+//   3. Aucune écriture miroir n'existe déjà pour ce ref_folio (idempotence)
+//
+// Retourne { created: boolean, reason?: string }.
+// ─────────────────────────────────────────────────────────────────────────
+async function creerMiroirInterSociete(
+  supabase: any,
+  params: {
+    user_id: string
+    societe_source_id: string
+    societe_dest_id: string
+    date_ecriture: string
+    montant_mur: number
+    libelle_source: string
+    isOut: boolean
+    ref_folio_source: string
+    devise_origine: string | null
+    montant_origine: number | null
+    taux_change_applique: number | null
+    lettre_code: string | null
+  },
+): Promise<{ created: boolean; reason?: string; mirror_ref_folio?: string }> {
+  const {
+    user_id,
+    societe_source_id,
+    societe_dest_id,
+    date_ecriture,
+    montant_mur,
+    libelle_source,
+    isOut,
+    ref_folio_source,
+    devise_origine,
+    montant_origine,
+    taux_change_applique,
+    lettre_code,
+  } = params
+
+  if (!societe_dest_id || societe_dest_id === societe_source_id) {
+    return { created: false, reason: 'societe_dest invalide' }
+  }
+
+  // Sécurité : vérifier l'accès utilisateur
+  const hasAccess = await userHasAccessToSociete(user_id, societe_dest_id)
+  if (!hasAccess) {
+    console.warn(
+      `[inter-societes] miroir SKIP — user=${user_id} pas d'accès à societe_dest=${societe_dest_id}`,
+    )
+    return { created: false, reason: 'forbidden_dest_societe' }
+  }
+
+  // Récupérer le dossier de la société destinataire
+  const { data: dossierDest } = await supabase
+    .from('dossiers')
+    .select('id')
+    .eq('societe_id', societe_dest_id)
+    .limit(1)
+    .maybeSingle()
+  if (!dossierDest) {
+    return { created: false, reason: 'dossier_dest_introuvable' }
+  }
+
+  // ref_folio dédié pour le miroir (préfixe MIR-) → idempotent
+  const mirrorRefFolio = `MIR-${ref_folio_source}`
+
+  // Idempotence : si une écriture miroir existe déjà, on ne re-crée pas
+  const { data: existing } = await supabase
+    .from('ecritures_comptables_v2')
+    .select('id')
+    .eq('societe_id', societe_dest_id)
+    .eq('ref_folio', mirrorRefFolio)
+    .limit(1)
+  if (existing && existing.length > 0) {
+    return { created: false, reason: 'mirror_deja_existant', mirror_ref_folio: mirrorRefFolio }
+  }
+
+  // Récupérer le compte bancaire 512 de la société destinataire (si défini, sinon '512' générique)
+  let compteBanqueDest = '512'
+  const { data: cbDest } = await supabase
+    .from('comptes_bancaires')
+    .select('compte_comptable')
+    .eq('societe_id', societe_dest_id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (cbDest?.compte_comptable) compteBanqueDest = String(cbDest.compte_comptable)
+
+  // Côté société SOURCE  : la société source PAYE  (isOut=true)  → DR 451 / CR 512_source
+  //   → côté DEST, elle REÇOIT                                   → DR 512_dest / CR 451
+  // Côté société SOURCE  : la société source REÇOIT (isOut=false) → DR 512_source / CR 451
+  //   → côté DEST, elle PAYE                                     → DR 451 / CR 512_dest
+  const destIsIn = isOut  // si source paye, dest reçoit
+
+  const freezeMirror = {
+    devise_origine: devise_origine,
+    montant_origine: montant_origine,
+    taux_change_applique: taux_change_applique,
+  }
+
+  const libelleMirror = `Inter-sociétés (miroir auto) — ${libelle_source}`.substring(0, 200)
+
+  const ecritures = [
+    {
+      dossier_id: dossierDest.id,
+      societe_id: societe_dest_id,
+      date_ecriture,
+      journal: 'BNQ',
+      numero_compte: destIsIn ? compteBanqueDest : COMPTE_GROUPE_451,
+      libelle: libelleMirror,
+      debit_mur: destIsIn ? montant_mur : 0,
+      credit_mur: destIsIn ? 0 : montant_mur,
+      lettre: lettre_code,
+      ref_folio: mirrorRefFolio,
+      statut: 'auto_genere_inter_societe',
+      ...freezeMirror,
+    },
+    {
+      dossier_id: dossierDest.id,
+      societe_id: societe_dest_id,
+      date_ecriture,
+      journal: 'BNQ',
+      numero_compte: destIsIn ? COMPTE_GROUPE_451 : compteBanqueDest,
+      libelle: libelleMirror,
+      debit_mur: destIsIn ? 0 : montant_mur,
+      credit_mur: destIsIn ? montant_mur : 0,
+      lettre: lettre_code,
+      ref_folio: mirrorRefFolio,
+      statut: 'auto_genere_inter_societe',
+      ...freezeMirror,
+    },
+  ]
+
+  // Tenter l'insertion avec `statut` ; en cas d'erreur de schéma (colonne
+  // absente), retry sans `statut` pour rester compatible avec les bases
+  // qui n'ont pas encore appliqué la migration ajoutant la colonne.
+  let { error: insErr } = await supabase
+    .from('ecritures_comptables_v2')
+    .insert(ecritures)
+  if (insErr && /column .* statut|statut.*does not exist/i.test(String(insErr.message || ''))) {
+    const fallback = ecritures.map(({ statut, ...rest }) => rest)
+    const retry = await supabase.from('ecritures_comptables_v2').insert(fallback)
+    insErr = retry.error
+  }
+  if (insErr) {
+    console.warn(`[inter-societes] miroir insert FAILED:`, insErr.message)
+    return { created: false, reason: `insert_failed: ${insErr.message}` }
+  }
+
+  console.log(
+    `[inter-societes] miroir OK — source=${societe_source_id} dest=${societe_dest_id} ` +
+    `montant=${montant_mur} MUR ref=${mirrorRefFolio} (destIsIn=${destIsIn})`,
+  )
+  return { created: true, mirror_ref_folio: mirrorRefFolio }
 }
 
 // POST — Actions
@@ -1882,8 +2048,45 @@ export async function POST(request: Request) {
           charge_sociale: '431',
           autre: '471',
         }
-        const compteCharge = CLASSE_COMPTES[classification] || '471'
+        let compteCharge = CLASSE_COMPTES[classification] || '471'
         console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
+
+        // ── DÉTECTION INTER-SOCIÉTÉS (migration 302 / fix bug 291-293) ─────
+        // Si la tx est classée 'virement_interne' (ou si on est en virement
+        // implicite sans facture), on tente de la matcher contre les autres
+        // sociétés du même groupe (groupe_id ou client_id). Match positif →
+        // bascule de 5800 (transit) vers 451 (Comptes courants Groupe),
+        // ET création du miroir comptable côté société destinataire.
+        const txForDetect = txs[txIdx] || {}
+        const libelleForDetect: string = String(txForDetect.libelle || '')
+        const tiersForDetect: string = String(txForDetect.tiers_detecte || '')
+        let interSocieteDest: string | null = null
+        let interSocieteScore = 0
+        if (
+          classification === 'virement_interne' ||
+          classification === 'inter_societe'
+        ) {
+          try {
+            const detection = await resolveInterSocieteForTransaction(
+              supabase,
+              societe_id as string,
+              libelleForDetect,
+              tiersForDetect,
+            )
+            if (detection.is_inter && detection.societe_dest_id) {
+              compteCharge = COMPTE_GROUPE_451  // basculer 5800 → 451
+              interSocieteDest = detection.societe_dest_id
+              interSocieteScore = detection.score
+              console.log(
+                `[lettrer_manuel] INTER-SOCIÉTÉS détecté ` +
+                `(${detection.match_method}, score=${detection.score.toFixed(2)}) — ` +
+                `compte forcé à 451, dest=${detection.societe_dest_id}`,
+              )
+            }
+          } catch (detErr: any) {
+            console.warn('[lettrer_manuel] détection inter-sociétés échouée:', detErr?.message)
+          }
+        }
 
         const ratesMC = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 } as Record<string, number>))
         const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
@@ -1909,16 +2112,47 @@ export async function POST(request: Request) {
             deviseMC === 'MUR' ? null : Math.round(txAmt * 100) / 100,
             historicalRateMC,
           )
+          const refFolioMC = `MC-${releve_id}-${txIdx}`
           await supabase.from('ecritures_comptables_v2').insert([
             { dossier_id: dossier.id, societe_id, date_ecriture: dateEcr,
               journal: 'BNQ', numero_compte: compteCharge, libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 30)}`,
-              debit_mur: isOut ? amountMurMC : 0, credit_mur: isOut ? 0 : amountMurMC, lettre: code, ref_folio: `MC-${releve_id}-${txIdx}`,
+              debit_mur: isOut ? amountMurMC : 0, credit_mur: isOut ? 0 : amountMurMC, lettre: code, ref_folio: refFolioMC,
               ...freezeMC },
             { dossier_id: dossier.id, societe_id, date_ecriture: dateEcr,
               journal: 'BNQ', numero_compte: '512', libelle: `Banque — ${(tx.tiers_detecte || '').substring(0, 25)}`,
-              debit_mur: isOut ? 0 : amountMurMC, credit_mur: isOut ? amountMurMC : 0, lettre: code, ref_folio: `MC-${releve_id}-${txIdx}`,
+              debit_mur: isOut ? 0 : amountMurMC, credit_mur: isOut ? amountMurMC : 0, lettre: code, ref_folio: refFolioMC,
               ...freezeMC },
           ])
+
+          // ── MIROIR INTER-SOCIÉTÉS ──────────────────────────────────────────
+          // Si la détection a trouvé une société destinataire du même groupe,
+          // on crée immédiatement la contre-partie miroir (DR 512_dest / CR 451)
+          // pour éviter le bug historique 291-293 (transit 5800 qui s'accumule).
+          if (interSocieteDest) {
+            try {
+              const mirrorRes = await creerMiroirInterSociete(supabase, {
+                user_id: user.id,
+                societe_source_id: societe_id as string,
+                societe_dest_id: interSocieteDest,
+                date_ecriture: dateEcr,
+                montant_mur: amountMurMC,
+                libelle_source: `${classification} — ${libelleForDetect.substring(0, 100)}`,
+                isOut,
+                ref_folio_source: refFolioMC,
+                devise_origine: freezeMC.devise_origine,
+                montant_origine: freezeMC.montant_origine,
+                taux_change_applique: freezeMC.taux_change_applique,
+                lettre_code: code,
+              })
+              if (mirrorRes.created) {
+                console.log(`[lettrer_manuel/inter] miroir créé dest=${interSocieteDest} score=${interSocieteScore.toFixed(2)}`)
+              } else {
+                console.log(`[lettrer_manuel/inter] miroir non créé : ${mirrorRes.reason}`)
+              }
+            } catch (mirrorErr: any) {
+              console.warn('[lettrer_manuel/inter] miroir échoué (non-bloquant):', mirrorErr?.message)
+            }
+          }
 
           // ⚠️ LETTRAGE CROISÉ (fix 2026-05-03)
           // Pour les classifications qui ont une CONTREPARTIE COMPTABLE
@@ -4015,7 +4249,44 @@ export async function POST(request: Request) {
         produit_divers: '706',
         autre: '471',
       }
-      const compte = compte_custom || CLASSE_COMPTES[classification] || '471'
+      let compte = compte_custom || CLASSE_COMPTES[classification] || '471'
+
+      // ── DÉTECTION INTER-SOCIÉTÉS (migration 302 / fix bug 291-293) ──
+      // Pour les classifications de virement interne, on tente de matcher
+      // la tx contre les autres sociétés du même groupe. Match positif →
+      // bascule 5800 → 451 + création du miroir comptable côté dest.
+      // Si l'utilisateur a explicitement choisi un compte_custom, on respecte
+      // son choix (pas de surcharge automatique).
+      const ctTxForDetect = txs[txIdx] || {}
+      const ctLibelleForDetect: string = String(ctTxForDetect.libelle || '')
+      const ctTiersForDetect: string = String(ctTxForDetect.tiers_detecte || '')
+      let ctInterSocieteDest: string | null = null
+      let ctInterSocieteScore = 0
+      if (
+        !compte_custom &&
+        (classification === 'virement_interne' || classification === 'inter_societe')
+      ) {
+        try {
+          const detection = await resolveInterSocieteForTransaction(
+            supabase,
+            societe_id as string,
+            ctLibelleForDetect,
+            ctTiersForDetect,
+          )
+          if (detection.is_inter && detection.societe_dest_id) {
+            compte = COMPTE_GROUPE_451  // basculer 5800 → 451
+            ctInterSocieteDest = detection.societe_dest_id
+            ctInterSocieteScore = detection.score
+            console.log(
+              `[classer_transaction] INTER-SOCIÉTÉS détecté ` +
+              `(${detection.match_method}, score=${detection.score.toFixed(2)}) — ` +
+              `compte forcé à 451, dest=${detection.societe_dest_id}`,
+            )
+          }
+        } catch (detErr: any) {
+          console.warn('[classer_transaction] détection inter-sociétés échouée:', detErr?.message)
+        }
+      }
 
       const { data: dossier, error: dossierErr } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
       let nbEcritures = 0
@@ -4233,6 +4504,36 @@ export async function POST(request: Request) {
         } else {
           nbEcritures = insEcrData?.length || 2
           console.log('[classer_transaction] ecritures inserees:', nbEcritures)
+        }
+
+        // ── MIROIR INTER-SOCIÉTÉS ─────────────────────────────────────────
+        // Si la détection a trouvé une société destinataire du même groupe,
+        // on crée immédiatement la contre-partie miroir (DR 512_dest / CR 451)
+        // pour éviter le bug historique 291-293 (transit 5800 qui s'accumule).
+        if (ctInterSocieteDest && !ecrituresError) {
+          try {
+            const mirrorRes = await creerMiroirInterSociete(supabase, {
+              user_id: user.id,
+              societe_source_id: societe_id as string,
+              societe_dest_id: ctInterSocieteDest,
+              date_ecriture: dateEcrCT,
+              montant_mur: txAmtMUR,
+              libelle_source: `${classification} — ${ctLibelleForDetect.substring(0, 100)}`,
+              isOut,
+              ref_folio_source: refFolio,
+              devise_origine: freezeCT.devise_origine,
+              montant_origine: freezeCT.montant_origine,
+              taux_change_applique: freezeCT.taux_change_applique,
+              lettre_code: code,
+            })
+            if (mirrorRes.created) {
+              console.log(`[classer_transaction/inter] miroir créé dest=${ctInterSocieteDest} score=${ctInterSocieteScore.toFixed(2)}`)
+            } else {
+              console.log(`[classer_transaction/inter] miroir non créé : ${mirrorRes.reason}`)
+            }
+          } catch (mirrorErr: any) {
+            console.warn('[classer_transaction/inter] miroir échoué (non-bloquant):', mirrorErr?.message)
+          }
         }
       }
 
