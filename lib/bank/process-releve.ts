@@ -428,6 +428,8 @@ export async function processReleveBancaire(
       solde_cloture: soldeCloture,
       total_debits: totalDebits,
       total_credits: totalCredits,
+      nb_transactions: normalized.length,
+      ecart_solde: ecartSolde,
       document_id: documentId,
       transactions_json: normalized,
       statut_rapprochement: statut,
