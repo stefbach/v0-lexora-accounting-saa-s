@@ -265,21 +265,36 @@ async function handlePost(request: Request): Promise<Response> {
     rates[devise] = n > 0 ? sum / n : 1
   }
 
-  // 9. Self-names pour détecter les virements internes (sociétés sœurs)
+  // 9. Noms des sociétés
+  //  - selfNames : la société COURANTE (et ses aliases). Tx avec tiers
+  //    matching ces noms = INTERCOMPTE (entre 2 comptes bancaires de la même
+  //    société) → compte 5800 transit.
+  //  - sisterSocieteNames : les AUTRES sociétés du portefeuille (sœurs/groupe).
+  //    Tx avec tiers matching ces noms = INTER-SOCIÉTÉS → compte 451
+  //    Comptes courants Groupe (IAS 24 related parties).
+  //
+  // L'ancien code avait inversé : selfNames pointait vers les sœurs, ce qui
+  // classait DDS→OCC comme transfert_interne (5800) alors que c'est inter-soc.
   const { data: autresSocietes = [] } = await sb
     .from("societes")
     .select("nom")
     .neq("id", societe_id)
-  const selfNames = (autresSocietes || []).map((s: any) => s.nom).filter(Boolean)
+  const sisterSocieteNames = (autresSocietes || [])
+    .map((s: any) => s.nom)
+    .filter(Boolean) as string[]
   const aliasesArr = Array.isArray((societe as any).aliases)
     ? (societe as any).aliases
     : []
-  const societeNames = [societe.nom, ...aliasesArr].filter(Boolean) as string[]
+  const selfNames = [societe.nom, ...aliasesArr].filter(Boolean) as string[]
+  // Compat : on garde societeNames pour les anciens consommateurs qui s'attendent
+  // à recevoir le nom de la société courante.
+  const societeNames = selfNames
 
   // 10. Run du moteur intelligent (PURE function)
   const result = runIntelligentRapprochement(matchingTx, matchingFactures, {
     societeNames,
     selfNames,
+    sisterSocieteNames,
     bulletins,
     ecritures,
     rates,
@@ -380,8 +395,13 @@ async function handlePost(request: Request): Promise<Response> {
     salaire_bulk: "4210",
     salaire_individuel: "4210",
     paiement_mra: "4330",
-    virement_interne: "5811",
-    transfert_interne: "5811",
+    // INTERCOMPTE (même société, 2 banques) → 5800 transit
+    virement_interne: "5800",
+    transfert_interne: "5800",
+    intercompte: "5800",
+    // INTER-SOCIÉTÉS (groupe DDS↔OCC) → 451 Comptes courants Groupe (IAS 24)
+    inter_societe: "451",
+    virement_inter_societe: "451",
     interets: "6611",
     agios: "6611",
     charges_sociales: "4310",
