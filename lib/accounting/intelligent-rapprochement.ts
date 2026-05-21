@@ -834,12 +834,10 @@ export function autoClassify(
     const lib = (tx.libelle || '').toLowerCase()
     const tiers = (tx.tiers_detecte || '').toLowerCase()
 
-    // ── Virements internes ──
-    // ULTRA-STRICT: un virement interne = UNIQUEMENT quand le TIERS est la société ELLE-MÊME
-    // PAS les sociétés liées du même groupe (interco = paiement, pas interne)
     const selfNamesRaw = context.selfNames || context.societeNames
     const selfNamesNorm = selfNamesRaw.map(n => n.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()).filter(n => n.length > 3)
     const tiersNorm = tiers.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()
+    const libNorm = lib.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()
 
     // Match intelligent: tous les mots de self dans tiers, aucun mot extra dans tiers
     function isSelfMatchEngine(selfName: string, tiersName: string): boolean {
@@ -852,6 +850,35 @@ export function autoClassify(
       return unmatchedTiers.length === 0
     }
 
+    // ── PRIORITÉ 1 : Virement inter-sociétés (groupe DDS↔OCC) ──
+    // Vérifier AVANT intercompte : si tiers/lib match une société SŒUR,
+    // c'est forcément inter-sociétés (et NON intercompte), même si alias
+    // ou pattern "virement interne" déclencheraient autrement.
+    // Compte 451 Comptes courants Groupe (IAS 24 related parties).
+    const sisterNamesRaw = context.sisterSocieteNames || []
+    const sisterNamesNorm = sisterNamesRaw
+      .map(n => n.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim())
+      .filter(n => n.length > 3)
+    const isInterSocieteByTiers = sisterNamesNorm.some(sn => isSelfMatchEngine(sn, tiersNorm))
+    const isInterSocieteByLib = sisterNamesNorm.some(sn => {
+      const sw = sn.split(/\s+/).filter(w => w.length > 3)
+      return sw.length > 0 && sw.every(w => libNorm.includes(w))
+    })
+
+    if (isInterSocieteByTiers || isInterSocieteByLib) {
+      console.log(`[autoClassify] INTER-SOCIÉTÉS: tiers="${tiers}" lib="${lib.substring(0,40)}" sisters=[${sisterNamesNorm.join(',')}]`)
+      results.push({
+        transactionKey: txKey(tx), transaction: tx,
+        type: 'virement_inter_societe',
+        note: 'Virement inter-sociétés (groupe) détecté',
+        confidence: 0.92,
+      })
+      matchedTxKeys.add(txKey(tx))
+      continue
+    }
+
+    // ── PRIORITÉ 2 : Intercompte (même société, 2 banques) ──
+    // ULTRA-STRICT: tiers = société elle-même (pas une sœur, déjà filtré ci-dessus)
     const isInternalByPattern = INTERNAL_PATTERNS.some(p => lib.includes(p)) && selfNamesNorm.some(n => isSelfMatchEngine(n, tiersNorm))
     const isInternalByName = false // Désactivé — trop de faux positifs avec societeNames du groupe
     const isInternalByAlias = (() => {
@@ -875,33 +902,6 @@ export function autoClassify(
         type: 'transfert_interne',
         note: `Virement intercompte (même société) détecté${isInternalByAlias ? ' (alias)' : ''}`,
         confidence: 0.95,
-      })
-      matchedTxKeys.add(txKey(tx))
-      continue
-    }
-
-    // ── Virement inter-sociétés (groupe DDS↔OCC) ──
-    // Détection : le tiers ou le libellé match le nom d'une société SŒUR
-    // (autre société du même groupe). Compte 451 Comptes courants Groupe
-    // (IAS 24 related parties).
-    const sisterNamesRaw = context.sisterSocieteNames || []
-    const sisterNamesNorm = sisterNamesRaw
-      .map(n => n.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim())
-      .filter(n => n.length > 3)
-    const isInterSocieteByTiers = sisterNamesNorm.some(sn => isSelfMatchEngine(sn, tiersNorm))
-    const libNorm = lib.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()
-    const isInterSocieteByLib = sisterNamesNorm.some(sn => {
-      const sw = sn.split(/\s+/).filter(w => w.length > 3)
-      return sw.length > 0 && sw.every(w => libNorm.includes(w))
-    })
-
-    if (isInterSocieteByTiers || isInterSocieteByLib) {
-      console.log(`[autoClassify] INTER-SOCIÉTÉS: tiers="${tiers}" lib="${lib.substring(0,40)}" sisters=[${sisterNamesNorm.join(',')}]`)
-      results.push({
-        transactionKey: txKey(tx), transaction: tx,
-        type: 'virement_inter_societe',
-        note: 'Virement inter-sociétés (groupe) détecté',
-        confidence: 0.92,
       })
       matchedTxKeys.add(txKey(tx))
       continue
