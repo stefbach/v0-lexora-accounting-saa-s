@@ -180,9 +180,32 @@ export default function TVAPage() {
   const factures: any[] = data?.factures ?? []
   const creditReporte = 0
 
+  // Helper : convertit un montant HT en MUR. Préférence à `montant_mur` qui
+  // est déjà calculé à l'OCR (taux du jour). Sinon recalcule via taux_change.
+  // Sinon retourne tel quel (cas MUR direct).
+  const htMur = (f: any): number => {
+    const m = Number(f?.montant_mur)
+    if (Number.isFinite(m) && m > 0) {
+      // montant_mur est en TTC ; on prend HT / TTC × montant_mur
+      const ttc = Number(f?.montant_ttc) || (Number(f?.montant_ht) + Number(f?.montant_tva || 0)) || 0
+      const ht = Number(f?.montant_ht) || 0
+      if (ttc > 0 && ht > 0) return Math.round((ht / ttc) * m * 100) / 100
+    }
+    const taux = Number(f?.taux_change) || 1
+    return Math.round((Number(f?.montant_ht) || 0) * taux * 100) / 100
+  }
+
+  // Une facture est "taxable Maurice" si :
+  //  - son client n'est pas offshore (client_offshore = false/null)
+  //  - ET sa devise est MUR (pas d'export en devise étrangère)
+  // Les factures hors MUR sont des EXPORTS exonérés → Box dédiée, pas Box 1.
+  const isLocalTaxable = (f: any) => !f.client_offshore && (!f.devise || f.devise === 'MUR')
+
   // TVA from factures table — LOCAL fournisseurs only (exclude reverse charge)
   const facturesClient = factures.filter((f: any) => f.type_facture === 'client')
-  const facturesClientLocal = facturesClient.filter((f: any) => !f.client_offshore)
+  const facturesClientLocal = facturesClient.filter(isLocalTaxable)
+  // Exports / ventes exonérées (devise ≠ MUR ou client_offshore)
+  const facturesClientExports = facturesClient.filter((f: any) => !isLocalTaxable(f))
   const facturesFournisseur = factures.filter((f: any) => f.type_facture === 'fournisseur')
   const facturesFournisseurLocal = facturesFournisseur.filter((f: any) => {
     // Exclude foreign suppliers from TVA déductible (they go in reverse charge)
@@ -544,7 +567,7 @@ export default function TVAPage() {
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>1</td>
                 <td className="py-2">{t('mra.tva.box1', locale)}</td>
-                <td className="py-2 text-right font-medium">{formatMUR(facturesClientLocal.reduce((s: number, f: any) => s + (Number(f.montant_ht) || 0), 0))}</td>
+                <td className="py-2 text-right font-medium">{formatMUR(facturesClientLocal.reduce((s: number, f: any) => s + htMur(f), 0))}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>2</td>
@@ -784,7 +807,14 @@ export default function TVAPage() {
                       <TableCell className="text-xs">{f.date_facture ? new Date(f.date_facture).toLocaleDateString('fr-FR') : '—'}</TableCell>
                       <TableCell className="text-xs font-mono">{f.numero_facture || '—'}</TableCell>
                       <TableCell className="text-xs">{f.tiers || '—'}</TableCell>
-                      <TableCell className="text-right text-xs font-mono">{formatMUR(Number(f.montant_ht) || 0)}</TableCell>
+                      <TableCell className="text-right text-xs font-mono">
+                        {formatMUR(htMur(f))}
+                        {f.devise && f.devise !== 'MUR' && (
+                          <span className="block text-[10px] text-gray-400">
+                            ({(Number(f.montant_ht) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} {f.devise})
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs"><Badge variant="outline">{f.devise || 'MUR'}</Badge></TableCell>
                       <TableCell className="text-xs text-gray-500">{raison}</TableCell>
                     </TableRow>

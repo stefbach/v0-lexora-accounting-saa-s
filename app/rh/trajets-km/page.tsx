@@ -97,9 +97,9 @@ export default function TrajetsKmPage() {
   // Parametres state
   const [parametres, setParametres] = useState<Parametre[]>([])
   const [showParams, setShowParams] = useState(false)
-  const [paramVoiture, setParamVoiture] = useState("0.50")
-  const [paramMoto, setParamMoto] = useState("0.30")
-  const [paramVelo, setParamVelo] = useState("0.15")
+  const [paramVoiture, setParamVoiture] = useState("7")
+  const [paramMoto, setParamMoto] = useState("4")
+  const [paramVelo, setParamVelo] = useState("2")
   const [plafondMensuel, setPlafondMensuel] = useState("")
   const [savingParams, setSavingParams] = useState(false)
 
@@ -222,9 +222,11 @@ export default function TrajetsKmPage() {
     return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
   }
 
-  const currentParamVoiture = parametres.find(p => p.vehicule_type === "voiture")
-  const currentParamMoto = parametres.find(p => p.vehicule_type === "moto")
-  const currentParamVelo = parametres.find(p => p.vehicule_type === "velo")
+  // parametres_km a UNE ligne par société avec taux_voiture/taux_moto/
+  // taux_velo (pas un array vehicule_type). On lit la ligne chargée.
+  const kmRow: any = parametres[0] || null
+  const tauxVoitureVal = kmRow && kmRow.taux_voiture != null ? Number(kmRow.taux_voiture) : null
+  const tauxMotoVal = kmRow && kmRow.taux_moto != null ? Number(kmRow.taux_moto) : null
 
   return (
     <ClientPageShell hideHero disableParticles>
@@ -328,11 +330,11 @@ export default function TrajetsKmPage() {
               <CardContent className="space-y-1">
                 <div className="flex items-center gap-2 text-sm">
                   <Car className="h-3 w-3" />
-                  <span>{t('rha.b.trajets.car', locale)}: {currentParamVoiture ? `${currentParamVoiture.taux_km} Rs/km` : t('rha.b.trajets.not_set', locale)}</span>
+                  <span>{t('rha.b.trajets.car', locale)}: {tauxVoitureVal != null ? `${tauxVoitureVal} Rs/km` : t('rha.b.trajets.not_set', locale)}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <Bike className="h-3 w-3" />
-                  <span>{t('rha.b.trajets.moto', locale)}: {currentParamMoto ? `${currentParamMoto.taux_km} Rs/km` : t('rha.b.trajets.not_set', locale)}</span>
+                  <span>{t('rha.b.trajets.moto', locale)}: {tauxMotoVal != null ? `${tauxMotoVal} Rs/km` : t('rha.b.trajets.not_set', locale)}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-400">
                   <span>{t('rha.b.trajets.click_edit', locale)}</span>

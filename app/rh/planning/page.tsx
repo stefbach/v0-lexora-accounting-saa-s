@@ -89,6 +89,15 @@ const CONGE_CRENEAU: Creneau = {
   pause_minutes: 0, heures_effectives: 0, couleur: "bg-emerald-100 text-emerald-700",
 }
 
+// Sick Leave assignable directement depuis la grille : crée un vrai congé
+// maladie approuvé (demandes_conges type=SL) → impacte soldes / paie /
+// Absences & Congés. Voir markSickLeave().
+const SICK_LEAVE_CRENEAU: Creneau = {
+  id: "sick", nom: "Sick Leave", code: "SL",
+  heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "",
+  pause_minutes: 0, heures_effectives: 0, couleur: "bg-orange-200 text-orange-800",
+}
+
 interface Conflict {
   type: "leave" | "hours"
   // Sprint 11 BUG 8 — severity distingue erreur bloquante (illégal) et
@@ -219,8 +228,16 @@ export default function PlanningPage() {
   // Approved leave days: empId -> Map(day -> leave type)
   const [approvedLeaves, setApprovedLeaves] = useState<Record<string, Map<number, string>>>({})
 
-  // Cell edit
-  const [editCell, setEditCell] = useState<{ empId: string; day: number } | null>(null)
+  // Jours fériés du mois affiché : day -> libellé. Marqueur visuel
+  // uniquement (n'efface jamais le shift planifié de l'employé).
+  const [holidaysByDay, setHolidaysByDay] = useState<Record<number, string>>({})
+
+  // Marquage sick leave en cours (empId-day) — évite le double-clic
+  const [sickPending, setSickPending] = useState<Set<string>>(new Set())
+
+  // Cell edit — `rect` ancre le popover (position fixe, au-dessus de la
+  // cellule) pour qu'il ne soit jamais rogné par le conteneur scrollable.
+  const [editCell, setEditCell] = useState<{ empId: string; day: number; rect?: DOMRect } | null>(null)
 
   // Bulk assign
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -242,7 +259,7 @@ export default function PlanningPage() {
     // Match by id, nom, or code (API returns shift name, not creneau id)
     return creneaux.find(c => c.id === id || c.nom === id || c.code === id) || REPOS_CRENEAU
   }
-  const allCreneaux = [...creneaux, REPOS_CRENEAU, CONGE_CRENEAU]
+  const allCreneaux = [...creneaux, REPOS_CRENEAU, CONGE_CRENEAU, SICK_LEAVE_CRENEAU]
 
   // ─── Conflict detection ─────────────────────────────────────────
 
@@ -629,12 +646,25 @@ export default function PlanningPage() {
     try {
       const params = new URLSearchParams({ periode })
       if (societe !== "all") params.set("societe_id", societe)
-      const [planRes, empRes, grpRes, leaveRes] = await Promise.all([
+      const [planRes, empRes, grpRes, leaveRes, feriesRes] = await Promise.all([
         fetch(`/api/rh/planning?${params}`).then(r => r.json()).catch(() => ({ planning: [] })),
         fetch(`/api/rh/employes?${societe !== "all" ? `societe_id=${societe}` : ""}`).then(r => r.json()).catch(() => ({ employes: [] })),
         fetch(`/api/rh/groupes?${societe !== "all" ? `societe_id=${societe}` : ""}`).then(r => r.json()).catch(() => ({ groupes: [] })),
         fetch(`/api/rh/conges?${params}&statut=approuve`).then(r => r.json()).catch(() => ({ conges: [] })),
+        fetch(`/api/rh/jours-feries?annee=${year}`).then(r => r.json()).catch(() => ({ jours_feries: [] })),
       ])
+      // Jours fériés du mois — marqueur visuel UNIQUEMENT (n'efface pas le
+      // shift). On garde les fériés nationaux (societe_id null) + ceux de la
+      // société sélectionnée.
+      const feriesMap: Record<number, string> = {}
+      for (const jf of (feriesRes.jours_feries || [])) {
+        const dStr = String(jf.date || "").slice(0, 10)
+        if (!dStr.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`)) continue
+        if (societe !== "all" && jf.societe_id && jf.societe_id !== societe) continue
+        const day = parseInt(dStr.slice(8, 10), 10)
+        if (day >= 1 && day <= daysInMonth) feriesMap[day] = jf.libelle || "Jour férié"
+      }
+      setHolidaysByDay(feriesMap)
       // Build approved leave map — mark days with type (AL, SL, MAT, PAT...)
       const leaveMap: Record<string, Map<number, string>> = {}
       for (const conge of (leaveRes.conges || [])) {
@@ -749,9 +779,78 @@ export default function PlanningPage() {
 
   useEffect(() => { load() }, [load])
 
+  // Fermer le sélecteur de créneau avec Échap.
+  useEffect(() => {
+    if (!editCell) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setEditCell(null) }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [editCell])
+
   // ─── Actions ────────────────────────────────────────────────────
 
+  // Sick Leave depuis la grille → crée un vrai congé maladie APPROUVÉ
+  // (demandes_conges type=SL, 1 jour). Impacte soldes / paie / Absences.
+  // Un SL d'1 jour < 3 jours consécutifs : aucun certificat requis (WRA S.46).
+  const markSickLeave = async (empId: string, day: number) => {
+    const key = `${empId}-${day}`
+    if (sickPending.has(key)) return
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+    setSickPending(prev => new Set(prev).add(key))
+    setEditCell(null)
+    try {
+      const res = await fetch("/api/rh/conges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "creer",
+          employe_id: empId,
+          type_conge: "SL",
+          date_debut: dateStr,
+          date_fin: dateStr,
+          statut: "approuve",
+          impose_par_societe: true,
+          motif: "Sick leave saisi via le planning RH",
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 409) {
+        toast.info("Un congé existe déjà pour ce jour")
+      } else if (!res.ok) {
+        toast.error("Sick leave : " + (data?.error || data?.raison || `HTTP ${res.status}`))
+        return
+      } else {
+        const finalType = data?.type_conge_final || data?.conge?.type_conge || "SL"
+        // Reflète immédiatement dans la grille via approvedLeaves (source de
+        // vérité pour le type de congé) — pas besoin de recharger.
+        setApprovedLeaves(prev => {
+          const next = { ...prev }
+          const m = new Map(next[empId] || [])
+          m.set(day, finalType)
+          next[empId] = m
+          return next
+        })
+        setPlanning(prev => ({
+          ...prev,
+          [empId]: {
+            ...prev[empId],
+            [day]: { creneau_id: `conge_${finalType}`, heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 },
+          },
+        }))
+        toast.success(data?.bascule_ul ? `Sick leave enregistré (basculé UL : solde insuffisant)` : "Sick leave enregistré")
+      }
+    } catch (e: any) {
+      toast.error("Erreur réseau : " + (e?.message || ""))
+    } finally {
+      setSickPending(prev => { const n = new Set(prev); n.delete(key); return n })
+    }
+  }
+
   const assignCreneau = (empId: string, day: number, creneauId: string) => {
+    if (creneauId === "sick") {
+      void markSickLeave(empId, day)
+      return
+    }
     if (creneauId === "repos") {
       setPlanning(prev => ({ ...prev, [empId]: { ...prev[empId], [day]: null } }))
     } else if (creneauId === "conge") {
@@ -1588,28 +1687,21 @@ export default function PlanningPage() {
                           : cell ? getCreneauById(cell.creneau_id) : REPOS_CRENEAU
                         const isEditing = editCell?.empId === emp.id && editCell?.day === d
                         const hasConflict = cellHasConflict(emp.id, d)
+                        const holiday = holidaysByDay[d]
                         return (
                           <td key={d}
-                            className={`border p-0 text-center cursor-pointer relative ${hasConflict ? "ring-2 ring-inset ring-red-500" : ""}`}
-                            onClick={() => setEditCell(isEditing ? null : { empId: emp.id, day: d })}
-                            title={hasConflict ? `CONFLIT: Congé approuvé ce jour\n${cell ? `${creneau.nom} ${cell.heure_debut}—${cell.heure_fin}` : "Repos"}` : cell ? `${creneau.nom}\n${cell.heure_debut}—${cell.heure_fin}\nPause: ${cell.pause_debut || "—"}—${cell.pause_fin || "—"}\n${cell.heures_prevues}h eff.` : "Repos"}
+                            className={`border p-0 text-center cursor-pointer relative ${hasConflict ? "ring-2 ring-inset ring-red-500" : ""} ${holiday ? "ring-1 ring-inset ring-amber-400" : ""} ${isEditing ? "ring-2 ring-inset ring-blue-500" : ""}`}
+                            onClick={(e) => setEditCell(isEditing ? null : { empId: emp.id, day: d, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() })}
+                            title={`${holiday ? `Jour férié : ${holiday}\n` : ""}${hasConflict ? `CONFLIT: Congé approuvé ce jour\n${cell ? `${creneau.nom} ${cell.heure_debut}—${cell.heure_fin}` : "Repos"}` : cell ? `${creneau.nom}\n${cell.heure_debut}—${cell.heure_fin}\nPause: ${cell.pause_debut || "—"}—${cell.pause_fin || "—"}\n${cell.heures_prevues}h eff.` : "Repos"}`}
                           >
+                            {holiday && (
+                              <div className="absolute top-0 left-0 right-0 h-[3px] bg-amber-400" aria-hidden="true" />
+                            )}
                             <div className={`w-full py-0.5 leading-tight ${hasConflict ? "bg-red-100 text-red-700" : creneau.couleur}`}>
                               <div className="text-[10px] font-bold">{creneau.code}</div>
                               {cell && cell.heure_debut && <div className="text-[7px] opacity-80">{cell.heure_debut?.slice(0,5)}</div>}
+                              {holiday && <div className="text-[6px] font-bold text-amber-700 uppercase tracking-wide">Férié</div>}
                             </div>
-                            {isEditing && (
-                              <div className="absolute top-full left-0 z-30 bg-white border rounded-lg shadow-xl p-1 flex flex-col gap-0.5 min-w-[160px]" onClick={e => e.stopPropagation()}>
-                                {allCreneaux.map(c => (
-                                  <button key={c.id}
-                                    className={`text-left px-2 py-1.5 rounded text-xs hover:opacity-80 flex items-center justify-between gap-2 ${c.couleur}`}
-                                    onClick={() => assignCreneau(emp.id, d, c.id)}>
-                                    <span className="font-bold">{c.code} {c.nom}</span>
-                                    {c.heure_debut && <span className="text-[10px] opacity-75">{c.heure_debut}—{c.heure_fin}</span>}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
                           </td>
                         )
                       })}
@@ -1625,6 +1717,7 @@ export default function PlanningPage() {
               <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-purple-200 border border-purple-300" /><span className="text-xs text-gray-600 font-medium">MAT - Maternité</span></div>
               <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-indigo-200 border border-indigo-300" /><span className="text-xs text-gray-600 font-medium">PAT - Paternité</span></div>
               <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-gray-200 border border-gray-300" /><span className="text-xs text-gray-600 font-medium">R - Repos</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded bg-white border-2 border-amber-400" /><span className="text-xs text-gray-600 font-medium">Jour férié (l'employé travaille — shift conservé)</span></div>
             </div>
             </>
           ) : (
@@ -1713,12 +1806,16 @@ export default function PlanningPage() {
                               bgColor = "bg-red-50 text-red-700"
                             }
 
+                            const wHoliday = holidaysByDay[day]
                             return (
                               <td key={i}
-                                className={`border p-0 text-center cursor-pointer relative ${hasConflict ? "ring-2 ring-inset ring-red-500" : ""}`}
-                                onClick={() => setEditCell(isEditing ? null : { empId: emp.id, day })}
-                                title={hasConflict ? "CONFLIT: Congé approuvé ce jour" : label}
+                                className={`border p-0 text-center cursor-pointer relative ${hasConflict ? "ring-2 ring-inset ring-red-500" : ""} ${wHoliday ? "ring-1 ring-inset ring-amber-400" : ""} ${isEditing ? "ring-2 ring-inset ring-blue-500" : ""}`}
+                                onClick={(e) => setEditCell(isEditing ? null : { empId: emp.id, day, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() })}
+                                title={`${wHoliday ? `Jour férié : ${wHoliday}\n` : ""}${hasConflict ? "CONFLIT: Congé approuvé ce jour" : label}`}
                               >
+                                {wHoliday && (
+                                  <div className="absolute top-0 left-0 right-0 h-[3px] bg-amber-400 z-10" aria-hidden="true" />
+                                )}
                                 <div className={`px-2 py-2.5 rounded-sm ${bgColor}`}>
                                   <div className="text-xs font-semibold">{label}</div>
                                   {cell && cell.creneau_id !== "conge" && !cell.creneau_id?.startsWith("conge_") && (
@@ -1726,20 +1823,9 @@ export default function PlanningPage() {
                                       {getCreneauById(cell.creneau_id).nom} ({cell.heures_prevues}h)
                                     </div>
                                   )}
+                                  {wHoliday && <div className="text-[9px] font-bold text-amber-700 uppercase tracking-wide mt-0.5">Férié</div>}
                                   {hasConflict && <AlertTriangle className="inline h-3 w-3 text-red-500 mt-0.5" />}
                                 </div>
-                                {isEditing && (
-                                  <div className="absolute top-full left-0 z-30 bg-white border rounded-lg shadow-xl p-1 flex flex-col gap-0.5 min-w-[160px]" onClick={e => e.stopPropagation()}>
-                                    {allCreneaux.map(c => (
-                                      <button key={c.id}
-                                        className={`text-left px-2 py-1.5 rounded text-xs hover:opacity-80 flex items-center justify-between gap-2 ${c.couleur}`}
-                                        onClick={() => assignCreneau(emp.id, day, c.id)}>
-                                        <span className="font-bold">{c.code} {c.nom}</span>
-                                        {c.heure_debut && <span className="text-[10px] opacity-75">{c.heure_debut}—{c.heure_fin}</span>}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
                               </td>
                             )
                           })}
@@ -2172,6 +2258,53 @@ export default function PlanningPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Sélecteur de créneau — popover EN POSITION FIXE, ancré AU-DESSUS de
+          la cellule cliquée. Rendu hors du conteneur scrollable (overflow)
+          pour ne jamais être rogné : on voit toutes les options et c'est
+          facile à sélectionner. */}
+      {editCell && (() => {
+        const r = editCell.rect
+        const PW = 220 // largeur popover
+        const left = r ? Math.max(8, Math.min(r.left, window.innerWidth - PW - 8)) : Math.max(8, (window.innerWidth - PW) / 2)
+        // `bottom` calculé depuis le viewport → le popover s'ouvre au-dessus
+        // de la cellule (son bas est à 6px au-dessus du haut de la cellule).
+        const bottom = r ? Math.max(8, window.innerHeight - r.top + 6) : 80
+        const empName = (allEmployes.find((e: any) => e.id === editCell.empId)
+          || employes.find((e: any) => e.id === editCell.empId))
+        const empLabel = empName ? `${empName.prenom} ${empName.nom}` : ""
+        const dateLabel = `${editCell.day} ${MONTH_NAMES[month]}`
+        return (
+          <>
+            <div className="fixed inset-0 z-[60]" onClick={() => setEditCell(null)} aria-hidden="true" />
+            <div
+              className="fixed z-[61] bg-white border rounded-lg shadow-2xl p-1.5 flex flex-col gap-0.5 max-h-[60vh] overflow-y-auto"
+              style={{ left, bottom, width: PW }}
+              onClick={e => e.stopPropagation()}
+              role="menu"
+            >
+              <div className="px-2 py-1 mb-0.5 border-b sticky top-0 bg-white">
+                <div className="text-[11px] font-bold text-gray-800 truncate">{empLabel}</div>
+                <div className="text-[10px] text-gray-500">{dateLabel}{holidaysByDay[editCell.day] ? ` · Férié : ${holidaysByDay[editCell.day]}` : ""}</div>
+              </div>
+              {allCreneaux.map(c => {
+                const pendingSick = c.id === "sick" && sickPending.has(`${editCell.empId}-${editCell.day}`)
+                return (
+                  <button key={c.id}
+                    disabled={pendingSick}
+                    className={`text-left px-2 py-2 rounded text-xs hover:opacity-80 flex items-center justify-between gap-2 disabled:opacity-50 ${c.couleur}`}
+                    onClick={() => assignCreneau(editCell.empId, editCell.day, c.id)}>
+                    <span className="font-bold">{c.code} {c.nom}</span>
+                    {c.heure_debut
+                      ? <span className="text-[10px] opacity-75">{c.heure_debut}—{c.heure_fin}</span>
+                      : pendingSick ? <span className="text-[10px]">…</span> : null}
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )
+      })()}
     </div>
     </ClientPageShell>
   )

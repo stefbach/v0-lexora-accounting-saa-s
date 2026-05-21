@@ -2081,6 +2081,8 @@ const partA_fr: Record<string, string> = {
 
   // ─── /rh/manager ────────────────────────────────────────────
   'rha.a.mgr.title': 'Tableau de bord Manager',
+  'rha.a.mgr.title_tl': 'Tableau de bord Team Leader',
+  'rha.a.mgr.bc_tl': 'Team Leader',
   'rha.a.mgr.subtitle': 'Suivi temps réel de votre équipe — présence, pointage, congés, alertes de certificats médicaux et soldes de jours.',
   'rha.a.mgr.kicker_mon_equipe': 'Mon équipe',
   'rha.a.mgr.collaborateur': 'collaborateur',
@@ -3071,6 +3073,8 @@ const partA_en: Record<string, string> = {
 
   // ─── /rh/manager ────────────────────────────────────────────
   'rha.a.mgr.title': 'Manager Dashboard',
+  'rha.a.mgr.title_tl': 'Team Leader Dashboard',
+  'rha.a.mgr.bc_tl': 'Team Leader',
   'rha.a.mgr.subtitle': 'Real-time monitoring of your team — attendance, time clock, leave, medical certificate alerts and day balances.',
   'rha.a.mgr.kicker_mon_equipe': 'My team',
   'rha.a.mgr.collaborateur': 'team member',

@@ -201,12 +201,56 @@ export async function withTelegramAuth(
   try {
     ctx = await resolveTelegramContext(req)
   } catch (resp: any) {
-    return resp instanceof Response ? (resp as NextResponse) : NextResponse.json({ error: 'Auth error' }, { status: 500 })
+    // Les erreurs d'auth (chat_id manquant, société active absente, etc.)
+    // retournent désormais HTTP 200 avec { status: 'error', error_msg } pour
+    // que le bot/LLM puisse relayer un message utile à l'utilisateur (axios
+    // discarde le body sur 4xx → "Request failed with status code 400" sans
+    // diagnostic). On préserve la compat avec les callers qui checkent
+    // `error` dans le body.
+    let body: any = { status: 'error', error_msg: 'Erreur authentification Telegram', result: null }
+    if (resp instanceof Response) {
+      try {
+        const j = await (resp.clone() as Response).json()
+        const msg = j?.error || j?.error_msg || 'Erreur authentification Telegram'
+        body = {
+          status: 'error',
+          error_msg: msg,
+          requires_setup: true,
+          result: null,
+          // hint utilisateur final selon le message
+          user_message: msg.includes('société') || msg.includes('Société')
+            ? "Ton compte Telegram n'a pas de société active. Va sur lexora.finance/client/societes pour en choisir une, puis redemande-moi."
+            : msg.includes('vérifié') || msg.includes('Chat')
+            ? "Ton chat Telegram n'est pas vérifié. Va sur lexora.finance/client/telegram-config pour le lier à ton compte."
+            : msg,
+        }
+      } catch { /* keep default */ }
+    }
+    return NextResponse.json(body)
   }
 
   let body: any = null
   if (req.method !== 'GET') {
     try { body = await req.clone().json() } catch {}
+  }
+
+  // Fusionne query string → body. Workaround pour le bug n8n
+  // toolHttpRequest + $fromAI qui n'expose pas les propriétés dans le schema
+  // envoyé à Claude (résultat : tool appelé avec body vide). Les tools n8n
+  // utilisent maintenant placeholderDefinitions + URL params → on lit la query.
+  // Body prime sur query (rétrocompat).
+  if (!body || typeof body !== 'object') body = {}
+  for (const [k, v] of req.nextUrl.searchParams.entries()) {
+    if (k === 'chat_id') continue  // déjà géré par resolveTelegramContext
+    if (body[k] === undefined) body[k] = v
+  }
+  // Normalise les dates ISO 8601 dont le '+' du timezone a été décodé en espace
+  // par URLSearchParams (ex: "2026-05-19T13:00:00 04:00" → "...+04:00").
+  for (const k of Object.keys(body)) {
+    const v = body[k]
+    if (typeof v === 'string') {
+      body[k] = v.replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?) (\d{2}:\d{2})$/, '$1+$2')
+    }
   }
 
   const t0 = Date.now()
@@ -241,7 +285,21 @@ export async function withTelegramAuth(
     duration_ms,
   }).then(() => {}, () => {})
 
-  if (status === 'error') return NextResponse.json({ error: error_msg }, { status: 500 })
-  if (status === 'denied') return NextResponse.json({ error: error_msg || 'Permission refusée' }, { status: 403 })
+  // Erreurs handler : on retourne HTTP 200 (au lieu de 500) avec un
+  // payload structuré pour que le LLM voie l'error_msg même quand axios
+  // traite les 4xx/5xx comme des exceptions ("Request failed with status
+  // code 500" sans body). Le LLM doit checker `status` pour distinguer.
+  if (status === 'error') {
+    return NextResponse.json({ status: 'error', error_msg, result: null })
+  }
+  if (status === 'denied') {
+    return NextResponse.json({ status: 'denied', error_msg: error_msg || 'Permission refusée', result: null })
+  }
+  // Succès : on garde le shape historique (result inline) pour ne pas
+  // casser les ~94 callers existants. Ajoute juste un champ `status` à la
+  // racine si result est un objet (compat backward).
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    return NextResponse.json({ status: 'success', ...result })
+  }
   return NextResponse.json(result)
 }

@@ -2319,18 +2319,52 @@ export async function POST(request: Request) {
         // Step 2: update facture if provided
         if (facture_id) {
           const { data: prevFacture } = await supabase
-            .from('factures').select('statut, rapproche_releve_id, rapproche_transaction_idx, rapproche_date, rapproche_source').eq('id', facture_id).single()
-          const { error: updFacErr } = await supabase.from('factures').update({
-            statut: 'paye',
+            .from('factures').select('statut, montant_ttc, solde_non_paye, rapproche_releve_id, rapproche_transaction_idx, rapproche_date, rapproche_source').eq('id', facture_id).single()
+
+          // Détection paiement partiel : si le montant payé < solde restant - tolérance,
+          // on marque 'partiel' (et on décrémente solde_non_paye). Sinon 'paye'.
+          // Permet : 1 facture → N transactions (chaque tx solde une partie).
+          // amount est le montant absolu de la tx (calculé ligne 2006).
+          const factureMontant = Number(prevFacture?.montant_ttc) || 0
+          const soldeRestantAvant = prevFacture?.solde_non_paye != null
+            ? Number(prevFacture.solde_non_paye)
+            : factureMontant
+          const TOL = 0.5 // MUR — petits écarts traités comme solde complet
+          const isPartial = amount > 0 && soldeRestantAvant > 0 && (soldeRestantAvant - amount) > TOL
+          const nouveauSolde = Math.max(0, Math.round((soldeRestantAvant - amount) * 100) / 100)
+
+          const updatePayload: Record<string, unknown> = {
+            statut: isPartial ? 'partiel' : 'paye',
+            solde_non_paye: isPartial ? nouveauSolde : 0,
             rapproche_releve_id: releve_id,
             rapproche_transaction_idx: txIdx,
             rapproche_date: reconcileDate,
             rapproche_source: 'manual',
-          }).eq('id', facture_id)
+          }
+          const { error: updFacErr } = await supabase.from('factures').update(updatePayload).eq('id', facture_id)
           if (updFacErr) throw new Error(`Facture update failed: ${updFacErr.message}`)
+          // Annote la transaction pour traçabilité côté UI
+          if (isPartial) {
+            txs[txIdx] = {
+              ...txs[txIdx],
+              paiement_partiel: true,
+              montant_paye: amount,
+              solde_restant_apres: nouveauSolde,
+            }
+            await supabase.from('releves_bancaires')
+              .update({ transactions_json: txs })
+              .eq('id', releve_id)
+          }
           rollback.unshift(async () => {
             if (prevFacture) {
-              await supabase.from('factures').update(prevFacture).eq('id', facture_id)
+              await supabase.from('factures').update({
+                statut: prevFacture.statut,
+                solde_non_paye: prevFacture.solde_non_paye,
+                rapproche_releve_id: prevFacture.rapproche_releve_id,
+                rapproche_transaction_idx: prevFacture.rapproche_transaction_idx,
+                rapproche_date: prevFacture.rapproche_date,
+                rapproche_source: prevFacture.rapproche_source,
+              }).eq('id', facture_id)
             }
           })
         }

@@ -59,11 +59,25 @@ export async function GET() {
 
       societes = Array.from(map.values())
 
-    } else if (['rh', 'juridique', 'employe', 'manager', 'direction'].includes(role)) {
+    } else if (['rh', 'rh_manager', 'juridique', 'employe', 'manager', 'team_leader', 'direction'].includes(role)) {
+      // Ces rôles sont liés à leurs sociétés via user_societes (et parfois
+      // via profiles.societe_id pour les setups legacy). Agrège les deux.
+      const map = new Map()
       if (profile?.societe_id) {
         const { data } = await admin.from('societes').select('*').eq('id', profile.societe_id)
-        societes = data || []
+        ;(data || []).forEach((s: any) => map.set(s.id, s))
       }
+      const { data: userSocietes } = await admin
+        .from('user_societes')
+        .select('societe_id')
+        .eq('user_id', user.id)
+      const ids = (userSocietes || []).map((r: any) => r.societe_id).filter(Boolean)
+      const missingIds = ids.filter((id: string) => !map.has(id))
+      if (missingIds.length > 0) {
+        const { data: extra } = await admin.from('societes').select('*').in('id', missingIds)
+        ;(extra || []).forEach((s: any) => map.set(s.id, s))
+      }
+      societes = Array.from(map.values())
 
     } else {
       // Rôle inconnu ou profil manquant — chercher via dossiers en dernier recours
