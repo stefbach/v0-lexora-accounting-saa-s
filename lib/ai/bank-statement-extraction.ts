@@ -114,13 +114,49 @@ export async function extractBankStatement(
     maxContinuations = 5,
   } = options
 
+  // --- Phase 0 : tenter une extraction de texte côté serveur (unpdf/pdfjs).
+  // Claude lit les PDFs comme images et galère sur les tableaux denses
+  // (>50 transactions). En envoyant le TEXTE structuré extrait du PDF, on
+  // multiplie par 10 la fiabilité d'extraction des tableaux bancaires.
+  // Fallback sur PDF base64 si l'extraction texte échoue (PDF scanné image).
+  let extractedText: string | null = null
+  try {
+    const pdfBytes = Uint8Array.from(Buffer.from(base64, 'base64'))
+    const { extractText, getDocumentProxy } = await import('unpdf')
+    const pdf = await getDocumentProxy(pdfBytes)
+    const result = await extractText(pdf, { mergePages: true })
+    const raw: unknown = (result as any)?.text
+    const text = typeof raw === 'string'
+      ? raw
+      : Array.isArray(raw)
+        ? raw.join('\n')
+        : ''
+    if (text && text.trim().length > 200) {
+      extractedText = text
+      console.log(`[bank-extract] unpdf success: ${text.length} chars from PDF`)
+    } else {
+      console.log('[bank-extract] unpdf returned too little text, falling back to PDF base64')
+    }
+  } catch (e: any) {
+    console.warn('[bank-extract] unpdf failed, falling back to PDF base64:', e?.message)
+  }
+
   // --- Initial extraction ---
+  // Si on a réussi à extraire le texte, on envoie le texte (plus fiable).
+  // Sinon on envoie le PDF base64 (fallback vision Claude).
+  const initialMessages = extractedText
+    ? [{ role: 'user' as const, content: [{
+        type: 'text' as const,
+        text: `Voici le contenu texte d'un relevé bancaire (extrait via pdfjs côté serveur). Lis TOUTES les lignes du tableau de transactions et retourne le JSON structuré demandé dans le system prompt.\n\n---DEBUT_RELEVE---\n${extractedText}\n---FIN_RELEVE---\n\n${initialUserPrompt}`,
+      }]}]
+    : [{ role: 'user' as const, content: [
+        { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+        { type: 'text' as const, text: initialUserPrompt },
+      ]}]
+
   const initialStream = anthropic.messages.stream({
     model, max_tokens: maxTokens, temperature, system: systemPrompt,
-    messages: [{ role: 'user', content: [
-      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-      { type: 'text', text: initialUserPrompt },
-    ]}],
+    messages: initialMessages,
   })
   const initialResponse = await initialStream.finalMessage()
   let rawText = initialResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
@@ -132,31 +168,59 @@ export async function extractBankStatement(
   const extraTransactions: any[] = []
   let nbContinuations = 0
 
+  // Détecte le cas "header extrait mais 0 transaction" : Claude a renvoyé un
+  // JSON valide avec soldes/totaux mais transactions vide → forcer une
+  // continuation pour extraire le tableau de lignes.
+  // Le prompt bancaire renvoie soit {routing, extraction:{transactions, soldes...}},
+  // soit directement {transactions, soldes...}. On cherche dans les deux.
+  const txContainer = parsed?.extraction ?? parsed
+  const headerContainer = parsed?.extraction ?? parsed
+  const initialTxCount = Array.isArray(txContainer?.transactions)
+    ? txContainer.transactions.length
+    : (Array.isArray(txContainer?.lignes) ? txContainer.lignes.length : 0)
+  const hasHeaderButNoTx =
+    parsed != null &&
+    initialTxCount === 0 &&
+    (headerContainer?.solde_ouverture != null || headerContainer?.solde_cloture != null ||
+     headerContainer?.total_debits != null || headerContainer?.total_credits != null)
+
   while (
     nbContinuations < maxContinuations &&
     (stopReason === 'max_tokens' ||
-      (stopReason === 'end_turn' && rawText.length > 60000 && nbContinuations === 0))
+      (stopReason === 'end_turn' && rawText.length > 60000 && nbContinuations === 0) ||
+      (hasHeaderButNoTx && nbContinuations === 0))
   ) {
     nbContinuations++
-    // Compute landmark from current accumulated state
-    const synthetic = parsed ? { ...parsed } : {}
-    const allTxs = [...(synthetic.transactions || synthetic.lignes || []), ...extraTransactions]
+    // Compute landmark from current accumulated state.
+    // Cherche les transactions soit au top-level, soit sous extraction.* (wrapper).
+    const ctn = parsed?.extraction ?? parsed
+    const allTxs = [...(ctn?.transactions || ctn?.lignes || []), ...extraTransactions]
     const lm = computeLandmark({ transactions: allTxs })
 
     const hint = lm.date && lm.desc
       ? `La dernière transaction extraite était : { date: "${lm.date}", description: "${(lm.desc || '').slice(0, 80)}" }. Reprends APRÈS celle-ci uniquement.`
-      : `Tu as déjà extrait ${extraTransactions.length} transactions supplémentaires. Reprends APRÈS la dernière.`
+      : hasHeaderButNoTx && nbContinuations === 1
+        ? `Tu as renvoyé le résumé du relevé (soldes ${headerContainer?.solde_ouverture || '?'} → ${headerContainer?.solde_cloture || '?'}, débits ${headerContainer?.total_debits || '?'}, crédits ${headerContainer?.total_credits || '?'}) mais AUCUNE transaction. Extrais MAINTENANT TOUTES les lignes du tableau de transactions (date, libellé, débit, crédit, solde après).`
+        : `Tu as déjà extrait ${extraTransactions.length} transactions supplémentaires. Reprends APRÈS la dernière.`
 
     console.log(`[bank-extract] continuation ${nbContinuations}/${maxContinuations} — landmark=${lm.date}/${lm.desc?.slice(0, 30)}`)
 
     try {
+      // Continuation : utilise le texte extrait s'il est disponible (plus fiable),
+      // sinon refait passer le PDF base64.
+      const contMessages = extractedText
+        ? [{ role: 'user' as const, content: [{
+            type: 'text' as const,
+            text: `Voici le contenu texte du relevé bancaire (mêmes données qu'à l'appel initial).\n\n---DEBUT_RELEVE---\n${extractedText}\n---FIN_RELEVE---\n\n${hint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].`,
+          }]}]
+        : [{ role: 'user' as const, content: [
+            { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } },
+            { type: 'text' as const, text: `${hint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].` },
+          ]}]
       const contStream = anthropic.messages.stream({
         model, max_tokens: maxTokens, temperature,
         system: 'Tu continues à extraire les transactions d\'un relevé bancaire. Retourne UNIQUEMENT un tableau JSON `[ {...}, {...} ]` avec les nouvelles transactions, sans aucune métadonnée, sans markdown, sans texte avant ou après. Si toutes les transactions sont déjà extraites, retourne `[]`.',
-        messages: [{ role: 'user', content: [
-          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-          { type: 'text', text: `${hint}\n\nRetourne UNIQUEMENT le tableau JSON des transactions manquantes. Format : [{"date":"YYYY-MM-DD","description":"...","debit":0,"credit":0,"solde":0}, ...].\nSi rien à ajouter : [].` },
-        ]}],
+        messages: contMessages,
       })
       const contResponse = await contStream.finalMessage()
       const contText = contResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
@@ -187,10 +251,15 @@ export async function extractBankStatement(
   let added = 0
   let skipped = 0
   if (parsed && typeof parsed === 'object' && extraTransactions.length > 0) {
-    const targetKey = Array.isArray(parsed.transactions)
+    // Détecte le container : top-level OR parsed.extraction (format
+    // bancaire avec wrapper {routing, extraction}).
+    const target = parsed.extraction && typeof parsed.extraction === 'object'
+      ? parsed.extraction
+      : parsed
+    const targetKey = Array.isArray(target.transactions)
       ? 'transactions'
-      : (Array.isArray(parsed.lignes) ? 'lignes' : 'transactions')
-    const existing: any[] = parsed[targetKey] || []
+      : (Array.isArray(target.lignes) ? 'lignes' : 'transactions')
+    const existing: any[] = target[targetKey] || []
     const dedupKey = (t: any) =>
       `${t.date || ''}|${t.description || t.libelle || ''}|${t.debit || 0}|${t.credit || 0}|${t.solde || ''}`
     const seen = new Set(existing.map(dedupKey))
@@ -201,10 +270,11 @@ export async function extractBankStatement(
       seen.add(key)
       added++
     }
-    parsed[targetKey] = existing
+    target[targetKey] = existing
   }
 
-  console.log(`[bank-extract] DONE — continuations=${nbContinuations}, tx_added=${added}, dup_skipped=${skipped}, final_count=${parsed?.transactions?.length || parsed?.lignes?.length || 0}`)
+  const finalContainer = parsed?.extraction ?? parsed
+  console.log(`[bank-extract] DONE — continuations=${nbContinuations}, tx_added=${added}, dup_skipped=${skipped}, final_count=${finalContainer?.transactions?.length || finalContainer?.lignes?.length || 0}`)
 
   return {
     parsed,

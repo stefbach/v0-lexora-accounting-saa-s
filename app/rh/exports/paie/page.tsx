@@ -23,11 +23,12 @@ function fmt(n: number) {
   return new Intl.NumberFormat("fr-MU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
 
-function downloadFile(content: string, filename: string) {
-  // BOM UTF-8 ajouté UNIQUEMENT aux .csv (Excel auto-détecte alors
-  // l'encodage). Les .txt sont des formats bruts bancaires (BP-V1 MCB)
-  // qui rejettent tout octet avant le magic-line — pas de BOM.
-  const isText = filename.toLowerCase().endsWith(".txt")
+function downloadFile(content: string, filename: string, bom: boolean = true) {
+  // BOM UTF-8 ajouté aux .csv destinés à Excel (auto-détection encodage).
+  // EXCLUS : .txt bancaires (BP-V1 MCB) ET fichiers MRA (PACO/PRGF) passés
+  // avec bom=false — leur parseur strict rejette tout octet avant la
+  // magic-line "MRA,..." → « Line 1 : Incorrect value for field 1 ».
+  const isText = filename.toLowerCase().endsWith(".txt") || !bom
   const prefix = isText ? "" : "\uFEFF"
   const mime = isText ? "text/plain;charset=utf-8" : "text/csv;charset=utf-8"
   const blob = new Blob([prefix + content], { type: mime })
@@ -428,7 +429,8 @@ export default function ExportPaiePage() {
         throw new Error(data.error || t('rha.b.expaie.err_paco', locale))
       }
 
-      if (data.csv) downloadFile(data.csv, data.filename || `paco_${periode}.csv`)
+      // bom=false : upload MRA strict (sinon « Line 1 : Incorrect value for field 1 »)
+      if (data.csv) downloadFile(data.csv, data.filename || `paco_${periode}.csv`, false)
 
       setPacoStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
       const warningCount = Array.isArray(data.warnings) ? data.warnings.length : 0
@@ -470,7 +472,8 @@ export default function ExportPaiePage() {
         throw new Error(data.error || t('rha.b.expaie.err_prgf', locale))
       }
 
-      if (data.csv) downloadFile(data.csv, data.filename || `prgf_${periode}.csv`)
+      // bom=false : upload MRA strict (même contrainte que le PACO)
+      if (data.csv) downloadFile(data.csv, data.filename || `prgf_${periode}.csv`, false)
 
       setPrgfStatus({ loading: false, done: true, error: null, summary: data.totaux || null })
       const warningCount = Array.isArray(data.warnings) ? data.warnings.length : 0

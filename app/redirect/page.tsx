@@ -14,6 +14,7 @@ const ROLE_DASHBOARD: Record<string, string> = {
   rh:                '/rh',
   juridique:         '/juridique',
   manager:           '/rh',
+  team_leader:       '/rh',
   employe:           '/salarie',
   direction:         '/direction',
   rh_manager:        '/rh',

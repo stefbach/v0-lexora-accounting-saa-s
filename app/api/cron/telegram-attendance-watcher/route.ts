@@ -26,7 +26,7 @@ export const maxDuration = 300
 
 type ServiceClient = ReturnType<typeof getServiceClient>
 
-const LATE_THRESHOLD_MIN = 10
+const LATE_THRESHOLD_MIN = 15
 const MAX_ALERTS_PER_DAY = 3
 const MIN_GAP_BETWEEN_ALERTS_MIN = 30
 
@@ -38,25 +38,35 @@ function getServiceClient() {
   )
 }
 
+// Mauritius is permanently UTC+4 (no DST). Plannings stockent heure_debut
+// en heure locale Maurice — il faut convertir pour comparer avec now() UTC.
+const MU_OFFSET_HOURS = 4
+
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  // "Aujourd'hui" du point de vue Maurice (pas UTC), pour matcher la
+  // colonne planning_assignments.date qui est stockée en date locale.
+  const muNow = new Date(Date.now() + MU_OFFSET_HOURS * 3600 * 1000)
+  return muNow.toISOString().slice(0, 10)
 }
 
-/** Minutes écoulées depuis "HH:MM(:SS)" aujourd'hui (UTC). Retourne null si parse échoue. */
+/** Minutes écoulées depuis "HH:MM(:SS)" Maurice aujourd'hui. Retourne null si parse échoue. */
 function minutesSinceStart(timeStr: string | null | undefined): number | null {
   if (!timeStr) return null
   const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(timeStr.trim())
   if (!m) return null
-  const now = new Date()
-  const start = new Date(Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
+  const now = Date.now()
+  // Construit "aujourd'hui (Maurice) à HH:MM Maurice" puis convertit en UTC.
+  const muNow = new Date(now + MU_OFFSET_HOURS * 3600 * 1000)
+  const startMuMs = Date.UTC(
+    muNow.getUTCFullYear(),
+    muNow.getUTCMonth(),
+    muNow.getUTCDate(),
     Number(m[1]),
     Number(m[2]),
     0,
-  ))
-  return Math.floor((now.getTime() - start.getTime()) / 60000)
+  )
+  const startUtc = startMuMs - MU_OFFSET_HOURS * 3600 * 1000
+  return Math.floor((now - startUtc) / 60000)
 }
 
 async function chatIdForUser(supabase: ServiceClient, user_id: string | null): Promise<number | null> {
@@ -263,6 +273,38 @@ export async function GET(request: Request) {
         employe_id: emp.id, target: 'manager', elapsed_min: elapsedMin, date: today,
       })
       if (ok) { stats.alerts_sent++; anySent = true } else stats.errors++
+    }
+
+    // 6c. Push RH / Direction / Client_admin / Client_assistant (rôles managériaux
+    // de la société). Une alerte par personne par employé absent, mais
+    // l'idempotence (max 3 alertes/jour, 30 min gap) s'applique au record
+    // d'absence, pas par destinataire — ces rôles reçoivent UNIQUEMENT lors
+    // de la première alerte du jour (alert_count == 0 avant cet incrément).
+    const isFirstAlertOfDay = !existing || (existing.alert_count ?? 0) === 0
+    if (isFirstAlertOfDay) {
+      const { data: managerialUsers } = await supabase
+        .from('user_societes')
+        .select('user_id, role')
+        .eq('societe_id', societe_id)
+        .in('role', ['rh', 'direction', 'client_admin', 'client_assistant'])
+      const recipientUserIds = new Set<string>()
+      // Évite double-envoi : l'employé et son manager déjà notifiés ne reçoivent pas en plus
+      for (const u of managerialUsers || []) {
+        if (u.user_id === emp.user_id) continue
+        recipientUserIds.add(u.user_id)
+      }
+      for (const uid of recipientUserIds) {
+        const chat = await chatIdForUser(supabase, uid)
+        if (!chat || chat === managerChat) continue
+        const rhText =
+          `🚨 <b>Absent : ${fullName}</b>\n` +
+          `Retard ${elapsedMin} min — Planning ${shiftLabel} (début ${startStr}).\n` +
+          `Aucun pointage, aucun congé déclaré.`
+        const ok = await safeSend(supabase, chat, societe_id, rhText, [], {
+          employe_id: emp.id, target: 'rh_direction', elapsed_min: elapsedMin, date: today,
+        })
+        if (ok) { stats.alerts_sent++; anySent = true } else stats.errors++
+      }
     }
 
     // 7. Upsert idempotence

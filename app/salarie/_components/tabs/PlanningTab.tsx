@@ -30,6 +30,7 @@ export function PlanningTab({ employe }: { employe: any }) {
   const [periode, setPeriode] = useState<string>(currentPeriode())
   const [rawPlanning, setRawPlanning] = useState<any[]>([])
   const [rawLeaves, setRawLeaves] = useState<any[]>([])
+  const [rawFeries, setRawFeries] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [serverMergedLeaves, setServerMergedLeaves] = useState(false)
 
@@ -40,14 +41,17 @@ export function PlanningTab({ employe }: { employe: any }) {
       try {
         // V2.4 — demande au serveur une fusion planning/congés optimale
         const plUrl = `/api/rh/planning?periode=${periode}&societe_id=${employe.societe_id}&employe_id=${employe.id}&merge_leaves=1`
-        const [plRes, cgRes] = await Promise.all([
+        const annee = periode.slice(0, 4)
+        const [plRes, cgRes, jfRes] = await Promise.all([
           fetch(plUrl).then(r => r.json()).catch(() => ({ planning: [] })),
           fetch(`/api/rh/conges?employe_id=${employe.id}`).then(r => r.json()).catch(() => ({ conges: [] })),
+          fetch(`/api/rh/jours-feries?annee=${annee}`).then(r => r.json()).catch(() => ({ jours_feries: [] })),
         ])
         if (cancelled) return
         setServerMergedLeaves(Boolean(plRes.merged_leaves))
         setRawPlanning((plRes.planning || []).filter((p: any) => p.employe_id === employe.id))
         setRawLeaves((cgRes.conges || cgRes.demandes || []).filter((c: any) => c.statut === "approuve" || c.statut === "approved"))
+        setRawFeries(jfRes.jours_feries || [])
       } catch {}
       finally {
         if (!cancelled) setLoading(false)
@@ -57,13 +61,21 @@ export function PlanningTab({ employe }: { employe: any }) {
     return () => { cancelled = true }
   }, [employe.id, employe.societe_id, periode])
 
-  // Fusion client-side tant que l'API ne renvoie pas merged_leaves=true.
-  // TODO(RH agent) — retirer cette fusion client quand
-  // /api/rh/planning?merge_leaves=1 marquera les congés côté serveur
-  // et renverra { planning: [...], merged_leaves: true }.
+  // Fusion client-side : on construit la liste des jours à partir de
+  // l'union (lignes planning ∪ congés approuvés ∪ jours fériés).
+  //
+  // BUGFIX — l'ancienne version faisait `rawPlanning.map(...)` : un jour
+  // de congé (ex: Sick Leave) SANS ligne planning (les jours de congé ne
+  // sont pas sauvegardés dans planning côté RH) n'apparaissait PAS du
+  // tout. On indexe par jour et on injecte les jours de congé manquants.
+  //
+  // Jours fériés : annotés (ferie + libellé) SANS effacer le shift —
+  // l'employé reste marqué travaillant le jour férié. Si le jour est en
+  // repos, on affiche "Férié" au lieu d'un simple "Repos".
   const planning = useMemo(() => {
-    if (serverMergedLeaves) return rawPlanning
-    if (rawPlanning.length === 0) return []
+    const leaveLabels: Record<string, string> = { AL: "Local Leave", SL: "Sick Leave", MAT: "Maternité", PAT: "Paternité", SANS_SOLDE: "Sans solde" }
+
+    // 1. Congés approuvés → map jour → type
     const leaveDays = new Map<number, string>()
     for (const c of rawLeaves) {
       const startStr = String(c.date_debut || "").slice(0, 10)
@@ -75,15 +87,40 @@ export function PlanningTab({ employe }: { employe: any }) {
         if (dayStr >= startStr && dayStr <= endStr) leaveDays.set(d, leaveType)
       }
     }
-    return rawPlanning.map((p: any) => {
-      const lt = leaveDays.get(p.jour || p.day)
-      if (lt) {
-        const leaveLabels: Record<string, string> = { AL: "Local Leave", SL: "Sick Leave", MAT: "Maternité", PAT: "Paternité", SANS_SOLDE: "Sans solde" }
-        return { ...p, shift: leaveLabels[lt] || "Congé", leave_type: lt, est_repos: false, heure_debut: null, heure_fin: null, heures_prevues: 0 }
-      }
-      return p
-    })
-  }, [rawPlanning, rawLeaves, periode, serverMergedLeaves])
+
+    // 2. Jours fériés du mois (nationaux + société de l'employé)
+    const ferieDays = new Map<number, string>()
+    for (const jf of rawFeries) {
+      const dStr = String(jf.date || "").slice(0, 10)
+      if (!dStr.startsWith(periode)) continue
+      if (employe.societe_id && jf.societe_id && jf.societe_id !== employe.societe_id) continue
+      const day = parseInt(dStr.slice(8, 10), 10)
+      if (day >= 1 && day <= 31) ferieDays.set(day, jf.libelle || "Jour férié")
+    }
+
+    // 3. Index des lignes planning par jour
+    const byDay = new Map<number, any>()
+    for (const p of rawPlanning) {
+      const d = p.jour || p.day
+      if (d) byDay.set(d, { ...p })
+    }
+
+    // 4. Injecter / surcharger les jours de congé (même si serverMerged :
+    //    idempotent, et garantit la présence des jours sans ligne planning)
+    for (const [d, lt] of leaveDays) {
+      const base = byDay.get(d) || { employe_id: employe.id, jour: d }
+      byDay.set(d, { ...base, shift: leaveLabels[lt] || "Congé", leave_type: lt, est_repos: false, heure_debut: null, heure_fin: null, heures_prevues: 0 })
+    }
+
+    // 5. Annoter les jours fériés (ne JAMAIS effacer le shift)
+    for (const [d, lbl] of ferieDays) {
+      const base = byDay.get(d)
+      if (base) byDay.set(d, { ...base, ferie: true, ferie_label: lbl })
+      else byDay.set(d, { employe_id: employe.id, jour: d, shift: "Repos", est_repos: true, ferie: true, ferie_label: lbl })
+    }
+
+    return Array.from(byDay.values())
+  }, [rawPlanning, rawLeaves, rawFeries, periode, employe.id, employe.societe_id])
 
   const sorted = [...planning].sort((a: any, b: any) => (a.jour || 0) - (b.jour || 0))
   const workDays = sorted.filter((p: any) => !p.est_repos && p.shift !== 'Repos' && p.shift !== 'R' && !p.leave_type)
@@ -177,6 +214,7 @@ export function PlanningTab({ employe }: { employe: any }) {
           {sorted.map((p: any, i: number) => {
             const isRepos = p.est_repos || p.shift === 'Repos' || p.shift === 'R'
             const isLeave = !!p.leave_type
+            const isFerie = !!p.ferie
             const dateStr = `${periode}-${String(p.jour).padStart(2, '0')}`
             const dateObj = new Date(dateStr + "T12:00:00")
             const dayNum = dateObj.getDate()
@@ -188,9 +226,11 @@ export function PlanningTab({ employe }: { employe: any }) {
             return (
               <div
                 key={i}
-                className={`flex items-center gap-3 p-3 rounded-2xl transition-all duration-200 ${isToday ? "ring-2 ring-offset-2" : ""}`}
+                className={`flex items-center gap-3 p-3 rounded-2xl transition-all duration-200 ${isToday ? "ring-2 ring-offset-2" : ""} ${isFerie ? "ring-1 ring-amber-300" : ""}`}
                 style={{
-                  backgroundColor: isRepos && !isLeave ? (isWeekend ? "#f9fafb" : "#f3f4f6") : style?.bg,
+                  backgroundColor: isFerie && isRepos && !isLeave
+                    ? "#fffbeb"
+                    : isRepos && !isLeave ? (isWeekend ? "#f9fafb" : "#f3f4f6") : style?.bg,
                   ...(isToday ? { ringColor: GOLD } : {}),
                 }}
               >
@@ -207,22 +247,38 @@ export function PlanningTab({ employe }: { employe: any }) {
 
                 <div className="flex-1 min-w-0">
                   {isRepos && !isLeave ? (
-                    <p className="text-sm font-medium text-gray-400">Repos</p>
+                    isFerie ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm">🎌</span>
+                        <p className="text-sm font-semibold text-amber-700">Férié — {p.ferie_label}</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-medium text-gray-400">Repos</p>
+                    )
                   ) : isLeave ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm">{style?.icon}</span>
                       <p className="text-sm font-semibold" style={{ color: style?.text }}>{p.shift}</p>
+                      {isFerie && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">Férié</span>
+                      )}
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm">{style?.icon}</span>
                         <p className="text-sm font-semibold" style={{ color: style?.text }}>{p.shift || "Travail"}</p>
+                        {isFerie && (
+                          <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200" title={p.ferie_label}>Férié</span>
+                        )}
                       </div>
                       {p.heure_debut && (
                         <p className="text-xs text-gray-500 mt-0.5 font-mono">
                           {String(p.heure_debut).slice(0, 5)} — {String(p.heure_fin).slice(0, 5)}
                         </p>
+                      )}
+                      {isFerie && (
+                        <p className="text-[11px] text-amber-700 mt-0.5">{p.ferie_label} — jour travaillé</p>
                       )}
                     </>
                   )}
