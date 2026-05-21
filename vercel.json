@@ -95,6 +95,10 @@
     {
       "path": "/api/cron/bank-scraper",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/sante-pcm-alert",
+      "schedule": "0 * * * *"
     }
   ]
 }
