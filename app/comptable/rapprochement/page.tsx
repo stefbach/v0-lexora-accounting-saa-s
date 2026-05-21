@@ -28,6 +28,15 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import {
   Loader2,
   Sparkles,
   CheckCircle2,
@@ -37,6 +46,7 @@ import {
   Bot,
   RefreshCw,
   CalendarDays,
+  Link2,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale } from "@/lib/i18n"
@@ -133,6 +143,12 @@ export default function RapprochementPage() {
   const [activeTab, setActiveTab] = useState("a-valider")
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set())
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
+
+  // Multi-facture linking dialog state
+  const [linkingTx, setLinkingTx] = useState<BankTx | null>(null)
+  const [linkSelectedFids, setLinkSelectedFids] = useState<Set<string>>(new Set())
+  const [linkFilter, setLinkFilter] = useState("")
+  const [linking, setLinking] = useState(false)
 
   const periodeDebut = modeToutes ? null : `${selectedAnnee}-${selectedMois}-01`
   const periodeFin = modeToutes
@@ -368,6 +384,38 @@ export default function RapprochementPage() {
     showToast(`Validé (${r.lettre || "—"}) — écriture BNQ créée`)
     load()
   }
+
+  // ── Ouvrir le dialog de liaison manuelle multi-factures ──────────────
+  const openLinkDialog = useCallback((tx: BankTx) => {
+    const existing = Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0
+      ? tx.facture_ids
+      : tx.facture_id
+        ? [tx.facture_id]
+        : []
+    setLinkingTx(tx)
+    setLinkSelectedFids(new Set(existing))
+    setLinkFilter("")
+  }, [])
+
+  // ── Confirmer la liaison : appelle lettrer_multi/lettrer_manuel ──────
+  const handleLinkConfirm = useCallback(async () => {
+    if (!linkingTx) return
+    const fids = Array.from(linkSelectedFids)
+    if (fids.length === 0) {
+      return showToast("Sélectionnez au moins une facture", "error")
+    }
+    setLinking(true)
+    const txWithFids = { ...linkingTx, facture_ids: fids, facture_id: fids[0] }
+    const r = await validateOne(txWithFids)
+    setLinking(false)
+    if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
+    showToast(
+      `${fids.length} facture${fids.length > 1 ? "s" : ""} liée${fids.length > 1 ? "s" : ""} — écriture BNQ créée (${r.lettre || "—"})`
+    )
+    setLinkingTx(null)
+    setLinkSelectedFids(new Set())
+    load()
+  }, [linkingTx, linkSelectedFids, validateOne, showToast, load])
 
   const handleRejectOne = async (tx: BankTx) => {
     try {
@@ -717,7 +765,12 @@ export default function RapprochementPage() {
                   ) : (
                     <div className="rounded border bg-card divide-y">
                       {orphelines.map((tx) => (
-                        <TxRow key={tx.id} tx={tx} facturesById={facturesById} />
+                        <TxRow
+                          key={tx.id}
+                          tx={tx}
+                          facturesById={facturesById}
+                          onLink={() => openLinkDialog(tx)}
+                        />
                       ))}
                     </div>
                   )}
@@ -727,7 +780,221 @@ export default function RapprochementPage() {
           </>
         )}
       </div>
+
+      {/* Dialog : lier manuellement plusieurs factures à une transaction */}
+      <LinkFacturesDialog
+        tx={linkingTx}
+        factures={factures}
+        selectedFids={linkSelectedFids}
+        setSelectedFids={setLinkSelectedFids}
+        filter={linkFilter}
+        setFilter={setLinkFilter}
+        onClose={() => setLinkingTx(null)}
+        onConfirm={handleLinkConfirm}
+        loading={linking}
+      />
     </ClientPageShell>
+  )
+}
+
+// ── Dialog manuel : lier une transaction à plusieurs factures ──────────
+function LinkFacturesDialog({
+  tx,
+  factures,
+  selectedFids,
+  setSelectedFids,
+  filter,
+  setFilter,
+  onClose,
+  onConfirm,
+  loading,
+}: {
+  tx: BankTx | null
+  factures: Facture[]
+  selectedFids: Set<string>
+  setSelectedFids: (s: Set<string>) => void
+  filter: string
+  setFilter: (s: string) => void
+  onClose: () => void
+  onConfirm: () => void
+  loading: boolean
+}) {
+  const open = tx !== null
+  const txAmount = tx ? (tx.debit > 0 ? tx.debit : tx.credit) : 0
+  const txDevise = (tx?.devise || "MUR").toUpperCase()
+
+  // Pré-filtre par tiers détecté + texte saisi par l'utilisateur
+  const filtered = useMemo(() => {
+    if (!tx) return []
+    const q = filter.trim().toLowerCase()
+    const unpaid = factures.filter(
+      (f) => f.statut !== "paye" && f.statut !== "annule"
+    )
+    return unpaid.filter((f) => {
+      if (!q) return true
+      const hay = `${f.numero_facture || ""} ${f.tiers || ""}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [tx, factures, filter])
+
+  // Somme des factures cochées (en MUR si dispo, sinon montant_ttc)
+  const sumSelected = useMemo(() => {
+    let s = 0
+    for (const id of selectedFids) {
+      const f = factures.find((x) => x.id === id)
+      if (!f) continue
+      s += Number(f.montant_mur) || Number(f.montant_ttc) || 0
+    }
+    return s
+  }, [selectedFids, factures])
+
+  if (!tx) return null
+
+  const toggle = (fid: string) => {
+    const n = new Set(selectedFids)
+    n.has(fid) ? n.delete(fid) : n.add(fid)
+    setSelectedFids(n)
+  }
+
+  const diff = txAmount - sumSelected
+  const diffPct = txAmount > 0 ? (Math.abs(diff) / txAmount) * 100 : 0
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Lier la transaction à une ou plusieurs factures</DialogTitle>
+          <DialogDescription>
+            Cochez les factures correspondant à ce virement. Le total des factures
+            doit approcher le montant de la transaction.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Résumé tx */}
+        <div className="rounded border p-3 bg-muted/30 space-y-1 text-sm">
+          <p className="text-xs text-muted-foreground">{formatDate(tx.date)}</p>
+          <p className="font-medium break-words">{tx.libelle}</p>
+          <p className="font-mono">
+            {tx.debit > 0 ? "Débit" : "Crédit"} {fmt(txAmount)} {txDevise}
+          </p>
+          {tx.tiers_detecte && (
+            <p className="text-xs text-muted-foreground">
+              Tiers détecté : <span className="font-medium">{tx.tiers_detecte}</span>
+            </p>
+          )}
+        </div>
+
+        {/* Filtre */}
+        <Input
+          placeholder="Filtrer par numéro de facture ou tiers…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="h-9"
+        />
+
+        {/* Liste des factures avec checkbox */}
+        <div className="flex-1 overflow-y-auto rounded border divide-y">
+          {filtered.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground text-center">
+              Aucune facture impayée trouvée.
+            </p>
+          ) : (
+            filtered.map((f) => {
+              const checked = selectedFids.has(f.id)
+              const monMur = Number(f.montant_mur) || Number(f.montant_ttc) || 0
+              return (
+                <label
+                  key={f.id}
+                  className={`flex items-start gap-3 p-2.5 hover:bg-muted/30 cursor-pointer ${
+                    checked ? "bg-blue-50/50" : ""
+                  }`}
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={() => toggle(f.id)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm">
+                        {f.numero_facture || f.id.slice(0, 8)}
+                      </span>
+                      {f.tiers && (
+                        <span className="text-xs text-muted-foreground">· {f.tiers}</span>
+                      )}
+                      {f.type_facture && (
+                        <Badge variant="outline" className="text-[10px]">
+                          {f.type_facture}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatDate(f.date_facture || "")} ·{" "}
+                      <span className="font-mono">
+                        {fmt(f.montant_ttc)} {f.devise || "MUR"}
+                      </span>
+                      {f.devise && f.devise !== "MUR" && (
+                        <span className="font-mono text-muted-foreground">
+                          {" "}≈ {fmt(monMur)} MUR
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </label>
+              )
+            })
+          )}
+        </div>
+
+        {/* Comparaison montants */}
+        {selectedFids.size > 0 && (
+          <div
+            className={`rounded border p-2.5 text-sm flex items-center justify-between ${
+              diffPct < 2
+                ? "bg-green-50 border-green-200"
+                : diffPct < 5
+                  ? "bg-amber-50 border-amber-200"
+                  : "bg-rose-50 border-rose-200"
+            }`}
+          >
+            <span>
+              {selectedFids.size} facture{selectedFids.size > 1 ? "s" : ""} ·{" "}
+              <span className="font-mono">{fmt(sumSelected)} MUR</span>
+            </span>
+            <span className="font-mono text-xs">
+              Tx ≈ {fmt(txAmount)} {txDevise} · écart{" "}
+              <span className={diff >= 0 ? "" : "text-rose-700"}>
+                {diff >= 0 ? "+" : ""}
+                {fmt(diff)} ({diffPct.toFixed(1)}%)
+              </span>
+            </span>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Annuler
+          </Button>
+          <Button
+            onClick={onConfirm}
+            disabled={loading || selectedFids.size === 0}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                Liaison…
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                Lier {selectedFids.size} facture{selectedFids.size > 1 ? "s" : ""}
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -931,9 +1198,11 @@ function SuggestionRow({
 function TxRow({
   tx,
   facturesById,
+  onLink,
 }: {
   tx: BankTx
   facturesById: Map<string, Facture>
+  onLink?: () => void
 }) {
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
   return (
@@ -964,14 +1233,27 @@ function TxRow({
           )}
         </div>
       </div>
-      <p
-        className={`font-mono text-sm flex-shrink-0 ${
-          montant >= 0 ? "text-green-700" : "text-rose-700"
-        }`}
-      >
-        {montant >= 0 ? "+" : ""}
-        {fmt(montant)} {tx.devise || "MUR"}
-      </p>
+      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+        <p
+          className={`font-mono text-sm ${
+            montant >= 0 ? "text-green-700" : "text-rose-700"
+          }`}
+        >
+          {montant >= 0 ? "+" : ""}
+          {fmt(montant)} {tx.devise || "MUR"}
+        </p>
+        {onLink && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onLink}
+            className="h-7 text-xs"
+          >
+            <Link2 className="h-3.5 w-3.5 mr-1" />
+            Lier factures
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

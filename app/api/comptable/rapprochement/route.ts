@@ -1824,8 +1824,14 @@ export async function POST(request: Request) {
       // Classification manuelle sans facture (MRA, frais, associé, etc.)
       if (classification && !facture_id && !ecriture_id) {
         const { data: releve } = await supabase
-          .from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
+          .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id').eq('id', releve_id).single()
         if (!releve) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+        // Résoudre la devise du compte bancaire du relevé (fallback si tx.devise absent)
+        let releveDeviseMC = 'MUR'
+        if (releve.compte_bancaire_id) {
+          const { data: cb } = await supabase.from('comptes_bancaires').select('devise').eq('id', releve.compte_bancaire_id).maybeSingle()
+          if (cb?.devise) releveDeviseMC = (cb.devise as string).toUpperCase()
+        }
 
         const txIdx = parseInt(transaction_id.split('-').pop() || '0')
         const txs = [...(releve.transactions_json || [])]
@@ -1854,6 +1860,7 @@ export async function POST(request: Request) {
           fournisseur: '401',
           client: '411',
           compte_courant_associe: '455',
+          cca: '455',
           remboursement_associe: '108',
           avance_personnel: '425',
           charge_diverse: '658',
@@ -1861,7 +1868,7 @@ export async function POST(request: Request) {
           frais_bancaires: '627',
           salaire: '4210',
           salaire_bulk: '421',
-          virement_interne: '580',
+          virement_interne: '5800',
           remboursement_personnel: '108',
           loyer: '613',
           entretien: '615',
@@ -1878,6 +1885,7 @@ export async function POST(request: Request) {
         const compteCharge = CLASSE_COMPTES[classification] || '471'
         console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
 
+        const ratesMC = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 } as Record<string, number>))
         const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
         if (dossier) {
           const tx = txs[txIdx]
@@ -1885,16 +1893,15 @@ export async function POST(request: Request) {
           const isOut = (Number(tx.debit) || 0) > 0
           // Migration 171/172 — résoudre la devise de la tx + taux historique.
           const dateEcr = tx.date || new Date().toISOString().split('T')[0]
-          const deviseMC = (tx.devise || 'MUR').toUpperCase()
+          const deviseMC = (tx.devise || releveDeviseMC || 'MUR').toUpperCase()
           let historicalRateMC = 1
           let amountMurMC = txAmt
           if (deviseMC !== 'MUR') {
-            const mcOutcome = await resolveHistoricalRateSafe(supabase, dateEcr, deviseMC)
-            if (mcOutcome.rate != null) {
-              historicalRateMC = mcOutcome.rate
-              amountMurMC = Math.round(txAmt * historicalRateMC * 100) / 100
-            } else {
-              console.warn(`[lettrer_manuel] missing rate ${deviseMC}@${dateEcr} — debit_mur écrit en devise d'origine`)
+            const mcOutcome = await resolveHistoricalRateSafe(supabase, dateEcr, deviseMC, ratesMC)
+            historicalRateMC = mcOutcome.rate ?? (ratesMC[deviseMC] || 1)
+            amountMurMC = Math.round(txAmt * historicalRateMC * 100) / 100
+            if (!mcOutcome.rate) {
+              console.warn(`[lettrer_manuel] missing historical rate ${deviseMC}@${dateEcr} — using live fallback ${historicalRateMC}`)
             }
           }
           const freezeMC = bnqFreezeColumns(
@@ -1983,6 +1990,50 @@ export async function POST(request: Request) {
               }
             } catch (lettrageErr: any) {
               console.warn(`[lettrer_manuel/${classification}] lettrage croisé échoué (non-bloquant):`, lettrageErr?.message)
+            }
+          }
+
+          // ── CCA : mettre à jour comptes_courants_associes.solde ──
+          // Quand une tx bancaire est classée 'compte_courant_associe', les
+          // écritures 455/512 sont créées mais la table CCA n'est pas maj.
+          // On cherche le CCA correspondant (par tiers_detecte) et on met
+          // à jour le solde + on crée un mouvement (source traçable).
+          if (classification === 'compte_courant_associe') {
+            try {
+              const tiersName = (txs[txIdx]?.tiers_detecte || '').trim().toLowerCase()
+              const { data: ccaList } = await supabase
+                .from('comptes_courants_associes')
+                .select('id, nom, solde')
+                .eq('societe_id', societe_id)
+              const matchedCca = ccaList?.length === 1
+                ? ccaList[0]
+                : ccaList?.find((c: any) =>
+                    tiersName && (c.nom || '').toLowerCase().includes(tiersName.slice(0, 10))
+                  )
+              if (matchedCca) {
+                // isOut: company pays associate → reduce company liability (solde decreases)
+                // !isOut: associate pays company → increase liability (solde increases)
+                const delta = isOut ? -amountMurMC : amountMurMC
+                const newSolde = (Number(matchedCca.solde) || 0) + delta
+                await supabase.from('comptes_courants_associes')
+                  .update({ solde: Math.round(newSolde * 100) / 100 })
+                  .eq('id', matchedCca.id)
+                await supabase.from('mouvements_compte_courant').insert({
+                  compte_courant_id: matchedCca.id,
+                  societe_id,
+                  type: isOut ? 'remboursement' : 'avance',
+                  montant: Math.round(amountMurMC * 100) / 100,
+                  date_mouvement: dateEcr,
+                  description: `Rapprochement BNQ — ${txs[txIdx]?.libelle?.substring(0, 60) || ''}`,
+                  source_releve_id: releve_id,
+                  source_transaction_idx: txIdx,
+                })
+                console.log(`[lettrer_manuel/CCA] solde ${matchedCca.nom}: ${matchedCca.solde} → ${newSolde}`)
+              } else {
+                console.log(`[lettrer_manuel/CCA] aucun CCA trouvé pour societe=${societe_id} tiers="${tiersName}" — solde non mis à jour`)
+              }
+            } catch (ccaErr: any) {
+              console.warn('[lettrer_manuel/CCA] mise à jour CCA échouée (non-bloquant):', ccaErr?.message)
             }
           }
         }
@@ -3950,7 +4001,7 @@ export async function POST(request: Request) {
         frais_bancaires: '627',
         salaire: '4210',
         salaire_bulk: '421',
-        virement_interne: '580',
+        virement_interne: '5800',
         remboursement_personnel: '108',
         charge_sociale: '431',
         loyer: '613',
