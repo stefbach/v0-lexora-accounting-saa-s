@@ -17,30 +17,24 @@
 --   Libellé explicite indiquant la raison.
 -- ============================================================================
 
-INSERT INTO ecritures_comptables_v2
-  (societe_id, journal, date_ecriture, numero_compte, libelle, debit_mur, credit_mur, ref_folio)
-SELECT
-  societe_id,
-  'ACH',
-  MAX(date_ecriture),
-  '607',
-  CASE ref_folio
-    WHEN 'FAC-7e224fc3-8564-4c91-83af-0be1afcb4b0d'
-      THEN 'Régularisation charge sur-saisie — alignement sur paiement bancaire (Jean Daril Adriano)'
-    WHEN 'FAC-3799d2f5-c2db-4ec5-82fa-9cd9ac13316b'
-      THEN 'Régularisation arrondi conversion — alignement sur paiement bancaire (Mauritius Telecom)'
-  END,
-  0,
-  ROUND((SUM(debit_mur) - SUM(credit_mur))::numeric, 2),
-  ref_folio
-FROM ecritures_comptables_v2
+-- ============================================================================
+-- CORRECTIF (UPDATE direct — la contrainte unique
+-- ux_ecritures_v2_ref_folio empêche d'insérer 2 lignes 607 sur le même folio)
+-- ============================================================================
+
+UPDATE ecritures_comptables_v2
+SET debit_mur = ROUND((debit_mur - 1363.00)::numeric, 2),
+    libelle  = libelle || ' (régul. -1,363 alignement paiement banque)'
 WHERE journal = 'ACH'
-  AND ref_folio IN (
-    'FAC-7e224fc3-8564-4c91-83af-0be1afcb4b0d',
-    'FAC-3799d2f5-c2db-4ec5-82fa-9cd9ac13316b'
-  )
-GROUP BY societe_id, ref_folio
-HAVING SUM(debit_mur) - SUM(credit_mur) > 0.01;
+  AND ref_folio = 'FAC-7e224fc3-8564-4c91-83af-0be1afcb4b0d'
+  AND numero_compte = '607';
+
+UPDATE ecritures_comptables_v2
+SET debit_mur = ROUND((debit_mur - 0.45)::numeric, 2),
+    libelle  = libelle || ' (régul. -0.45 arrondi conversion)'
+WHERE journal = 'ACH'
+  AND ref_folio = 'FAC-3799d2f5-c2db-4ec5-82fa-9cd9ac13316b'
+  AND numero_compte = '607';
 
 -- ── VÉRIFICATION 1 : ACH doit être équilibré ────────────────────────────────
 SELECT
@@ -71,8 +65,14 @@ GROUP BY journal
 ORDER BY journal;
 -- Tous les desequilibre attendus = 0.00
 
--- ROLLBACK : DELETE FROM ecritures_comptables_v2
---             WHERE journal = 'ACH'
---               AND numero_compte = '607'
---               AND libelle ILIKE 'Régularisation %sur-saisie%'
---               OR libelle ILIKE 'Régularisation arrondi%';
+-- ROLLBACK :
+--   UPDATE ecritures_comptables_v2
+--   SET debit_mur = debit_mur + 1363.00
+--   WHERE journal = 'ACH'
+--     AND ref_folio = 'FAC-7e224fc3-8564-4c91-83af-0be1afcb4b0d'
+--     AND numero_compte = '607';
+--   UPDATE ecritures_comptables_v2
+--   SET debit_mur = debit_mur + 0.45
+--   WHERE journal = 'ACH'
+--     AND ref_folio = 'FAC-3799d2f5-c2db-4ec5-82fa-9cd9ac13316b'
+--     AND numero_compte = '607';
