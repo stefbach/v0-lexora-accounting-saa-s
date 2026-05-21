@@ -242,7 +242,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.generer_ecritures_paie(UUID) IS
-'Génère les écritures OD-PAIE pour un bulletin. Skip si source=import_excel ET une SAL agrégée existe déjà pour la même période (évite double compta sans perdre l''historique).';
+'Genere les ecritures OD-PAIE pour un bulletin. Skip si source=import_excel ET une SAL agregee existe deja pour la meme periode (evite double compta sans perdre historique).';
 
 -- ── ÉTAPE 2 : Régénérer pour les bulletins import_excel sans SAL ────────────
 DO $$
