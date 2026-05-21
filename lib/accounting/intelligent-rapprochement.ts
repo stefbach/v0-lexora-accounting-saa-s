@@ -149,7 +149,15 @@ export interface IntermediateMatch {
 export interface AutoClassification {
   transactionKey: string
   transaction: MatchingTransaction
-  type: 'transfert_interne' | 'frais_bancaires' | 'salaire_bulk' | 'salaire_individuel' | 'paiement_mra' | 'charges_sociales' | 'reversal_salaire'
+  type:
+    | 'transfert_interne'         // intercompte (même société, 2 banques) → 5800
+    | 'virement_inter_societe'    // inter-sociétés (groupe DDS↔OCC) → 451
+    | 'frais_bancaires'
+    | 'salaire_bulk'
+    | 'salaire_individuel'
+    | 'paiement_mra'
+    | 'charges_sociales'
+    | 'reversal_salaire'
   note: string
   ecritureId?: string
   confidence: number
@@ -807,6 +815,10 @@ export function autoClassify(
   context: {
     societeNames: string[]
     selfNames?: string[]
+    /** Noms des sociétés SŒURS du même groupe (DDS↔OCC). Si le tiers détecté
+     *  match une de ces sociétés → classifier en `virement_inter_societe`
+     *  (et non `transfert_interne`). */
+    sisterSocieteNames?: string[]
     bulletins?: Array<{ periode: string; salaire_net: number }>
     ecritures?: Array<{ id: string; compte: string; debit: number; credit: number; libelle: string }>
     aliasMap?: Map<string, string>
@@ -857,12 +869,39 @@ export function autoClassify(
     })()
 
     if (isInternalByPattern || isInternalByName || isInternalByAlias) {
-      console.log(`[autoClassify] INTERNE: tiers="${tiers}" lib="${lib.substring(0,40)}" pattern=${isInternalByPattern} name=${isInternalByName} alias=${isInternalByAlias} selfNames=[${selfNamesNorm.join(',')}]`)
+      console.log(`[autoClassify] INTERCOMPTE: tiers="${tiers}" lib="${lib.substring(0,40)}" pattern=${isInternalByPattern} name=${isInternalByName} alias=${isInternalByAlias} selfNames=[${selfNamesNorm.join(',')}]`)
       results.push({
         transactionKey: txKey(tx), transaction: tx,
         type: 'transfert_interne',
-        note: `Virement interne détecté${isInternalByAlias ? ' (alias)' : ''}`,
+        note: `Virement intercompte (même société) détecté${isInternalByAlias ? ' (alias)' : ''}`,
         confidence: 0.95,
+      })
+      matchedTxKeys.add(txKey(tx))
+      continue
+    }
+
+    // ── Virement inter-sociétés (groupe DDS↔OCC) ──
+    // Détection : le tiers ou le libellé match le nom d'une société SŒUR
+    // (autre société du même groupe). Compte 451 Comptes courants Groupe
+    // (IAS 24 related parties).
+    const sisterNamesRaw = context.sisterSocieteNames || []
+    const sisterNamesNorm = sisterNamesRaw
+      .map(n => n.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim())
+      .filter(n => n.length > 3)
+    const isInterSocieteByTiers = sisterNamesNorm.some(sn => isSelfMatchEngine(sn, tiersNorm))
+    const libNorm = lib.replace(/\b(ltd|limited|sarl|sa|co)\b\.?/gi, '').replace(/\s+/g, ' ').trim()
+    const isInterSocieteByLib = sisterNamesNorm.some(sn => {
+      const sw = sn.split(/\s+/).filter(w => w.length > 3)
+      return sw.length > 0 && sw.every(w => libNorm.includes(w))
+    })
+
+    if (isInterSocieteByTiers || isInterSocieteByLib) {
+      console.log(`[autoClassify] INTER-SOCIÉTÉS: tiers="${tiers}" lib="${lib.substring(0,40)}" sisters=[${sisterNamesNorm.join(',')}]`)
+      results.push({
+        transactionKey: txKey(tx), transaction: tx,
+        type: 'virement_inter_societe',
+        note: 'Virement inter-sociétés (groupe) détecté',
+        confidence: 0.92,
       })
       matchedTxKeys.add(txKey(tx))
       continue
@@ -1306,6 +1345,10 @@ export function runIntelligentRapprochement(
   context: {
     societeNames: string[]
     selfNames?: string[]
+    /** Noms des sociétés sœurs (même groupe). Permet de classifier les
+     *  virements inter-sociétés (DDS↔OCC) en `virement_inter_societe` au
+     *  lieu de `transfert_interne`. */
+    sisterSocieteNames?: string[]
     bulletins?: Array<{ periode: string; salaire_net: number }>
     ecritures?: Array<{ id: string; compte: string; debit: number; credit: number; libelle: string }>
     rates?: Record<string, number>
