@@ -158,6 +158,19 @@ export default function ClientRapprochementPage() {
   // Affect dialog : tx ciblée pour imputation manuelle
   const [affectTx, setAffectTx] = useState<BankTx | null>(null)
 
+  // Override de classification par tx (override de la proposition agent
+  // via Select inline dans SuggestionRow). Cf comptable/rapprochement/page.tsx.
+  const [classificationOverrides, setClassificationOverrides] = useState<
+    Map<string, { classification: string; compte: string }>
+  >(new Map())
+  const setOverride = useCallback((txId: string, classification: string, compte: string) => {
+    setClassificationOverrides((prev) => {
+      const next = new Map(prev)
+      next.set(txId, { classification, compte })
+      return next
+    })
+  }, [])
+
   const periodeDebut = modeToutes ? null : `${selectedAnnee}-${selectedMois}-01`
   const periodeFin = modeToutes
     ? null
@@ -602,8 +615,15 @@ export default function ClientRapprochementPage() {
         }
       } else if (tx.compte_comptable && tx.classification) {
         body.action = "lettrer_manuel"
-        body.classification = tx.classification
-        body.compte_charge = tx.compte_comptable
+        // Override manuel via le Select inline (cf state classificationOverrides)
+        const override = classificationOverrides.get(tx.id)
+        if (override) {
+          body.classification = override.classification
+          body.compte_charge = override.compte
+        } else {
+          body.classification = tx.classification
+          body.compte_charge = tx.compte_comptable
+        }
       } else {
         return { ok: false, error: t('acc.rap.suggestion_incomplete', locale) }
       }
@@ -620,7 +640,7 @@ export default function ClientRapprochementPage() {
         return { ok: false, error: e?.message || t('acc.rap.network_error', locale) }
       }
     },
-    [societeId, locale]
+    [societeId, locale, classificationOverrides]
   )
 
   const handleValidateOne = async (tx: BankTx) => {
@@ -1107,6 +1127,8 @@ export default function ClientRapprochementPage() {
                                 onReject={() => handleRejectOne(tx)}
                                 facturesById={facturesById}
                                 locale={locale}
+                                override={classificationOverrides.get(tx.id)}
+                                onReclassify={setOverride}
                               />
                             ))}
                           </div>
@@ -1265,6 +1287,25 @@ function SourceBadge({ source }: { source: string | null | undefined }) {
   )
 }
 
+const RECLASS_OPTIONS_CLIENT: Array<{ value: string; compte: string; label: string }> = [
+  { value: "fournisseur", compte: "401", label: "401 — Fournisseur" },
+  { value: "client", compte: "411", label: "411 — Client" },
+  { value: "salaire_bulk", compte: "4210", label: "4210 — Salaires nets" },
+  { value: "charges_sociales", compte: "4421", label: "4421 — PAYE / MRA" },
+  { value: "nsf_csg", compte: "4431", label: "4431 — NSF / CSG" },
+  { value: "tva", compte: "4471", label: "4471 — TVA" },
+  { value: "inter_societe", compte: "451", label: "451 — Comptes courants Groupe" },
+  { value: "compte_courant_associe", compte: "455", label: "455 — CCA (Associé)" },
+  { value: "virement_interne", compte: "5800", label: "5800 — Virement interne" },
+  { value: "frais_bancaires", compte: "6271", label: "6271 — Services bancaires" },
+  { value: "interets", compte: "6611", label: "6611 — Intérêts" },
+  { value: "loyer", compte: "613", label: "613 — Locations / Loyer" },
+  { value: "electricite", compte: "6061", label: "6061 — Électricité / Eau" },
+  { value: "telecom", compte: "626", label: "626 — Télécommunications" },
+  { value: "assurance", compte: "616", label: "616 — Assurances" },
+  { value: "autre", compte: "658", label: "658 — Charges diverses" },
+]
+
 function SuggestionRow({
   tx,
   type,
@@ -1274,6 +1315,8 @@ function SuggestionRow({
   onReject,
   facturesById,
   locale,
+  override,
+  onReclassify,
 }: {
   tx: BankTx
   type: "match" | "classification"
@@ -1283,6 +1326,8 @@ function SuggestionRow({
   onReject: () => void
   facturesById: Map<string, Facture>
   locale: Locale
+  override?: { classification: string; compte: string }
+  onReclassify?: (txId: string, classification: string, compte: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
@@ -1348,12 +1393,44 @@ function SuggestionRow({
               )}
             </p>
           ) : (
-            <p className="text-xs">
+            <p className="text-xs flex items-center gap-1.5 flex-wrap">
               <span className="text-muted-foreground">{t('acc.rap.pcm_arrow', locale)} </span>
-              <Badge variant="outline" className="font-mono text-[10px]">
-                {tx.compte_comptable || "?"}
-              </Badge>
-              <span className="text-muted-foreground"> ({tx.classification})</span>
+              {onReclassify ? (
+                <Select
+                  value={override?.classification ?? (tx.classification || "")}
+                  onValueChange={(v) => {
+                    const opt = RECLASS_OPTIONS_CLIENT.find((o) => o.value === v)
+                    if (opt) onReclassify(tx.id, opt.value, opt.compte)
+                  }}
+                >
+                  <SelectTrigger
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-6 px-2 py-0 text-[10px] font-mono w-auto inline-flex min-w-[200px]"
+                  >
+                    <SelectValue>
+                      <span className="font-mono">
+                        {override
+                          ? `${override.compte} (${override.classification}) ✏️`
+                          : `${tx.compte_comptable || "?"} (${tx.classification || "?"})`}
+                      </span>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RECLASS_OPTIONS_CLIENT.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono">
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <>
+                  <Badge variant="outline" className="font-mono text-[10px]">
+                    {tx.compte_comptable || "?"}
+                  </Badge>
+                  <span className="text-muted-foreground"> ({tx.classification})</span>
+                </>
+              )}
             </p>
           )}
           <div className="flex items-center gap-1.5 flex-wrap">
