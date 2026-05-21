@@ -359,7 +359,8 @@ export default function ClientRapprochementPage() {
   //   - frais_bancaires       : classification frais bancaires/agios/intérêts
   //   - salaires              : classification salaire bulk ou individuel
   //   - mra                   : paiement MRA / charges sociales
-  //   - virements_internes    : virement interne / transfert interne
+  //   - intercompte           : virement entre comptes d'une MÊME société → 5800
+  //   - inter_societes        : virement entre DEUX sociétés du groupe (DDS↔OCC) → 451
   //   - autres                : tout le reste (typiquement matches IA cross)
   function classifyBucket(
     tx: BankTx
@@ -369,13 +370,15 @@ export default function ClientRapprochementPage() {
     | "frais_bancaires"
     | "salaires"
     | "mra"
-    | "virements_internes"
+    | "intercompte"
+    | "inter_societes"
     | "autres" {
     const cls = (tx.classification || tx.classification_suggestion?.type || "").toLowerCase()
     if (cls === "frais_bancaires" || cls === "interets" || cls === "agios") return "frais_bancaires"
     if (cls === "salaire_bulk" || cls === "salaire_individuel" || cls === "reversal_salaire") return "salaires"
     if (cls === "paiement_mra" || cls === "charges_sociales") return "mra"
-    if (cls === "virement_interne" || cls === "transfert_interne") return "virements_internes"
+    if (cls === "inter_societe" || cls === "inter_societes") return "inter_societes"
+    if (cls === "virement_interne" || cls === "transfert_interne" || cls === "intercompte") return "intercompte"
     const fids =
       Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0
         ? tx.facture_ids
@@ -409,7 +412,8 @@ export default function ClientRapprochementPage() {
       frais_bancaires: [] as BankTx[],
       salaires: [] as BankTx[],
       mra: [] as BankTx[],
-      virements_internes: [] as BankTx[],
+      intercompte: [] as BankTx[],
+      inter_societes: [] as BankTx[],
       autres: [] as BankTx[],
     }
     for (const tx of all) {
@@ -462,14 +466,23 @@ export default function ClientRapprochementPage() {
         color: "border-purple-300 bg-purple-50",
         items: buckets.salaires,
       })
-    if (buckets.virements_internes.length)
+    if (buckets.intercompte.length)
       g.push({
-        key: "virements_internes",
-        title: t('acc.rap.vir_title', locale),
-        desc: t('acc.rap.vir_desc', locale),
+        key: "intercompte",
+        title: "Virements intercompte (même société)",
+        desc: "Transferts entre 2 comptes bancaires de la même société (ex DDS MCB → DDS SBM). Compte de transit 5800 — solde doit revenir à 0 après le pendant.",
         icon: "🔄",
         color: "border-blue-300 bg-blue-50",
-        items: buckets.virements_internes,
+        items: buckets.intercompte,
+      })
+    if (buckets.inter_societes.length)
+      g.push({
+        key: "inter_societes",
+        title: "Virements inter-sociétés (groupe DDS ↔ OCC)",
+        desc: "Transferts entre 2 sociétés du même groupe. Compte courant Groupe 451 (IAS 24 related parties). Pas de transit — créance/dette permanente.",
+        icon: "🤝",
+        color: "border-indigo-300 bg-indigo-50",
+        items: buckets.inter_societes,
       })
     if (buckets.autres.length)
       g.push({
@@ -1294,9 +1307,9 @@ const RECLASS_OPTIONS_CLIENT: Array<{ value: string; compte: string; label: stri
   { value: "charges_sociales", compte: "4421", label: "4421 — PAYE / MRA" },
   { value: "nsf_csg", compte: "4431", label: "4431 — NSF / CSG" },
   { value: "tva", compte: "4471", label: "4471 — TVA" },
-  { value: "inter_societe", compte: "451", label: "451 — Comptes courants Groupe" },
-  { value: "compte_courant_associe", compte: "455", label: "455 — CCA (Associé)" },
-  { value: "virement_interne", compte: "5800", label: "5800 — Virement interne" },
+  { value: "inter_societe", compte: "451", label: "451 — Inter-sociétés (DDS ↔ OCC, groupe)" },
+  { value: "compte_courant_associe", compte: "455", label: "455 — CCA (Associé personne physique)" },
+  { value: "virement_interne", compte: "5800", label: "5800 — Intercompte (même société, 2 banques)" },
   { value: "frais_bancaires", compte: "6271", label: "6271 — Services bancaires" },
   { value: "interets", compte: "6611", label: "6611 — Intérêts" },
   { value: "loyer", compte: "613", label: "613 — Locations / Loyer" },
