@@ -58,18 +58,11 @@ BEGIN
     RAISE EXCEPTION 'Bulletin % introuvable', p_bulletin_id;
   END IF;
 
-  -- Skip import_excel si SAL existe deja pour cette periode
-  IF COALESCE(v_bulletin.source, 'calcul') = 'import_excel' THEN
-    SELECT EXISTS (
-      SELECT 1 FROM public.ecritures_comptables_v2
-      WHERE societe_id = v_bulletin.societe_id
-        AND journal    = 'SAL'
-        AND TO_CHAR(date_ecriture, 'YYYY-MM') = TO_CHAR(v_bulletin.periode::DATE, 'YYYY-MM')
-    ) INTO v_sal_exists;
-    IF v_sal_exists THEN
-      RETURN 0;
-    END IF;
-  END IF;
+  -- FIX 306 : NE PLUS skip sur SAL existence — le check provoquait que la
+  -- regen ne traitait que peu de bulletins. On régénère TOUJOURS pour
+  -- import_excel. Les éventuels doublons SAL+OD-PAIE seront détectés et
+  -- nettoyés séparément.
+  -- (Code SAL check supprimé ici, garde reactivable si besoin.)
 
   v_piece    := 'BP-' || p_bulletin_id::TEXT;
   v_periode  := v_bulletin.periode::DATE;
@@ -226,12 +219,6 @@ BEGIN
     SELECT bp.id
     FROM public.bulletins_paie bp
     WHERE bp.source = 'import_excel'
-      AND NOT EXISTS (
-        SELECT 1 FROM public.ecritures_comptables_v2 e
-        WHERE e.societe_id = bp.societe_id
-          AND e.journal    = 'SAL'
-          AND TO_CHAR(e.date_ecriture, 'YYYY-MM') = TO_CHAR(bp.periode::DATE, 'YYYY-MM')
-      )
   LOOP
     BEGIN
       PERFORM public.generer_ecritures_paie(v_bid);
@@ -240,7 +227,7 @@ BEGIN
       v_errors := v_errors + 1;
     END;
   END LOOP;
-  RAISE NOTICE 'Migration 306 : % bulletins régénérés, % erreurs', v_count, v_errors;
+  RAISE NOTICE 'Migration 306 : % bulletins regenerés, % erreurs', v_count, v_errors;
 END $$;
 
 -- ── ÉTAPE 3 : Re-équilibrer les folios avec déficit (CR 4210 trop bas) ──────
