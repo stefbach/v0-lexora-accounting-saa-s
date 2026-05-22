@@ -94,6 +94,7 @@ WHERE e.id NOT IN (SELECT id FROM entrees_appariees);
 
 -- ── 3. MATCHER ORPHELINES AVEC VIREMENTS RÉELS ─────────────────────────────
 -- Critères : même societe_id, date proche, montant approx, devises différentes
+-- (le JOIN garantit déjà o.devise <> rv.devise)
 CREATE TEMP TABLE temp_verified_pairs AS
 SELECT
   o.id AS orpheline_id,
@@ -105,16 +106,14 @@ SELECT
   rv.releve_id,
   rv.tx_date,
   rv.tx_montant,
-  rv.devise AS virement_devise,
-  CASE WHEN o.devise <> rv.devise THEN TRUE ELSE FALSE END AS devises_differentes
+  rv.devise AS virement_devise
 FROM temp_remaining_orphelines o
 JOIN temp_real_intercompte_virements rv ON (
   o.societe_id = rv.societe_id
   AND ABS(o.date_ecriture - rv.tx_date) <= 1
   AND ABS(o.montant - rv.tx_montant) < 1
   AND o.devise <> rv.devise
-)
-WHERE devises_differentes = TRUE;
+);
 
 -- ── 4. AUDIT : quelles orphelines sont vérifiées ? ──────────────────────────
 SELECT
