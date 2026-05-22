@@ -46,8 +46,17 @@ export async function launchBrowser(opts: LaunchOptions = {}): Promise<BrowserSe
 
   const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME
   if (isServerless) {
-    const sparticuz = await import('@sparticuz/chromium')
-    const chromiumModule = (sparticuz.default || sparticuz) as typeof import('@sparticuz/chromium').default
+    // @sparticuz/chromium est publié en CJS et son typing n'expose pas de
+    // `.default`. Selon le mode d'interop ESM (ESM strict vs Node interop
+    // historique), `import` peut placer l'API sur `.default` ou directement
+    // sur le namespace. On gère les deux en castant via `unknown`.
+    type SparticuzChromium = {
+      args: string[]
+      executablePath: () => Promise<string>
+      headless?: boolean
+    }
+    const sparticuz = await import('@sparticuz/chromium') as unknown as SparticuzChromium & { default?: SparticuzChromium }
+    const chromiumModule: SparticuzChromium = sparticuz.default ?? sparticuz
     executablePath = await chromiumModule.executablePath()
     args = [...chromiumModule.args, ...args]
   }
