@@ -40,6 +40,9 @@ import {
   ArrowRight,
   Search,
   ListFilter,
+  KeyRound,
+  Mail,
+  Info,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -270,6 +273,13 @@ export default function ClientBanquePage() {
             </div>
           </div>
         </div>
+
+        {/* ── Panneau "3 chemins pour alimenter tes transactions" ──
+            Visible par défaut, dismissable via localStorage. Posé entre le
+            header et la zone de données pour que l'utilisateur sache tout
+            de suite quelles options s'offrent à lui — surtout que le
+            scraping auto nécessite des credentials qu'il pourrait ignorer. */}
+        <FeedTransactionsPanel locale={locale} />
 
         {!societeId ? (
           <Card>
@@ -812,6 +822,129 @@ function KpiCard({
       <CardContent className="p-3">
         <div className="text-xs text-muted-foreground">{label}</div>
         <div className="text-xl font-semibold mt-1">{value}</div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Panneau pédagogique : explique les 3 façons d'alimenter le compte bancaire
+ * dans Lexora. Affiché en haut de /client/banque pour que l'utilisateur
+ * voie immédiatement ses options — surtout que le scraping auto demande
+ * des credentials qu'il pourrait ne pas vouloir donner.
+ *
+ * Persistance : un toggle "Comprendre les options" (collapsé/déplié) est
+ * mémorisé en localStorage par utilisateur — pas par société, c'est une
+ * préférence d'affichage personnelle.
+ */
+function FeedTransactionsPanel({ locale }: { locale: Locale }) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('lexora_banque_panel_collapsed')
+      if (stored === '1') setCollapsed(true)
+    } catch { /* ignore */ }
+  }, [])
+
+  const toggle = () => {
+    setCollapsed(v => {
+      const next = !v
+      try { localStorage.setItem('lexora_banque_panel_collapsed', next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }
+
+  const isFr = locale === 'fr'
+
+  return (
+    <Card className="border-blue-200 bg-blue-50/30">
+      <CardContent className="p-4">
+        <button
+          type="button"
+          onClick={toggle}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Info className="h-4 w-4 text-blue-700" />
+            <span className="font-semibold text-blue-900 text-sm">
+              {isFr
+                ? 'Comment alimenter tes transactions bancaires dans Lexora ?'
+                : 'How to feed bank transactions into Lexora?'}
+            </span>
+          </div>
+          <span className="text-xs text-blue-700 underline">
+            {collapsed
+              ? (isFr ? 'Voir les options' : 'Show options')
+              : (isFr ? 'Masquer' : 'Hide')}
+          </span>
+        </button>
+
+        {!collapsed && (
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            {/* Option A : Upload manuel — toujours disponible */}
+            <div className="rounded-md border border-green-200 bg-white p-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <CheckCircle2 className="h-4 w-4 text-green-700" />
+                <span className="font-semibold text-sm text-green-900">
+                  {isFr ? 'A — Upload CSV / MT940' : 'A — CSV / MT940 upload'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-700 leading-relaxed">
+                {isFr
+                  ? 'Tu exportes le relevé depuis ton Internet Banking, tu le déposes ici (bouton Importer ↑). Lexora parse MCB, SBM, MauBank, formats MT940 standards. Aucun mot de passe à donner.'
+                  : 'Export the statement from your Internet Banking and drop it here (Import button ↑). Lexora parses MCB, SBM, MauBank, standard MT940. No password required.'}
+              </p>
+              <p className="text-[11px] text-green-700 mt-1.5 font-medium">
+                {isFr ? '✅ Fonctionne tout de suite' : '✅ Works right now'}
+              </p>
+            </div>
+
+            {/* Option B : Scraping auto — nécessite credentials */}
+            <div className="rounded-md border border-amber-200 bg-white p-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <KeyRound className="h-4 w-4 text-amber-700" />
+                <span className="font-semibold text-sm text-amber-900">
+                  {isFr ? 'B — Scraping nocturne auto' : 'B — Nightly auto scraping'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-700 leading-relaxed">
+                {isFr
+                  ? 'Lexora se connecte chaque nuit à 02:00 UTC et récupère solde + transactions. Tu donnes ton login + password Internet Banking (chiffrés AES-256-GCM). MCB activé, autres banques en attente.'
+                  : 'Lexora connects every night at 02:00 UTC to fetch balance + transactions. You provide your Internet Banking login + password (encrypted AES-256-GCM). MCB live, other banks pending.'}
+              </p>
+              <div className="mt-1.5 flex items-center justify-between">
+                <span className="text-[11px] text-amber-700 font-medium">
+                  {isFr ? '⚠ Nécessite credentials' : '⚠ Requires credentials'}
+                </span>
+                <Link
+                  href="/client/direction/bank-credentials"
+                  className="text-[11px] text-blue-700 underline hover:text-blue-900"
+                >
+                  {isFr ? 'Configurer →' : 'Configure →'}
+                </Link>
+              </div>
+            </div>
+
+            {/* Option C : Email forwarding — pas encore en place */}
+            <div className="rounded-md border border-gray-200 bg-white p-3 opacity-75">
+              <div className="flex items-center gap-2 mb-1.5">
+                <Mail className="h-4 w-4 text-gray-600" />
+                <span className="font-semibold text-sm text-gray-700">
+                  {isFr ? 'C — Forward email (à venir)' : 'C — Email forwarding (coming)'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                {isFr
+                  ? 'Tu configures un forward automatique des relevés que ta banque t\'envoie par email. Lexora reçoit, parse, injecte. Aucun mot de passe à donner.'
+                  : 'Configure an auto-forward of the statement emails your bank sends. Lexora receives, parses, injects. No password required.'}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-1.5 italic">
+                {isFr ? 'Roadmap — disponible bientôt' : 'Roadmap — coming soon'}
+              </p>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
