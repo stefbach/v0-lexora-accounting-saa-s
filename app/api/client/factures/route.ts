@@ -232,11 +232,24 @@ export async function POST(request: Request) {
       insertData.facture_reference_id = facture_reference_id
     }
 
-    const { data, error } = await supabase
-      .from('factures')
-      .insert(insertData)
-      .select()
-      .single()
+    // Insert robuste : si une colonne récente (ex: template_id mig 286)
+    // manque dans la DB de la cible, on retire le champ fautif et on
+    // retente plutôt que de faire échouer toute la création de facture.
+    let data, error
+    const tryInsert = async (payload: typeof insertData) =>
+      supabase.from('factures').insert(payload).select().single()
+    ;({ data, error } = await tryInsert(insertData))
+    if (error) {
+      const code = (error as { code?: string }).code
+      const msg = error.message || ''
+      const isSchemaError = code === '42703' || /column.*(not exist|schema cache)/i.test(msg)
+      const missingCol = msg.match(/'([a-zA-Z_]+)'/)?.[1]
+      if (isSchemaError && missingCol && missingCol in insertData) {
+        console.warn(`[factures POST] colonne "${missingCol}" manquante en DB, retrait et retry. Lance la migration correspondante.`)
+        delete (insertData as Record<string, unknown>)[missingCol]
+        ;({ data, error } = await tryInsert(insertData))
+      }
+    }
 
     if (error) throw error
 
