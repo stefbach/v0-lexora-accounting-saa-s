@@ -147,18 +147,13 @@ ORDER BY classe, numero_compte;
 -- ──────────────────────────────────────────────────────────────────────────
 
 SELECT '=== AUDIT 7. PROPOSITION RECLASSEMENT ===' AS section,
-  '1. Créer compte 455 (Compte courant associé) avec solde basé sur:' AS action,
-  '   - Retraits associé détectés dans virements bancaires' AS detail1,
-  '   - Solde = virements totaux de/vers ce compte' AS detail2
+  '1. Créer 455: Retraits associé (solde = virements détectés)' AS action
 UNION ALL
-SELECT '', '2. Créer comptes 4411/4412 (Dettes inter-sociétés) avec:', ''
+SELECT '', '2. Créer 4411/4412: DDS/OCC inter-company (virements réels)' AS action
 UNION ALL
-SELECT '', '   - DDS: affectations dues à OCC (4412)' AS detail1,
-  '   - OCC: créances sur DDS (4411)' AS detail2
+SELECT '', '3. Supprimer contrepartie artificielle 1101 (Mig 322)' AS action
 UNION ALL
-SELECT '', '3. Supprimer la contrepartie artificielle sur 1101 créée par Mig 322', ''
-UNION ALL
-SELECT '', '4. Rétablir balance globale = 0 avec double-entry correcte', '';
+SELECT '', '4. Rétablir balance = 0 avec double-entry correcte' AS action;
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- PHASE 5: CALCUL DES MONTANTS À RECLASSER
@@ -209,30 +204,28 @@ ORDER BY societe_nom;
 -- PHASE 6: ANALYSE DE L'IMPACT
 -- ──────────────────────────────────────────────────────────────────────────
 
-SELECT '=== AUDIT 9. IMPACT ESTIMÉ DU RECLASSEMENT ===' AS section,
-  'Si on reclasse les écritures:' AS impact,
-  '• Balance globale restera = 0 (double-entry)' AS impact1,
-  '• Comptes 512xxx alignés avec soldes bancaires réels' AS impact2,
-  '• Comptes inter-sociétés (4411/4412) montreront vraies dettes' AS impact3,
-  '• Compte associé (455) montrera vraies positions' AS impact4;
+SELECT '=== AUDIT 9. IMPACT ESTIMÉ ===' AS section,
+  '✓ Balance globale restera = 0 (double-entry)' AS impact
+UNION ALL
+SELECT '', '✓ Comptes 512xxx alignés avec soldes bancaires réels' AS impact
+UNION ALL
+SELECT '', '✓ Comptes inter-sociétés (4411/4412) montreront vraies dettes' AS impact
+UNION ALL
+SELECT '', '✓ Compte associé (455) montrera vraies positions' AS impact;
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- CONCLUSION & RECOMMANDATIONS
 -- ──────────────────────────────────────────────────────────────────────────
 
 SELECT '=== AUDIT 10. RECOMMANDATIONS ===' AS section,
-  '✅ OPTION A (RECOMMANDÉE): Reclasser via Mig 324' AS action,
-  '   Avantages: Structure comptable correcte, traçable, réversible' AS detail,
-  '' AS sep,
-  '❌ OPTION B (À ÉVITER): Créer plus de contreparties artificielles' AS action2,
-  '   Problème: Augmente la complexité sans résoudre le root cause' AS detail2
+  '✅ OPTION A (RECOMMANDÉE): Reclasser via Mig 324' AS action
 UNION ALL
-SELECT '', '', '', ''
+SELECT '', '   → Structure comptable correcte, traçable, réversible' AS action
 UNION ALL
-SELECT '', '📋 PROCHAINES ÉTAPES:', '', ''
+SELECT '', '❌ OPTION B (À ÉVITER): Créer contreparties artificielles' AS action
 UNION ALL
-SELECT '', '1. Valider cette analyse avec les données métier' AS action3,
-  '2. Créer Mig 324 pour reclasser (ou corriger Mig 322-323 avant exécution)' AS detail3,
-  '';
+SELECT '', '   → Augmente complexité sans résoudre root cause' AS action
+UNION ALL
+SELECT '', '📋 ACTION: Exécuter Mig 323 → 324 en séquence' AS action;
 
 COMMIT;
