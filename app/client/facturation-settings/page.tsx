@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -180,6 +181,13 @@ interface CompteBancaireBrief {
 export default function FacturationSettingsPage() {
   const locale = getLocale()
   const { societeId, societe, refresh } = useSocieteActive()
+  // Onglet actif : lu depuis ?tab= dans l'URL (le redirect depuis
+  // /client/facture-template arrive avec ?tab=modeles, idem depuis le
+  // menu latéral si on veut deep-link vers un tab précis).
+  const searchParams = useSearchParams()
+  const requestedTab = searchParams?.get('tab') || ''
+  const VALID_TABS = ['entreprise', 'clients', 'catalogue', 'modeles', 'mra']
+  const initialTab = VALID_TABS.includes(requestedTab) ? requestedTab : 'entreprise'
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS)
   const [persisting, setPersisting] = useState(false)
   const [persistError, setPersistError] = useState<string | null>(null)
@@ -527,7 +535,7 @@ export default function FacturationSettingsPage() {
         <div className="hidden">{/* header moved to shell */}
       </div>
 
-      <Tabs defaultValue="entreprise" className="space-y-4">
+      <Tabs defaultValue={initialTab} className="space-y-4">
         <TabsList className="grid grid-cols-5 w-full max-w-3xl">
           <TabsTrigger value="entreprise" className="flex items-center gap-1.5"><Building2 className="w-4 h-4" />{t('inv.fs.tab_company', locale)}</TabsTrigger>
           <TabsTrigger value="clients" className="flex items-center gap-1.5"><Users className="w-4 h-4" />{t('inv.fs.tab_clients', locale)}</TabsTrigger>
