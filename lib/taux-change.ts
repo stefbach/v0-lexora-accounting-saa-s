@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { fetchBomRates, toRateMap, BomFetchError } from './connectors/bom-fx'
 
 // Fallback rates (Bank of Mauritius reference) used when DB and API are unavailable
 // Couvre toutes les devises courantes à Maurice — compliance MRA
@@ -197,64 +198,97 @@ export async function getTauxForDates(
 }
 
 /**
- * Fetch live rates from ExchangeRate-API and store in DB.
- * Base currency is MUR — the API returns how many MUR per 1 unit of foreign currency.
- * API: https://v6.exchangerate-api.com/v6/{KEY}/latest/MUR
- * Étendu pour couvrir toutes les devises courantes à Maurice.
+ * Fetch live rates et stockage en DB.
+ *
+ * Stratégie en cascade :
+ *  1. **BOM (Bank of Mauritius)** — source officielle, requise par MRA pour
+ *     la valorisation fiscale (USD, EUR, GBP, JPY, AUD, CAD, CNY, INR).
+ *  2. **ExchangeRate-API** — couvre les devises non listées par BOM (ZAR,
+ *     AED, SGD, CHF, KES, MGA, etc.) et sert de fallback si BOM indisponible.
+ *  3. **FALLBACK_RATES** hardcodés — dernier recours si les deux sources échouent.
+ *
+ * Pour chaque devise, on enregistre `source = 'bom-mu' | 'exchangerate-api'`
+ * dans la table `taux_change` pour traçabilité (audit MRA, IFRS).
  */
 export async function fetchAndStoreRates(): Promise<{ success: boolean; rates: Record<string, number>; error?: string }> {
-  const apiKey = process.env.EXCHANGE_RATE_API_KEY
-  if (!apiKey) {
-    return { success: false, rates: FALLBACK_RATES, error: 'EXCHANGE_RATE_API_KEY not configured' }
-  }
+  const supabase = getSupabase()
+  const today = new Date().toISOString().split('T')[0]
+  const finalRates: Record<string, number> = { MUR: 1 }
+  const errors: string[] = []
 
+  // ── 1. Source officielle BOM (devises principales) ──
+  let bomDate = today
   try {
-    // Fetch rates with MUR as base
-    const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/MUR`, {
-      next: { revalidate: 0 },
-    })
-
-    if (!response.ok) {
-      return { success: false, rates: FALLBACK_RATES, error: `API returned ${response.status}` }
-    }
-
-    const data = await response.json()
-
-    if (data.result !== 'success' || !data.conversion_rates) {
-      return { success: false, rates: FALLBACK_RATES, error: data['error-type'] || 'Invalid API response' }
-    }
-
-    // The API returns: 1 MUR = X EUR, 1 MUR = X GBP, etc.
-    // We need the inverse: 1 EUR = Y MUR, 1 GBP = Z MUR
-    const apiRates = data.conversion_rates as Record<string, number>
-    const rates: Record<string, number> = { MUR: 1 }
-
-    for (const devise of CURRENCIES_TO_FETCH) {
-      if (apiRates[devise] && apiRates[devise] > 0) {
-        // Inverse: if 1 MUR = 0.0215 EUR, then 1 EUR = 1/0.0215 = 46.51 MUR
-        rates[devise] = Math.round((1 / apiRates[devise]) * 10000) / 10000
-      } else {
-        rates[devise] = FALLBACK_RATES[devise] || 1
-      }
-    }
-
-    // Store in database with today's date
-    const supabase = getSupabase()
-    const today = new Date().toISOString().split('T')[0]
-
-    for (const [devise, taux] of Object.entries(rates)) {
+    const bom = await fetchBomRates()
+    const bomMap = toRateMap(bom)
+    bomDate = bom.date
+    for (const [devise, taux] of Object.entries(bomMap)) {
       if (devise === 'MUR') continue
+      finalRates[devise] = taux
       await supabase
         .from('taux_change')
         .upsert(
-          { devise, taux, date_taux: today, source: 'exchangerate-api' },
-          { onConflict: 'devise,date_taux' }
+          { devise, taux, date_taux: bomDate, source: 'bom-mu' },
+          { onConflict: 'devise,date_taux' },
         )
     }
-
-    return { success: true, rates }
   } catch (e) {
-    return { success: false, rates: FALLBACK_RATES, error: e instanceof Error ? e.message : 'Fetch failed' }
+    const msg = e instanceof BomFetchError ? e.message : 'BOM injoignable'
+    errors.push(`BOM: ${msg}`)
+  }
+
+  // ── 2. ExchangeRate-API pour les devises restantes (ZAR, AED, SGD, etc.) ──
+  const apiKey = process.env.EXCHANGE_RATE_API_KEY
+  const missingFromBom = CURRENCIES_TO_FETCH.filter(d => !(d in finalRates))
+  if (missingFromBom.length > 0) {
+    if (!apiKey) {
+      errors.push('EXCHANGE_RATE_API_KEY not configured — devises ' + missingFromBom.join(',') + ' indisponibles')
+    } else {
+      try {
+        const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/latest/MUR`, {
+          next: { revalidate: 0 },
+        })
+        if (!response.ok) {
+          errors.push(`exchangerate-api HTTP ${response.status}`)
+        } else {
+          const data = await response.json()
+          if (data.result !== 'success' || !data.conversion_rates) {
+            errors.push(`exchangerate-api: ${data['error-type'] || 'invalid response'}`)
+          } else {
+            const apiRates = data.conversion_rates as Record<string, number>
+            for (const devise of missingFromBom) {
+              if (apiRates[devise] && apiRates[devise] > 0) {
+                // L'API renvoie 1 MUR = X devise → on inverse pour avoir 1 devise = Y MUR
+                const taux = Math.round((1 / apiRates[devise]) * 10000) / 10000
+                finalRates[devise] = taux
+                await supabase
+                  .from('taux_change')
+                  .upsert(
+                    { devise, taux, date_taux: today, source: 'exchangerate-api' },
+                    { onConflict: 'devise,date_taux' },
+                  )
+              }
+            }
+          }
+        }
+      } catch (e) {
+        errors.push(`exchangerate-api: ${e instanceof Error ? e.message : 'fetch failed'}`)
+      }
+    }
+  }
+
+  // ── 3. Fallback hardcodé pour ce qui manque encore ──
+  for (const devise of Object.keys(FALLBACK_RATES)) {
+    if (!(devise in finalRates)) finalRates[devise] = FALLBACK_RATES[devise]
+  }
+
+  // Le succès est défini comme : on a au moins eu BOM OU exchangerate-api.
+  // Si les deux ont échoué, on renvoie les fallbacks hardcodés en signalant.
+  const success = errors.length < 2
+  return {
+    success,
+    rates: finalRates,
+    error: errors.length > 0 ? errors.join(' | ') : undefined,
   }
 }
 

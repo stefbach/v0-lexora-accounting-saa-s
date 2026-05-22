@@ -12,14 +12,18 @@ import { getTauxChange, fetchAndStoreRates } from '@/lib/taux-change'
 // au cas où la page serait servie via Vercel Edge.
 export const revalidate = 3600 // 1h en secondes
 
-// GET — Return current exchange rates (from DB, or fetch from API if empty)
+// GET — Return current exchange rates (from DB, or fetch fresh from BOM /
+// ExchangeRate-API if the cache looks stale). BOM ne nécessite pas de clé,
+// donc on déclenche un refresh même sans EXCHANGE_RATE_API_KEY.
 export async function GET() {
   try {
     let rates = await getTauxChange()
 
-    // If rates are fallback (DB empty), try to fetch live from API
+    // Heuristique "rates fallback" : on détecte les taux hardcodés (== 46.50)
+    // pour décider si un fetch frais est nécessaire. BOM publie pas le
+    // week-end : si le DB-cache vient d'un jour ouvré récent, on garde.
     const isFallback = !rates.EUR || rates.EUR === 46.50
-    if (isFallback && process.env.EXCHANGE_RATE_API_KEY) {
+    if (isFallback) {
       const fresh = await fetchAndStoreRates()
       if (fresh.success) rates = fresh.rates
     }
