@@ -68,7 +68,9 @@ const styles = StyleSheet.create({
   notesTitle:  { fontSize: 8, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
   notesText:   { fontSize: 8, color: '#555' },
   bankInfo:    { marginTop: 12, padding: 10, borderWidth: 0.5, borderColor: '#ddd', borderRadius: 4 },
-  footer:      { position: 'absolute', bottom: 24, left: 48, right: 48, borderTopWidth: 0.5, borderTopColor: '#ccc', paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between' },
+  mentionsLegales:     { marginTop: 16, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: '#e5e5e5' },
+  mentionsLegalesText: { fontSize: 8, color: '#555', lineHeight: 1.4 },
+  footer:      { position: 'absolute', bottom: 24, left: 48, right: 48, borderTopWidth: 0.5, borderTopColor: '#ccc', paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' },
   footerText:  { fontSize: 7, color: '#aaa' },
 })
 
@@ -449,11 +451,23 @@ export async function GET(request: Request, { params }: Params) {
           )
         })(),
 
+        // Mentions légales : priorité au template IA actif, fallback société.
+        // Affiché juste au-dessus du footer mais en bloc séparé pour visibilité.
+        (() => {
+          const mention = (tpl?.mentions_legales || soc?.facture_mention_legale || '').trim()
+          if (!mention) return null
+          return React.createElement(View, { style: styles.mentionsLegales },
+            React.createElement(Text, { style: styles.mentionsLegalesText }, mention),
+          )
+        })(),
+
         // Footer
         React.createElement(View, { style: styles.footer },
           React.createElement(Text, { style: styles.footerText }, soc?.nom || ''),
           React.createElement(Text, { style: styles.footerText }, `N° ${facture.numero_facture || '—'} · ${fmtDate(facture.date_facture)}`),
           soc?.vat_number && React.createElement(Text, { style: styles.footerText }, `VAT : ${soc.vat_number}`),
+          // Texte libre footer société (mig 247). Affiché en plus petit.
+          soc?.facture_footer_text && React.createElement(Text, { style: styles.footerText }, soc.facture_footer_text),
         )
       )
     )

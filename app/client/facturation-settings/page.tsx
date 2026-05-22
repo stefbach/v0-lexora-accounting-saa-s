@@ -20,6 +20,7 @@ import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { LogoUploader } from "@/components/client/LogoUploader"
 import { inferSwiftFromIban, inferSwiftWithDiagnostic } from "@/lib/banque/iban-swift"
 import { t, getLocale, type Locale } from '@/lib/i18n'
+import { ACTIVE_TEMPLATE_LS_KEY, toAiTemplateId, parseAiTemplateId } from '@/lib/factures/active-template'
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -242,7 +243,7 @@ export default function FacturationSettingsPage() {
       if (c) setClients(JSON.parse(c))
       const cat = localStorage.getItem("lexora_invoice_catalogue")
       if (cat) setCatalogue(JSON.parse(cat))
-      const tplStored = localStorage.getItem("lexora_invoice_template")
+      const tplStored = localStorage.getItem(ACTIVE_TEMPLATE_LS_KEY)
       if (tplStored) setSelectedTemplate(tplStored)
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       if (tc) setTemplateColors(JSON.parse(tc))
@@ -259,6 +260,11 @@ export default function FacturationSettingsPage() {
     // DB > legacy localStorage. Si pas de société chargée encore, on
     // pose au moins le legacy pour que le user voie ses anciennes valeurs.
     setSettings(mapSocieteToSettings(societe, legacy))
+
+    // DB > localStorage pour le template actif : mig 287
+    // (societes.facture_template_id) prend le pas s'il est défini.
+    const dbTemplateId = (societe as { facture_template_id?: string | null } | null)?.facture_template_id
+    if (dbTemplateId) setSelectedTemplate(toAiTemplateId(dbTemplateId))
   }, [societe])
 
   // Charge les comptes bancaires de la société active (mig 010 + 043)
@@ -338,11 +344,17 @@ export default function FacturationSettingsPage() {
         body: JSON.stringify({ id, societe_id: societeId }),
       })
       if (res.ok) {
-        if (selectedTemplate === `ai-${id}`) setSelectedTemplate('standard')
+        if (selectedTemplate === toAiTemplateId(id)) setSelectedTemplate('standard')
         await loadAiTemplates()
+        return
       }
-    } catch {
-      // silencieux : l'utilisateur peut réessayer
+      // L'API peut échouer (template déjà supprimé, perte de session, etc.).
+      // On affiche dans la même bande d'erreur que l'upload pour rester
+      // discret — l'utilisateur peut réessayer ou recharger la page.
+      const data = await res.json().catch(() => ({}))
+      setAiUploadError(data?.error || 'Suppression échouée. Réessaie.')
+    } catch (e: unknown) {
+      setAiUploadError(e instanceof Error ? e.message : 'Erreur réseau pendant la suppression.')
     }
   }, [societeId, selectedTemplate, loadAiTemplates])
 
@@ -354,7 +366,7 @@ export default function FacturationSettingsPage() {
     localStorage.setItem("lexora_invoice_settings", JSON.stringify(settings))
     localStorage.setItem("lexora_invoice_clients", JSON.stringify(clients))
     localStorage.setItem("lexora_invoice_catalogue", JSON.stringify(catalogue))
-    localStorage.setItem("lexora_invoice_template", selectedTemplate)
+    localStorage.setItem(ACTIVE_TEMPLATE_LS_KEY, selectedTemplate)
     localStorage.setItem("lexora_invoice_template_colors", JSON.stringify(templateColors))
     localStorage.setItem("lexora_mra_settings", JSON.stringify({
       active: mraActive, ebs_id: mraEbsId, api_key: mraApiKey,
@@ -390,6 +402,9 @@ export default function FacturationSettingsPage() {
           facture_conditions_paiement:  settings.conditions_paiement,
           facture_footer_text:          settings.footer_text,
           facture_mention_legale:       settings.mention_legale,
+          // Mig 287 : persiste le template actif côté société. Pour les
+          // templates hardcoded (standard/professional/minimal), on stocke null.
+          facture_template_id:          parseAiTemplateId(selectedTemplate),
         }
         const res = await fetch(`/api/client/societes?id=${societeId}`, {
           method: "PATCH",
@@ -1121,7 +1136,7 @@ export default function FacturationSettingsPage() {
               </h3>
               <div className="grid grid-cols-3 gap-4">
                 {aiTemplates.map(tpl => {
-                  const tplId = `ai-${tpl.id}`
+                  const tplId = toAiTemplateId(tpl.id)
                   const isSelected = selectedTemplate === tplId
                   const primaire = tpl.couleur_primaire || '#0B0F2E'
                   const secondaire = tpl.couleur_secondaire || '#D4AF37'

@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { readActiveAiTemplateIdFromStorage } from "@/lib/factures/active-template"
 
 interface ChatMessage {
   role: "user" | "assistant"
@@ -134,13 +135,10 @@ export default function NouvelleFactureIAPage() {
     setInput("")
     setSending(true)
     setErrorMsg(null)
-    // Récupère l'ID du template actif depuis localStorage. Si l'utilisateur
-    // a sélectionné un template IA dans facturation-settings (préfixe "ai-"),
-    // on le transmet pour que ses consignes soient injectées dans le prompt.
-    const selectedTpl = typeof window !== 'undefined'
-      ? localStorage.getItem('lexora_invoice_template') || ''
-      : ''
-    const aiTemplateId = selectedTpl.startsWith('ai-') ? selectedTpl.slice(3) : null
+    // Template IA actif (le cas échéant) : ses consignes seront injectées
+    // dans le system prompt côté serveur. Source : localStorage (cache du
+    // choix utilisateur fait dans facturation-settings → tab Modèles).
+    const aiTemplateId = readActiveAiTemplateIdFromStorage()
 
     try {
       const r = await fetch(`/api/client/factures-ia/chat`, {
@@ -171,13 +169,9 @@ export default function NouvelleFactureIAPage() {
     if (!analyse?.parametres_extraits || !societeId || generating) return
     setGenerating(true)
     setErrorMsg(null)
-    // Récupère le template IA actif depuis localStorage pour persister le
-    // lien facture ↔ template (utilisé par le générateur PDF pour appliquer
-    // la couleur primaire et la position du logo).
-    const selectedTpl = typeof window !== 'undefined'
-      ? localStorage.getItem('lexora_invoice_template') || ''
-      : ''
-    const aiTemplateId = selectedTpl.startsWith('ai-') ? selectedTpl.slice(3) : null
+    // Persiste le lien facture → template (PDF render utilisera la couleur
+    // primaire et la position du logo extraits du template à la création).
+    const aiTemplateId = readActiveAiTemplateIdFromStorage()
     try {
       const r = await fetch(`/api/client/factures-ia/generer`, {
         method: "POST",
