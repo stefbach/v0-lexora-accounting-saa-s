@@ -29,9 +29,9 @@ export function classifyAccount(numeroCompte: string): AccountClass {
   // Items monétaires (trésorerie, créances, dettes)
   if (c.startsWith('5')) return 'monetary'                // Trésorerie classe 5
   if (c.startsWith('40') || c.startsWith('41') || c.startsWith('42')
-    || c.startsWith('43') || c.startsWith('44')) return 'monetary'
+    || c.startsWith('43') || c.startsWith('44') || c.startsWith('45')
+    || c.startsWith('46')) return 'monetary'              // Créances/dettes/comptes courants
   if (c.startsWith('16') || c.startsWith('17')) return 'monetary' // Emprunts
-  if (c.startsWith('46')) return 'monetary'               // Comptes courants associés
 
   // Capitaux propres (sauf 1078 lui-même)
   if (c.startsWith('1')) {

@@ -473,15 +473,18 @@ describe('Intercompany Reconciliation', () => {
 
     it('should validate numeric amounts', () => {
       const validAmounts = [0, 100.5, 999999.99, 0.01]
-      const invalidAmounts = ['abc', NaN, undefined]
+      const invalidAmounts = ['abc', undefined]
 
       for (const amount of validAmounts) {
-        expect(typeof amount === 'number').toBe(true)
+        expect(typeof amount === 'number' && !isNaN(amount)).toBe(true)
       }
 
       for (const amount of invalidAmounts) {
-        expect(typeof amount === 'number').toBe(false)
+        expect(typeof amount === 'number' && !isNaN(amount as any)).toBe(false)
       }
+
+      // NaN is a special case: typeof NaN === 'number', but isNaN(NaN) === true
+      expect(typeof NaN === 'number' && !isNaN(NaN)).toBe(false)
     })
 
     it('should validate account numbers (4411, 4412)', () => {
