@@ -39,9 +39,9 @@ ORDER BY solde_actuel DESC;
 -- PHASE 2: VÉRIFIER TRANSACTIONS ASSOCIÉES AU COMPTE À SUPPRIMER
 -- ──────────────────────────────────────────────────────────────────────────
 
-SELECT '=== AUDIT 2. TRANSACTIONS COMPTE À SUPPRIMER (026d6800) ===' AS section,
-  COUNT(*) AS nb_transactions,
-  COALESCE(COUNT(DISTINCT rre_id), 0) AS nb_releves
+SELECT '=== AUDIT 2. RELEVES COMPTE À SUPPRIMER (026d6800) ===' AS section,
+  COUNT(*) AS nb_releves,
+  COALESCE(SUM(CASE WHEN transactions_json IS NOT NULL THEN jsonb_array_length(transactions_json) ELSE 0 END), 0) AS nb_transactions
 FROM releves_bancaires
 WHERE compte_bancaire_id = '026d6800-373c-4975-bd83-1d5c1a15046f';
 
