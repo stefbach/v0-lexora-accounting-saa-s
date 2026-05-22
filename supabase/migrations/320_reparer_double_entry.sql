@@ -22,14 +22,14 @@ BEGIN;
 
 -- ── 1. IDENTIFIER LES REF_FOLIOS DÉSÉQUILIBRÉS ──────────────────────────
 -- Une transaction équilibrée a SUM(debit) = SUM(credit) pour son ref_folio
-CREATE TEMP TABLE temp_refs_deséquilibrées AS
+CREATE TEMP TABLE temp_unbalanced_refs AS
 SELECT
   ref_folio,
   societe_id,
   COUNT(*) AS nb_lignes,
   ROUND(SUM(debit_mur)::numeric, 2) AS total_debit,
   ROUND(SUM(credit_mur)::numeric, 2) AS total_credit,
-  ROUND((SUM(debit_mur) - SUM(credit_mur))::numeric, 2) AS deséquilibre
+  ROUND((SUM(debit_mur) - SUM(credit_mur))::numeric, 2) AS desequilibre
 FROM ecritures_comptables_v2
 WHERE ref_folio IS NOT NULL
 GROUP BY ref_folio, societe_id
@@ -37,9 +37,9 @@ HAVING ABS(SUM(debit_mur) - SUM(credit_mur)) > 0.01;
 
 SELECT
   '=== REF_FOLIOS DÉSÉQUILIBRÉS ===' AS section,
-  COUNT(*) AS nb_refs_deséquilibrés,
-  ROUND(SUM(ABS(deséquilibre))::numeric, 2) AS total_deséquilibre
-FROM temp_refs_deséquilibrées;
+  COUNT(*) AS nb_refs_desequilibres,
+  ROUND(SUM(ABS(desequilibre))::numeric, 2) AS total_desequilibre
+FROM temp_unbalanced_refs;
 
 -- ── 2. DÉTAIL DES TOP REF_FOLIOS DÉSÉQUILIBRÉS ─────────────────────────
 SELECT
@@ -49,9 +49,9 @@ SELECT
   nb_lignes,
   total_debit,
   total_credit,
-  deséquilibre
-FROM temp_refs_deséquilibrées
-ORDER BY ABS(deséquilibre) DESC
+  desequilibre
+FROM temp_unbalanced_refs
+ORDER BY ABS(desequilibre) DESC
 LIMIT 20;
 
 -- ── 3. DÉCISION : 2 OPTIONS ────────────────────────────────────────────
@@ -68,9 +68,9 @@ LIMIT 20;
 -- ── 4. SUPPRIMER LES LIGNES ORPHELINES (même ref_folio que les supprimés) ─
 DELETE FROM ecritures_comptables_v2 e
 WHERE EXISTS (
-  SELECT 1 FROM temp_refs_deséquilibrées trd
-  WHERE trd.ref_folio = e.ref_folio
-    AND trd.societe_id = e.societe_id
+  SELECT 1 FROM temp_unbalanced_refs tur
+  WHERE tur.ref_folio = e.ref_folio
+    AND tur.societe_id = e.societe_id
 );
 
 SELECT
