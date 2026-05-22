@@ -39,7 +39,7 @@ async function chargerContexte(
   const [societeRes, profileRes, contactsRes, catalogueRes, facturesRes, settingsRes] = await Promise.all([
     supabase
       .from('societes')
-      .select('id, nom, brn, vat_number, numero_tva_mra, adresse, devise_defaut, banque_iban, banque_swift, mra_fiscalisation_active')
+      .select('id, nom, brn, vat_number, numero_tva_mra, adresse, devise_defaut, banque_iban, banque_swift, mra_fiscalisation_active, logo_url')
       .eq('id', societe_id)
       .maybeSingle(),
     supabase

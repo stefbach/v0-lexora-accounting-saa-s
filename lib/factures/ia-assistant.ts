@@ -110,6 +110,7 @@ export interface ContexteFactureIA {
     banque_iban?: string
     banque_swift?: string
     mra_fiscalisation_active?: boolean
+    logo_url?: string
   }
   user: {
     full_name?: string
@@ -224,6 +225,7 @@ Tu aides l'utilisateur à créer rapidement une facture / devis / avoir / note d
 - TVA par défaut : ${ctx.tva_defaut ?? 15}%
 - Conditions paiement par défaut : ${ctx.conditions_paiement_defaut ?? 30} jours
 - IBAN : ${ctx.societe.banque_iban || 'non renseigné'} (SWIFT ${ctx.societe.banque_swift || 'non renseigné'})
+- Logo : ${ctx.societe.logo_url ? 'disponible (sera affiché en en-tête de la facture)' : 'non uploadé (l\'utilisateur peut l\'ajouter dans Facturation Settings → Identité)'}
 - Fiscalisation MRA EBS : ${ctx.societe.mra_fiscalisation_active ? 'ACTIVÉE' : 'désactivée'}
 
 ## Utilisateur connecté

@@ -1047,6 +1047,15 @@ export default function FacturationSettingsPage() {
               <p className="text-xs text-gray-600">
                 Uploade une ancienne facture (PDF, PNG, JPG, WebP, max 20 MB) et ajoute tes consignes pour que l'IA extraie un modèle réutilisable.
               </p>
+              {!settings.logo_url && (
+                <div className="text-xs text-[#A88925] bg-[#D4AF37]/10 px-3 py-2 rounded flex items-start gap-2">
+                  <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <span>
+                    Aucun logo société uploadé. Pour que le modèle reprenne ton logo en en-tête,
+                    ajoute-le d'abord dans l'onglet <span className="font-semibold">Identité</span>.
+                  </span>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Fichier facture</Label>
@@ -1136,9 +1145,14 @@ export default function FacturationSettingsPage() {
                         </button>
                         <Badge className="absolute top-2 left-2 bg-[#D4AF37] text-white text-[9px] px-1.5 py-0">IA</Badge>
                         <div className="border rounded-lg p-3 mb-3 bg-white min-h-[180px] mt-6">
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="w-10 h-10 rounded" style={{ backgroundColor: primaire }} />
-                            <div className="text-right">
+                          <div className={`flex items-start mb-3 ${tpl.logo_position === 'top-right' ? 'flex-row-reverse' : tpl.logo_position === 'top-center' ? 'flex-col items-center gap-1' : 'justify-between'}`}>
+                            {settings.logo_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={settings.logo_url} alt="logo" className="max-h-10 max-w-[80px] object-contain" />
+                            ) : (
+                              <div className="w-10 h-10 rounded" style={{ backgroundColor: primaire }} />
+                            )}
+                            <div className={tpl.logo_position === 'top-center' ? 'text-center' : 'text-right'}>
                               <div className="text-[10px] font-bold" style={{ color: primaire }}>FACTURE</div>
                               <div className="text-[8px] text-gray-400">{tpl.format_numero || 'INV-001'}</div>
                             </div>

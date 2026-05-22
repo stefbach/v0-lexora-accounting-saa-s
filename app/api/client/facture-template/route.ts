@@ -334,7 +334,7 @@ Retourne UNIQUEMENT un objet JSON valide (pas de texte avant ou après, pas de m
   "devise": "MUR|EUR|USD|GBP",
   "taux_tva": 15,
   "colonnes": ["description", "quantite", "prix_unitaire", "montant"],
-  "entete_html": "<div>...court template HTML <500 chars avec placeholders {{nom_societe}}, {{adresse}}, {{brn}}, {{tva_number}}, {{telephone}}, {{email}}...</div>",
+  "entete_html": "<div>...court template HTML <500 chars. DOIT inclure <img src=\\"{{logo_url}}\\" alt=\\"logo\\" /> à la position détectée si la facture a un logo, et placeholders {{nom_societe}}, {{adresse}}, {{brn}}, {{tva_number}}, {{telephone}}, {{email}}...</div>",
   "pied_page_html": "<div>...court <500 chars avec {{conditions_paiement}}, {{mentions_legales}}, {{coordonnees_bancaires}}</div>",
   "mentions_legales": "texte court <300 chars",
   "conditions_paiement": "ex: Net 30 jours",
@@ -353,4 +353,5 @@ CONTRAINTES STRICTES :
 - Pas de commentaires JS, pas de virgule finale, pas de markdown
 - entete_html et pied_page_html doivent rester COURTS (<500 chars chacun)
 - Utilise UNIQUEMENT des placeholders {{variable}}, pas de vraies données
+- Si la facture a un logo visible : inclus impérativement <img src="{{logo_url}}" ... /> dans entete_html à la position détectée (logo_position) et avec une largeur raisonnable (style="max-height:60px")
 - Si une info n'est pas détectable, utilise une valeur par défaut raisonnable (pas de null)`
