@@ -171,13 +171,20 @@ export default function NouvelleFactureIAPage() {
     if (!analyse?.parametres_extraits || !societeId || generating) return
     setGenerating(true)
     setErrorMsg(null)
+    // Récupère le template IA actif depuis localStorage pour persister le
+    // lien facture ↔ template (utilisé par le générateur PDF pour appliquer
+    // la couleur primaire et la position du logo).
+    const selectedTpl = typeof window !== 'undefined'
+      ? localStorage.getItem('lexora_invoice_template') || ''
+      : ''
+    const aiTemplateId = selectedTpl.startsWith('ai-') ? selectedTpl.slice(3) : null
     try {
       const r = await fetch(`/api/client/factures-ia/generer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           societe_id: societeId,
-          parametres: analyse.parametres_extraits,
+          parametres: { ...analyse.parametres_extraits, template_id: aiTemplateId },
         }),
       })
       const j = await r.json()
