@@ -61,14 +61,15 @@ JOIN temp_real_bank_virements_strict rbv ON (
 -- ── 3. AUDIT: Combien d'écritures sur 512xxx SANS match bancaire ? ──────
 SELECT
   '=== AUDIT ÉCRITURES 512xxx ===' AS section,
-  COUNT(*) FILTER (WHERE numero_compte IN ('512100', '512101')) AS nb_total_512,
-  COUNT(*) FILTER (WHERE numero_compte IN ('512100', '512101')
-                    AND id IN (SELECT id FROM temp_verified_512_entries)) AS nb_verifiees,
-  COUNT(*) FILTER (WHERE numero_compte IN ('512100', '512101')
-                    AND id NOT IN (SELECT id FROM temp_verified_512_entries)) AS nb_fausses,
-  ROUND(100.0 * COUNT(*) FILTER (WHERE numero_compte IN ('512100', '512101')
-                    AND id NOT IN (SELECT id FROM temp_verified_512_entries)) /
-    NULLIF(COUNT(*) FILTER (WHERE numero_compte IN ('512100', '512101')), 0), 2) AS pct_fausses;
+  COUNT(*) FILTER (WHERE e.numero_compte IN ('512100', '512101')) AS nb_total_512,
+  COUNT(*) FILTER (WHERE e.numero_compte IN ('512100', '512101')
+                    AND e.id IN (SELECT id FROM temp_verified_512_entries)) AS nb_verifiees,
+  COUNT(*) FILTER (WHERE e.numero_compte IN ('512100', '512101')
+                    AND e.id NOT IN (SELECT id FROM temp_verified_512_entries)) AS nb_fausses,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE e.numero_compte IN ('512100', '512101')
+                    AND e.id NOT IN (SELECT id FROM temp_verified_512_entries)) /
+    NULLIF(COUNT(*) FILTER (WHERE e.numero_compte IN ('512100', '512101')), 0), 2) AS pct_fausses
+FROM ecritures_comptables_v2 e;
 
 -- ── 4. DÉTAIL DES ÉCRITURES FAUSSES À SUPPRIMER ────────────────────────
 SELECT
