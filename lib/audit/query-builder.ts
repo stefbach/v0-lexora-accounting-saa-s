@@ -13,7 +13,7 @@
  * This ensures regulatory compliance with Big 4 auditor requirements.
  */
 
-import { PostgrestFilterBuilder, SupabaseClient } from '@supabase/supabase-js'
+import { SupabaseClient } from '@supabase/supabase-js'
 
 export interface AuditTrailEntry {
   id: string

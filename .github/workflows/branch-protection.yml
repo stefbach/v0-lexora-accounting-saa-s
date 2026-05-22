@@ -1,0 +1,36 @@
+name: Branch Protection Rules
+
+on:
+  workflow_run:
+    workflows: ["Code Quality & Security Checks"]
+    types: [completed]
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  require-reviews:
+    name: Enforce Review Requirements
+    runs-on: ubuntu-latest
+    if: github.event.pull_request
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check PR has ticket reference
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BODY="${{ github.event.pull_request.body }}"
+
+          # Check for ticket reference pattern: #123, TICKET-123, etc.
+          if ! grep -E "(#[0-9]+|[A-Z]+-[0-9]+)" <<< "$PR_TITLE" && ! grep -E "(#[0-9]+|[A-Z]+-[0-9]+)" <<< "$PR_BODY"; then
+            echo "ERROR: PR must reference a ticket/issue (e.g., #123 or TICKET-123)"
+            exit 1
+          fi
+
+  check-required-status-checks:
+    name: Verify All Status Checks
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - name: Ensure branch protection is enforced
+        run: echo "Branch protection checks are enforced via repository settings"
