@@ -25,6 +25,8 @@
  */
 import { getAdminClient } from '@/lib/supabase/admin'
 import { decryptSecret } from '@/lib/crypto/symmetric'
+import { launchBrowser } from './playwright-launcher'
+import { loginAndScrapeMcb } from './adapters/mcb'
 
 export type BankCode = 'MCB' | 'SBM' | 'ABC' | 'MAUBANK' | 'MYTMONEY' | 'AFRASIA' | 'BANKONE' | 'OTHER'
 
@@ -144,17 +146,30 @@ async function recordRun(args: {
 export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScrapeResult> {
   const t0 = Date.now()
   let result: BankScrapeResult
+  let session: Awaited<ReturnType<typeof launchBrowser>> | null = null
 
   try {
     const compte = await loadCompte(input.compte_bancaire_id)
-    await loadCredentials(input.compte_bancaire_id) // valide que tout est config
+    const credentials = await loadCredentials(input.compte_bancaire_id)
     const bankCode = detectBankCode(compte.banque)
 
-    // Stub : retourne manual_needed pour l'instant
-    result = {
-      status: 'manual_needed',
-      error: `Robot bancaire ${bankCode} pas encore activé (Playwright stub). Active-le en installant playwright-core + @sparticuz/chromium et en mappant les sélecteurs réels du site.`,
-      duration_ms: Date.now() - t0,
+    // Dispatch par banque. Pour l'instant seule MCB est implémentée ;
+    // les autres banques restent en manual_needed jusqu'à mapping de
+    // leurs sélecteurs respectifs.
+    if (bankCode === 'MCB') {
+      session = await launchBrowser({ defaultTimeout: 30000 })
+      const scraped = await loginAndScrapeMcb(
+        session.page,
+        credentials,
+        { numero_compte: compte.numero_compte, max_transactions: 30 },
+      )
+      result = { ...scraped, duration_ms: Date.now() - t0 }
+    } else {
+      result = {
+        status: 'manual_needed',
+        error: `Adapter ${bankCode} pas encore implémenté. Banques actives : MCB. Pour les autres, upload manuel du relevé via /client/comptes-bancaires.`,
+        duration_ms: Date.now() - t0,
+      }
     }
 
     await recordRun({
@@ -164,30 +179,10 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
       result,
     })
     return result
-
-    /*
-    // === Code Playwright (commenté tant que les packages ne sont pas installés) ===
-    //
-    // import chromium from '@sparticuz/chromium'
-    // import { chromium as playwright } from 'playwright-core'
-    //
-    // const browser = await playwright.launch({
-    //   args: chromium.args, defaultViewport: chromium.defaultViewport,
-    //   executablePath: await chromium.executablePath(), headless: chromium.headless,
-    // })
-    // const ctx = await browser.newContext()
-    // const page = await ctx.newPage()
-    //
-    // const adapter = ADAPTERS[bankCode]
-    // const scraped = await adapter(page, credentials)
-    // await browser.close()
-    //
-    // result = { ...scraped, duration_ms: Date.now() - t0 }
-    */
-  } catch (e: any) {
+  } catch (e) {
     result = {
       status: 'failed',
-      error: e.message,
+      error: e instanceof Error ? e.message : 'Erreur inconnue',
       duration_ms: Date.now() - t0,
     }
     await recordRun({
@@ -197,6 +192,8 @@ export async function scrapeBankAccount(input: BankScrapeInput): Promise<BankScr
       result,
     })
     return result
+  } finally {
+    if (session) await session.close()
   }
 }
 

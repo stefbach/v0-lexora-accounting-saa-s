@@ -35,6 +35,7 @@
  */
 import { getAdminClient } from '@/lib/supabase/admin'
 import { decryptSecret } from '@/lib/crypto/symmetric'
+import { launchBrowser, captureScreenshot } from '@/lib/banks/playwright-launcher'
 
 export type MraSubmitInput = {
   societe_id: string
@@ -51,13 +52,37 @@ export type MraSubmitResult = {
   error?: string
 }
 
+// URLs MRA — chaque type de déclaration a SON propre sous-domaine et
+// SON propre formulaire login (architecture historique du MRA).
+// À vérifier/corriger lors des premiers tests en sandbox.
 const MRA_URLS = {
-  login: 'https://eservices.mra.mu/login',
-  paye: 'https://eservices.mra.mu/paye/declarations/new',
-  csg: 'https://eservices.mra.mu/csg/declarations/new',
-  vat: 'https://eservices.mra.mu/vat/declarations/new',
-  tds: 'https://eservices.mra.mu/tds/declarations/new',
-  prgf: 'https://eservices.mra.mu/prgf/declarations/new',
+  // VAT a une URL dédiée bien établie
+  vat: {
+    login: 'https://eservices3.mra.mu/vatreturn/taxpayerlogin.jsp',
+    form: 'https://eservices3.mra.mu/vatreturn/',
+  },
+  // CIT via central login MRA
+  cit: {
+    login: 'https://eservices38.mra.mu/centralLogin/login',
+    form: 'https://eservices38.mra.mu/CIT/',
+  },
+  // PAYE, CSG, TDS, PRGF : URLs à valider — placeholders raisonnables
+  paye: {
+    login: 'https://eservices.mra.mu/centralLogin/login',
+    form: 'https://eservices.mra.mu/PAYE/declarations/new',
+  },
+  csg: {
+    login: 'https://eservices.mra.mu/centralLogin/login',
+    form: 'https://eservices.mra.mu/CSG/declarations/new',
+  },
+  tds: {
+    login: 'https://eservices.mra.mu/centralLogin/login',
+    form: 'https://eservices.mra.mu/TDS/declarations/new',
+  },
+  prgf: {
+    login: 'https://eservices.mra.mu/centralLogin/login',
+    form: 'https://eservices.mra.mu/PRGF/declarations/new',
+  },
 }
 
 async function loadCredentials(societe_id: string) {
@@ -89,72 +114,135 @@ async function updateSubmitStatus(societe_id: string, status: 'success' | 'faile
 }
 
 /**
- * Stub principal — à compléter avec Playwright quand le package sera installé.
- * Pour l'instant : retourne `manual_needed` → le caller envoie les fichiers
- * en PJ Telegram et l'admin soumet à la main sur eservices.mra.mu.
+ * Soumission MRA via Playwright headless.
+ *
+ * Étapes (génériques, à valider par type de déclaration) :
+ *   1. Login sur le portail MRA correspondant au `type` demandé
+ *   2. Détection CAPTCHA / OTP → si présent, retourne `manual_needed`
+ *      avec screenshot pour intervention humaine via Telegram
+ *   3. Navigation vers le formulaire de déclaration
+ *   4. Upload du fichier (CSV/XML déjà généré par Lexora côté server)
+ *   5. Soumission + capture accusé de réception
+ *   6. Update DB avec last_submit_status + screenshot stocké en audit log
+ *
+ * ⚠ SÉLECTEURS À VALIDER : les CSS ci-dessous sont des best-guess basés
+ * sur les patterns standards eGov Mauritius. Avant prod, valide chaque
+ * sélecteur avec scripts/discover-mra-selectors.mjs lancé en local.
  */
 export async function submitMraDeclaration(input: MraSubmitInput): Promise<MraSubmitResult> {
+  let creds
   try {
-    await loadCredentials(input.societe_id)
-  } catch (e: any) {
-    return { status: 'failed', message: e.message, error: e.message }
+    creds = await loadCredentials(input.societe_id)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Credentials introuvables'
+    return { status: 'failed', message: msg, error: msg }
   }
 
-  // ⚠️ Stub : la soumission auto est désactivée tant que Playwright n'est
-  // pas installé + les sélecteurs MRA réels mappés. On retourne donc
-  // toujours `manual_needed` pour que le bot envoie les fichiers à l'admin.
-  await updateSubmitStatus(
-    input.societe_id,
-    'manual_needed',
-    'Soumission auto MRA pas encore activée — fichiers envoyés en PJ Telegram pour soumission manuelle.',
-  )
-  return {
-    status: 'manual_needed',
-    message:
-      'Soumission auto MRA pas encore activée (Playwright stub). Les fichiers ont été envoyés en PJ Telegram, ' +
-      'soumets-les manuellement sur https://eservices.mra.mu (' + input.type.toUpperCase() + ', période ' + input.periode + ').',
+  const urls = MRA_URLS[input.type]
+  if (!urls) {
+    return { status: 'failed', message: `Type de déclaration inconnu : ${input.type}`, error: 'invalid_type' }
   }
 
-  /*
-  // === Code Playwright (commenté tant que les packages ne sont pas installés) ===
-  // Pour activer :
-  //   pnpm add playwright-core @sparticuz/chromium
-  //   import chromium from '@sparticuz/chromium'
-  //   import { chromium as playwright } from 'playwright-core'
-  //
-  //   const browser = await playwright.launch({
-  //     args: chromium.args, defaultViewport: chromium.defaultViewport,
-  //     executablePath: await chromium.executablePath(),
-  //     headless: chromium.headless,
-  //   })
-  //   const ctx = await browser.newContext()
-  //   const page = await ctx.newPage()
-  //
-  //   await page.goto(MRA_URLS.login, { waitUntil: 'networkidle' })
-  //   await page.fill('input[name="username"]', creds.username)
-  //   await page.fill('input[name="password"]', creds.password)
-  //   await page.click('button[type="submit"]')
-  //   await page.waitForNavigation({ waitUntil: 'networkidle' })
-  //
-  //   // Détection CAPTCHA / OTP → return manual_needed
-  //   if (await page.locator('text=/captcha|otp|verification/i').count() > 0) {
-  //     const screenshot = await page.screenshot({ encoding: 'base64' })
-  //     await browser.close()
-  //     await updateSubmitStatus(input.societe_id, 'manual_needed', '2FA/CAPTCHA détecté')
-  //     return { status: 'manual_needed', message: '2FA actif côté MRA', screenshot_b64: screenshot }
-  //   }
-  //
-  //   // Navigate to declaration form
-  //   await page.goto(MRA_URLS[input.type], { waitUntil: 'networkidle' })
-  //   // ... fill form depending on input.type ...
-  //   // ... upload file from input.files[0] ...
-  //   await page.click('button:has-text("Submit")')
-  //   await page.waitForLoadState('networkidle')
-  //
-  //   const ackRef = await page.locator('[data-ref="ack"]').textContent()
-  //   const screenshot = await page.screenshot({ encoding: 'base64' })
-  //   await browser.close()
-  //   await updateSubmitStatus(input.societe_id, 'success')
-  //   return { status: 'success', message: `Soumis. Réf MRA : ${ackRef}`, ack_ref: ackRef, screenshot_b64: screenshot }
-  */
+  let session: Awaited<ReturnType<typeof launchBrowser>> | null = null
+  try {
+    session = await launchBrowser({ defaultTimeout: 30000 })
+    const { page } = session
+
+    // ── 1. Login ──
+    await page.goto(urls.login, { waitUntil: 'domcontentloaded' })
+    await page.fill('input[name="username"], input[name="userId"], input[id="username"]', creds.username)
+    await page.fill('input[type="password"]', creds.password)
+    await page.click('button[type="submit"], input[type="submit"], button:has-text("Login")')
+
+    // ── 2. Attendre soit dashboard, soit CAPTCHA/OTP, soit erreur ──
+    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {})
+
+    const needsManual = await page
+      .locator(':text-matches("captcha|otp|verification|verify", "i")')
+      .count()
+      .then((c: number) => c > 0)
+      .catch(() => false)
+
+    if (needsManual) {
+      const screenshot = await captureScreenshot(page)
+      await updateSubmitStatus(input.societe_id, 'manual_needed', '2FA/CAPTCHA détecté')
+      return {
+        status: 'manual_needed',
+        message: 'MRA demande CAPTCHA ou OTP. Soumission manuelle requise via Telegram (fichiers joints).',
+        screenshot_b64: screenshot,
+      }
+    }
+
+    const loginError = await page
+      .locator(':text-matches("invalid|incorrect|wrong|failed", "i")')
+      .count()
+      .then((c: number) => c > 0)
+      .catch(() => false)
+
+    if (loginError) {
+      const screenshot = await captureScreenshot(page)
+      await updateSubmitStatus(input.societe_id, 'failed', 'Login MRA rejeté')
+      return {
+        status: 'failed',
+        message: 'MRA a rejeté les credentials',
+        error: 'login_rejected',
+        screenshot_b64: screenshot,
+      }
+    }
+
+    // ── 3. Navigation vers le formulaire ──
+    await page.goto(urls.form, { waitUntil: 'domcontentloaded' }).catch(() => {})
+
+    // ── 4. Upload du premier fichier de la liste ──
+    // (les déclarations MRA acceptent généralement 1 seul fichier CSV/XML)
+    if (input.files.length === 0) {
+      throw new Error('Aucun fichier fourni pour la déclaration MRA')
+    }
+    const file = input.files[0]
+    const fileInput = await page.waitForSelector('input[type="file"]', { timeout: 15000 }).catch(() => null)
+    if (!fileInput) {
+      const screenshot = await captureScreenshot(page)
+      await updateSubmitStatus(input.societe_id, 'manual_needed', 'Champ upload introuvable')
+      return {
+        status: 'manual_needed',
+        message: `Formulaire ${input.type.toUpperCase()} : champ d'upload introuvable. Soumission manuelle requise.`,
+        screenshot_b64: screenshot,
+      }
+    }
+    await fileInput.setInputFiles({
+      name: file.filename,
+      mimeType: file.filename.endsWith('.xml') ? 'application/xml' : 'text/csv',
+      buffer: Buffer.from(file.content),
+    })
+
+    // ── 5. Soumission ──
+    await page.click('button:has-text("Submit"), button:has-text("Soumettre"), input[value*="Submit" i]')
+    await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {})
+
+    // ── 6. Extraction de la référence d'accusé ──
+    const ackRef = await page
+      .locator('[data-ref="ack"], .ack-ref, :text-matches("Reference|Réf", "i")')
+      .first()
+      .textContent()
+      .catch(() => null)
+
+    const screenshot = await captureScreenshot(page)
+    await updateSubmitStatus(input.societe_id, 'success')
+    return {
+      status: 'success',
+      message: ackRef ? `Soumis. Réf MRA : ${ackRef.trim()}` : 'Soumis (référence non détectée)',
+      ack_ref: ackRef?.trim() || undefined,
+      screenshot_b64: screenshot,
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Erreur soumission MRA inconnue'
+    await updateSubmitStatus(input.societe_id, 'failed', msg)
+    let screenshot_b64: string | undefined
+    if (session) {
+      try { screenshot_b64 = await captureScreenshot(session.page) } catch { /* ignore */ }
+    }
+    return { status: 'failed', message: msg, error: msg, screenshot_b64 }
+  } finally {
+    if (session) await session.close()
+  }
 }
