@@ -292,7 +292,7 @@ async function extractAgingAnalysis() {
   const filename = 'AGING_ANALYSIS.xlsx'
   const filepath = path.join(exportsDir, filename)
 
-  XLSX.write(wb, { type: 'file', file: filepath })
+  XLSX.writeFile(wb, filepath)
 
   console.log(`✓ Aging analysis exported to: ${filepath}`)
   console.log(`  Total outstanding: ${totalCount} invoices / ${totalAmount.toFixed(2)} MUR`)

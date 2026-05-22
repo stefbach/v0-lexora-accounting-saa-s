@@ -107,7 +107,7 @@ export async function GET(request: Request) {
   // Check for SOD violations in the specified table
   if (checkViolations && tableName) {
     try {
-      let violations = []
+      let violations: Array<{ id: string; type: string; [key: string]: any }> = []
 
       if (tableName === 'ecritures_comptables_v2') {
         const { data: violatingEntries } = await supabase

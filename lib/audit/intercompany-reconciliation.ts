@@ -225,12 +225,12 @@ export async function getIntercompanyTransactionMap(
     const amount = entry.debit_mur > 0 ? entry.debit_mur : entry.credit_mur
 
     // Get settlement status from flux_interco if linked
-    const { data: fluxData } = await supabase
+    const fluxResult = await supabase
       .from('flux_interco')
       .select('reconcilie_avec_id, statut_reconciliation')
       .eq('document_id', entry.facture_id)
       .single()
-      .catch(() => ({ data: null }))
+    const fluxData = fluxResult.data
 
     transactions.push({
       id: entry.id,
@@ -400,14 +400,15 @@ export async function getSettlementHistory(
 
   for (const settlement of settlements || []) {
     // Try to find corresponding GL entry that indicates settlement
-    const { data: glEntry } = await supabase
+    const glResult = await supabase
       .from('ecritures_comptables_v2')
       .select('reference_document')
       .or(
         `reference_document.eq.${settlement.id},reference_document.ilike.%${settlement.id}%`
       )
       .single()
-      .catch(() => ({ data: null }))
+
+    const glEntry = glResult.data
 
     settlementRecords.push({
       settlement_id: settlement.id,
@@ -465,8 +466,10 @@ export async function getRelatedPartyDisclosure(
   let partnerGuaranteesTotal = 0
 
   for (const flux of fluxData || []) {
-    const soemettrice = (flux.societe_emettrice as { nom: string }).nom
-    const sreceptrice = (flux.societe_receptrice as { nom: string }).nom
+    const emettrice = (flux as any).societe_emettrice
+    const receptrice = (flux as any).societe_receptrice
+    const soemettrice = Array.isArray(emettrice) ? emettrice[0]?.nom : emettrice?.nom || 'Unknown'
+    const sreceptrice = Array.isArray(receptrice) ? receptrice[0]?.nom : receptrice?.nom || 'Unknown'
 
     let typeEnum: RelatedPartyTransaction['type'] = 'transfer'
     if (flux.type_flux === 'pret') typeEnum = 'loan'

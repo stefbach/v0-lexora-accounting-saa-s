@@ -224,7 +224,7 @@ async function extractGLTraceability() {
       [header('Date'), t.invoiceDate],
       [header('Total Amount'), cell(t.invoiceAmount, FMT_MUR)],
       [],
-      [header('GL Entries Linked'), header('Count: ') + t.ecritures.length],
+      [header('GL Entries Linked'), header('Count: ' + t.ecritures.length)],
       [],
       [header('Date'), header('Journal'), header('Account'), header('Debit'), header('Credit'), header('Reference'), header('Created')],
     ]
@@ -282,7 +282,7 @@ async function extractGLTraceability() {
   const filename = 'INVOICE_GL_TRACEABILITY_50_SAMPLE.xlsx'
   const filepath = path.join(exportsDir, filename)
 
-  XLSX.write(wb, { type: 'file', file: filepath })
+  XLSX.writeFile(wb, filepath)
 
   console.log(`✓ GL Traceability report exported to: ${filepath}`)
   console.log(`  Sample size: ${traces.length} invoices`)
