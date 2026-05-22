@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   const admin = getAdminClient()
   const { data } = await admin
     .from('societe_mra_credentials')
-    .select('mra_username, mra_password_enc, mra_tan_enc, notes, active, last_submitted_at, last_submit_status, last_submit_error, updated_at')
+    .select('mra_username, mra_password_enc, mra_tan_enc, mra_api_key_enc, notes, active, last_submitted_at, last_submit_status, last_submit_error, updated_at')
     .eq('societe_id', societeId)
     .maybeSingle()
   return NextResponse.json({
@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
     mra_username_masked: maskSecret(data?.mra_username),
     has_password: !!data?.mra_password_enc,
     has_tan: !!data?.mra_tan_enc,
+    has_api_key: !!data?.mra_api_key_enc,
     notes: data?.notes || null,
     active: data?.active ?? true,
     last_submitted_at: data?.last_submitted_at,
@@ -75,6 +76,9 @@ export async function PUT(req: NextRequest) {
     }
     if (typeof body.mra_tan === 'string') {
       updates.mra_tan_enc = body.mra_tan ? encryptSecret(body.mra_tan) : null
+    }
+    if (typeof body.mra_api_key === 'string') {
+      updates.mra_api_key_enc = body.mra_api_key ? encryptSecret(body.mra_api_key) : null
     }
   } catch (e: any) {
     return NextResponse.json({ error: `Chiffrement impossible : ${e.message}. Configure CRYPT_KEY côté serveur.` }, { status: 500 })
