@@ -150,6 +150,18 @@ export interface ContexteFactureIA {
   prochain_numero?: { facture?: string; devis?: string; avoir?: string; note_debit?: string }
   tva_defaut?: number
   conditions_paiement_defaut?: number
+  // Template IA actif (issu d'un upload utilisateur via facturation-settings).
+  // Si présent, ses consignes sont injectées dans le system prompt et prennent
+  // le dessus sur les défauts (TVA, conditions, devise, mentions).
+  template_actif?: {
+    nom?: string
+    devise_defaut?: string
+    tva_defaut?: number
+    conditions_paiement?: string
+    mentions_legales?: string
+    format_numero?: string
+    consignes_ia?: string
+  }
 }
 
 let _anthropic: Anthropic | null = null
@@ -189,7 +201,15 @@ function buildSystemPrompt(ctx: ContexteFactureIA): string {
     ? `\n- Facture : ${ctx.prochain_numero.facture || 'auto'}\n- Devis : ${ctx.prochain_numero.devis || 'auto'}\n- Avoir : ${ctx.prochain_numero.avoir || 'auto'}\n- Note de débit : ${ctx.prochain_numero.note_debit || 'auto'}`
     : ''
 
+  // Bloc dédié aux consignes du template IA actif. Placé en tête du prompt
+  // pour que Claude le voie comme contrainte de premier ordre (couleurs,
+  // mentions, format de numéro, conditions de paiement, etc. prévalent).
+  const templateBlock = ctx.template_actif
+    ? `\n## Modèle actif : ${ctx.template_actif.nom || 'sans nom'}\nCe modèle a été créé à partir d'une facture uploadée par l'utilisateur. Tu DOIS respecter ses paramètres :\n${ctx.template_actif.devise_defaut ? `- Devise par défaut : ${ctx.template_actif.devise_defaut}\n` : ''}${ctx.template_actif.tva_defaut != null ? `- TVA par défaut : ${ctx.template_actif.tva_defaut}%\n` : ''}${ctx.template_actif.conditions_paiement ? `- Conditions de paiement : ${ctx.template_actif.conditions_paiement}\n` : ''}${ctx.template_actif.format_numero ? `- Format de numéro : ${ctx.template_actif.format_numero}\n` : ''}${ctx.template_actif.mentions_legales ? `- Mentions légales : ${ctx.template_actif.mentions_legales}\n` : ''}${ctx.template_actif.consignes_ia ? `\n**Consignes spécifiques de l'utilisateur (PRIORITAIRES)** :\n${ctx.template_actif.consignes_ia}\n` : ''}\n`
+    : ''
+
   return `Tu es **Lexora Factures IA**, un assistant expert en création de factures pour les professionnels mauriciens.
+${templateBlock}
 
 ## Ton rôle
 Tu aides l'utilisateur à créer rapidement une facture / devis / avoir / note de débit grâce au chat. Tu utilises les informations déjà connues de sa société, de ses clients et de son catalogue pour ne demander QUE l'essentiel.

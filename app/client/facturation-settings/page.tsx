@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Building2, Users, Package, Layout, Save, Plus, Pencil, Trash2, Check, X, Eye, Palette,
-  Shield, Wifi, WifiOff, Info, Loader2, Download
+  Shield, Wifi, WifiOff, Info, Loader2, Download, Upload, Sparkles, FileText
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -56,6 +56,29 @@ interface InvoiceTemplate {
   id: string; nom: string; description: string; style: {
     couleur_primaire: string; couleur_secondaire: string; police: string; layout: string
   }
+}
+// Template extrait par l'IA depuis un PDF/image uploadé par l'utilisateur,
+// persisté dans la table `facture_templates`. À ne pas confondre avec les
+// 3 templates hardcoded (standard / professional / minimal).
+interface AiFactureTemplate {
+  id: string
+  societe_id: string
+  nom: string
+  couleur_primaire: string | null
+  couleur_secondaire: string | null
+  logo_position: string | null
+  entete_html: string | null
+  pied_page_html: string | null
+  colonnes: string[] | null
+  mentions_legales: string | null
+  conditions_paiement: string | null
+  devise_defaut: string | null
+  tva_defaut: number | null
+  format_numero: string | null
+  style: Record<string, unknown> | null
+  source_fichier: string | null
+  consignes_ia: string | null
+  created_at: string
 }
 
 const DEFAULT_SETTINGS: CompanySettings = {
@@ -164,6 +187,14 @@ export default function FacturationSettingsPage() {
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState("standard")
   const [templateColors, setTemplateColors] = useState({ primaire: "#0B0F2E", secondaire: "#D4AF37" })
+  // Templates IA générés à partir de factures uploadées par l'utilisateur.
+  // Persistés dans la table `facture_templates` côté serveur.
+  const [aiTemplates, setAiTemplates] = useState<AiFactureTemplate[]>([])
+  const [aiTemplatesLoading, setAiTemplatesLoading] = useState(false)
+  const [aiUploadFile, setAiUploadFile] = useState<File | null>(null)
+  const [aiUploadConsignes, setAiUploadConsignes] = useState("")
+  const [aiUploading, setAiUploading] = useState(false)
+  const [aiUploadError, setAiUploadError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [clientDialog, setClientDialog] = useState(false)
   const [editingClient, setEditingClient] = useState<InvoiceClient | null>(null)
@@ -242,6 +273,78 @@ export default function FacturationSettingsPage() {
       .then((d) => setComptesBancaires(d?.comptes || []))
       .catch(() => setComptesBancaires([]))
   }, [societeId])
+
+  // Charge les templates de facture générés par IA pour la société active.
+  const loadAiTemplates = useCallback(async () => {
+    if (!societeId) {
+      setAiTemplates([])
+      return
+    }
+    setAiTemplatesLoading(true)
+    try {
+      const res = await fetch('/api/client/facture-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list', societe_id: societeId }),
+      })
+      const data = await res.json()
+      if (res.ok && Array.isArray(data.templates)) {
+        setAiTemplates(data.templates)
+      } else {
+        setAiTemplates([])
+      }
+    } catch {
+      setAiTemplates([])
+    } finally {
+      setAiTemplatesLoading(false)
+    }
+  }, [societeId])
+
+  useEffect(() => { loadAiTemplates() }, [loadAiTemplates])
+
+  // Upload d'une facture existante (PDF/image) + consignes utilisateur.
+  // L'analyse Claude prend 10-30s ; on désactive le bouton pendant.
+  const handleAiTemplateUpload = useCallback(async () => {
+    if (!aiUploadFile || !societeId) return
+    setAiUploading(true)
+    setAiUploadError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', aiUploadFile)
+      fd.append('societe_id', societeId)
+      if (aiUploadConsignes.trim()) fd.append('consignes', aiUploadConsignes.trim())
+      const res = await fetch('/api/client/facture-template', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok || !data.saved) {
+        throw new Error(data.error || 'Échec de l\'analyse')
+      }
+      setAiUploadFile(null)
+      setAiUploadConsignes("")
+      await loadAiTemplates()
+    } catch (e: unknown) {
+      setAiUploadError(e instanceof Error ? e.message : 'Erreur inconnue')
+    } finally {
+      setAiUploading(false)
+    }
+  }, [aiUploadFile, aiUploadConsignes, societeId, loadAiTemplates])
+
+  const handleAiTemplateDelete = useCallback(async (id: string) => {
+    if (!societeId) return
+    if (!confirm('Supprimer ce template ?')) return
+    try {
+      const res = await fetch('/api/client/facture-template', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, societe_id: societeId }),
+      })
+      if (res.ok) {
+        if (selectedTemplate === `ai-${id}`) setSelectedTemplate('standard')
+        await loadAiTemplates()
+      }
+    } catch {
+      // silencieux : l'utilisateur peut réessayer
+    }
+  }, [societeId, selectedTemplate, loadAiTemplates])
 
   const saveAll = useCallback(async () => {
     // 1. localStorage : conserve les paramètres pas encore migrés en DB
@@ -931,6 +1034,156 @@ export default function FacturationSettingsPage() {
         {/* ══════════ TAB: Modeles ══════════ */}
         <TabsContent value="modeles" className="space-y-4">
           <p className="text-sm text-gray-500">{t('inv.fs.templates_subtitle', locale)}</p>
+
+          {/* ── Upload d'une facture existante pour créer un template IA ── */}
+          <Card className="border-dashed border-2 border-[#D4AF37]/40 bg-gradient-to-br from-[#D4AF37]/5 to-transparent">
+            <CardHeader>
+              <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#D4AF37]" />
+                Créer un modèle à partir d'une facture existante
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-gray-600">
+                Uploade une ancienne facture (PDF, PNG, JPG, WebP, max 20 MB) et ajoute tes consignes pour que l'IA extraie un modèle réutilisable.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Fichier facture</Label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*"
+                      onChange={e => setAiUploadFile(e.target.files?.[0] || null)}
+                      disabled={aiUploading}
+                      className="text-sm"
+                    />
+                  </div>
+                  {aiUploadFile && (
+                    <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
+                      <FileText className="w-3 h-3" />
+                      {aiUploadFile.name} ({(aiUploadFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-xs">Consignes pour l'IA (optionnel)</Label>
+                  <Textarea
+                    value={aiUploadConsignes}
+                    onChange={e => setAiUploadConsignes(e.target.value)}
+                    placeholder={`Ex: "Garde le header bleu marine", "Mentionne notre licence FSC", "Conditions: paiement à 30 jours fin de mois"...`}
+                    rows={3}
+                    disabled={aiUploading}
+                    className="mt-1 text-sm"
+                  />
+                </div>
+              </div>
+              {aiUploadError && (
+                <div className="text-xs text-[#9F1239] bg-[#9F1239]/10 px-3 py-2 rounded">
+                  {aiUploadError}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleAiTemplateUpload}
+                  disabled={!aiUploadFile || !societeId || aiUploading}
+                  className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white"
+                >
+                  {aiUploading ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Analyse en cours…</>
+                  ) : (
+                    <><Upload className="w-4 h-4 mr-2" />Analyser et créer le modèle</>
+                  )}
+                </Button>
+                {aiUploading && (
+                  <span className="text-xs text-gray-500">L'IA met 10 à 30 secondes pour analyser la facture.</span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Templates IA déjà créés ── */}
+          {(aiTemplatesLoading || aiTemplates.length > 0) && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-[#0B0F2E] flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-[#D4AF37]" />
+                Mes modèles IA
+                {aiTemplatesLoading && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+              </h3>
+              <div className="grid grid-cols-3 gap-4">
+                {aiTemplates.map(tpl => {
+                  const tplId = `ai-${tpl.id}`
+                  const isSelected = selectedTemplate === tplId
+                  const primaire = tpl.couleur_primaire || '#0B0F2E'
+                  const secondaire = tpl.couleur_secondaire || '#D4AF37'
+                  return (
+                    <Card
+                      key={tpl.id}
+                      className={`cursor-pointer transition-all relative ${isSelected ? "ring-2 ring-[#D4AF37] shadow-lg" : "hover:shadow-md"}`}
+                      onClick={() => {
+                        setSelectedTemplate(tplId)
+                        setTemplateColors({ primaire, secondaire })
+                      }}
+                    >
+                      <CardContent className="p-4">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleAiTemplateDelete(tpl.id) }}
+                          title="Supprimer ce modèle"
+                          className="absolute top-2 right-2 p-1 rounded hover:bg-[#9F1239]/10 text-gray-400 hover:text-[#9F1239] transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <Badge className="absolute top-2 left-2 bg-[#D4AF37] text-white text-[9px] px-1.5 py-0">IA</Badge>
+                        <div className="border rounded-lg p-3 mb-3 bg-white min-h-[180px] mt-6">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="w-10 h-10 rounded" style={{ backgroundColor: primaire }} />
+                            <div className="text-right">
+                              <div className="text-[10px] font-bold" style={{ color: primaire }}>FACTURE</div>
+                              <div className="text-[8px] text-gray-400">{tpl.format_numero || 'INV-001'}</div>
+                            </div>
+                          </div>
+                          <div className="space-y-1 mb-3">
+                            <div className="h-1.5 rounded bg-gray-200 w-3/4" />
+                            <div className="h-1.5 rounded bg-gray-200 w-1/2" />
+                          </div>
+                          <div className="border-t pt-2 space-y-1">
+                            <div className="flex justify-between">
+                              <div className="h-1.5 rounded bg-gray-200 w-1/3" />
+                              <div className="h-1.5 rounded w-1/6" style={{ backgroundColor: secondaire }} />
+                            </div>
+                          </div>
+                          <div className="border-t mt-2 pt-2 flex justify-end">
+                            <div className="h-2 rounded w-1/4" style={{ backgroundColor: primaire }} />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <h3 className="font-semibold text-[#0B0F2E] text-sm truncate" title={tpl.nom}>{tpl.nom}</h3>
+                            {tpl.source_fichier && (
+                              <p className="text-[10px] text-gray-500 truncate" title={tpl.source_fichier}>
+                                {tpl.source_fichier}
+                              </p>
+                            )}
+                            {tpl.consignes_ia && (
+                              <p className="text-[10px] text-[#A88925] mt-1 line-clamp-2" title={tpl.consignes_ia}>
+                                <Info className="w-2.5 h-2.5 inline mr-0.5" />
+                                {tpl.consignes_ia}
+                              </p>
+                            )}
+                          </div>
+                          {isSelected && <Check className="w-5 h-5 text-[#D4AF37] flex-shrink-0" />}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Templates standards (hardcoded) ── */}
+          <h3 className="text-sm font-semibold text-[#0B0F2E] pt-2">Modèles standards</h3>
           <div className="grid grid-cols-3 gap-4">
             {getTemplates(locale).map(tpl => (
               <Card key={tpl.id} className={`cursor-pointer transition-all ${selectedTemplate === tpl.id ? "ring-2 ring-[#D4AF37] shadow-lg" : "hover:shadow-md"}`}

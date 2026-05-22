@@ -134,6 +134,14 @@ export default function NouvelleFactureIAPage() {
     setInput("")
     setSending(true)
     setErrorMsg(null)
+    // Récupère l'ID du template actif depuis localStorage. Si l'utilisateur
+    // a sélectionné un template IA dans facturation-settings (préfixe "ai-"),
+    // on le transmet pour que ses consignes soient injectées dans le prompt.
+    const selectedTpl = typeof window !== 'undefined'
+      ? localStorage.getItem('lexora_invoice_template') || ''
+      : ''
+    const aiTemplateId = selectedTpl.startsWith('ai-') ? selectedTpl.slice(3) : null
+
     try {
       const r = await fetch(`/api/client/factures-ia/chat`, {
         method: "POST",
@@ -142,6 +150,7 @@ export default function NouvelleFactureIAPage() {
           societe_id: societeId,
           historique: messages,
           message: userMsg.content,
+          template_id: aiTemplateId,
         }),
       })
       const j = await r.json()
