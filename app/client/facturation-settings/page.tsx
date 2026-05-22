@@ -21,7 +21,7 @@ import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { LogoUploader } from "@/components/client/LogoUploader"
 import { inferSwiftFromIban, inferSwiftWithDiagnostic } from "@/lib/banque/iban-swift"
 import { t, getLocale, type Locale } from '@/lib/i18n'
-import { ACTIVE_TEMPLATE_LS_KEY, toAiTemplateId, parseAiTemplateId } from '@/lib/factures/active-template'
+import { toAiTemplateId, parseAiTemplateId } from '@/lib/factures/active-template'
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -126,39 +126,48 @@ function buildMentionLegale(brn: string | null | undefined, vat: string | null |
 
 /**
  * Mappe la société DB (colonnes Supabase) → CompanySettings du form.
- * Privilégie les valeurs DB, fallback sur les valeurs déjà saisies en
- * localStorage pour ne rien perdre lors de la première migration.
+ *
+ * ⚠️ Tenant isolation : on n'utilise PLUS le legacy localStorage pour les
+ * champs spécifiques à la société (logo, identité, contact, banque,
+ * numérotation, mentions). localStorage est un store GLOBAL au navigateur,
+ * pas par société — utiliser son contenu en fallback faisait fuir les
+ * données d'une société dans la suivante quand l'utilisateur changeait
+ * de société active (bug observé : logo de Obesity Care Clinic affiché
+ * sur DDS).
+ *
+ * Le paramètre `legacy` est conservé pour usages futurs non-tenant
+ * (préférences UI, etc.) mais n'est plus lu ici.
  */
-function mapSocieteToSettings(societe: any, legacy: Partial<CompanySettings>): CompanySettings {
+function mapSocieteToSettings(societe: any, _legacy: Partial<CompanySettings>): CompanySettings {
   return {
-    nom:                 societe?.nom                          ?? legacy.nom                 ?? "",
-    brn:                 societe?.brn                          ?? legacy.brn                 ?? "",
-    vat_number:          societe?.numero_tva_mra               ?? legacy.vat_number          ?? "",
-    logo_url:            societe?.logo_url                     ?? legacy.logo_url            ?? "",
-    adresse:             societe?.adresse                      ?? legacy.adresse             ?? "",
-    telephone:           societe?.telephone                    ?? legacy.telephone           ?? "",
-    email:               societe?.email                        ?? legacy.email               ?? "",
-    website:             societe?.website                      ?? legacy.website             ?? "",
-    banque_nom:          societe?.bank_name                    ?? legacy.banque_nom          ?? "",
-    banque_compte:       societe?.bank_account_number          ?? legacy.banque_compte       ?? "",
-    banque_iban:         societe?.iban                         ?? legacy.banque_iban         ?? "",
-    banque_swift:        societe?.banque_swift                 ?? legacy.banque_swift        ?? "",
-    devise_defaut:       societe?.devise_principale            ?? legacy.devise_defaut       ?? "MUR",
-    prefixe_facture:     societe?.facture_prefixe              ?? legacy.prefixe_facture     ?? "INV-",
-    prochain_numero:     Number(societe?.facture_prochain_numero ?? legacy.prochain_numero ?? 1),
-    devis_prefixe:       societe?.devis_prefixe                 ?? legacy.devis_prefixe       ?? "DEV-",
-    devis_prochain_numero: Number(societe?.devis_prochain_numero ?? legacy.devis_prochain_numero ?? 1),
-    avoir_prefixe:       societe?.avoir_prefixe                 ?? legacy.avoir_prefixe       ?? "AV-",
-    avoir_prochain_numero: Number(societe?.avoir_prochain_numero ?? legacy.avoir_prochain_numero ?? 1),
-    note_debit_prefixe:  societe?.note_debit_prefixe            ?? legacy.note_debit_prefixe  ?? "ND-",
-    note_debit_prochain_numero: Number(societe?.note_debit_prochain_numero ?? legacy.note_debit_prochain_numero ?? 1),
-    conditions_paiement: Number(societe?.facture_conditions_paiement ?? legacy.conditions_paiement ?? 30),
-    footer_text:         societe?.facture_footer_text          ?? legacy.footer_text         ?? "",
+    nom:                 societe?.nom                          ?? "",
+    brn:                 societe?.brn                          ?? "",
+    vat_number:          societe?.numero_tva_mra               ?? "",
+    logo_url:            societe?.logo_url                     ?? "",
+    adresse:             societe?.adresse                      ?? "",
+    telephone:           societe?.telephone                    ?? "",
+    email:               societe?.email                        ?? "",
+    website:             societe?.website                      ?? "",
+    banque_nom:          societe?.bank_name                    ?? "",
+    banque_compte:       societe?.bank_account_number          ?? "",
+    banque_iban:         societe?.iban                         ?? "",
+    banque_swift:        societe?.banque_swift                 ?? "",
+    devise_defaut:       societe?.devise_principale            ?? "MUR",
+    prefixe_facture:     societe?.facture_prefixe              ?? "INV-",
+    prochain_numero:     Number(societe?.facture_prochain_numero ?? 1),
+    devis_prefixe:       societe?.devis_prefixe                 ?? "DEV-",
+    devis_prochain_numero: Number(societe?.devis_prochain_numero ?? 1),
+    avoir_prefixe:       societe?.avoir_prefixe                 ?? "AV-",
+    avoir_prochain_numero: Number(societe?.avoir_prochain_numero ?? 1),
+    note_debit_prefixe:  societe?.note_debit_prefixe            ?? "ND-",
+    note_debit_prochain_numero: Number(societe?.note_debit_prochain_numero ?? 1),
+    conditions_paiement: Number(societe?.facture_conditions_paiement ?? 30),
+    footer_text:         societe?.facture_footer_text          ?? "",
     // Auto-génère la mention légale depuis BRN/VAT si l'utilisateur n'a
-    // rien saisi (ni en DB, ni en localStorage). Si la valeur stockée
-    // ressemble au placeholder par défaut, on la régénère aussi.
+    // rien saisi en DB. Si la valeur stockée ressemble au placeholder
+    // par défaut, on la régénère aussi.
     mention_legale:      (() => {
-      const stored = societe?.facture_mention_legale ?? legacy.mention_legale ?? ""
+      const stored = societe?.facture_mention_legale ?? ""
       if (!stored || stored === "VAT Reg No: XXXXX | BRN: XXXXX") {
         return buildMentionLegale(societe?.brn, societe?.numero_tva_mra)
       }
@@ -238,21 +247,23 @@ export default function FacturationSettingsPage() {
   const [catTva, setCatTva] = useState(true)
   const [catCategorie, setCatCategorie] = useState("")
 
-  // Charge depuis la DB (société active) en priorité, fallback localStorage
-  // pour les utilisateurs legacy qui n'ont pas encore migré vers la mig 243.
-  // Le mapping est fait par mapSocieteToSettings → toutes les colonnes DB
-  // pertinentes (nom, BRN, adresse, banque, etc.) auto-remplissent le form.
+  // Charge les paramètres de la société active depuis la DB.
+  //
+  // Tenant isolation : on lit le localStorage UNIQUEMENT pour les
+  // préférences non-tenant (clients/catalogue legacy, couleurs UI, MRA).
+  // Les champs spécifiques à la société (logo, identité, banque, template
+  // actif) viennent EXCLUSIVEMENT de la société DB pour éviter la fuite
+  // de données entre sociétés via le store local du navigateur.
   useEffect(() => {
-    let legacy: Partial<CompanySettings> = {}
     try {
-      const s = localStorage.getItem("lexora_invoice_settings")
-      if (s) legacy = JSON.parse(s) as Partial<CompanySettings>
+      // ⚠ Ces deux entrées sont legacy, à l'échelle utilisateur (clients +
+      // catalogue de l'ancienne version mono-société). On les garde pour
+      // ne pas perdre les données pré-mig, mais elles ne touchent PAS aux
+      // settings tenant-specific.
       const c = localStorage.getItem("lexora_invoice_clients")
       if (c) setClients(JSON.parse(c))
       const cat = localStorage.getItem("lexora_invoice_catalogue")
       if (cat) setCatalogue(JSON.parse(cat))
-      const tplStored = localStorage.getItem(ACTIVE_TEMPLATE_LS_KEY)
-      if (tplStored) setSelectedTemplate(tplStored)
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       if (tc) setTemplateColors(JSON.parse(tc))
       const mra = localStorage.getItem("lexora_mra_settings")
@@ -265,14 +276,14 @@ export default function FacturationSettingsPage() {
         setMraApiUrl(m.api_url || "https://sandboxifp.mra.mu/api/v1")
       }
     } catch { /* ignore */ }
-    // DB > legacy localStorage. Si pas de société chargée encore, on
-    // pose au moins le legacy pour que le user voie ses anciennes valeurs.
-    setSettings(mapSocieteToSettings(societe, legacy))
+    setSettings(mapSocieteToSettings(societe, {}))
 
-    // DB > localStorage pour le template actif : mig 287
-    // (societes.facture_template_id) prend le pas s'il est défini.
+    // Template actif : DB-only par société. Si la société n'a pas de
+    // template IA défini en DB, on retombe sur 'standard' (NE PAS lire
+    // localStorage — il est partagé entre toutes les sociétés et fuirait
+    // le choix de la société précédente).
     const dbTemplateId = (societe as { facture_template_id?: string | null } | null)?.facture_template_id
-    if (dbTemplateId) setSelectedTemplate(toAiTemplateId(dbTemplateId))
+    setSelectedTemplate(dbTemplateId ? toAiTemplateId(dbTemplateId) : 'standard')
   }, [societe])
 
   // Charge les comptes bancaires de la société active (mig 010 + 043)
@@ -371,10 +382,12 @@ export default function FacturationSettingsPage() {
     //    (clients legacy, catalogue legacy, template choisi, MRA). Quand
     //    le composant catalogue / contacts DB sera la source unique, on
     //    pourra retirer ces lignes.
-    localStorage.setItem("lexora_invoice_settings", JSON.stringify(settings))
+    // Note : on n'écrit PLUS les settings société dans localStorage —
+    // c'est un store global au navigateur, non scopé par société, et ça
+    // faisait fuir le logo/identité d'une société dans la suivante. La
+    // DB (mig 243+, mig 287) est désormais la seule source de vérité.
     localStorage.setItem("lexora_invoice_clients", JSON.stringify(clients))
     localStorage.setItem("lexora_invoice_catalogue", JSON.stringify(catalogue))
-    localStorage.setItem(ACTIVE_TEMPLATE_LS_KEY, selectedTemplate)
     localStorage.setItem("lexora_invoice_template_colors", JSON.stringify(templateColors))
     localStorage.setItem("lexora_mra_settings", JSON.stringify({
       active: mraActive, ebs_id: mraEbsId, api_key: mraApiKey,
