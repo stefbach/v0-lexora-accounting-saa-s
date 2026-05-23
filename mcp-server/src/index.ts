@@ -6,15 +6,14 @@
  * natif. Read-only par défaut — pas d'écriture en compta sans approbation
  * humaine côté Lexora UI.
  *
- * AUTH : header `X-Internal-Token` + `X-Internal-User-Id` (cf.
- * lib/lexora-internal-auth.ts côté serveur Lexora). Le token est validé
- * contre `process.env.INTERNAL_API_TOKEN` côté Lexora.
+ * AUTH : header `X-Lexora-Api-Key` (mig 308 — user_api_keys).
+ * La clé est générée par l'utilisateur dans Lexora :
+ *   /client/direction/mcp-setup → "Créer une nouvelle clé"
+ * Elle est liée à son user_id, révocable, et hashée en DB.
  *
  * ENV CÔTÉ MCP (à mettre dans claude_desktop_config.json) :
- *   LEXORA_API_URL          URL de l'instance Lexora (ex: https://lexora.vercel.app)
- *   LEXORA_INTERNAL_TOKEN   Token secret partagé (= INTERNAL_API_TOKEN côté Lexora)
- *   LEXORA_USER_ID          UUID de l'utilisateur Lexora à usurper (toi-même)
- *   LEXORA_USER_EMAIL       (optionnel) email pour les logs côté Lexora
+ *   LEXORA_API_URL    URL de l'instance Lexora (ex: https://lexora.vercel.app)
+ *   LEXORA_API_KEY    Clé générée dans Lexora (format "lex_...")
  *
  * USAGE Claude Desktop (~/.config/Claude/claude_desktop_config.json) :
  *   {
@@ -24,9 +23,7 @@
  *         "args": ["/chemin/absolu/v0-lexora-accounting-saa-s/mcp-server/dist/index.js"],
  *         "env": {
  *           "LEXORA_API_URL": "https://ton-instance.vercel.app",
- *           "LEXORA_INTERNAL_TOKEN": "...",
- *           "LEXORA_USER_ID": "uuid-supabase",
- *           "LEXORA_USER_EMAIL": "toi@ton-domaine.mu"
+ *           "LEXORA_API_KEY": "lex_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
  *         }
  *       }
  *     }
@@ -41,12 +38,16 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 
 const LEXORA_API_URL = (process.env.LEXORA_API_URL || 'http://localhost:3000').replace(/\/$/, '')
-const LEXORA_INTERNAL_TOKEN = process.env.LEXORA_INTERNAL_TOKEN ?? ''
-const LEXORA_USER_ID = process.env.LEXORA_USER_ID ?? ''
-const LEXORA_USER_EMAIL = process.env.LEXORA_USER_EMAIL ?? ''
+const LEXORA_API_KEY = process.env.LEXORA_API_KEY ?? ''
 
-if (!LEXORA_INTERNAL_TOKEN || !LEXORA_USER_ID) {
-  console.error('[lexora-mcp] LEXORA_INTERNAL_TOKEN et LEXORA_USER_ID sont requis dans l\'env')
+if (!LEXORA_API_KEY) {
+  console.error('[lexora-mcp] LEXORA_API_KEY est requis dans l\'env (format "lex_...")')
+  console.error('[lexora-mcp] Génère-en une depuis Lexora → Direction → Connecter à Claude Desktop')
+  process.exit(1)
+}
+
+if (!LEXORA_API_KEY.startsWith('lex_')) {
+  console.error('[lexora-mcp] LEXORA_API_KEY doit commencer par "lex_" — clé invalide')
   process.exit(1)
 }
 
@@ -54,11 +55,9 @@ async function lexoraFetch(path: string, init: RequestInit = {}) {
   const url = `${LEXORA_API_URL}${path.startsWith('/') ? path : '/' + path}`
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'X-Internal-Token': LEXORA_INTERNAL_TOKEN,
-    'X-Internal-User-Id': LEXORA_USER_ID,
+    'X-Lexora-Api-Key': LEXORA_API_KEY,
     ...(init.headers as Record<string, string> | undefined),
   }
-  if (LEXORA_USER_EMAIL) headers['X-Internal-User-Email'] = LEXORA_USER_EMAIL
 
   const res = await fetch(url, { ...init, headers })
   const contentType = res.headers.get('content-type') || ''
@@ -71,7 +70,7 @@ async function lexoraFetch(path: string, init: RequestInit = {}) {
 }
 
 const server = new Server(
-  { name: 'lexora-mcp', version: '0.2.0' },
+  { name: 'lexora-mcp', version: '0.3.0' },
   { capabilities: { tools: {} } },
 )
 
@@ -197,4 +196,4 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 const transport = new StdioServerTransport()
 await server.connect(transport)
-console.error('[lexora-mcp] Server started — 5 tools: list_societes, get_financial_summary, list_factures, list_alertes, get_taux_change')
+console.error('[lexora-mcp] Server started (v0.3.0) — 5 tools: list_societes, get_financial_summary, list_factures, list_alertes, get_taux_change')
