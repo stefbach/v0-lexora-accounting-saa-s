@@ -16,6 +16,30 @@
 BEGIN;
 
 -- ───────────────────────────────────────────────────────────────────────────
+-- Compat view: plan_comptable_mauricien
+-- ───────────────────────────────────────────────────────────────────────────
+-- Cette migration a été écrite avant le refactor multi-juridictions (mig 400)
+-- qui a remplacé `public.plan_comptable_mauricien` par le canonique
+-- `public.chart_of_accounts` indexé par `framework` ('PCM' = Mauricien,
+-- 'SYSCOHADA' = OHADA, etc.).
+--
+-- Pour éviter de réécrire les 6 JOIN ci-dessous (et pour garder les noms de
+-- colonnes utilisés par les fonctions RPC), on expose une vue de
+-- compatibilité qui redirige vers les comptes du framework PCM avec les
+-- alias historiques (`code_compte` ← `account_number`,
+-- `nom_compte` ← `label_fr`).
+CREATE OR REPLACE VIEW public.plan_comptable_mauricien AS
+SELECT
+  account_number AS code_compte,
+  label_fr       AS nom_compte,
+  label_en,
+  class_number,
+  category,
+  framework
+FROM public.chart_of_accounts
+WHERE framework = 'PCM';
+
+-- ───────────────────────────────────────────────────────────────────────────
 -- Function 1: Get General Ledger (12 months)
 -- ───────────────────────────────────────────────────────────────────────────
 DROP FUNCTION IF EXISTS public.get_general_ledger_12months();
@@ -274,16 +298,17 @@ monthly_balance_check AS (
 unmatched_count AS (
   SELECT COUNT(*) AS total_unmatched
   FROM (
+    -- Mig 406 a été écrite avec une table `public.lettrages` qui n'existe
+    -- pas dans le schéma réel. Le lettrage est porté directement par
+    -- `ecritures_comptables_v2.lettre` (NULL = non lettré, code partagé
+    -- entre deux écritures = matched). On s'aligne sur la sémantique
+    -- "écritures non lettrées sur comptes tiers" via ec.lettre IS NULL.
     SELECT ec.id
     FROM public.ecritures_comptables_v2 ec
-    LEFT JOIN public.lettrages l ON (
-      (ec.id = l.ecriture_1_id OR ec.id = l.ecriture_2_id)
-      AND l.statut = 'lettres'
-    )
     WHERE
       ec.date_ecriture >= CURRENT_DATE - INTERVAL '12 months'
       AND ec.numero_compte IN ('4210', '4220', '5121', '5122', '5130')
-      AND l.id IS NULL
+      AND ec.lettre IS NULL
       AND ABS(COALESCE(ec.debit_mur, 0) - COALESCE(ec.credit_mur, 0)) > 0.01
   ) t
 ),
