@@ -33,6 +33,7 @@ import { FourPillars } from "@/components/FourPillars"
 import { TelegramShowcase } from "@/components/TelegramShowcase"
 import { EcosystemBridge } from "@/components/EcosystemBridge"
 import { LexoraEngineCore } from "@/components/LexoraEngineCore"
+import { PcmClaudeInnovation } from "@/components/PcmClaudeInnovation"
 import { NewFeatures2026 } from "@/components/NewFeatures2026"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcherLight } from "@/components/LanguageSwitcher"
@@ -218,6 +219,9 @@ export default function HomePage() {
             </a>
             <a href="#engine" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {locale === "fr" ? "Moteur" : "Engine"}
+            </a>
+            <a href="#pcm-claude" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+              PCM × Claude
             </a>
             <a href="#offres" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {locale === "fr" ? "Offres" : "Offers"}
@@ -1484,6 +1488,9 @@ export default function HomePage() {
 
         {/* LEXORA ENGINE — PCM / SYSCOHADA / Full IFRS / GBC + Claude Code skills */}
         <LexoraEngineCore locale={locale === "fr" ? "fr" : "en"} />
+
+        {/* PCM × CLAUDE — Innovation : PCM vivant, rapports d'expertise, évolution infinie */}
+        <PcmClaudeInnovation locale={locale === "fr" ? "fr" : "en"} />
 
         {/* NEW FEATURES 2026 — Lex Banque, GBC Pillar Two, Bank scraping, etc. */}
         <NewFeatures2026 locale={locale === "fr" ? "fr" : "en"} />
