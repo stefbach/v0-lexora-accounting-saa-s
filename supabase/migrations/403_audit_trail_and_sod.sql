@@ -61,7 +61,7 @@ CREATE POLICY "Admins manage SOD matrix" ON public.sod_matrix FOR ALL
   USING (public.get_my_role() = 'admin')
   WITH CHECK (public.get_my_role() = 'admin');
 
-DROP POLICY IF EXISTS "Comptables view SOD matrix" ON public.sod_matrix FOR SELECT;
+DROP POLICY IF EXISTS "Comptables view SOD matrix" ON public.sod_matrix;
 CREATE POLICY "Comptables view SOD matrix" ON public.sod_matrix FOR SELECT
   USING (public.get_my_role() IN ('admin', 'comptable', 'comptable_dedie'));
 
