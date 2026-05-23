@@ -197,6 +197,7 @@ const MENU: MenuSection[] = [
       { href: "/client/email-accounts", label: "Comptes Email", labelKey: "account.email_accounts", icon: Mail } as any,
       { href: "/client/direction/mra-credentials", label: "Accès MRA (Direction)", labelKey: "account.mra_credentials", icon: KeyRound, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
       { href: "/client/direction/bank-credentials", label: "Accès Bancaires (Direction)", labelKey: "account.bank_credentials", icon: Banknote, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
+      { href: "/client/direction/mcp-setup", label: "Connecter à Claude Desktop", icon: Sparkles, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
     ]
   },
 ]

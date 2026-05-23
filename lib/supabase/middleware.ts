@@ -114,11 +114,24 @@ export async function updateSession(request: NextRequest) {
   // /admin    → Platform administration
 
   // Non-public /api/* without session → 401 JSON (pas de redirect HTML pour les APIs)
-  if (!user && pathname.startsWith('/api/') && !isPublicApi) {
+  // Exception : si la requête porte un header d'auth alternatif (clé API perso
+  // ou token interne), on laisse passer pour que la route puisse valider via
+  // resolveUserAuth(). Sans ça, le MCP Lexora (Claude Desktop) et les scripts
+  // n8n recevraient un 401 du middleware avant même d'atteindre la route.
+  const hasApiKeyHeader = !!request.headers.get('x-lexora-api-key')
+  const hasInternalToken = !!request.headers.get('x-internal-token')
+  if (!user && pathname.startsWith('/api/') && !isPublicApi && !hasApiKeyHeader && !hasInternalToken) {
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 },
     )
+  }
+
+  // Idem pour les redirects HTML : si auth alternative présente, on ne redirige
+  // pas vers /auth/login (ça casserait les clients programmatiques qui hit des
+  // routes hors /api/).
+  if (!user && !isPublicRoute && (hasApiKeyHeader || hasInternalToken)) {
+    return supabaseResponse
   }
 
   // If not authenticated and trying to access a protected route, redirect to login

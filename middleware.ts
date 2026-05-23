@@ -13,7 +13,9 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public files (images, etc.)
+     * - install-mcp.sh / install-mcp.ps1 — installer scripts pour le MCP Lexora,
+     *   doivent être servis publiquement (curl | bash non authentifié).
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|install-mcp\\.sh|install-mcp\\.ps1|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

@@ -60,8 +60,9 @@ function getAvailableExercices(): string[] {
 // Supports ?exercice=2025-2026 and ?date_debut=...&date_fin=... for period filtering
 export async function GET(request: Request) {
   try {
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
+    // Accepte session OU X-Internal-Token (MCP, bot, cron)
+    const { resolveUserAuth } = await import('@/lib/supabase/auth-resolver')
+    const user = await resolveUserAuth(request)
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const supabase = getAdminClient()

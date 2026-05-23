@@ -2,11 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { getAdminClient as getAdmin } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // Accepte session web OU header X-Internal-Token (MCP, bot, cron).
+    const user = await resolveUserAuth(request)
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const admin = getAdmin()

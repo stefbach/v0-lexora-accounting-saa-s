@@ -26,8 +26,8 @@ interface Alerte {
 // GET — Generate financial alerts for a client (rule-based, no AI call)
 export async function GET(request: Request) {
   try {
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
+    const { resolveUserAuth } = await import('@/lib/supabase/auth-resolver')
+    const user = await resolveUserAuth(request)
     if (!user) return NextResponse.json({ error: 'Non authentifie' }, { status: 401 })
 
     const supabase = getAdminClient()

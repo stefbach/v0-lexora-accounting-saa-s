@@ -1,0 +1,24 @@
+{
+  "name": "@lexora/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server for Lexora SaaS - Accounting & HR pilot for Claude AI",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "lexora-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.0.0",
+    "typescript": "5.7.3"
+  }
+}
