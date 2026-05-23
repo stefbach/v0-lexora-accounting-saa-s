@@ -22,6 +22,7 @@ import {
   fiscaliseInvoiceWithAudit,
   getMRAConfig,
 } from '@/lib/mra-ifp'
+import { getMRAApiKey } from '@/lib/credentials/mra-vault'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -63,10 +64,24 @@ export async function POST(_request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Société introuvable pour cette facture' }, { status: 400 })
     }
 
+    // Retrieve encrypted MRA API key from vault
+    let mraApiKey: string | null = null
+    try {
+      mraApiKey = await getMRAApiKey(supabase, facture.societe_id)
+    } catch (e) {
+      return NextResponse.json(
+        {
+          error: 'Impossible de récupérer les credentials MRA chiffrés.',
+          hint: 'Vérifiez la configuration CRYPT_KEY et les credentials MRA.',
+        },
+        { status: 500 },
+      )
+    }
+
     // Vérifie que la fiscalisation est activée pour cette société
     const config = getMRAConfig({
       mra_ebs_id: societe.mra_ebs_id,
-      mra_api_key: societe.mra_api_key,
+      mra_api_key: mraApiKey || societe.mra_api_key, // fallback to plaintext for migration period
       mra_environment: societe.mra_environment,
       mra_fiscalisation_active: societe.mra_fiscalisation_active,
     })

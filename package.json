@@ -12,7 +12,10 @@
     "test:coverage": "vitest run --coverage",
     "n8n:setup": "node scripts/setup-n8n-creds.mjs",
     "n8n:list": "node scripts/sync-n8n.mjs list",
-    "n8n:push": "node scripts/sync-n8n.mjs push-all"
+    "n8n:push": "node scripts/sync-n8n.mjs push-all",
+    "extract:finance": "npx ts-node scripts/finance-extraction-agent.ts",
+    "extract:test": "psql -f scripts/test-extraction-setup.sql",
+    "extract:help": "cat docs/PHASE2_TASK2A_FINANCE_EXTRACTION.md"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -52,13 +55,17 @@
     "@tiptap/pm": "^3.22.3",
     "@tiptap/react": "^3.22.3",
     "@tiptap/starter-kit": "^3.22.3",
+    "@types/bcrypt": "^6.0.0",
+    "@types/exceljs": "^0.5.3",
     "@vercel/analytics": "1.6.1",
     "autoprefixer": "^10.4.20",
+    "bcrypt": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
     "date-fns": "4.1.0",
     "embla-carousel-react": "8.6.0",
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.38.0",
     "gsap": "^3.15.0",
     "html2pdf.js": "^0.14.0",
@@ -87,6 +94,8 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@next/eslint-plugin-next": "^16.2.6",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^22",
@@ -95,12 +104,16 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@types/three": "^0.183.1",
+    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/ui": "^2.1.8",
+    "eslint": "^10.4.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",
     "tw-animate-css": "1.3.3",
     "typescript": "5.7.3",
-    "vitest": "^2.1.8",
-    "@vitest/ui": "^2.1.8",
-    "@vitest/coverage-v8": "^2.1.8"
+    "typescript-eslint": "^8.59.4",
+    "vitest": "^2.1.8"
   }
 }
