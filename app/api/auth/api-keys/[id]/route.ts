@@ -58,8 +58,9 @@ export async function DELETE(
     return NextResponse.json({
       message: `Clé API "${apiKey.name}" révoquée avec succès`
     })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -100,7 +101,7 @@ export async function PATCH(
       )
     }
 
-    const updateData: any = {}
+    const updateData: Record<string, string | null> = {}
     if (body.name) updateData.name = body.name
     if (body.description) updateData.description = body.description
     if (body.expires_at) updateData.expires_at = body.expires_at
@@ -118,7 +119,8 @@ export async function PATCH(
       message: 'Clé API mise à jour',
       key: updated
     })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
