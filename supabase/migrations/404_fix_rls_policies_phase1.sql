@@ -71,7 +71,7 @@ BEGIN
     AND pg_namespace.nspname = 'public'
   ) THEN
     CREATE FUNCTION public.user_has_societe_access(societe_id_param UUID)
-    RETURNS BOOLEAN AS $$
+    RETURNS BOOLEAN AS $func$
     BEGIN
       RETURN EXISTS (
         SELECT 1 FROM public.user_societes us
@@ -87,7 +87,7 @@ BEGIN
         AND s.created_by = auth.uid()
       );
     END;
-    $$ LANGUAGE plpgsql SECURITY DEFINER;
+    $func$ LANGUAGE plpgsql SECURITY DEFINER;
   END IF;
 END $$;
 
