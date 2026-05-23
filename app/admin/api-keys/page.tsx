@@ -70,8 +70,9 @@ export default function ApiKeysPage() {
       setNewKeyName('')
       setNewKeyDescription('')
       await loadKeys()
-    } catch (err: any) {
-      alert('Erreur: ' + err.message)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      alert('Erreur: ' + message)
     } finally {
       setCreatingKey(false)
     }
@@ -84,7 +85,7 @@ export default function ApiKeysPage() {
       const res = await fetch(`/api/auth/api-keys/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete')
       await loadKeys()
-    } catch (err) {
+    } catch {
       alert('Erreur lors de la suppression')
     }
   }
@@ -100,7 +101,7 @@ export default function ApiKeysPage() {
       <div>
         <h1 className="text-3xl font-bold">Clés API</h1>
         <p className="text-sm text-gray-600 mt-1">
-          Gérez les clés pour l'intégration MCP (Claude, n8n, etc)
+          Gérez les clés pour l&apos;intégration MCP (Claude, n8n, etc)
         </p>
       </div>
 

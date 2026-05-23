@@ -68,8 +68,9 @@ export default function ClientApiKeysPage() {
       setNewKeyName('')
       setNewKeyDescription('')
       await loadKeys()
-    } catch (err: any) {
-      alert('Erreur: ' + err.message)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      alert('Erreur: ' + message)
     } finally {
       setCreatingKey(false)
     }
@@ -82,7 +83,7 @@ export default function ClientApiKeysPage() {
       const res = await fetch(`/api/auth/api-keys/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete')
       await loadKeys()
-    } catch (err) {
+    } catch {
       alert('Erreur lors de la suppression')
     }
   }
@@ -101,7 +102,7 @@ export default function ClientApiKeysPage() {
           Mes Clés API
         </h1>
         <p className="text-sm text-gray-600 mt-1">
-          Créez et gérez les clés pour intégrer Lexora avec Claude, n8n, ou d'autres outils
+          Créez et gérez les clés pour intégrer Lexora avec Claude, n8n, ou d&apos;autres outils
         </p>
       </div>
 
@@ -250,7 +251,7 @@ export default function ClientApiKeysPage() {
       {/* Usage Examples */}
       <Card>
         <CardHeader>
-          <CardTitle>Guide d'utilisation</CardTitle>
+          <CardTitle>Guide d&apos;utilisation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div>

@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       societe_id: apiKey.societe_id,
       scopes: apiKey.scopes
     })
-  } catch (err: any) {
+  } catch {
     return NextResponse.json(
       { valid: false, error: 'Validation failed' },
       { status: 500 }

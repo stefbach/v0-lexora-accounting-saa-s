@@ -39,10 +39,11 @@ export async function validateApiKey(apiKey: string, lexoraApiUrl: string): Prom
       societeId: result.societe_id,
       scopes: result.scopes || []
     }
-  } catch (err: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
     return {
       valid: false,
-      error: `Validation error: ${err.message}`
+      error: `Validation error: ${message}`
     }
   }
 }

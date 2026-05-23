@@ -6,7 +6,7 @@ import crypto from 'crypto'
  * GET /api/auth/api-keys
  * List all API keys for the current user
  */
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const supabase = await createServerClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -27,8 +27,9 @@ export async function GET(req: NextRequest) {
       keys: apiKeys || [],
       message: `${apiKeys?.length || 0} clé(s) API trouvée(s)`
     })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -97,7 +98,8 @@ export async function POST(req: NextRequest) {
       name: newKey.name,
       warning: '⚠️ Sauvegarde cette clé immédiatement. Tu ne pourras pas la voir à nouveau pour des raisons de sécurité.'
     }, { status: 201 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
