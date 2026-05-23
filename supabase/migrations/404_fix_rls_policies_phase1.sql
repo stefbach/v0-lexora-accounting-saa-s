@@ -66,9 +66,10 @@ BEGIN
   -- Check that user_has_societe_access exists, if not create stub
   -- In production, this is defined in auth module or earlier migration
   IF NOT EXISTS (
-    SELECT 1 FROM pg_proc
-    WHERE proname = 'user_has_societe_access'
-    AND pg_namespace.nspname = 'public'
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE p.proname = 'user_has_societe_access'
+    AND n.nspname = 'public'
   ) THEN
     CREATE FUNCTION public.user_has_societe_access(societe_id_param UUID)
     RETURNS BOOLEAN AS $func$
