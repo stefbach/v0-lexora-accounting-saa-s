@@ -244,6 +244,8 @@ DO $$
 BEGIN
   DROP POLICY IF EXISTS "documents_auth" ON public.documents;
 
+  -- public.documents n'a pas de societe_id direct : la table porte
+  -- dossier_id et le rattachement multi-tenant se fait via dossiers.societe_id.
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
     WHERE tablename = 'documents'
@@ -251,7 +253,11 @@ BEGIN
   ) THEN
     CREATE POLICY documents_tenant_select ON public.documents
       FOR SELECT USING (
-        public.user_has_societe_access(societe_id)
+        EXISTS (
+          SELECT 1 FROM public.dossiers d
+          WHERE d.id = documents.dossier_id
+          AND public.user_has_societe_access(d.societe_id)
+        )
       );
   END IF;
 
@@ -262,9 +268,17 @@ BEGIN
   ) THEN
     CREATE POLICY documents_tenant_modify ON public.documents
       FOR ALL USING (
-        public.user_has_societe_access(societe_id)
+        EXISTS (
+          SELECT 1 FROM public.dossiers d
+          WHERE d.id = documents.dossier_id
+          AND public.user_has_societe_access(d.societe_id)
+        )
       ) WITH CHECK (
-        public.user_has_societe_access(societe_id)
+        EXISTS (
+          SELECT 1 FROM public.dossiers d
+          WHERE d.id = documents.dossier_id
+          AND public.user_has_societe_access(d.societe_id)
+        )
       );
   END IF;
 END $$;

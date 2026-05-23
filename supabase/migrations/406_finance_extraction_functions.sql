@@ -16,6 +16,30 @@
 BEGIN;
 
 -- ───────────────────────────────────────────────────────────────────────────
+-- Compat view: plan_comptable_mauricien
+-- ───────────────────────────────────────────────────────────────────────────
+-- Cette migration a été écrite avant le refactor multi-juridictions (mig 400)
+-- qui a remplacé `public.plan_comptable_mauricien` par le canonique
+-- `public.chart_of_accounts` indexé par `framework` ('PCM' = Mauricien,
+-- 'SYSCOHADA' = OHADA, etc.).
+--
+-- Pour éviter de réécrire les 6 JOIN ci-dessous (et pour garder les noms de
+-- colonnes utilisés par les fonctions RPC), on expose une vue de
+-- compatibilité qui redirige vers les comptes du framework PCM avec les
+-- alias historiques (`code_compte` ← `account_number`,
+-- `nom_compte` ← `label_fr`).
+CREATE OR REPLACE VIEW public.plan_comptable_mauricien AS
+SELECT
+  account_number AS code_compte,
+  label_fr       AS nom_compte,
+  label_en,
+  class_number,
+  category,
+  framework
+FROM public.chart_of_accounts
+WHERE framework = 'PCM';
+
+-- ───────────────────────────────────────────────────────────────────────────
 -- Function 1: Get General Ledger (12 months)
 -- ───────────────────────────────────────────────────────────────────────────
 DROP FUNCTION IF EXISTS public.get_general_ledger_12months();
