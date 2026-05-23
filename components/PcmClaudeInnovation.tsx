@@ -1,0 +1,716 @@
+"use client"
+
+/**
+ * PcmClaudeInnovation — manifesto section presenting the PCM × Claude
+ * fusion as the deepest innovation in Lexora. Static accounting standards
+ * become a living, self-auditing, self-improving brain — with an
+ * infinite evolution path through Claude Skills + MCP tools.
+ *
+ * Features a typewriter-style "live expert report" animation to evoke
+ * Claude writing analytical commentary in real-time.
+ */
+
+import * as React from "react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Reveal, StaggerGroup, StaggerItem, FadeSlide, HoverLift } from "@/components/ui/motion"
+import {
+  Sparkles,
+  ShieldCheck,
+  FileText,
+  Brain,
+  Telescope,
+  GitMerge,
+  Infinity as InfinityIcon,
+  TrendingUp,
+  ArrowRight,
+  Wand2,
+  Activity,
+} from "lucide-react"
+
+type Locale = "fr" | "en"
+
+const CAPABILITIES = [
+  {
+    icon: ShieldCheck,
+    title: "Audit comptable continu",
+    titleEn: "Continuous accounting audit",
+    body: "Score de santé PCM 0-100 calculé en temps réel. Claude détecte les déséquilibres par journal, les folios non équilibrés, les comptes hors plan, les écritures orphelines — avant même la clôture mensuelle.",
+    bodyEn: "Live PCM health score 0-100. Claude detects journal imbalances, unbalanced folios, off-plan accounts, orphan entries — before month-end close.",
+    color: "#4191FF",
+    tag: "9 checks · live",
+  },
+  {
+    icon: FileText,
+    title: "Rapports d'expertise rédigés",
+    titleEn: "AI-drafted expert reports",
+    body: "Claude rédige les commentaires d'expert-comptable : analyse de bilan, variation de marge, dégradation du BFR, exposition crédit IFRS 9, surveillance substance GBC. Tone professionnel, conforme normes mauriciennes.",
+    bodyEn: "Claude drafts accountant-grade commentary: balance sheet analysis, margin variance, working capital deterioration, IFRS 9 credit exposure, GBC substance monitoring. Professional tone, compliant with Mauritian standards.",
+    color: "#D4AF37",
+    tag: "Bilan · P&L · Notes",
+  },
+  {
+    icon: Brain,
+    title: "Mémoire métier persistante",
+    titleEn: "Persistent business memory",
+    body: "Claude apprend votre nomenclature client, vos abréviations fournisseurs, les patterns récurrents de votre cabinet. Plus vous l'utilisez, plus il devient précis sur votre comptabilité — sans paramétrage.",
+    bodyEn: "Claude learns your client naming, supplier abbreviations, your firm's recurring patterns. The more you use it, the sharper it gets on your books — no configuration.",
+    color: "#2ECC8A",
+    tag: "RAG embeddings",
+  },
+  {
+    icon: GitMerge,
+    title: "Conversion multi-référentiel",
+    titleEn: "Multi-standard conversion",
+    body: "Convertit instantanément vos écritures PCM → SYSCOHADA → IFRS, et inversement. Le moteur connaît les 65 mappings PCM↔SYSCOHADA, les reclassements IFRS, les ajustements GBC. Un seul prompt suffit.",
+    bodyEn: "Instantly converts your entries PCM → SYSCOHADA → IFRS, and back. The engine knows the 65 PCM↔SYSCOHADA mappings, IFRS reclassifications, GBC adjustments. One prompt is enough.",
+    color: "#4191FF",
+    tag: "PCM · OHADA · IFRS",
+  },
+  {
+    icon: Telescope,
+    title: "Anticipation prédictive",
+    titleEn: "Predictive anticipation",
+    body: "Claude alerte avant la deadline MRA (J-7), avant l'anomalie de balance, avant le découvert bancaire, avant la dégradation de stage IFRS 9 sur un client. L'expertise n'est plus réactive — elle est prospective.",
+    bodyEn: "Claude alerts before MRA deadlines (D-7), before balance anomalies, before bank overdrafts, before IFRS 9 stage downgrades on a customer. Expertise is no longer reactive — it's prospective.",
+    color: "#D4AF37",
+    tag: "Alertes proactives",
+  },
+  {
+    icon: InfinityIcon,
+    title: "Évolution à l'infini",
+    titleEn: "Infinite evolution",
+    body: "Une nouvelle norme est publiée ? Une skill Claude se greffe. IFRS 17 Insurance Contracts, IFRS 18, futures sustainability standards (ISSB), nouvelles obligations MRA — tout s'ajoute sans redéploiement. Le moteur grandit avec la régulation.",
+    bodyEn: "A new standard is published? A Claude skill is grafted. IFRS 17 Insurance Contracts, IFRS 18, upcoming sustainability standards (ISSB), new MRA obligations — everything plugs in without redeploy. The engine grows with regulation.",
+    color: "#2ECC8A",
+    tag: "Skills + MCP",
+  },
+]
+
+const ROADMAP = [
+  {
+    year: "2025",
+    label: "Foundations",
+    items: ["PCM strict canonique", "Règles R1-R7", "SYSCOHADA 17 pays", "Lex Banque agent"],
+    color: "#4191FF",
+  },
+  {
+    year: "2026",
+    label: "Live now",
+    items: ["IFRS 9 ECL · Stages 1/2/3", "IFRS 16 Leases", "GBC Pillar Two GloBE", "MRA robot e-filing"],
+    color: "#D4AF37",
+  },
+  {
+    year: "2027+",
+    label: "On deck",
+    items: ["IFRS 17 Insurance", "IFRS 18 Presentation", "ISSB Sustainability (S1/S2)", "Open Banking PSD3 Maurice"],
+    color: "#2ECC8A",
+  },
+]
+
+const REPORT_LINES_FR = [
+  "Analyse du bilan au 31/05/2026 — Acme Mauritius Ltd",
+  "",
+  "→ Total actif : Rs 24 850 200 (+8,4% vs N-1)",
+  "→ Capitaux propres : Rs 11 420 000 — gearing ratio = 0,46 (sain)",
+  "",
+  "Points d'attention détectés :",
+  "• Compte 411 : +18% sur 90 jours, dont 2 clients > 60j",
+  "  → Stage 2 IFRS 9 suggéré pour CL-2024-018 (PD lifetime 4,2%)",
+  "• Provision congés IAS 19 : sous-estimée de Rs 142 000",
+  "  → Recalcul auto disponible (47 employés concernés)",
+  "• TVA déductible Box 9 non rapprochée : Rs 38 400 sur 6 factures",
+  "",
+  "Conformité MRA : ✓ PAYE/CSG/NSF mai 2026 soumis le 24/05",
+  "Substance GBC : ✓ CIGA conforme (3/2 employés qualifiés)",
+  "",
+  "Rapport généré par Claude Sonnet 4.6 — confiance 96%",
+]
+
+const REPORT_LINES_EN = [
+  "Balance sheet analysis at 31/05/2026 — Acme Mauritius Ltd",
+  "",
+  "→ Total assets: Rs 24,850,200 (+8.4% vs PY)",
+  "→ Equity: Rs 11,420,000 — gearing ratio = 0.46 (healthy)",
+  "",
+  "Items requiring attention:",
+  "• Account 411: +18% over 90 days, including 2 customers > 60d",
+  "  → IFRS 9 Stage 2 suggested for CL-2024-018 (lifetime PD 4.2%)",
+  "• IAS 19 leave provision: understated by Rs 142,000",
+  "  → Auto-recompute available (47 employees affected)",
+  "• VAT input Box 9 unreconciled: Rs 38,400 across 6 invoices",
+  "",
+  "MRA compliance: ✓ PAYE/CSG/NSF May 2026 submitted on 24/05",
+  "GBC substance: ✓ CIGA compliant (3/2 qualified employees)",
+  "",
+  "Report generated by Claude Sonnet 4.6 — confidence 96%",
+]
+
+function useTypewriter(lines: string[], charDelay = 14, lineDelay = 220) {
+  const [output, setOutput] = React.useState<string[]>([])
+  const [done, setDone] = React.useState(false)
+
+  React.useEffect(() => {
+    let cancelled = false
+    let lineIdx = 0
+    let charIdx = 0
+    const next: string[] = []
+
+    function tick() {
+      if (cancelled) return
+      const line = lines[lineIdx] ?? ""
+      if (charIdx === 0) next[lineIdx] = ""
+      if (charIdx < line.length) {
+        next[lineIdx] = line.slice(0, charIdx + 1)
+        charIdx++
+        setOutput([...next])
+        setTimeout(tick, charDelay)
+      } else {
+        lineIdx++
+        charIdx = 0
+        if (lineIdx >= lines.length) {
+          setDone(true)
+          return
+        }
+        setTimeout(tick, lineDelay)
+      }
+    }
+    const t = setTimeout(tick, 600)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [lines, charDelay, lineDelay])
+
+  return { output, done }
+}
+
+function LiveExpertReport({ locale }: { locale: Locale }) {
+  const lines = locale === "fr" ? REPORT_LINES_FR : REPORT_LINES_EN
+  const { output, done } = useTypewriter(lines)
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl"
+      style={{
+        background: "linear-gradient(180deg, #0E1338 0%, #0B0F2E 100%)",
+        border: "1px solid rgba(212,175,55,0.30)",
+        boxShadow:
+          "0 30px 80px -30px rgba(65,145,255,0.40), inset 0 1px 0 rgba(255,255,255,0.04)",
+      }}
+    >
+      {/* Editor chrome */}
+      <div
+        className="flex items-center justify-between px-4 py-2.5"
+        style={{
+          background: "rgba(232,234,252,0.04)",
+          borderBottom: "1px solid rgba(212,175,55,0.18)",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#FF5F57" }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#FEBC2E" }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#28C840" }} />
+          <span
+            className="ml-3 text-[11px] uppercase tracking-widest"
+            style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}
+          >
+            <Wand2 className="inline h-3 w-3 mr-1.5" style={{ color: "#D4AF37" }} />
+            {locale === "fr" ? "Rapport d'expertise · live" : "Expert report · live"}
+          </span>
+        </div>
+        <div
+          className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest"
+          style={{ color: done ? "#2ECC8A" : "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+        >
+          <span className="relative flex h-2 w-2">
+            <span
+              className={done ? "" : "absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full opacity-75"}
+              style={{ backgroundColor: done ? "#2ECC8A" : "#D4AF37" }}
+            />
+            <span
+              className="relative inline-flex h-2 w-2 rounded-full"
+              style={{ backgroundColor: done ? "#2ECC8A" : "#D4AF37" }}
+            />
+          </span>
+          {done ? (locale === "fr" ? "Terminé" : "Done") : (locale === "fr" ? "Génération…" : "Generating…")}
+        </div>
+      </div>
+
+      {/* Code-style body */}
+      <pre
+        className="m-0 overflow-hidden px-5 py-5 text-[13px] leading-[1.65] md:text-[14px]"
+        style={{
+          fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
+          color: "#E8EAFC",
+          minHeight: "440px",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+        }}
+      >
+        {output.map((line, i) => {
+          let color = "#E8EAFC"
+          if (line.startsWith("→")) color = "#D4AF37"
+          else if (line.startsWith("•")) color = "#A8AFC7"
+          else if (line.startsWith("  →")) color = "#7CE5B5"
+          else if (line.includes("✓")) color = "#7CE5B5"
+          else if (line.startsWith("Points") || line.startsWith("Items")) color = "#F4B95C"
+          else if (line.includes("Sonnet") || line.includes("confiance") || line.includes("confidence")) color = "#8B90B8"
+          return (
+            <div key={i} style={{ color }}>
+              {line || " "}
+              {i === output.length - 1 && !done && (
+                <span
+                  aria-hidden="true"
+                  className="ml-0.5 inline-block h-4 w-[7px] align-middle motion-safe:animate-pulse"
+                  style={{ backgroundColor: "#D4AF37" }}
+                />
+              )}
+            </div>
+          )
+        })}
+      </pre>
+    </div>
+  )
+}
+
+export function PcmClaudeInnovation({ locale = "fr" }: { locale?: Locale }) {
+  return (
+    <section
+      id="pcm-claude"
+      className="relative overflow-hidden py-20 md:py-28"
+      style={{
+        background:
+          "linear-gradient(180deg, #0B0F2E 0%, #101847 40%, #0B0F2E 100%)",
+      }}
+    >
+      {/* Cinematic backdrop */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "radial-gradient(ellipse 55% 45% at 80% 15%, rgba(212,175,55,0.18) 0%, transparent 65%), radial-gradient(ellipse 50% 45% at 20% 90%, rgba(65,145,255,0.18) 0%, transparent 70%)",
+        }}
+      />
+      {/* Faint vertical grid */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-[0.10]"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(90deg, rgba(212,175,55,0.4) 0px, rgba(212,175,55,0.4) 1px, transparent 1px, transparent 56px)",
+          maskImage:
+            "radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 80%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 70% 60% at 50% 50%, black 30%, transparent 80%)",
+        }}
+      />
+
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
+        {/* HEADER + LIVE REPORT */}
+        <div className="grid items-start gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+          <Reveal>
+            <span
+              className="mb-5 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest"
+              style={{
+                backgroundColor: "rgba(212,175,55,0.10)",
+                color: "#D4AF37",
+                borderColor: "rgba(212,175,55,0.30)",
+                fontFamily: "'Poppins', sans-serif",
+              }}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {locale === "fr" ? "L'innovation au cœur de Lexora" : "The innovation at the core of Lexora"}
+            </span>
+            <h2
+              className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
+              style={{
+                color: "#E8EAFC",
+                fontFamily: "'Poppins', sans-serif",
+                fontWeight: 700,
+                letterSpacing: "-0.03em",
+                lineHeight: 1.05,
+              }}
+            >
+              {locale === "fr" ? (
+                <>
+                  Le PCM était figé.
+                  <br />
+                  Greffé à{" "}
+                  <span
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                      WebkitBackgroundClip: "text",
+                      backgroundClip: "text",
+                      color: "transparent",
+                    }}
+                  >
+                    Claude
+                  </span>
+                  , il devient{" "}
+                  <span
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(90deg, #D4AF37 0%, #2ECC8A 100%)",
+                      WebkitBackgroundClip: "text",
+                      backgroundClip: "text",
+                      color: "transparent",
+                    }}
+                  >
+                    vivant
+                  </span>
+                  .
+                </>
+              ) : (
+                <>
+                  PCM used to be static.
+                  <br />
+                  Wired to{" "}
+                  <span
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                      WebkitBackgroundClip: "text",
+                      backgroundClip: "text",
+                      color: "transparent",
+                    }}
+                  >
+                    Claude
+                  </span>
+                  , it becomes{" "}
+                  <span
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(90deg, #D4AF37 0%, #2ECC8A 100%)",
+                      WebkitBackgroundClip: "text",
+                      backgroundClip: "text",
+                      color: "transparent",
+                    }}
+                  >
+                    alive
+                  </span>
+                  .
+                </>
+              )}
+            </h2>
+            <p
+              className="mb-7 text-base md:text-lg"
+              style={{
+                color: "#A8AFC7",
+                fontFamily: "'Poppins', sans-serif",
+                fontWeight: 400,
+                lineHeight: 1.7,
+                maxWidth: "640px",
+              }}
+            >
+              {locale === "fr"
+                ? "Pour la première fois à Maurice, un Plan Comptable Mauricien qui s'audite seul, qui rédige ses propres rapports d'expertise, qui apprend votre métier, et qui évolue avec chaque nouvelle norme — sans redéploiement. C'est le moteur Lexora × Claude Code. Une innovation propre à Lexora."
+                : "For the first time in Mauritius, a Mauritian Chart of Accounts that audits itself, drafts its own expert reports, learns your business, and evolves with every new standard — without redeployment. This is the Lexora × Claude Code engine. A Lexora-exclusive innovation."}
+            </p>
+
+            <StaggerGroup className="grid grid-cols-2 gap-3 sm:grid-cols-4" staggerMs={60}>
+              {[
+                { v: "4", l: locale === "fr" ? "skills Claude" : "Claude skills" },
+                { v: "5", l: locale === "fr" ? "outils MCP" : "MCP tools" },
+                { v: "9", l: locale === "fr" ? "checks live" : "live checks" },
+                { v: "∞", l: locale === "fr" ? "extensible" : "extensible" },
+              ].map((s) => (
+                <StaggerItem key={s.l}>
+                  <div
+                    className="rounded-xl px-4 py-3 text-center"
+                    style={{
+                      backgroundColor: "rgba(232,234,252,0.04)",
+                      border: "1px solid rgba(212,175,55,0.22)",
+                      fontFamily: "'Poppins', sans-serif",
+                    }}
+                  >
+                    <div
+                      className="text-xl font-bold md:text-2xl"
+                      style={{ color: "#D4AF37", letterSpacing: "-0.01em" }}
+                    >
+                      {s.v}
+                    </div>
+                    <div className="text-[11px] uppercase tracking-widest" style={{ color: "#A8AFC7" }}>
+                      {s.l}
+                    </div>
+                  </div>
+                </StaggerItem>
+              ))}
+            </StaggerGroup>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link href="/comptable/sante-pcm">
+                <Button
+                  size="lg"
+                  className="w-full px-7 text-base font-semibold sm:w-auto"
+                  style={{
+                    backgroundColor: "#D4AF37",
+                    color: "#0B0F2E",
+                    fontFamily: "'Poppins', sans-serif",
+                    fontWeight: 700,
+                    borderRadius: "8px",
+                  }}
+                >
+                  <Activity className="mr-2 h-5 w-5" />
+                  {locale === "fr" ? "Voir un audit PCM live" : "See a live PCM audit"}
+                </Button>
+              </Link>
+              <a href="#engine">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full px-7 text-base font-semibold sm:w-auto"
+                  style={{
+                    border: "1px solid rgba(65,145,255,0.45)",
+                    color: "#E8EAFC",
+                    backgroundColor: "rgba(232,234,252,0.04)",
+                    fontFamily: "'Poppins', sans-serif",
+                    fontWeight: 500,
+                    borderRadius: "8px",
+                  }}
+                >
+                  {locale === "fr" ? "Explorer les 4 skills Claude" : "Explore the 4 Claude skills"}
+                </Button>
+              </a>
+            </div>
+          </Reveal>
+
+          <FadeSlide delay={0.2} y={24}>
+            <LiveExpertReport locale={locale} />
+          </FadeSlide>
+        </div>
+
+        {/* CAPABILITIES — 6 cards */}
+        <Reveal className="mt-20 mb-10 text-center">
+          <span
+            className="mb-4 inline-block text-[11px] font-bold uppercase tracking-[0.18em]"
+            style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+          >
+            {locale === "fr" ? "6 capacités natives" : "6 native capabilities"}
+          </span>
+          <h3
+            className="mb-3 text-3xl font-bold md:text-4xl"
+            style={{
+              color: "#E8EAFC",
+              fontFamily: "'Poppins', sans-serif",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            {locale === "fr"
+              ? "Ce qu'un PCM vivant fait pour vous"
+              : "What a living PCM does for you"}
+          </h3>
+        </Reveal>
+
+        <StaggerGroup className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" staggerMs={70}>
+          {CAPABILITIES.map((c) => (
+            <StaggerItem key={c.title}>
+              <HoverLift lift={6} className="h-full">
+                <article
+                  className="group relative h-full overflow-hidden rounded-2xl p-7"
+                  style={{
+                    backgroundColor: "rgba(16,24,71,0.70)",
+                    border: `1px solid ${c.color}40`,
+                    backdropFilter: "blur(8px)",
+                    WebkitBackdropFilter: "blur(8px)",
+                  }}
+                >
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-x-0 top-0 h-[2px]"
+                    style={{
+                      background: `linear-gradient(90deg, transparent, ${c.color} 50%, transparent)`,
+                    }}
+                  />
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full opacity-0 transition-opacity duration-500 group-hover:opacity-70"
+                    style={{ background: `radial-gradient(circle, ${c.color}35 0%, transparent 70%)` }}
+                  />
+
+                  <div className="relative mb-5 flex items-start justify-between gap-3">
+                    <div
+                      className="flex h-12 w-12 items-center justify-center rounded-xl transition-transform duration-500 group-hover:scale-105"
+                      style={{
+                        backgroundColor: `${c.color}1A`,
+                        border: `1px solid ${c.color}55`,
+                        boxShadow: `0 0 28px ${c.color}30`,
+                      }}
+                    >
+                      <c.icon className="h-6 w-6" style={{ color: c.color }} strokeWidth={1.8} />
+                    </div>
+                    <span
+                      className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]"
+                      style={{
+                        backgroundColor: `${c.color}14`,
+                        color: c.color,
+                        border: `1px solid ${c.color}33`,
+                        fontFamily: "'Poppins', sans-serif",
+                      }}
+                    >
+                      {c.tag}
+                    </span>
+                  </div>
+
+                  <h4
+                    className="mb-3 text-lg font-bold leading-tight md:text-xl"
+                    style={{
+                      color: "#E8EAFC",
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 700,
+                      letterSpacing: "-0.01em",
+                    }}
+                  >
+                    {locale === "fr" ? c.title : c.titleEn}
+                  </h4>
+                  <p
+                    className="text-sm"
+                    style={{
+                      color: "#A8AFC7",
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 400,
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {locale === "fr" ? c.body : c.bodyEn}
+                  </p>
+                </article>
+              </HoverLift>
+            </StaggerItem>
+          ))}
+        </StaggerGroup>
+
+        {/* ROADMAP — Infinite evolution */}
+        <Reveal className="mt-20">
+          <div
+            className="overflow-hidden rounded-3xl p-7 md:p-10"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(65,145,255,0.10) 0%, rgba(212,175,55,0.10) 50%, rgba(46,204,138,0.10) 100%)",
+              border: "1px solid rgba(212,175,55,0.30)",
+              boxShadow:
+                "0 30px 80px -30px rgba(65,145,255,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
+            }}
+          >
+            <div className="mb-8 flex flex-col items-center gap-3 text-center md:flex-row md:justify-between md:text-left">
+              <div className="flex items-center gap-4">
+                <div
+                  className="flex h-14 w-14 items-center justify-center rounded-2xl"
+                  style={{
+                    backgroundColor: "rgba(212,175,55,0.15)",
+                    border: "1px solid rgba(212,175,55,0.40)",
+                    boxShadow: "0 0 32px rgba(212,175,55,0.30)",
+                  }}
+                >
+                  <InfinityIcon className="h-7 w-7" style={{ color: "#D4AF37" }} strokeWidth={1.8} />
+                </div>
+                <div>
+                  <div
+                    className="text-[10px] font-bold uppercase tracking-widest"
+                    style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
+                  >
+                    {locale === "fr" ? "Évolution à l'infini" : "Infinite evolution"}
+                  </div>
+                  <h3
+                    className="text-2xl font-bold md:text-3xl"
+                    style={{
+                      color: "#E8EAFC",
+                      fontFamily: "'Poppins', sans-serif",
+                      fontWeight: 700,
+                      letterSpacing: "-0.02em",
+                    }}
+                  >
+                    {locale === "fr" ? "Le moteur grandit avec la régulation" : "The engine grows with regulation"}
+                  </h3>
+                </div>
+              </div>
+              <TrendingUp className="hidden h-8 w-8 md:block" style={{ color: "#D4AF37" }} />
+            </div>
+
+            <div className="relative grid gap-5 md:grid-cols-3">
+              {/* Connecting gradient line on md+ */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute left-0 right-0 top-7 hidden h-[2px] md:block"
+                style={{
+                  background:
+                    "linear-gradient(90deg, #4191FF 0%, #D4AF37 50%, #2ECC8A 100%)",
+                  opacity: 0.35,
+                  marginLeft: "8%",
+                  marginRight: "8%",
+                }}
+              />
+              {ROADMAP.map((r, i) => (
+                <div key={r.year} className="relative">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div
+                      className="relative z-10 flex h-14 w-14 items-center justify-center rounded-full text-sm font-bold"
+                      style={{
+                        backgroundColor: "#0B0F2E",
+                        border: `2px solid ${r.color}`,
+                        color: r.color,
+                        boxShadow: `0 0 28px ${r.color}50`,
+                        fontFamily: "'Poppins', sans-serif",
+                      }}
+                    >
+                      {r.year.replace("+", "")}
+                      {r.year.includes("+") && <span className="text-[11px] -mt-2.5 ml-0.5">+</span>}
+                    </div>
+                    <div
+                      className="text-[11px] font-bold uppercase tracking-widest"
+                      style={{ color: r.color, fontFamily: "'Poppins', sans-serif" }}
+                    >
+                      {r.label}
+                    </div>
+                  </div>
+                  <ul className="space-y-2 pl-1">
+                    {r.items.map((item) => (
+                      <li
+                        key={item}
+                        className="flex items-start gap-2 text-sm"
+                        style={{
+                          color: "#E8EAFC",
+                          fontFamily: "'Poppins', sans-serif",
+                          fontWeight: 400,
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="mt-1.5 inline-block h-1 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: r.color }}
+                        />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+
+            <div
+              className="mt-8 flex flex-wrap items-center justify-center gap-2 rounded-xl px-5 py-3 text-center text-xs md:text-sm"
+              style={{
+                backgroundColor: "rgba(11,15,46,0.55)",
+                border: "1px solid rgba(212,175,55,0.22)",
+                color: "#A8AFC7",
+                fontFamily: "'Poppins', sans-serif",
+              }}
+            >
+              <Sparkles className="h-4 w-4" style={{ color: "#D4AF37" }} />
+              <span>
+                {locale === "fr"
+                  ? "Une nouvelle norme demain ? Une nouvelle skill Claude se greffe — pas de redéploiement, pas de migration douloureuse."
+                  : "A new standard tomorrow? A new Claude skill plugs in — no redeploy, no painful migration."}
+              </span>
+              <ArrowRight className="h-4 w-4" style={{ color: "#D4AF37" }} />
+            </div>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
