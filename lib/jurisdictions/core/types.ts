@@ -75,7 +75,7 @@ export type AccountCategory =
 
 export interface Account {
   number: string  // Account number (e.g. "411" or "6011")
-  label: string
+  label?: string
   labelFr: string
   classNumber: number
   category: AccountCategory
