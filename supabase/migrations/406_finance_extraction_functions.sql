@@ -298,16 +298,17 @@ monthly_balance_check AS (
 unmatched_count AS (
   SELECT COUNT(*) AS total_unmatched
   FROM (
+    -- Mig 406 a été écrite avec une table `public.lettrages` qui n'existe
+    -- pas dans le schéma réel. Le lettrage est porté directement par
+    -- `ecritures_comptables_v2.lettre` (NULL = non lettré, code partagé
+    -- entre deux écritures = matched). On s'aligne sur la sémantique
+    -- "écritures non lettrées sur comptes tiers" via ec.lettre IS NULL.
     SELECT ec.id
     FROM public.ecritures_comptables_v2 ec
-    LEFT JOIN public.lettrages l ON (
-      (ec.id = l.ecriture_1_id OR ec.id = l.ecriture_2_id)
-      AND l.statut = 'lettres'
-    )
     WHERE
       ec.date_ecriture >= CURRENT_DATE - INTERVAL '12 months'
       AND ec.numero_compte IN ('4210', '4220', '5121', '5122', '5130')
-      AND l.id IS NULL
+      AND ec.lettre IS NULL
       AND ABS(COALESCE(ec.debit_mur, 0) - COALESCE(ec.credit_mur, 0)) > 0.01
   ) t
 ),
