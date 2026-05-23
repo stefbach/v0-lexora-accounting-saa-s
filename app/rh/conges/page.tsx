@@ -551,6 +551,10 @@ export default function CongesPage() {
   const [supprimerTarget, setSupprimerTarget] = useState<CongeRecord | null>(null)
   const [supprimerMotif, setSupprimerMotif] = useState<string>("")
   const [annulerMotif, setAnnulerMotif] = useState("")
+  // Édition d'un congé (dates + catégorie) — action modifier_demande.
+  const [editTarget, setEditTarget] = useState<CongeRecord | null>(null)
+  const [editFields, setEditFields] = useState<{ date_debut: string; date_fin: string; type_conge: string }>({ date_debut: "", date_fin: "", type_conge: "AL" })
+  const [editLoading, setEditLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
   // ── Collectif (Commit 10) ─────────────────────────────────────
@@ -1004,6 +1008,55 @@ export default function CongesPage() {
       setTimeout(() => setToast(null), 6000)
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  // Ouvre le dialog d'édition d'un congé (dates + catégorie).
+  const ouvrirEdition = (c: CongeRecord) => {
+    setEditTarget(c)
+    setEditFields({
+      date_debut: String(c.date_debut || "").slice(0, 10),
+      date_fin: String(c.date_fin || c.date_debut || "").slice(0, 10),
+      type_conge: c.type_conge || "AL",
+    })
+  }
+
+  // Enregistre les modifications via action=modifier_demande. Le backend
+  // recalcule nb_jours et recompute le solde si la demande est approuvée.
+  const sauverEdition = async () => {
+    if (!editTarget) return
+    if (!editFields.date_debut || !editFields.date_fin) {
+      setToast("⚠ Dates requises"); setTimeout(() => setToast(null), 3500); return
+    }
+    if (editFields.date_fin < editFields.date_debut) {
+      setToast("⚠ La date de fin doit être après la date de début"); setTimeout(() => setToast(null), 3500); return
+    }
+    setEditLoading(true)
+    try {
+      const res = await fetch("/api/rh/conges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "modifier_demande",
+          id: editTarget.id,
+          date_debut: editFields.date_debut,
+          date_fin: editFields.date_fin,
+          type_conge: editFields.type_conge,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      setToast("Congé modifié")
+      setEditTarget(null)
+      loadDemandes()
+      loadBalances()
+      if (tab === "historique") loadHistorique()
+      setTimeout(() => setToast(null), 4000)
+    } catch (e: any) {
+      setToast(`⚠ Modification échouée : ${e?.message || 'erreur'}`)
+      setTimeout(() => setToast(null), 6000)
+    } finally {
+      setEditLoading(false)
     }
   }
 
@@ -1609,6 +1662,18 @@ export default function CongesPage() {
                               >
                                 <XCircle className="w-4 h-4 mr-1" />Refuser
                               </Button>
+                              {/* Modifier le congé (dates + catégorie) — RH/admin */}
+                              {canSupprimer && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-blue-600 hover:bg-blue-50 h-8"
+                                  title="Modifier les dates ou la catégorie"
+                                  onClick={() => ouvrirEdition(c)}
+                                >
+                                  <Pencil className="w-4 h-4 mr-1" />Modifier
+                                </Button>
+                              )}
                               {/* S1 — Suppression definitive (RH/admin uniquement) */}
                               {canSupprimer && (
                                 <Button
@@ -1904,6 +1969,18 @@ export default function CongesPage() {
                                       <XCircle className="w-3 h-3 mr-1" />
                                     )}
                                     Annuler
+                                  </Button>
+                                )}
+                                {/* Modifier le congé (dates + catégorie) — RH/admin */}
+                                {canSupprimer && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-xs text-blue-600 hover:bg-blue-50"
+                                    title="Modifier les dates ou la catégorie"
+                                    onClick={() => ouvrirEdition(c)}
+                                  >
+                                    <Pencil className="w-3.5 h-3.5 mr-1" />Modifier
                                   </Button>
                                 )}
                                 {/* S1 — suppression definitive (RH/admin) */}
@@ -2328,6 +2405,51 @@ export default function CongesPage() {
             >
               {actionLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               <XCircle className="w-4 h-4 mr-2" />Confirmer le refus
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ DIALOG: Modifier un congé (dates + catégorie) ═══ */}
+      <Dialog open={!!editTarget} onOpenChange={open => { if (!open) setEditTarget(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifier le congé</DialogTitle>
+            <DialogDescription>
+              {editTarget ? `${editTarget.employe?.prenom || ""} ${editTarget.employe?.nom || ""}` : ""}
+              {" — "}le nombre de jours est recalculé automatiquement. Si le congé est approuvé, le solde est recompté.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Catégorie</Label>
+              <Select value={editFields.type_conge} onValueChange={v => setEditFields(f => ({ ...f, type_conge: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TYPE_LABELS).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Date de début</Label>
+                <Input type="date" className="mt-1" value={editFields.date_debut}
+                  onChange={e => setEditFields(f => ({ ...f, date_debut: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Date de fin</Label>
+                <Input type="date" className="mt-1" value={editFields.date_fin}
+                  onChange={e => setEditFields(f => ({ ...f, date_fin: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Annuler</Button>
+            <Button onClick={sauverEdition} disabled={editLoading} className="bg-blue-600 text-white hover:bg-blue-700">
+              {editLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              <Save className="w-4 h-4 mr-2" />Enregistrer
             </Button>
           </DialogFooter>
         </DialogContent>

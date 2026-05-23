@@ -34,17 +34,37 @@ export async function GET(request: Request) {
       if (ex) { dDebut = ex.date_debut; dFin = ex.date_fin }
     }
 
-    // Récupérer toutes les écritures
-    let query = supabase
-      .from('ecritures_comptables_v2')
-      .select('numero_compte, debit_mur, credit_mur, nom_compte, date_ecriture')
-      .eq('societe_id', societe_id)
+    // Récupérer toutes les écritures (avec pagination explicite — Supabase
+    // a une limite par défaut de 1000 lignes par requête sans .range(),
+    // ce qui faisait apparemment disparaître les salaires de DDS dans le
+    // P&L/bilan/cashflow alors qu'ils étaient bien dans le PCM/Grand Livre).
+    const buildBaseQuery = () => {
+      let q = supabase
+        .from('ecritures_comptables_v2')
+        .select('numero_compte, debit_mur, credit_mur, nom_compte, date_ecriture')
+        .eq('societe_id', societe_id)
+        .order('date_ecriture', { ascending: true })
+      if (dDebut) q = q.gte('date_ecriture', dDebut)
+      if (dFin)   q = q.lte('date_ecriture', dFin)
+      return q
+    }
 
-    if (dDebut) query = query.gte('date_ecriture', dDebut)
-    if (dFin)   query = query.lte('date_ecriture', dFin)
-
-    const { data: ecritures, error } = await query
-    if (error) throw error
+    const PAGE_SIZE = 1000
+    const ecritures: Array<{
+      numero_compte: string
+      debit_mur: number | null
+      credit_mur: number | null
+      nom_compte: string | null
+      date_ecriture: string | null
+    }> = []
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+      const { data: page, error } = await buildBaseQuery()
+        .range(offset, offset + PAGE_SIZE - 1)
+      if (error) throw error
+      if (!page || page.length === 0) break
+      ecritures.push(...page)
+      if (page.length < PAGE_SIZE) break
+    }
 
     if (!ecritures || ecritures.length === 0) {
       return NextResponse.json({

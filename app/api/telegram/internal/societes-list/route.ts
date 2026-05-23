@@ -29,14 +29,14 @@ async function fetchAccessibleSocietes(userId: string, currentSocieteId: string)
   if (ids.length === 0) return []
   const { data } = await admin
     .from('societes')
-    .select('id, nom, brn, devise_defaut')
+    .select('id, nom, brn, devise_principale')
     .in('id', ids)
     .order('nom', { ascending: true })
   return (data || []).map((s: any) => ({
     id: s.id,
     nom: s.nom,
     brn: s.brn,
-    devise: s.devise_defaut || 'MUR',
+    devise: s.devise_principale || 'MUR',
     active: s.id === currentSocieteId,
   }))
 }

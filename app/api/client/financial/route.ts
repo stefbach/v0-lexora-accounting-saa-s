@@ -273,10 +273,13 @@ export async function GET(request: Request) {
 
     // === COMPUTE FINANCIAL METRICS ===
 
-    // Exclude incomplete month payroll: SAL/OD-PAIE entries in current month
-    const currentMonthFirst = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-    const isPayrollCurrentMonth = (e: any) =>
-      (e.journal === 'SAL' || e.journal === 'OD-PAIE') && e.date_ecriture >= currentMonthFirst
+    // NOTE 2026-05-21 — Le filtre isPayrollCurrentMonth a été retiré : il
+    // excluait TOUTE écriture SAL/OD-PAIE du mois courant pour éviter d'afficher
+    // des paies "en cours de saisie", mais avec l'import Excel les paies sont
+    // souvent finalisées dès le mois en cours. Résultat : les salaires (compte
+    // 6411/6415) disparaissaient du dashboard et P&L alors qu'ils étaient bien
+    // dans le PCM et le Grand Livre. L'endpoint /api/comptable/etats-financiers
+    // n'a jamais eu ce filtre — on s'aligne sur lui.
 
     // Revenue: class 7 accounts
     const totalRevenue = allEcritures
@@ -287,9 +290,9 @@ export async function GET(request: Request) {
       .filter(e => e.compte?.startsWith('7'))
       .reduce((sum, e) => sum + (Number(e.credit) || 0) - (Number(e.debit) || 0), 0)
 
-    // Expenses: class 6 accounts (exclude incomplete month payroll)
+    // Expenses: class 6 accounts
     const totalExpenses = allEcritures
-      .filter(e => e.compte?.startsWith('6') && !isPayrollCurrentMonth(e))
+      .filter(e => e.compte?.startsWith('6'))
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
     const monthlyExpenses = currentMonthEcritures
@@ -354,7 +357,6 @@ export async function GET(request: Request) {
         && !e.compte?.startsWith('6418')
         && e.journal !== 'ACH'
         && e.journal !== 'VTE'
-        && !isPayrollCurrentMonth(e)
       ).forEach(e => {
         const prefix = (e.compte || '6').substring(0, 3)
         expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
@@ -376,7 +378,6 @@ export async function GET(request: Request) {
       allEcritures.filter(e =>
         e.compte?.startsWith('6')
         && !e.compte?.startsWith('6418')
-        && !isPayrollCurrentMonth(e)
       ).forEach(e => {
         const prefix = (e.compte || '6').substring(0, 3)
         expensesByAccount[prefix] = (expensesByAccount[prefix] || 0) + (Number(e.debit) || 0) - (Number(e.credit) || 0)
@@ -417,19 +418,18 @@ export async function GET(request: Request) {
 
     // Payroll — P&L accounts (641 = salaires, 645 = charges patronales)
     // Exclusions :
-    //  - Mois courant (paie incomplète) → géré par isPayrollCurrentMonth
     //  - 6418 (indemnités compensatrices + ajustements `FAC-... écart` —
     //    écritures techniques, pas de la masse salariale réelle).
     //  - Journal ACH (factures fournisseurs : si une charge 641 a été passée
     //    à tort par ACH alors qu'elle existe aussi en SAL, double-comptage).
-    // Bug observé : 7,6M Rs affichés au lieu de 6,7M car 6418 (~883k
-    // d'ajustements `FAC-... écart`) gonflait artificiellement les salaires.
+    // NB : le filtre 'mois courant SAL/OD-PAIE' a été retiré (cf note ligne 276) —
+    // il masquait à tort les salaires du mois en cours alors que l'import Excel
+    // ingère des paies déjà finalisées.
     const salaires = allEcritures
       .filter(e =>
         e.compte?.startsWith('641')
         && !e.compte?.startsWith('6418')   // exclut indemnités/ajustements
         && e.journal !== 'ACH'             // évite double-comptage avec factures fournisseurs
-        && !isPayrollCurrentMonth(e)
       )
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 
@@ -442,7 +442,6 @@ export async function GET(request: Request) {
       .filter(e =>
         (e.compte?.startsWith('645') || e.compte?.startsWith('647') || e.compte?.startsWith('648'))
         && e.journal !== 'ACH'
-        && !isPayrollCurrentMonth(e)
       )
       .reduce((sum, e) => sum + (Number(e.debit) || 0) - (Number(e.credit) || 0), 0)
 

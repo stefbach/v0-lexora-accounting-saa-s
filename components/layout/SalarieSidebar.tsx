@@ -37,6 +37,7 @@ function getNav(locale: Locale) {
 // client_assistant → /client/assistant, comptable → /comptable, etc.).
 function getReturnConfig(locale: Locale): Record<string, { href: string; label: string }> {
   const rh = t('comp.emp_sidebar.back_rh', locale)
+  const tl = t('comp.emp_sidebar.back_team_leader', locale)
   const cli = t('comp.emp_sidebar.back_client', locale)
   const asst = t('comp.emp_sidebar.back_assistant', locale)
   const cab = t('comp.emp_sidebar.back_comptable', locale)
@@ -46,6 +47,7 @@ function getReturnConfig(locale: Locale): Record<string, { href: string; label: 
     admin:            { href: "/rh",               label: rh },
     super_admin:      { href: "/rh",               label: rh },
     manager:          { href: "/rh",               label: rh },
+    team_leader:      { href: "/rh",               label: tl },
     direction:        { href: "/rh",               label: rh },
     client_admin:     { href: "/client",           label: cli },
     client_assistant: { href: "/client/assistant", label: asst },

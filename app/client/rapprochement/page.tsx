@@ -158,6 +158,19 @@ export default function ClientRapprochementPage() {
   // Affect dialog : tx ciblée pour imputation manuelle
   const [affectTx, setAffectTx] = useState<BankTx | null>(null)
 
+  // Override de classification par tx (override de la proposition agent
+  // via Select inline dans SuggestionRow). Cf comptable/rapprochement/page.tsx.
+  const [classificationOverrides, setClassificationOverrides] = useState<
+    Map<string, { classification: string; compte: string }>
+  >(new Map())
+  const setOverride = useCallback((txId: string, classification: string, compte: string) => {
+    setClassificationOverrides((prev) => {
+      const next = new Map(prev)
+      next.set(txId, { classification, compte })
+      return next
+    })
+  }, [])
+
   const periodeDebut = modeToutes ? null : `${selectedAnnee}-${selectedMois}-01`
   const periodeFin = modeToutes
     ? null
@@ -346,7 +359,8 @@ export default function ClientRapprochementPage() {
   //   - frais_bancaires       : classification frais bancaires/agios/intérêts
   //   - salaires              : classification salaire bulk ou individuel
   //   - mra                   : paiement MRA / charges sociales
-  //   - virements_internes    : virement interne / transfert interne
+  //   - intercompte           : virement entre comptes d'une MÊME société → 5800
+  //   - inter_societes        : virement entre DEUX sociétés du groupe (DDS↔OCC) → 451
   //   - autres                : tout le reste (typiquement matches IA cross)
   function classifyBucket(
     tx: BankTx
@@ -356,13 +370,15 @@ export default function ClientRapprochementPage() {
     | "frais_bancaires"
     | "salaires"
     | "mra"
-    | "virements_internes"
+    | "intercompte"
+    | "inter_societes"
     | "autres" {
     const cls = (tx.classification || tx.classification_suggestion?.type || "").toLowerCase()
     if (cls === "frais_bancaires" || cls === "interets" || cls === "agios") return "frais_bancaires"
     if (cls === "salaire_bulk" || cls === "salaire_individuel" || cls === "reversal_salaire") return "salaires"
     if (cls === "paiement_mra" || cls === "charges_sociales") return "mra"
-    if (cls === "virement_interne" || cls === "transfert_interne") return "virements_internes"
+    if (cls === "inter_societe" || cls === "inter_societes") return "inter_societes"
+    if (cls === "virement_interne" || cls === "transfert_interne" || cls === "intercompte") return "intercompte"
     const fids =
       Array.isArray(tx.facture_ids) && tx.facture_ids.length > 0
         ? tx.facture_ids
@@ -396,7 +412,8 @@ export default function ClientRapprochementPage() {
       frais_bancaires: [] as BankTx[],
       salaires: [] as BankTx[],
       mra: [] as BankTx[],
-      virements_internes: [] as BankTx[],
+      intercompte: [] as BankTx[],
+      inter_societes: [] as BankTx[],
       autres: [] as BankTx[],
     }
     for (const tx of all) {
@@ -449,14 +466,23 @@ export default function ClientRapprochementPage() {
         color: "border-purple-300 bg-purple-50",
         items: buckets.salaires,
       })
-    if (buckets.virements_internes.length)
+    if (buckets.intercompte.length)
       g.push({
-        key: "virements_internes",
-        title: t('acc.rap.vir_title', locale),
-        desc: t('acc.rap.vir_desc', locale),
+        key: "intercompte",
+        title: "Virements intercompte (même société)",
+        desc: "Transferts entre 2 comptes bancaires de la même société (ex DDS MCB → DDS SBM). Compte de transit 5800 — solde doit revenir à 0 après le pendant.",
         icon: "🔄",
         color: "border-blue-300 bg-blue-50",
-        items: buckets.virements_internes,
+        items: buckets.intercompte,
+      })
+    if (buckets.inter_societes.length)
+      g.push({
+        key: "inter_societes",
+        title: "Virements inter-sociétés (groupe DDS ↔ OCC)",
+        desc: "Transferts entre 2 sociétés du même groupe. Compte courant Groupe 451 (IAS 24 related parties). Pas de transit — créance/dette permanente.",
+        icon: "🤝",
+        color: "border-indigo-300 bg-indigo-50",
+        items: buckets.inter_societes,
       })
     if (buckets.autres.length)
       g.push({
@@ -602,8 +628,15 @@ export default function ClientRapprochementPage() {
         }
       } else if (tx.compte_comptable && tx.classification) {
         body.action = "lettrer_manuel"
-        body.classification = tx.classification
-        body.compte_charge = tx.compte_comptable
+        // Override manuel via le Select inline (cf state classificationOverrides)
+        const override = classificationOverrides.get(tx.id)
+        if (override) {
+          body.classification = override.classification
+          body.compte_charge = override.compte
+        } else {
+          body.classification = tx.classification
+          body.compte_charge = tx.compte_comptable
+        }
       } else {
         return { ok: false, error: t('acc.rap.suggestion_incomplete', locale) }
       }
@@ -620,7 +653,7 @@ export default function ClientRapprochementPage() {
         return { ok: false, error: e?.message || t('acc.rap.network_error', locale) }
       }
     },
-    [societeId, locale]
+    [societeId, locale, classificationOverrides]
   )
 
   const handleValidateOne = async (tx: BankTx) => {
@@ -1107,6 +1140,8 @@ export default function ClientRapprochementPage() {
                                 onReject={() => handleRejectOne(tx)}
                                 facturesById={facturesById}
                                 locale={locale}
+                                override={classificationOverrides.get(tx.id)}
+                                onReclassify={setOverride}
                               />
                             ))}
                           </div>
@@ -1265,6 +1300,25 @@ function SourceBadge({ source }: { source: string | null | undefined }) {
   )
 }
 
+const RECLASS_OPTIONS_CLIENT: Array<{ value: string; compte: string; label: string }> = [
+  { value: "fournisseur", compte: "401", label: "401 — Fournisseur" },
+  { value: "client", compte: "411", label: "411 — Client" },
+  { value: "salaire_bulk", compte: "4210", label: "4210 — Salaires nets" },
+  { value: "charges_sociales", compte: "4421", label: "4421 — PAYE / MRA" },
+  { value: "nsf_csg", compte: "4431", label: "4431 — NSF / CSG" },
+  { value: "tva", compte: "4471", label: "4471 — TVA" },
+  { value: "inter_societe", compte: "451", label: "451 — Inter-sociétés (DDS ↔ OCC, groupe)" },
+  { value: "compte_courant_associe", compte: "455", label: "455 — CCA (Associé personne physique)" },
+  { value: "virement_interne", compte: "5800", label: "5800 — Intercompte (même société, 2 banques)" },
+  { value: "frais_bancaires", compte: "6271", label: "6271 — Services bancaires" },
+  { value: "interets", compte: "6611", label: "6611 — Intérêts" },
+  { value: "loyer", compte: "613", label: "613 — Locations / Loyer" },
+  { value: "electricite", compte: "6061", label: "6061 — Électricité / Eau" },
+  { value: "telecom", compte: "626", label: "626 — Télécommunications" },
+  { value: "assurance", compte: "616", label: "616 — Assurances" },
+  { value: "autre", compte: "658", label: "658 — Charges diverses" },
+]
+
 function SuggestionRow({
   tx,
   type,
@@ -1274,6 +1328,8 @@ function SuggestionRow({
   onReject,
   facturesById,
   locale,
+  override,
+  onReclassify,
 }: {
   tx: BankTx
   type: "match" | "classification"
@@ -1283,6 +1339,8 @@ function SuggestionRow({
   onReject: () => void
   facturesById: Map<string, Facture>
   locale: Locale
+  override?: { classification: string; compte: string }
+  onReclassify?: (txId: string, classification: string, compte: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
@@ -1348,12 +1406,44 @@ function SuggestionRow({
               )}
             </p>
           ) : (
-            <p className="text-xs">
+            <p className="text-xs flex items-center gap-1.5 flex-wrap">
               <span className="text-muted-foreground">{t('acc.rap.pcm_arrow', locale)} </span>
-              <Badge variant="outline" className="font-mono text-[10px]">
-                {tx.compte_comptable || "?"}
-              </Badge>
-              <span className="text-muted-foreground"> ({tx.classification})</span>
+              {onReclassify ? (
+                <Select
+                  value={override?.classification ?? (tx.classification || "")}
+                  onValueChange={(v) => {
+                    const opt = RECLASS_OPTIONS_CLIENT.find((o) => o.value === v)
+                    if (opt) onReclassify(tx.id, opt.value, opt.compte)
+                  }}
+                >
+                  <SelectTrigger
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-6 px-2 py-0 text-[10px] font-mono w-auto inline-flex min-w-[200px]"
+                  >
+                    <SelectValue>
+                      <span className="font-mono">
+                        {override
+                          ? `${override.compte} (${override.classification}) ✏️`
+                          : `${tx.compte_comptable || "?"} (${tx.classification || "?"})`}
+                      </span>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RECLASS_OPTIONS_CLIENT.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono">
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <>
+                  <Badge variant="outline" className="font-mono text-[10px]">
+                    {tx.compte_comptable || "?"}
+                  </Badge>
+                  <span className="text-muted-foreground"> ({tx.classification})</span>
+                </>
+              )}
             </p>
           )}
           <div className="flex items-center gap-1.5 flex-wrap">

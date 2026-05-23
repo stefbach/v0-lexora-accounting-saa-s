@@ -26,6 +26,7 @@ const ALLOWED_ROLES = new Set([
   "rh",
   "rh_manager",
   "manager",
+  "team_leader",
   "admin",
   "super_admin",
   "direction",

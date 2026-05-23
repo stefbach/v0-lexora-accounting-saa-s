@@ -108,6 +108,14 @@ export default function ClientBanquePage() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [search, setSearch] = useState("")
   const [filtreCompte, setFiltreCompte] = useState<string>("all")
+  // Taux de change MUR — fetché au mount pour cumuler les soldes multi-devises
+  const [taux, setTaux] = useState<Record<string, number>>({ MUR: 1 })
+  useEffect(() => {
+    fetch('/api/taux-change', { cache: 'force-cache' })
+      .then(r => r.json())
+      .then(d => { if (d?.rates) setTaux({ ...d.rates, MUR: 1 }) })
+      .catch(() => {})
+  }, [])
   const [filtreStatut, setFiltreStatut] = useState<string>("all")
   const [maxRows, setMaxRows] = useState(100)
 
@@ -174,8 +182,11 @@ export default function ClientBanquePage() {
   }
 
   const totalSoldes = useMemo(
-    () => comptes.reduce((s, c) => s + (c.solde_actuel || 0), 0),
-    [comptes]
+    () => comptes.reduce((s, c) => {
+      const taux_devise = taux[c.devise || 'MUR'] || 1
+      return s + (c.solde_actuel || 0) * taux_devise
+    }, 0),
+    [comptes, taux]
   )
   const lastImport = useMemo(() => {
     if (releves.length === 0) return null
@@ -288,7 +299,7 @@ export default function ClientBanquePage() {
               <KpiCard label={t('acc.bnq.active_accounts', locale)} value={comptes.filter((c) => c.actif).length} />
               <KpiCard
                 label={t('acc.bnq.cumulative_balance', locale)}
-                value={fmt(totalSoldes, comptes[0]?.devise || "MUR")}
+                value={fmt(totalSoldes, "MUR")}
                 tone="green"
               />
               <KpiCard
@@ -366,7 +377,9 @@ export default function ClientBanquePage() {
                             {stale && (
                               <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
                                 <AlertTriangle className="h-3 w-3 mr-1" />
-                                {t('acc.bnq.no_stmt_for_d', locale).replace('{d}', String(days))}
+                                {Number.isFinite(days)
+                                  ? t('acc.bnq.no_stmt_for_d', locale).replace('{d}', String(days))
+                                  : 'Aucun relevé'}
                               </Badge>
                             )}
                           </div>
