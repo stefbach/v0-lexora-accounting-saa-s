@@ -130,7 +130,7 @@ export default function AuthLoginPage() {
         <CardFooter className="justify-center">
           <p className="text-sm text-muted-foreground">
             {txt.no_account}{" "}
-            <Link href="#" className="font-medium hover:underline" style={{ color: "#D4AF37" }}>{txt.contact_admin}</Link>
+            <Link href="/inscription" className="font-medium hover:underline" style={{ color: "#D4AF37" }}>{txt.contact_admin}</Link>
           </p>
         </CardFooter>
       </Card>

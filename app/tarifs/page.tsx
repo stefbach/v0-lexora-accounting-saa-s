@@ -601,15 +601,44 @@ function annualPrice(monthly: number): number {
 /*  Sub-components                                                     */
 /* ------------------------------------------------------------------ */
 
+function footerLinkHref(label: string): string {
+  const map: Record<string, string> = {
+    // FR
+    "Modules": "/#features",
+    "Tarifs": "/tarifs",
+    "Sécurité": "/protection-donnees",
+    "Changelog": "/#new-2026",
+    "Santé salariés": "/#features",
+    "Téléconsultation": "/#features",
+    "Bien-être": "/#features",
+    "Partenaires": "/inscription?role=expert",
+    "Support": "mailto:contact@lexora.finance?subject=Support",
+    "Démo": "/inscription",
+    "Partenariats": "/inscription?role=expert",
+    "Presse": "mailto:contact@lexora.finance?subject=Presse",
+    // EN
+    "Pricing": "/tarifs",
+    "Security": "/protection-donnees",
+    "Employee health": "/#features",
+    "Teleconsultation": "/#features",
+    "Wellbeing": "/#features",
+    "Partners": "/inscription?role=expert",
+    "Demo": "/inscription",
+    "Partnerships": "/inscription?role=expert",
+    "Press": "mailto:contact@lexora.finance?subject=Press",
+  }
+  return map[label] || "/#features"
+}
+
 /* ---------- Tier Card ---------- */
 function TierCard({
   badge, badgeColor, name, desc, criteria, monthlyPrice, roi, emra,
-  storage, features, ctaLabel, ctaPrimary, billing, txt, tibokFeats,
+  storage, features, ctaLabel, ctaHref, ctaPrimary, billing, txt, tibokFeats,
 }: {
   badge: string; badgeColor: string; name: string; desc: string
   criteria: string; monthlyPrice: number; roi: string; emra: string
   storage: string; features: { label: string; included: boolean }[]
-  ctaLabel: string; ctaPrimary: boolean; billing: "monthly" | "annual"
+  ctaLabel: string; ctaHref: string; ctaPrimary: boolean; billing: "monthly" | "annual"
   txt: Txt; tibokFeats?: string[]
 }) {
   const price = billing === "monthly" ? monthlyPrice : annualPrice(monthlyPrice)
@@ -763,10 +792,12 @@ function TierCard({
       )}
 
       {/* CTA */}
-      <button style={{
+      <Link href={ctaHref} style={{
         position: "relative",
+        display: "block",
         width: "100%", padding: "14px", borderRadius: "12px",
         fontWeight: 700, fontSize: "14px", cursor: "pointer",
+        textAlign: "center", textDecoration: "none",
         border: ctaPrimary ? "none" : `1px solid ${C.navyBorder}`,
         backgroundColor: ctaPrimary ? C.gold : "transparent",
         color: ctaPrimary ? C.bg : C.white,
@@ -780,7 +811,7 @@ function TierCard({
       onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1.02)" }}
       >
         {ctaLabel}
-      </button>
+      </Link>
     </div>
   )
 }
@@ -901,6 +932,7 @@ export default function TarifsPage() {
         storage={txt.tierStorages[i]}
         features={featLabels.map((label, j) => ({ label, included: included[i][j] }))}
         ctaLabel={txt.tierCtas[i]}
+        ctaHref={i === txt.tierNames.length - 1 ? "/inscription?role=enterprise" : "/inscription"}
         ctaPrimary={i === 1}
         billing={billing}
         txt={txt}
@@ -1817,7 +1849,7 @@ export default function TarifsPage() {
                 {txt.footerProduit}
               </h4>
               {txt.footerProduitLinks.map((l) => (
-                <div key={l}><Link href="#" style={{ color: C.muted, fontSize: "13px", textDecoration: "none", lineHeight: 2 }}>{l}</Link></div>
+                <div key={l}><Link href={footerLinkHref(l)} style={{ color: C.muted, fontSize: "13px", textDecoration: "none", lineHeight: 2 }}>{l}</Link></div>
               ))}
             </div>
             {/* TIBOK */}
@@ -1826,7 +1858,7 @@ export default function TarifsPage() {
                 {txt.footerTibok}
               </h4>
               {txt.footerTibokLinks.map((l) => (
-                <div key={l}><Link href="#" style={{ color: C.muted, fontSize: "13px", textDecoration: "none", lineHeight: 2 }}>{l}</Link></div>
+                <div key={l}><Link href={footerLinkHref(l)} style={{ color: C.muted, fontSize: "13px", textDecoration: "none", lineHeight: 2 }}>{l}</Link></div>
               ))}
             </div>
             {/* Contact */}
@@ -1835,7 +1867,7 @@ export default function TarifsPage() {
                 {txt.footerContact}
               </h4>
               {txt.footerContactLinks.map((l) => (
-                <div key={l}><Link href="#" style={{ color: C.muted, fontSize: "13px", textDecoration: "none", lineHeight: 2 }}>{l}</Link></div>
+                <div key={l}><Link href={footerLinkHref(l)} style={{ color: C.muted, fontSize: "13px", textDecoration: "none", lineHeight: 2 }}>{l}</Link></div>
               ))}
             </div>
           </div>
