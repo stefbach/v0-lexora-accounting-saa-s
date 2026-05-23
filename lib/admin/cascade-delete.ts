@@ -206,7 +206,13 @@ async function cascadeBanque(
     }
   }
 
-  // Étendre aux contreparties via ref_folio (même lot) :
+  // Étendre aux contreparties via ref_folio (même lot) — UNIQUEMENT dans les
+  // journaux banque. Sans ce filtre, une écriture OD-PAIE / AN / VTE / ACH qui
+  // partagerait un ref_folio (cas typique : ref_folio = "BP-{uuid}" porté par
+  // l'OD-PAIE de la charge salariale ET le BNQ du paiement du salaire) serait
+  // wipée par effet de bord — c'est exactement le bug du 2026-05-23 sur la
+  // société 1826dde7-7b41-4d14-bc75-d8d22dfc75fb (2025 écritures OD-PAIE
+  // supprimées involontairement).
   const refFolios = [...new Set(snapshot.map(r => r.ref_folio).filter(Boolean) as string[])]
   let counterparts: Array<{ id: string; lettre: string | null }> = []
   if (refFolios.length > 0) {
@@ -215,6 +221,7 @@ async function cascadeBanque(
       .select('id, lettre')
       .eq('societe_id', societe_id)
       .in('ref_folio', refFolios)
+      .in('journal', ['BNQ', 'BQ', 'BANK'])
     counterparts = cp || []
   }
   const allEcritureIds = [...new Set([...scopedIds, ...counterparts.map(c => c.id)])]
