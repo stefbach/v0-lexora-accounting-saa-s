@@ -1,228 +1,120 @@
 # Lexora MCP Server
 
-## Description
+Serveur **Model Context Protocol** qui expose ton instance Lexora à Claude
+(Desktop ou autre client MCP) et à n8n / scripts ops.
 
-Serveur MCP (Model Context Protocol) qui permet à Claude (Desktop, API, ou Code) de piloter directement votre instance Lexora.
+## Outils disponibles (v0.2.0)
 
-Au lieu d'une API REST classique, MCP permet à Claude d'utiliser Lexora comme un outil natif — Claude voit les schémas TypeScript exactement, sans prompts élaborés, pour un pilotage conversationnel naturel de votre comptabilité et RH.
+| Outil | Description | Endpoint Lexora |
+|---|---|---|
+| `list_societes` | Liste les sociétés du user | `GET /api/client/societes` |
+| `get_financial_summary` | Dashboard + P&L d'une société sur une période | `GET /api/client/financial` |
+| `list_factures` | Liste factures clients/fournisseurs avec filtres | `GET /api/client/factures` |
+| `list_alertes` | Alertes conformité + financières actives | `GET /api/client/alertes` |
+| `get_taux_change` | Taux MUR (BOM officiels + fallback) | `GET /api/taux-change` |
+
+Tous les outils sont **read-only** dans cette version. L'écriture (création
+de factures, écritures, paie) reste pilotée par l'UI Lexora avec workflow
+d'approbation humain.
+
+## Architecture
+
+```
+Claude Desktop  ──stdio──▶  mcp-server (Node, ce package)
+                                │
+                                │  HTTP avec headers :
+                                │    X-Internal-Token: <secret partagé>
+                                │    X-Internal-User-Id: <UUID utilisateur>
+                                ▼
+                         Lexora API (Next.js sur Vercel)
+                                │
+                                └─▶ Supabase (PostgreSQL)
+```
+
+Le token interne est validé côté Lexora dans `lib/lexora-internal-auth.ts`
+contre la variable d'environnement `INTERNAL_API_TOKEN`. La résolution
+d'utilisateur (session OR token) se fait via `lib/supabase/auth-resolver.ts`.
 
 ## Installation
 
-```bash
-npm install -g @lexora/mcp-server
+### 1. Pré-requis côté Lexora
+
+Sur ton déploiement Vercel, ajouter la variable d'env :
+
+```
+INTERNAL_API_TOKEN=<un secret long aléatoire — 32+ caractères>
 ```
 
-Ou via npx (sans installation globale) :
+Récupérer l'UUID de ton utilisateur Lexora (visible dans Supabase Studio
+ou via `SELECT id FROM auth.users WHERE email = 'toi@x.mu'`).
+
+### 2. Build du MCP en local
 
 ```bash
-npx @lexora/mcp-server
+cd v0-lexora-accounting-saa-s/mcp-server
+npm install
+npm run build
 ```
 
-## Configuration Claude Desktop
+Vérifier que `dist/index.js` existe.
 
-Éditer le fichier de configuration Claude Desktop :
+### 3. Configurer Claude Desktop
 
-- **Mac** : `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows** : `%APPDATA%/Claude/claude_desktop_config.json`
-- **Linux** : `~/.config/Claude/claude_desktop_config.json`
+Éditer `~/Library/Application Support/Claude/claude_desktop_config.json`
+(macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows), ou
+`~/.config/Claude/claude_desktop_config.json` (Linux) :
 
 ```json
 {
   "mcpServers": {
     "lexora": {
-      "command": "npx",
-      "args": ["@lexora/mcp-server"],
+      "command": "node",
+      "args": [
+        "/chemin/absolu/v0-lexora-accounting-saa-s/mcp-server/dist/index.js"
+      ],
       "env": {
-        "LEXORA_API_URL": "https://your-lexora-instance.com",
-        "LEXORA_API_KEY": "your-api-key-here"
+        "LEXORA_API_URL": "https://ton-lexora.vercel.app",
+        "LEXORA_INTERNAL_TOKEN": "<le même secret que côté Lexora>",
+        "LEXORA_USER_ID": "<ton UUID Supabase auth.users>",
+        "LEXORA_USER_EMAIL": "toi@ton-domaine.mu"
       }
     }
   }
 }
 ```
 
-Redémarrer Claude Desktop après modification.
+### 4. Redémarrer Claude Desktop
 
-## Variables d'Environnement
+**Quit complet** (Cmd+Q sur Mac, systray Quit sur Windows). Puis relancer.
 
-| Variable | Description | Défaut |
+### 5. Vérifier
+
+Dans une nouvelle conversation Claude Desktop, taper :
+> *Liste mes sociétés Lexora.*
+
+Claude doit appeler `list_societes` et te retourner DDS, OCC, etc.
+
+## Variables d'environnement
+
+| Variable | Requis | Description |
 |---|---|---|
-| `LEXORA_API_URL` | URL de votre instance Lexora | `http://localhost:3000` |
-| `LEXORA_API_KEY` | Clé API Bearer | *(vide)* |
-
-## Outils Disponibles
-
-### Comptabilité
-
-#### `list_societes`
-Liste toutes les sociétés accessibles à l'utilisateur courant.
-
-```
-Paramètres : aucun
-Retour : tableau de sociétés avec id, nom, devise, framework comptable
-```
-
-#### `get_balance`
-Solde d'un compte comptable pour une période donnée.
-
-```
-Paramètres requis : societeId, accountNumber
-Paramètres optionnels : startDate (YYYY-MM-DD), endDate (YYYY-MM-DD)
-Retour : solde débiteur/créditeur en MUR ou devise d'origine
-```
-
-#### `get_chart_of_accounts`
-Plan comptable complet (PCM Mauritius ou SYSCOHADA).
-
-```
-Paramètres optionnels : framework (PCM|SYSCOHADA), classNumber (1-9)
-Retour : liste des comptes avec numéro, libellé, classe, type
-```
-
-#### `search_journal_entries`
-Recherche d'écritures GL avec filtres combinables.
-
-```
-Paramètres requis : societeId
-Paramètres optionnels : startDate, endDate, accountNumber, journalCode (VTE|ACH|BNQ|SAL|OD), minAmount, maxAmount, limit
-Retour : liste d'écritures avec détail des lignes
-```
-
-#### `post_journal_entry`
-Crée une nouvelle écriture comptable. Passe par le workflow d'approbation Lexora.
-
-```
-Paramètres requis : societeId, date, description, journalCode, lines[]
-Contrainte : total débit = total crédit (écriture équilibrée)
-Retour : id écriture + statut workflow (pending_approval)
-```
-
-#### `generate_financial_statement`
-Génère les états financiers réglementaires.
-
-```
-Paramètres requis : societeId, statementType, periodStart, periodEnd
-statementType : balance_sheet | income_statement | cash_flow | tafire | all
-Paramètres optionnels : comparativePeriod (boolean, N vs N-1)
-Retour : état financier structuré au format PCM/SYSCOHADA
-```
-
-### RH & Paie
-
-#### `list_employees`
-Liste les employés d'une société.
-
-```
-Paramètres requis : societeId
-Paramètres optionnels : active (boolean)
-Retour : liste employés avec id, nom, poste, salaire brut, juridiction
-```
-
-#### `calculate_payslip`
-Calcule un bulletin de paie en mode preview (ne sauvegarde pas).
-
-```
-Paramètres requis : jurisdictionCode (MU|SN|CI...), employeeId, grossSalary
-Paramètres optionnels : bonuses, familyDependents, period {year, month}
-Retour : décomposition brut→net (PAYE, NSF, CSG, cotisations patronales)
-```
-
-### Commercial
-
-#### `search_invoices`
-Recherche de factures avec filtres.
-
-```
-Paramètres requis : societeId
-Paramètres optionnels : status (draft|sent|paid|overdue|cancelled), customerId, startDate, endDate
-Retour : liste factures avec montant, client, échéance, statut
-```
-
-### Devises
-
-#### `get_forex_rate`
-Taux de change temps réel ou historique.
-
-```
-Paramètres requis : base (ex: EUR), quote (ex: MUR)
-Paramètres optionnels : date (YYYY-MM-DD pour cours historique)
-Retour : taux, variation, source
-```
-
-### Audit
-
-#### `get_audit_trail`
-Piste d'audit immuable pour toute entité.
-
-```
-Paramètres requis : entityType (invoice|journal_entry|payslip|employee), entityId
-Retour : log chronologique des actions (qui, quoi, quand, depuis quelle IP)
-```
-
-## Exemples d'Usage avec Claude
-
-### "Quel est le solde du compte 411 (clients) pour la société TIBOK ?"
-
-Claude enchaîne automatiquement :
-1. `list_societes` → trouve l'id de TIBOK
-2. `get_balance` avec `accountNumber: "411"` → retourne le solde net
-
-### "Calcule un bulletin pour Jean Dupont, salaire brut 500 000 XOF, Sénégal, 2 enfants"
-
-Claude enchaîne :
-1. `list_employees` → trouve l'id de Jean Dupont
-2. `calculate_payslip` avec `jurisdictionCode: "SN"`, `grossSalary: 500000`, `familyDependents: 2`
-3. Affiche la décomposition complète IRPP, IPRES, CSS
-
-### "Génère le bilan comparatif 2024 vs 2023 pour OCC"
-
-Claude appelle :
-1. `list_societes` → trouve OCC
-2. `generate_financial_statement` avec `statementType: "balance_sheet"`, `comparativePeriod: true`
-
-### "Passe l'écriture de provisions pour congés payés de 250 000 MUR"
-
-Claude appelle :
-1. `post_journal_entry` avec les lignes débit 6619 / crédit 4280 équilibrées
-2. Informe que l'écriture est en attente d'approbation
+| `LEXORA_API_URL` | oui | URL de l'instance Lexora |
+| `LEXORA_INTERNAL_TOKEN` | oui | Secret partagé avec `INTERNAL_API_TOKEN` côté Lexora |
+| `LEXORA_USER_ID` | oui | UUID utilisateur Lexora à usurper (tenant isolation) |
+| `LEXORA_USER_EMAIL` | non | Email pour logs/audit côté Lexora |
 
 ## Sécurité
 
-- **Authentification** : API Key Bearer requise, jamais exposée dans les logs
-- **Workflow d'approbation** : toutes les écritures POST passent par validation humaine
-- **Audit trail immuable** : chaque appel MCP est tracé (utilisateur, timestamp, payload)
-- **Rate limiting** : 100 requêtes/heure par clé API par défaut
-- **Read-only par défaut** : seul `post_journal_entry` modifie des données
+- **Le token interne donne accès à TOUTES les données de l'utilisateur usurpé**.
+  Ne pas le partager. Le stocker uniquement dans le fichier `claude_desktop_config.json`
+  qui est local à ta machine.
+- **Tenant isolation** : `LEXORA_USER_ID` détermine quelles sociétés sont
+  accessibles. Si tu mets l'UUID d'un autre user, tu vois ses sociétés.
+- **Rotation** : change le token Vercel + ton config local en cas de doute.
 
-## Développement Local
-
-```bash
-git clone https://github.com/lexora/mcp-server
-cd mcp-server
-npm install
-```
-
-Démarrer en mode dev (hot reload) :
+## Développement
 
 ```bash
-LEXORA_API_URL=http://localhost:3000 LEXORA_API_KEY=dev-key npm run dev
+npm run dev    # tsx en mode watch
+npm run build  # tsc → dist/
 ```
-
-Compiler pour la production :
-
-```bash
-npm run build
-npm start
-```
-
-## Pourquoi MCP plutôt qu'une API REST classique ?
-
-| Critère | API REST | MCP |
-|---|---|---|
-| Intégration Claude | Prompts manuels | Native, schémas TypeScript |
-| Découverte des outils | Documentation PDF | Auto-discovery à la connexion |
-| Workflow conversationnel | Limité | Naturel, multi-étapes |
-| Appels chaînés | Manuel | Automatique par Claude |
-| Sécurité | Token dans prompt | Env vars isolées |
-
-MCP transforme Lexora en co-pilote comptable : Claude comprend exactement quels outils sont disponibles, leurs paramètres, et les enchaîne intelligemment pour répondre aux questions métier.

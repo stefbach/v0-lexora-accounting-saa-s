@@ -1,36 +1,36 @@
 #!/usr/bin/env node
 /**
- * Lexora MCP Server
- * Provides Claude AI direct access to Lexora accounting & HR functions.
+ * Lexora MCP Server — Model Context Protocol pour Claude Desktop, n8n, API.
  *
- * Tools exposed:
- *   - list_societes: List all companies the user has access to
- *   - get_balance: Get account balance for a period
- *   - get_chart_of_accounts: Retrieve full chart of accounts (PCM or SYSCOHADA)
- *   - search_journal_entries: Search GL entries with filters
- *   - post_journal_entry: Create a new GL entry (requires approval workflow)
- *   - get_employee: Get employee details
- *   - list_payslips: List recent payslips for an employee
- *   - calculate_payslip: Calculate a payslip (without saving)
- *   - get_invoice: Get invoice details
- *   - search_invoices: Search invoices with filters
- *   - generate_statement: Generate Bilan/CR/Cash Flow
- *   - get_forex_rate: Get real-time exchange rate
+ * Permet à Claude (et autres clients MCP) d'utiliser Lexora comme un outil
+ * natif. Read-only par défaut — pas d'écriture en compta sans approbation
+ * humaine côté Lexora UI.
  *
- * Usage in Claude Desktop:
- * Add to claude_desktop_config.json:
- * {
- *   "mcpServers": {
- *     "lexora": {
- *       "command": "npx",
- *       "args": ["@lexora/mcp-server"],
- *       "env": {
- *         "LEXORA_API_URL": "https://your-lexora.com",
- *         "LEXORA_API_KEY": "your-api-key"
+ * AUTH : header `X-Internal-Token` + `X-Internal-User-Id` (cf.
+ * lib/lexora-internal-auth.ts côté serveur Lexora). Le token est validé
+ * contre `process.env.INTERNAL_API_TOKEN` côté Lexora.
+ *
+ * ENV CÔTÉ MCP (à mettre dans claude_desktop_config.json) :
+ *   LEXORA_API_URL          URL de l'instance Lexora (ex: https://lexora.vercel.app)
+ *   LEXORA_INTERNAL_TOKEN   Token secret partagé (= INTERNAL_API_TOKEN côté Lexora)
+ *   LEXORA_USER_ID          UUID de l'utilisateur Lexora à usurper (toi-même)
+ *   LEXORA_USER_EMAIL       (optionnel) email pour les logs côté Lexora
+ *
+ * USAGE Claude Desktop (~/.config/Claude/claude_desktop_config.json) :
+ *   {
+ *     "mcpServers": {
+ *       "lexora": {
+ *         "command": "node",
+ *         "args": ["/chemin/absolu/v0-lexora-accounting-saa-s/mcp-server/dist/index.js"],
+ *         "env": {
+ *           "LEXORA_API_URL": "https://ton-instance.vercel.app",
+ *           "LEXORA_INTERNAL_TOKEN": "...",
+ *           "LEXORA_USER_ID": "uuid-supabase",
+ *           "LEXORA_USER_EMAIL": "toi@ton-domaine.mu"
+ *         }
  *       }
  *     }
  *   }
- * }
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
@@ -39,318 +39,162 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
-import { z } from 'zod'
 
-const LEXORA_API_URL = process.env.LEXORA_API_URL ?? 'http://localhost:3000'
-const LEXORA_API_KEY = process.env.LEXORA_API_KEY ?? ''
+const LEXORA_API_URL = (process.env.LEXORA_API_URL || 'http://localhost:3000').replace(/\/$/, '')
+const LEXORA_INTERNAL_TOKEN = process.env.LEXORA_INTERNAL_TOKEN ?? ''
+const LEXORA_USER_ID = process.env.LEXORA_USER_ID ?? ''
+const LEXORA_USER_EMAIL = process.env.LEXORA_USER_EMAIL ?? ''
 
-async function lexoraFetch(path: string, options: RequestInit = {}) {
-  const url = `${LEXORA_API_URL}${path}`
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${LEXORA_API_KEY}`,
-      ...options.headers,
-    },
-  })
-  if (!response.ok) {
-    throw new Error(`Lexora API error ${response.status}: ${await response.text()}`)
+if (!LEXORA_INTERNAL_TOKEN || !LEXORA_USER_ID) {
+  console.error('[lexora-mcp] LEXORA_INTERNAL_TOKEN et LEXORA_USER_ID sont requis dans l\'env')
+  process.exit(1)
+}
+
+async function lexoraFetch(path: string, init: RequestInit = {}) {
+  const url = `${LEXORA_API_URL}${path.startsWith('/') ? path : '/' + path}`
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Internal-Token': LEXORA_INTERNAL_TOKEN,
+    'X-Internal-User-Id': LEXORA_USER_ID,
+    ...(init.headers as Record<string, string> | undefined),
   }
-  return response.json()
+  if (LEXORA_USER_EMAIL) headers['X-Internal-User-Email'] = LEXORA_USER_EMAIL
+
+  const res = await fetch(url, { ...init, headers })
+  const contentType = res.headers.get('content-type') || ''
+  const body = contentType.includes('json') ? await res.json() : await res.text()
+  if (!res.ok) {
+    const detail = typeof body === 'string' ? body : JSON.stringify(body)
+    throw new Error(`Lexora ${res.status} sur ${path}: ${detail}`)
+  }
+  return body
 }
 
 const server = new Server(
-  { name: 'lexora-mcp', version: '0.1.0' },
-  { capabilities: { tools: {} } }
+  { name: 'lexora-mcp', version: '0.2.0' },
+  { capabilities: { tools: {} } },
 )
 
-// ============================================================================
-// TOOLS REGISTRY
-// ============================================================================
-
-const tools = [
+// ============================================================
+// Liste des outils exposés à Claude
+// ============================================================
+const TOOLS = [
   {
     name: 'list_societes',
-    description: 'List all companies (sociétés) accessible to the user.',
-    inputSchema: { type: 'object', properties: {} },
+    description:
+      'Liste les sociétés accessibles à l\'utilisateur Lexora connecté. Retourne id, nom, BRN, VAT, devise, régime fiscal.',
+    inputSchema: { type: 'object' as const, properties: {} },
   },
   {
-    name: 'get_balance',
-    description: 'Get account balance for a specific period. Returns balance in MUR or original currency.',
+    name: 'get_financial_summary',
+    description:
+      'Synthèse financière d\'une société pour une période : revenus, dépenses, TVA, masse salariale, trésorerie, créances, dettes. Source identique au Dashboard et P&L Lexora.',
     inputSchema: {
-      type: 'object',
+      type: 'object' as const,
       properties: {
-        societeId: { type: 'string', description: 'UUID of the société' },
-        accountNumber: { type: 'string', description: 'Account number (e.g., "411", "4210")' },
-        startDate: { type: 'string', description: 'YYYY-MM-DD' },
-        endDate: { type: 'string', description: 'YYYY-MM-DD' },
+        societe_id: { type: 'string', description: 'UUID de la société (cf. list_societes)' },
+        exercice: { type: 'string', description: 'Exercice fiscal mauricien (Jul-Jun), ex: "2025-2026". Optionnel.' },
+        date_debut: { type: 'string', description: 'Début période YYYY-MM-DD, alternative à exercice' },
+        date_fin: { type: 'string', description: 'Fin période YYYY-MM-DD' },
       },
-      required: ['societeId', 'accountNumber'],
+      required: ['societe_id'],
     },
   },
   {
-    name: 'get_chart_of_accounts',
-    description: 'Retrieve the chart of accounts (PCM Mauritius or SYSCOHADA).',
+    name: 'list_factures',
+    description:
+      'Liste les factures (clients et fournisseurs) d\'une société. Filtres optionnels par type, statut, période.',
     inputSchema: {
-      type: 'object',
+      type: 'object' as const,
       properties: {
-        framework: { type: 'string', enum: ['PCM', 'SYSCOHADA'], description: 'Framework' },
-        classNumber: { type: 'number', description: 'Optional class filter (1-9)' },
+        societe_id: { type: 'string' },
+        type_facture: { type: 'string', enum: ['client', 'fournisseur'], description: 'Filtre par type. Par défaut : tous.' },
+        statut: { type: 'string', enum: ['brouillon', 'en_attente', 'paye', 'retard', 'annule'] },
+        limit: { type: 'number', description: 'Max résultats. Défaut 50.' },
       },
+      required: ['societe_id'],
     },
   },
   {
-    name: 'search_journal_entries',
-    description: 'Search GL entries with filters (date range, account, journal code, amount range).',
+    name: 'list_alertes',
+    description:
+      'Alertes financières et de conformité actives pour une société : TVA en retard, créances anciennes, ratio liquidité dégradé, échéances MRA à venir, etc.',
     inputSchema: {
-      type: 'object',
+      type: 'object' as const,
       properties: {
-        societeId: { type: 'string' },
-        startDate: { type: 'string' },
-        endDate: { type: 'string' },
-        accountNumber: { type: 'string' },
-        journalCode: { type: 'string', enum: ['VTE', 'ACH', 'BNQ', 'SAL', 'OD'] },
-        minAmount: { type: 'number' },
-        maxAmount: { type: 'number' },
-        limit: { type: 'number', description: 'Max results (default 50)' },
+        societe_id: { type: 'string' },
       },
-      required: ['societeId'],
+      required: ['societe_id'],
     },
   },
   {
-    name: 'post_journal_entry',
-    description: 'Create a new GL entry. Requires balanced debits/credits. Goes through approval workflow.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        societeId: { type: 'string' },
-        date: { type: 'string' },
-        description: { type: 'string' },
-        journalCode: { type: 'string', enum: ['VTE', 'ACH', 'BNQ', 'SAL', 'OD'] },
-        lines: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              accountNumber: { type: 'string' },
-              debit: { type: 'number' },
-              credit: { type: 'number' },
-              description: { type: 'string' },
-            },
-            required: ['accountNumber', 'debit', 'credit'],
-          },
-        },
-      },
-      required: ['societeId', 'date', 'description', 'journalCode', 'lines'],
-    },
-  },
-  {
-    name: 'list_employees',
-    description: 'List employees for a société with optional filters.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        societeId: { type: 'string' },
-        active: { type: 'boolean', description: 'Filter active employees only' },
-      },
-      required: ['societeId'],
-    },
-  },
-  {
-    name: 'calculate_payslip',
-    description: 'Calculate a payslip preview (does NOT save). Returns gross→net breakdown with all deductions.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        jurisdictionCode: { type: 'string', description: 'MU, SN, CI, etc.' },
-        employeeId: { type: 'string' },
-        grossSalary: { type: 'number' },
-        bonuses: { type: 'number' },
-        familyDependents: { type: 'number' },
-        period: {
-          type: 'object',
-          properties: {
-            year: { type: 'number' },
-            month: { type: 'number' }
-          }
-        },
-      },
-      required: ['jurisdictionCode', 'employeeId', 'grossSalary'],
-    },
-  },
-  {
-    name: 'search_invoices',
-    description: 'Search invoices with filters (status, customer, date range, amount).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        societeId: { type: 'string' },
-        status: { type: 'string', enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled'] },
-        customerId: { type: 'string' },
-        startDate: { type: 'string' },
-        endDate: { type: 'string' },
-      },
-      required: ['societeId'],
-    },
-  },
-  {
-    name: 'generate_financial_statement',
-    description: 'Generate Bilan, Compte de Résultat, or Cash Flow statement for a société.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        societeId: { type: 'string' },
-        statementType: { type: 'string', enum: ['balance_sheet', 'income_statement', 'cash_flow', 'tafire', 'all'] },
-        periodStart: { type: 'string' },
-        periodEnd: { type: 'string' },
-        comparativePeriod: { type: 'boolean' },
-      },
-      required: ['societeId', 'statementType', 'periodStart', 'periodEnd'],
-    },
-  },
-  {
-    name: 'get_forex_rate',
-    description: 'Get real-time exchange rate between two currencies.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        base: { type: 'string', description: 'Base currency (e.g., EUR)' },
-        quote: { type: 'string', description: 'Quote currency (e.g., MUR)' },
-        date: { type: 'string', description: 'Optional historical date YYYY-MM-DD' },
-      },
-      required: ['base', 'quote'],
-    },
-  },
-  {
-    name: 'get_audit_trail',
-    description: 'Retrieve audit log for a specific entity (invoice, journal entry, payslip).',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        entityType: { type: 'string', enum: ['invoice', 'journal_entry', 'payslip', 'employee'] },
-        entityId: { type: 'string' },
-      },
-      required: ['entityType', 'entityId'],
-    },
+    name: 'get_taux_change',
+    description:
+      'Taux de change actuels MUR vers devises étrangères (USD, EUR, GBP, JPY, AUD, CAD, CNY, INR, ZAR...). Source : Bank of Mauritius officielle, fallback ExchangeRate-API.',
+    inputSchema: { type: 'object' as const, properties: {} },
   },
 ]
 
-// ============================================================================
-// HANDLER
-// ============================================================================
-
-server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }))
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params
+  const a = (args || {}) as Record<string, unknown>
 
   try {
     switch (name) {
       case 'list_societes': {
-        const data = await lexoraFetch('/api/societes')
+        const data = await lexoraFetch('/api/client/societes')
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
       }
 
-      case 'get_balance': {
-        const params = new URLSearchParams(args as Record<string, string>)
-        const data = await lexoraFetch(`/api/balance?${params}`)
+      case 'get_financial_summary': {
+        const params = new URLSearchParams()
+        if (a.societe_id) params.set('societe_id', String(a.societe_id))
+        if (a.exercice) params.set('exercice', String(a.exercice))
+        if (a.date_debut) params.set('date_debut', String(a.date_debut))
+        if (a.date_fin) params.set('date_fin', String(a.date_fin))
+        const data = await lexoraFetch(`/api/client/financial?${params}`)
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
       }
 
-      case 'get_chart_of_accounts': {
-        const framework = (args as any).framework ?? 'PCM'
-        const data = await lexoraFetch(`/api/jurisdictions/chart-of-accounts?framework=${framework}`)
+      case 'list_factures': {
+        const params = new URLSearchParams()
+        if (a.societe_id) params.set('societe_id', String(a.societe_id))
+        if (a.type_facture) params.set('type', String(a.type_facture))
+        if (a.statut) params.set('statut', String(a.statut))
+        if (a.limit) params.set('limit', String(a.limit))
+        const data = await lexoraFetch(`/api/client/factures?${params}`)
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
       }
 
-      case 'search_journal_entries': {
-        const params = new URLSearchParams(args as Record<string, string>)
-        const data = await lexoraFetch(`/api/ecritures/search?${params}`)
+      case 'list_alertes': {
+        const params = new URLSearchParams()
+        if (a.societe_id) params.set('societe_id', String(a.societe_id))
+        const data = await lexoraFetch(`/api/client/alertes?${params}`)
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
       }
 
-      case 'post_journal_entry': {
-        const data = await lexoraFetch('/api/ecritures', {
-          method: 'POST',
-          body: JSON.stringify(args),
-        })
-        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
-      }
-
-      case 'list_employees': {
-        const params = new URLSearchParams(args as Record<string, string>)
-        const data = await lexoraFetch(`/api/employes?${params}`)
-        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
-      }
-
-      case 'calculate_payslip': {
-        const data = await lexoraFetch('/api/ohada/payroll/calculate', {
-          method: 'POST',
-          body: JSON.stringify(args),
-        })
-        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
-      }
-
-      case 'search_invoices': {
-        const params = new URLSearchParams(args as Record<string, string>)
-        const data = await lexoraFetch(`/api/factures?${params}`)
-        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
-      }
-
-      case 'generate_financial_statement': {
-        const data = await lexoraFetch('/api/ohada/statements', {
-          method: 'POST',
-          body: JSON.stringify({
-            ...args,
-            statementType: (args as any).statementType === 'balance_sheet' ? 'bilan' :
-                          (args as any).statementType === 'income_statement' ? 'compte-resultat' :
-                          (args as any).statementType,
-          }),
-        })
-        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
-      }
-
-      case 'get_forex_rate': {
-        const { base, quote, date } = args as any
-        const endpoint = date
-          ? `/api/forex/convert`
-          : `/api/forex/rates?base=${base}&quote=${quote}`
-        const opts = date
-          ? { method: 'POST', body: JSON.stringify({ amount: 1, from: base, to: quote, date }) }
-          : {}
-        const data = await lexoraFetch(endpoint, opts)
-        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
-      }
-
-      case 'get_audit_trail': {
-        const { entityType, entityId } = args as any
-        const data = await lexoraFetch(`/api/audit/trail?entityType=${entityType}&entityId=${entityId}`)
+      case 'get_taux_change': {
+        const data = await lexoraFetch('/api/taux-change')
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
       }
 
       default:
-        throw new Error(`Unknown tool: ${name}`)
+        return {
+          content: [{ type: 'text', text: `Outil inconnu : ${name}` }],
+          isError: true,
+        }
     }
-  } catch (error: any) {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
     return {
-      content: [{ type: 'text', text: `Error: ${error.message}` }],
+      content: [{ type: 'text', text: `Erreur : ${msg}` }],
       isError: true,
     }
   }
 })
 
-// ============================================================================
-// START
-// ============================================================================
-
-async function main() {
-  const transport = new StdioServerTransport()
-  await server.connect(transport)
-  console.error('Lexora MCP Server running on stdio')
-}
-
-main().catch((err) => {
-  console.error('Fatal error:', err)
-  process.exit(1)
-})
+const transport = new StdioServerTransport()
+await server.connect(transport)
+console.error('[lexora-mcp] Server started — 5 tools: list_societes, get_financial_summary, list_factures, list_alertes, get_taux_change')
