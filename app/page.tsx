@@ -30,6 +30,10 @@ import { ScrollProgress } from "@/components/ScrollProgress"
 import { LiveEconomicWidget } from "@/components/LiveEconomicWidget"
 import { BrainOrb3DLazy } from "@/components/3d/BrainOrb3DLoader"
 import { FourPillars } from "@/components/FourPillars"
+import { TelegramShowcase } from "@/components/TelegramShowcase"
+import { EcosystemBridge } from "@/components/EcosystemBridge"
+import { LexoraEngineCore } from "@/components/LexoraEngineCore"
+import { NewFeatures2026 } from "@/components/NewFeatures2026"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcherLight } from "@/components/LanguageSwitcher"
 import { LexoraLogo } from "@/components/LexoraLogo"
@@ -208,6 +212,12 @@ export default function HomePage() {
             </a>
             <a href="#ai" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {t('home.ai_intelligence', locale)}
+            </a>
+            <a href="#telegram" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+              Telegram
+            </a>
+            <a href="#engine" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
+              {locale === "fr" ? "Moteur" : "Engine"}
             </a>
             <a href="#offres" className="text-sm font-medium transition-colors hover:text-[#E8EAFC]" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
               {locale === "fr" ? "Offres" : "Offers"}
@@ -1466,63 +1476,17 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* PILOTAGE TELEGRAM — Chief of Staff IA */}
-        <section className="relative py-16 md:py-24 overflow-hidden" style={{ background: "linear-gradient(135deg, #0B0F2E 0%, #1a2659 50%, #0B0F2E 100%)" }}>
-          {/* Glow décoratif */}
-          <div
-            aria-hidden="true"
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-            style={{
-              width: 700,
-              height: 700,
-              background: "radial-gradient(circle, rgba(212,175,55,0.18) 0%, transparent 65%)",
-              filter: "blur(40px)",
-            }}
-          />
-          <div className="relative mx-auto max-w-6xl px-4 sm:px-6 text-center text-white">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium mb-6"
-                 style={{ backgroundColor: "rgba(212,175,55,0.12)", borderColor: "rgba(212,175,55,0.4)", color: "#D4AF37" }}>
-              <span style={{ fontFamily: "'Poppins', sans-serif" }}>
-                {locale === 'fr' ? 'NOUVEAU · Chief of Staff IA' : 'NEW · AI Chief of Staff'}
-              </span>
-            </div>
-            <h2 className="text-3xl md:text-5xl font-black leading-tight" style={{ fontFamily: "'Poppins', sans-serif" }}>
-              {locale === 'fr' ? (
-                <>Votre bras droit, <span style={{ color: "#D4AF37" }}>disponible 24h/7</span></>
-              ) : (
-                <>Your right hand, <span style={{ color: "#D4AF37" }}>available 24/7</span></>
-              )}
-            </h2>
-            <p className="text-base md:text-lg mt-5 max-w-2xl mx-auto leading-relaxed" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
-              {locale === 'fr'
-                ? "Lexora x Telegram n'est pas un chatbot — c'est un assistant de direction qui comprend votre business. Agenda, emails, comptabilité, RH, banque, contrats. Tout ce que vous délégueriez à votre assistante, en langage naturel."
-                : "Lexora x Telegram is not a chatbot — it's an executive assistant that understands your business. Calendar, emails, accounting, HR, banking, contracts. Everything you would delegate to your assistant, in plain language."}
-            </p>
+        {/* TELEGRAM SHOWCASE — Chief of Staff IA with 3D orbit */}
+        <TelegramShowcase locale={locale === "fr" ? "fr" : "en"} />
 
-            <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
-              {[
-                { label: locale === 'fr' ? 'Agenda & RDV' : 'Calendar & meetings' },
-                { label: locale === 'fr' ? 'Emails & relances' : 'Emails & follow-ups' },
-                { label: locale === 'fr' ? 'Comptabilité & banque' : 'Accounting & banking' },
-                { label: locale === 'fr' ? '6 agents experts IA' : '6 expert AI agents' },
-              ].map((b) => (
-                <div key={b.label} className="rounded-xl border border-white/10 p-4" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
-                  <p className="text-sm font-bold" style={{ color: "#E8EAFC", fontFamily: "'Poppins', sans-serif" }}>{b.label}</p>
-                </div>
-              ))}
-            </div>
+        {/* ECOSYSTEM BRIDGE — banks, MRA, email, Claude, Google */}
+        <EcosystemBridge locale={locale === "fr" ? "fr" : "en"} />
 
-            <div className="mt-10">
-              <Link
-                href="/pilotage-telegram"
-                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-lg font-bold text-base hover:opacity-95 transition-opacity"
-                style={{ backgroundColor: "#D4AF37", color: "#0B0F2E", fontFamily: "'Poppins', sans-serif" }}
-              >
-                {locale === 'fr' ? 'Découvrir le Chief of Staff IA' : 'Discover the AI Chief of Staff'} →
-              </Link>
-            </div>
-          </div>
-        </section>
+        {/* LEXORA ENGINE — PCM / SYSCOHADA / Full IFRS / GBC + Claude Code skills */}
+        <LexoraEngineCore locale={locale === "fr" ? "fr" : "en"} />
+
+        {/* NEW FEATURES 2026 — Lex Banque, GBC Pillar Two, Bank scraping, etc. */}
+        <NewFeatures2026 locale={locale === "fr" ? "fr" : "en"} />
 
         {/* OFFRES — Deux offres claires : Client direct + Expert-Comptable */}
         <section id="offres" className="py-20 md:py-28" style={{ backgroundColor: "#FFFFFF" }}>
