@@ -1815,8 +1815,8 @@ export default function HomePage() {
                 {/* CTA */}
                 <div className="relative mt-auto">
                   <PressableWrap className="block w-full">
-                    <a
-                      href="mailto:contact@lexora.finance?subject=Demande démonstration cabinet — Expert-Comptable"
+                    <Link
+                      href="/inscription?role=expert"
                       className="block"
                     >
                       <Button
@@ -1833,7 +1833,7 @@ export default function HomePage() {
                         {locale === "fr" ? "Demander une démo cabinet" : "Request a firm demo"}
                         <ArrowRight className="ml-2 h-5 w-5" aria-hidden="true" />
                       </Button>
-                    </a>
+                    </Link>
                   </PressableWrap>
                 </div>
               </div>

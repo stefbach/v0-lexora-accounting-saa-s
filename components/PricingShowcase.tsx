@@ -184,7 +184,7 @@ const TIERS: Tier[] = [
     cta: {
       fr: "Contacter l'équipe",
       en: "Contact sales",
-      href: "mailto:contact@lexora.finance?subject=Demande Enterprise",
+      href: "/inscription?role=enterprise",
     },
   },
 ]
