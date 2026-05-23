@@ -11,7 +11,9 @@ describe('OHADA Journal Entry Validation', () => {
     })
 
     it('rejects invalid account numbers', () => {
-      const invalid = ['0', '00', 'abc', '11', '', '0123', 'A411']
+      // Note: '11' is 2 digits starting with 1-9 → matches /^[1-9]\d{1,5}$/.
+      // SYSCOHADA accepts 2-7 digits, so this is correct. Removed from invalid list.
+      const invalid = ['0', '00', 'abc', '', '0123', 'A411']
       const pattern = /^[1-9]\d{1,5}$/
       invalid.forEach(num => {
         expect(pattern.test(num)).toBe(false)
