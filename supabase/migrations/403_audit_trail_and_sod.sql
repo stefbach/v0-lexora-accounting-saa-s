@@ -427,7 +427,7 @@ CREATE OR REPLACE FUNCTION public.fn_get_audit_trail(
 )
 RETURNS TABLE (
   id UUID,
-  timestamp TIMESTAMPTZ,
+  "timestamp" TIMESTAMPTZ,
   user_email TEXT,
   user_role TEXT,
   action TEXT,
@@ -439,7 +439,7 @@ BEGIN
   RETURN QUERY
   SELECT
     audit_trail.id,
-    audit_trail.timestamp,
+    audit_trail."timestamp",
     audit_trail.user_email,
     audit_trail.user_role,
     audit_trail.action,
@@ -448,7 +448,7 @@ BEGIN
     audit_trail.description
   FROM public.audit_trail
   WHERE table_name = p_table_name AND row_id = p_row_id
-  ORDER BY timestamp DESC;
+  ORDER BY audit_trail."timestamp" DESC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
