@@ -29,6 +29,7 @@
 
 import { getCompteComptable } from "@/lib/accounting/comptes-bancaires"
 import { isBankName } from "@/lib/utils/bank-utils"
+import { upsertReleveBancaire } from "@/lib/bank/upsert-releve"
 
 // -----------------------------------------------------------------------------
 // Types
@@ -415,32 +416,43 @@ export async function processReleveBancaire(
   const ecartSolde = Math.abs(soldeOuverture + totalCredits - totalDebits - soldeCloture)
   const statut = ecartSolde > 1 ? "ecart_detecte" : "en_attente"
 
-  // -- Insert releve ---------------------------------------------------------
-  const { data: inserted, error: releveErr } = await supabase
-    .from("releves_bancaires")
-    .insert({
-      compte_bancaire_id: bankAccount!.id,
-      societe_id: societeId,
-      periode: periodeFin.substring(0, 7),
-      date_debut: periodeDebut,
-      date_fin: periodeFin,
-      solde_ouverture: soldeOuverture,
-      solde_cloture: soldeCloture,
-      total_debits: totalDebits,
-      total_credits: totalCredits,
-      nb_transactions: normalized.length,
-      ecart_solde: ecartSolde,
-      document_id: documentId,
-      transactions_json: normalized,
-      statut_rapprochement: statut,
-    })
-    .select("id")
-    .single()
-
-  if (releveErr || !inserted) {
+  // -- Upsert releve (versioning via RPC, mig 410) ---------------------------
+  // Si une version active existe deja pour (compte_bancaire_id, date_debut,
+  // date_fin), elle est marquee superseded et une nouvelle version active est
+  // creee. La RPC supprime aussi les transactions_bancaires de l'ancienne
+  // version pour qu'on puisse les re-inserer ci-dessous proprement.
+  let inserted: { id: string; version: number; replaced: boolean }
+  try {
+    const result = await upsertReleveBancaire(
+      supabase,
+      {
+        compte_bancaire_id: bankAccount!.id,
+        societe_id: societeId,
+        periode: periodeFin.substring(0, 7),
+        date_debut: periodeDebut,
+        date_fin: periodeFin,
+        solde_ouverture: soldeOuverture,
+        solde_cloture: soldeCloture,
+        total_debits: totalDebits,
+        total_credits: totalCredits,
+        nb_transactions: normalized.length,
+        ecart_solde: ecartSolde,
+        document_id: documentId,
+        transactions_json: normalized,
+        statut_rapprochement: statut,
+      },
+      { uploaded_by: null, source: 'telegram' },
+    )
+    inserted = { id: result.releve_id, version: result.version, replaced: result.replaced }
+    if (result.replaced) {
+      console.log(
+        `[process-releve] releve_bancaire REPLACED (v${result.version}, previous=${result.previous_id})`,
+      )
+    }
+  } catch (e: any) {
     return {
       ok: false,
-      reason: `releve_insert_failed: ${releveErr?.message || "unknown"}`,
+      reason: `releve_insert_failed: ${e?.message || "unknown"}`,
     }
   }
 

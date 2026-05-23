@@ -13,6 +13,7 @@ import {
 } from '@/lib/accounting/validate-bank-currency'
 import { parseAmount, parseAmountSafe, ParseAmountError } from '@/lib/utils/bank-amount'
 import { getCompteComptable } from '@/lib/accounting/comptes-bancaires'
+import { upsertReleveBancaire } from '@/lib/bank/upsert-releve'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -2391,24 +2392,32 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           const ecartSolde = Math.abs((soldeOuverture + totalCredits - totalDebits) - soldeCloture)
           const statutRapprochement = ecartSolde > 1 ? 'ecart_detecte' : 'en_attente'
 
-          const { error: releveError } = await supabase.from('releves_bancaires').insert({
-            compte_bancaire_id: bankAccount.id,
-            societe_id: bankSocieteId,
-            periode: normPeriodeFin.substring(0, 7),
-            date_debut: normPeriodeDebut,
-            date_fin: normPeriodeFin,
-            solde_ouverture: soldeOuverture,
-            solde_cloture: soldeCloture,
-            total_debits: totalDebits,
-            total_credits: totalCredits,
-            document_id: doc.id,
-            transactions_json: normalizedTransactions,
-            statut_rapprochement: statutRapprochement,
-          })
-          if (releveError) {
-            console.error('[upload] releves_bancaires insert FAILED:', releveError.message, releveError.details)
-          } else {
-            console.log(`[upload] releve_bancaire stored: ${normalizedTransactions.length} transactions, societe=${bankSocieteId}`)
+          try {
+            const upsertResult = await upsertReleveBancaire(
+              supabase,
+              {
+                compte_bancaire_id: bankAccount.id,
+                societe_id: bankSocieteId,
+                periode: normPeriodeFin.substring(0, 7),
+                date_debut: normPeriodeDebut,
+                date_fin: normPeriodeFin,
+                solde_ouverture: soldeOuverture,
+                solde_cloture: soldeCloture,
+                total_debits: totalDebits,
+                total_credits: totalCredits,
+                nb_transactions: normalizedTransactions.length,
+                ecart_solde: ecartSolde,
+                document_id: doc.id,
+                transactions_json: normalizedTransactions,
+                statut_rapprochement: statutRapprochement,
+              },
+              { uploaded_by: user?.id ?? null, source: 'web' },
+            )
+            console.log(
+              `[upload] releve_bancaire ${upsertResult.replaced ? 'REPLACED' : 'created'}: v${upsertResult.version}, ${normalizedTransactions.length} transactions, societe=${bankSocieteId}, previous=${upsertResult.previous_id || 'none'}`,
+            )
+          } catch (e: any) {
+            console.error('[upload] upsertReleveBancaire FAILED:', e?.message || String(e))
           }
         }
       }
