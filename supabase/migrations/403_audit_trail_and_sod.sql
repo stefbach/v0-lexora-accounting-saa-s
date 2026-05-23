@@ -122,7 +122,7 @@ INSERT INTO public.sod_matrix (role, transaction_type, max_amount_mur, requires_
 
 DROP TABLE IF EXISTS public.audit_trail CASCADE;
 CREATE TABLE IF NOT EXISTS public.audit_trail (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  id UUID NOT NULL DEFAULT gen_random_uuid(),
   timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   user_id UUID REFERENCES auth.users(id),
   user_email TEXT,
@@ -135,7 +135,11 @@ CREATE TABLE IF NOT EXISTS public.audit_trail (
   ip_address INET,
   user_agent TEXT,
   description TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Postgres exige que la PK d'une table partitionnée inclue TOUTES les
+  -- colonnes de partition. Composite (id, created_at) car partition BY RANGE
+  -- (created_at). id reste unique en pratique grâce à gen_random_uuid().
+  PRIMARY KEY (id, created_at)
 ) PARTITION BY RANGE (created_at);
 
 -- Partition by month for better query performance
