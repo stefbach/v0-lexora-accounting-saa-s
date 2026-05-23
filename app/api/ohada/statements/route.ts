@@ -33,22 +33,39 @@ export async function POST(req: NextRequest) {
       comparativePeriodEnd: body.comparativePeriodEnd ? new Date(body.comparativePeriodEnd) : undefined,
     }
 
-    // Mock account balances getter - in production this would query Supabase
-    const mockGetBalances = async (accountCodes: string[]): Promise<Map<string, number>> => {
+    // Mocks par signature — chaque générateur SYSCOHADA a sa propre forme
+    // de fonction de lecture de soldes. En prod ces 3 mocks seront remplacés
+    // par des requêtes Supabase (planifié S2-S3).
+
+    // bilan.ts : (codes: string[]) => Promise<Map<string, number>>
+    const mockGetBalancesByCodes = async (accountCodes: string[]): Promise<Map<string, number>> => {
       const balances = new Map<string, number>()
-      // Return zero balances for all accounts - real impl would query DB
-      for (const code of accountCodes) {
-        balances.set(code, 0)
-      }
+      for (const code of accountCodes) balances.set(code, 0)
       return balances
     }
+
+    // compte-resultat.ts : (societeId, accountPrefixes: string[], start, end) => Promise<number>
+    const mockGetBalancesByPrefixes = async (
+      _societeId: string,
+      _accountPrefixes: string[],
+      _periodStart: Date,
+      _periodEnd: Date,
+    ): Promise<number> => 0
+
+    // tafire.ts : (societeId, accountPrefix: string, start, end) => Promise<number>
+    const mockGetBalanceByPrefix = async (
+      _societeId: string,
+      _accountPrefix: string,
+      _periodStart: Date,
+      _periodEnd: Date,
+    ): Promise<number> => 0
 
     const result: any = { jurisdictionCode: body.jurisdictionCode, period: { start: body.periodStart, end: body.periodEnd } }
 
     if (body.statementType === 'bilan' || body.statementType === 'all') {
       try {
         const { generateBilan } = await import('@/lib/jurisdictions/ohada/statements/bilan')
-        result.bilan = await generateBilan(input, mockGetBalances)
+        result.bilan = await generateBilan(input, mockGetBalancesByCodes)
       } catch (e) {
         result.bilan = { error: String(e) }
       }
@@ -57,7 +74,7 @@ export async function POST(req: NextRequest) {
     if (body.statementType === 'compte-resultat' || body.statementType === 'all') {
       try {
         const { generateCompteDeResultat } = await import('@/lib/jurisdictions/ohada/statements/compte-resultat')
-        result.compteResultat = await generateCompteDeResultat(input, mockGetBalances)
+        result.compteResultat = await generateCompteDeResultat(input, mockGetBalancesByPrefixes)
       } catch (e) {
         result.compteResultat = { error: String(e) }
       }
@@ -66,8 +83,7 @@ export async function POST(req: NextRequest) {
     if (body.statementType === 'tafire' || body.statementType === 'all') {
       try {
         const { generateTAFIRE } = await import('@/lib/jurisdictions/ohada/statements/tafire')
-        const mockPriorBalances = mockGetBalances
-        result.tafire = await generateTAFIRE(input, mockGetBalances, mockPriorBalances)
+        result.tafire = await generateTAFIRE(input, mockGetBalanceByPrefix, mockGetBalanceByPrefix)
       } catch (e) {
         result.tafire = { error: String(e) }
       }
