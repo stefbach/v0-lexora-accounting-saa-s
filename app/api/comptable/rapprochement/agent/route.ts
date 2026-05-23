@@ -147,6 +147,7 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
       .from('releves_bancaires')
       .select('id, compte_bancaire_id, transactions_json')
       .eq('societe_id', societe_id)
+      .is('superseded_by_id', null)
 
     const unmatched: any[] = []
     for (const releve of releves || []) {
@@ -330,7 +331,7 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
   if (name === 'get_reconciliation_stats') {
     const { societe_id } = input
     const { data: releves } = await supabase.from('releves_bancaires')
-      .select('transactions_json').eq('societe_id', societe_id)
+      .select('transactions_json').eq('societe_id', societe_id).is('superseded_by_id', null)
     let total = 0, matched = 0, unmatched = 0
     for (const r of releves || []) {
       const txs: any[] = r.transactions_json || []
@@ -362,7 +363,7 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
           .select('id, numero_facture, tiers, statut, rapproche_releve_id')
           .eq('societe_id', societe_id)
         const { data: releves } = await supabase.from('releves_bancaires')
-          .select('id, transactions_json').eq('societe_id', societe_id)
+          .select('id, transactions_json').eq('societe_id', societe_id).is('superseded_by_id', null)
         const claimedIds = new Set<string>()
         for (const r of releves || []) {
           for (const tx of r.transactions_json || []) {
@@ -386,7 +387,7 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
     const { societe_id } = input
     // Find all rapproche transactions that don't have a BANK-* entry in ecritures_comptables_v2
     const { data: releves } = await supabase.from('releves_bancaires')
-      .select('id, transactions_json').eq('societe_id', societe_id)
+      .select('id, transactions_json').eq('societe_id', societe_id).is('superseded_by_id', null)
 
     let generated = 0
     let errors = 0
