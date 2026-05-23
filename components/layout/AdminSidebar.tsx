@@ -55,6 +55,7 @@ const MENU = [
     items: [
       { href: "/admin/parametres", label: "Configuration", labelKey: "admin.configuration", icon: Settings },
       { href: "/admin/reset-societe", label: "Reset société", labelKey: "admin.reset_societe", icon: ShieldAlert, danger: true },
+      { href: "/admin/purge", label: "Purge cascade", icon: ShieldAlert, danger: true },
     ],
   },
 ]
