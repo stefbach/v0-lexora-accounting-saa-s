@@ -80,23 +80,43 @@ ALTER TABLE public.ecritures_comptables_v2
 CREATE INDEX IF NOT EXISTS idx_ecritures_jurisdiction ON public.ecritures_comptables_v2(jurisdiction_code);
 
 -- 6. RLS policies for jurisdictions (read-only for authenticated users)
+-- Idempotent : DROP IF EXISTS avant CREATE pour permettre les re-runs.
 ALTER TABLE public.jurisdictions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "jurisdictions_read_all" ON public.jurisdictions;
 CREATE POLICY "jurisdictions_read_all" ON public.jurisdictions
   FOR SELECT TO authenticated USING (true);
 
 ALTER TABLE public.chart_of_accounts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "chart_accounts_read_all" ON public.chart_of_accounts;
 CREATE POLICY "chart_accounts_read_all" ON public.chart_of_accounts
   FOR SELECT TO authenticated USING (true);
 
 -- 7. Helper view: chart of accounts for a specific company
+-- NOTE : s.jurisdiction_code et coa.jurisdiction_code sont sémantiquement
+-- différents (juridiction de la société vs juridiction du compte, qui peut
+-- être NULL pour les comptes globaux). On alias explicitement pour que
+-- Postgres accepte la vue (42701 "column specified more than once" sinon).
 CREATE OR REPLACE VIEW public.v_societe_chart_of_accounts AS
 SELECT
-  s.id as societe_id,
-  s.nom as societe_nom,
-  s.jurisdiction_code,
-  coa.*
+  s.id AS societe_id,
+  s.nom AS societe_nom,
+  s.jurisdiction_code AS societe_jurisdiction_code,
+  coa.id AS coa_id,
+  coa.jurisdiction_code AS coa_jurisdiction_code,
+  coa.framework,
+  coa.account_number,
+  coa.label_en,
+  coa.label_fr,
+  coa.class_number,
+  coa.category,
+  coa.is_auxiliary,
+  coa.normal_balance,
+  coa.is_reconcilable,
+  coa.parent_account,
+  coa.tax_code,
+  coa.created_at AS coa_created_at
 FROM public.societes s
 LEFT JOIN public.chart_of_accounts coa
   ON coa.framework = (SELECT framework FROM public.jurisdictions WHERE code = s.jurisdiction_code)
