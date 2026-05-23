@@ -226,10 +226,29 @@ async function cascadeBanque(
   }
   const allEcritureIds = [...new Set([...scopedIds, ...counterparts.map(c => c.id)])]
 
-  // Audit log pour chaque ligne
+  // Audit log pour chaque ligne ciblée
   for (const row of snapshot) {
     await logAudit(admin, ctx, 'ecritures_comptables_v2', row.id, row as Record<string, unknown>,
       `Cascade hard-delete écriture banque ref_folio=${row.ref_folio || '?'}`)
+  }
+
+  // Audit log pour les contreparties (extension par ref_folio). Sans ce snapshot
+  // explicite, on perd la trace des contreparties supprimées en cascade — le
+  // trigger automatique fn_log_audit_trail (mig 403) les capture aussi mais
+  // sans le contexte ("cascade banque contrepartie ref_folio=X"), donc on
+  // double-log côté application pour avoir la description métier.
+  const counterpartIdsNotInSnapshot = counterparts
+    .map(c => c.id)
+    .filter(id => !scopedIds.includes(id))
+  if (counterpartIdsNotInSnapshot.length > 0) {
+    const { data: counterpartSnapshot } = await admin
+      .from('ecritures_comptables_v2')
+      .select('id, journal, ref_folio, numero_compte, debit_mur, credit_mur, lettre, libelle')
+      .in('id', counterpartIdsNotInSnapshot)
+    for (const row of counterpartSnapshot || []) {
+      await logAudit(admin, ctx, 'ecritures_comptables_v2', row.id, row as Record<string, unknown>,
+        `Cascade hard-delete contrepartie banque (ref_folio=${row.ref_folio || '?'}, journal=${row.journal || '?'})`)
+    }
   }
 
   // Si certaines écritures étaient lettrées avec des contreparties HORS
