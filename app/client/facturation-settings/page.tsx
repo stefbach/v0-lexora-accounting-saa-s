@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,13 +14,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Building2, Users, Package, Layout, Save, Plus, Pencil, Trash2, Check, X, Eye, Palette,
-  Shield, Wifi, WifiOff, Info, Loader2, Download
+  Shield, Wifi, WifiOff, Info, Loader2, Download, Upload, Sparkles, FileText
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { LogoUploader } from "@/components/client/LogoUploader"
 import { inferSwiftFromIban, inferSwiftWithDiagnostic } from "@/lib/banque/iban-swift"
 import { t, getLocale, type Locale } from '@/lib/i18n'
+import { toAiTemplateId, parseAiTemplateId } from '@/lib/factures/active-template'
 
 const ACCENT_COLORS = [
   { name: "Navy", hex: "#0B0F2E" }, { name: "Gold", hex: "#D4AF37" },
@@ -56,6 +58,29 @@ interface InvoiceTemplate {
   id: string; nom: string; description: string; style: {
     couleur_primaire: string; couleur_secondaire: string; police: string; layout: string
   }
+}
+// Template extrait par l'IA depuis un PDF/image uploadé par l'utilisateur,
+// persisté dans la table `facture_templates`. À ne pas confondre avec les
+// 3 templates hardcoded (standard / professional / minimal).
+interface AiFactureTemplate {
+  id: string
+  societe_id: string
+  nom: string
+  couleur_primaire: string | null
+  couleur_secondaire: string | null
+  logo_position: string | null
+  entete_html: string | null
+  pied_page_html: string | null
+  colonnes: string[] | null
+  mentions_legales: string | null
+  conditions_paiement: string | null
+  devise_defaut: string | null
+  tva_defaut: number | null
+  format_numero: string | null
+  style: Record<string, unknown> | null
+  source_fichier: string | null
+  consignes_ia: string | null
+  created_at: string
 }
 
 const DEFAULT_SETTINGS: CompanySettings = {
@@ -101,39 +126,48 @@ function buildMentionLegale(brn: string | null | undefined, vat: string | null |
 
 /**
  * Mappe la société DB (colonnes Supabase) → CompanySettings du form.
- * Privilégie les valeurs DB, fallback sur les valeurs déjà saisies en
- * localStorage pour ne rien perdre lors de la première migration.
+ *
+ * ⚠️ Tenant isolation : on n'utilise PLUS le legacy localStorage pour les
+ * champs spécifiques à la société (logo, identité, contact, banque,
+ * numérotation, mentions). localStorage est un store GLOBAL au navigateur,
+ * pas par société — utiliser son contenu en fallback faisait fuir les
+ * données d'une société dans la suivante quand l'utilisateur changeait
+ * de société active (bug observé : logo de Obesity Care Clinic affiché
+ * sur DDS).
+ *
+ * Le paramètre `legacy` est conservé pour usages futurs non-tenant
+ * (préférences UI, etc.) mais n'est plus lu ici.
  */
-function mapSocieteToSettings(societe: any, legacy: Partial<CompanySettings>): CompanySettings {
+function mapSocieteToSettings(societe: any, _legacy: Partial<CompanySettings>): CompanySettings {
   return {
-    nom:                 societe?.nom                          ?? legacy.nom                 ?? "",
-    brn:                 societe?.brn                          ?? legacy.brn                 ?? "",
-    vat_number:          societe?.numero_tva_mra               ?? legacy.vat_number          ?? "",
-    logo_url:            societe?.logo_url                     ?? legacy.logo_url            ?? "",
-    adresse:             societe?.adresse                      ?? legacy.adresse             ?? "",
-    telephone:           societe?.telephone                    ?? legacy.telephone           ?? "",
-    email:               societe?.email                        ?? legacy.email               ?? "",
-    website:             societe?.website                      ?? legacy.website             ?? "",
-    banque_nom:          societe?.bank_name                    ?? legacy.banque_nom          ?? "",
-    banque_compte:       societe?.bank_account_number          ?? legacy.banque_compte       ?? "",
-    banque_iban:         societe?.iban                         ?? legacy.banque_iban         ?? "",
-    banque_swift:        societe?.banque_swift                 ?? legacy.banque_swift        ?? "",
-    devise_defaut:       societe?.devise_principale            ?? legacy.devise_defaut       ?? "MUR",
-    prefixe_facture:     societe?.facture_prefixe              ?? legacy.prefixe_facture     ?? "INV-",
-    prochain_numero:     Number(societe?.facture_prochain_numero ?? legacy.prochain_numero ?? 1),
-    devis_prefixe:       societe?.devis_prefixe                 ?? legacy.devis_prefixe       ?? "DEV-",
-    devis_prochain_numero: Number(societe?.devis_prochain_numero ?? legacy.devis_prochain_numero ?? 1),
-    avoir_prefixe:       societe?.avoir_prefixe                 ?? legacy.avoir_prefixe       ?? "AV-",
-    avoir_prochain_numero: Number(societe?.avoir_prochain_numero ?? legacy.avoir_prochain_numero ?? 1),
-    note_debit_prefixe:  societe?.note_debit_prefixe            ?? legacy.note_debit_prefixe  ?? "ND-",
-    note_debit_prochain_numero: Number(societe?.note_debit_prochain_numero ?? legacy.note_debit_prochain_numero ?? 1),
-    conditions_paiement: Number(societe?.facture_conditions_paiement ?? legacy.conditions_paiement ?? 30),
-    footer_text:         societe?.facture_footer_text          ?? legacy.footer_text         ?? "",
+    nom:                 societe?.nom                          ?? "",
+    brn:                 societe?.brn                          ?? "",
+    vat_number:          societe?.numero_tva_mra               ?? "",
+    logo_url:            societe?.logo_url                     ?? "",
+    adresse:             societe?.adresse                      ?? "",
+    telephone:           societe?.telephone                    ?? "",
+    email:               societe?.email                        ?? "",
+    website:             societe?.website                      ?? "",
+    banque_nom:          societe?.bank_name                    ?? "",
+    banque_compte:       societe?.bank_account_number          ?? "",
+    banque_iban:         societe?.iban                         ?? "",
+    banque_swift:        societe?.banque_swift                 ?? "",
+    devise_defaut:       societe?.devise_principale            ?? "MUR",
+    prefixe_facture:     societe?.facture_prefixe              ?? "INV-",
+    prochain_numero:     Number(societe?.facture_prochain_numero ?? 1),
+    devis_prefixe:       societe?.devis_prefixe                 ?? "DEV-",
+    devis_prochain_numero: Number(societe?.devis_prochain_numero ?? 1),
+    avoir_prefixe:       societe?.avoir_prefixe                 ?? "AV-",
+    avoir_prochain_numero: Number(societe?.avoir_prochain_numero ?? 1),
+    note_debit_prefixe:  societe?.note_debit_prefixe            ?? "ND-",
+    note_debit_prochain_numero: Number(societe?.note_debit_prochain_numero ?? 1),
+    conditions_paiement: Number(societe?.facture_conditions_paiement ?? 30),
+    footer_text:         societe?.facture_footer_text          ?? "",
     // Auto-génère la mention légale depuis BRN/VAT si l'utilisateur n'a
-    // rien saisi (ni en DB, ni en localStorage). Si la valeur stockée
-    // ressemble au placeholder par défaut, on la régénère aussi.
+    // rien saisi en DB. Si la valeur stockée ressemble au placeholder
+    // par défaut, on la régénère aussi.
     mention_legale:      (() => {
-      const stored = societe?.facture_mention_legale ?? legacy.mention_legale ?? ""
+      const stored = societe?.facture_mention_legale ?? ""
       if (!stored || stored === "VAT Reg No: XXXXX | BRN: XXXXX") {
         return buildMentionLegale(societe?.brn, societe?.numero_tva_mra)
       }
@@ -156,6 +190,13 @@ interface CompteBancaireBrief {
 export default function FacturationSettingsPage() {
   const locale = getLocale()
   const { societeId, societe, refresh } = useSocieteActive()
+  // Onglet actif : lu depuis ?tab= dans l'URL (le redirect depuis
+  // /client/facture-template arrive avec ?tab=modeles, idem depuis le
+  // menu latéral si on veut deep-link vers un tab précis).
+  const searchParams = useSearchParams()
+  const requestedTab = searchParams?.get('tab') || ''
+  const VALID_TABS = ['entreprise', 'clients', 'catalogue', 'modeles', 'mra']
+  const initialTab = VALID_TABS.includes(requestedTab) ? requestedTab : 'entreprise'
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_SETTINGS)
   const [persisting, setPersisting] = useState(false)
   const [persistError, setPersistError] = useState<string | null>(null)
@@ -164,6 +205,14 @@ export default function FacturationSettingsPage() {
   const [catalogue, setCatalogue] = useState<CatalogueItem[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState("standard")
   const [templateColors, setTemplateColors] = useState({ primaire: "#0B0F2E", secondaire: "#D4AF37" })
+  // Templates IA générés à partir de factures uploadées par l'utilisateur.
+  // Persistés dans la table `facture_templates` côté serveur.
+  const [aiTemplates, setAiTemplates] = useState<AiFactureTemplate[]>([])
+  const [aiTemplatesLoading, setAiTemplatesLoading] = useState(false)
+  const [aiUploadFile, setAiUploadFile] = useState<File | null>(null)
+  const [aiUploadConsignes, setAiUploadConsignes] = useState("")
+  const [aiUploading, setAiUploading] = useState(false)
+  const [aiUploadError, setAiUploadError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [clientDialog, setClientDialog] = useState(false)
   const [editingClient, setEditingClient] = useState<InvoiceClient | null>(null)
@@ -198,21 +247,23 @@ export default function FacturationSettingsPage() {
   const [catTva, setCatTva] = useState(true)
   const [catCategorie, setCatCategorie] = useState("")
 
-  // Charge depuis la DB (société active) en priorité, fallback localStorage
-  // pour les utilisateurs legacy qui n'ont pas encore migré vers la mig 243.
-  // Le mapping est fait par mapSocieteToSettings → toutes les colonnes DB
-  // pertinentes (nom, BRN, adresse, banque, etc.) auto-remplissent le form.
+  // Charge les paramètres de la société active depuis la DB.
+  //
+  // Tenant isolation : on lit le localStorage UNIQUEMENT pour les
+  // préférences non-tenant (clients/catalogue legacy, couleurs UI, MRA).
+  // Les champs spécifiques à la société (logo, identité, banque, template
+  // actif) viennent EXCLUSIVEMENT de la société DB pour éviter la fuite
+  // de données entre sociétés via le store local du navigateur.
   useEffect(() => {
-    let legacy: Partial<CompanySettings> = {}
     try {
-      const s = localStorage.getItem("lexora_invoice_settings")
-      if (s) legacy = JSON.parse(s) as Partial<CompanySettings>
+      // ⚠ Ces deux entrées sont legacy, à l'échelle utilisateur (clients +
+      // catalogue de l'ancienne version mono-société). On les garde pour
+      // ne pas perdre les données pré-mig, mais elles ne touchent PAS aux
+      // settings tenant-specific.
       const c = localStorage.getItem("lexora_invoice_clients")
       if (c) setClients(JSON.parse(c))
       const cat = localStorage.getItem("lexora_invoice_catalogue")
       if (cat) setCatalogue(JSON.parse(cat))
-      const tplStored = localStorage.getItem("lexora_invoice_template")
-      if (tplStored) setSelectedTemplate(tplStored)
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       if (tc) setTemplateColors(JSON.parse(tc))
       const mra = localStorage.getItem("lexora_mra_settings")
@@ -225,9 +276,14 @@ export default function FacturationSettingsPage() {
         setMraApiUrl(m.api_url || "https://sandboxifp.mra.mu/api/v1")
       }
     } catch { /* ignore */ }
-    // DB > legacy localStorage. Si pas de société chargée encore, on
-    // pose au moins le legacy pour que le user voie ses anciennes valeurs.
-    setSettings(mapSocieteToSettings(societe, legacy))
+    setSettings(mapSocieteToSettings(societe, {}))
+
+    // Template actif : DB-only par société. Si la société n'a pas de
+    // template IA défini en DB, on retombe sur 'standard' (NE PAS lire
+    // localStorage — il est partagé entre toutes les sociétés et fuirait
+    // le choix de la société précédente).
+    const dbTemplateId = (societe as { facture_template_id?: string | null } | null)?.facture_template_id
+    setSelectedTemplate(dbTemplateId ? toAiTemplateId(dbTemplateId) : 'standard')
   }, [societe])
 
   // Charge les comptes bancaires de la société active (mig 010 + 043)
@@ -243,15 +299,95 @@ export default function FacturationSettingsPage() {
       .catch(() => setComptesBancaires([]))
   }, [societeId])
 
+  // Charge les templates de facture générés par IA pour la société active.
+  const loadAiTemplates = useCallback(async () => {
+    if (!societeId) {
+      setAiTemplates([])
+      return
+    }
+    setAiTemplatesLoading(true)
+    try {
+      const res = await fetch('/api/client/facture-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list', societe_id: societeId }),
+      })
+      const data = await res.json()
+      if (res.ok && Array.isArray(data.templates)) {
+        setAiTemplates(data.templates)
+      } else {
+        setAiTemplates([])
+      }
+    } catch {
+      setAiTemplates([])
+    } finally {
+      setAiTemplatesLoading(false)
+    }
+  }, [societeId])
+
+  useEffect(() => { loadAiTemplates() }, [loadAiTemplates])
+
+  // Upload d'une facture existante (PDF/image) + consignes utilisateur.
+  // L'analyse Claude prend 10-30s ; on désactive le bouton pendant.
+  const handleAiTemplateUpload = useCallback(async () => {
+    if (!aiUploadFile || !societeId) return
+    setAiUploading(true)
+    setAiUploadError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', aiUploadFile)
+      fd.append('societe_id', societeId)
+      if (aiUploadConsignes.trim()) fd.append('consignes', aiUploadConsignes.trim())
+      const res = await fetch('/api/client/facture-template', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok || !data.saved) {
+        throw new Error(data.error || 'Échec de l\'analyse')
+      }
+      setAiUploadFile(null)
+      setAiUploadConsignes("")
+      await loadAiTemplates()
+    } catch (e: unknown) {
+      setAiUploadError(e instanceof Error ? e.message : 'Erreur inconnue')
+    } finally {
+      setAiUploading(false)
+    }
+  }, [aiUploadFile, aiUploadConsignes, societeId, loadAiTemplates])
+
+  const handleAiTemplateDelete = useCallback(async (id: string) => {
+    if (!societeId) return
+    if (!confirm('Supprimer ce template ?')) return
+    try {
+      const res = await fetch('/api/client/facture-template', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, societe_id: societeId }),
+      })
+      if (res.ok) {
+        if (selectedTemplate === toAiTemplateId(id)) setSelectedTemplate('standard')
+        await loadAiTemplates()
+        return
+      }
+      // L'API peut échouer (template déjà supprimé, perte de session, etc.).
+      // On affiche dans la même bande d'erreur que l'upload pour rester
+      // discret — l'utilisateur peut réessayer ou recharger la page.
+      const data = await res.json().catch(() => ({}))
+      setAiUploadError(data?.error || 'Suppression échouée. Réessaie.')
+    } catch (e: unknown) {
+      setAiUploadError(e instanceof Error ? e.message : 'Erreur réseau pendant la suppression.')
+    }
+  }, [societeId, selectedTemplate, loadAiTemplates])
+
   const saveAll = useCallback(async () => {
     // 1. localStorage : conserve les paramètres pas encore migrés en DB
     //    (clients legacy, catalogue legacy, template choisi, MRA). Quand
     //    le composant catalogue / contacts DB sera la source unique, on
     //    pourra retirer ces lignes.
-    localStorage.setItem("lexora_invoice_settings", JSON.stringify(settings))
+    // Note : on n'écrit PLUS les settings société dans localStorage —
+    // c'est un store global au navigateur, non scopé par société, et ça
+    // faisait fuir le logo/identité d'une société dans la suivante. La
+    // DB (mig 243+, mig 287) est désormais la seule source de vérité.
     localStorage.setItem("lexora_invoice_clients", JSON.stringify(clients))
     localStorage.setItem("lexora_invoice_catalogue", JSON.stringify(catalogue))
-    localStorage.setItem("lexora_invoice_template", selectedTemplate)
     localStorage.setItem("lexora_invoice_template_colors", JSON.stringify(templateColors))
     localStorage.setItem("lexora_mra_settings", JSON.stringify({
       active: mraActive, ebs_id: mraEbsId, api_key: mraApiKey,
@@ -287,6 +423,9 @@ export default function FacturationSettingsPage() {
           facture_conditions_paiement:  settings.conditions_paiement,
           facture_footer_text:          settings.footer_text,
           facture_mention_legale:       settings.mention_legale,
+          // Mig 287 : persiste le template actif côté société. Pour les
+          // templates hardcoded (standard/professional/minimal), on stocke null.
+          facture_template_id:          parseAiTemplateId(selectedTemplate),
         }
         const res = await fetch(`/api/client/societes?id=${societeId}`, {
           method: "PATCH",
@@ -409,7 +548,7 @@ export default function FacturationSettingsPage() {
         <div className="hidden">{/* header moved to shell */}
       </div>
 
-      <Tabs defaultValue="entreprise" className="space-y-4">
+      <Tabs defaultValue={initialTab} className="space-y-4">
         <TabsList className="grid grid-cols-5 w-full max-w-3xl">
           <TabsTrigger value="entreprise" className="flex items-center gap-1.5"><Building2 className="w-4 h-4" />{t('inv.fs.tab_company', locale)}</TabsTrigger>
           <TabsTrigger value="clients" className="flex items-center gap-1.5"><Users className="w-4 h-4" />{t('inv.fs.tab_clients', locale)}</TabsTrigger>
@@ -931,6 +1070,170 @@ export default function FacturationSettingsPage() {
         {/* ══════════ TAB: Modeles ══════════ */}
         <TabsContent value="modeles" className="space-y-4">
           <p className="text-sm text-gray-500">{t('inv.fs.templates_subtitle', locale)}</p>
+
+          {/* ── Upload d'une facture existante pour créer un template IA ── */}
+          <Card className="border-dashed border-2 border-[#D4AF37]/40 bg-gradient-to-br from-[#D4AF37]/5 to-transparent">
+            <CardHeader>
+              <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#D4AF37]" />
+                Créer un modèle à partir d'une facture existante
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-gray-600">
+                Uploade une ancienne facture (PDF, PNG, JPG, WebP, max 20 MB) et ajoute tes consignes pour que l'IA extraie un modèle réutilisable.
+              </p>
+              {!settings.logo_url && (
+                <div className="text-xs text-[#A88925] bg-[#D4AF37]/10 px-3 py-2 rounded flex items-start gap-2">
+                  <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <span>
+                    Aucun logo société uploadé. Pour que le modèle reprenne ton logo en en-tête,
+                    ajoute-le d'abord dans l'onglet <span className="font-semibold">Identité</span>.
+                  </span>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Fichier facture</Label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*"
+                      onChange={e => setAiUploadFile(e.target.files?.[0] || null)}
+                      disabled={aiUploading}
+                      className="text-sm"
+                    />
+                  </div>
+                  {aiUploadFile && (
+                    <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
+                      <FileText className="w-3 h-3" />
+                      {aiUploadFile.name} ({(aiUploadFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-xs">Consignes pour l'IA (optionnel)</Label>
+                  <Textarea
+                    value={aiUploadConsignes}
+                    onChange={e => setAiUploadConsignes(e.target.value)}
+                    placeholder={`Ex: "Garde le header bleu marine", "Mentionne notre licence FSC", "Conditions: paiement à 30 jours fin de mois"...`}
+                    rows={3}
+                    disabled={aiUploading}
+                    className="mt-1 text-sm"
+                  />
+                </div>
+              </div>
+              {aiUploadError && (
+                <div className="text-xs text-[#9F1239] bg-[#9F1239]/10 px-3 py-2 rounded">
+                  {aiUploadError}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleAiTemplateUpload}
+                  disabled={!aiUploadFile || !societeId || aiUploading}
+                  className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white"
+                >
+                  {aiUploading ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Analyse en cours…</>
+                  ) : (
+                    <><Upload className="w-4 h-4 mr-2" />Analyser et créer le modèle</>
+                  )}
+                </Button>
+                {aiUploading && (
+                  <span className="text-xs text-gray-500">L'IA met 10 à 30 secondes pour analyser la facture.</span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Templates IA déjà créés ── */}
+          {(aiTemplatesLoading || aiTemplates.length > 0) && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-[#0B0F2E] flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-[#D4AF37]" />
+                Mes modèles IA
+                {aiTemplatesLoading && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+              </h3>
+              <div className="grid grid-cols-3 gap-4">
+                {aiTemplates.map(tpl => {
+                  const tplId = toAiTemplateId(tpl.id)
+                  const isSelected = selectedTemplate === tplId
+                  const primaire = tpl.couleur_primaire || '#0B0F2E'
+                  const secondaire = tpl.couleur_secondaire || '#D4AF37'
+                  return (
+                    <Card
+                      key={tpl.id}
+                      className={`cursor-pointer transition-all relative ${isSelected ? "ring-2 ring-[#D4AF37] shadow-lg" : "hover:shadow-md"}`}
+                      onClick={() => {
+                        setSelectedTemplate(tplId)
+                        setTemplateColors({ primaire, secondaire })
+                      }}
+                    >
+                      <CardContent className="p-4">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleAiTemplateDelete(tpl.id) }}
+                          title="Supprimer ce modèle"
+                          className="absolute top-2 right-2 p-1 rounded hover:bg-[#9F1239]/10 text-gray-400 hover:text-[#9F1239] transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <Badge className="absolute top-2 left-2 bg-[#D4AF37] text-white text-[9px] px-1.5 py-0">IA</Badge>
+                        <div className="border rounded-lg p-3 mb-3 bg-white min-h-[180px] mt-6">
+                          <div className={`flex items-start mb-3 ${tpl.logo_position === 'top-right' ? 'flex-row-reverse' : tpl.logo_position === 'top-center' ? 'flex-col items-center gap-1' : 'justify-between'}`}>
+                            {settings.logo_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={settings.logo_url} alt="logo" className="max-h-10 max-w-[80px] object-contain" />
+                            ) : (
+                              <div className="w-10 h-10 rounded" style={{ backgroundColor: primaire }} />
+                            )}
+                            <div className={tpl.logo_position === 'top-center' ? 'text-center' : 'text-right'}>
+                              <div className="text-[10px] font-bold" style={{ color: primaire }}>FACTURE</div>
+                              <div className="text-[8px] text-gray-400">{tpl.format_numero || 'INV-001'}</div>
+                            </div>
+                          </div>
+                          <div className="space-y-1 mb-3">
+                            <div className="h-1.5 rounded bg-gray-200 w-3/4" />
+                            <div className="h-1.5 rounded bg-gray-200 w-1/2" />
+                          </div>
+                          <div className="border-t pt-2 space-y-1">
+                            <div className="flex justify-between">
+                              <div className="h-1.5 rounded bg-gray-200 w-1/3" />
+                              <div className="h-1.5 rounded w-1/6" style={{ backgroundColor: secondaire }} />
+                            </div>
+                          </div>
+                          <div className="border-t mt-2 pt-2 flex justify-end">
+                            <div className="h-2 rounded w-1/4" style={{ backgroundColor: primaire }} />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <h3 className="font-semibold text-[#0B0F2E] text-sm truncate" title={tpl.nom}>{tpl.nom}</h3>
+                            {tpl.source_fichier && (
+                              <p className="text-[10px] text-gray-500 truncate" title={tpl.source_fichier}>
+                                {tpl.source_fichier}
+                              </p>
+                            )}
+                            {tpl.consignes_ia && (
+                              <p className="text-[10px] text-[#A88925] mt-1 line-clamp-2" title={tpl.consignes_ia}>
+                                <Info className="w-2.5 h-2.5 inline mr-0.5" />
+                                {tpl.consignes_ia}
+                              </p>
+                            )}
+                          </div>
+                          {isSelected && <Check className="w-5 h-5 text-[#D4AF37] flex-shrink-0" />}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Templates standards (hardcoded) ── */}
+          <h3 className="text-sm font-semibold text-[#0B0F2E] pt-2">Modèles standards</h3>
           <div className="grid grid-cols-3 gap-4">
             {getTemplates(locale).map(tpl => (
               <Card key={tpl.id} className={`cursor-pointer transition-all ${selectedTemplate === tpl.id ? "ring-2 ring-[#D4AF37] shadow-lg" : "hover:shadow-md"}`}

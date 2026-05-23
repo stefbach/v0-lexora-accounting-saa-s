@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       date_facture, date_echeance, devise = 'MUR', taux_change = 1,
       montant_ht = 0, montant_tva = 0, montant_ttc,
       taux_tva = 0, statut: statutIn = 'brouillon', notes, notes_internes,
-      lignes = [], conditions_paiement = 30, termes, template = 'standard',
+      lignes = [], conditions_paiement = 30, termes, template = 'standard', template_id = null,
       client_offshore = false, remise_pct = 0, remise_montant = 0,
       recurrent = false, recurrent_frequence, logo_url,
       mode_paiement = 'banque', paye_par, contact_id,
@@ -218,7 +218,7 @@ export async function POST(request: Request) {
       montant_ht, montant_tva, montant_ttc: ttc,
       taux_tva, montant_mur: mur, statut: finalStatut, notes,
       notes_internes, lignes, conditions_paiement, termes,
-      template, client_offshore, remise_pct, remise_montant,
+      template, template_id, client_offshore, remise_pct, remise_montant,
       recurrent, recurrent_frequence, logo_url,
       mode_paiement, paye_par, contact_id,
       type_document,
@@ -232,11 +232,24 @@ export async function POST(request: Request) {
       insertData.facture_reference_id = facture_reference_id
     }
 
-    const { data, error } = await supabase
-      .from('factures')
-      .insert(insertData)
-      .select()
-      .single()
+    // Insert robuste : si une colonne récente (ex: template_id mig 286)
+    // manque dans la DB de la cible, on retire le champ fautif et on
+    // retente plutôt que de faire échouer toute la création de facture.
+    let data, error
+    const tryInsert = async (payload: typeof insertData) =>
+      supabase.from('factures').insert(payload).select().single()
+    ;({ data, error } = await tryInsert(insertData))
+    if (error) {
+      const code = (error as { code?: string }).code
+      const msg = error.message || ''
+      const isSchemaError = code === '42703' || /column.*(not exist|schema cache)/i.test(msg)
+      const missingCol = msg.match(/'([a-zA-Z_]+)'/)?.[1]
+      if (isSchemaError && missingCol && missingCol in insertData) {
+        console.warn(`[factures POST] colonne "${missingCol}" manquante en DB, retrait et retry. Lance la migration correspondante.`)
+        delete (insertData as Record<string, unknown>)[missingCol]
+        ;({ data, error } = await tryInsert(insertData))
+      }
+    }
 
     if (error) throw error
 

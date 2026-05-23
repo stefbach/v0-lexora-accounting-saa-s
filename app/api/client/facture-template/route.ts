@@ -24,6 +24,7 @@ export async function POST(request: Request) {
       const formData = await request.formData()
       const file = formData.get('file') as File
       const societe_id = formData.get('societe_id') as string
+      const consignes = String(formData.get('consignes') || '').trim()
       if (!file) return NextResponse.json({ error: 'Fichier requis' }, { status: 400 })
       if (!societe_id) {
         return NextResponse.json({ error: 'societe_id requis — plus de templates globaux' }, { status: 400 })
@@ -68,17 +69,25 @@ export async function POST(request: Request) {
 
       console.log(`[facture-template] file=${file.name} size=${file.size} mime=${mimeFromHeader} ext=${ext} magic=${headHex.substring(0, 8)}`)
 
+      // Construit le prompt d'analyse en intégrant les consignes libres de
+      // l'utilisateur (le cas échéant). Les consignes sont une information
+      // de premier ordre : si elles contredisent ce que l'IA aurait deviné,
+      // elles prévalent (couleurs, format de numéro, mentions, etc.).
+      const analyzePromptWithConsignes = consignes
+        ? `${ANALYZE_PROMPT}\n\nCONSIGNES UTILISATEUR (à respecter en priorité, elles prévalent sur ce que tu déduirais du document) :\n${consignes}`
+        : ANALYZE_PROMPT
+
       let content: any[]
       if (isPdf && isPdfMagic) {
         content = [
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-          { type: 'text', text: ANALYZE_PROMPT },
+          { type: 'text', text: analyzePromptWithConsignes },
         ]
       } else if ((isPng && isPngMagic) || (isJpeg && isJpegMagic) || (isWebp && isWebpMagic)) {
         const media_type = isPng ? 'image/png' : isWebp ? 'image/webp' : 'image/jpeg'
         content = [
           { type: 'image', source: { type: 'base64', media_type, data: base64 } },
-          { type: 'text', text: ANALYZE_PROMPT },
+          { type: 'text', text: analyzePromptWithConsignes },
         ]
       } else if (isPdf && !isPdfMagic) {
         return NextResponse.json({
@@ -220,6 +229,7 @@ export async function POST(request: Request) {
         format_numero: template.format_numero || 'INV-{YYYY}-{NNN}',
         style: template.style && typeof template.style === 'object' ? template.style : {},
         source_fichier: file.name,
+        consignes_ia: consignes || null,
         created_by: user.id,
         actif: true,
       }
@@ -254,8 +264,19 @@ export async function POST(request: Request) {
     const body = await request.json()
 
     if (body.action === 'list') {
+      const societe_id: string | undefined = body.societe_id
+      if (!societe_id) {
+        return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
+      }
       const supabase = getAdminClient()
-      const { data } = await supabase.from('facture_templates').select('*').order('created_at', { ascending: false })
+      await assertSocieteAccess(supabase, user.id, societe_id)
+      const { data, error } = await supabase
+        .from('facture_templates')
+        .select('*')
+        .eq('societe_id', societe_id)
+        .eq('actif', true)
+        .order('created_at', { ascending: false })
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
       return NextResponse.json({ templates: data || [] })
     }
 
@@ -264,6 +285,38 @@ export async function POST(request: Request) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     console.error('[facture-template]', e)
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
+
+// DELETE — Suppression douce (actif=false) d'un template IA.
+// Body : { id: string, societe_id: string }
+export async function DELETE(request: Request) {
+  try {
+    const supabaseAuth = await createServerClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    const { id, societe_id } = await request.json()
+    if (!id || !societe_id) {
+      return NextResponse.json({ error: 'id et societe_id requis' }, { status: 400 })
+    }
+
+    const supabase = getAdminClient()
+    await assertSocieteAccess(supabase, user.id, societe_id)
+
+    const { error } = await supabase
+      .from('facture_templates')
+      .update({ actif: false })
+      .eq('id', id)
+      .eq('societe_id', societe_id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ deleted: true })
+  } catch (e: unknown) {
+    const mapped = mapSocieteAccessError(e)
+    if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
+    console.error('[facture-template DELETE]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -281,7 +334,7 @@ Retourne UNIQUEMENT un objet JSON valide (pas de texte avant ou après, pas de m
   "devise": "MUR|EUR|USD|GBP",
   "taux_tva": 15,
   "colonnes": ["description", "quantite", "prix_unitaire", "montant"],
-  "entete_html": "<div>...court template HTML <500 chars avec placeholders {{nom_societe}}, {{adresse}}, {{brn}}, {{tva_number}}, {{telephone}}, {{email}}...</div>",
+  "entete_html": "<div>...court template HTML <500 chars. DOIT inclure <img src=\\"{{logo_url}}\\" alt=\\"logo\\" /> à la position détectée si la facture a un logo, et placeholders {{nom_societe}}, {{adresse}}, {{brn}}, {{tva_number}}, {{telephone}}, {{email}}...</div>",
   "pied_page_html": "<div>...court <500 chars avec {{conditions_paiement}}, {{mentions_legales}}, {{coordonnees_bancaires}}</div>",
   "mentions_legales": "texte court <300 chars",
   "conditions_paiement": "ex: Net 30 jours",
@@ -300,4 +353,5 @@ CONTRAINTES STRICTES :
 - Pas de commentaires JS, pas de virgule finale, pas de markdown
 - entete_html et pied_page_html doivent rester COURTS (<500 chars chacun)
 - Utilise UNIQUEMENT des placeholders {{variable}}, pas de vraies données
+- Si la facture a un logo visible : inclus impérativement <img src="{{logo_url}}" ... /> dans entete_html à la position détectée (logo_position) et avec une largeur raisonnable (style="max-height:60px")
 - Si une info n'est pas détectable, utilise une valeur par défaut raisonnable (pas de null)`

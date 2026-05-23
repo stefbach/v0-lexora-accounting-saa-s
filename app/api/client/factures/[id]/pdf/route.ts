@@ -68,7 +68,9 @@ const styles = StyleSheet.create({
   notesTitle:  { fontSize: 8, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
   notesText:   { fontSize: 8, color: '#555' },
   bankInfo:    { marginTop: 12, padding: 10, borderWidth: 0.5, borderColor: '#ddd', borderRadius: 4 },
-  footer:      { position: 'absolute', bottom: 24, left: 48, right: 48, borderTopWidth: 0.5, borderTopColor: '#ccc', paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between' },
+  mentionsLegales:     { marginTop: 16, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: '#e5e5e5' },
+  mentionsLegalesText: { fontSize: 8, color: '#555', lineHeight: 1.4 },
+  footer:      { position: 'absolute', bottom: 24, left: 48, right: 48, borderTopWidth: 0.5, borderTopColor: '#ccc', paddingTop: 6, flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' },
   footerText:  { fontSize: 7, color: '#aaa' },
 })
 
@@ -160,7 +162,7 @@ export async function GET(request: Request, { params }: Params) {
     //
     // Bumper PDF_TEMPLATE_VERSION_BUMP à chaque évolution du gabarit
     // (mise en page, nouvelles colonnes affichées, etc.).
-    const PDF_TEMPLATE_VERSION_BUMP = '2026-05-12T15:00:00Z'
+    const PDF_TEMPLATE_VERSION_BUMP = '2026-05-22T14:00:00Z'
     const pdfStoredAtMs = facture.pdf_stored_at
       ? new Date(facture.pdf_stored_at).getTime()
       : 0
@@ -200,7 +202,26 @@ export async function GET(request: Request, { params }: Params) {
     // isForeign=false → pas de double affichage. La devise est aussi
     // affichée sur le PDF, donc une casse propre c'est mieux.
     const devise = (facture.devise || 'MUR').toString().trim().toUpperCase() || 'MUR'
-    const accentColor = facture.accent_color || '#0B0F2E'
+
+    // Si la facture a été créée avec un template IA (mig 286), on charge
+    // ses paramètres de personnalisation (couleur primaire, position du
+    // logo). Les valeurs du template prennent le pas sur les défauts mais
+    // n'écrasent PAS les overrides explicites sur la facture (accent_color).
+    let tpl: {
+      couleur_primaire?: string | null
+      logo_position?: string | null
+      mentions_legales?: string | null
+    } | null = null
+    if ((facture as any).template_id) {
+      const tplRes = await admin
+        .from('facture_templates')
+        .select('couleur_primaire, logo_position, mentions_legales, actif')
+        .eq('id', (facture as any).template_id)
+        .maybeSingle()
+      if (tplRes.data && tplRes.data.actif !== false) tpl = tplRes.data
+    }
+    const accentColor = facture.accent_color || tpl?.couleur_primaire || '#0B0F2E'
+    const logoPosition = (tpl?.logo_position || 'top-left') as 'top-left' | 'top-center' | 'top-right'
 
     // ── Double devise : si la facture est en devise étrangère, on affiche
     //    en parallèle l'équivalent en MUR sur chaque ligne de totaux et
@@ -232,8 +253,25 @@ export async function GET(request: Request, { params }: Params) {
     const doc = React.createElement(Document, {},
       React.createElement(Page, { size: 'A4', style: styles.page },
 
-        // En-tête
-        React.createElement(View, { style: styles.header },
+        // En-tête — la disposition du logo dépend du template IA actif
+        // (top-left = défaut, top-center = pile centré sur 2 lignes,
+        // top-right = société à droite et titre facture à gauche).
+        React.createElement(View, {
+          style: {
+            ...styles.header,
+            flexDirection: logoPosition === 'top-center' ? 'column' : 'row',
+            alignItems: logoPosition === 'top-center' ? 'center' : 'flex-start',
+          },
+        },
+          // Inverse l'ordre pour top-right : titre facture à gauche, société à droite.
+          ...(logoPosition === 'top-right' ? [
+            React.createElement(View, { key: 'title' },
+              React.createElement(Text, { style: { ...styles.invoiceTitle, color: accentColor } },
+                facture.type_facture === 'fournisseur' ? 'FACTURE FOURNISSEUR' : 'FACTURE'
+              ),
+              React.createElement(Text, { style: styles.invoiceNum }, `N° ${facture.numero_facture || '—'}`),
+            ),
+          ] : []),
           React.createElement(View, {},
             // Logo société (mig 242, bucket societes-logos). On retire le query
             // string de cache-busting éventuel — @react-pdf récupère via fetch
@@ -255,7 +293,9 @@ export async function GET(request: Request, { params }: Params) {
               `VAT : ${soc.numero_tva_mra || soc.vat_number}`),
             soc?.brn && React.createElement(Text, { style: styles.companyInfo }, `BRN : ${soc.brn}`),
           ),
-          React.createElement(View, {},
+          // Le titre FACTURE n'est rendu ici que pour top-left et top-center.
+          // Pour top-right, il a déjà été inséré en tête (cf. plus haut).
+          logoPosition !== 'top-right' && React.createElement(View, {},
             React.createElement(Text, { style: { ...styles.invoiceTitle, color: accentColor } },
               facture.type_facture === 'fournisseur' ? 'FACTURE FOURNISSEUR' : 'FACTURE'
             ),
@@ -411,11 +451,23 @@ export async function GET(request: Request, { params }: Params) {
           )
         })(),
 
+        // Mentions légales : priorité au template IA actif, fallback société.
+        // Affiché juste au-dessus du footer mais en bloc séparé pour visibilité.
+        (() => {
+          const mention = (tpl?.mentions_legales || soc?.facture_mention_legale || '').trim()
+          if (!mention) return null
+          return React.createElement(View, { style: styles.mentionsLegales },
+            React.createElement(Text, { style: styles.mentionsLegalesText }, mention),
+          )
+        })(),
+
         // Footer
         React.createElement(View, { style: styles.footer },
           React.createElement(Text, { style: styles.footerText }, soc?.nom || ''),
           React.createElement(Text, { style: styles.footerText }, `N° ${facture.numero_facture || '—'} · ${fmtDate(facture.date_facture)}`),
           soc?.vat_number && React.createElement(Text, { style: styles.footerText }, `VAT : ${soc.vat_number}`),
+          // Texte libre footer société (mig 247). Affiché en plus petit.
+          soc?.facture_footer_text && React.createElement(Text, { style: styles.footerText }, soc.facture_footer_text),
         )
       )
     )

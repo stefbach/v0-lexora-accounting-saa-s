@@ -4,6 +4,7 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useProfile } from "@/hooks/use-profile"
+import { useActiveSocieteRole } from "@/hooks/use-active-societe-role"
 import { useState, useEffect } from "react"
 import { t, getLocale } from "@/lib/i18n"
 import { LanguageSwitcher } from "@/components/LanguageSwitcher"
@@ -208,6 +209,14 @@ export function ClientSidebarFull() {
   const router = useRouter()
   const { profile } = useProfile()
   const { societe, societes, societeId, clearSociete } = useSocieteActive()
+  // Rôle de l'utilisateur SUR la société active (différent du rôle global
+  // dans profiles.role). Les API "Direction" s'appuient sur ce rôle-là,
+  // donc la sidebar doit aussi le respecter — sinon un utilisateur ayant
+  // rôle "direction" sur une société voit ses menus cachés à tort.
+  const societeRole = useActiveSocieteRole(societeId)
+  // Union des deux rôles : on accorde l'accès si l'une OU l'autre source
+  // reconnaît l'utilisateur dans un rôle autorisé.
+  const effectiveRoles = [profile?.role, societeRole].filter(Boolean) as string[]
   const locale = getLocale()
   const [collapsed, setCollapsed] = useState<string[]>([])
   const [activeModules, setActiveModules] = useState<ActiveModules>(DEFAULT_MODULES)
@@ -499,7 +508,7 @@ export function ClientSidebarFull() {
                     <div className="mt-1 space-y-0.5">
                       {items.map(item => {
                         const vRoles = (item as any).visibleForRoles
-                        if (vRoles && (!profile?.role || !vRoles.includes(profile.role))) return null
+                        if (vRoles && !effectiveRoles.some(r => vRoles.includes(r))) return null
                       const Icon = item.icon
                       const active = isActive(item.href)
                       const itemLabel = item.labelKey ? t(item.labelKey, locale) : item.label

@@ -423,9 +423,10 @@ export async function GET(request: Request) {
     //    écritures techniques, pas de la masse salariale réelle).
     //  - Journal ACH (factures fournisseurs : si une charge 641 a été passée
     //    à tort par ACH alors qu'elle existe aussi en SAL, double-comptage).
-    // NB : le filtre 'mois courant SAL/OD-PAIE' a été retiré (cf note ligne 276) —
-    // il masquait à tort les salaires du mois en cours alors que l'import Excel
-    // ingère des paies déjà finalisées.
+    // Bug observé : 7,6M Rs affichés au lieu de 6,7M car 6418 (~883k
+    // d'ajustements `FAC-... écart`) gonflait artificiellement les salaires.
+    // NB : on n'exclut PLUS la paye du mois courant — si elle est en Grand Livre
+    // (validée/postée), elle DOIT apparaître dans Dashboard/P&L. Cohérence GL <-> P&L.
     const salaires = allEcritures
       .filter(e =>
         e.compte?.startsWith('641')

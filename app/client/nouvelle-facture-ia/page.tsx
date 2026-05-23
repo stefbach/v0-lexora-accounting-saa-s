@@ -80,7 +80,10 @@ function fmtMontant(n: number, dev = "MUR") {
 
 export default function NouvelleFactureIAPage() {
   const router = useRouter()
-  const { societeId } = useSocieteActive()
+  const { societeId, societe } = useSocieteActive()
+  // Template IA actif lu depuis la société DB (source de vérité par
+  // société, mig 287). Évite la fuite cross-tenant via localStorage.
+  const activeAiTemplateId = (societe as { facture_template_id?: string | null } | null)?.facture_template_id || null
   const [contexte, setContexte] = useState<Contexte | null>(null)
   const [loadingContexte, setLoadingContexte] = useState(true)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -134,6 +137,7 @@ export default function NouvelleFactureIAPage() {
     setInput("")
     setSending(true)
     setErrorMsg(null)
+
     try {
       const r = await fetch(`/api/client/factures-ia/chat`, {
         method: "POST",
@@ -142,6 +146,7 @@ export default function NouvelleFactureIAPage() {
           societe_id: societeId,
           historique: messages,
           message: userMsg.content,
+          template_id: activeAiTemplateId,
         }),
       })
       const j = await r.json()
@@ -168,7 +173,7 @@ export default function NouvelleFactureIAPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           societe_id: societeId,
-          parametres: analyse.parametres_extraits,
+          parametres: { ...analyse.parametres_extraits, template_id: activeAiTemplateId },
         }),
       })
       const j = await r.json()

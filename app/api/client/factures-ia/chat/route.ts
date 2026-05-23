@@ -30,11 +30,16 @@ import {
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-async function chargerContexte(supabase: ReturnType<typeof getAdminClient>, userId: string, societe_id: string): Promise<ContexteFactureIA> {
+async function chargerContexte(
+  supabase: ReturnType<typeof getAdminClient>,
+  userId: string,
+  societe_id: string,
+  template_id?: string | null,
+): Promise<ContexteFactureIA> {
   const [societeRes, profileRes, contactsRes, catalogueRes, facturesRes, settingsRes] = await Promise.all([
     supabase
       .from('societes')
-      .select('id, nom, brn, vat_number, numero_tva_mra, adresse, devise_defaut, banque_iban, banque_swift, mra_fiscalisation_active')
+      .select('id, nom, brn, vat_number, numero_tva_mra, adresse, devise_defaut, banque_iban, banque_swift, mra_fiscalisation_active, logo_url')
       .eq('id', societe_id)
       .maybeSingle(),
     supabase
@@ -77,6 +82,29 @@ async function chargerContexte(supabase: ReturnType<typeof getAdminClient>, user
     return `${prefix || 'INV'}-${year}-${String((counter || 0) + 1).padStart(4, '0')}`
   }
 
+  // Charge le template IA actif (le cas échéant) après les autres requêtes :
+  // c'est petit et facultatif, on garde le Promise.all groupé propre pour le reste.
+  let template_actif: ContexteFactureIA['template_actif']
+  if (template_id) {
+    const { data: tpl } = await supabase
+      .from('facture_templates')
+      .select('nom, devise_defaut, tva_defaut, conditions_paiement, mentions_legales, format_numero, consignes_ia, actif')
+      .eq('id', template_id)
+      .eq('societe_id', societe_id)
+      .maybeSingle()
+    if (tpl && tpl.actif !== false) {
+      template_actif = {
+        nom: tpl.nom,
+        devise_defaut: tpl.devise_defaut || undefined,
+        tva_defaut: tpl.tva_defaut ?? undefined,
+        conditions_paiement: tpl.conditions_paiement || undefined,
+        mentions_legales: tpl.mentions_legales || undefined,
+        format_numero: tpl.format_numero || undefined,
+        consignes_ia: tpl.consignes_ia || undefined,
+      }
+    }
+  }
+
   return {
     societe: (societeRes.data as any) || { id: societe_id, nom: '?' },
     user: (profileRes.data as any) || {},
@@ -91,6 +119,7 @@ async function chargerContexte(supabase: ReturnType<typeof getAdminClient>, user
     },
     tva_defaut: settings.tva_defaut ?? 15,
     conditions_paiement_defaut: settings.conditions_paiement_defaut ?? 30,
+    template_actif,
   }
 }
 
@@ -105,12 +134,13 @@ export async function POST(request: Request) {
     const societe_id: string = body.societe_id
     const message: string = body.message || ''
     const historique: MessageFactureIA[] = Array.isArray(body.historique) ? body.historique : []
+    const template_id: string | null = body.template_id || null
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     if (!message.trim()) return NextResponse.json({ error: 'message requis' }, { status: 400 })
 
     await assertSocieteAccess(supabase, user.id, societe_id)
 
-    const contexte = await chargerContexte(supabase, user.id, societe_id)
+    const contexte = await chargerContexte(supabase, user.id, societe_id, template_id)
 
     const reponseIA = await continuerConversationFacture({
       contexte,

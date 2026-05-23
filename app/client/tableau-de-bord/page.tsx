@@ -69,7 +69,6 @@ export default function TableauDeBord() {
   const currentMoisDefault = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
   const [mois, setMois] = useState(currentMoisDefault)
   const [exercice, setExercice] = useState(getCurrentExercice())
-  const isCurrentMonth = mois === currentMoisDefault
 
   // KPI data
   const [monthly, setMonthly] = useState<any>(null)
@@ -302,7 +301,7 @@ export default function TableauDeBord() {
                   </CardContent>
                 </Card>
                 <KpiCard label={t('core.tdb.vat_net', locale)} value={monthly.tvaNette} icon={Receipt} color="text-[#A88925]" bg="bg-[#D4AF37]/10" />
-                <KpiCard label={t('core.tdb.payroll_mass', locale)} valueStr={isCurrentMonth ? t('core.tdb.current_month', locale) : undefined} value={isCurrentMonth ? undefined : monthly.salaires} icon={Users} color="text-slate-600" bg="bg-slate-100" />
+                <KpiCard label={t('core.tdb.payroll_mass', locale)} value={monthly.salaires} icon={Users} color="text-slate-600" bg="bg-slate-100" />
                 <Card className="cursor-pointer" onClick={() => document.getElementById('alertes-section')?.scrollIntoView({ behavior: 'smooth' })}>
                   <CardContent className="p-4">
                     {(() => {

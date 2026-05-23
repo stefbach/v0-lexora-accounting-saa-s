@@ -243,6 +243,7 @@ export async function PATCH(request: Request) {
     }
     if (body.facture_footer_text !== undefined) updateData.facture_footer_text = body.facture_footer_text || null
     if (body.facture_mention_legale !== undefined) updateData.facture_mention_legale = body.facture_mention_legale || null
+    if (body.facture_template_id !== undefined) updateData.facture_template_id = body.facture_template_id || null
 
     // Numérotation devis / avoir / note de débit (mig 247) — même
     // pattern que facture_*, avec préfixe + compteur. Le retry défensif
