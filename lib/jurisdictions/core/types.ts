@@ -80,9 +80,9 @@ export interface Account {
   description?: string  // Free-text description (used by SYSCOHADA classes)
   classNumber: number
   category: AccountCategory
-  isAuxiliary: boolean  // True for tiers (clients, fournisseurs)
+  isAuxiliary?: boolean  // True for tiers (clients, fournisseurs). Default false.
   normalBalance: 'DEBIT' | 'CREDIT'
-  isReconcilable: boolean  // True if account supports lettrage
+  isReconcilable?: boolean  // True if account supports lettrage. Default false.
   taxCode?: string
   parentAccount?: string
   jurisdiction: JurisdictionCode | 'OHADA' | 'COMMON'

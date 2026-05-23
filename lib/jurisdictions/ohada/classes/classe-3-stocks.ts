@@ -3,8 +3,8 @@ import type { Account } from '../../core/types';
 export const CLASSE_3_ACCOUNTS: Account[] = [
   // 31 - Marchandises
   {
-    accountNumber: '311',
-    name: 'Marchandises A',
+    number: '311',
+    labelFr: 'Marchandises A',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -13,8 +13,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '312',
-    name: 'Marchandises B',
+    number: '312',
+    labelFr: 'Marchandises B',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -23,8 +23,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '318',
-    name: 'Marchandises hors activités ordinaires',
+    number: '318',
+    labelFr: 'Marchandises hors activités ordinaires',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -35,8 +35,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
 
   // 32 - Matières premières et fournitures liées
   {
-    accountNumber: '321',
-    name: 'Matières premières A',
+    number: '321',
+    labelFr: 'Matières premières A',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -45,8 +45,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '322',
-    name: 'Matières premières B',
+    number: '322',
+    labelFr: 'Matières premières B',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -55,8 +55,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '323',
-    name: 'Fournitures A',
+    number: '323',
+    labelFr: 'Fournitures A',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -65,8 +65,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '324',
-    name: 'Fournitures B',
+    number: '324',
+    labelFr: 'Fournitures B',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -77,8 +77,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
 
   // 33 - Autres approvisionnements
   {
-    accountNumber: '331',
-    name: 'Matières consommables',
+    number: '331',
+    labelFr: 'Matières consommables',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -87,8 +87,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '332',
-    name: 'Fournitures consommables',
+    number: '332',
+    labelFr: 'Fournitures consommables',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -97,8 +97,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '333',
-    name: 'Emballages',
+    number: '333',
+    labelFr: 'Emballages',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -107,8 +107,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '3351',
-    name: 'Emballages perdus',
+    number: '3351',
+    labelFr: 'Emballages perdus',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -117,8 +117,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '3352',
-    name: 'Emballages récupérables non identifiables',
+    number: '3352',
+    labelFr: 'Emballages récupérables non identifiables',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -127,8 +127,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '3358',
-    name: 'Autres emballages',
+    number: '3358',
+    labelFr: 'Autres emballages',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -137,8 +137,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '338',
-    name: 'Stocks en cours de route, en consignation',
+    number: '338',
+    labelFr: 'Stocks en cours de route, en consignation',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -149,8 +149,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
 
   // 34 - Produits en cours
   {
-    accountNumber: '341',
-    name: 'Produits en cours',
+    number: '341',
+    labelFr: 'Produits en cours',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -159,8 +159,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '342',
-    name: 'Travaux en cours',
+    number: '342',
+    labelFr: 'Travaux en cours',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -169,8 +169,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '343',
-    name: 'Services en cours',
+    number: '343',
+    labelFr: 'Services en cours',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -181,8 +181,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
 
   // 35 - Services en cours
   {
-    accountNumber: '351',
-    name: 'Services en cours - Interne',
+    number: '351',
+    labelFr: 'Services en cours - Interne',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -191,8 +191,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '352',
-    name: 'Services en cours - Externe',
+    number: '352',
+    labelFr: 'Services en cours - Externe',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -203,8 +203,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
 
   // 36 - Produits finis
   {
-    accountNumber: '361',
-    name: 'Produits finis A',
+    number: '361',
+    labelFr: 'Produits finis A',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -213,8 +213,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '362',
-    name: 'Produits finis B',
+    number: '362',
+    labelFr: 'Produits finis B',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -223,8 +223,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '368',
-    name: 'Produits finis hors activités ordinaires',
+    number: '368',
+    labelFr: 'Produits finis hors activités ordinaires',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -235,8 +235,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
 
   // 37 - Produits intermédiaires et résiduels
   {
-    accountNumber: '371',
-    name: 'Produits intermédiaires',
+    number: '371',
+    labelFr: 'Produits intermédiaires',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -245,8 +245,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '372',
-    name: 'Produits résiduels',
+    number: '372',
+    labelFr: 'Produits résiduels',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -255,8 +255,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '373',
-    name: 'Produits intermédiaires hors activités ordinaires',
+    number: '373',
+    labelFr: 'Produits intermédiaires hors activités ordinaires',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -267,8 +267,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
 
   // 38 - Stocks en cours de route, en consignation ou en dépôt
   {
-    accountNumber: '381',
-    name: 'Stocks en cours de route',
+    number: '381',
+    labelFr: 'Stocks en cours de route',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -277,8 +277,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '382',
-    name: 'Stocks en consignation',
+    number: '382',
+    labelFr: 'Stocks en consignation',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -287,8 +287,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '383',
-    name: 'Stocks en dépôt',
+    number: '383',
+    labelFr: 'Stocks en dépôt',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -299,8 +299,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
 
   // 39 - Dépréciations des stocks
   {
-    accountNumber: '391',
-    name: 'Dépréciations des marchandises',
+    number: '391',
+    labelFr: 'Dépréciations des marchandises',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'CREDIT',
@@ -309,8 +309,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '392',
-    name: 'Dépréciations des matières premières',
+    number: '392',
+    labelFr: 'Dépréciations des matières premières',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'CREDIT',
@@ -319,8 +319,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '393',
-    name: 'Dépréciations des autres approvisionnements',
+    number: '393',
+    labelFr: 'Dépréciations des autres approvisionnements',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'CREDIT',
@@ -329,8 +329,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '394',
-    name: 'Dépréciations des produits en cours',
+    number: '394',
+    labelFr: 'Dépréciations des produits en cours',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'CREDIT',
@@ -339,8 +339,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '395',
-    name: 'Dépréciations des services en cours',
+    number: '395',
+    labelFr: 'Dépréciations des services en cours',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'CREDIT',
@@ -349,8 +349,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '396',
-    name: 'Dépréciations des produits finis',
+    number: '396',
+    labelFr: 'Dépréciations des produits finis',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'CREDIT',
@@ -359,8 +359,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '397',
-    name: 'Dépréciations des produits intermédiaires',
+    number: '397',
+    labelFr: 'Dépréciations des produits intermédiaires',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'CREDIT',
@@ -369,8 +369,8 @@ export const CLASSE_3_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '398',
-    name: 'Dépréciations des stocks en route',
+    number: '398',
+    labelFr: 'Dépréciations des stocks en route',
     classNumber: 3,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'CREDIT',

@@ -93,8 +93,8 @@ export interface SMTEligibilityResult {
 
 // ─── Seuils AUDCIF ───────────────────────────────────────────────────────────
 
-const SMT_SEUIL_CA_XOF = 60_000_000    // 60 millions XOF/XAF
-const SMT_SEUIL_EFFECTIF = 20
+export const SMT_SEUIL_CA_XOF = 60_000_000    // 60 millions XOF/XAF
+export const SMT_SEUIL_EFFECTIF = 20
 
 // ─── Contrôle d'éligibilité ──────────────────────────────────────────────────
 

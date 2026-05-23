@@ -4,8 +4,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   // Classe 90 - Comptes réfléchis
   {
     classNumber: 9,
-    accountNumber: '901',
-    label: 'Achats stockés réfléchis',
+    number: '901',
+    labelFr: 'Achats stockés réfléchis',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -14,8 +14,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '902',
-    label: 'Ventes réfléchies',
+    number: '902',
+    labelFr: 'Ventes réfléchies',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -24,8 +24,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '903',
-    label: 'Stocks et services en cours réfléchis',
+    number: '903',
+    labelFr: 'Stocks et services en cours réfléchis',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -34,8 +34,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '904',
-    label: 'Charges de personnel réfléchies',
+    number: '904',
+    labelFr: 'Charges de personnel réfléchies',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -44,8 +44,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '905',
-    label: 'Impôts et taxes réfléchis',
+    number: '905',
+    labelFr: 'Impôts et taxes réfléchis',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -54,8 +54,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '906',
-    label: 'Autres charges réfléchies',
+    number: '906',
+    labelFr: 'Autres charges réfléchies',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -64,8 +64,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '907',
-    label: 'Frais financiers réfléchis',
+    number: '907',
+    labelFr: 'Frais financiers réfléchis',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -74,8 +74,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '908',
-    label: 'Charges et produits HAO réfléchis',
+    number: '908',
+    labelFr: 'Charges et produits HAO réfléchis',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -86,8 +86,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   // Classe 91 - Comptes de reclassement
   {
     classNumber: 9,
-    accountNumber: '911',
-    label: 'Reclassements préalables des charges',
+    number: '911',
+    labelFr: 'Reclassements préalables des charges',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -96,8 +96,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '912',
-    label: 'Reclassements préalables des produits',
+    number: '912',
+    labelFr: 'Reclassements préalables des produits',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -108,8 +108,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   // Classe 92 - Comptes de coûts
   {
     classNumber: 9,
-    accountNumber: '921',
-    label: 'Centres d\'analyse - section approvisionnement',
+    number: '921',
+    labelFr: 'Centres d\'analyse - section approvisionnement',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -118,8 +118,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '922',
-    label: 'Centres d\'analyse - section production',
+    number: '922',
+    labelFr: 'Centres d\'analyse - section production',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -128,8 +128,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '923',
-    label: 'Centres d\'analyse - section distribution',
+    number: '923',
+    labelFr: 'Centres d\'analyse - section distribution',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -138,8 +138,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '924',
-    label: 'Centres d\'analyse - section administration',
+    number: '924',
+    labelFr: 'Centres d\'analyse - section administration',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -148,8 +148,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '925',
-    label: 'Centres d\'analyse - autres sections',
+    number: '925',
+    labelFr: 'Centres d\'analyse - autres sections',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -158,8 +158,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '926',
-    label: 'Sections auxiliaires',
+    number: '926',
+    labelFr: 'Sections auxiliaires',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -168,8 +168,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '928',
-    label: 'Sections principales',
+    number: '928',
+    labelFr: 'Sections principales',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -180,8 +180,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   // Classe 93 - Coûts d'achat
   {
     classNumber: 9,
-    accountNumber: '931',
-    label: 'Coûts d\'achat de marchandises',
+    number: '931',
+    labelFr: 'Coûts d\'achat de marchandises',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -190,8 +190,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '932',
-    label: 'Coûts d\'achat des matières premières et fournitures',
+    number: '932',
+    labelFr: 'Coûts d\'achat des matières premières et fournitures',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -200,8 +200,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '933',
-    label: 'Coûts d\'achat des autres approvisionnements',
+    number: '933',
+    labelFr: 'Coûts d\'achat des autres approvisionnements',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -212,8 +212,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   // Classe 94 - Inventaire permanent des stocks
   {
     classNumber: 9,
-    accountNumber: '941',
-    label: 'Marchandises',
+    number: '941',
+    labelFr: 'Marchandises',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -222,8 +222,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '942',
-    label: 'Matières premières',
+    number: '942',
+    labelFr: 'Matières premières',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -232,8 +232,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '943',
-    label: 'Autres approvisionnements',
+    number: '943',
+    labelFr: 'Autres approvisionnements',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -242,8 +242,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '944',
-    label: 'Produits en cours',
+    number: '944',
+    labelFr: 'Produits en cours',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -252,8 +252,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '945',
-    label: 'Services en cours',
+    number: '945',
+    labelFr: 'Services en cours',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -262,8 +262,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '946',
-    label: 'Produits finis',
+    number: '946',
+    labelFr: 'Produits finis',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -272,8 +272,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '947',
-    label: 'Produits intermédiaires et résiduels',
+    number: '947',
+    labelFr: 'Produits intermédiaires et résiduels',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -284,8 +284,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   // Classe 95 - Coûts de production
   {
     classNumber: 9,
-    accountNumber: '951',
-    label: 'Coûts de production des produits finis A',
+    number: '951',
+    labelFr: 'Coûts de production des produits finis A',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -294,8 +294,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '952',
-    label: 'Coûts de production des produits finis B',
+    number: '952',
+    labelFr: 'Coûts de production des produits finis B',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -304,8 +304,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '953',
-    label: 'Coûts de production des produits intermédiaires',
+    number: '953',
+    labelFr: 'Coûts de production des produits intermédiaires',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -316,8 +316,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   // Classe 96 - Coûts de revient
   {
     classNumber: 9,
-    accountNumber: '961',
-    label: 'Coûts de revient des marchandises vendues',
+    number: '961',
+    labelFr: 'Coûts de revient des marchandises vendues',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -326,8 +326,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '962',
-    label: 'Coûts de revient des produits vendus',
+    number: '962',
+    labelFr: 'Coûts de revient des produits vendus',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -336,8 +336,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '963',
-    label: 'Coûts de revient des services rendus',
+    number: '963',
+    labelFr: 'Coûts de revient des services rendus',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -348,8 +348,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   // Classe 97 - Écarts
   {
     classNumber: 9,
-    accountNumber: '971',
-    label: 'Écarts sur achats',
+    number: '971',
+    labelFr: 'Écarts sur achats',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -358,8 +358,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '972',
-    label: 'Écarts sur stocks',
+    number: '972',
+    labelFr: 'Écarts sur stocks',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -368,8 +368,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '973',
-    label: 'Écarts sur production',
+    number: '973',
+    labelFr: 'Écarts sur production',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -380,8 +380,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   // Classe 98 - Résultats analytiques
   {
     classNumber: 9,
-    accountNumber: '981',
-    label: 'Résultat sur ventes de marchandises',
+    number: '981',
+    labelFr: 'Résultat sur ventes de marchandises',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -390,8 +390,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '982',
-    label: 'Résultat sur ventes de produits',
+    number: '982',
+    labelFr: 'Résultat sur ventes de produits',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -400,8 +400,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '983',
-    label: 'Résultat sur prestations de services',
+    number: '983',
+    labelFr: 'Résultat sur prestations de services',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -412,8 +412,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   // Classe 99 - Comptes de liaison internes (engagements)
   {
     classNumber: 9,
-    accountNumber: '991',
-    label: 'Engagements obtenus',
+    number: '991',
+    labelFr: 'Engagements obtenus',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -422,8 +422,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '992',
-    label: 'Engagements donnés',
+    number: '992',
+    labelFr: 'Engagements donnés',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,
@@ -432,8 +432,8 @@ export const CLASSE_9_ACCOUNTS: Account[] = [
   },
   {
     classNumber: 9,
-    accountNumber: '994',
-    label: 'Comptes de liaison entre établissements stables',
+    number: '994',
+    labelFr: 'Comptes de liaison entre établissements stables',
     category: 'ANALYTICAL',
     isAuxiliary: false,
     isReconcilable: false,

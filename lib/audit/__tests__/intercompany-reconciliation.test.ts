@@ -394,7 +394,7 @@ describe('Intercompany Reconciliation', () => {
         },
       ]
 
-      const isCompliant = findings.filter(f => f.severity === 'critical').length === 0
+      const isCompliant = findings.filter(f => (f.severity as string) === 'critical').length === 0
       expect(isCompliant).toBe(true)
     })
 
@@ -409,7 +409,7 @@ describe('Intercompany Reconciliation', () => {
         },
       ]
 
-      const isCompliant = findings.filter(f => f.severity === 'critical').length === 0
+      const isCompliant = findings.filter(f => (f.severity as string) === 'critical').length === 0
       expect(isCompliant).toBe(false)
     })
   })

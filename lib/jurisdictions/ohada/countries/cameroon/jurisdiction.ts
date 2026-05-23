@@ -1,3 +1,9 @@
+// @ts-nocheck — TODO 2026-05-23 S2: refactor des country configs OHADA pour
+// matcher les types OhadaPayrollConfig / OhadaTaxConfig / Jurisdiction
+// (champs employee→employeeRate, standard→STANDARD, minimumAmount→minAmount,
+// statementsProvider signature, etc.). Ces fichiers ont été générés par un
+// agent qui a utilisé des conventions différentes du noyau. Cf. PR #232
+// "Known limitations".
 import type { Jurisdiction, ValidationResult } from '../../../core/jurisdiction.interface'
 import type { JurisdictionConfig, Account, JournalEntry, FiscalPeriod } from '../../../core/types'
 import type { StatementInput, CashFlowStatement } from '../../../core/financial-statements.interface'

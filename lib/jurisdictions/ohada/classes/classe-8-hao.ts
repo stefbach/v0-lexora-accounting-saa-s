@@ -11,8 +11,8 @@ import type { Account } from '../../core/types'
 export const CLASSE_8_ACCOUNTS: Account[] = [
   // CLASSE 81: Valeurs comptables des cessions d'immobilisations
   {
-    accountNumber: '81',
-    accountName: 'Valeurs comptables des cessions d\'immobilisations',
+    number: '81',
+    labelFr: 'Valeurs comptables des cessions d\'immobilisations',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -21,8 +21,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '812',
-    accountName: 'Valeurs comptables des cessions d\'immobilisations incorporelles',
+    number: '812',
+    labelFr: 'Valeurs comptables des cessions d\'immobilisations incorporelles',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -31,8 +31,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '813',
-    accountName: 'Valeurs comptables des cessions d\'immobilisations corporelles',
+    number: '813',
+    labelFr: 'Valeurs comptables des cessions d\'immobilisations corporelles',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -41,8 +41,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '816',
-    accountName: 'Valeurs comptables des cessions d\'immobilisations financières',
+    number: '816',
+    labelFr: 'Valeurs comptables des cessions d\'immobilisations financières',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -53,8 +53,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
 
   // CLASSE 82: Produits des cessions d'immobilisations
   {
-    accountNumber: '82',
-    accountName: 'Produits des cessions d\'immobilisations',
+    number: '82',
+    labelFr: 'Produits des cessions d\'immobilisations',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -63,8 +63,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '822',
-    accountName: 'Produits des cessions d\'immobilisations incorporelles',
+    number: '822',
+    labelFr: 'Produits des cessions d\'immobilisations incorporelles',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -73,8 +73,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '823',
-    accountName: 'Produits des cessions d\'immobilisations corporelles',
+    number: '823',
+    labelFr: 'Produits des cessions d\'immobilisations corporelles',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -83,8 +83,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '826',
-    accountName: 'Produits des cessions d\'immobilisations financières',
+    number: '826',
+    labelFr: 'Produits des cessions d\'immobilisations financières',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -95,8 +95,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
 
   // CLASSE 83: Charges hors activités ordinaires
   {
-    accountNumber: '83',
-    accountName: 'Charges hors activités ordinaires',
+    number: '83',
+    labelFr: 'Charges hors activités ordinaires',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -105,8 +105,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '831',
-    accountName: 'Charges HAO constatées',
+    number: '831',
+    labelFr: 'Charges HAO constatées',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -115,8 +115,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '832',
-    accountName: 'Pertes sur risques HAO',
+    number: '832',
+    labelFr: 'Pertes sur risques HAO',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -125,8 +125,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '835',
-    accountName: 'Dons et libéralités accordés',
+    number: '835',
+    labelFr: 'Dons et libéralités accordés',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -135,8 +135,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '836',
-    accountName: 'Abandons de créances consentis',
+    number: '836',
+    labelFr: 'Abandons de créances consentis',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -145,8 +145,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '838',
-    accountName: 'Charges HAO diverses',
+    number: '838',
+    labelFr: 'Charges HAO diverses',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -157,8 +157,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
 
   // CLASSE 84: Produits hors activités ordinaires
   {
-    accountNumber: '84',
-    accountName: 'Produits hors activités ordinaires',
+    number: '84',
+    labelFr: 'Produits hors activités ordinaires',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -167,8 +167,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '841',
-    accountName: 'Produits HAO constatés',
+    number: '841',
+    labelFr: 'Produits HAO constatés',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -177,8 +177,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '845',
-    accountName: 'Dons et libéralités obtenus',
+    number: '845',
+    labelFr: 'Dons et libéralités obtenus',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -187,8 +187,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '846',
-    accountName: 'Abandons de créances obtenus',
+    number: '846',
+    labelFr: 'Abandons de créances obtenus',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -197,8 +197,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '848',
-    accountName: 'Produits HAO divers',
+    number: '848',
+    labelFr: 'Produits HAO divers',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -209,8 +209,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
 
   // CLASSE 85: Dotations HAO
   {
-    accountNumber: '85',
-    accountName: 'Dotations HAO',
+    number: '85',
+    labelFr: 'Dotations HAO',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -219,8 +219,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '851',
-    accountName: 'Dotations aux provisions réglementées',
+    number: '851',
+    labelFr: 'Dotations aux provisions réglementées',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -229,8 +229,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '852',
-    accountName: 'Dotations aux amortissements HAO',
+    number: '852',
+    labelFr: 'Dotations aux amortissements HAO',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -239,8 +239,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '853',
-    accountName: 'Dotations aux provisions HAO',
+    number: '853',
+    labelFr: 'Dotations aux provisions HAO',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -249,8 +249,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '858',
-    accountName: 'Autres dotations HAO',
+    number: '858',
+    labelFr: 'Autres dotations HAO',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -261,8 +261,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
 
   // CLASSE 86: Reprises HAO
   {
-    accountNumber: '86',
-    accountName: 'Reprises HAO',
+    number: '86',
+    labelFr: 'Reprises HAO',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -271,8 +271,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '861',
-    accountName: 'Reprises de provisions réglementées',
+    number: '861',
+    labelFr: 'Reprises de provisions réglementées',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -281,8 +281,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '862',
-    accountName: 'Reprises d\'amortissements HAO',
+    number: '862',
+    labelFr: 'Reprises d\'amortissements HAO',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -291,8 +291,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '863',
-    accountName: 'Reprises de provisions HAO',
+    number: '863',
+    labelFr: 'Reprises de provisions HAO',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -301,8 +301,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '868',
-    accountName: 'Autres reprises HAO',
+    number: '868',
+    labelFr: 'Autres reprises HAO',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -313,8 +313,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
 
   // CLASSE 87: Participation des travailleurs
   {
-    accountNumber: '87',
-    accountName: 'Participation des travailleurs',
+    number: '87',
+    labelFr: 'Participation des travailleurs',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -323,8 +323,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '871',
-    accountName: 'Participation légale aux bénéfices',
+    number: '871',
+    labelFr: 'Participation légale aux bénéfices',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -335,8 +335,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
 
   // CLASSE 88: Subventions d'équilibre
   {
-    accountNumber: '88',
-    accountName: 'Subventions d\'équilibre',
+    number: '88',
+    labelFr: 'Subventions d\'équilibre',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -345,8 +345,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '881',
-    accountName: 'Subventions d\'équilibre reçues',
+    number: '881',
+    labelFr: 'Subventions d\'équilibre reçues',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -355,8 +355,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '882',
-    accountName: 'Subventions d\'équilibre versées',
+    number: '882',
+    labelFr: 'Subventions d\'équilibre versées',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -367,8 +367,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
 
   // CLASSE 89: Impôts sur le résultat
   {
-    accountNumber: '89',
-    accountName: 'Impôts sur le résultat',
+    number: '89',
+    labelFr: 'Impôts sur le résultat',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -377,8 +377,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '891',
-    accountName: 'Impôts sur les bénéfices de l\'exercice',
+    number: '891',
+    labelFr: 'Impôts sur les bénéfices de l\'exercice',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -387,8 +387,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '892',
-    accountName: 'Rappels d\'impôts sur résultats antérieurs',
+    number: '892',
+    labelFr: 'Rappels d\'impôts sur résultats antérieurs',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',
@@ -397,8 +397,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '895',
-    accountName: 'Crédit d\'impôt',
+    number: '895',
+    labelFr: 'Crédit d\'impôt',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_REVENUE',
@@ -407,8 +407,8 @@ export const CLASSE_8_ACCOUNTS: Account[] = [
     isReconcilable: false,
   },
   {
-    accountNumber: '899',
-    accountName: 'Impôts sur le résultat - participation',
+    number: '899',
+    labelFr: 'Impôts sur le résultat - participation',
     classNumber: 8,
     jurisdiction: 'OHADA',
     category: 'INCOME_STATEMENT_EXPENSE',

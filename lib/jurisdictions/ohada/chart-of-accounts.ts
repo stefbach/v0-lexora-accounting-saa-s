@@ -144,7 +144,7 @@ export class OhadaChartOfAccounts implements ChartOfAccountsProvider {
     return ALL_OHADA_ACCOUNTS.filter(
       (a) =>
         a.number.includes(q) ||
-        a.label.toLowerCase().includes(q) ||
+        (a.label?.toLowerCase().includes(q) ?? false) ||
         a.labelFr.toLowerCase().includes(q),
     )
   }

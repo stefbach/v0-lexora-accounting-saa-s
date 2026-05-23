@@ -7,8 +7,8 @@ import type { Account } from '../../core/types';
 export const CLASSE_7_ACCOUNTS: Account[] = [
   // 70 - VENTES
   {
-    accountNumber: '70',
-    accountName: 'Ventes',
+    number: '70',
+    labelFr: 'Ventes',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -17,8 +17,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '701',
-    accountName: 'Ventes de marchandises',
+    number: '701',
+    labelFr: 'Ventes de marchandises',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -27,8 +27,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7011',
-    accountName: 'Ventes de marchandises A',
+    number: '7011',
+    labelFr: 'Ventes de marchandises A',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -37,8 +37,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7012',
-    accountName: 'Ventes de marchandises B',
+    number: '7012',
+    labelFr: 'Ventes de marchandises B',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -47,8 +47,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '702',
-    accountName: 'Ventes de produits finis',
+    number: '702',
+    labelFr: 'Ventes de produits finis',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -57,8 +57,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7021',
-    accountName: 'Ventes de produits finis A',
+    number: '7021',
+    labelFr: 'Ventes de produits finis A',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -67,8 +67,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7022',
-    accountName: 'Ventes de produits finis B',
+    number: '7022',
+    labelFr: 'Ventes de produits finis B',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -77,8 +77,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '703',
-    accountName: 'Ventes de produits intermédiaires',
+    number: '703',
+    labelFr: 'Ventes de produits intermédiaires',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -87,8 +87,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '704',
-    accountName: 'Ventes de produits résiduels',
+    number: '704',
+    labelFr: 'Ventes de produits résiduels',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -97,8 +97,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '705',
-    accountName: 'Travaux facturés',
+    number: '705',
+    labelFr: 'Travaux facturés',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -107,8 +107,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '706',
-    accountName: 'Services vendus',
+    number: '706',
+    labelFr: 'Services vendus',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -117,8 +117,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7061',
-    accountName: 'Prestations de services A',
+    number: '7061',
+    labelFr: 'Prestations de services A',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -127,8 +127,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7062',
-    accountName: 'Prestations de services B',
+    number: '7062',
+    labelFr: 'Prestations de services B',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -137,8 +137,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '707',
-    accountName: 'Produits accessoires',
+    number: '707',
+    labelFr: 'Produits accessoires',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -147,8 +147,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7071',
-    accountName: 'Ports, emballages et autres frais facturés',
+    number: '7071',
+    labelFr: 'Ports, emballages et autres frais facturés',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -157,8 +157,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7072',
-    accountName: 'Locations de matériel',
+    number: '7072',
+    labelFr: 'Locations de matériel',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -167,8 +167,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7073',
-    accountName: 'Bonifications obtenues des clients',
+    number: '7073',
+    labelFr: 'Bonifications obtenues des clients',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -177,8 +177,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7077',
-    accountName: 'Bénéfices attribués par concession',
+    number: '7077',
+    labelFr: 'Bénéfices attribués par concession',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -187,8 +187,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '7078',
-    accountName: 'Autres produits accessoires',
+    number: '7078',
+    labelFr: 'Autres produits accessoires',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -197,8 +197,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '708',
-    accountName: 'Produits des activités annexes',
+    number: '708',
+    labelFr: 'Produits des activités annexes',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -207,8 +207,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '709',
-    accountName: 'Rabais, remises et ristournes accordés',
+    number: '709',
+    labelFr: 'Rabais, remises et ristournes accordés',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -219,8 +219,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
 
   // 71 - SUBVENTIONS D'EXPLOITATION
   {
-    accountNumber: '71',
-    accountName: 'Subventions d\'exploitation',
+    number: '71',
+    labelFr: 'Subventions d\'exploitation',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -229,8 +229,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '711',
-    accountName: 'Subventions sur produits importés',
+    number: '711',
+    labelFr: 'Subventions sur produits importés',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -239,8 +239,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '712',
-    accountName: 'Subventions sur produits exportés',
+    number: '712',
+    labelFr: 'Subventions sur produits exportés',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -249,8 +249,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '713',
-    accountName: 'Subventions à l\'importation',
+    number: '713',
+    labelFr: 'Subventions à l\'importation',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -259,8 +259,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '714',
-    accountName: 'Subventions au déficit d\'exploitation',
+    number: '714',
+    labelFr: 'Subventions au déficit d\'exploitation',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -269,8 +269,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '718',
-    accountName: 'Autres subventions d\'exploitation',
+    number: '718',
+    labelFr: 'Autres subventions d\'exploitation',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -281,8 +281,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
 
   // 72 - PRODUCTION IMMOBILISÉE
   {
-    accountNumber: '72',
-    accountName: 'Production immobilisée',
+    number: '72',
+    labelFr: 'Production immobilisée',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -291,8 +291,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '721',
-    accountName: 'Production immobilisée incorporelle',
+    number: '721',
+    labelFr: 'Production immobilisée incorporelle',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -301,8 +301,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '722',
-    accountName: 'Production immobilisée corporelle',
+    number: '722',
+    labelFr: 'Production immobilisée corporelle',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -313,8 +313,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
 
   // 73 - VARIATIONS DES STOCKS
   {
-    accountNumber: '73',
-    accountName: 'Variations des stocks de biens et services produits',
+    number: '73',
+    labelFr: 'Variations des stocks de biens et services produits',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -323,8 +323,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '734',
-    accountName: 'Variations des stocks de produits en cours',
+    number: '734',
+    labelFr: 'Variations des stocks de produits en cours',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -333,8 +333,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '735',
-    accountName: 'Variations des stocks de services en cours',
+    number: '735',
+    labelFr: 'Variations des stocks de services en cours',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -343,8 +343,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '736',
-    accountName: 'Variations des stocks de produits finis',
+    number: '736',
+    labelFr: 'Variations des stocks de produits finis',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -353,8 +353,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '737',
-    accountName: 'Variations des stocks de produits intermédiaires et résiduels',
+    number: '737',
+    labelFr: 'Variations des stocks de produits intermédiaires et résiduels',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -365,8 +365,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
 
   // 75 - AUTRES PRODUITS
   {
-    accountNumber: '75',
-    accountName: 'Autres produits',
+    number: '75',
+    labelFr: 'Autres produits',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -375,8 +375,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '751',
-    accountName: 'Produits exceptionnels sur opérations de gestion',
+    number: '751',
+    labelFr: 'Produits exceptionnels sur opérations de gestion',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -385,8 +385,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '752',
-    accountName: 'Quote-parts de résultats sur opérations faites en commun',
+    number: '752',
+    labelFr: 'Quote-parts de résultats sur opérations faites en commun',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -395,8 +395,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '753',
-    accountName: 'Jetons de présence reçus',
+    number: '753',
+    labelFr: 'Jetons de présence reçus',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -405,8 +405,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '754',
-    accountName: 'Produits sur cessions d\'immobilisations courantes',
+    number: '754',
+    labelFr: 'Produits sur cessions d\'immobilisations courantes',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -415,8 +415,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '758',
-    accountName: 'Produits divers',
+    number: '758',
+    labelFr: 'Produits divers',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -427,8 +427,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
 
   // 76 - FRAIS FINANCIERS ET PRODUITS ASSIMILÉS
   {
-    accountNumber: '76',
-    accountName: 'Frais financiers et produits assimilés',
+    number: '76',
+    labelFr: 'Frais financiers et produits assimilés',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -437,8 +437,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '761',
-    accountName: 'Revenus de placement',
+    number: '761',
+    labelFr: 'Revenus de placement',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -447,8 +447,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '762',
-    accountName: 'Revenus de participations',
+    number: '762',
+    labelFr: 'Revenus de participations',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -457,8 +457,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '764',
-    accountName: 'Revenus de prêts et créances diverses',
+    number: '764',
+    labelFr: 'Revenus de prêts et créances diverses',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -467,8 +467,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '765',
-    accountName: 'Escomptes obtenus',
+    number: '765',
+    labelFr: 'Escomptes obtenus',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -477,8 +477,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '766',
-    accountName: 'Gains de change',
+    number: '766',
+    labelFr: 'Gains de change',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -487,8 +487,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '767',
-    accountName: 'Gains sur cessions de titres de placement',
+    number: '767',
+    labelFr: 'Gains sur cessions de titres de placement',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -497,8 +497,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '768',
-    accountName: 'Autres frais financiers et produits assimilés',
+    number: '768',
+    labelFr: 'Autres frais financiers et produits assimilés',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -509,8 +509,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
 
   // 77 - REVENUS FINANCIERS
   {
-    accountNumber: '77',
-    accountName: 'Revenus financiers',
+    number: '77',
+    labelFr: 'Revenus financiers',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -519,8 +519,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '771',
-    accountName: 'Revenus de placement',
+    number: '771',
+    labelFr: 'Revenus de placement',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -529,8 +529,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '772',
-    accountName: 'Revenus de participations',
+    number: '772',
+    labelFr: 'Revenus de participations',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -541,8 +541,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
 
   // 78 - TRANSFERTS DE CHARGES
   {
-    accountNumber: '78',
-    accountName: 'Transferts de charges',
+    number: '78',
+    labelFr: 'Transferts de charges',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -551,8 +551,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '781',
-    accountName: 'Transferts de charges d\'exploitation',
+    number: '781',
+    labelFr: 'Transferts de charges d\'exploitation',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -561,8 +561,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '787',
-    accountName: 'Transferts de charges financières',
+    number: '787',
+    labelFr: 'Transferts de charges financières',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -573,8 +573,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
 
   // 79 - REPRISES DE PROVISIONS
   {
-    accountNumber: '79',
-    accountName: 'Reprises de provisions',
+    number: '79',
+    labelFr: 'Reprises de provisions',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -583,8 +583,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '791',
-    accountName: 'Reprises de provisions d\'exploitation',
+    number: '791',
+    labelFr: 'Reprises de provisions d\'exploitation',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',
@@ -593,8 +593,8 @@ export const CLASSE_7_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '797',
-    accountName: 'Reprises de provisions financières',
+    number: '797',
+    labelFr: 'Reprises de provisions financières',
     classNumber: 7,
     category: 'INCOME_STATEMENT_REVENUE',
     normalBalance: 'CREDIT',

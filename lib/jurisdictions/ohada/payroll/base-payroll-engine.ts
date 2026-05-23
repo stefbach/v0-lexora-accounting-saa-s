@@ -72,6 +72,8 @@ export interface OhadaPayrollConfig {
     chargeDeFamilleAllowance: number
     /** Nombre maximum de personnes à charge déductibles */
     maxDependents: number
+    /** Centimes Additionnels Communaux (CM, TD, GQ) — taux additionnel sur IRPP. Optionnel. */
+    cacRate?: number
   }
 
   /** SMIG mensuel en monnaie locale */

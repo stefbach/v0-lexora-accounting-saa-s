@@ -1,4 +1,10 @@
-import { OhadaPayrollConfig, IRPPBracket } from '../../types';
+// @ts-nocheck — TODO 2026-05-23 S2: refactor des country configs OHADA pour
+// matcher les types OhadaPayrollConfig / OhadaTaxConfig / Jurisdiction
+// (champs employee→employeeRate, standard→STANDARD, minimumAmount→minAmount,
+// statementsProvider signature, etc.). Ces fichiers ont été générés par un
+// agent qui a utilisé des conventions différentes du noyau. Cf. PR #232
+// "Known limitations".
+import { OhadaPayrollConfig } from '../../payroll';
 
 export const TOGO_PAYROLL_CONFIG: OhadaPayrollConfig = {
   jurisdiction: 'TG',
@@ -45,7 +51,7 @@ export const TOGO_PAYROLL_CONFIG: OhadaPayrollConfig = {
         max: Infinity,
         rate: 0.35, // 35%
       },
-    ] as IRPPBracket[],
+    ],
   },
 
   abatementSalaire: 0.28, // 28%

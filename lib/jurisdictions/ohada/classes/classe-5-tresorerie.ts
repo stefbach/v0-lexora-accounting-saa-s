@@ -11,8 +11,8 @@ import type { Account } from '../../core/types';
 export const CLASSE_5_ACCOUNTS: Account[] = [
   // CLASSE 50: Titres de placement
   {
-    accountNumber: '501',
-    accountName: 'Titres du Trésor',
+    number: '501',
+    labelFr: 'Titres du Trésor',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -20,8 +20,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '502',
-    accountName: 'Actions',
+    number: '502',
+    labelFr: 'Actions',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -29,8 +29,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '503',
-    accountName: 'Obligations',
+    number: '503',
+    labelFr: 'Obligations',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -38,8 +38,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '504',
-    accountName: 'Bons de souscription',
+    number: '504',
+    labelFr: 'Bons de souscription',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -47,8 +47,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '506',
-    accountName: 'Intérêts courus sur titres de placement',
+    number: '506',
+    labelFr: 'Intérêts courus sur titres de placement',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -56,8 +56,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '508',
-    accountName: 'Autres valeurs assimilées',
+    number: '508',
+    labelFr: 'Autres valeurs assimilées',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -65,8 +65,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '509',
-    accountName: 'Titres de placement à libérer',
+    number: '509',
+    labelFr: 'Titres de placement à libérer',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -76,8 +76,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
 
   // CLASSE 51: Valeurs à encaisser
   {
-    accountNumber: '511',
-    accountName: 'Effets à l\'encaissement',
+    number: '511',
+    labelFr: 'Effets à l\'encaissement',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -85,8 +85,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '512',
-    accountName: 'Chèques à encaisser',
+    number: '512',
+    labelFr: 'Chèques à encaisser',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -94,8 +94,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '513',
-    accountName: 'Effets à l\'escompte',
+    number: '513',
+    labelFr: 'Effets à l\'escompte',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -103,8 +103,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '514',
-    accountName: 'Coupons échus',
+    number: '514',
+    labelFr: 'Coupons échus',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -112,8 +112,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '515',
-    accountName: 'Cartes de crédit à encaisser',
+    number: '515',
+    labelFr: 'Cartes de crédit à encaisser',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -121,8 +121,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '518',
-    accountName: 'Autres valeurs à l\'encaissement',
+    number: '518',
+    labelFr: 'Autres valeurs à l\'encaissement',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -132,8 +132,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
 
   // CLASSE 52: Banques
   {
-    accountNumber: '521',
-    accountName: 'Banques locales',
+    number: '521',
+    labelFr: 'Banques locales',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -141,8 +141,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '522',
-    accountName: 'Banques autres États région monétaire',
+    number: '522',
+    labelFr: 'Banques autres États région monétaire',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -150,8 +150,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '523',
-    accountName: 'Banques autres États zone monétaire',
+    number: '523',
+    labelFr: 'Banques autres États zone monétaire',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -159,8 +159,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '524',
-    accountName: 'Banques hors zone monétaire',
+    number: '524',
+    labelFr: 'Banques hors zone monétaire',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -168,8 +168,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '526',
-    accountName: 'Banques intérêts courus à recevoir',
+    number: '526',
+    labelFr: 'Banques intérêts courus à recevoir',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -177,8 +177,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '528',
-    accountName: 'Banques intérêts courus à payer',
+    number: '528',
+    labelFr: 'Banques intérêts courus à payer',
     classNumber: 5,
     category: 'BALANCE_SHEET_LIABILITY',
     normalBalance: 'CREDIT',
@@ -188,8 +188,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
 
   // CLASSE 53: Établissements financiers et assimilés
   {
-    accountNumber: '531',
-    accountName: 'Chèques postaux',
+    number: '531',
+    labelFr: 'Chèques postaux',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -197,8 +197,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '532',
-    accountName: 'Trésor public',
+    number: '532',
+    labelFr: 'Trésor public',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -206,8 +206,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '533',
-    accountName: 'Sociétés de gestion et d\'intermédiation',
+    number: '533',
+    labelFr: 'Sociétés de gestion et d\'intermédiation',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -215,8 +215,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '536',
-    accountName: 'Établissements financiers intérêts courus à recevoir',
+    number: '536',
+    labelFr: 'Établissements financiers intérêts courus à recevoir',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -226,8 +226,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
 
   // CLASSE 54: Instruments de monnaie électronique
   {
-    accountNumber: '541',
-    accountName: 'Instruments de monnaie électronique',
+    number: '541',
+    labelFr: 'Instruments de monnaie électronique',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -237,8 +237,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
 
   // CLASSE 56: Concours bancaires courants
   {
-    accountNumber: '561',
-    accountName: 'Crédits de trésorerie',
+    number: '561',
+    labelFr: 'Crédits de trésorerie',
     classNumber: 5,
     category: 'BALANCE_SHEET_LIABILITY',
     normalBalance: 'CREDIT',
@@ -246,8 +246,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '564',
-    accountName: 'Escompte de crédit ordinaire',
+    number: '564',
+    labelFr: 'Escompte de crédit ordinaire',
     classNumber: 5,
     category: 'BALANCE_SHEET_LIABILITY',
     normalBalance: 'CREDIT',
@@ -255,8 +255,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '565',
-    accountName: 'Escompte de crédits de mobilisation',
+    number: '565',
+    labelFr: 'Escompte de crédits de mobilisation',
     classNumber: 5,
     category: 'BALANCE_SHEET_LIABILITY',
     normalBalance: 'CREDIT',
@@ -264,8 +264,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '566',
-    accountName: 'Banques crédits de trésorerie',
+    number: '566',
+    labelFr: 'Banques crédits de trésorerie',
     classNumber: 5,
     category: 'BALANCE_SHEET_LIABILITY',
     normalBalance: 'CREDIT',
@@ -273,8 +273,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '568',
-    accountName: 'Concours intérêts courus',
+    number: '568',
+    labelFr: 'Concours intérêts courus',
     classNumber: 5,
     category: 'BALANCE_SHEET_LIABILITY',
     normalBalance: 'CREDIT',
@@ -284,8 +284,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
 
   // CLASSE 57: Caisse
   {
-    accountNumber: '571',
-    accountName: 'Caisse siège social',
+    number: '571',
+    labelFr: 'Caisse siège social',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -293,8 +293,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '572',
-    accountName: 'Caisse succursale A',
+    number: '572',
+    labelFr: 'Caisse succursale A',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -302,8 +302,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '573',
-    accountName: 'Caisse succursale B',
+    number: '573',
+    labelFr: 'Caisse succursale B',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -311,8 +311,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '578',
-    accountName: 'Régies d\'avances et accréditifs',
+    number: '578',
+    labelFr: 'Régies d\'avances et accréditifs',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -322,8 +322,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
 
   // CLASSE 58: Régularisations
   {
-    accountNumber: '581',
-    accountName: 'Virements de fonds',
+    number: '581',
+    labelFr: 'Virements de fonds',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -331,8 +331,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '582',
-    accountName: 'Virements de fonds en attente',
+    number: '582',
+    labelFr: 'Virements de fonds en attente',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -340,8 +340,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '588',
-    accountName: 'Autres virements internes',
+    number: '588',
+    labelFr: 'Autres virements internes',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'DEBIT',
@@ -351,8 +351,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
 
   // CLASSE 59: Dépréciations et provisions pour risques à court terme
   {
-    accountNumber: '591',
-    accountName: 'Dépréciations titres de placement',
+    number: '591',
+    labelFr: 'Dépréciations titres de placement',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'CREDIT',
@@ -360,8 +360,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '592',
-    accountName: 'Dépréciations banques',
+    number: '592',
+    labelFr: 'Dépréciations banques',
     classNumber: 5,
     category: 'BALANCE_SHEET_ASSET',
     normalBalance: 'CREDIT',
@@ -369,8 +369,8 @@ export const CLASSE_5_ACCOUNTS: Account[] = [
     jurisdiction: 'OHADA',
   },
   {
-    accountNumber: '599',
-    accountName: 'Risques provisionnés',
+    number: '599',
+    labelFr: 'Risques provisionnés',
     classNumber: 5,
     category: 'BALANCE_SHEET_LIABILITY',
     normalBalance: 'CREDIT',
