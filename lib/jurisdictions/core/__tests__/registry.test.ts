@@ -25,13 +25,13 @@ describe('Jurisdiction Registry', () => {
       corporateIncomeTaxRate: 0.30,
       withholdingTaxes: [],
     },
-    chartOfAccounts: {} as any,
-    taxEngine: {} as any,
-    payrollEngine: {} as any,
-    statementsProvider: {} as any,
+    chartOfAccounts: {} as Jurisdiction['chartOfAccounts'],
+    taxEngine: {} as Jurisdiction['taxEngine'],
+    payrollEngine: {} as Jurisdiction['payrollEngine'],
+    statementsProvider: {} as Jurisdiction['statementsProvider'],
     validateJournalEntry: () => ({ valid: true, errors: [], warnings: [] }),
     getAccount: () => undefined,
-    getCurrentFiscalPeriod: () => ({} as any),
+    getCurrentFiscalPeriod: () => ({} as ReturnType<Jurisdiction['getCurrentFiscalPeriod']>),
     isAccountReconcilable: () => false,
     formatAmount: (a) => String(a),
     formatDate: (d) => d.toISOString(),
@@ -44,11 +44,11 @@ describe('Jurisdiction Registry', () => {
   })
 
   it('throws when getting unknown jurisdiction', () => {
-    expect(() => getJurisdiction('XX' as any)).toThrow()
+    expect(() => getJurisdiction('XX' as Parameters<typeof getJurisdiction>[0])).toThrow()
   })
 
   it('returns undefined with tryGet for unknown', () => {
-    expect(tryGetJurisdiction('YY' as any)).toBeUndefined()
+    expect(tryGetJurisdiction('YY' as Parameters<typeof tryGetJurisdiction>[0])).toBeUndefined()
   })
 
   it('checks if jurisdiction is registered', () => {

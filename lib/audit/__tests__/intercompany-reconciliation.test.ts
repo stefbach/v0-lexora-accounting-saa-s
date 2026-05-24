@@ -116,7 +116,7 @@ describe('Intercompany Reconciliation', () => {
       })
 
       const transactions = await getIntercompanyTransactionMap(
-        mockSupabase as unknown as Parameters<typeof generateIntercompanyReport>[0],
+        mockSupabase as unknown as Parameters<typeof getIntercompanyTransactionMap>[0],
         '2025-01-01',
         '2025-12-31'
       )
@@ -194,7 +194,7 @@ describe('Intercompany Reconciliation', () => {
       })
 
       const transactions = await getIntercompanyTransactionMap(
-        mockSupabase as unknown as Parameters<typeof generateIntercompanyReport>[0],
+        mockSupabase as unknown as Parameters<typeof getIntercompanyTransactionMap>[0],
         '2025-01-01',
         '2025-12-31'
       )
@@ -480,7 +480,7 @@ describe('Intercompany Reconciliation', () => {
       }
 
       for (const amount of invalidAmounts) {
-        expect(typeof amount === 'number' && !isNaN(amount as any)).toBe(false)
+        expect(typeof amount === 'number' && !isNaN(amount as number)).toBe(false)
       }
 
       // NaN is a special case: typeof NaN === 'number', but isNaN(NaN) === true

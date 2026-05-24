@@ -60,7 +60,7 @@ function mockSupabase(opts: MockOpts = {}) {
     from: (table: string) => ({
       select: () => chain(table),
       update: (vals: any) => {
-        const upd: any = { _table: table, vals, _filters: [] as any[] }
+        const upd: { _table: string; vals: unknown; _filters: unknown[] } = { _table: table, vals, _filters: [] }
         const updChain: any = {
           eq: (col: string, val: any) => { upd._filters.push(['eq', col, val]); return updChain },
           like: (col: string, val: any) => { upd._filters.push(['like', col, val]); return updChain },
@@ -76,6 +76,7 @@ function mockSupabase(opts: MockOpts = {}) {
     }),
     _updates: updates,
     _inserts: inserts,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock partiel d'un SupabaseClient pour test unitaire
   } as any
 }
 
