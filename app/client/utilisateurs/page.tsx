@@ -712,10 +712,12 @@ export default function UtilisateursPage() {
         <div className="text-center text-gray-400 py-16">{t('core.users.loading_users', locale)}</div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent className="p-12 text-center">
-            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="font-medium text-gray-500">{t('core.users.none_found', locale)}</p>
-            <p className="text-sm text-gray-400 mt-1">{t('core.users.adjust_or_create', locale)}</p>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={Users}
+              title={t('core.users.none_found', locale)}
+              description={t('core.users.adjust_or_create', locale)}
+            />
           </CardContent>
         </Card>
       ) : (

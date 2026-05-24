@@ -27,6 +27,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from "@/lib/i18n"
 
@@ -295,8 +296,11 @@ export default function ClientRelancesPage() {
 
         {!societeId ? (
           <Card>
-            <CardContent className="py-16 text-center text-gray-400">
-              {t('inv.rel.no_societe', locale)}
+            <CardContent className="p-0">
+              <EmptyState
+                icon={AlertTriangle}
+                title={t('inv.rel.no_societe', locale)}
+              />
             </CardContent>
           </Card>
         ) : loading ? (
