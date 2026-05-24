@@ -30,7 +30,7 @@ export function FloatingPageHelp() {
       <SheetTrigger asChild>
         <button
           aria-label={locale === 'en' ? "Help for this page" : "Aide pour cette page"}
-          className="fixed bottom-20 right-6 z-50 h-11 w-11 rounded-full bg-white border border-slate-200 shadow-md text-slate-700 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition flex items-center justify-center"
+          className="fixed bottom-20 right-6 z-50 h-11 w-11 rounded-full bg-white border border-slate-200 shadow-md text-slate-700 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition flex items-center justify-center print:hidden"
         >
           <HelpCircle className="h-5 w-5" />
         </button>

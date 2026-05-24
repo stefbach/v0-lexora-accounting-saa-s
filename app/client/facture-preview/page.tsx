@@ -318,10 +318,25 @@ function FacturePreviewContent() {
           body { margin: 0; padding: 0; }
           html, body { background: white; }
           .no-print { display: none !important; }
+          /* Masquer tout élément du layout global qui n'a rien à faire
+             sur le PDF imprimé : sidebar client/comptable, bandeau cabinet,
+             bouton d'aide flottant, toasts. Ces éléments ne sont pas
+             dans la zone .print-page mais sont sur la même page DOM, et
+             apparaîtraient sinon en surimpression (le ? rond observé). */
+          aside,
+          header,
+          nav,
+          [role="banner"],
+          [role="navigation"],
+          [data-sidebar],
+          [data-banner],
+          [data-floating-help] { display: none !important; }
           /* Forcer la facture à tenir sur 1 page A4 :
              - retirer min-height: 297mm qui force toujours 1 page pleine
                et provoque débordement quand combiné aux marges @page.
-             - retirer ombre / padding écran qui poussent vers une 2e page. */
+             - retirer ombre / padding écran qui poussent vers une 2e page.
+             - retirer ml-64 du <main> qui décalait la facture à droite. */
+          main { margin-left: 0 !important; }
           .print-page {
             padding: 0 !important;
             margin: 0 !important;
