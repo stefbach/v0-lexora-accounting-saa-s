@@ -331,6 +331,15 @@ function FacturePreviewContent() {
           [data-sidebar],
           [data-banner],
           [data-floating-help] { display: none !important; }
+          /* Filet de sécurité : tout bouton ou div positionné en fixed
+             qui se trouverait HORS de la zone .print-page (sidebar mobile
+             hamburger, toasters, widgets d'aide, etc.). Ne touche pas
+             aux éléments fixed à L'INTÉRIEUR de la facture (il n'y en a
+             pas, mais ça reste safe). */
+          body > button[class*="fixed"],
+          body > div > button[class*="fixed"],
+          body > main > button[class*="fixed"],
+          [class*="fixed"][class*="top-4"][class*="left-4"] { display: none !important; }
           /* Forcer la facture à tenir sur 1 page A4 :
              - retirer min-height: 297mm qui force toujours 1 page pleine
                et provoque débordement quand combiné aux marges @page.

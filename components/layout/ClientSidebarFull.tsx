@@ -312,7 +312,7 @@ export function ClientSidebarFull() {
       <button
         onClick={() => setMobileOpen(true)}
         aria-label={t('comp.sidebar.open_nav', locale)}
-        className="fixed top-4 left-4 z-50 md:hidden inline-flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-lg backdrop-blur"
+        className="fixed top-4 left-4 z-50 md:hidden print:hidden inline-flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-lg backdrop-blur"
         style={{
           backgroundColor: "rgba(16,24,71,0.85)",
           border: "1px solid rgba(212,175,55,0.35)",
