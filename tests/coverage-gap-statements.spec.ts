@@ -21,10 +21,20 @@ import { generateNotesAnnexes } from '@/lib/jurisdictions/ohada/statements/notes
 // Minimal balance provider — returns 0 for every requested account, so all
 // derived totals collapse to zero. Verifies the orchestration code paths
 // execute end-to-end without throwing.
-const zeroBalanceProvider = async (codes: string[]) => {
-  const m = new Map<string, number>()
-  for (const c of codes) m.set(c, 0)
-  return m
+// Bilan signature: (codes: string[]) => Promise<Map<string, number>>
+// Compte-Resultat signature: (societeId, prefixes, start, end) => Promise<number>
+// We provide a polymorphic stub that supports both via overload casts.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- polymorphic stub for 2 different OHADA signatures
+const zeroBalanceProvider: any = async (...args: unknown[]) => {
+  // If first arg is array → bilan style
+  if (Array.isArray(args[0])) {
+    const codes = args[0] as string[]
+    const m = new Map<string, number>()
+    for (const c of codes) m.set(c, 0)
+    return m
+  }
+  // Else → compte-resultat style: return scalar 0
+  return 0
 }
 
 const baseInput = {

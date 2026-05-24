@@ -435,21 +435,13 @@ describe('jurisdictions/ohada/statements/SMT (eligibility)', () => {
   })
 
   it('checkSMTEligibility returns an eligibility object', () => {
-    // Below thresholds → eligible
-    const small = checkSMTEligibility({
-      ca_annuel_xof: 10_000_000,
-      effectif: 5,
-      activite_type: 'commerce',
-    })
+    // Below thresholds → eligible (caHT, effectif, activiteReglementee)
+    const small = checkSMTEligibility(10_000_000, 5, false)
     expect(small).toBeTruthy()
     expect(typeof small).toBe('object')
 
     // Above thresholds → not eligible
-    const big = checkSMTEligibility({
-      ca_annuel_xof: 100_000_000,
-      effectif: 50,
-      activite_type: 'commerce',
-    })
+    const big = checkSMTEligibility(100_000_000, 50, false)
     expect(big).toBeTruthy()
   })
 })
