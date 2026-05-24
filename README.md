@@ -24,6 +24,20 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Roadmap & plans actifs
+
+La roadmap actuelle (V5, mai 2026) est consolidée dans :
+
+- **[`docs/superpowers/plans/2026-05-24-roadmap-9sur10.md`](docs/superpowers/plans/2026-05-24-roadmap-9sur10.md)**
+  — plan 9/10 : sécurité (SEC-001/002/003/005), tests, docs.
+
+Documentation associée :
+
+- [`CLAUDE.md`](CLAUDE.md) — consignes sessions Claude + section Sécurité (V1)
+- [`docs/ACCESS_CONTROL_MATRIX.md`](docs/ACCESS_CONTROL_MATRIX.md) — RBAC + ROLE_LEVEL
+- [`docs/INTERNAL_CONTROLS_DOCUMENTATION.md`](docs/INTERNAL_CONTROLS_DOCUMENTATION.md) — contrôles internes + Annexe A (migrations 413→420)
+- [`docs/AUDIT_QUICK_START.md`](docs/AUDIT_QUICK_START.md) — guide démarrage rapide audit
+
 ## Learn More
 
 To learn more, take a look at the following resources:
