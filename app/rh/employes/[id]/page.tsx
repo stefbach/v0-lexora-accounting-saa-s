@@ -749,9 +749,9 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Code contribution" field="contribution_code" placeholder="S2" />
                     <div>
-                      <Label className="text-xs text-gray-500">Categorie CSG</Label>
+                      <Label className="text-xs text-gray-500" id="emp-csg-cat-label">Categorie CSG</Label>
                       <Select value={form.csg_categorie || "A"} onValueChange={v => u("csg_categorie", v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-labelledby="emp-csg-cat-label" aria-label="Categorie CSG"><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent>
                       </Select>
                     </div>
@@ -774,18 +774,18 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   <Label htmlFor="bank" className="text-sm">Paye par virement bancaire</Label>
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Banque</Label>
+                  <Label className="text-xs text-gray-500" id="emp-banque-label">Banque</Label>
                   <Select value={form.bank_name || ""} onValueChange={v => u("bank_name", v)}>
-                    <SelectTrigger><SelectValue placeholder="Choisir une banque..." /></SelectTrigger>
+                    <SelectTrigger aria-labelledby="emp-banque-label" aria-label="Banque"><SelectValue placeholder="Choisir une banque..." /></SelectTrigger>
                     <SelectContent>{BANQUES_MAURITIUS.map(b => <SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <Field label="N. compte bancaire" field="bank_account" placeholder="000012345678" />
                 <Field label="IBAN" field="iban" placeholder="MU17BOMM0101101030300200000MUR" />
                 <div>
-                  <Label className="text-xs text-gray-500">Devise salaire</Label>
+                  <Label className="text-xs text-gray-500" id="emp-devise-label">Devise salaire</Label>
                   <Select value={form.devise_salaire || "MUR"} onValueChange={v => u("devise_salaire", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-labelledby="emp-devise-label" aria-label="Devise salaire"><SelectValue /></SelectTrigger>
                     <SelectContent>{DEVISES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
