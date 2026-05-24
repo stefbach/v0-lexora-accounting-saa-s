@@ -83,6 +83,27 @@ function formatMUR(n: number, locale: Locale) {
   return n.toLocaleString(locale === 'en' ? 'en-GB' : 'fr-FR') + " MUR"
 }
 
+type AlertLocalState = Record<string, { lue?: boolean; archivee?: boolean }>
+
+function loadLocalState(societeId: string | null | undefined): AlertLocalState {
+  if (!societeId || typeof window === "undefined") return {}
+  try {
+    const raw = window.localStorage.getItem(`alertes_state_${societeId}`)
+    return raw ? (JSON.parse(raw) as AlertLocalState) : {}
+  } catch {
+    return {}
+  }
+}
+
+function persistLocalState(societeId: string | null | undefined, state: AlertLocalState) {
+  if (!societeId || typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(`alertes_state_${societeId}`, JSON.stringify(state))
+  } catch {
+    // quota or disabled storage — silently ignore
+  }
+}
+
 export default function AlertesPage() {
   const locale = getLocale()
   const { profile } = useProfile()
@@ -92,18 +113,21 @@ export default function AlertesPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
     async function fetchAlerts() {
       if (!societeId) { setLoading(false); return }
       try {
         const res = await fetch(`/api/client/alertes?societe_id=${societeId}`)
         if (res.ok) {
           const data = await res.json()
+          if (cancelled) return
           if (Array.isArray(data.alertes)) {
+            const persisted = loadLocalState(societeId)
             setAlerts(
               data.alertes.map((a: any) => ({
                 ...a,
-                lue: false,
-                archivee: false,
+                lue: persisted[a.id]?.lue ?? false,
+                archivee: persisted[a.id]?.archivee ?? false,
               }))
             )
           }
@@ -111,11 +135,14 @@ export default function AlertesPage() {
       } catch {
         // API not available -- leave empty
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     fetchAlerts()
+    return () => {
+      cancelled = true
+    }
   }, [societeId])
 
   if (profile?.role === "client_user") {
@@ -156,10 +183,16 @@ export default function AlertesPage() {
 
   function markAsRead(id: string) {
     setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, lue: true } : a)))
+    const state = loadLocalState(societeId)
+    state[id] = { ...(state[id] || {}), lue: true }
+    persistLocalState(societeId, state)
   }
 
   function archiveAlert(id: string) {
     setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, archivee: true, lue: true } : a)))
+    const state = loadLocalState(societeId)
+    state[id] = { ...(state[id] || {}), lue: true, archivee: true }
+    persistLocalState(societeId, state)
   }
 
   // Group alerts by type for grouped display
