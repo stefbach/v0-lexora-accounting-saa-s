@@ -112,7 +112,7 @@ export async function calculerAccrualMensuelDb(
   if (error || !data) {
     return calculerAccrualMensuel(emp.date_arrivee, ref)
   }
-  const r = data as any
+  const r = data as { al_acquis?: number | string; al_utilisable?: number | string; sl_droit?: number | string; months_in_cycle?: number | string }
   return {
     al_acquis: Number(r.al_acquis) || 0,
     al_utilisable: Number(r.al_utilisable) || 0,

@@ -92,7 +92,7 @@ export function validerFichier(file: { size: number; type: string; name: string 
       erreur: `Fichier trop lourd (${formaterTaille(file.size)}). Max ${formaterTaille(TAILLE_MAX_OCTETS)}.`,
     }
   }
-  if (!MIME_TYPES_AUTORISES.includes(file.type as any)) {
+  if (!MIME_TYPES_AUTORISES.includes(file.type as (typeof MIME_TYPES_AUTORISES)[number])) {
     return {
       valide: false,
       erreur: `Type ${file.type || 'inconnu'} non autorisé. Acceptés : ${EXTENSIONS_LISIBLES}.`,

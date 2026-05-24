@@ -108,6 +108,7 @@ export async function handleLettrerEcritures(deps: PostProcessingDeps) {
     return NextResponse.json({ error: 'Certaines écritures sont introuvables' }, { status: 404 })
   }
   const violation = validateLettrageGroup({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- shape Supabase aliased select (compte/debit/credit) ne matche pas exactement le type attendu
     ecritures: ecrituresToLetter as any,
     newLettre: lettreCode,
   })
@@ -1060,14 +1061,17 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
           ? await supabase.from('comptes_bancaires').select('id, devise').in('id', cbIds)
           : { data: [] }
         const deviseByCb: Record<string, string> = {}
-        for (const c of cbData || []) deviseByCb[(c as any).id] = ((c as any).devise || 'MUR').toUpperCase()
+        for (const c of cbData || []) {
+          const row = c as { id: string; devise?: string | null }
+          deviseByCb[row.id] = (row.devise || 'MUR').toUpperCase()
+        }
 
         const { data: dossierProp } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
 
         for (const rel of allReleves || []) {
           const relTxs = [...(rel.transactions_json || [])]
           let changed = false
-          const relDevise = deviseByCb[(rel as any).compte_bancaire_id] || 'MUR'
+          const relDevise = deviseByCb[(rel as { compte_bancaire_id?: string }).compte_bancaire_id || ''] || 'MUR'
           for (let i = 0; i < relTxs.length; i++) {
             const t = relTxs[i]
             if (rel.id === releve_id && i === txIdx) continue
@@ -1244,7 +1248,7 @@ export async function handleCloturerMois(deps: PostProcessingDeps) {
   let tx_a_verifier = 0
   let tx_total_mois = 0
   for (const r of releves || []) {
-    for (const tx of ((r as any).transactions_json || [])) {
+    for (const tx of ((r as { transactions_json?: Array<{ date?: string; statut?: string }> | null }).transactions_json || [])) {
       const d = tx.date || ''
       if (d.substring(0, 7) !== mois) continue
       tx_total_mois++

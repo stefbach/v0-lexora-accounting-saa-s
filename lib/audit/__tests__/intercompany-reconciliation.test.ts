@@ -116,7 +116,7 @@ describe('Intercompany Reconciliation', () => {
       })
 
       const transactions = await getIntercompanyTransactionMap(
-        mockSupabase as any,
+        mockSupabase as unknown as Parameters<typeof generateIntercompanyReport>[0],
         '2025-01-01',
         '2025-12-31'
       )
@@ -194,7 +194,7 @@ describe('Intercompany Reconciliation', () => {
       })
 
       const transactions = await getIntercompanyTransactionMap(
-        mockSupabase as any,
+        mockSupabase as unknown as Parameters<typeof generateIntercompanyReport>[0],
         '2025-01-01',
         '2025-12-31'
       )

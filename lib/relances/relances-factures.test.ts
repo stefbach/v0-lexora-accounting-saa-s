@@ -62,7 +62,7 @@ const SOCIETE = {
   relances_delais_jours: { '1': 7, '2': 15, '3': 30 },
 }
 
-function factureRow(overrides: any = {}) {
+function factureRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'fac-1',
     societe_id: 'soc-1',
@@ -96,7 +96,7 @@ describe('findFacturesARelancer', () => {
         clients: [],
       },
     })
-    const res = await findFacturesARelancer(supabase as any, 'soc-1', {
+    const res = await findFacturesARelancer(supabase as unknown as Parameters<typeof findFacturesARelancer>[0], 'soc-1', {
       today: new Date('2026-05-10T12:00:00Z'),
     })
     const ids = res.map((r) => r.facture_id)
@@ -119,7 +119,7 @@ describe('findFacturesARelancer', () => {
         clients: [],
       },
     })
-    const res = await findFacturesARelancer(supabase as any, 'soc-1', {
+    const res = await findFacturesARelancer(supabase as unknown as Parameters<typeof findFacturesARelancer>[0], 'soc-1', {
       today: new Date('2026-05-10T12:00:00Z'),
     })
     expect(res).toHaveLength(0)              // déjà au N3, plus rien à envoyer
@@ -133,7 +133,7 @@ describe('findFacturesARelancer', () => {
         factures_relances: [],
       },
     })
-    const res = await findFacturesARelancer(supabase as any, 'soc-1', {
+    const res = await findFacturesARelancer(supabase as unknown as Parameters<typeof findFacturesARelancer>[0], 'soc-1', {
       today: new Date('2026-05-10'),
     })
     expect(res).toHaveLength(0)
@@ -150,7 +150,7 @@ describe('findFacturesARelancer', () => {
         factures_relances: [],
       },
     })
-    const res = await findFacturesARelancer(supabase as any, 'soc-1', {
+    const res = await findFacturesARelancer(supabase as unknown as Parameters<typeof findFacturesARelancer>[0], 'soc-1', {
       today: new Date('2026-05-10'),
     })
     expect(res[0].contact_email).toBe('bob@example.com')
@@ -168,7 +168,7 @@ describe('findFacturesARelancer', () => {
         factures_relances: [],
       },
     })
-    const res = await findFacturesARelancer(supabase as any, 'soc-1', {
+    const res = await findFacturesARelancer(supabase as unknown as Parameters<typeof findFacturesARelancer>[0], 'soc-1', {
       today: new Date('2026-05-10'),
     })
     expect(res.map((r) => r.facture_id)).toEqual(['fac-big'])
@@ -193,7 +193,7 @@ describe('envoyerRelance — dry_run', () => {
       contact_email: 'bob@example.com',
       contact_phone: '+23055512345',
     }
-    const r = await envoyerRelance(supabase as any, {
+    const r = await envoyerRelance(supabase as unknown as Parameters<typeof findFacturesARelancer>[0], {
       facture,
       societe_nom: 'ACME',
       canaux: ['email', 'whatsapp'],
@@ -225,7 +225,7 @@ describe('envoyerRelance — dry_run', () => {
       contact_email: null,
       contact_phone: null,
     }
-    const r = await envoyerRelance(supabase as any, {
+    const r = await envoyerRelance(supabase as unknown as Parameters<typeof findFacturesARelancer>[0], {
       facture,
       societe_nom: 'ACME',
       canaux: ['email'],
@@ -247,7 +247,7 @@ describe('runRelancesQuotidiennes', () => {
         clients: [],
       },
     })
-    const summary = await runRelancesQuotidiennes(supabase as any, {
+    const summary = await runRelancesQuotidiennes(supabase as unknown as Parameters<typeof findFacturesARelancer>[0], {
       societe_id: 'soc-1',
       dry_run: true,
       today: new Date('2026-05-10'),

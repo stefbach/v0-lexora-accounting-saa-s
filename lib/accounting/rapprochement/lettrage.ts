@@ -310,7 +310,7 @@ export function payTypeFromFactureType(
  * sans signe. Utilisé pour comparer aux montants des factures.
  */
 export function txAbsoluteAmount(tx: { debit?: unknown; credit?: unknown }): number {
-  const d = Number((tx as any).debit) || 0
-  const c = Number((tx as any).credit) || 0
+  const d = Number(tx.debit) || 0
+  const c = Number(tx.credit) || 0
   return Math.max(d, c)
 }
