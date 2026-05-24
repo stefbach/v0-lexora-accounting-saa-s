@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
 import { toast } from "sonner"
+import { notifySuccess } from "@/lib/utils/toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -61,7 +62,7 @@ export function TrajetsTab({ employe }: { employe: any }) {
       try { data = JSON.parse(text) } catch { toast.error("Erreur serveur", { description: text.slice(0, 200) }); return }
       if (!res.ok) { toast.error(`Erreur ${res.status}`, { description: data.error || data.message || "Impossible de démarrer le trajet" }); return }
       setTrajetEnCours(data.trajet)
-      toast.success("Trajet démarré")
+      notifySuccess("Trajet démarré")
       loadTrajets()
     } catch (e: any) { toast.error("Erreur", { description: e.message || String(e) }) }
     finally { setGpsLoading(false) }
@@ -79,7 +80,7 @@ export function TrajetsTab({ employe }: { employe: any }) {
       const data = await res.json()
       if (!res.ok) { toast.error("Erreur", { description: data.error || "Impossible d'ajouter le checkpoint" }); return }
       setTrajetEnCours((prev: any) => ({ ...prev, distance_totale_km: data.trajet?.distance_totale_km || prev?.distance_totale_km }))
-      toast.success("Checkpoint ajouté")
+      notifySuccess("Checkpoint ajouté")
     } catch (e: any) { toast.error("Erreur GPS", { description: e.message }) }
     finally { setGpsLoading(false) }
   }
@@ -96,7 +97,7 @@ export function TrajetsTab({ employe }: { employe: any }) {
       const data = await res.json()
       if (!res.ok) { toast.error("Erreur", { description: data.error || "Impossible de terminer le trajet" }); return }
       setTrajetEnCours(null)
-      toast.success("Trajet terminé")
+      notifySuccess("Trajet terminé")
       loadTrajets()
     } catch (e: any) { toast.error("Erreur GPS", { description: e.message }) }
     finally { setGpsLoading(false) }

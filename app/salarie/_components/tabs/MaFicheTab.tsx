@@ -1,6 +1,7 @@
 "use client"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -72,10 +73,10 @@ export function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: ()
       if (data.photo_url) {
         setPhotoPreview(null) // on laisse l'URL du serveur prendre le relais
         onUpdated()
-        toast.success("Photo mise à jour")
+        notifySuccess("Photo mise à jour")
       }
     } catch {
-      toast.error("Erreur réseau")
+      notifyError("Erreur réseau")
       setPhotoPreview(null)
     } finally {
       setUploadingPhoto(false)
@@ -101,7 +102,7 @@ export function MaFicheTab({ employe, onUpdated }: { employe: any; onUpdated: ()
       const data = await res.json()
       if (data.error) toast.error("Erreur", { description: data.error })
       else { setSaved(true); setTimeout(() => setSaved(false), 4000); onUpdated() }
-    } catch { toast.error("Erreur réseau") }
+    } catch { notifyError("Erreur réseau") }
     setSaving(false)
   }
 
