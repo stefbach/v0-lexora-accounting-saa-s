@@ -184,6 +184,15 @@ export default function NouvelleFacturePage() {
       .then(d => {
         const soc = (d.societes || []).find((s: any) => s.id === societeId)
         if (!soc) return
+        // Pré-affichage du prochain numéro côté front : si l'utilisateur n'a
+        // pas encore de valeur en localStorage, on hydrate depuis la DB
+        // (table societes.facture_prefixe + facture_prochain_numero) pour
+        // que le champ "Numéro" affiche le bon prochain numéro avant
+        // sauvegarde. L'API reste source de vérité sur l'incrément (qui
+        // est atomique côté serveur).
+        const dbPrefixe = soc.facture_prefixe || 'INV-'
+        const dbProchain = Number(soc.facture_prochain_numero) || 1
+        setNumeroFacture(prev => prev || `${dbPrefixe}${String(dbProchain).padStart(4, '0')}`)
         setSettings(prev => {
           const base = prev || ({} as CompanySettings)
           return {
@@ -203,8 +212,8 @@ export default function NouvelleFacturePage() {
             footer_text: soc.facture_footer_text || base.footer_text || '',
             mention_legale: soc.facture_mention_legale || base.mention_legale || '',
             devise_defaut: base.devise_defaut || 'MUR',
-            prefixe_facture: base.prefixe_facture || soc.facture_prefixe || 'INV-',
-            prochain_numero: base.prochain_numero || Number(soc.facture_prochain_numero) || 1,
+            prefixe_facture: base.prefixe_facture || dbPrefixe,
+            prochain_numero: base.prochain_numero || dbProchain,
             conditions_paiement: base.conditions_paiement || 30,
           } as CompanySettings
         })

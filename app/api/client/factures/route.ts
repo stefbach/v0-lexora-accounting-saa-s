@@ -163,18 +163,18 @@ export async function POST(request: Request) {
     // L'utilisateur paramètre une fois ses préfixes + compteurs dans
     // /client/facturation-settings, ensuite tout est auto.
     let finalNumero = numero_facture
+    const filterDoc = type_document || 'facture'
+
+    // Mapping type_document → colonnes (préfixe + compteur) sur societes
+    const colMap: Record<string, { prefCol: string; numCol: string; defaultPrefix: string }> = {
+      facture:    { prefCol: 'facture_prefixe',    numCol: 'facture_prochain_numero',    defaultPrefix: 'INV-' },
+      devis:      { prefCol: 'devis_prefixe',      numCol: 'devis_prochain_numero',      defaultPrefix: 'DEV-' },
+      avoir:      { prefCol: 'avoir_prefixe',      numCol: 'avoir_prochain_numero',      defaultPrefix: 'AV-'  },
+      note_debit: { prefCol: 'note_debit_prefixe', numCol: 'note_debit_prochain_numero', defaultPrefix: 'ND-'  },
+    }
+    const cfg = colMap[filterDoc] || colMap.facture
+
     if (!finalNumero) {
-      const filterDoc = type_document || 'facture'
-
-      // Mapping type_document → colonnes (préfixe + compteur) sur societes
-      const colMap: Record<string, { prefCol: string; numCol: string; defaultPrefix: string }> = {
-        facture:    { prefCol: 'facture_prefixe',    numCol: 'facture_prochain_numero',    defaultPrefix: 'INV-' },
-        devis:      { prefCol: 'devis_prefixe',      numCol: 'devis_prochain_numero',      defaultPrefix: 'DEV-' },
-        avoir:      { prefCol: 'avoir_prefixe',      numCol: 'avoir_prochain_numero',      defaultPrefix: 'AV-'  },
-        note_debit: { prefCol: 'note_debit_prefixe', numCol: 'note_debit_prochain_numero', defaultPrefix: 'ND-'  },
-      }
-      const cfg = colMap[filterDoc] || colMap.facture
-
       // Lit le compteur + le préfixe dans societes. Si la requête échoue
       // (mig 247 non appliquée → colonne devis/avoir manquante), on
       // retombe sur la logique legacy parse-dernier-numéro.
@@ -222,6 +222,30 @@ export async function POST(request: Request) {
           if (match) nextNum = parseInt(match[1]) + 1
         }
         finalNumero = `${cfg.defaultPrefix}${String(nextNum).padStart(3, '0')}`
+      }
+    } else {
+      // Numéro fourni par l'utilisateur (souvent une valeur pré-remplie
+      // côté front à partir du compteur DB). On avance le compteur DB
+      // pour refléter la consommation et éviter que le PROCHAIN appel
+      // ne réutilise le même numéro → bug observé : "numérotation qui
+      // tourne en boucle, même INV-0001 réapparaît à chaque sauvegarde".
+      const match = String(finalNumero).match(/(\d+)$/)
+      if (match) {
+        const used = parseInt(match[1], 10)
+        if (!Number.isNaN(used)) {
+          const counterRes = await supabase
+            .from('societes')
+            .select(cfg.numCol)
+            .eq('id', societe_id)
+            .maybeSingle()
+          const current = Number((counterRes.data as Record<string, any> | null)?.[cfg.numCol]) || 0
+          if (used + 1 > current) {
+            await supabase
+              .from('societes')
+              .update({ [cfg.numCol]: used + 1 })
+              .eq('id', societe_id)
+          }
+        }
       }
     }
 
@@ -274,7 +298,21 @@ export async function POST(request: Request) {
       }
     }
 
-    if (error) throw error
+    if (error) {
+      // Erreur 23505 = violation unique (societe_id, numero_facture, type_facture).
+      // Cause typique : compteur DB pas à jour vs numéros déjà saisis →
+      // l'utilisateur recevait juste "duplicate key value violates...".
+      // On renvoie un message clair avec le numéro fautif.
+      const code = (error as { code?: string }).code
+      if (code === '23505' && /numero/i.test(error.message || '')) {
+        return NextResponse.json({
+          error: `Le numéro "${finalNumero}" existe déjà pour cette société. Modifiez le numéro manuellement ou mettez à jour le compteur dans Paramètres facturation.`,
+          code: 'DUPLICATE_INVOICE_NUMBER',
+          numero: finalNumero,
+        }, { status: 409 })
+      }
+      throw error
+    }
 
     // Auto-create a "documents" record so the invoice appears in "Documents numérisés"
     // (links the invoice to the documents folder for consistency)
