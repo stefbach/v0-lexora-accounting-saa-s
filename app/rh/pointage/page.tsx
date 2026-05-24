@@ -238,9 +238,10 @@ export default function PointagePage() {
 
       // Filter congés that cover today
       const today = todayISO()
-      const todayConges: CongeToday[] = ((congesRes.conges || []) as any[])
-        .filter((c: any) => c.date_debut <= today && c.date_fin >= today)
-        .map((c: any) => ({
+      type RawConge = { employe_id: string; type_conge: string; demi_journee?: boolean; matin_ou_apres_midi?: string | null; date_debut: string; date_fin: string }
+      const todayConges: CongeToday[] = ((congesRes.conges || []) as RawConge[])
+        .filter((c) => c.date_debut <= today && c.date_fin >= today)
+        .map((c) => ({
           employe_id: c.employe_id,
           type_conge: c.type_conge,
           demi_journee: c.demi_journee === true,

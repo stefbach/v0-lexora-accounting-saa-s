@@ -418,8 +418,8 @@ export async function marquerPayeMra(
   }
 
   const dossierId = await resolveDossierId(supabase, args.societeId)
-  const periodeLib = libellePeriode(p.periode)
-  const piece = pieceMra(p.periode)
+  const periodeLib = libellePeriode(String(p.periode))
+  const piece = pieceMra(String(p.periode))
   const exercice = String(args.datePaiement).slice(0, 4)
   const ecritures: string[] = []
 
@@ -518,11 +518,12 @@ export async function getDeclarationsAnnee(
       .order('periode', { ascending: false }),
   ])
   return {
-    paye: ((paye || []) as Array<Record<string, unknown>>).map(mapPaye),
-    csg: ((csg || []) as Array<Record<string, unknown>>).map(mapCsg),
+    paye: (paye || []).map(mapPaye),
+    csg: (csg || []).map(mapCsg),
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- row Supabase brute, mapping vers DeclarationPayeRecord
 function mapPaye(r: any): DeclarationPayeRecord {
   return {
     id: String(r.id),
@@ -545,6 +546,7 @@ function mapPaye(r: any): DeclarationPayeRecord {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- row Supabase brute, mapping vers DeclarationCsgRecord
 function mapCsg(r: any): DeclarationCsgRecord {
   return {
     id: String(r.id),
@@ -618,7 +620,7 @@ export async function calculerFinalRemuneration(
     .lte('periode', dateExit)
     .order('periode', { ascending: false })
     .limit(1).maybeSingle()
-  const dernier = Number((last as any)?.salaire_brut) || 0
+  const dernier = Number((last as { salaire_brut?: number | string } | null)?.salaire_brut) || 0
 
   // Moyenne 12 derniers mois
   const dateDebut = new Date(dateExit + 'T12:00:00')
@@ -629,7 +631,7 @@ export async function calculerFinalRemuneration(
     .eq('employe_id', employeId)
     .gte('periode', dateDebut.toISOString().slice(0, 10))
     .lte('periode', dateExit)
-  const bulletins = (all || []) as any[]
+  const bulletins = (all || []) as Array<{ salaire_brut?: number | string | null }>
   const sum = bulletins.reduce((a, b) => a + (Number(b.salaire_brut) || 0), 0)
   const moyenne = bulletins.length > 0 ? sum / bulletins.length : 0
 
@@ -678,6 +680,7 @@ export async function getExitStatementsSociete(
     .select(`*, employes:employe_id(prenom, nom)`)
     .eq('societe_id', societeId)
     .order('date_exit', { ascending: false })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- row Supabase avec embed employes:employe_id() — typage manuel coûteux
   return ((data || []) as any[]).map(r => ({
     id: String(r.id),
     employe_id: String(r.employe_id),

@@ -410,7 +410,7 @@ export default function CongesParametresPage() {
                   : regles[tx.id] || null
               const { value, unit } = tx.formatValue(cfg)
               const Icon = tx.icon
-              const localizedTitle = t(`rha.a.congesp.t_${tx.id}` as any, locale) || tx.title
+              const localizedTitle = t(`rha.a.congesp.t_${tx.id}`, locale) || tx.title
               const unitMap: Record<string, string> = {
                 'jours ouvrables / an': t('rha.a.congesp.unit_jours_an', locale),
                 'jours / an': t('rha.a.congesp.unit_jours_an2', locale),

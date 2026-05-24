@@ -195,7 +195,7 @@ export default function AdminDemandesInscriptionPage() {
         </div>
       )}
 
-      <Tabs value={statut} onValueChange={(v) => setStatut(v as any)}>
+      <Tabs value={statut} onValueChange={(v) => setStatut(v as 'en_attente' | 'validee' | 'refusee')}>
         <TabsList>
           <TabsTrigger value="en_attente">
             <Clock className="h-3.5 w-3.5 mr-1" />

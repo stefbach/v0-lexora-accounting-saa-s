@@ -744,7 +744,7 @@ export default function ParametresPaiePage() {
       .then(r => r.ok ? r.json() : { jours_feries: [] })
       .then(d => {
         if (cancelled) return
-        const rows = (d?.jours_feries || d?.data || []) as any[]
+        const rows = (d?.jours_feries || d?.data || []) as Array<{ date?: string; libelle?: string; label?: string }>
         setJoursFeries(
           rows
             .filter(r => r?.date)

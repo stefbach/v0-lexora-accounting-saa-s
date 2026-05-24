@@ -273,7 +273,7 @@ function UploadModal({
     fetch('/api/rh/conges?self=1')
       .then(r => r.ok ? r.json() : { conges: [] })
       .then(d => {
-        const rows = (d?.conges || d?.demandes || []) as any[]
+        const rows = (d?.conges || d?.demandes || []) as Array<{ id: string; type_conge: string; date_debut: string }>
         setDemandes(rows.slice(0, 20).map(r => ({
           id: r.id, type_conge: r.type_conge, date_debut: r.date_debut,
         })))
