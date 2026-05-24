@@ -75,6 +75,50 @@ interface PCMEntry {
   sens_normal: "D" | "C" | null
 }
 
+interface AuditResult {
+  score?: number
+  severity?: "ok" | "warning" | "critical"
+  issues?: Array<{ severity: string; message: string }>
+  summary?: {
+    total_ecritures?: number
+    total_debit?: number
+    total_credit?: number
+    ecart_balance?: number
+  }
+  comptes_hors_pcm?: Array<{ numero: string; nb: number; debit: number; credit: number }>
+  // Champs V2 (optionnels)
+  explanation?: string | null
+  ecritures_futures?: Array<{ id: string; date: string; compte: string; libelle: string }>
+  ecritures_hors_exercice_count?: number
+  tiers_inverses?: Array<{ numero: string; solde: number; sens: string }>
+  tva_summary?: {
+    ttc_collectee: number
+    ttc_deductible: number
+    a_payer: number
+    a_recuperer: number
+    ecart_calcul: number
+  }
+  comptes_aux_nus?: Array<{ numero: string; nb: number; solde: number }>
+  net_a_payer_vieux?: Array<{ id: string; date: string; libelle: string; montant: number }>
+  cot_patronales?: { charges_d: number; cot_c: number; ecart: number }
+  ecritures_weekend_ferie?: number
+  montants_ronds_count?: number
+  sens_inverses?: Array<{ numero: string; solde: number; classe: number }>
+  doublons_rapprochement?: number
+  bulletins_orphelins?: number
+  paye_summary?: { retenu: number; paye: number; solde: number }
+  drill_down_balance?: Array<{ numero: string; ecart: number }>
+}
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g)
+  return parts.map((p, i) =>
+    p.startsWith('**') && p.endsWith('**')
+      ? <strong key={i} className="font-semibold text-gray-900">{p.slice(2, -2)}</strong>
+      : <span key={i}>{p}</span>
+  )
+}
+
 function getClasses(locale: Locale): Array<{
   num: number
   label: string
@@ -183,14 +227,18 @@ export default function ClientGrandLivrePage() {
     load()
   }, [load])
 
-  const handleAudit = async () => {
+  const handleAudit = async (opts: { explain?: boolean } = {}) => {
     if (!societeId) return
     setAuditing(true)
     try {
       const res = await fetch("/api/agent/grand-livre", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ societe_id: societeId, action: "audit" }),
+        body: JSON.stringify({
+          societe_id: societeId,
+          action: "audit",
+          explain: !!opts.explain,
+        }),
       })
       const d = await res.json()
       if (!res.ok) {
@@ -360,7 +408,7 @@ export default function ClientGrandLivrePage() {
                 {t('acc.gl.export_excel', locale)}
               </Button>
               <Button
-                onClick={handleAudit}
+                onClick={() => handleAudit()}
                 disabled={auditing || !societeId}
                 className="bg-purple-600 hover:bg-purple-700 text-white shadow-md"
               >
@@ -370,6 +418,21 @@ export default function ClientGrandLivrePage() {
                   <Sparkles className="h-4 w-4 mr-2" />
                 )}
                 {t('acc.gl.run_lex_livre', locale)}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleAudit({ explain: true })}
+                disabled={!societeId || auditing}
+                className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                title="Lance l'audit + génère une explication IA détaillée"
+              >
+                {auditing ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-1.5" />
+                )}
+                {auditing ? 'Analyse IA...' : 'Audit + Explication IA'}
               </Button>
             </div>
           </div>
@@ -568,7 +631,7 @@ export default function ClientGrandLivrePage() {
   )
 }
 
-function AuditPanel({ audit, locale }: { audit: any; locale: Locale }) {
+function AuditPanel({ audit, locale }: { audit: AuditResult; locale: Locale }) {
   const issues = audit.issues || []
   const score = audit.score || 0
   const severity = audit.severity || "ok"
@@ -584,6 +647,31 @@ function AuditPanel({ audit, locale }: { audit: any; locale: Locale }) {
     score >= 80 ? "text-green-700" : score >= 50 ? "text-amber-700" : "text-red-700"
 
   return (
+    <div className="space-y-3">
+      {audit.explanation && (
+        <Card className="border-purple-200 bg-purple-50/30">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2 text-purple-900">
+              <Sparkles className="h-5 w-5 text-purple-600" />
+              Analyse IA — Lex Livre
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="prose prose-sm max-w-none text-sm leading-relaxed">
+              {audit.explanation.split('\n').map((line: string, i: number) => {
+                if (line.startsWith('## ')) {
+                  return <h3 key={i} className="font-semibold text-purple-900 mt-3 mb-1">{line.slice(3)}</h3>
+                }
+                if (line.startsWith('- ') || line.startsWith('* ')) {
+                  return <p key={i} className="ml-4 text-gray-700">• {renderInline(line.slice(2))}</p>
+                }
+                if (line.trim() === '') return <div key={i} className="h-2" />
+                return <p key={i} className="text-gray-800 mb-1">{renderInline(line)}</p>
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     <div className={`rounded-xl border-2 p-4 ${headerColor}`}>
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
@@ -644,7 +732,7 @@ function AuditPanel({ audit, locale }: { audit: any; locale: Locale }) {
           })}
         </div>
       )}
-      {audit.comptes_hors_pcm?.length > 0 && (
+      {audit.comptes_hors_pcm && audit.comptes_hors_pcm.length > 0 && (
         <details className="mt-3 text-xs">
           <summary className="cursor-pointer font-medium text-amber-700">
             {t('acc.gl.accounts_off_pcm', locale)} ({audit.comptes_hors_pcm.length})
@@ -661,6 +749,119 @@ function AuditPanel({ audit, locale }: { audit: any; locale: Locale }) {
           </div>
         </details>
       )}
+    </div>
+
+    {/* Bloc 1 — Drill-down balance déséquilibrée */}
+    {audit.drill_down_balance && audit.drill_down_balance.length > 0 && (
+      <Card className="border-red-200">
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2 text-red-700">
+            <AlertTriangle className="h-4 w-4" />
+            Comptes contribuant à l'écart de balance
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="divide-y text-sm">
+            {audit.drill_down_balance.map((c, i: number) => (
+              <div key={i} className="flex justify-between py-1.5">
+                <span className="font-mono">{c.numero}</span>
+                <span className={`font-mono ${c.ecart > 0 ? 'text-green-700' : 'text-rose-700'}`}>
+                  {c.ecart > 0 ? '+' : ''}{c.ecart.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR
+                </span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )}
+
+    {/* Bloc 2 — Résumé TVA */}
+    {audit.tva_summary && (audit.tva_summary.ttc_collectee !== 0 || audit.tva_summary.ttc_deductible !== 0) && (
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Résumé TVA</CardTitle></CardHeader>
+        <CardContent className="text-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <div>TVA collectée (4457)</div>
+            <div className="font-mono text-right">{audit.tva_summary.ttc_collectee.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR</div>
+            <div>TVA déductible (4456)</div>
+            <div className="font-mono text-right">{audit.tva_summary.ttc_deductible.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR</div>
+            <div>TVA à payer (4455)</div>
+            <div className="font-mono text-right font-semibold">{audit.tva_summary.a_payer.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR</div>
+            {Math.abs(audit.tva_summary.ecart_calcul) > 1 && (
+              <>
+                <div className="text-rose-700">Écart calcul</div>
+                <div className="font-mono text-right text-rose-700">{audit.tva_summary.ecart_calcul.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR</div>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    )}
+
+    {/* Bloc 3 — Tiers inversés */}
+    {audit.tiers_inverses && audit.tiers_inverses.length > 0 && (
+      <Card className="border-amber-200">
+        <CardHeader>
+          <CardTitle className="text-sm">Tiers avec solde inversé ({audit.tiers_inverses.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-gray-500 mb-2">Clients en créditeur (acomptes reçus) ou fournisseurs en débiteur (acomptes versés). À reclasser en 4191/4091.</p>
+          <div className="divide-y text-sm">
+            {audit.tiers_inverses.slice(0, 5).map((tiers, i: number) => (
+              <div key={i} className="flex justify-between py-1.5">
+                <span><span className="font-mono">{tiers.numero}</span> — {tiers.sens === 'client_crediteur' ? 'Client créditeur' : 'Fournisseur débiteur'}</span>
+                <span className="font-mono">{tiers.solde.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )}
+
+    {/* Bloc 4 — Écritures futures + dates non ouvrées */}
+    {((audit.ecritures_futures && audit.ecritures_futures.length > 0) || (audit.ecritures_weekend_ferie && audit.ecritures_weekend_ferie > 0)) && (
+      <Card className="border-amber-200">
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2 text-amber-700">
+            <AlertTriangle className="h-4 w-4" />
+            Dates suspectes
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm space-y-2">
+          {audit.ecritures_futures && audit.ecritures_futures.length > 0 && (
+            <div>
+              <div className="font-medium text-amber-800 mb-1">Écritures dans le futur ({audit.ecritures_futures.length})</div>
+              <div className="divide-y text-xs">
+                {audit.ecritures_futures.slice(0, 5).map((e, i: number) => (
+                  <div key={i} className="flex justify-between py-1 gap-2">
+                    <span className="font-mono whitespace-nowrap">{e.date}</span>
+                    <span className="font-mono">{e.compte}</span>
+                    <span className="text-gray-600 truncate" title={e.libelle}>{e.libelle}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {audit.ecritures_weekend_ferie && audit.ecritures_weekend_ferie > 0 ? (
+            <div className="text-xs text-amber-800">
+              <span className="font-semibold">{audit.ecritures_weekend_ferie}</span> écriture(s) datée(s) sur un weekend ou jour férié.
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+    )}
+
+    {/* Bloc 5 — Bulletins de paie orphelins */}
+    {audit.bulletins_orphelins !== undefined && audit.bulletins_orphelins > 0 && (
+      <Card className="border-orange-200">
+        <CardHeader>
+          <CardTitle className="text-sm text-orange-700">{audit.bulletins_orphelins} bulletin(s) de paie sans écritures</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-700">Ces bulletins sont marqués comptabilisés mais n'ont pas d'écritures correspondantes en DB. Régénère-les via la page Paie ou le bouton ci-dessous.</p>
+        </CardContent>
+      </Card>
+    )}
     </div>
   )
 }
