@@ -441,7 +441,22 @@ export async function POST(request: Request) {
   } catch (e: unknown) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    // Extraction robuste du message — couvre les Error JS, les objets
+    // Supabase { code, message, details, hint } et les rejects génériques.
+    // Sans ça, le client recevait juste { error: undefined } → "Erreur"
+    // affiché sans contexte impossible à debugger.
+    const err = e as any
+    const message =
+      err?.message
+      || err?.error_description
+      || err?.error
+      || err?.hint
+      || err?.details
+      || (typeof err === 'string' ? err : null)
+      || 'Erreur inattendue'
+    const code = err?.code
+    console.error('[factures POST] erreur:', { code, message, details: err?.details, hint: err?.hint })
+    return NextResponse.json({ error: message, code, details: err?.details, hint: err?.hint }, { status: 500 })
   }
 }
 
