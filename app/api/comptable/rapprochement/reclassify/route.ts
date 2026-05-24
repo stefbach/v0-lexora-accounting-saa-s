@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
     // Récupérer tous les relevés
     const { data: releves } = await supabase
-      .from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', societe_id)
+      .from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', societe_id).is('superseded_by_id', null)
     if (!releves || releves.length === 0) {
       return NextResponse.json({ matched: 0, total: 0, message: 'Aucun relevé' })
     }

@@ -60,7 +60,7 @@ export async function GET(request: Request) {
       alertsRes,
       reconciliationsRes,
     ] = await Promise.all([
-      safeQuery(supabase.from('releves_bancaires').select('id, transactions_json').eq('societe_id', societe_id)),
+      safeQuery(supabase.from('releves_bancaires').select('id, transactions_json').eq('societe_id', societe_id).is('superseded_by_id', null)),
       safeQuery(supabase.from('factures').select('id, statut, solde_non_paye, montant_ttc, rapproche_date, date_facture, societe_id, dossier_id').eq('societe_id', societe_id)),
       dossier
         ? fetchAllPaginated<any>(() =>

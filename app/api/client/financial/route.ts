@@ -197,7 +197,7 @@ export async function GET(request: Request) {
       supabase.from('tva_mensuelle').select('*').in('societe_id', societeIds).order('periode', { ascending: false }),
       facturesQuery,
       supabase.from('releves_bancaires').select('id, transactions_json, date_debut, date_fin, compte_bancaire_id')
-        .in('societe_id', societeIds).order('date_fin', { ascending: false }),
+        .in('societe_id', societeIds).is('superseded_by_id', null).order('date_fin', { ascending: false }),
     ])
 
     // V2 = source unique (mig 230). On normalise les colonnes avec aliases

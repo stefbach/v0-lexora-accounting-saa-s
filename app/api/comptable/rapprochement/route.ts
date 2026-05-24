@@ -186,6 +186,7 @@ export async function GET(request: Request) {
       .from('releves_bancaires')
       .select('id, compte_bancaire_id, periode, date_debut, date_fin, transactions_json, solde_ouverture, solde_cloture')
       .eq('societe_id', societe_id)
+      .is('superseded_by_id', null)
       .order('date_fin', { ascending: false })
 
     // Restreindre les relevés qui chevauchent la période demandée
@@ -568,7 +569,7 @@ export async function POST(request: Request) {
 
       try {
         const results = await Promise.all([
-          supabase.from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', societe_id),
+          supabase.from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', societe_id).is('superseded_by_id', null),
           supabase.from('societes').select('nom, aliases').eq('id', societe_id),
           supabase.from('dossiers').select('id, client_id').eq('societe_id', societe_id),
           supabase.from('factures').select('id, numero_facture, tiers, montant_ttc, montant_mur, type_facture, devise, date_facture, date_echeance, conditions_paiement, statut').eq('societe_id', societe_id).in('statut', ['en_attente', 'retard', 'partiel']),
@@ -2684,6 +2685,7 @@ export async function POST(request: Request) {
         const { data: rel } = await supabase
           .from('releves_bancaires').select('solde_cloture')
           .eq('societe_id', societe_id)
+          .is('superseded_by_id', null)
           .lte('date_debut', body.periode_fin).gte('date_fin', body.periode_debut)
           .order('date_fin', { ascending: false }).limit(1).maybeSingle()
         if (rel) solde_comptable = Number(rel.solde_cloture) || 0
@@ -2989,7 +2991,7 @@ export async function POST(request: Request) {
       const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', socId).limit(1).maybeSingle()
       if (!dossier) return NextResponse.json({ error: 'Aucun dossier pour cette société' }, { status: 404 })
 
-      const { data: releves } = await supabase.from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', socId)
+      const { data: releves } = await supabase.from('releves_bancaires').select('id, compte_bancaire_id, transactions_json').eq('societe_id', socId).is('superseded_by_id', null)
       const { data: comptesBanc } = await supabase.from('comptes_bancaires').select('id, devise').eq('societe_id', socId)
       const deviseMap: Record<string, string> = {}
       ;(comptesBanc || []).forEach((c: any) => { deviseMap[c.id] = c.devise || 'MUR' })
@@ -4905,7 +4907,7 @@ export async function POST(request: Request) {
 
       // 1. Transactions bancaires du mois
       const { data: releves } = await supabase
-        .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id').eq('societe_id', societe_id)
+        .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id').eq('societe_id', societe_id).is('superseded_by_id', null)
       let tx_non_identifie = 0
       let tx_a_verifier = 0
       let tx_total_mois = 0

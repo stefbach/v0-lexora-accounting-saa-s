@@ -52,6 +52,7 @@ export async function GET(request: Request) {
       .from('releves_bancaires')
       .select('*')
       .eq('societe_id', societe_id)
+      .is('superseded_by_id', null)
       .order('date_fin', { ascending: false })
 
     if (relevesError) throw relevesError
