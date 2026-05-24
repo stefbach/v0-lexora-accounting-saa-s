@@ -3,13 +3,26 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, AlertCircle, Building2, Check, Send, Plus, X, Users, PieChart } from 'lucide-react'
+import { Loader2, AlertCircle, Building2, Check, Send, Plus, X, Users, PieChart, Upload, FileText, ExternalLink } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
 import { t, getLocale, type Locale } from '@/lib/i18n'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+
+/** Parse les notes ROC : peut être JSON {manual_submission:{...}} ou texte legacy. */
+function parseManualSubmission(notes: string | null | undefined): {
+  ack_ref: string; ack_pdf_path: string; submitted_at: string; status: string
+} | null {
+  if (!notes) return null
+  try {
+    const obj = JSON.parse(notes)
+    return obj?.manual_submission || null
+  } catch { return null }
+}
 
 const STATUS_COLOR: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700', review: 'bg-blue-100 text-blue-800',
   approved: 'bg-emerald-100 text-emerald-800', submitted: 'bg-indigo-100 text-indigo-800',
+  submitted_manual: 'bg-indigo-100 text-indigo-800', accepted: 'bg-emerald-200 text-emerald-900',
 }
 
 export default function MraRocPage() {

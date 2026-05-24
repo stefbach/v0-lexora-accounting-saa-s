@@ -101,12 +101,85 @@ export async function GET(request: Request) {
   }
 }
 
-/** POST — ajout/marquage SFT déclaré */
+/** POST — ajout/marquage SFT déclaré + soumission manuelle (multipart) */
 export async function POST(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+
+    const contentType = request.headers.get('content-type') || ''
+
+    // ── Branche multipart : soumission manuelle SFT + upload PDF accusé ────
+    // Le SFT n'a pas d'endpoint MRA e-services dédié — il se dépose via le
+    // portail générique MRA. Le comptable soumet manuellement et remonte
+    // ici l'accusé PDF + référence pour preuve et clôture du dossier.
+    if (contentType.includes('multipart/form-data')) {
+      const form = await request.formData()
+      const societe_id = String(form.get('societe_id') || '')
+      const year       = parseInt(String(form.get('year') || ''))
+      const action     = String(form.get('action') || '')
+      const ack_ref    = String(form.get('mra_ack_ref') || '').trim()
+      const file       = form.get('ack_pdf') as File | null
+
+      if (!societe_id || !year) return NextResponse.json({ error: 'societe_id et year requis' }, { status: 400 })
+      if (action !== 'submit_manual') return NextResponse.json({ error: 'action invalide' }, { status: 400 })
+      if (!ack_ref) return NextResponse.json({ error: 'Référence MRA requise' }, { status: 400 })
+      if (!file) return NextResponse.json({ error: 'PDF accusé de réception requis' }, { status: 400 })
+      if (file.type !== 'application/pdf') return NextResponse.json({ error: 'Le fichier doit être un PDF' }, { status: 400 })
+      if (file.size > 10 * 1024 * 1024) return NextResponse.json({ error: 'PDF trop volumineux (max 10MB)' }, { status: 400 })
+
+      const supabase = getAdminClient()
+
+      const safeName = (file.name || 'ack.pdf').replace(/[^a-zA-Z0-9._-]/g, '_')
+      const storagePath = `mra-acks/${societe_id}/sft/${year}/${Date.now()}_${safeName}`
+      const buf = Buffer.from(await file.arrayBuffer())
+      const up = await supabase.storage.from('documents').upload(storagePath, buf, {
+        contentType: 'application/pdf', upsert: false,
+      })
+      if (up.error) return NextResponse.json({ error: `Upload storage: ${up.error.message}` }, { status: 500 })
+
+      const submissionMeta = JSON.stringify({
+        ack_ref, ack_pdf_path: storagePath,
+        submitted_at: new Date().toISOString(),
+        submitted_by: user.id,
+        status: 'submitted_manual',
+      })
+      const reportedAt = new Date().toISOString()
+
+      // Marque toutes les transactions SFT de l'année comme déclarées.
+      const { error: updErr } = await supabase.from('sft_transactions')
+        .update({ reported_to_mra: true, reported_at: reportedAt, notes: submissionMeta })
+        .eq('societe_id', societe_id).eq('reporting_year', year)
+      if (updErr) {
+        await supabase.storage.from('documents').remove([storagePath]).catch(() => {})
+        return NextResponse.json({ error: updErr.message }, { status: 500 })
+      }
+
+      // Si aucune transaction n'existait (filing à zéro / déclaration
+      // négative), on insère une ligne marqueur pour conserver la preuve.
+      const { count } = await supabase.from('sft_transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('societe_id', societe_id).eq('reporting_year', year)
+      if (!count || count === 0) {
+        const { error: insErr } = await supabase.from('sft_transactions').insert({
+          societe_id, reporting_year: year,
+          transaction_type: '__manual_submission__',
+          counterparty_name: `MRA SFT ${year}`,
+          transaction_date: new Date().toISOString().slice(0, 10),
+          amount_mur: 0,
+          reported_to_mra: true,
+          reported_at: reportedAt,
+          notes: submissionMeta,
+        })
+        if (insErr) {
+          await supabase.storage.from('documents').remove([storagePath]).catch(() => {})
+          return NextResponse.json({ error: insErr.message }, { status: 500 })
+        }
+      }
+      return NextResponse.json({ ok: true, statut: 'submitted_manual', ack_ref, ack_pdf_path: storagePath, year })
+    }
+
     const body = await request.json()
     const supabase = getAdminClient()
     if (body.action === 'declare') {
