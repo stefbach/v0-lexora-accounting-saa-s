@@ -425,19 +425,36 @@ function NouvelleFactureContent() {
     const signedHT = isCredit ? -Math.abs(totalHTApresRemise) : totalHTApresRemise
     const signedTVA = isCredit ? -Math.abs(totalTVA) : totalTVA
     const signedTTC = isCredit ? -Math.abs(totalTTC) : totalTTC
+    // ⚠️ Liste des champs ENVOYÉS au backend : ne doit contenir QUE des
+    // colonnes qui existent réellement dans la table public.factures.
+    // Sinon le PATCH plante avec
+    //   "Could not find the '<X>' column of 'factures' in the schema cache"
+    // Le POST tolérait silencieusement les champs inconnus (il
+    // destructure uniquement les champs qu'il connaît), mais PATCH passe
+    // tout l'objet à .update() → tout champ orphelin fait planter.
+    // remise_type/remise_value/notes_visibles/contre_valeur_mur/accent_color
+    // /reference n'existent PAS en DB — on les mappe sur les vraies colonnes
+    // (remise_pct/remise_montant/notes) ou on les supprime.
     return {
-      societe_id: societeId, numero_facture: numeroFacture, reference,
-      tiers: clientNom || clientEntreprise, description: descriptif || lignes.map(l => l.description).filter(Boolean).join(", "),
-      date_facture: dateFacture, date_echeance: dateEcheance, devise, taux_change: tauxChange,
+      societe_id: societeId, numero_facture: numeroFacture,
+      tiers: clientNom || clientEntreprise,
+      description: descriptif || lignes.map(l => l.description).filter(Boolean).join(", "),
+      date_facture: dateFacture, date_echeance: dateEcheance,
+      devise, taux_change: tauxChange,
       montant_ht: signedHT, montant_tva: signedTVA, montant_ttc: signedTTC,
-      taux_tva: clientOffshore ? 0 : 15, statut, lignes, mode_paiement: modePaiement,
+      taux_tva: clientOffshore ? 0 : 15, statut, lignes,
+      mode_paiement: modePaiement,
       conditions_paiement: echeancePreset >= 0 ? echeancePreset : (settings?.conditions_paiement || 30),
-      notes_visibles: notesVisibles, notes_internes: notesInternes,
+      // notes_visibles côté UI = notes en DB (texte libre affiché sur PDF).
+      notes: notesVisibles,
+      notes_internes: notesInternes,
       template: localStorage.getItem("lexora_invoice_template") || "standard",
       template_id: templateId || undefined,
-      client_offshore: clientOffshore, remise_type: remiseType, remise_value: remiseValue, remise_montant: remiseMontant,
-      logo_url: settings?.logo_url || "", contre_valeur_mur: contreValeurMUR,
-      accent_color: accentColor,
+      client_offshore: clientOffshore,
+      // remise_type='pct' → remise_pct ; sinon → remise_montant.
+      remise_pct: remiseType === 'pct' ? remiseValue : 0,
+      remise_montant: remiseType === 'pct' ? 0 : remiseValue,
+      logo_url: settings?.logo_url || "",
       type_document: typeDocument,
       facture_reference_id: factureReferenceId || undefined,
       // Lien stable vers le contact DB (utilisé par les relances et le

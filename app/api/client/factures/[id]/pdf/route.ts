@@ -428,9 +428,13 @@ export async function GET(request: Request, { params }: Params) {
         ),
 
         // Notes visibles
-        facture.notes_visibles && React.createElement(View, { style: styles.notes },
+        // notes_visibles est l'ancien nom legacy ; en DB la colonne réelle
+        // est `notes` (les notes internes sont dans `notes_internes`).
+        // On garde le fallback pour les factures historiques qui auraient
+        // été créées avec un payload alternatif.
+        ((facture as any).notes_visibles || facture.notes) && React.createElement(View, { style: styles.notes },
           React.createElement(Text, { style: styles.notesTitle }, 'Conditions & Notes'),
-          React.createElement(Text, { style: styles.notesText }, facture.notes_visibles),
+          React.createElement(Text, { style: styles.notesText }, (facture as any).notes_visibles || facture.notes),
         ),
 
         // Coordonnées bancaires — supporte les colonnes legacy
