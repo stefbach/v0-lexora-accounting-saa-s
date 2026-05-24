@@ -7,7 +7,6 @@ import { Loader2, RefreshCw, AlertCircle, AlertTriangle, Download, Upload, FileT
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
 import { t, getLocale, type Locale } from '@/lib/i18n'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button as _Button } from '@/components/ui/button' // (déjà importé plus haut, alias inutile)
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2 }).format(Number(n))
 
