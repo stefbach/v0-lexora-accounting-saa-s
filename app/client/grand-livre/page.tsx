@@ -689,10 +689,22 @@ function EcrituresDetail({
         <span className="text-muted-foreground font-medium">
           {t('acc.gl.detail_entries_for', locale)} <span className="font-mono">{compte}</span>
         </span>
-        <span className="font-mono">
-          D <span className="text-green-700">{fmt(totalD)}</span> · C{" "}
-          <span className="text-rose-700">{fmt(totalC)}</span>
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="font-mono">
+            D <span className="text-green-700">{fmt(totalD)}</span> · C{" "}
+            <span className="text-rose-700">{fmt(totalC)}</span>
+          </span>
+          {/* Lien vers la page d'édition pré-filtrée sur ce compte —
+              demande utilisateur : "il manque le lien pour pouvoir
+              modifier les écritures depuis le grand livre". */}
+          <Link
+            href={`/client/ecritures?compte=${encodeURIComponent(compte)}`}
+            className="text-[11px] underline text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
+            title="Ouvrir ces écritures sur la page d'édition (Modifier / Supprimer)"
+          >
+            ✏️ Modifier
+          </Link>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
