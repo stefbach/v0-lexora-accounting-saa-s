@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { generateCitXml } from '@/lib/accounting/mra-xml'
+import { computeCitDeadlineISO } from '@/lib/accounting/mra-deadlines'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,8 +80,8 @@ export async function POST(request: Request) {
         + (Number(adj.depreciation_book_mur) || 0)
         - (Number(adj.capital_allowance_mur) || 0)
 
-      // Tax rate selon régime
-      const { data: societe } = await supabase.from('societes').select('regime').eq('id', societe_id).single()
+      // Tax rate selon régime + date_fin_exercice pour deadline CIT (ITA s.116)
+      const { data: societe } = await supabase.from('societes').select('regime, date_fin_exercice').eq('id', societe_id).single()
       const taux = (societe?.regime === 'gbc1' || societe?.regime === 'authorised_company') ? 3.0 : 15.0
       const impotBrut = Math.max(0, profitImposable) * (taux / 100)
       const ftc = Number(adj.ftc_applied_mur) || 0
@@ -88,9 +89,11 @@ export async function POST(request: Request) {
       const apsCredit = Number(adj.aps_credit_mur) || 0
       const impotNet = Math.max(0, impotBrut - ftc - tdsCredit - apsCredit)
 
-      // Date limite : 6 mois après clôture exercice (Maurice juin → décembre)
-      const [, endYear] = exercice.split('-')
-      const dateLimit = `${endYear}-12-30`
+      // Date limite CIT — ITA s.116(1) : 6 mois après la fin du mois de
+      // clôture de l'exercice. La société renseigne sa fin d'exercice
+      // dans societes.date_fin_exercice (mig 006). Fallback 30/06 de
+      // endYear si non renseigné (exercice juillet-juin classique).
+      const dateLimit = computeCitDeadlineISO(exercice, societe?.date_fin_exercice)
 
       const { data, error } = await supabase.from('cit_returns').upsert({
         societe_id, exercice,

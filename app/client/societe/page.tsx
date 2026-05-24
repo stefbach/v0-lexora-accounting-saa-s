@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Save, Building2, Phone, Banknote, Settings, MapPin, CheckCircle } from "lucide-react"
 import { t, getLocale, type Locale } from "@/lib/i18n"
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -284,35 +285,23 @@ function BankTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void
 // Main page
 export default function SocieteSettingsPage() {
   const locale = getLocale()
-  const [societes, setSocietes] = useState<any[]>([])
-  const [societeId, setSocieteId] = useState("")
-  const [societe, setSociete] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  // W2-C problème 2 : respecter le provider plutôt que de refetch + forcer
+  // unique[0]. Le cookie active_societe_id / acting_as_societe et le choix
+  // utilisateur doivent persister, comme dans toutes les autres pages /client/*.
+  const {
+    societes,
+    societeId,
+    societe,
+    loading,
+    switchSociete,
+    refresh,
+  } = useSocieteActive()
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [tab, setTab] = useState<Tab>("details")
 
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/comptable/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-      fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
-    ]).then(([d1, d2]) => {
-      const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values())
-      setSocietes(unique)
-      if (unique.length >= 1) { setSocieteId(unique[0].id); setSociete(unique[0]) }
-      setLoading(false)
-    })
-  }, [])
-
-  useEffect(() => {
-    if (societeId) {
-      const s = societes.find(s => s.id === societeId)
-      if (s) setSociete(s)
-    }
-  }, [societeId, societes])
-
   const handleSave = async (data: any) => {
+    if (!societeId) return
     setSaving(true); setSaved(false)
     try {
       const res = await fetch("/api/admin/societes", {
@@ -324,7 +313,9 @@ export default function SocieteSettingsPage() {
       if (result.error) alert(t('core.socset.error_prefix', locale) + ": " + result.error)
       else {
         setSaved(true)
-        setSociete(data)
+        // Re-fetch global de la liste : la sidebar, le sélecteur global et
+        // toutes les autres pages voient l'update sans reload.
+        await refresh()
         setTimeout(() => setSaved(false), 3000)
       }
     } catch { alert(t('core.socset.network_error', locale)) }
@@ -332,6 +323,14 @@ export default function SocieteSettingsPage() {
   }
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin" /></div>
+
+  if (!societeId || !societe) {
+    return (
+      <div className="p-6">
+        <p className="text-gray-500">{t('core.socset.no_active_societe', locale) || "Aucune société active. Sélectionnez-en une dans le menu."}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
@@ -343,7 +342,7 @@ export default function SocieteSettingsPage() {
         <div className="flex items-center gap-3">
           {saved && <Badge className="bg-green-100 text-green-700"><CheckCircle className="h-3 w-3 mr-1" /> {t('core.socset.saved', locale)}</Badge>}
           {societes.length > 1 && (
-            <Select value={societeId} onValueChange={setSocieteId}>
+            <Select value={societeId} onValueChange={switchSociete}>
               <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
