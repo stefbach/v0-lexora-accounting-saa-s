@@ -94,22 +94,22 @@ function InlineActions({ editing, onEdit, onSave, onCancel, onDelete, busy }: {
   if (editing) {
     return (
       <div className="flex gap-1">
-        <Button size="sm" variant="ghost" disabled={busy} onClick={onSave} className="text-green-600 hover:text-green-700 h-8 w-8 p-0">
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+        <Button aria-label="Enregistrer" size="sm" variant="ghost" disabled={busy} onClick={onSave} className="text-green-600 hover:text-green-700 h-8 w-8 p-0">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4" aria-hidden="true" />}
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel} className="text-gray-400 hover:text-gray-600 h-8 w-8 p-0">
-          <X className="w-4 h-4" />
+        <Button aria-label="Annuler" size="sm" variant="ghost" disabled={busy} onClick={onCancel} className="text-gray-400 hover:text-gray-600 h-8 w-8 p-0">
+          <X className="w-4 h-4" aria-hidden="true" />
         </Button>
       </div>
     )
   }
   return (
     <div className="flex gap-1">
-      <Button size="sm" variant="ghost" disabled={busy} onClick={onEdit} className="text-[#0B0F2E] hover:text-[#D4AF37] h-8 w-8 p-0">
-        <Pencil className="w-4 h-4" />
+      <Button aria-label="Modifier" size="sm" variant="ghost" disabled={busy} onClick={onEdit} className="text-[#0B0F2E] hover:text-[#D4AF37] h-8 w-8 p-0">
+        <Pencil className="w-4 h-4" aria-hidden="true" />
       </Button>
-      <Button size="sm" variant="ghost" disabled={busy} onClick={onDelete} className="text-red-400 hover:text-red-600 h-8 w-8 p-0">
-        <Trash2 className="w-4 h-4" />
+      <Button aria-label="Supprimer" size="sm" variant="ghost" disabled={busy} onClick={onDelete} className="text-red-400 hover:text-red-600 h-8 w-8 p-0">
+        <Trash2 className="w-4 h-4" aria-hidden="true" />
       </Button>
     </div>
   )

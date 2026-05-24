@@ -1521,9 +1521,7 @@ export default function CongesPage() {
             </CardHeader>
             <CardContent className="p-0">
               {loadingConges ? <Spinner /> : conges.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  Aucune demande en attente
-                </div>
+                <EmptyState icon={CheckCircle} title="Aucune demande en attente" description="Toutes les demandes de congés ont été traitées." size="md" />
               ) : (
                 <Table>
                   <TableHeader>
@@ -1729,9 +1727,7 @@ export default function CongesPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {loadingAbsents ? <Spinner /> : absentsAvecConge.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    Aucun employe en conge aujourd&apos;hui
-                  </div>
+                  <EmptyState icon={Calendar} title="Aucun employé en congé aujourd'hui" size="sm" />
                 ) : (
                   <Table>
                     <TableHeader>
@@ -1778,9 +1774,7 @@ export default function CongesPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {loadingAbsents ? <Spinner /> : employesSansConge.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    Tous les employes sont en conge approuve
-                  </div>
+                  <EmptyState icon={CheckCircle} title="Tous les employés sont en congé approuvé" size="sm" />
                 ) : (
                   <Table>
                     <TableHeader>
@@ -1866,9 +1860,7 @@ export default function CongesPage() {
             </CardHeader>
             <CardContent className="p-0">
               {loadingHisto ? <Spinner /> : filteredHisto.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  Aucun enregistrement
-                </div>
+                <EmptyState icon={Clock} title="Aucun enregistrement" size="md" />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>

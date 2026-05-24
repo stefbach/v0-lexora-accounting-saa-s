@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { useState, useEffect } from "react"
-import { toast } from "sonner"
+import { notifyError } from "@/lib/utils/toast"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -99,11 +99,11 @@ export default function BilanOfficielPage() {
         ])
         if (cancelled) return
 
-        if (socRes.error) toast.error("Société : " + socRes.error.message)
+        if (socRes.error) notifyError("Charger société", socRes.error.message)
         setSocieteName(socRes.data?.nom || "—")
 
         if (exRes.error) {
-          toast.error("Exercices : " + exRes.error.message)
+          notifyError("Charger exercices", exRes.error.message)
           setExercises([])
         } else {
           const rows = (exRes.data || []) as ExerciceRow[]
@@ -144,7 +144,7 @@ export default function BilanOfficielPage() {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
           if (!cancelled) {
-            toast.error("Bilan : " + (err?.error || res.statusText))
+            notifyError("Charger bilan", err?.error || res.statusText)
             setBilan(null)
           }
           return
@@ -159,7 +159,7 @@ export default function BilanOfficielPage() {
         }
       } catch {
         if (!cancelled) {
-          toast.error("Erreur chargement bilan")
+          notifyError("Charger bilan")
           setBilan(null)
         }
       } finally {

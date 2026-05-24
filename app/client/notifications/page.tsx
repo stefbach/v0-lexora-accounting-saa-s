@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { toast } from "sonner"
+import { notifyError } from "@/lib/utils/toast"
 import { createClient } from "@/lib/supabase/client"
 import {
   Card,
@@ -100,7 +100,7 @@ export default function NotificationsPage() {
           .limit(200)
         if (cancelled) return
         if (error) {
-          toast.error(t('core.notif.title', locale) + " : " + error.message)
+          notifyError(t('core.notif.title', locale), error.message)
           setNotifications([])
         } else {
           setNotifications(
@@ -117,7 +117,7 @@ export default function NotificationsPage() {
         }
       } catch {
         if (!cancelled) {
-          toast.error("Erreur chargement notifications")
+          notifyError("Charger notifications")
           setNotifications([])
         }
       } finally {

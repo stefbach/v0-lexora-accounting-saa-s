@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { useState, useEffect } from "react"
-import { toast } from "sonner"
+import { notifyError } from "@/lib/utils/toast"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -127,11 +127,11 @@ export default function TableauDeBordPage() {
         ])
         if (cancelled) return
 
-        if (socRes.error) toast.error("Société : " + socRes.error.message)
+        if (socRes.error) notifyError("Charger société", socRes.error.message)
         setSocieteName(socRes.data?.nom || "—")
 
         if (exRes.error) {
-          toast.error("Exercices : " + exRes.error.message)
+          notifyError("Charger exercices", exRes.error.message)
           setExercises([])
         } else {
           const rows = (exRes.data || []) as ExerciceRow[]
@@ -183,7 +183,7 @@ export default function TableauDeBordPage() {
         setPnl(pnlData?.type === "pnl" ? (pnlData as PnlPayload) : null)
       } catch {
         if (!cancelled) {
-          toast.error("Erreur chargement états financiers")
+          notifyError("Charger états financiers")
           setBilan(null)
           setPnl(null)
         }

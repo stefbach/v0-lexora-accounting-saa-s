@@ -788,19 +788,20 @@ function NouvelleFactureContent() {
               ) : lignes.map((l, idx) => (
                 <TableRow key={l.id} className="group">
                   <TableCell className="text-center text-gray-400 text-sm">{idx + 1}</TableCell>
-                  <TableCell><Input value={l.description} onChange={e => updateLigne(l.id, "description", e.target.value)} placeholder={t('inv.nf.line_description_placeholder', locale)} className="border-0 bg-transparent focus:bg-white" /></TableCell>
+                  <TableCell><Input aria-label={`${t('inv.nf.description', locale)} ${idx + 1}`} value={l.description} onChange={e => updateLigne(l.id, "description", e.target.value)} placeholder={t('inv.nf.line_description_placeholder', locale)} className="border-0 bg-transparent focus:bg-white" /></TableCell>
                   <TableCell>
                     <Select value={l.unite} onValueChange={v => updateLigne(l.id, "unite", v)}>
-                      <SelectTrigger className="border-0 bg-transparent text-sm"><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={`${t('inv.nf.unit', locale)} ${idx + 1}`} className="border-0 bg-transparent text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>{UNITES.map(u => <SelectItem key={u} value={u}>{getUniteLabel(u, locale)}</SelectItem>)}</SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell><Input type="number" min={0} step="0.01" value={l.quantite} onChange={e => updateLigne(l.id, "quantite", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-20" /></TableCell>
+                  <TableCell><Input aria-label={`${t('inv.nf.quantity', locale)} ${idx + 1}`} type="number" min={0} step="0.01" value={l.quantite} onChange={e => updateLigne(l.id, "quantite", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-20" /></TableCell>
                   <TableCell>
                     {devise === "MUR" || tauxChange <= 1.0001 ? (
                       <Input
                         type="number"
                         step="0.01"
+                        aria-label={`${t('inv.nf.unit_price', locale)} ${idx + 1}`}
                         value={l.prix_unitaire}
                         onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)}
                         className="text-right border-0 bg-transparent focus:bg-white w-28"
@@ -813,20 +814,22 @@ function NouvelleFactureContent() {
                       // devise qui lui parle (prix d'achat en MUR, vente en EUR).
                       <div className="space-y-1">
                         <div className="flex items-center gap-1 justify-end">
-                          <span className="text-[10px] text-gray-500 w-7">{devise}</span>
+                          <span className="text-[10px] text-gray-500 w-7" aria-hidden="true">{devise}</span>
                           <Input
                             type="number"
                             step="0.01"
+                            aria-label={`${t('inv.nf.unit_price', locale)} ${idx + 1} (${devise})`}
                             value={l.prix_unitaire}
                             onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)}
                             className="text-right border-0 bg-transparent focus:bg-white w-24 h-8"
                           />
                         </div>
                         <div className="flex items-center gap-1 justify-end">
-                          <span className="text-[10px] text-gray-500 w-7">MUR</span>
+                          <span className="text-[10px] text-gray-500 w-7" aria-hidden="true">MUR</span>
                           <Input
                             type="number"
                             step="0.01"
+                            aria-label={`${t('inv.nf.unit_price', locale)} ${idx + 1} (MUR)`}
                             value={Number((l.prix_unitaire * tauxChange).toFixed(2))}
                             onChange={e => {
                               const mur = parseFloat(e.target.value) || 0
@@ -840,7 +843,7 @@ function NouvelleFactureContent() {
                   </TableCell>
                   <TableCell>
                     <Select value={String(l.taux_tva)} onValueChange={v => updateLigne(l.id, "taux_tva", parseFloat(v))}>
-                      <SelectTrigger className="border-0 bg-transparent w-20 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={`TVA % ${idx + 1}`} className="border-0 bg-transparent w-20 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="15">15%</SelectItem><SelectItem value="0">0%</SelectItem></SelectContent>
                     </Select>
                   </TableCell>
@@ -857,7 +860,7 @@ function NouvelleFactureContent() {
                       </div>
                     )}
                   </TableCell>
-                  <TableCell><Button variant="ghost" size="sm" onClick={() => removeLigne(l.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></Button></TableCell>
+                  <TableCell><Button aria-label={`${t('inv.nf.line_description_placeholder', locale)} - supprimer ligne ${idx + 1}`} variant="ghost" size="sm" onClick={() => removeLigne(l.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" aria-hidden="true" /></Button></TableCell>
                 </TableRow>
               ))}
             </TableBody>
