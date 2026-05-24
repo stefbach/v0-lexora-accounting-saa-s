@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,137 +8,96 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import {
   Plus, Trash2, Pencil, Save, X, Building2, MapPin, Calendar,
-  Users, Clock, ChevronLeft, ChevronRight
+  Users, Clock, ChevronLeft, ChevronRight, Loader2, AlertTriangle,
 } from "lucide-react"
-import { t, getLocale, type Locale } from '@/lib/i18n'
+import { t, getLocale } from '@/lib/i18n'
+import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 
 // ---------------------------------------------------------------------------
-// Types
+// Types (UI shapes — server returns slightly richer rows; we keep what's used)
 // ---------------------------------------------------------------------------
 interface Department {
-  id: string; code: string; name: string; manager: string
+  id: string
+  code: string
+  nom: string
+  description?: string | null
+  manager_id?: string | null
 }
 interface Office {
-  id: string; code: string; name: string; address: string
+  id: string
+  code: string
+  nom: string
+  adresse?: string | null
 }
 interface LeaveType {
-  id: string; code: string; name: string; daysPerYear: number
-  requiresCertificate: boolean; paid: boolean
+  id: string
+  code: string
+  nom: string
+  daysPerYear: number
+  paid: boolean
+  requiresCertificate: boolean
+  is_global?: boolean
+  societe_id?: string | null
 }
 interface PublicHoliday {
-  id: string; date: string; label: string
+  id: string
+  date: string
+  libelle: string
+  societe_id?: string | null
 }
 interface PayGroup {
-  id: string; code: string; name: string; employees: string[]
+  id: string
+  code?: string | null
+  nom: string
+  nb_membres?: number
 }
 interface WorkCalendar {
-  id: string; name: string; days: string[]; hoursPerDay: number
+  id: string
+  nom: string
+  jours_semaine: string[]
+  heures_par_jour: number
 }
-
-// ---------------------------------------------------------------------------
-// Default data
-// ---------------------------------------------------------------------------
-const uid = () => Math.random().toString(36).slice(2, 10)
-
-const DEFAULT_DEPARTMENTS: Department[] = [
-  { id: uid(), code: "DIR", name: "Direction", manager: "" },
-  { id: uid(), code: "FIN", name: "Finance", manager: "" },
-  { id: uid(), code: "IT", name: "Informatique", manager: "" },
-  { id: uid(), code: "RH", name: "Ressources Humaines", manager: "" },
-  { id: uid(), code: "COM", name: "Commercial", manager: "" },
-]
-
-const DEFAULT_OFFICES: Office[] = [
-  { id: uid(), code: "HQ", name: "Siege Social", address: "Port Louis, Maurice" },
-  { id: uid(), code: "EB", name: "Ebene Office", address: "Ebene, Maurice" },
-]
-
-const DEFAULT_LEAVE_TYPES: LeaveType[] = [
-  { id: uid(), code: "AL", name: "Annual Leave", daysPerYear: 14, requiresCertificate: false, paid: true },
-  { id: uid(), code: "SL", name: "Sick Leave", daysPerYear: 15, requiresCertificate: true, paid: true },
-  { id: uid(), code: "MAT", name: "Maternity Leave", daysPerYear: 98, requiresCertificate: true, paid: true },
-  { id: uid(), code: "PAT", name: "Paternity Leave", daysPerYear: 5, requiresCertificate: false, paid: true },
-  { id: uid(), code: "UL", name: "Unpaid Leave", daysPerYear: 0, requiresCertificate: false, paid: false },
-  { id: uid(), code: "WI", name: "Work Injury Leave", daysPerYear: 0, requiresCertificate: true, paid: true },
-  { id: uid(), code: "COM", name: "Compassionate Leave", daysPerYear: 3, requiresCertificate: false, paid: true },
-]
-
-const HOLIDAYS_2025: PublicHoliday[] = [
-  { id: uid(), date: "2025-01-01", label: "Jour de l'An" },
-  { id: uid(), date: "2025-01-02", label: "Jour de l'An (suite)" },
-  { id: uid(), date: "2025-02-01", label: "Abolition de l'Esclavage" },
-  { id: uid(), date: "2025-02-26", label: "Maha Shivaratree" },
-  { id: uid(), date: "2025-03-12", label: "Fete Nationale" },
-  { id: uid(), date: "2025-03-30", label: "Ugadi" },
-  { id: uid(), date: "2025-05-01", label: "Fete du Travail" },
-  { id: uid(), date: "2025-06-07", label: "Eid ul Fitr" },
-  { id: uid(), date: "2025-08-15", label: "Assomption" },
-  { id: uid(), date: "2025-09-05", label: "Ganesh Chaturthi" },
-  { id: uid(), date: "2025-10-20", label: "Divali" },
-  { id: uid(), date: "2025-11-01", label: "Toussaint" },
-  { id: uid(), date: "2025-11-02", label: "Arrivee des Travailleurs Engages" },
-  { id: uid(), date: "2025-12-25", label: "Noel" },
-]
-
-const HOLIDAYS_2026: PublicHoliday[] = [
-  { id: uid(), date: "2026-01-01", label: "Jour de l'An" },
-  { id: uid(), date: "2026-01-02", label: "Jour de l'An (suite)" },
-  { id: uid(), date: "2026-02-01", label: "Abolition de l'Esclavage" },
-  { id: uid(), date: "2026-02-15", label: "Maha Shivaratree" },
-  { id: uid(), date: "2026-03-12", label: "Fete Nationale" },
-  { id: uid(), date: "2026-03-18", label: "Ugadi" },
-  { id: uid(), date: "2026-05-01", label: "Fete du Travail" },
-  { id: uid(), date: "2026-05-27", label: "Eid ul Fitr" },
-  { id: uid(), date: "2026-08-15", label: "Assomption" },
-  { id: uid(), date: "2026-08-26", label: "Ganesh Chaturthi" },
-  { id: uid(), date: "2026-11-01", label: "Toussaint" },
-  { id: uid(), date: "2026-11-02", label: "Arrivee des Travailleurs Engages" },
-  { id: uid(), date: "2026-11-08", label: "Divali" },
-  { id: uid(), date: "2026-12-25", label: "Noel" },
-]
-
-const DEFAULT_PAY_GROUPS: PayGroup[] = [
-  { id: uid(), code: "MUT", name: "Mutualise", employees: [] },
-  { id: uid(), code: "AE", name: "Agence Externe", employees: [] },
-  { id: uid(), code: "TL", name: "Team Lead", employees: [] },
-  { id: uid(), code: "AST", name: "Astreinte", employees: [] },
-]
-
-const DEFAULT_CALENDARS: WorkCalendar[] = [
-  { id: uid(), name: "Standard Lun-Ven", days: ["Lun", "Mar", "Mer", "Jeu", "Ven"], hoursPerDay: 9 },
-  { id: uid(), name: "Shift 3x8", days: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"], hoursPerDay: 8 },
-]
 
 const ALL_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
 // ---------------------------------------------------------------------------
-// localStorage helpers
+// API helpers
 // ---------------------------------------------------------------------------
-function loadLS<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? JSON.parse(raw) : fallback
-  } catch { return fallback }
+async function apiGet<T>(path: string): Promise<T> {
+  const r = await fetch(path, { cache: 'no-store' })
+  const data = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(data?.error || r.statusText)
+  return data as T
 }
-function saveLS<T>(key: string, value: T) {
-  if (typeof window === "undefined") return
-  localStorage.setItem(key, JSON.stringify(value))
+async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(data?.error || r.statusText)
+  return data as T
 }
 
 // ---------------------------------------------------------------------------
 // Inline edit row helper
 // ---------------------------------------------------------------------------
-function InlineActions({ editing, onEdit, onSave, onCancel, onDelete }: {
-  editing: boolean; onEdit: () => void; onSave: () => void; onCancel: () => void; onDelete: () => void
+function InlineActions({ editing, onEdit, onSave, onCancel, onDelete, busy }: {
+  editing: boolean
+  onEdit: () => void
+  onSave: () => void
+  onCancel: () => void
+  onDelete: () => void
+  busy?: boolean
 }) {
   if (editing) {
     return (
       <div className="flex gap-1">
-        <Button size="sm" variant="ghost" onClick={onSave} className="text-green-600 hover:text-green-700 h-8 w-8 p-0">
-          <Save className="w-4 h-4" />
+        <Button size="sm" variant="ghost" disabled={busy} onClick={onSave} className="text-green-600 hover:text-green-700 h-8 w-8 p-0">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel} className="text-gray-400 hover:text-gray-600 h-8 w-8 p-0">
+        <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel} className="text-gray-400 hover:text-gray-600 h-8 w-8 p-0">
           <X className="w-4 h-4" />
         </Button>
       </div>
@@ -146,10 +105,10 @@ function InlineActions({ editing, onEdit, onSave, onCancel, onDelete }: {
   }
   return (
     <div className="flex gap-1">
-      <Button size="sm" variant="ghost" onClick={onEdit} className="text-[#0B0F2E] hover:text-[#D4AF37] h-8 w-8 p-0">
+      <Button size="sm" variant="ghost" disabled={busy} onClick={onEdit} className="text-[#0B0F2E] hover:text-[#D4AF37] h-8 w-8 p-0">
         <Pencil className="w-4 h-4" />
       </Button>
-      <Button size="sm" variant="ghost" onClick={onDelete} className="text-red-400 hover:text-red-600 h-8 w-8 p-0">
+      <Button size="sm" variant="ghost" disabled={busy} onClick={onDelete} className="text-red-400 hover:text-red-600 h-8 w-8 p-0">
         <Trash2 className="w-4 h-4" />
       </Button>
     </div>
@@ -161,6 +120,13 @@ function InlineActions({ editing, onEdit, onSave, onCancel, onDelete }: {
 // ---------------------------------------------------------------------------
 export default function ParametresRHPage() {
   const locale = getLocale()
+  const { societeId, loading: societeLoading } = useSocieteActive()
+
+  // Global page state
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
   // Departments
   const [departments, setDepartments] = useState<Department[]>([])
   const [editDeptId, setEditDeptId] = useState<string | null>(null)
@@ -177,8 +143,8 @@ export default function ParametresRHPage() {
   const [draftLt, setDraftLt] = useState<Partial<LeaveType>>({})
 
   // Holidays
-  const [holidayYear, setHolidayYear] = useState(2025)
-  const [holidays, setHolidays] = useState<Record<number, PublicHoliday[]>>({})
+  const [holidayYear, setHolidayYear] = useState(new Date().getFullYear())
+  const [holidays, setHolidays] = useState<PublicHoliday[]>([])
   const [newHoliday, setNewHoliday] = useState({ date: "", label: "" })
 
   // Pay Groups
@@ -191,85 +157,406 @@ export default function ParametresRHPage() {
   const [editCalId, setEditCalId] = useState<string | null>(null)
   const [draftCal, setDraftCal] = useState<Partial<WorkCalendar>>({})
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    setDepartments(loadLS("rh_departments", DEFAULT_DEPARTMENTS))
-    setOffices(loadLS("rh_offices", DEFAULT_OFFICES))
-    setLeaveTypes(loadLS("rh_leave_types", DEFAULT_LEAVE_TYPES))
-    setHolidays(loadLS("rh_holidays", { 2025: HOLIDAYS_2025, 2026: HOLIDAYS_2026 }))
-    setPayGroups(loadLS("rh_pay_groups", DEFAULT_PAY_GROUPS))
-    setCalendars(loadLS("rh_calendars", DEFAULT_CALENDARS))
+  // ---------------- Data loaders ----------------
+  const loadAll = useCallback(async (sid: string, year: number) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [d, o, lt, h, pg, c] = await Promise.all([
+        apiGet<{ departements: Department[] }>(`/api/rh/departements?societe_id=${sid}`),
+        apiGet<{ bureaux: Office[] }>(`/api/rh/bureaux?societe_id=${sid}`),
+        apiGet<{ types_conges: LeaveType[] }>(`/api/rh/types-conges?societe_id=${sid}`),
+        apiGet<{ jours_feries: PublicHoliday[] }>(`/api/rh/jours-feries?societe_id=${sid}&annee=${year}`),
+        apiGet<{ groupes: PayGroup[] }>(`/api/rh/groupes?societe_id=${sid}`),
+        apiGet<{ calendriers: WorkCalendar[] }>(`/api/rh/calendriers?societe_id=${sid}`),
+      ])
+      setDepartments(d.departements ?? [])
+      setOffices(o.bureaux ?? [])
+      setLeaveTypes(lt.types_conges ?? [])
+      setHolidays(h.jours_feries ?? [])
+      setPayGroups(pg.groupes ?? [])
+      setCalendars(c.calendriers ?? [])
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur de chargement'
+      setError(msg)
+      console.error('[parametres-rh] load error', e)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  // Save helpers
-  const saveDepts = (d: Department[]) => { setDepartments(d); saveLS("rh_departments", d) }
-  const saveOffs = (o: Office[]) => { setOffices(o); saveLS("rh_offices", o) }
-  const saveLts = (l: LeaveType[]) => { setLeaveTypes(l); saveLS("rh_leave_types", l) }
-  const saveHols = (h: Record<number, PublicHoliday[]>) => { setHolidays(h); saveLS("rh_holidays", h) }
-  const savePgs = (p: PayGroup[]) => { setPayGroups(p); saveLS("rh_pay_groups", p) }
-  const saveCals = (c: WorkCalendar[]) => { setCalendars(c); saveLS("rh_calendars", c) }
+  useEffect(() => {
+    if (!societeId) return
+    void loadAll(societeId, holidayYear)
+  }, [societeId, holidayYear, loadAll])
+
+  // Refresh helpers (only the part that changed) so other tabs keep their state.
+  const refreshDepartments = useCallback(async () => {
+    if (!societeId) return
+    const r = await apiGet<{ departements: Department[] }>(`/api/rh/departements?societe_id=${societeId}`)
+    setDepartments(r.departements ?? [])
+  }, [societeId])
+  const refreshOffices = useCallback(async () => {
+    if (!societeId) return
+    const r = await apiGet<{ bureaux: Office[] }>(`/api/rh/bureaux?societe_id=${societeId}`)
+    setOffices(r.bureaux ?? [])
+  }, [societeId])
+  const refreshLeaveTypes = useCallback(async () => {
+    if (!societeId) return
+    const r = await apiGet<{ types_conges: LeaveType[] }>(`/api/rh/types-conges?societe_id=${societeId}`)
+    setLeaveTypes(r.types_conges ?? [])
+  }, [societeId])
+  const refreshHolidays = useCallback(async (year = holidayYear) => {
+    if (!societeId) return
+    const r = await apiGet<{ jours_feries: PublicHoliday[] }>(`/api/rh/jours-feries?societe_id=${societeId}&annee=${year}`)
+    setHolidays(r.jours_feries ?? [])
+  }, [societeId, holidayYear])
+  const refreshPayGroups = useCallback(async () => {
+    if (!societeId) return
+    const r = await apiGet<{ groupes: PayGroup[] }>(`/api/rh/groupes?societe_id=${societeId}`)
+    setPayGroups(r.groupes ?? [])
+  }, [societeId])
+  const refreshCalendars = useCallback(async () => {
+    if (!societeId) return
+    const r = await apiGet<{ calendriers: WorkCalendar[] }>(`/api/rh/calendriers?societe_id=${societeId}`)
+    setCalendars(r.calendriers ?? [])
+  }, [societeId])
+
+  // ---------------- Mutation handlers ----------------
+  const handleErr = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : 'Erreur inattendue'
+    alert(msg)
+  }
+
+  // Departments
+  const saveDept = async (id: string | null, draft: Partial<Department>) => {
+    if (!societeId) return
+    if (!draft.code?.trim() || !draft.nom?.trim()) {
+      alert(t('hr.params.code', locale) + ' + ' + t('hr.params.name', locale) + ' requis')
+      return
+    }
+    setBusy(true)
+    try {
+      if (id) {
+        await apiPost('/api/rh/departements', {
+          action: 'modifier',
+          id,
+          code: draft.code,
+          nom: draft.nom,
+          description: draft.description ?? null,
+          manager_id: draft.manager_id ?? null,
+        })
+      } else {
+        await apiPost('/api/rh/departements', {
+          action: 'creer',
+          societe_id: societeId,
+          code: draft.code,
+          nom: draft.nom,
+          description: draft.description ?? null,
+          manager_id: draft.manager_id ?? null,
+        })
+      }
+      await refreshDepartments()
+      setEditDeptId(null)
+      setDraftDept({})
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+  const deleteDept = async (id: string) => {
+    if (!confirm('Supprimer ce département ?')) return
+    setBusy(true)
+    try {
+      await apiPost('/api/rh/departements', { action: 'supprimer', id })
+      await refreshDepartments()
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+
+  // Offices
+  const saveOff = async (id: string | null, draft: Partial<Office>) => {
+    if (!societeId) return
+    if (!draft.code?.trim() || !draft.nom?.trim()) {
+      alert(t('hr.params.code', locale) + ' + ' + t('hr.params.name', locale) + ' requis')
+      return
+    }
+    setBusy(true)
+    try {
+      if (id) {
+        await apiPost('/api/rh/bureaux', {
+          action: 'modifier', id,
+          code: draft.code, nom: draft.nom, adresse: draft.adresse ?? null,
+        })
+      } else {
+        await apiPost('/api/rh/bureaux', {
+          action: 'creer', societe_id: societeId,
+          code: draft.code, nom: draft.nom, adresse: draft.adresse ?? null,
+        })
+      }
+      await refreshOffices()
+      setEditOffId(null)
+      setDraftOff({})
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+  const deleteOff = async (id: string) => {
+    if (!confirm('Supprimer ce bureau ?')) return
+    setBusy(true)
+    try {
+      await apiPost('/api/rh/bureaux', { action: 'supprimer', id })
+      await refreshOffices()
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+
+  // Leave Types
+  const saveLt = async (id: string | null, draft: Partial<LeaveType>) => {
+    if (!societeId) return
+    if (!draft.code?.trim() || !draft.nom?.trim()) {
+      alert(t('hr.params.code', locale) + ' + ' + t('hr.params.name', locale) + ' requis')
+      return
+    }
+    setBusy(true)
+    try {
+      if (id) {
+        await apiPost('/api/rh/types-conges', {
+          action: 'modifier', id,
+          societe_id: societeId,
+          code: draft.code, nom: draft.nom,
+          daysPerYear: draft.daysPerYear ?? 0,
+          paid: draft.paid ?? true,
+          requiresCertificate: draft.requiresCertificate ?? false,
+        })
+      } else {
+        await apiPost('/api/rh/types-conges', {
+          action: 'creer', societe_id: societeId,
+          code: draft.code, nom: draft.nom,
+          daysPerYear: draft.daysPerYear ?? 0,
+          paid: draft.paid ?? true,
+          requiresCertificate: draft.requiresCertificate ?? false,
+        })
+      }
+      await refreshLeaveTypes()
+      setEditLtId(null)
+      setDraftLt({})
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+  const deleteLt = async (id: string, is_global?: boolean) => {
+    if (is_global) {
+      alert('Règle globale Maurice (WRA 2019). Modifiez-la pour créer un override société.')
+      return
+    }
+    if (!confirm('Supprimer ce type de congé pour cette société ?')) return
+    setBusy(true)
+    try {
+      await apiPost('/api/rh/types-conges', { action: 'supprimer', id })
+      await refreshLeaveTypes()
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+
+  // Holidays
+  const addHoliday = async () => {
+    if (!societeId || !newHoliday.date || !newHoliday.label) return
+    setBusy(true)
+    try {
+      await apiPost('/api/rh/jours-feries', {
+        action: 'creer',
+        societe_id: societeId,
+        date: newHoliday.date,
+        libelle: newHoliday.label,
+      })
+      setNewHoliday({ date: "", label: "" })
+      await refreshHolidays()
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+  const deleteHoliday = async (id: string) => {
+    if (!confirm('Supprimer ce jour férié ?')) return
+    setBusy(true)
+    try {
+      await apiPost('/api/rh/jours-feries', { action: 'supprimer', id })
+      await refreshHolidays()
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+
+  // Pay Groups
+  const savePg = async (id: string | null, draft: Partial<PayGroup>) => {
+    if (!societeId) return
+    if (!draft.nom?.trim()) {
+      alert(t('hr.params.group_name', locale) + ' requis')
+      return
+    }
+    setBusy(true)
+    try {
+      if (id) {
+        await apiPost('/api/rh/groupes', {
+          action: 'modifier', id,
+          code: draft.code ?? null, nom: draft.nom,
+        })
+      } else {
+        await apiPost('/api/rh/groupes', {
+          action: 'creer', societe_id: societeId,
+          code: draft.code ?? null, nom: draft.nom,
+        })
+      }
+      await refreshPayGroups()
+      setEditPgId(null)
+      setDraftPg({})
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+  const deletePg = async (id: string) => {
+    if (!confirm('Supprimer ce groupe de paie ?')) return
+    setBusy(true)
+    try {
+      await apiPost('/api/rh/groupes', { action: 'supprimer', id })
+      await refreshPayGroups()
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+
+  // Calendars
+  const saveCal = async (id: string | null, draft: Partial<WorkCalendar>) => {
+    if (!societeId) return
+    if (!draft.nom?.trim()) {
+      alert(t('hr.params.calendar_name_ph', locale) + ' requis')
+      return
+    }
+    setBusy(true)
+    try {
+      if (id) {
+        await apiPost('/api/rh/calendriers', {
+          action: 'modifier', id,
+          nom: draft.nom,
+          jours_semaine: draft.jours_semaine ?? [],
+          heures_par_jour: draft.heures_par_jour ?? 9,
+        })
+      } else {
+        await apiPost('/api/rh/calendriers', {
+          action: 'creer', societe_id: societeId,
+          nom: draft.nom,
+          jours_semaine: draft.jours_semaine ?? ["Lun", "Mar", "Mer", "Jeu", "Ven"],
+          heures_par_jour: draft.heures_par_jour ?? 9,
+        })
+      }
+      await refreshCalendars()
+      setEditCalId(null)
+      setDraftCal({})
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+  const deleteCal = async (id: string) => {
+    if (!confirm('Supprimer ce calendrier ?')) return
+    setBusy(true)
+    try {
+      await apiPost('/api/rh/calendriers', { action: 'supprimer', id })
+      await refreshCalendars()
+    } catch (e) { handleErr(e) } finally { setBusy(false) }
+  }
+
+  // =========================================================================
+  // RENDER GUARDS (loading / no société / error)
+  // =========================================================================
+  if (societeLoading) {
+    return (
+      <div className="flex justify-center items-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-[#0B0F2E]" />
+      </div>
+    )
+  }
+  if (!societeId) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="py-10 text-center">
+            <AlertTriangle className="h-8 w-8 mx-auto text-amber-500 mb-3" />
+            <p className="text-gray-600">
+              Aucune société active. Sélectionnez-en une dans le menu de gauche.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   // =========================================================================
   // DEPARTMENTS TAB
   // =========================================================================
-  const DepartmentsTab = () => (
+  const DepartmentsTab = (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <Building2 className="w-5 h-5" /> {t('hr.params.departments', locale)}
         </CardTitle>
         <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
+          disabled={busy || editDeptId === '__new__'}
           onClick={() => {
-            const d: Department = { id: uid(), code: "", name: "", manager: "" }
-            saveDepts([...departments, d])
-            setEditDeptId(d.id)
-            setDraftDept(d)
+            setEditDeptId('__new__')
+            setDraftDept({ code: "", nom: "", description: "", manager_id: null })
           }}>
           <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[#0B0F2E] text-white">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
-                <th className="px-4 py-2 text-left font-medium">{t('hr.params.name', locale)}</th>
-                <th className="px-4 py-2 text-left font-medium">{t('hr.params.manager', locale)}</th>
-                <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {departments.map((d, i) => {
-                const editing = editDeptId === d.id
-                return (
-                  <tr key={d.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+        {loading ? (
+          <div className="py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" /></div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-[#0B0F2E] text-white">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
+                  <th className="px-4 py-2 text-left font-medium">{t('hr.params.name', locale)}</th>
+                  <th className="px-4 py-2 text-left font-medium">{t('hr.params.manager', locale)}</th>
+                  <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {editDeptId === '__new__' && (
+                  <tr className="bg-amber-50">
                     <td className="px-4 py-2">
-                      {editing ? <Input value={draftDept.code || ""} onChange={e => setDraftDept(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" /> : d.code}
+                      <Input value={draftDept.code || ""} onChange={e => setDraftDept(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" placeholder="DIR" />
                     </td>
                     <td className="px-4 py-2">
-                      {editing ? <Input value={draftDept.name || ""} onChange={e => setDraftDept(p => ({ ...p, name: e.target.value }))} className="h-8" /> : d.name}
+                      <Input value={draftDept.nom || ""} onChange={e => setDraftDept(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Direction" />
                     </td>
                     <td className="px-4 py-2">
-                      {editing ? <Input value={draftDept.manager || ""} onChange={e => setDraftDept(p => ({ ...p, manager: e.target.value }))} className="h-8" /> : (d.manager || <span className="text-gray-400">--</span>)}
+                      <Input value={draftDept.description || ""} onChange={e => setDraftDept(p => ({ ...p, description: e.target.value }))} className="h-8" placeholder="(description)" />
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <InlineActions editing={editing}
-                        onEdit={() => { setEditDeptId(d.id); setDraftDept({ ...d }) }}
-                        onSave={() => { saveDepts(departments.map(x => x.id === d.id ? { ...d, ...draftDept } as Department : x)); setEditDeptId(null) }}
-                        onCancel={() => setEditDeptId(null)}
-                        onDelete={() => saveDepts(departments.filter(x => x.id !== d.id))}
+                      <InlineActions editing busy={busy}
+                        onEdit={() => {}}
+                        onSave={() => saveDept(null, draftDept)}
+                        onCancel={() => { setEditDeptId(null); setDraftDept({}) }}
+                        onDelete={() => {}}
                       />
                     </td>
                   </tr>
-                )
-              })}
-              {departments.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_departments', locale)}</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+                {departments.map((d, i) => {
+                  const editing = editDeptId === d.id
+                  return (
+                    <tr key={d.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="px-4 py-2">
+                        {editing ? <Input value={draftDept.code || ""} onChange={e => setDraftDept(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" /> : d.code}
+                      </td>
+                      <td className="px-4 py-2">
+                        {editing ? <Input value={draftDept.nom || ""} onChange={e => setDraftDept(p => ({ ...p, nom: e.target.value }))} className="h-8" /> : d.nom}
+                      </td>
+                      <td className="px-4 py-2">
+                        {editing
+                          ? <Input value={draftDept.description || ""} onChange={e => setDraftDept(p => ({ ...p, description: e.target.value }))} className="h-8" />
+                          : (d.description || <span className="text-gray-400">--</span>)}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <InlineActions editing={editing} busy={busy}
+                          onEdit={() => { setEditDeptId(d.id); setDraftDept({ ...d }) }}
+                          onSave={() => saveDept(d.id, draftDept)}
+                          onCancel={() => { setEditDeptId(null); setDraftDept({}) }}
+                          onDelete={() => deleteDept(d.id)}
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+                {departments.length === 0 && editDeptId !== '__new__' && (
+                  <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_departments', locale)}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -277,64 +564,82 @@ export default function ParametresRHPage() {
   // =========================================================================
   // OFFICES TAB
   // =========================================================================
-  const OfficesTab = () => (
+  const OfficesTab = (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <MapPin className="w-5 h-5" /> {t('hr.params.offices', locale)}
         </CardTitle>
         <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
+          disabled={busy || editOffId === '__new__'}
           onClick={() => {
-            const o: Office = { id: uid(), code: "", name: "", address: "" }
-            saveOffs([...offices, o])
-            setEditOffId(o.id)
-            setDraftOff(o)
+            setEditOffId('__new__')
+            setDraftOff({ code: "", nom: "", adresse: "" })
           }}>
           <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[#0B0F2E] text-white">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
-                <th className="px-4 py-2 text-left font-medium">{t('hr.params.name', locale)}</th>
-                <th className="px-4 py-2 text-left font-medium">{t('hr.params.address', locale)}</th>
-                <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {offices.map((o, i) => {
-                const editing = editOffId === o.id
-                return (
-                  <tr key={o.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                    <td className="px-4 py-2">
-                      {editing ? <Input value={draftOff.code || ""} onChange={e => setDraftOff(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" /> : o.code}
-                    </td>
-                    <td className="px-4 py-2">
-                      {editing ? <Input value={draftOff.name || ""} onChange={e => setDraftOff(p => ({ ...p, name: e.target.value }))} className="h-8" /> : o.name}
-                    </td>
-                    <td className="px-4 py-2">
-                      {editing ? <Input value={draftOff.address || ""} onChange={e => setDraftOff(p => ({ ...p, address: e.target.value }))} className="h-8" /> : o.address}
-                    </td>
+        {loading ? (
+          <div className="py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" /></div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-[#0B0F2E] text-white">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
+                  <th className="px-4 py-2 text-left font-medium">{t('hr.params.name', locale)}</th>
+                  <th className="px-4 py-2 text-left font-medium">{t('hr.params.address', locale)}</th>
+                  <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {editOffId === '__new__' && (
+                  <tr className="bg-amber-50">
+                    <td className="px-4 py-2"><Input value={draftOff.code || ""} onChange={e => setDraftOff(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" placeholder="HQ" /></td>
+                    <td className="px-4 py-2"><Input value={draftOff.nom || ""} onChange={e => setDraftOff(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Siège" /></td>
+                    <td className="px-4 py-2"><Input value={draftOff.adresse || ""} onChange={e => setDraftOff(p => ({ ...p, adresse: e.target.value }))} className="h-8" placeholder="Port Louis" /></td>
                     <td className="px-4 py-2 text-right">
-                      <InlineActions editing={editing}
-                        onEdit={() => { setEditOffId(o.id); setDraftOff({ ...o }) }}
-                        onSave={() => { saveOffs(offices.map(x => x.id === o.id ? { ...o, ...draftOff } as Office : x)); setEditOffId(null) }}
-                        onCancel={() => setEditOffId(null)}
-                        onDelete={() => saveOffs(offices.filter(x => x.id !== o.id))}
+                      <InlineActions editing busy={busy}
+                        onEdit={() => {}}
+                        onSave={() => saveOff(null, draftOff)}
+                        onCancel={() => { setEditOffId(null); setDraftOff({}) }}
+                        onDelete={() => {}}
                       />
                     </td>
                   </tr>
-                )
-              })}
-              {offices.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_offices', locale)}</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+                {offices.map((o, i) => {
+                  const editing = editOffId === o.id
+                  return (
+                    <tr key={o.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="px-4 py-2">
+                        {editing ? <Input value={draftOff.code || ""} onChange={e => setDraftOff(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" /> : o.code}
+                      </td>
+                      <td className="px-4 py-2">
+                        {editing ? <Input value={draftOff.nom || ""} onChange={e => setDraftOff(p => ({ ...p, nom: e.target.value }))} className="h-8" /> : o.nom}
+                      </td>
+                      <td className="px-4 py-2">
+                        {editing ? <Input value={draftOff.adresse || ""} onChange={e => setDraftOff(p => ({ ...p, adresse: e.target.value }))} className="h-8" /> : (o.adresse || <span className="text-gray-400">--</span>)}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <InlineActions editing={editing} busy={busy}
+                          onEdit={() => { setEditOffId(o.id); setDraftOff({ ...o }) }}
+                          onSave={() => saveOff(o.id, draftOff)}
+                          onCancel={() => { setEditOffId(null); setDraftOff({}) }}
+                          onDelete={() => deleteOff(o.id)}
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+                {offices.length === 0 && editOffId !== '__new__' && (
+                  <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_offices', locale)}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -342,81 +647,110 @@ export default function ParametresRHPage() {
   // =========================================================================
   // LEAVE TYPES TAB
   // =========================================================================
-  const LeaveTypesTab = () => (
+  const LeaveTypesTab = (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <Calendar className="w-5 h-5" /> {t('hr.params.leave_types', locale)}
         </CardTitle>
         <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
+          disabled={busy || editLtId === '__new__'}
           onClick={() => {
-            const lt: LeaveType = { id: uid(), code: "", name: "", daysPerYear: 0, requiresCertificate: false, paid: true }
-            saveLts([...leaveTypes, lt])
-            setEditLtId(lt.id)
-            setDraftLt(lt)
+            setEditLtId('__new__')
+            setDraftLt({ code: "", nom: "", daysPerYear: 0, requiresCertificate: false, paid: true })
           }}>
           <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[#0B0F2E] text-white">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
-                <th className="px-4 py-2 text-left font-medium">{t('hr.params.name', locale)}</th>
-                <th className="px-4 py-2 text-center font-medium">{t('hr.params.days_per_year', locale)}</th>
-                <th className="px-4 py-2 text-center font-medium">{t('hr.params.certificate', locale)}</th>
-                <th className="px-4 py-2 text-center font-medium">{t('hr.params.paid', locale)}</th>
-                <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaveTypes.map((lt, i) => {
-                const editing = editLtId === lt.id
-                return (
-                  <tr key={lt.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                    <td className="px-4 py-2">
-                      {editing ? <Input value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" /> : <span className="font-mono text-xs bg-[#0B0F2E]/10 px-2 py-0.5 rounded">{lt.code}</span>}
-                    </td>
-                    <td className="px-4 py-2">
-                      {editing ? <Input value={draftLt.name || ""} onChange={e => setDraftLt(p => ({ ...p, name: e.target.value }))} className="h-8" /> : lt.name}
-                    </td>
-                    <td className="px-4 py-2 text-center">
-                      {editing ? <Input type="number" value={draftLt.daysPerYear ?? 0} onChange={e => setDraftLt(p => ({ ...p, daysPerYear: Number(e.target.value) }))} className="h-8 w-20 mx-auto" /> : (lt.daysPerYear > 0 ? lt.daysPerYear : <span className="text-gray-400">--</span>)}
-                    </td>
-                    <td className="px-4 py-2 text-center">
-                      {editing ? (
-                        <Switch checked={draftLt.requiresCertificate ?? false} onCheckedChange={v => setDraftLt(p => ({ ...p, requiresCertificate: v }))} />
-                      ) : (
-                        lt.requiresCertificate ? <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">{t('hr.params.yes', locale)}</span> : <span className="text-xs text-gray-400">{t('hr.params.no', locale)}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-center">
-                      {editing ? (
-                        <Switch checked={draftLt.paid ?? true} onCheckedChange={v => setDraftLt(p => ({ ...p, paid: v }))} />
-                      ) : (
-                        lt.paid ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">{t('hr.params.paid_yes', locale)}</span> : <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">{t('hr.params.paid_no', locale)}</span>
-                      )}
-                    </td>
+        {loading ? (
+          <div className="py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" /></div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-[#0B0F2E] text-white">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
+                  <th className="px-4 py-2 text-left font-medium">{t('hr.params.name', locale)}</th>
+                  <th className="px-4 py-2 text-center font-medium">{t('hr.params.days_per_year', locale)}</th>
+                  <th className="px-4 py-2 text-center font-medium">{t('hr.params.certificate', locale)}</th>
+                  <th className="px-4 py-2 text-center font-medium">{t('hr.params.paid', locale)}</th>
+                  <th className="px-4 py-2 text-center font-medium">Scope</th>
+                  <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {editLtId === '__new__' && (
+                  <tr className="bg-amber-50">
+                    <td className="px-4 py-2"><Input value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" placeholder="AL" /></td>
+                    <td className="px-4 py-2"><Input value={draftLt.nom || ""} onChange={e => setDraftLt(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Annual leave" /></td>
+                    <td className="px-4 py-2 text-center"><Input type="number" value={draftLt.daysPerYear ?? 0} onChange={e => setDraftLt(p => ({ ...p, daysPerYear: Number(e.target.value) }))} className="h-8 w-20 mx-auto" /></td>
+                    <td className="px-4 py-2 text-center"><Switch checked={draftLt.requiresCertificate ?? false} onCheckedChange={v => setDraftLt(p => ({ ...p, requiresCertificate: v }))} /></td>
+                    <td className="px-4 py-2 text-center"><Switch checked={draftLt.paid ?? true} onCheckedChange={v => setDraftLt(p => ({ ...p, paid: v }))} /></td>
+                    <td className="px-4 py-2 text-center"><span className="text-xs text-amber-600">société</span></td>
                     <td className="px-4 py-2 text-right">
-                      <InlineActions editing={editing}
-                        onEdit={() => { setEditLtId(lt.id); setDraftLt({ ...lt }) }}
-                        onSave={() => { saveLts(leaveTypes.map(x => x.id === lt.id ? { ...lt, ...draftLt } as LeaveType : x)); setEditLtId(null) }}
-                        onCancel={() => setEditLtId(null)}
-                        onDelete={() => saveLts(leaveTypes.filter(x => x.id !== lt.id))}
+                      <InlineActions editing busy={busy}
+                        onEdit={() => {}}
+                        onSave={() => saveLt(null, draftLt)}
+                        onCancel={() => { setEditLtId(null); setDraftLt({}) }}
+                        onDelete={() => {}}
                       />
                     </td>
                   </tr>
-                )
-              })}
-              {leaveTypes.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_leave_types', locale)}</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-gray-400 mt-3">{t('hr.params.leave_types_note', locale)}</p>
+                )}
+                {leaveTypes.map((lt, i) => {
+                  const editing = editLtId === lt.id
+                  return (
+                    <tr key={lt.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="px-4 py-2">
+                        {editing ? <Input value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" /> : <span className="font-mono text-xs bg-[#0B0F2E]/10 px-2 py-0.5 rounded">{lt.code}</span>}
+                      </td>
+                      <td className="px-4 py-2">
+                        {editing ? <Input value={draftLt.nom || ""} onChange={e => setDraftLt(p => ({ ...p, nom: e.target.value }))} className="h-8" /> : lt.nom}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        {editing ? <Input type="number" value={draftLt.daysPerYear ?? 0} onChange={e => setDraftLt(p => ({ ...p, daysPerYear: Number(e.target.value) }))} className="h-8 w-20 mx-auto" /> : (lt.daysPerYear > 0 ? lt.daysPerYear : <span className="text-gray-400">--</span>)}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        {editing
+                          ? <Switch checked={draftLt.requiresCertificate ?? false} onCheckedChange={v => setDraftLt(p => ({ ...p, requiresCertificate: v }))} />
+                          : (lt.requiresCertificate
+                            ? <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">{t('hr.params.yes', locale)}</span>
+                            : <span className="text-xs text-gray-400">{t('hr.params.no', locale)}</span>)}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        {editing
+                          ? <Switch checked={draftLt.paid ?? true} onCheckedChange={v => setDraftLt(p => ({ ...p, paid: v }))} />
+                          : (lt.paid
+                            ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">{t('hr.params.paid_yes', locale)}</span>
+                            : <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">{t('hr.params.paid_no', locale)}</span>)}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        {lt.is_global
+                          ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">global MU</span>
+                          : <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">société</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <InlineActions editing={editing} busy={busy}
+                          onEdit={() => { setEditLtId(lt.id); setDraftLt({ ...lt }) }}
+                          onSave={() => saveLt(lt.id, draftLt)}
+                          onCancel={() => { setEditLtId(null); setDraftLt({}) }}
+                          onDelete={() => deleteLt(lt.id, lt.is_global)}
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+                {leaveTypes.length === 0 && editLtId !== '__new__' && (
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_leave_types', locale)}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-xs text-gray-400 mt-3">
+          Les types « global MU » proviennent du seed WRA 2019 (Maurice). Les modifier crée automatiquement un override pour la société active.
+        </p>
       </CardContent>
     </Card>
   )
@@ -424,9 +758,9 @@ export default function ParametresRHPage() {
   // =========================================================================
   // HOLIDAYS TAB
   // =========================================================================
-  const currentHolidays = holidays[holidayYear] || []
+  const sortedHolidays = [...holidays].sort((a, b) => a.date.localeCompare(b.date))
 
-  const HolidaysTab = () => (
+  const HolidaysTab = (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
@@ -443,26 +777,27 @@ export default function ParametresRHPage() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {currentHolidays.sort((a, b) => a.date.localeCompare(b.date)).map(h => (
-            <div key={h.id} className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-100">
-              <div>
-                <p className="text-sm font-medium text-[#0B0F2E]">{h.label}</p>
-                <p className="text-xs text-gray-500">{new Date(h.date + "T12:00:00").toLocaleDateString(locale === 'fr' ? "fr-FR" : "en-US", { weekday: "short", day: "numeric", month: "long" })}</p>
+        {loading ? (
+          <div className="py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" /></div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {sortedHolidays.map(h => (
+              <div key={h.id} className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-100">
+                <div>
+                  <p className="text-sm font-medium text-[#0B0F2E]">{h.libelle}</p>
+                  <p className="text-xs text-gray-500">{new Date(h.date + "T12:00:00").toLocaleDateString(locale === 'fr' ? "fr-FR" : "en-US", { weekday: "short", day: "numeric", month: "long" })}</p>
+                </div>
+                <Button size="sm" variant="ghost" disabled={busy} className="text-red-400 hover:text-red-600 h-8 w-8 p-0"
+                  onClick={() => deleteHoliday(h.id)}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
               </div>
-              <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-600 h-8 w-8 p-0"
-                onClick={() => {
-                  const updated = { ...holidays, [holidayYear]: currentHolidays.filter(x => x.id !== h.id) }
-                  saveHols(updated)
-                }}>
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-          ))}
-          {currentHolidays.length === 0 && (
-            <p className="text-gray-400 text-sm col-span-3 text-center py-6">{t('hr.params.no_holidays', locale)} {holidayYear}</p>
-          )}
-        </div>
+            ))}
+            {sortedHolidays.length === 0 && (
+              <p className="text-gray-400 text-sm col-span-3 text-center py-6">{t('hr.params.no_holidays', locale)} {holidayYear}</p>
+            )}
+          </div>
+        )}
 
         <div className="border-t pt-4">
           <p className="text-sm font-medium text-[#0B0F2E] mb-2">{t('hr.params.add_holiday', locale)}</p>
@@ -476,14 +811,10 @@ export default function ParametresRHPage() {
               <Input value={newHoliday.label} onChange={e => setNewHoliday(p => ({ ...p, label: e.target.value }))} placeholder={t('hr.params.holiday_name_ph', locale)} className="h-9" />
             </div>
             <Button size="sm" className="bg-[#D4AF37] text-[#0B0F2E] hover:bg-[#b89a42] h-9"
-              disabled={!newHoliday.date || !newHoliday.label}
-              onClick={() => {
-                const h: PublicHoliday = { id: uid(), date: newHoliday.date, label: newHoliday.label }
-                const updated = { ...holidays, [holidayYear]: [...currentHolidays, h] }
-                saveHols(updated)
-                setNewHoliday({ date: "", label: "" })
-              }}>
-              <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
+              disabled={busy || !newHoliday.date || !newHoliday.label}
+              onClick={addHoliday}>
+              {busy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />}
+              {t('hr.params.add', locale)}
             </Button>
           </div>
         </div>
@@ -496,64 +827,84 @@ export default function ParametresRHPage() {
   // =========================================================================
   // PAY GROUPS TAB
   // =========================================================================
-  const PayGroupsTab = () => (
+  const PayGroupsTab = (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <Users className="w-5 h-5" /> {t('hr.params.pay_groups', locale)}
         </CardTitle>
         <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
+          disabled={busy || editPgId === '__new__'}
           onClick={() => {
-            const pg: PayGroup = { id: uid(), code: "", name: "", employees: [] }
-            savePgs([...payGroups, pg])
-            setEditPgId(pg.id)
-            setDraftPg(pg)
+            setEditPgId('__new__')
+            setDraftPg({ code: "", nom: "" })
           }}>
           <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-[#0B0F2E] text-white">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
-                <th className="px-4 py-2 text-left font-medium">{t('hr.params.group_name', locale)}</th>
-                <th className="px-4 py-2 text-center font-medium">{t('hr.params.employees', locale)}</th>
-                <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payGroups.map((pg, i) => {
-                const editing = editPgId === pg.id
-                return (
-                  <tr key={pg.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                    <td className="px-4 py-2">
-                      {editing ? <Input value={draftPg.code || ""} onChange={e => setDraftPg(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" /> : <span className="font-mono text-xs bg-[#D4AF37]/20 text-[#0B0F2E] px-2 py-0.5 rounded font-semibold">{pg.code}</span>}
-                    </td>
-                    <td className="px-4 py-2">
-                      {editing ? <Input value={draftPg.name || ""} onChange={e => setDraftPg(p => ({ ...p, name: e.target.value }))} className="h-8" /> : pg.name}
-                    </td>
-                    <td className="px-4 py-2 text-center">
-                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{pg.employees.length} {t('hr.params.employees_count', locale)}</span>
-                    </td>
+        {loading ? (
+          <div className="py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" /></div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-[#0B0F2E] text-white">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium">{t('hr.params.code', locale)}</th>
+                  <th className="px-4 py-2 text-left font-medium">{t('hr.params.group_name', locale)}</th>
+                  <th className="px-4 py-2 text-center font-medium">{t('hr.params.employees', locale)}</th>
+                  <th className="px-4 py-2 text-right font-medium w-24">{t('hr.params.actions', locale)}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {editPgId === '__new__' && (
+                  <tr className="bg-amber-50">
+                    <td className="px-4 py-2"><Input value={draftPg.code || ""} onChange={e => setDraftPg(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" placeholder="MUT" /></td>
+                    <td className="px-4 py-2"><Input value={draftPg.nom || ""} onChange={e => setDraftPg(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Mutualisé" /></td>
+                    <td className="px-4 py-2 text-center"><span className="text-xs text-gray-400">--</span></td>
                     <td className="px-4 py-2 text-right">
-                      <InlineActions editing={editing}
-                        onEdit={() => { setEditPgId(pg.id); setDraftPg({ ...pg }) }}
-                        onSave={() => { savePgs(payGroups.map(x => x.id === pg.id ? { ...pg, ...draftPg } as PayGroup : x)); setEditPgId(null) }}
-                        onCancel={() => setEditPgId(null)}
-                        onDelete={() => savePgs(payGroups.filter(x => x.id !== pg.id))}
+                      <InlineActions editing busy={busy}
+                        onEdit={() => {}}
+                        onSave={() => savePg(null, draftPg)}
+                        onCancel={() => { setEditPgId(null); setDraftPg({}) }}
+                        onDelete={() => {}}
                       />
                     </td>
                   </tr>
-                )
-              })}
-              {payGroups.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_pay_groups', locale)}</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+                {payGroups.map((pg, i) => {
+                  const editing = editPgId === pg.id
+                  return (
+                    <tr key={pg.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="px-4 py-2">
+                        {editing
+                          ? <Input value={draftPg.code || ""} onChange={e => setDraftPg(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" />
+                          : <span className="font-mono text-xs bg-[#D4AF37]/20 text-[#0B0F2E] px-2 py-0.5 rounded font-semibold">{pg.code || '--'}</span>}
+                      </td>
+                      <td className="px-4 py-2">
+                        {editing ? <Input value={draftPg.nom || ""} onChange={e => setDraftPg(p => ({ ...p, nom: e.target.value }))} className="h-8" /> : pg.nom}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{pg.nb_membres ?? 0} {t('hr.params.employees_count', locale)}</span>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <InlineActions editing={editing} busy={busy}
+                          onEdit={() => { setEditPgId(pg.id); setDraftPg({ ...pg }) }}
+                          onSave={() => savePg(pg.id, draftPg)}
+                          onCancel={() => { setEditPgId(null); setDraftPg({}) }}
+                          onDelete={() => deletePg(pg.id)}
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+                {payGroups.length === 0 && editPgId !== '__new__' && (
+                  <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">{t('hr.params.no_pay_groups', locale)}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
         <p className="text-xs text-gray-400 mt-3">{t('hr.params.pay_groups_note', locale)}</p>
       </CardContent>
     </Card>
@@ -562,79 +913,124 @@ export default function ParametresRHPage() {
   // =========================================================================
   // CALENDARS TAB
   // =========================================================================
-  const CalendarsTab = () => (
+  const CalendarsTab = (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
           <Clock className="w-5 h-5" /> {t('hr.params.calendars', locale)}
         </CardTitle>
         <Button size="sm" className="bg-[#0B0F2E] text-white hover:bg-[#2a3d6b]"
+          disabled={busy || editCalId === '__new__'}
           onClick={() => {
-            const c: WorkCalendar = { id: uid(), name: "", days: ["Lun", "Mar", "Mer", "Jeu", "Ven"], hoursPerDay: 9 }
-            saveCals([...calendars, c])
-            setEditCalId(c.id)
-            setDraftCal(c)
+            setEditCalId('__new__')
+            setDraftCal({ nom: "", jours_semaine: ["Lun", "Mar", "Mer", "Jeu", "Ven"], heures_par_jour: 9 })
           }}>
           <Plus className="w-4 h-4 mr-1" /> {t('hr.params.add', locale)}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        {calendars.map((cal, i) => {
-          const editing = editCalId === cal.id
-          return (
-            <div key={cal.id} className="border rounded-lg p-4 bg-white">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex-1">
-                  {editing ? (
-                    <Input value={draftCal.name || ""} onChange={e => setDraftCal(p => ({ ...p, name: e.target.value }))} className="h-8 font-semibold" placeholder={t('hr.params.calendar_name_ph', locale)} />
-                  ) : (
-                    <p className="font-semibold text-[#0B0F2E]">{cal.name}</p>
-                  )}
+        {loading ? (
+          <div className="py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" /></div>
+        ) : (
+          <>
+            {editCalId === '__new__' && (
+              <div className="border-2 border-amber-200 rounded-lg p-4 bg-amber-50">
+                <div className="flex items-center justify-between mb-3">
+                  <Input
+                    value={draftCal.nom || ""}
+                    onChange={e => setDraftCal(p => ({ ...p, nom: e.target.value }))}
+                    className="h-8 font-semibold flex-1 mr-3"
+                    placeholder={t('hr.params.calendar_name_ph', locale)}
+                  />
+                  <InlineActions editing busy={busy}
+                    onEdit={() => {}}
+                    onSave={() => saveCal(null, draftCal)}
+                    onCancel={() => { setEditCalId(null); setDraftCal({}) }}
+                    onDelete={() => {}}
+                  />
                 </div>
-                <InlineActions editing={editing}
-                  onEdit={() => { setEditCalId(cal.id); setDraftCal({ ...cal }) }}
-                  onSave={() => { saveCals(calendars.map(x => x.id === cal.id ? { ...cal, ...draftCal } as WorkCalendar : x)); setEditCalId(null) }}
-                  onCancel={() => setEditCalId(null)}
-                  onDelete={() => saveCals(calendars.filter(x => x.id !== cal.id))}
-                />
+                <div className="flex gap-2 items-center flex-wrap">
+                  <span className="text-xs text-gray-500 mr-2">{t('hr.params.days', locale)}</span>
+                  {ALL_DAYS.map(day => {
+                    const active = (draftCal.jours_semaine || []).includes(day)
+                    return (
+                      <button key={day}
+                        onClick={() => {
+                          const current = draftCal.jours_semaine || []
+                          setDraftCal(p => ({
+                            ...p,
+                            jours_semaine: current.includes(day) ? current.filter(d => d !== day) : [...current, day],
+                          }))
+                        }}
+                        className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer hover:opacity-80 ${active ? "bg-[#0B0F2E] text-white" : "bg-gray-100 text-gray-400"}`}>
+                        {day}
+                      </button>
+                    )
+                  })}
+                  <span className="text-xs text-gray-500 ml-4 mr-2">{t('hr.params.hours_per_day', locale)}</span>
+                  <Input type="number" value={draftCal.heures_par_jour ?? 9}
+                    onChange={e => setDraftCal(p => ({ ...p, heures_par_jour: Number(e.target.value) }))}
+                    className="h-8 w-16" />
+                </div>
               </div>
-              <div className="flex gap-2 items-center">
-                <span className="text-xs text-gray-500 mr-2">{t('hr.params.days', locale)}</span>
-                {ALL_DAYS.map(day => {
-                  const active = editing ? (draftCal.days || []).includes(day) : cal.days.includes(day)
-                  return (
-                    <button key={day}
-                      disabled={!editing}
-                      onClick={() => {
-                        if (!editing) return
-                        const current = draftCal.days || []
-                        setDraftCal(p => ({
-                          ...p,
-                          days: current.includes(day) ? current.filter(d => d !== day) : [...current, day]
-                        }))
-                      }}
-                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                        active
-                          ? "bg-[#0B0F2E] text-white"
-                          : "bg-gray-100 text-gray-400"
-                      } ${editing ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
-                    >
-                      {day}
-                    </button>
-                  )
-                })}
-                <span className="text-xs text-gray-500 ml-4 mr-2">{t('hr.params.hours_per_day', locale)}</span>
-                {editing ? (
-                  <Input type="number" value={draftCal.hoursPerDay ?? 9} onChange={e => setDraftCal(p => ({ ...p, hoursPerDay: Number(e.target.value) }))} className="h-8 w-16" />
-                ) : (
-                  <span className="text-sm font-semibold text-[#0B0F2E]">{cal.hoursPerDay}h</span>
-                )}
-              </div>
-            </div>
-          )
-        })}
-        {calendars.length === 0 && (
-          <p className="text-gray-400 text-sm text-center py-8">{t('hr.params.no_calendars', locale)}</p>
+            )}
+            {calendars.map(cal => {
+              const editing = editCalId === cal.id
+              return (
+                <div key={cal.id} className="border rounded-lg p-4 bg-white">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex-1">
+                      {editing ? (
+                        <Input value={draftCal.nom || ""} onChange={e => setDraftCal(p => ({ ...p, nom: e.target.value }))} className="h-8 font-semibold" placeholder={t('hr.params.calendar_name_ph', locale)} />
+                      ) : (
+                        <p className="font-semibold text-[#0B0F2E]">{cal.nom}</p>
+                      )}
+                    </div>
+                    <InlineActions editing={editing} busy={busy}
+                      onEdit={() => { setEditCalId(cal.id); setDraftCal({ ...cal }) }}
+                      onSave={() => saveCal(cal.id, draftCal)}
+                      onCancel={() => { setEditCalId(null); setDraftCal({}) }}
+                      onDelete={() => deleteCal(cal.id)}
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <span className="text-xs text-gray-500 mr-2">{t('hr.params.days', locale)}</span>
+                    {ALL_DAYS.map(day => {
+                      const active = editing
+                        ? (draftCal.jours_semaine || []).includes(day)
+                        : (cal.jours_semaine || []).includes(day)
+                      return (
+                        <button key={day}
+                          disabled={!editing}
+                          onClick={() => {
+                            if (!editing) return
+                            const current = draftCal.jours_semaine || []
+                            setDraftCal(p => ({
+                              ...p,
+                              jours_semaine: current.includes(day) ? current.filter(d => d !== day) : [...current, day],
+                            }))
+                          }}
+                          className={`px-2 py-1 rounded text-xs font-medium transition-colors ${active ? "bg-[#0B0F2E] text-white" : "bg-gray-100 text-gray-400"} ${editing ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}>
+                          {day}
+                        </button>
+                      )
+                    })}
+                    <span className="text-xs text-gray-500 ml-4 mr-2">{t('hr.params.hours_per_day', locale)}</span>
+                    {editing ? (
+                      <Input type="number" value={draftCal.heures_par_jour ?? 9}
+                        onChange={e => setDraftCal(p => ({ ...p, heures_par_jour: Number(e.target.value) }))}
+                        className="h-8 w-16" />
+                    ) : (
+                      <span className="text-sm font-semibold text-[#0B0F2E]">{cal.heures_par_jour}h</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+            {calendars.length === 0 && editCalId !== '__new__' && (
+              <p className="text-gray-400 text-sm text-center py-8">{t('hr.params.no_calendars', locale)}</p>
+            )}
+          </>
         )}
         <p className="text-xs text-gray-400">{t('hr.params.calendars_note', locale)}</p>
       </CardContent>
@@ -650,6 +1046,16 @@ export default function ParametresRHPage() {
         <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('hr.params.title', locale)}</h1>
         <p className="text-sm text-gray-500">{t('hr.params.subtitle', locale)}</p>
       </div>
+
+      {error && (
+        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">Erreur de chargement</p>
+            <p className="text-xs">{error}</p>
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="departments">
         <TabsList className="bg-[#0B0F2E]/5 border">
@@ -673,24 +1079,12 @@ export default function ParametresRHPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="departments" className="mt-4">
-          <DepartmentsTab />
-        </TabsContent>
-        <TabsContent value="offices" className="mt-4">
-          <OfficesTab />
-        </TabsContent>
-        <TabsContent value="leave-types" className="mt-4">
-          <LeaveTypesTab />
-        </TabsContent>
-        <TabsContent value="holidays" className="mt-4">
-          <HolidaysTab />
-        </TabsContent>
-        <TabsContent value="pay-groups" className="mt-4">
-          <PayGroupsTab />
-        </TabsContent>
-        <TabsContent value="calendars" className="mt-4">
-          <CalendarsTab />
-        </TabsContent>
+        <TabsContent value="departments" className="mt-4">{DepartmentsTab}</TabsContent>
+        <TabsContent value="offices" className="mt-4">{OfficesTab}</TabsContent>
+        <TabsContent value="leave-types" className="mt-4">{LeaveTypesTab}</TabsContent>
+        <TabsContent value="holidays" className="mt-4">{HolidaysTab}</TabsContent>
+        <TabsContent value="pay-groups" className="mt-4">{PayGroupsTab}</TabsContent>
+        <TabsContent value="calendars" className="mt-4">{CalendarsTab}</TabsContent>
       </Tabs>
     </div>
   )

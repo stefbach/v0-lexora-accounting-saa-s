@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, RefreshCw, AlertCircle, AlertTriangle, Download } from 'lucide-react'
+import { Loader2, RefreshCw, AlertCircle, AlertTriangle, Download, Upload, FileText, Check, Send, ExternalLink } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
 import { t, getLocale, type Locale } from '@/lib/i18n'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button as _Button } from '@/components/ui/button' // (déjà importé plus haut, alias inutile)
 
 const fmt = (n: number | null | undefined) => n == null ? '—' : new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2 }).format(Number(n))
 

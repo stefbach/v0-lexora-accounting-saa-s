@@ -340,13 +340,113 @@ export default function MraRocPage() {
           </Button>
         )}
         {roc?.statut === 'review' && <Button onClick={() => doAction('approve')} variant="outline" className="text-emerald-700"><Check className="h-4 w-4 mr-2" />{t('mra.roc.approve', locale)}</Button>}
-        {roc?.statut === 'approved' && <Button onClick={() => doAction('submit_mra')} className="bg-indigo-600 hover:bg-indigo-700 text-white"><Send className="h-4 w-4 mr-2" />{t('mra.roc.submit_mra', locale)}</Button>}
+        {roc?.statut === 'approved' && !manualSub && (
+          <Button onClick={() => setSubmitOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Upload className="h-4 w-4 mr-2" />J'ai soumis sur le portail MRA/CBRD
+          </Button>
+        )}
         {!canSubmitReview && roc?.statut === 'draft' && (
           <span className="text-xs text-slate-500 italic">
             Companies Act s.223 — directors ≥ 1 et somme actions = 100%
           </span>
         )}
       </div>
+
+      {/* Soumission manuelle — preuve d'archivage du dépôt CBRD/MRA */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Upload className="h-4 w-4 text-slate-600" />
+            Soumission manuelle (portail CBRD/MRA)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-slate-600 mb-3">
+            Le ROC Annual Return se dépose manuellement sur le portail{' '}
+            <a href="https://onlinebrd.govmu.org" target="_blank" rel="noopener noreferrer"
+               className="text-indigo-600 hover:underline inline-flex items-center gap-1">
+              CBRD <ExternalLink className="h-3 w-3" />
+            </a>.
+            Après dépôt, remontez ici la référence et l'accusé PDF pour preuve réglementaire.
+          </p>
+          {manualSub ? (
+            <div className="rounded border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-emerald-800">
+                <Check className="h-4 w-4" />
+                Déclaration soumise manuellement
+              </div>
+              <div className="text-xs text-emerald-900 space-y-1">
+                <div><span className="font-semibold">Référence :</span> {manualSub.ack_ref}</div>
+                <div><span className="font-semibold">Date :</span> {new Date(manualSub.submitted_at).toLocaleString('fr-FR')}</div>
+                <div className="flex items-center gap-1">
+                  <FileText className="h-3 w-3" />
+                  <span className="font-mono break-all">{manualSub.ack_pdf_path}</span>
+                </div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setSubmitOpen(true)}>
+                Re-soumettre / mettre à jour
+              </Button>
+            </div>
+          ) : (
+            <Button
+              onClick={() => setSubmitOpen(true)}
+              variant="outline"
+              disabled={!roc || roc.statut === 'draft'}
+              title={!roc || roc.statut === 'draft' ? 'Passer en revue puis approuver avant soumission' : ''}
+            >
+              <Upload className="h-4 w-4 mr-2" />J'ai soumis sur le portail MRA/CBRD
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={submitOpen} onOpenChange={(o) => { if (!submitting) setSubmitOpen(o) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmer la soumission manuelle</DialogTitle>
+            <DialogDescription>
+              Renseignez la référence de dépôt CBRD/MRA et joignez l'accusé PDF (max 10MB).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs text-slate-600 block mb-1">Référence MRA / CBRD *</label>
+              <input
+                type="text"
+                value={submitAckRef}
+                onChange={e => setSubmitAckRef(e.target.value)}
+                placeholder="ex: AR-2025-12345"
+                className="w-full border rounded px-2 py-1 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-600 block mb-1">Accusé de réception PDF *</label>
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={e => setSubmitFile(e.target.files?.[0] || null)}
+                className="w-full text-sm"
+              />
+              {submitFile && (
+                <p className="text-xs text-slate-500 mt-1">
+                  {submitFile.name} ({(submitFile.size / 1024).toFixed(1)} KB)
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={submitting}>Annuler</Button>
+            <Button
+              onClick={submitManual}
+              disabled={submitting || !submitAckRef.trim() || !submitFile}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Send className="h-4 w-4 mr-2" />Confirmer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
