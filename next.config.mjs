@@ -22,6 +22,13 @@ const nextConfig = {
       { source: '/rh/exports',       destination: '/rh/exports/paie',    permanent: true },
       // Sprint 2 — /rh/parametres existe maintenant comme hub dédié,
       // donc PAS de redirect ici (sinon la page serait inatteignable).
+
+      // V3-27/30 (mai 2026) — consolidation doublons routes.
+      // /comptable/inter-societes était une V1 "lecture + actions optimistes
+      // locales" (sans persistance), /comptable/interco est la version
+      // complète (CRUD flux + reconciliation paire-à-paire). On supprime
+      // la V1 et on redirige les anciens liens (bookmarks, docs) en 308.
+      { source: '/comptable/inter-societes', destination: '/comptable/interco', permanent: true },
     ]
   },
 }
