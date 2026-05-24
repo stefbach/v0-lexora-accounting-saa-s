@@ -186,7 +186,43 @@ function FacturePreviewContent() {
         .then(async d => {
           if (d.factures?.[0]) {
             const f = d.factures[0]
-            const settings = JSON.parse(localStorage.getItem("lexora_invoice_settings") || "{}")
+            // Settings société : DB d'abord (source de vérité — contient
+            // VAT, BRN, coordonnées bancaires, logo, mentions légales),
+            // fallback localStorage pour les anciens utilisateurs qui
+            // n'ont pas encore migré leurs paramètres en base. Sans ce
+            // chargement DB, ouvrir une facture sauvegardée depuis un
+            // autre navigateur / device perdait VAT/BRN/banque.
+            let settings: any = {}
+            try {
+              const ls = localStorage.getItem("lexora_invoice_settings")
+              if (ls) settings = JSON.parse(ls)
+            } catch { /* ignore */ }
+            if (f.societe_id) {
+              try {
+                const socRes = await fetch('/api/client/societes')
+                const socJson = await socRes.json()
+                const soc = (socJson.societes || []).find((s: any) => s.id === f.societe_id)
+                if (soc) {
+                  settings = {
+                    ...settings,
+                    nom: soc.nom || settings.nom || '',
+                    brn: soc.brn || settings.brn || '',
+                    vat_number: soc.numero_tva_mra || soc.vat_number || settings.vat_number || '',
+                    logo_url: soc.logo_url || settings.logo_url || '',
+                    adresse: [soc.adresse, soc.adresse2, soc.ville].filter(Boolean).join('\n') || settings.adresse || '',
+                    telephone: soc.telephone || settings.telephone || '',
+                    email: soc.email || settings.email || '',
+                    website: soc.website || settings.website || '',
+                    banque_nom: soc.banque_nom || soc.bank_name || settings.banque_nom || '',
+                    banque_compte: soc.banque_compte || soc.bank_account_number || settings.banque_compte || '',
+                    banque_iban: soc.banque_iban || soc.iban || settings.banque_iban || '',
+                    banque_swift: soc.banque_swift || settings.banque_swift || '',
+                    footer_text: soc.facture_footer_text || settings.footer_text || '',
+                    mention_legale: soc.facture_mention_legale || settings.mention_legale || '',
+                  }
+                }
+              } catch { /* fallback sur localStorage déjà chargé */ }
+            }
             let contact: ContactDetail | null = null
             if (f.contact_id) {
               try {

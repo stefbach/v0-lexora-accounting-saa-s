@@ -21,12 +21,35 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
+    const factureId = searchParams.get('id')
 
     // Tenant isolation — verify user has access to the requested societe_id
     // (unified helper, includes user_societes + dossiers + created_by branches)
     if (societe_id) {
       await assertSocieteAccess(supabase, user.id, societe_id)
     }
+
+    // Mode "fetch single facture by id" : utilisé par /client/facture-preview
+    // pour rouvrir une facture déjà enregistrée. Sans ce filtre id, l'API
+    // renvoyait toute la liste et la page preview chargeait factures[0]
+    // (la facture la plus récente) au lieu de celle demandée → bug observé :
+    // l'aperçu et le PDF montraient les infos d'une autre facture.
+    if (factureId) {
+      const { data: row, error } = await supabase
+        .from('factures')
+        .select('*')
+        .eq('id', factureId)
+        .maybeSingle()
+      if (error) throw error
+      if (!row) return NextResponse.json({ factures: [] })
+      // Tenant isolation après lecture : la facture peut appartenir à
+      // une autre société que celle active.
+      if (row.societe_id) {
+        await assertSocieteAccess(supabase, user.id, row.societe_id)
+      }
+      return NextResponse.json({ factures: [row] })
+    }
+
     const statut = searchParams.get('statut')
     const client = searchParams.get('client')
     const date_debut = searchParams.get('date_debut')
