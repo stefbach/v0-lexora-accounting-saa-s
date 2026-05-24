@@ -614,4 +614,66 @@ describe('SEC-005 — HMAC + replay', () => {
     expect(headers[HMAC_HEADER_NONCE]).toBe(nonce)
     expect(headers[HMAC_HEADER_SIGNATURE]).toMatch(/^sha256=[a-f0-9]{64}$/)
   })
+
+  // ── HMAC coverage across telegram internal endpoints (V5-41) ─────────
+  // Vérification statique : chaque route sous app/api/telegram/internal/**
+  // doit importer `verifyHmac` depuis @/lib/security/hmac-auth.
+  // 47 routes attendues au moment de la mission V5-41.
+  describe('HMAC sur les endpoints telegram internal', () => {
+    const { readdirSync, statSync } = require('node:fs') as typeof import('node:fs')
+    const telegramInternalDir = resolve(REPO_ROOT, 'app/api/telegram/internal')
+
+    function walkRouteFiles(dir: string): string[] {
+      const out: string[] = []
+      if (!existsSync(dir)) return out
+      for (const entry of readdirSync(dir)) {
+        const full = resolve(dir, entry)
+        const st = statSync(full)
+        if (st.isDirectory()) out.push(...walkRouteFiles(full))
+        else if (entry === 'route.ts') out.push(full)
+      }
+      return out
+    }
+
+    it('le dossier app/api/telegram/internal existe', () => {
+      expect(existsSync(telegramInternalDir)).toBe(true)
+    })
+
+    it('découvre au moins 40 endpoints internal (47 attendus en V5-41)', () => {
+      const routes = walkRouteFiles(telegramInternalDir)
+      expect(routes.length).toBeGreaterThanOrEqual(40)
+    })
+
+    it('chaque endpoint telegram/internal importe verifyHmac', () => {
+      const routes = walkRouteFiles(telegramInternalDir)
+      const missing: string[] = []
+      for (const route of routes) {
+        const src = readFileSync(route, 'utf8')
+        const hasImport =
+          /from\s+['"]@\/lib\/security\/hmac-auth['"]/.test(src) &&
+          /verifyHmac/.test(src)
+        if (!hasImport) {
+          // Path relatif pour message lisible
+          missing.push(route.slice(REPO_ROOT.length + 1))
+        }
+      }
+      expect(missing, `Endpoints sans verifyHmac:\n${missing.join('\n')}`).toEqual([])
+    })
+
+    it('chaque endpoint vérifie le résultat HMAC (.ok)', () => {
+      const routes = walkRouteFiles(telegramInternalDir)
+      const unguarded: string[] = []
+      for (const route of routes) {
+        const src = readFileSync(route, 'utf8')
+        // Look for `verifyHmac(req)` followed by an `.ok` check within ~200 chars.
+        if (!/verifyHmac\s*\([^)]*\)/.test(src)) continue
+        const callIdx = src.search(/verifyHmac\s*\(/)
+        const window = src.slice(callIdx, callIdx + 400)
+        if (!/\.ok\b/.test(window)) {
+          unguarded.push(route.slice(REPO_ROOT.length + 1))
+        }
+      }
+      expect(unguarded, `Endpoints sans check .ok:\n${unguarded.join('\n')}`).toEqual([])
+    })
+  })
 })
