@@ -990,6 +990,31 @@ Evidence: Quarterly completeness audit report
 
 ---
 
+## APPENDIX A — SECURITY & COMPLIANCE MIGRATIONS (Roadmap V5 9/10)
+
+Seven Supabase migrations were deployed (May 2026) to harden the
+control framework. Each migration is referenced below with its
+corresponding control objective. SQL files live in
+`supabase/migrations/`.
+
+| # | Migration file | Control objective | Linked control |
+|---|----------------|-------------------|----------------|
+| 413 | `413_password_reset_audit.sql` | Immutable log of every password reset (who, target, IP, timestamp) | SEC-001 / SOD User Access |
+| 414 | `414_revoke_exec_sql_security_hardening.sql` | DROP of the `exec_sql` Postgres function (arbitrary SQL exec removed) | SEC-002 / Access Control |
+| 415 A→D | `415_fix_rls_policies_phase2_part{A,B,C,D}.sql` | New RLS helpers `user_has_societe_access` + `user_has_employe_access`; all financial & HR tables migrated | SEC-003 / Segregation of Data |
+| 416 | `416_telegram_hmac_nonces.sql` | HMAC-SHA256 + nonce table for all `/api/telegram/**` callbacks (replay-attack protection) | SEC-005 / Integration Controls |
+| 417 | `417_intercompany_eliminations.sql` | Audit-grade table for intercompany elimination journals (consolidation IFRS 10) | Control Activity GL |
+| 418 | `418_sft_detect_transactions_v2.sql` | Improved suspicious-financial-transaction detection (bank rec quality) | Monitoring / Bank Rec |
+| 419 | `419_mra_submit_ack.sql` | Persistent acknowledgement trail for MRA online submissions (PAYE/CSG/TDS) | Tax Compliance |
+| 420 | `420_rh_settings_tables.sql` | Per-societe RH settings (overtime caps, leave defaults) backing payroll calculation controls | Payroll Controls |
+
+**Audit evidence path:** the migration files themselves are the
+auditable source of truth (versioned in git, deployed via Supabase
+`apply_migration`). For each control test, reference the migration
+number above plus the corresponding section of this document.
+
+---
+
 ## DOCUMENT CONTROL
 
 **Version History:**
@@ -997,6 +1022,7 @@ Evidence: Quarterly completeness audit report
 | Version | Date | Changes | Approver |
 |---|---|---|---|
 | 1.0 | 2026-05-22 | Initial document | CFO |
+| 1.1 | 2026-05-24 | Appendix A — migrations 413→420 (roadmap V5 9/10) | CFO |
 
 **Approval:**
 

@@ -429,6 +429,39 @@ Service Account: mra-filing-lexora
 
 ## ROW-LEVEL SECURITY (RLS) POLICIES
 
+### RLS Helper Functions (SEC-003, Phase 2)
+
+Since migrations **415 A→D** (May 2026), all new RLS policies MUST use
+the two `SECURITY DEFINER` helper functions instead of inline
+sub-queries. They centralise the access logic, respect the role
+hierarchy, and avoid Postgres planner blow-ups on nested `IN (SELECT…)`.
+
+```sql
+-- Returns true if the current auth.uid() can access the given societe
+-- (admin/super_admin = always true; comptable/rh = via dossiers or
+-- societes_users; client_admin = own societe only).
+public.user_has_societe_access(p_societe_id uuid) RETURNS boolean
+
+-- Returns true if the current auth.uid() can access the given employe
+-- (admin/rh of the societe = full; client_user = only own employe row).
+public.user_has_employe_access(p_employe_id uuid) RETURNS boolean
+```
+
+**Required pattern for new policies:**
+
+```sql
+CREATE POLICY p_select ON public.<table>
+  FOR SELECT
+  USING (public.user_has_societe_access(societe_id));
+```
+
+**Anti-pattern (do NOT do this — bypasses hierarchy, slow):**
+
+```sql
+-- ❌ Will be rejected in code review
+USING (societe_id IN (SELECT id FROM societes WHERE created_by = auth.uid()))
+```
+
 ### RLS Architecture
 
 All financial tables enforce RLS at database level:
@@ -681,6 +714,10 @@ Automatic alerts for:
 | | | 180+ table × field access levels |
 | | | SOD requirements documented |
 | | | Service account framework |
+| 1.1 | 2026-05-24 | Roadmap V5 9/10 security hotfixes |
+| | | SEC-001 ROLE_LEVEL hierarchy + `canManageRole` |
+| | | SEC-003 RLS helpers `user_has_societe_access` / `user_has_employe_access` |
+| | | Password reset audit row in SOD matrix (migration 413) |
 
 ---
 
