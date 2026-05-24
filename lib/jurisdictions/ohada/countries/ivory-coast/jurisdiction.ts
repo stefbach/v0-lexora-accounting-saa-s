@@ -6,7 +6,12 @@
  * Accounting framework: SYSCOHADA (Système Comptable OHADA révisé).
  */
 
-import type { Jurisdiction, ValidationResult } from '../../../core/jurisdiction.interface'
+import type {
+  Jurisdiction,
+  ValidationResult,
+  ValidationError,
+  ValidationWarning,
+} from '../../../core/jurisdiction.interface'
 import type { JurisdictionConfig, Account, JournalEntry, FiscalPeriod } from '../../../core/types'
 import type {
   FinancialStatementsProvider,
@@ -86,8 +91,8 @@ export class IvoryCoastJurisdiction implements Jurisdiction {
   readonly statementsProvider = new IvoryCoastStatementsProvider()
 
   validateJournalEntry(entry: JournalEntry): ValidationResult {
-    const errors: any[] = []
-    const warnings: any[] = []
+    const errors: ValidationError[] = []
+    const warnings: ValidationWarning[] = []
 
     // R1: Double-entry validation
     const totalDebit = entry.lines.reduce((s, l) => s + l.debit, 0)

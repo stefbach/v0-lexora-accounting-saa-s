@@ -56,7 +56,7 @@ export function TVATable({ data }: TVATableProps) {
             <TableCell className="font-medium capitalize">
               {formatPeriode(row.periode)}
             </TableCell>
-            <TableCell>{(row as any).societe}</TableCell>
+            <TableCell>{row.societe}</TableCell>
             <TableCell className="text-right">{formatMUR(row.tva_collectee)}</TableCell>
             <TableCell className="text-right">{formatMUR(row.tva_deductible)}</TableCell>
             <TableCell className="text-right font-medium">

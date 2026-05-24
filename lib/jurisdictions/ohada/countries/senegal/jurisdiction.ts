@@ -83,8 +83,8 @@ export class SenegalJurisdiction implements Jurisdiction {
   readonly statementsProvider = new SenegalStatementsProvider()
 
   validateJournalEntry(entry: JournalEntry): ValidationResult {
-    const errors: any[] = []
-    const warnings: any[] = []
+    const errors: ValidationError[] = []
+    const warnings: ValidationWarning[] = []
 
     // R1: Double-entry validation
     const totalDebit = entry.lines.reduce((s, l) => s + l.debit, 0)

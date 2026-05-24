@@ -100,7 +100,7 @@ function parseRow(row: Record<string, any>, idx: number): ParsedRow {
   const nom = String(pickValue(row, COL_ALIASES.nom) || '').trim()
   const email = String(pickValue(row, COL_ALIASES.email) || '').trim()
   const deviseRaw = String(pickValue(row, COL_ALIASES.devise) || 'MUR').trim().toUpperCase()
-  const devise = DEVISES_OK.includes(deviseRaw as any) ? deviseRaw : 'MUR'
+  const devise = (DEVISES_OK as readonly string[]).includes(deviseRaw) ? deviseRaw : 'MUR'
   const cpRaw = pickValue(row, COL_ALIASES.conditions_paiement)
   const cp = cpRaw === null ? 30 : Number(cpRaw)
   const conditions_paiement = Number.isFinite(cp) && cp >= 0 && cp <= 365 ? Math.floor(cp) : 30
