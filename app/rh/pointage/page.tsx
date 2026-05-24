@@ -313,7 +313,6 @@ export default function PointagePage() {
       })
 
       const data = await res.json()
-      console.log('[pointage response]', res.status, JSON.stringify(data).substring(0, 300))
 
       if (res.status === 409) {
         // Already clocked in/out
@@ -358,7 +357,6 @@ export default function PointagePage() {
             heures_sup: returnedPointage.heures_sup || null,
             employe: returnedPointage.employe || (emp ? { nom: emp.nom, prenom: emp.prenom, poste: emp.poste } : undefined),
           }
-          console.log('[local update]', enriched.employe_id, 'entree:', enriched.heure_entree, 'sortie:', enriched.heure_sortie)
           setPointages(prev => {
             const idx = prev.findIndex(x => x.employe_id === empId)
             if (idx >= 0) {
