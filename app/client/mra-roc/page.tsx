@@ -86,6 +86,37 @@ export default function MraRocPage() {
   const directorsOk = (form.directors || []).some((d: any) => (d?.name || '').trim().length > 0)
   const canSubmitReview = directorsOk && pctOk
 
+  // ── Soumission manuelle (portail CBRD/MRA — pas d'API) ─────────────────
+  const [submitOpen, setSubmitOpen] = useState(false)
+  const [submitAckRef, setSubmitAckRef] = useState('')
+  const [submitFile, setSubmitFile] = useState<File | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const manualSub = roc ? parseManualSubmission(roc?.notes) : null
+  // Statut effectif (override par flag interne stocké dans notes JSON).
+  const effectiveStatut = manualSub?.status || roc?.statut || 'draft'
+
+  const submitManual = async () => {
+    if (!societeId || !submitAckRef.trim() || !submitFile) return
+    setSubmitting(true); setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('societe_id', societeId)
+      fd.append('exercice', exercice)
+      fd.append('action', 'submit_manual')
+      fd.append('mra_ack_ref', submitAckRef.trim())
+      fd.append('ack_pdf', submitFile)
+      const r = await fetch('/api/comptable/mra/roc', { method: 'POST', body: fd })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j?.error || 'Échec soumission manuelle')
+      setSubmitOpen(false); setSubmitAckRef(''); setSubmitFile(null)
+      load()
+    } catch (e: any) {
+      setError(e?.message || 'Erreur')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const load = async () => {
     if (!societeId) { setLoading(false); return }
     setError(null); setLoading(true)
@@ -121,7 +152,7 @@ export default function MraRocPage() {
         </div>
         <div className="flex gap-2 items-center">
           <input value={exercice} onChange={e => setExercice(e.target.value)} className="border rounded px-2 py-1 text-sm w-32" />
-          {roc && <Badge className={STATUS_COLOR[roc.statut || 'draft']}>{roc.statut || 'draft'}</Badge>}
+          {roc && <Badge className={STATUS_COLOR[effectiveStatut] || STATUS_COLOR.draft}>{effectiveStatut}</Badge>}
         </div>
       </div>
 
