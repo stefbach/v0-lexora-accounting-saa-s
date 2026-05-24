@@ -63,7 +63,7 @@ export function TVATable({ data }: TVATableProps) {
               {formatMUR(row.tva_nette)}
             </TableCell>
             <TableCell>
-              <TVAStatusBadge statut={(row.statut ?? "a_payer") as any} montant={Math.abs(row.tva_nette)} />
+              <TVAStatusBadge statut={row.statut ?? "a_payer"} montant={Math.abs(row.tva_nette)} />
             </TableCell>
             <TableCell>
               {new Date(row.date_limite).toLocaleDateString("fr-FR")}
@@ -100,9 +100,9 @@ export function TVATable({ data }: TVATableProps) {
                   >
                     En retard
                   </Badge>
-                  {((row as any).penalites ?? 0) > 0 && (
+                  {(row.penalites ?? 0) > 0 && (
                     <span className="text-xs text-red-600">
-                      Pénalité: {formatMUR(((row as any).penalites ?? 0))}
+                      Pénalité: {formatMUR(row.penalites ?? 0)}
                     </span>
                   )}
                 </div>

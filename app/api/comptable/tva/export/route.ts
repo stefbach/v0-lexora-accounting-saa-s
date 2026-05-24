@@ -371,7 +371,7 @@ export async function GET(request: Request) {
 
     const buf = await renderToBuffer(VatReturnPdf(props) as any)
     const filename = `TVA_Return_${societe.nom.replace(/[^a-z0-9]+/gi, '_')}_${periode}.pdf`
-    return new NextResponse(buf as any, {
+    return new NextResponse(buf as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,

@@ -149,7 +149,7 @@ export async function agregerDeclarationsMraMois(
     .rpc('agreger_declarations_mra', { p_societe_id: societeId, p_periode: p })
     .maybeSingle()
   if (error) throw new Error(error.message)
-  const r = (data || {}) as any
+  const r = (data || {}) as Record<string, unknown>
   return {
     societe_id: societeId,
     periode: p,
@@ -164,7 +164,7 @@ export async function agregerDeclarationsMraMois(
     total_training_levy: Number(r.total_training_levy) || 0,
     total_prgf: Number(r.total_prgf) || 0,
     total_a_remettre_mra: Number(r.total_a_remettre_mra) || 0,
-    details: (Array.isArray(r.details) ? r.details : []).map(normaliserDetail),
+    details: (Array.isArray(r.details) ? r.details as Array<Record<string, unknown>> : []).map(normaliserDetail),
   }
 }
 
