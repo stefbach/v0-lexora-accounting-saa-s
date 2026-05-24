@@ -232,15 +232,15 @@ export default function MentionsLegalesPage() {
             <Field label={t('pub.ml.f_reg', locale)} value="C20173522" />
             <Field label={t('pub.ml.f_vat', locale)} value="27816949" />
             <Field label={t('pub.ml.f_seat', locale)} value={t('pub.ml.f_seat_v', locale)} />
-            <Field label={t('pub.ml.f_phone', locale)} value="+230 4687378" />
+            <Field label={t('pub.ml.f_phone', locale)} value="+230 5259 1043" />
             <Field
               label={t('pub.ml.f_email', locale)}
               value={
                 <a
-                  href="mailto:contact@lexora.finance"
+                  href="mailto:sbach@digital-data-solutions.net"
                   style={{ color: C.accent, textDecoration: "none", fontWeight: 600 }}
                 >
-                  contact@lexora.finance
+                  sbach@digital-data-solutions.net
                 </a>
               }
             />
@@ -361,7 +361,7 @@ export default function MentionsLegalesPage() {
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
-                href="mailto:contact@lexora.finance"
+                href="mailto:sbach@digital-data-solutions.net"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -376,10 +376,10 @@ export default function MentionsLegalesPage() {
                   boxShadow: `0 8px 20px -8px ${C.gold}80`,
                 }}
               >
-                contact@lexora.finance
+                sbach@digital-data-solutions.net
               </a>
               <a
-                href="mailto:dpo@lexora.finance"
+                href="mailto:sbach@digital-data-solutions.net"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -394,7 +394,7 @@ export default function MentionsLegalesPage() {
                   border: `1px solid ${C.borderDark}`,
                 }}
               >
-                dpo@lexora.finance
+                sbach@digital-data-solutions.net
               </a>
             </div>
           </div>
@@ -443,7 +443,7 @@ export default function MentionsLegalesPage() {
             <Link href="/tarifs" style={{ color: "#A8AFC7", textDecoration: "none" }}>
               {t('pub.ml.nav_pricing', locale)}
             </Link>
-            <a href="mailto:contact@lexora.finance" style={{ color: "#A8AFC7", textDecoration: "none" }}>
+            <a href="mailto:sbach@digital-data-solutions.net" style={{ color: "#A8AFC7", textDecoration: "none" }}>
               {t('pub.ml.nav_contact', locale)}
             </a>
           </div>

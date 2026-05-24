@@ -115,6 +115,7 @@ export async function runLettrage(
       .from("releves_bancaires")
       .select("id, transactions_json")
       .eq("societe_id", societe_id)
+      .is("superseded_by_id", null)
       .limit(500)
     const txIndex = new Map<string, string[]>()
     for (const r of releves || []) {

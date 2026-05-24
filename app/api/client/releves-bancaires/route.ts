@@ -60,6 +60,7 @@ export async function GET(request: Request) {
           "id, compte_bancaire_id, periode, date_debut, date_fin, solde_ouverture, solde_cloture, total_debits, total_credits, statut_rapprochement, transactions_json, created_at"
         )
         .eq("societe_id", societe_id)
+        .is("superseded_by_id", null)
         .order("date_fin", { ascending: false }),
     ])
 

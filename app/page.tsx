@@ -2027,7 +2027,7 @@ export default function HomePage() {
               &copy; {new Date().getFullYear()} LE<span style={{ color: "#D4AF37" }}>X</span>ORA — Digital Data Solutions Ltd. {locale === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}
             </p>
             <p className="text-xs" style={{ color: "#A8AFC7", fontFamily: "'Poppins', sans-serif" }}>
-              Bourdet Road, Grand Baie, Maurice · +230 4687378
+              Bourdet Road, Grand Baie, Maurice · +230 5259 1043
             </p>
           </div>
         </div>

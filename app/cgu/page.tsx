@@ -48,12 +48,12 @@ export default function CGUPage() {
           <LegalField label={t('pub.cgu.s2_l4', locale)} value="C20173522" />
           <LegalField label={t('pub.cgu.s2_l5', locale)} value="27816949" />
           <LegalField label={t('pub.cgu.s2_l6', locale)} value={t('pub.cgu.s2_l6_v', locale)} />
-          <LegalField label={t('pub.cgu.s2_l7', locale)} value="+230 4687378" />
+          <LegalField label={t('pub.cgu.s2_l7', locale)} value="+230 5259 1043" />
           <LegalField
             label={t('pub.cgu.s2_l8', locale)}
             value={
-              <a href="mailto:contact@lexora.finance" style={{ color: "#4191FF", textDecoration: "none", fontWeight: 600 }}>
-                contact@lexora.finance
+              <a href="mailto:sbach@digital-data-solutions.net" style={{ color: "#4191FF", textDecoration: "none", fontWeight: 600 }}>
+                sbach@digital-data-solutions.net
               </a>
             }
           />

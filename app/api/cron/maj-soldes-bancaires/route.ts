@@ -37,6 +37,7 @@ export async function GET(request: Request) {
         .from('releves_bancaires')
         .select('solde_cloture, date_fin')
         .eq('compte_bancaire_id', compte.id)
+        .is('superseded_by_id', null)
         .order('date_fin', { ascending: false })
         .limit(1)
         .single()

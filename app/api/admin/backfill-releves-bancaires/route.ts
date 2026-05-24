@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   // Pre-filter to docs that have NO releve yet.
   const docIds = (docs || []).map((d: any) => d.id)
   const { data: existingReleves } = await supabase
-    .from('releves_bancaires').select('document_id').in('document_id', docIds)
+    .from('releves_bancaires').select('document_id').in('document_id', docIds).is('superseded_by_id', null)
   const alreadyStored = new Set((existingReleves || []).map((r: any) => r.document_id))
 
   const candidates = (docs || []).filter((d: any) => !alreadyStored.has(d.id))

@@ -17,10 +17,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check PR has ticket reference
+        env:
+          # Pass via env to avoid bash injection from PR title/body (backticks,
+          # quotes, $(), etc.). GitHub-recommended pattern for untrusted input.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_BODY="${{ github.event.pull_request.body }}"
-
           # Check for ticket reference pattern: #123, TICKET-123, etc.
           if ! grep -E "(#[0-9]+|[A-Z]+-[0-9]+)" <<< "$PR_TITLE" && ! grep -E "(#[0-9]+|[A-Z]+-[0-9]+)" <<< "$PR_BODY"; then
             echo "ERROR: PR must reference a ticket/issue (e.g., #123 or TICKET-123)"

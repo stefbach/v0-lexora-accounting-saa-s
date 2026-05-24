@@ -310,7 +310,7 @@ async function cascadeDocuments(
     .from('dossiers').select('id').eq('societe_id', societe_id)
   const dossierIds = (dossiers || []).map((d: { id: string }) => d.id)
 
-  let q = admin.from('documents').select('id, storage_path, nom_fichier').in('id', ids)
+  let q = admin.from('documents').select('id, storage_path, nom_fichier, type_document').in('id', ids)
   if (dossierIds.length > 0) {
     q = q.or(`societe_id.eq.${societe_id},dossier_id.in.(${dossierIds.join(',')})`)
   } else {
@@ -349,22 +349,55 @@ async function cascadeDocuments(
     }
   }
 
-  // 2. Tables liées via document_id / ref_folio (réutilise la liste de bulk-delete)
-  const CHILD: Array<{ table: string; field: string }> = [
-    { table: 'releves_bancaires',      field: 'document_id' },
-    { table: 'factures',               field: 'document_id' },
-    { table: 'ecritures_comptables_v2', field: 'ref_folio' },
-    { table: 'ecritures_comptables_v2', field: 'document_id' },
-    { table: 'transactions_bancaires', field: 'document_lie_id' },
-    { table: 'messages_document',      field: 'document_id' },
-    { table: 'immobilisations',        field: 'document_id' },
-    { table: 'depenses',               field: 'document_id' },
+  // 2. Tables liées via document_id (toujours appliqué) ou ref_folio (UNIQUEMENT
+  //    pour les relevés bancaires).
+  //
+  //    Bug fix (cf. PR #237 sur cascadeBanque) : supprimer ecritures_comptables_v2
+  //    par `ref_folio IN (document_ids)` sans filtrer par societe_id ni journal
+  //    risque de wiper des écritures non-bancaires d'autres sociétés si un
+  //    ref_folio collisionne avec un uuid de document (cross-tenant + cross-
+  //    journal contamination). On scope donc :
+  //      - société (via .eq('societe_id', societe_id)) — sécurité multi-tenant
+  //      - journaux bancaires uniquement (BNQ/BQ/BANK)
+  //      - documents de type 'releve_bancaire' uniquement (les autres types
+  //        n'utilisent jamais leur uuid comme ref_folio bancaire)
+  //
+  //    Pour les autres types de document (facture, fiche_paie, etc.), la
+  //    suppression se fait via document_id uniquement.
+  const releveBancaireIds = scopedDocs
+    .filter((d: { type_document?: string | null }) => d.type_document === 'releve_bancaire')
+    .map((d: { id: string }) => d.id)
+
+  const CHILD: Array<{ table: string; field: string; ids: string[]; scopeSociete: boolean; journalsBancaires?: boolean }> = [
+    { table: 'releves_bancaires',       field: 'document_id',     ids: scopedIds,         scopeSociete: true },
+    { table: 'factures',                field: 'document_id',     ids: scopedIds,         scopeSociete: true },
+    { table: 'ecritures_comptables_v2', field: 'ref_folio',       ids: releveBancaireIds, scopeSociete: true, journalsBancaires: true },
+    { table: 'ecritures_comptables_v2', field: 'document_id',     ids: scopedIds,         scopeSociete: true },
+    { table: 'transactions_bancaires',  field: 'document_lie_id', ids: scopedIds,         scopeSociete: true },
+    { table: 'messages_document',       field: 'document_id',     ids: scopedIds,         scopeSociete: false },
+    { table: 'immobilisations',         field: 'document_id',     ids: scopedIds,         scopeSociete: true },
+    { table: 'depenses',                field: 'document_id',     ids: scopedIds,         scopeSociete: true },
   ]
-  for (const { table, field } of CHILD) {
-    const { count, error } = await admin.from(table).delete({ count: 'exact' }).in(field, scopedIds)
+  for (const { table, field, ids: childIds, scopeSociete, journalsBancaires } of CHILD) {
+    if (childIds.length === 0) continue
+    let del = admin.from(table).delete({ count: 'exact' }).in(field, childIds)
+    if (scopeSociete) del = del.eq('societe_id', societe_id)
+    if (journalsBancaires) del = del.in('journal', ['BNQ', 'BQ', 'BANK'])
+    const { count, error } = await del
     if (error) {
       const isMissing = /relation .* does not exist/i.test(error.message)
-      if (!isMissing) console.warn(`[cascade-delete] ${table}.${field}: ${error.message}`)
+      // Si societe_id n'existe pas sur cette table (legacy), retry sans scope
+      const missingSocieteCol = /column .*societe_id.* does not exist/i.test(error.message)
+      if (isMissing) continue
+      if (missingSocieteCol && scopeSociete) {
+        let retry = admin.from(table).delete({ count: 'exact' }).in(field, childIds)
+        if (journalsBancaires) retry = retry.in('journal', ['BNQ', 'BQ', 'BANK'])
+        const { count: c2, error: e2 } = await retry
+        if (e2) { console.warn(`[cascade-delete] ${table}.${field} retry: ${e2.message}`); continue }
+        counts[`${table}.${field}`] = (counts[`${table}.${field}`] || 0) + (c2 || 0)
+        continue
+      }
+      console.warn(`[cascade-delete] ${table}.${field}: ${error.message}`)
       continue
     }
     counts[`${table}.${field}`] = (counts[`${table}.${field}`] || 0) + (count || 0)
