@@ -366,7 +366,7 @@ async function insertEcriture(
     })
     .select('id').single()
   if (error) return null
-  return String((data as any).id)
+  return String((data as { id: string }).id)
 }
 
 export interface PaiementMraResult {
@@ -395,8 +395,8 @@ export async function marquerPayeMra(
   if (!paye) return { ok: false, erreur: 'Déclaration PAYE introuvable' }
   if (!csg) return { ok: false, erreur: 'Déclaration CSG introuvable' }
 
-  const p = paye as any
-  const c = csg as any
+  const p = paye as Record<string, unknown>
+  const c = csg as Record<string, unknown>
   const totalPaye = Number(p.total_paye_retenu) || 0
   const totalCsgNsf = (Number(c.total_csg_salarie) || 0)
     + (Number(c.total_csg_patronal) || 0)
@@ -518,8 +518,8 @@ export async function getDeclarationsAnnee(
       .order('periode', { ascending: false }),
   ])
   return {
-    paye: ((paye || []) as any[]).map(mapPaye),
-    csg: ((csg || []) as any[]).map(mapCsg),
+    paye: ((paye || []) as Array<Record<string, unknown>>).map(mapPaye),
+    csg: ((csg || []) as Array<Record<string, unknown>>).map(mapCsg),
   }
 }
 

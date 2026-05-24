@@ -447,9 +447,9 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                 <TableCell className="font-medium text-red-800">
                   {t('rha.b.depart.row_severance', locale)}
                   {/* G12 — lien calculateur dédié WRA S.70 */}
-                  {typeof (breakdown as any).employe_id === 'string' && (
+                  {typeof breakdown.employe_id === 'string' && (
                     <a
-                      href={`/rh/severance?employe_id=${(breakdown as any).employe_id}&date=${encodeURIComponent(breakdown?.date_depart || '')}`}
+                      href={`/rh/severance?employe_id=${breakdown.employe_id}&date=${encodeURIComponent(breakdown?.date_depart || '')}`}
                       className="ml-2 text-[11px] underline text-indigo-700"
                       title="Ouvrir le calculateur WRA S.70 avec pré-remplissage"
                     >
