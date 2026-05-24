@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 
@@ -9,6 +10,14 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * Données chiffrées seulement (montants) — le PDF est envoyé via /attachments dans Phase 3.
  */
 export async function GET(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'payslip.latest.get', async (ctx) => {
     if (!ctx.employe_id) {
       return { result: null, status: 'denied', error_msg: 'Aucun employé lié à votre compte' }

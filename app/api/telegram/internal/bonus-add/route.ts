@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/bonus-add
@@ -23,6 +24,9 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * Retour : { id, employe_id, employe_nom, periode, montant_mur, motif, prime_id }
  */
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'bonus.add', async (ctx, body) => {
     if (!hasRole(ctx, 'rh')) {
       return { result: null, status: 'denied', error_msg: 'Saisie de primes réservée aux RH et plus' }

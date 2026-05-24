@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * GET /api/telegram/internal/leave-pending?chat_id=<n>
@@ -13,6 +14,9 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * la source de vérité pour les demandes).
  */
 export async function GET(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'leave.pending.get', async (ctx) => {
     if (!hasRole(ctx, 'manager')) {
       return { result: null, status: 'denied', error_msg: 'Validation congés réservée aux managers et plus' }

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { scrapeBankAccount, detectAnomalies } from '@/lib/banks/scraper'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/bank-scrape
@@ -13,6 +14,9 @@ import { scrapeBankAccount, detectAnomalies } from '@/lib/banks/scraper'
  * Rôle minimum : direction (sensible : exposition balance).
  */
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'bank.scrape', async (ctx, body) => {
     if (!hasRole(ctx, 'direction')) {
       return { result: null, status: 'denied', error_msg: 'Scrape bancaire réservé à la direction' }

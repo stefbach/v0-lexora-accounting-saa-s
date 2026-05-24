@@ -3,6 +3,7 @@ import { withTelegramAuth, hasRole, type TelegramContext } from '@/lib/telegram/
 import { getAdminClient } from '@/lib/supabase/admin'
 import { callLexoraHeaders, getLexoraBaseUrl } from '@/lib/lexora-internal-auth'
 import {
+import { verifyHmac } from '@/lib/security/hmac-auth'
   extraireParametresFacture,
   type ContexteFactureIA,
   type MessageFactureIA,
@@ -88,6 +89,9 @@ async function buildContexte(societe_id: string): Promise<ContexteFactureIA> {
 }
 
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'invoice.create', async (ctx, body) => {
     if (!roleAllowed(ctx)) {
       return {

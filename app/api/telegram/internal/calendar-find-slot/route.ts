@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { googleCalendarFetch } from '@/lib/google/calendar-client'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/calendar-find-slot
@@ -42,6 +43,9 @@ function mergeBusy(busy: Busy[]): Busy[] {
 }
 
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'calendar.find_slot', async (ctx, body) => {
     const duration_min = Math.max(15, Math.min(480, Number(body?.duration_min) || 30))
     const days_ahead = Math.max(1, Math.min(30, Number(body?.days_ahead) || 7))

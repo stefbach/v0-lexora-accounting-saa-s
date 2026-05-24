@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { sendTelegramDocument, sendTelegramMessage } from '@/lib/telegram/auth'
@@ -19,6 +20,14 @@ import { sendTelegramDocument, sendTelegramMessage } from '@/lib/telegram/auth'
 const BUCKET = 'factures-pdf'
 
 export async function POST(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'invoice.send', async (ctx, body) => {
     if (!hasRole(ctx, 'comptable')) {
       return { result: null, status: 'denied', error_msg: 'Envoi de facture réservé aux comptables et plus' }

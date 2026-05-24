@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 
@@ -15,6 +16,14 @@ import { getAdminClient } from '@/lib/supabase/admin'
  *   - top_n    : pour les "top_*", défaut 10
  */
 export async function POST(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'report.get', async (ctx, body) => {
     if (!hasRole(ctx, 'comptable') && !hasRole(ctx, 'direction')) {
       return { result: null, status: 'denied', error_msg: 'Rapports réservés aux comptables et plus' }

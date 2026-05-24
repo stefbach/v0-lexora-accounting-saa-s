@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth, hasRole, type TelegramContext } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { callLexoraHeaders, getLexoraBaseUrl } from '@/lib/lexora-internal-auth'
@@ -105,6 +106,14 @@ async function buildContexte(societe_id: string): Promise<ContexteFactureIA> {
 }
 
 export async function POST(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'recurring_invoice.create', async (ctx, body) => {
     if (!roleAllowed(ctx)) {
       return {

@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { memoryRecall } from '@/lib/telegram/memory'
 
@@ -16,6 +17,14 @@ import { memoryRecall } from '@/lib/telegram/memory'
  * Auth : withTelegramAuth → societe_id + user_id.
  */
 export async function POST(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'memory.recall', async (ctx, body) => {
     const query = body?.query ? String(body.query).slice(0, 2000) : null
     const tags = Array.isArray(body?.tags) ? body.tags.map((t: any) => String(t)) : null

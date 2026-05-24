@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { getAccessibleSocieteIds } from '@/lib/supabase/assert-societe-access'
@@ -42,6 +43,14 @@ async function fetchAccessibleSocietes(userId: string, currentSocieteId: string)
 }
 
 export async function GET(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'societes.list', async (ctx) => {
     const societes = await fetchAccessibleSocietes(ctx.user_id, ctx.societe_id)
     return { result: { count: societes.length, societes } }
@@ -49,6 +58,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'societes.switch', async (ctx, body) => {
     const target_id = body?.societe_id ? String(body.societe_id).trim() : null
     const target_nom = body?.societe_nom ? String(body.societe_nom).trim() : null
