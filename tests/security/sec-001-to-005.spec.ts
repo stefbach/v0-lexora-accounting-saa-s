@@ -222,6 +222,54 @@ describe('SEC-001 — escalade privilèges via /api/admin/users/[id]/password', 
     expect(supabase._state.inserts[0].rows[0].actor_role).toBe('rh')
     expect(supabase._state.inserts[0].rows[0].target_role).toBe('employe')
   })
+
+  // ── WORM audit (V5-41 extension) ───────────────────────────────────────
+  // Garantit que la migration 413 verrouille password_reset_audit en
+  // append-only via RLS : UPDATE et DELETE sont refusés (`USING (false)`)
+  // et la SELECT est restreinte aux admins.
+  describe('audit log WORM (migration 413)', () => {
+    const migration413 = resolve(REPO_ROOT, 'supabase/migrations/413_password_reset_audit.sql')
+
+    it('migration 413 existe et active RLS', () => {
+      expect(existsSync(migration413)).toBe(true)
+      const sql = readFileSync(migration413, 'utf8')
+      expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS public\.password_reset_audit/)
+      expect(sql).toMatch(/ENABLE ROW LEVEL SECURITY/)
+    })
+
+    it('REJECTS UPDATE (policy USING(false))', () => {
+      const sql = readFileSync(migration413, 'utf8')
+      // Le policy d'UPDATE doit utiliser USING (false) → 0 row toujours.
+      expect(sql).toMatch(/password_reset_audit_no_update[\s\S]*?FOR UPDATE[\s\S]*?USING\s*\(\s*false\s*\)/)
+    })
+
+    it('REJECTS DELETE (policy USING(false))', () => {
+      const sql = readFileSync(migration413, 'utf8')
+      expect(sql).toMatch(/password_reset_audit_no_delete[\s\S]*?FOR DELETE[\s\S]*?USING\s*\(\s*false\s*\)/)
+    })
+
+    it('SELECT restreint aux rôles admin / super_admin', () => {
+      const sql = readFileSync(migration413, 'utf8')
+      expect(sql).toMatch(/password_reset_audit_select_admin[\s\S]*?FOR SELECT/)
+      expect(sql).toMatch(/role IN \('admin','super_admin'\)/)
+    })
+
+    it('indexes performance sur actor_id et target_id', () => {
+      const sql = readFileSync(migration413, 'utf8')
+      expect(sql).toMatch(/idx_password_reset_audit_actor/)
+      expect(sql).toMatch(/idx_password_reset_audit_target/)
+    })
+
+    it('colonnes obligatoires conformes au runtime route.ts', () => {
+      const sql = readFileSync(migration413, 'utf8')
+      for (const col of [
+        'actor_id', 'actor_role', 'target_id', 'target_role',
+        'target_email', 'target_societe_id', 'ip', 'user_agent', 'created_at',
+      ]) {
+        expect(sql).toMatch(new RegExp(`\\b${col}\\b`))
+      }
+    })
+  })
 })
 
 // ────────────────────────────────────────────────────────────────────────────

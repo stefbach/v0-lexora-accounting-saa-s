@@ -1,0 +1,541 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for lib/accounting/comptes-bancaires.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">lib/accounting</a> comptes-bancaires.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/80</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>1/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>1/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/80</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * Helper pour générer automatiquement le compte comptable d'un compte bancaire
+ * (numero du PCM Maurice 512xxx) selon la banque + la devise.
+ *
+ * Convention : 512&lt;BB&gt;&lt;D&gt;
+ *   BB = code banque (2 digits) — voir BANK_CODES (aligné sur banques_mauritius mig 211)
+ *   D  = code devise (1 digit)  — voir DEVISE_CODES
+ *
+ * Exemples :
+ *   getCompteComptable('Mauritius Commercial Bank', 'MUR') → '512100'
+ *   getCompteComptable('MCB', 'EUR')                       → '512101'
+ *   getCompteComptable('SBM', 'USD')                       → '512202'
+ *   getCompteComptable('HSBC Mauritius', 'EUR')            → '512801'
+ *   getCompteComptable('Banque inconnue', 'MUR')           → '512990'
+ *
+ * Utilisation : appelé dans le flow OCR upload (app/api/documents/upload/route.ts)
+ * lors de la détection d'un nouveau compte bancaire ou d'une mise à jour
+ * d'un compte existant qui n'a pas encore de compte_comptable. Permet une
+ * onboarding 100% automatique des comptes bancaires sans config manuelle.
+ *
+ * Si un client a plusieurs comptes dans la même banque + même devise, le 2e
+ * compte aura le MÊME compte_comptable. Le user devra alors discriminer
+ * manuellement (ex: 512100 → 512100A, 512100B). Cas rare en pratique.
+ */
+&nbsp;
+// ── Codes banque (2 digits) ──────────────────────────────────────────────────
+// Aligné sur la table banques_mauritius (migration 211). Toute nouvelle
+// banque ajoutée à banques_mauritius doit aussi être ajoutée ici.
+<span class="cstat-no" title="statement not covered" >const BANK_CODES: Record&lt;string, string&gt; = {</span>
+  // Banques mauriciennes commerciales
+<span class="cstat-no" title="statement not covered" >  MCB: '10',          // Mauritius Commercial Bank</span>
+<span class="cstat-no" title="statement not covered" >  SBM: '20',          // State Bank of Mauritius</span>
+<span class="cstat-no" title="statement not covered" >  ABSA: '30',         // ABSA Bank Mauritius (ex-Barclays)</span>
+<span class="cstat-no" title="statement not covered" >  BANKONE: '40',      // Bank One</span>
+<span class="cstat-no" title="statement not covered" >  AFRASIA: '50',      // AfrAsia Bank</span>
+<span class="cstat-no" title="statement not covered" >  MAUBANK: '60',      // MauBank</span>
+<span class="cstat-no" title="statement not covered" >  SCB: '70',          // Standard Chartered</span>
+<span class="cstat-no" title="statement not covered" >  HSBC: '80',         // HSBC Mauritius</span>
+<span class="cstat-no" title="statement not covered" >  SBI: '90',          // State Bank of India (Mauritius)</span>
+<span class="cstat-no" title="statement not covered" >  BOB: '91',          // Bank of Baroda</span>
+<span class="cstat-no" title="statement not covered" >  ABC: '92',          // ABC Banking Corporation</span>
+<span class="cstat-no" title="statement not covered" >  BNP: '93',          // BNP Paribas Mauritius</span>
+<span class="cstat-no" title="statement not covered" >  CITI: '94',         // Citibank Mauritius</span>
+<span class="cstat-no" title="statement not covered" >  HABIB: '95',        // Habib Bank</span>
+<span class="cstat-no" title="statement not covered" >  INVESTEC: '96',     // Investec</span>
+<span class="cstat-no" title="statement not covered" >  BCP: '97',          // Banque de Commerce et de Placements</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+// Code générique pour banque non identifiée
+<span class="cstat-no" title="statement not covered" >const BANK_CODE_UNKNOWN = '99'</span>
+&nbsp;
+// ── Codes devise (1 digit) ───────────────────────────────────────────────────
+<span class="cstat-no" title="statement not covered" >const DEVISE_CODES: Record&lt;string, string&gt; = {</span>
+<span class="cstat-no" title="statement not covered" >  MUR: '0',  // Roupie mauricienne (devise locale)</span>
+<span class="cstat-no" title="statement not covered" >  EUR: '1',</span>
+<span class="cstat-no" title="statement not covered" >  USD: '2',</span>
+<span class="cstat-no" title="statement not covered" >  GBP: '3',</span>
+<span class="cstat-no" title="statement not covered" >  AUD: '4',</span>
+<span class="cstat-no" title="statement not covered" >  CAD: '5',</span>
+<span class="cstat-no" title="statement not covered" >  CHF: '6',</span>
+<span class="cstat-no" title="statement not covered" >  ZAR: '7',</span>
+<span class="cstat-no" title="statement not covered" >  INR: '8',</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+// Code générique pour devise non identifiée
+<span class="cstat-no" title="statement not covered" >const DEVISE_CODE_UNKNOWN = '9'</span>
+&nbsp;
+/**
+ * Normalise le nom d'une banque pour le matching (uppercase, alphanumeric only).
+ * Ex: "Mauritius Commercial Bank Ltd." → "MAURITIUSCOMMERCIALBANKLTD"
+ */
+<span class="cstat-no" title="statement not covered" >function normalizeBankName(banque: string): string {</span>
+<span class="cstat-no" title="statement not covered" >  return banque.toUpperCase().replace(/[^A-Z0-9]/g, '')</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/**
+ * Détecte le code banque (2 digits) depuis un nom potentiellement non normé.
+ * Cherche d'abord les codes exacts (ex: "MCB"), puis les noms longs
+ * ("MAURITIUSCOMMERCIALBANK") en commençant par les plus spécifiques.
+ *
+ * Retourne BANK_CODE_UNKNOWN si aucune correspondance.
+ */
+<span class="cstat-no" title="statement not covered" >function detectBankCode(banque: string | null | undefined): string {</span>
+<span class="cstat-no" title="statement not covered" >  if (!banque) return BANK_CODE_UNKNOWN</span>
+<span class="cstat-no" title="statement not covered" >  const norm = normalizeBankName(banque)</span>
+<span class="cstat-no" title="statement not covered" >  if (!norm) return BANK_CODE_UNKNOWN</span>
+&nbsp;
+  // Match avec patterns spécifiques (par ordre de priorité)
+  // On utilise des aliases connus pour gérer les variations de nommage par OCR
+<span class="cstat-no" title="statement not covered" >  const PATTERNS: Array&lt;[string[], string]&gt; = [</span>
+<span class="cstat-no" title="statement not covered" >    [['MAURITIUSCOMMERCIALBANK', 'MCB'], BANK_CODES.MCB],</span>
+<span class="cstat-no" title="statement not covered" >    [['STATEBANKOFMAURITIUS', 'SBM'], BANK_CODES.SBM],</span>
+<span class="cstat-no" title="statement not covered" >    [['ABSABANK', 'BARCLAYSMAURITIUS', 'BARCLAYS', 'ABSA'], BANK_CODES.ABSA],</span>
+<span class="cstat-no" title="statement not covered" >    [['BANKONE', 'BANK1'], BANK_CODES.BANKONE],</span>
+<span class="cstat-no" title="statement not covered" >    [['AFRASIA', 'AFRASIABANK'], BANK_CODES.AFRASIA],</span>
+<span class="cstat-no" title="statement not covered" >    [['MAUBANK'], BANK_CODES.MAUBANK],</span>
+<span class="cstat-no" title="statement not covered" >    [['STANDARDCHARTERED', 'SCB', 'STANCHART'], BANK_CODES.SCB],</span>
+<span class="cstat-no" title="statement not covered" >    [['HSBC', 'HSBCMAURITIUS'], BANK_CODES.HSBC],</span>
+<span class="cstat-no" title="statement not covered" >    [['STATEBANKOFINDIA', 'SBIMAURITIUS', 'SBI'], BANK_CODES.SBI],</span>
+<span class="cstat-no" title="statement not covered" >    [['BANKOFBARODA', 'BOB'], BANK_CODES.BOB],</span>
+<span class="cstat-no" title="statement not covered" >    [['ABCBANKING', 'ABCBANK', 'ABC'], BANK_CODES.ABC],</span>
+<span class="cstat-no" title="statement not covered" >    [['BNPPARIBAS', 'BNP'], BANK_CODES.BNP],</span>
+<span class="cstat-no" title="statement not covered" >    [['CITIBANK', 'CITI'], BANK_CODES.CITI],</span>
+<span class="cstat-no" title="statement not covered" >    [['HABIBBANK', 'HABIB'], BANK_CODES.HABIB],</span>
+<span class="cstat-no" title="statement not covered" >    [['INVESTEC'], BANK_CODES.INVESTEC],</span>
+<span class="cstat-no" title="statement not covered" >    [['BCP', 'BANQUEDECOMMERCE'], BANK_CODES.BCP],</span>
+<span class="cstat-no" title="statement not covered" >  ]</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  for (const [aliases, code] of PATTERNS) {</span>
+<span class="cstat-no" title="statement not covered" >    for (const alias of aliases) {</span>
+<span class="cstat-no" title="statement not covered" >      if (norm.includes(alias)) return code</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  return BANK_CODE_UNKNOWN</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/**
+ * Détecte le code devise (1 digit) depuis une chaîne potentiellement non normée.
+ * Retourne DEVISE_CODE_UNKNOWN si la devise n'est pas identifiée.
+ */
+<span class="cstat-no" title="statement not covered" >function detectDeviseCode(devise: string | null | undefined): string {</span>
+<span class="cstat-no" title="statement not covered" >  if (!devise) return DEVISE_CODES.MUR // Fallback raisonnable : MUR (devise locale)</span>
+<span class="cstat-no" title="statement not covered" >  const norm = devise.toUpperCase().replace(/[^A-Z]/g, '')</span>
+<span class="cstat-no" title="statement not covered" >  return DEVISE_CODES[norm] || DEVISE_CODE_UNKNOWN</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/**
+ * Génère le compte comptable PCM (512xxx) pour un compte bancaire selon la
+ * banque et la devise. Garantit toujours un format 6 digits commençant par
+ * 512 — jamais NULL, jamais vide.
+ *
+ * @param banque  Nom de la banque (ex: "Mauritius Commercial Bank", "MCB", "SBM")
+ * @param devise  Code devise ISO 4217 (ex: "MUR", "EUR", "USD")
+ * @returns       Compte comptable 6 digits (ex: "512100", "512801", "512990")
+ */
+<span class="cstat-no" title="statement not covered" >export function getCompteComptable(</span>
+<span class="cstat-no" title="statement not covered" >  banque: string | null | undefined,</span>
+<span class="cstat-no" title="statement not covered" >  devise: string | null | undefined,</span>
+<span class="cstat-no" title="statement not covered" >): string {</span>
+<span class="cstat-no" title="statement not covered" >  const bankCode = detectBankCode(banque)</span>
+<span class="cstat-no" title="statement not covered" >  const deviseCode = detectDeviseCode(devise)</span>
+<span class="cstat-no" title="statement not covered" >  return `512${bankCode}${deviseCode}`</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/**
+ * Vérifie si un compte_comptable est dans le format canonique 512xxx généré
+ * par getCompteComptable. Utile pour identifier les comptes legacy à backfiller.
+ */
+<span class="cstat-no" title="statement not covered" >export function isCanonicalCompteComptable(compteComptable: string | null | undefined): boolean {</span>
+<span class="cstat-no" title="statement not covered" >  if (!compteComptable) return false</span>
+<span class="cstat-no" title="statement not covered" >  return /^512\d{3}$/.test(compteComptable)</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-05-24T23:10:58.038Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    
