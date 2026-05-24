@@ -736,13 +736,13 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
               return (
                 <div key={n} className="grid grid-cols-[1fr_140px] gap-2">
                   <Input
-                    value={(e as any)[libKey]||""}
+                    value={(e as unknown as Record<string, string | number | null>)[libKey]||""}
                     onChange={ev=>u(libKey,ev.target.value)}
                     placeholder={`Libellé prime ${n} (ex: Electricity, Loyer...)`}
                   />
                   <Input
                     type="number" min="0" step="0.01"
-                    value={(e as any)[montantKey]??""}
+                    value={(e as unknown as Record<string, string | number | null>)[montantKey]??""}
                     onChange={ev=>u(montantKey,ev.target.value)}
                     placeholder="Montant MUR"
                     className="font-mono"

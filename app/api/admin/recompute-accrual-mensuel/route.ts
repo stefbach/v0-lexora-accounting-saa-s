@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       .select('role')
       .eq('id', user.id)
       .maybeSingle()
-    if (!prof || !['admin', 'super_admin'].includes((prof as { role?: string }).role)) {
+    if (!prof || !['admin', 'super_admin'].includes((prof as { role?: string }).role || '')) {
       return NextResponse.json({ error: 'Accès admin requis' }, { status: 403 })
     }
 

@@ -95,6 +95,7 @@ export default function MapComponent({ positions }: { positions: Position[] }) {
     // Add a note for employees without GPS
     const sansGPS = positions.filter(p => !p.latitude || !p.longitude)
     if (sansGPS.length > 0 && markers.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- L.control est typed comme namespace mais peut être invoqué comme fonction (API Leaflet historique)
       const corner = (L.control as any)({ position: "bottomleft" })
       corner.onAdd = () => {
         const div = L.DomUtil.create("div")

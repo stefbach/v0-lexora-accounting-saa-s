@@ -60,7 +60,7 @@ async function ensurePointageActif(
       .eq('id', userId)
       .maybeSingle()
     const bypass = ['admin', 'super_admin', 'rh', 'rh_manager', 'manager', 'team_leader']
-    if (!prof || !bypass.includes((prof as { role?: string }).role)) {
+    if (!prof || !bypass.includes((prof as { role?: string }).role || '')) {
       return {
         ok: false,
         status: 403,

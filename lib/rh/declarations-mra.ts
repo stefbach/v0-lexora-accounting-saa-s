@@ -168,12 +168,13 @@ export async function agregerDeclarationsMraMois(
   }
 }
 
-function normaliserDetail(d: any): DetailEmployeMra {
+function normaliserDetail(raw: Record<string, unknown>): DetailEmployeMra {
+  const d = raw as Record<string, unknown>
   return {
     employe_id: String(d.employe_id),
     nom: String(d.nom || '').trim(),
-    nic: d.nic || null,
-    tan: d.tan || null,
+    nic: (d.nic as string | null) || null,
+    tan: (d.tan as string | null) || null,
     basic: Number(d.basic) || 0,
     salaire_brut: Number(d.salaire_brut) || 0,
     overtime: Number(d.overtime) || 0,
@@ -185,7 +186,7 @@ function normaliserDetail(d: any): DetailEmployeMra {
     training_levy: Number(d.training_levy) || 0,
     prgf: Number(d.prgf) || 0,
     prgf_eligible: Boolean(d.prgf_eligible),
-    prgf_motif_exemption: d.prgf_motif_exemption || null,
+    prgf_motif_exemption: (d.prgf_motif_exemption as string | null) || null,
   }
 }
 
@@ -335,7 +336,7 @@ async function resolveDossierId(supabase: SupabaseLike, societeId: string): Prom
     .eq('societe_id', societeId)
     .order('created_at', { ascending: false })
     .limit(1).maybeSingle()
-  return (data as any)?.id || null
+  return (data as { id?: string } | null)?.id || null
 }
 
 async function insertEcriture(
