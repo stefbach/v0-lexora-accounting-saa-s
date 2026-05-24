@@ -37,12 +37,12 @@ export default function CGVPage() {
         <p style={{ margin: "0 0 12px" }} dangerouslySetInnerHTML={{ __html: t('pub.cgv.s0_p1', locale) }} />
         <dl style={{ margin: 0 }}>
           <LegalField label={t('pub.cgv.l_vat', locale)} value="27816949" />
-          <LegalField label={t('pub.cgv.l_phone', locale)} value="+230 4687378" />
+          <LegalField label={t('pub.cgv.l_phone', locale)} value="+230 5259 1043" />
           <LegalField
             label={t('pub.cgv.l_email', locale)}
             value={
-              <a href="mailto:contact@lexora.finance" style={{ color: "#4191FF", textDecoration: "none", fontWeight: 600 }}>
-                contact@lexora.finance
+              <a href="mailto:sbach@digital-data-solutions.net" style={{ color: "#4191FF", textDecoration: "none", fontWeight: 600 }}>
+                sbach@digital-data-solutions.net
               </a>
             }
           />

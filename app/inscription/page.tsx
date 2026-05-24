@@ -392,7 +392,7 @@ export default function InscriptionPage() {
                   Retour à l'accueil
                 </Link>
                 <a
-                  href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'contact@lexora.finance'}`}
+                  href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'sbach@digital-data-solutions.net'}`}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-[#0B0F2E] text-white rounded-lg text-sm hover:bg-[#1a2659]"
                 >
                   <Mail className="h-3.5 w-3.5" /> Nous contacter

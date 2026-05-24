@@ -41,8 +41,8 @@ export default function ProtectionDonneesPage() {
           <LegalField
             label={t('pub.pd.l_dpo', locale)}
             value={
-              <a href="mailto:dpo@lexora.finance" style={{ color: "#4191FF", textDecoration: "none", fontWeight: 600 }}>
-                dpo@lexora.finance
+              <a href="mailto:sbach@digital-data-solutions.net" style={{ color: "#4191FF", textDecoration: "none", fontWeight: 600 }}>
+                sbach@digital-data-solutions.net
               </a>
             }
           />
