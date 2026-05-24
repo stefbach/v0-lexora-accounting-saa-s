@@ -157,7 +157,7 @@ export default function BilanOfficielPage() {
         } else {
           setBilan(data as BilanPayload)
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) {
           toast.error("Erreur chargement bilan")
           setBilan(null)

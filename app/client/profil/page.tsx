@@ -83,7 +83,7 @@ export default function ProfilPage() {
       } else {
         toast.success(t('core.prof.save_changes', locale))
       }
-    } catch (e) {
+    } catch {
       toast.error("Erreur sauvegarde")
     } finally {
       setSaving(false)
@@ -106,7 +106,7 @@ export default function ProfilPage() {
         setNewPwd("")
         setPwdOpen(false)
       }
-    } catch (e) {
+    } catch {
       toast.error("Erreur changement mot de passe")
     } finally {
       setPwdSaving(false)

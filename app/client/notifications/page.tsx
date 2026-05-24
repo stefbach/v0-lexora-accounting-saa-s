@@ -115,7 +115,7 @@ export default function NotificationsPage() {
             }))
           )
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) {
           toast.error("Erreur chargement notifications")
           setNotifications([])
