@@ -566,13 +566,28 @@ export async function PATCH(request: Request) {
 
     updates.updated_at = new Date().toISOString()
 
-    const { data, error } = await supabase
-      .from('factures')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
-
+    // Update résilient — calqué sur la logique POST : si une colonne envoyée
+    // par le client n'existe pas en DB (cas typique : accent_color,
+    // contre_valeur_mur, ou champs récents pas encore migrés sur cet env),
+    // on la retire et on retente. Évite que tout le PATCH échoue à cause
+    // d'un champ optionnel inconnu.
+    const tryUpdate = async (payload: Record<string, any>) =>
+      supabase.from('factures').update(payload).eq('id', id).select().single()
+    let updateResult = await tryUpdate(updates)
+    // Boucle de retry — jusqu'à 5 colonnes inconnues retirées avant
+    // d'abandonner (évite une boucle infinie sur une vraie erreur).
+    for (let i = 0; i < 5 && updateResult.error; i++) {
+      const code = (updateResult.error as { code?: string }).code
+      const msg = updateResult.error.message || ''
+      const isSchemaError = code === '42703' || /column.*(not exist|schema cache|not found)/i.test(msg)
+      if (!isSchemaError) break
+      const missingCol = msg.match(/'([a-zA-Z_]+)'/)?.[1]
+      if (!missingCol || !(missingCol in updates)) break
+      console.warn(`[factures PATCH] colonne "${missingCol}" manquante en DB, retrait et retry.`)
+      delete updates[missingCol]
+      updateResult = await tryUpdate(updates)
+    }
+    const { data, error } = updateResult
     if (error) throw error
 
     // Auto-create ecritures when transitioning from brouillon to en_attente
@@ -604,7 +619,14 @@ export async function PATCH(request: Request) {
   } catch (e: unknown) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    // Extraction du vrai message (Supabase, Postgres, ou Error JS) pour
+    // que le client voie quelque chose d'actionnable plutôt qu'un 'Erreur'
+    // opaque (même logique que POST).
+    const err = e as any
+    const message = err?.message || err?.error_description || err?.error || err?.hint || err?.details || (typeof err === 'string' ? err : null) || 'Erreur inattendue'
+    const code = err?.code
+    console.error('[factures PATCH] erreur:', { code, message, details: err?.details, hint: err?.hint })
+    return NextResponse.json({ error: message, code, details: err?.details, hint: err?.hint }, { status: 500 })
   }
 }
 

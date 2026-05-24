@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -77,7 +77,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><Label>{label}</Label>{children}</div>
 }
 
+// Wrapper Suspense — requis par Next.js App Router pour useSearchParams
+// dans un client component. Sans ça, le build avertit et certains cas
+// (édition d'une facture via ?id=) peuvent ne pas hydrater correctement.
 export default function NouvelleFacturePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-sm text-gray-500">Chargement…</div>}>
+      <NouvelleFactureContent />
+    </Suspense>
+  )
+}
+
+function NouvelleFactureContent() {
   const locale = getLocale()
   const router = useRouter()
   const { societeId } = useSocieteActive()
