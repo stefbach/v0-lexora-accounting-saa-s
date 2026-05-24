@@ -225,25 +225,71 @@ export async function POST(request: Request) {
       }
     } else {
       // Numéro fourni par l'utilisateur (souvent une valeur pré-remplie
-      // côté front à partir du compteur DB). On avance le compteur DB
-      // pour refléter la consommation et éviter que le PROCHAIN appel
-      // ne réutilise le même numéro → bug observé : "numérotation qui
-      // tourne en boucle, même INV-0001 réapparaît à chaque sauvegarde".
-      const match = String(finalNumero).match(/(\d+)$/)
-      if (match) {
-        const used = parseInt(match[1], 10)
-        if (!Number.isNaN(used)) {
-          const counterRes = await supabase
-            .from('societes')
-            .select(cfg.numCol)
-            .eq('id', societe_id)
+      // côté front à partir du compteur DB). Deux risques :
+      //  1) le numéro existe déjà en DB (compteur désynchronisé, legacy
+      //     non comptabilisé, plusieurs onglets ouverts en parallèle…)
+      //     → on régénère automatiquement plutôt que de renvoyer 409.
+      //  2) on avance le compteur DB pour que le PROCHAIN appel ne
+      //     réutilise pas le même numéro.
+      const checkRes = await supabase
+        .from('factures')
+        .select('id')
+        .eq('societe_id', societe_id)
+        .eq('numero_facture', finalNumero)
+        .eq('type_facture', 'client')
+        .limit(1)
+        .maybeSingle()
+      if (checkRes.data) {
+        // Collision détectée → trouver le prochain numéro libre en
+        // s'appuyant sur le compteur DB s'il est dispo, sinon en
+        // parsant le dernier numéro existant.
+        const counterRes = await supabase
+          .from('societes')
+          .select(`${cfg.prefCol}, ${cfg.numCol}`)
+          .eq('id', societe_id)
+          .maybeSingle()
+        const row = (counterRes.data as Record<string, any> | null) || {}
+        const prefixe = (row[cfg.prefCol] as string) || cfg.defaultPrefix
+        const matchUser = String(finalNumero).match(/(\d+)$/)
+        const usedNum = matchUser ? parseInt(matchUser[1], 10) : 0
+        let next = Math.max(Number(row[cfg.numCol]) || 0, usedNum + 1)
+        // Avance jusqu'à trouver un numéro non utilisé (au cas où plusieurs
+        // numéros consécutifs seraient déjà en DB).
+        for (let i = 0; i < 50; i++) {
+          const candidate = `${prefixe}${String(next).padStart(4, '0')}`
+          const exists = await supabase
+            .from('factures')
+            .select('id')
+            .eq('societe_id', societe_id)
+            .eq('numero_facture', candidate)
+            .eq('type_facture', 'client')
+            .limit(1)
             .maybeSingle()
-          const current = Number((counterRes.data as Record<string, any> | null)?.[cfg.numCol]) || 0
-          if (used + 1 > current) {
-            await supabase
+          if (!exists.data) { finalNumero = candidate; break }
+          next++
+        }
+        await supabase
+          .from('societes')
+          .update({ [cfg.numCol]: next + 1 })
+          .eq('id', societe_id)
+      } else {
+        // Pas de collision → on avance simplement le compteur si besoin.
+        const match = String(finalNumero).match(/(\d+)$/)
+        if (match) {
+          const used = parseInt(match[1], 10)
+          if (!Number.isNaN(used)) {
+            const counterRes = await supabase
               .from('societes')
-              .update({ [cfg.numCol]: used + 1 })
+              .select(cfg.numCol)
               .eq('id', societe_id)
+              .maybeSingle()
+            const current = Number((counterRes.data as Record<string, any> | null)?.[cfg.numCol]) || 0
+            if (used + 1 > current) {
+              await supabase
+                .from('societes')
+                .update({ [cfg.numCol]: used + 1 })
+                .eq('id', societe_id)
+            }
           }
         }
       }
