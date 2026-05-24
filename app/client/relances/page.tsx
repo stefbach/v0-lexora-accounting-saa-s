@@ -399,9 +399,12 @@ export default function ClientRelancesPage() {
               <TabsContent value="apreleance" className="space-y-2">
                 {factures.length === 0 ? (
                   <Card>
-                    <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                      <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-500" />
-                      {t('inv.rel.empty_pending', locale)}
+                    <CardContent className="p-0">
+                      <EmptyState
+                        icon={CheckCircle2}
+                        title={t('inv.rel.empty_pending', locale)}
+                        size="md"
+                      />
                     </CardContent>
                   </Card>
                 ) : (
@@ -482,8 +485,12 @@ export default function ClientRelancesPage() {
               <TabsContent value="historique">
                 {historique.length === 0 ? (
                   <Card>
-                    <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                      {t('inv.rel.empty_history', locale)}
+                    <CardContent className="p-0">
+                      <EmptyState
+                        icon={Clock}
+                        title={t('inv.rel.empty_history', locale)}
+                        size="md"
+                      />
                     </CardContent>
                   </Card>
                 ) : (

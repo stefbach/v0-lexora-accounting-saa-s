@@ -614,13 +614,13 @@ export default function ParametresRHPage() {
                   return (
                     <tr key={o.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <td className="px-4 py-2">
-                        {editing ? <Input value={draftOff.code || ""} onChange={e => setDraftOff(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" /> : o.code}
+                        {editing ? <Input aria-label={`${t('hr.params.code', locale)} ${o.nom}`} value={draftOff.code || ""} onChange={e => setDraftOff(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" /> : o.code}
                       </td>
                       <td className="px-4 py-2">
-                        {editing ? <Input value={draftOff.nom || ""} onChange={e => setDraftOff(p => ({ ...p, nom: e.target.value }))} className="h-8" /> : o.nom}
+                        {editing ? <Input aria-label={`${t('hr.params.name', locale)} ${o.nom}`} value={draftOff.nom || ""} onChange={e => setDraftOff(p => ({ ...p, nom: e.target.value }))} className="h-8" /> : o.nom}
                       </td>
                       <td className="px-4 py-2">
-                        {editing ? <Input value={draftOff.adresse || ""} onChange={e => setDraftOff(p => ({ ...p, adresse: e.target.value }))} className="h-8" /> : (o.adresse || <span className="text-gray-400">--</span>)}
+                        {editing ? <Input aria-label={`${t('hr.params.address', locale)} ${o.nom}`} value={draftOff.adresse || ""} onChange={e => setDraftOff(p => ({ ...p, adresse: e.target.value }))} className="h-8" /> : (o.adresse || <span className="text-gray-400">--</span>)}
                       </td>
                       <td className="px-4 py-2 text-right">
                         <InlineActions editing={editing} busy={busy}
@@ -682,11 +682,11 @@ export default function ParametresRHPage() {
               <tbody>
                 {editLtId === '__new__' && (
                   <tr className="bg-amber-50">
-                    <td className="px-4 py-2"><Input value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" placeholder="AL" /></td>
-                    <td className="px-4 py-2"><Input value={draftLt.nom || ""} onChange={e => setDraftLt(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Annual leave" /></td>
-                    <td className="px-4 py-2 text-center"><Input type="number" value={draftLt.daysPerYear ?? 0} onChange={e => setDraftLt(p => ({ ...p, daysPerYear: Number(e.target.value) }))} className="h-8 w-20 mx-auto" /></td>
-                    <td className="px-4 py-2 text-center"><Switch checked={draftLt.requiresCertificate ?? false} onCheckedChange={v => setDraftLt(p => ({ ...p, requiresCertificate: v }))} /></td>
-                    <td className="px-4 py-2 text-center"><Switch checked={draftLt.paid ?? true} onCheckedChange={v => setDraftLt(p => ({ ...p, paid: v }))} /></td>
+                    <td className="px-4 py-2"><Input aria-label={`${t('hr.params.code', locale)} type de congé`} value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" placeholder="AL" /></td>
+                    <td className="px-4 py-2"><Input aria-label={`${t('hr.params.name', locale)} type de congé`} value={draftLt.nom || ""} onChange={e => setDraftLt(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Annual leave" /></td>
+                    <td className="px-4 py-2 text-center"><Input aria-label={t('hr.params.days_per_year', locale)} type="number" value={draftLt.daysPerYear ?? 0} onChange={e => setDraftLt(p => ({ ...p, daysPerYear: Number(e.target.value) }))} className="h-8 w-20 mx-auto" /></td>
+                    <td className="px-4 py-2 text-center"><Switch aria-label={t('hr.params.certificate', locale)} checked={draftLt.requiresCertificate ?? false} onCheckedChange={v => setDraftLt(p => ({ ...p, requiresCertificate: v }))} /></td>
+                    <td className="px-4 py-2 text-center"><Switch aria-label={t('hr.params.paid', locale)} checked={draftLt.paid ?? true} onCheckedChange={v => setDraftLt(p => ({ ...p, paid: v }))} /></td>
                     <td className="px-4 py-2 text-center"><span className="text-xs text-amber-600">société</span></td>
                     <td className="px-4 py-2 text-right">
                       <InlineActions editing busy={busy}

@@ -54,7 +54,7 @@ import {
   Save,
   Trash2,
 } from 'lucide-react'
-import { toast } from 'sonner'
+import { notifySuccess, notifyError, notifyWarning } from "@/lib/utils/toast"
 
 import type {
   OvertimeAlerteSemaine,

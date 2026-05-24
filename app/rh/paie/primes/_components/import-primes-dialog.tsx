@@ -54,6 +54,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { notifySuccess, notifyError, notifyWarning } from "@/lib/utils/toast"
 import * as XLSX from 'xlsx'
 
 import {
@@ -387,15 +388,15 @@ export function ImportPrimesDialog({
         const nbBloques = Array.isArray(data.bulletins_bloques) ? data.bulletins_bloques.length : 0
         const nbImp = data.nb_importes ?? 0
         if (nbBloques > 0) {
-          toast.warning(
+          notifyWarning(
             `${nbImp} prime(s) importée(s). ${nbBloques} bulletin(s) verrouillé(s) ignoré(s) — déverrouillez avant de réessayer.`,
           )
         } else if (Array.isArray(data.warnings) && data.warnings.length > 0) {
-          toast.success(
+          notifySuccess(
             `${nbImp} prime(s) importée(s). ${data.warnings.length} avertissement(s) non bloquant(s).`,
           )
         } else {
-          toast.success(`${nbImp} prime(s) importée(s) avec succès.`)
+          notifySuccess(`${nbImp} prime(s) importée(s) avec succès.`)
         }
         onImportSuccess?.()
         handleOpenChange(false)
@@ -405,19 +406,19 @@ export function ImportPrimesDialog({
       if (res.status === 400) {
         if (Array.isArray(data.details) && data.details.length > 0) {
           const first = data.details[0]
-          toast.error(`Format invalide : ${first.path} — ${first.error}`)
+          notifyError('Format invalide', `${first.path} — ${first.error}`)
         } else {
-          toast.error(data.error ?? 'Validation échouée')
+          notifyError('Importer primes', data.error ?? 'Validation échouée')
         }
       } else if (res.status === 401) {
-        toast.error('Session expirée — reconnectez-vous.')
+        notifyError('Importer primes', 'Session expirée — reconnectez-vous')
       } else if (res.status === 403) {
-        toast.error("Accès refusé — vous n'avez pas le rôle requis.")
+        notifyError('Importer primes', "Accès refusé — rôle requis manquant")
       } else {
-        toast.error(data.error ?? "Erreur lors de l'import des primes.")
+        notifyError('Importer primes', data.error ?? "Erreur inconnue")
       }
-    } catch {
-      toast.error('Erreur réseau lors de l\'import.')
+    } catch (e: unknown) {
+      notifyError('Importer primes', e instanceof Error ? e : 'Erreur réseau')
     } finally {
       setSubmitting(false)
     }

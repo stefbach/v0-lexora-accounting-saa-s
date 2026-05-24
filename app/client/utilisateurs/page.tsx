@@ -16,6 +16,7 @@ import {
   Key, Eye, EyeOff, AlertTriangle, Loader2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from "@/lib/i18n"
 
