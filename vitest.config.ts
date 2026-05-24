@@ -23,6 +23,8 @@ export default defineConfig({
       'lib/**/*.test.tsx',
       'tests/**/*.test.ts',
       'tests/**/*.test.tsx',
+      'tests/**/*.spec.ts',
+      'tests/**/*.spec.tsx',
     ],
     exclude: [
       'node_modules',

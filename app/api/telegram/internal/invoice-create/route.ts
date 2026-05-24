@@ -3,11 +3,11 @@ import { withTelegramAuth, hasRole, type TelegramContext } from '@/lib/telegram/
 import { getAdminClient } from '@/lib/supabase/admin'
 import { callLexoraHeaders, getLexoraBaseUrl } from '@/lib/lexora-internal-auth'
 import {
-import { verifyHmac } from '@/lib/security/hmac-auth'
   extraireParametresFacture,
   type ContexteFactureIA,
   type MessageFactureIA,
 } from '@/lib/factures/ia-assistant'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/invoice-create
