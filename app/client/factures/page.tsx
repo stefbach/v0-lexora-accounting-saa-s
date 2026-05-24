@@ -90,6 +90,13 @@ function getStatutLabels(locale: Locale): Record<string, { label: string; color:
     retard: { label: t('inv.fac.status_overdue', locale), color: "bg-red-100 text-red-700 border-red-300" },
     en_attente: { label: t('inv.fac.status_pending', locale), color: "bg-amber-100 text-amber-700 border-amber-300" },
     annule: { label: t('inv.fac.status_cancelled', locale), color: "bg-gray-100 text-gray-600 border-gray-300" },
+    // Statuts ajoutés mig 411 — sans ces entrées, une facture brouillon
+    // s'affichait avec le label "En attente" (fallback) → utilisateur ne
+    // distinguait plus brouillon vs finalisée dans la liste.
+    brouillon: { label: t('inv.fac.status_draft', locale), color: "bg-slate-100 text-slate-600 border-slate-300" },
+    devis: { label: t('inv.fac.status_quote', locale), color: "bg-purple-100 text-purple-700 border-purple-300" },
+    converti: { label: t('inv.fac.status_converted', locale), color: "bg-violet-100 text-violet-700 border-violet-300" },
+    modele: { label: t('inv.fac.status_template', locale), color: "bg-indigo-100 text-indigo-700 border-indigo-300" },
   }
 }
 
@@ -390,11 +397,14 @@ export default function ClientFacturesPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">{t('inv.fac.all_status', locale)}</SelectItem>
+                        <SelectItem value="brouillon">{t('inv.fac.status_draft', locale)}</SelectItem>
                         <SelectItem value="en_attente">{t('inv.fac.status_pending', locale)}</SelectItem>
                         <SelectItem value="partiel">{t('inv.fac.status_partial', locale)}</SelectItem>
                         <SelectItem value="retard">{t('inv.fac.status_overdue', locale)}</SelectItem>
                         <SelectItem value="paye">{t('inv.fac.status_paid', locale)}</SelectItem>
                         <SelectItem value="annule">{t('inv.fac.status_cancelled', locale)}</SelectItem>
+                        <SelectItem value="devis">{t('inv.fac.status_quote', locale)}</SelectItem>
+                        <SelectItem value="modele">{t('inv.fac.status_template', locale)}</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={rapprochementFilter} onValueChange={setRapprochementFilter}>
