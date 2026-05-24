@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       factures_updated: count ?? 0,
       tiers_annuaire: tiersRecord,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     console.error('[tiers-offshore] error:', e)

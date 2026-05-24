@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
     }))
 
     return NextResponse.json({ users })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -332,7 +332,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ user: { id: authData.user.id, email, full_name, role } })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -425,7 +425,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[PATCH]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

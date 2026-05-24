@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
       params_paie: paramsResult ?? null,
       current_year: currentYear,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[rh/societe] GET error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -262,7 +262,7 @@ export async function PUT(req: NextRequest) {
       params_paie: updatedParams,
       message: 'Paramètres sauvegardés',
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[rh/societe] PUT error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

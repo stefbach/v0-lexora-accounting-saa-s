@@ -1,112 +1,30 @@
-// FIXME(lint-fix): @ts-nocheck pragma not convertible to @ts-expect-error (file-level vs line-level). Refactor needed.
-// @ts-nocheck — TODO 2026-05-23 S2: refactor des country configs OHADA pour
-// matcher les types OhadaPayrollConfig / OhadaTaxConfig / Jurisdiction
-// (champs employee→employeeRate, standard→STANDARD, minimumAmount→minAmount,
-// statementsProvider signature, etc.). Ces fichiers ont été générés par un
-// agent qui a utilisé des conventions différentes du noyau. Cf. PR #232
-// "Known limitations".
-import { OhadaPayrollConfig } from '../../payroll';
+import type { OhadaPayrollConfig } from '../../payroll/base-payroll-engine'
 
+/**
+ * Central African Republic (CF) — CEMAC, devise XAF
+ * Source: Code du Travail Centrafrique, OCSS
+ */
 export const CAR_PAYROLL_CONFIG: OhadaPayrollConfig = {
   jurisdiction: 'CF',
-  country: 'Central African Republic',
-  region: 'CEMAC',
-  currency: 'XAF',
-
-  // Minimum Wage
-  minimumWage: 35000, // XAF monthly
-
-  // CNSS (Caisse Nationale de Sécurité Sociale / OCSS)
-  socialSecurity: {
-    cnss: {
-      employee: 0.03, // 3%
-      employer: 0.19, // 19%
-      cap: 600000, // XAF - maximum insurable earnings
-    },
+  cnss: {
+    employeeRate: 0.03, // CNSS salarié 3%
+    employerRate: 0.19, // CNSS patronal 19%
+    cap: 600000,        // XAF — plafond mensuel
   },
-
-  // Family Allowances
-  familyAllowances: {
-    rate: 0.12, // 12% of salary
-  },
-
-  // Work Accident Insurance
-  workAccident: {
-    employer: 0.03, // 3%
-  },
-
-  // Income Tax (IRPP - Impôt sur le Revenu des Personnes Physiques)
-  // RCA (Revenu Catégorique des Salaires) - Monthly brackets in XAF
-  incomeTax: {
-    taxType: 'IRPP_RCA',
-    brackets: [
-      {
-        min: 0,
-        max: 50000,
-        rate: 0.00, // 0%
-      },
-      {
-        min: 50000,
-        max: 100000,
-        rate: 0.08, // 8%
-      },
-      {
-        min: 100000,
-        max: 200000,
-        rate: 0.15, // 15%
-      },
-      {
-        min: 200000,
-        max: 400000,
-        rate: 0.28, // 28%
-      },
-      {
-        min: 400000,
-        max: Infinity,
-        rate: 0.40, // 40%
-      },
-    ],
-  },
-
-  // Salary Deductions/Abatements
-  salaryAbatement: {
-    rate: 0.15, // 15% abatement (déduction forfaitaire)
-  },
-
-  // Tax-Free Allowances
-  taxFreeAllowances: [
-    {
-      name: 'Family allowances',
-      percentage: 0.00,
-    },
+  familyAllowances: { rate: 0.12 }, // 12%
+  workAccident: { rate: 0.03 }, // 3%
+  // IRPP (RCA) — barème mensuel XAF
+  incomeTaxBrackets: [
+    { from: 0, to: 50000, rate: 0 },
+    { from: 50000, to: 100000, rate: 0.08 },
+    { from: 100000, to: 200000, rate: 0.15 },
+    { from: 200000, to: 400000, rate: 0.28 },
+    { from: 400000, to: null, rate: 0.40 },
   ],
-
-  // Deduction Order
-  deductionOrder: [
-    'SOCIAL_SECURITY',
-    'WORK_ACCIDENT',
-    'FAMILY_ALLOWANCES',
-    'INCOME_TAX',
-  ],
-
-  // Payroll Frequency
-  payrollFrequency: 'MONTHLY',
-
-  // Contribution Caps
-  contributionCaps: {
-    cnssEmployeeMonthly: 600000, // XAF
-    cnssEmployerMonthly: 600000, // XAF
+  taxableIncomeRules: {
+    abatementSalaire: 0.15, // 15% abattement
+    chargeDeFamilleAllowance: 0,
+    maxDependents: 0,
   },
-
-  // Filing Requirements
-  filingRequirements: {
-    payrollTaxFilingDueDateDays: 15, // 15 days after month-end
-    annualDeclartionDueDateDays: 60, // 60 days after year-end
-  },
-
-  // Penalties
-  penalties: {
-    latePaymentPerDay: 0.001, // 0.1% per day
-    underReportingPenalty: 0.10, // 10%
-  },
-};
+  minimumWage: 35000, // SMIG XAF
+}

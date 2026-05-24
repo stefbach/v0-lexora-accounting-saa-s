@@ -99,6 +99,8 @@ interface BankTx {
   credit: number
   devise?: string
   banque?: string
+  debit_mur?: number | null
+  credit_mur?: number | null
   statut?: string
   facture_id?: string | null
   facture_ids?: string[]
@@ -224,9 +226,9 @@ export default function ClientRapprochementPage() {
   const comptesUniques = useMemo(() => {
     const map = new Map<string, { id: string; label: string; devise: string }>()
     for (const tx of transactions) {
-      const id = (tx as any).releve_id || ""
-      const banque = (tx as any).banque || ""
-      const devise = (tx as any).devise || "MUR"
+      const id = tx.releve_id || ""
+      const banque = tx.banque || ""
+      const devise = tx.devise || "MUR"
       if (!map.has(banque + "|" + devise) && banque) {
         map.set(banque + "|" + devise, {
           id: banque + "|" + devise,
@@ -274,8 +276,8 @@ export default function ClientRapprochementPage() {
     }
     if (filtreCompte !== "all") {
       out = out.filter((tx) => {
-        const banque = (tx as any).banque || ""
-        const devise = (tx as any).devise || "MUR"
+        const banque = tx.banque || ""
+        const devise = tx.devise || "MUR"
         return banque + "|" + devise === filtreCompte
       })
     }
@@ -1356,7 +1358,7 @@ function SuggestionRow({
     (s, f) => s + (Number(f.montant_mur) || Number(f.montant_ttc) || 0),
     0
   )
-  const txMontantMur = (tx as any).debit_mur ?? (tx as any).credit_mur ?? Math.abs(montant)
+  const txMontantMur = tx.debit_mur ?? tx.credit_mur ?? Math.abs(montant)
   const ecart = Math.abs(Math.abs(txMontantMur) - factureTotal)
   const ecartPct = factureTotal > 0 ? (ecart / factureTotal) * 100 : 0
 
@@ -2245,7 +2247,7 @@ function InterneCompteSection({
 }) {
   const targetAmt = Math.max(tx.debit, tx.credit)
   const txDate = tx.date ? new Date(tx.date).getTime() : 0
-  const txCompte = (tx as any).banque || ""
+  const txCompte = tx.banque || ""
 
   // Cherche les tx miroirs : autre compte (banque différente OU même banque
   // mais devise différente), sens INVERSE, montant proche (±5%), date ±10 jours.
@@ -2253,7 +2255,7 @@ function InterneCompteSection({
     return allTransactions
       .filter((tr) => tr.id !== tx.id)
       .filter((tr) => {
-        const otherCompte = (tr as any).banque || ""
+        const otherCompte = tr.banque || ""
         // Autre tx (peu importe le compte, on prend tout sauf la même tx)
         if (!tr.date) return false
         const dt = Math.abs(new Date(tr.date).getTime() - txDate) / 86400000
@@ -2290,7 +2292,7 @@ function InterneCompteSection({
             {candidates.map((m) => {
               const mAmt = Math.max(m.debit, m.credit)
               const mSens = m.debit > 0 ? "-" : "+"
-              const mCompte = (m as any).banque || "?"
+              const mCompte = m.banque || "?"
               const ratio = targetAmt > 0 ? Math.abs(mAmt - targetAmt) / targetAmt : 0
               return (
                 <button

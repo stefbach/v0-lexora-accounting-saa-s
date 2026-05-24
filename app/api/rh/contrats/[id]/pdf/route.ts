@@ -187,7 +187,7 @@ export async function GET(_request: Request, { params }: Params) {
         'Cache-Control': 'no-store',
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur PDF' }, { status: 500 })
   }
 }

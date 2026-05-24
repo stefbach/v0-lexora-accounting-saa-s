@@ -53,7 +53,7 @@ export async function GET(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ calendriers: data || [] })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur' },
       { status: 500 }
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur' },
       { status: 500 }

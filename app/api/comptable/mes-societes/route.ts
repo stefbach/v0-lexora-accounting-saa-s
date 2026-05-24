@@ -45,7 +45,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ societes: societes || [] })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

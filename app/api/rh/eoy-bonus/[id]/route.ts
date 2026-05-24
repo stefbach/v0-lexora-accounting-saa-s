@@ -35,7 +35,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Accès admin requis' }, { status: 403 })
     }
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
@@ -47,7 +47,7 @@ export async function DELETE(
       .eq('id', id)
       .maybeSingle()
     if (!calcul) return NextResponse.json({ error: 'Calcul introuvable' }, { status: 404 })
-    const hasAccess = await userHasAccessToSociete(user.id, String((calcul as any).societe_id))
+    const hasAccess = await userHasAccessToSociete(user.id, String((calcul as { societe_id: string }).societe_id))
     if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
     const { error } = await supabase

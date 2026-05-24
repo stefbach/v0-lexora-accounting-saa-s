@@ -85,25 +85,26 @@ export async function calculerEoyBonusSociete(
   const { data, error } = await supabase
     .rpc('calculer_eoy_bonus_societe', { p_societe_id: societeId, p_annee: annee })
   if (error || !data) return []
-  return (data as any[]).map(normaliserCalcul)
+  return (data as Array<Record<string, unknown>>).map(normaliserCalcul)
 }
 
-function normaliserCalcul(raw: any): EoyBonusCalcul {
+function normaliserCalcul(raw: Record<string, unknown>): EoyBonusCalcul {
+  const r = raw as Record<string, unknown>
   return {
-    employe_id: String(raw.employe_id),
-    employe_nom: raw.employe_nom ? String(raw.employe_nom) : undefined,
-    annee: Number(raw.annee) || 0,
-    earnings_annuel: Number(raw.earnings_annuel) || 0,
-    nb_mois_travailles: Number(raw.nb_mois_travailles) || 0,
-    salaire_decembre: raw.salaire_decembre == null ? null : Number(raw.salaire_decembre),
-    moyenne_mensuelle: Number(raw.moyenne_mensuelle) || 0,
-    base_calcul: Number(raw.base_calcul) || 0,
-    prorata: Number(raw.prorata) || 0,
-    bonus_calcule: Number(raw.bonus_calcule) || 0,
-    eligible: Boolean(raw.eligible),
-    motif_non_eligible: raw.motif_non_eligible || null,
-    bulletins_trouves: Number(raw.bulletins_trouves) || 0,
-    bulletins_attendus: Number(raw.bulletins_attendus) || 0,
+    employe_id: String(r.employe_id),
+    employe_nom: r.employe_nom ? String(r.employe_nom) : undefined,
+    annee: Number(r.annee) || 0,
+    earnings_annuel: Number(r.earnings_annuel) || 0,
+    nb_mois_travailles: Number(r.nb_mois_travailles) || 0,
+    salaire_decembre: r.salaire_decembre == null ? null : Number(r.salaire_decembre),
+    moyenne_mensuelle: Number(r.moyenne_mensuelle) || 0,
+    base_calcul: Number(r.base_calcul) || 0,
+    prorata: Number(r.prorata) || 0,
+    bonus_calcule: Number(r.bonus_calcule) || 0,
+    eligible: Boolean(r.eligible),
+    motif_non_eligible: (r.motif_non_eligible as string | null) || null,
+    bulletins_trouves: Number(r.bulletins_trouves) || 0,
+    bulletins_attendus: Number(r.bulletins_attendus) || 0,
   }
 }
 
@@ -192,7 +193,16 @@ export async function getCalculsExistants(
     .eq('annee', annee)
     .order('updated_at', { ascending: false })
 
-  return ((data || []) as any[]).map(r => ({
+  interface EoyCalculRow {
+    id: string | number; employe_id: string; annee: number; earnings_annuel: number | string
+    nb_mois_travailles: number | string; salaire_decembre: number | string | null
+    moyenne_mensuelle: number | string; base_calcul: number | string; prorata_applique: number | string
+    bonus_calcule: number | string; eligible: boolean; motif_non_eligible: string | null
+    bulletins_trouves: number; bulletins_attendus: number; statut: string; updated_at: string
+    bulletin_75pct_id: string | null; bulletin_25pct_id: string | null
+    employes?: { prenom?: string | null; nom?: string | null } | null
+  }
+  return ((data || []) as EoyCalculRow[]).map(r => ({
     id: String(r.id),
     employe_id: String(r.employe_id),
     employe_nom: r.employes

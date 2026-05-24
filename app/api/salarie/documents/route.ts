@@ -113,7 +113,7 @@ export async function GET() {
     ].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
 
     return NextResponse.json({ documents, employe_id: emp.id })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[/api/salarie/documents] error:', e)
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur' },

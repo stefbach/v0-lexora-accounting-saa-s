@@ -34,7 +34,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Annulation réservée admin' }, { status: 403 })
     }
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 

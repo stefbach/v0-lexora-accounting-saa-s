@@ -51,7 +51,7 @@ export async function GET() {
     }))
 
     return NextResponse.json({ societes: enriched })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }
 }
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ societe: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Unknown error' }, { status: 500 })
   }
 }
@@ -176,7 +176,7 @@ export async function PUT(request: NextRequest) {
     }
 
     return NextResponse.json({ societe: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
   }
 }
@@ -213,7 +213,7 @@ export async function DELETE(request: NextRequest) {
 
     if (error) return NextResponse.json({ error: 'Erreur lors de la suppression de la société : ' + error.message }, { status: 500 })
     return NextResponse.json({ message: 'Société et dossiers associés supprimés avec succès' })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
   }
 }

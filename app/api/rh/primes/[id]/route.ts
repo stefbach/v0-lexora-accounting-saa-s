@@ -42,7 +42,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { data, error } = await supabase.from('primes_variables_mois').update(updates).eq('id', id).select().single()
     if (error) throw error
     return NextResponse.json({ prime_mois: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -64,7 +64,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const { error } = await supabase.from('primes_variables_mois').delete().eq('id', id)
     if (error) throw error
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

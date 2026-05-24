@@ -157,7 +157,7 @@ export async function GET() {
     console.log(`[documents GET] user=${user.id} role=${userProfile?.role} dossiers=${dossierIds.length} uploaders=${uploaderIds.length} docs=${documents.length}`)
 
     return NextResponse.json({ documents, _debug: { dossierIds_count: dossierIds.length, uploaderIds_count: uploaderIds.length, total: documents.length } })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
   }
 }

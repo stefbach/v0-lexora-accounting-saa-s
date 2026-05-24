@@ -730,7 +730,7 @@ async function handleDocumentMessage(
   const tailleKo = Math.round(r.taille / 1024)
   const isImage = r.type_fichier === 'jpeg' || r.type_fichier === 'png'
   const captionMatches = captionLooksLikeExpense(caption)
-  const ocr = (r as any).ocr || null
+  const ocr = (r as { ocr?: unknown }).ocr || null
   const ocrSuccess = !!ocr?.success
   const typeDoc = ocr?.type_document || 'autre'
   const societeDetectee = ocr?.societe_detectee

@@ -92,7 +92,7 @@ export async function GET() {
       email: user.email,
       message: "Compte non lié à un employé. Communiquez votre email au RH: " + user.email,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[employes/me] error:', e)
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur' },
@@ -133,7 +133,7 @@ export async function PATCH(request: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ employe: data, message: 'Informations mises à jour' })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

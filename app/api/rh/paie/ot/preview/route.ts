@@ -90,7 +90,7 @@ export async function GET(request: Request) {
     const lignes = await previewOvertimeMois(supabase, societeId, periode)
 
     return NextResponse.json({ lignes })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const msg = e instanceof Error ? e.message : String(e)
     const stack = e instanceof Error ? e.stack?.split('\n').slice(0, 3).join(' | ') : ''
     // Stack et détail DB restent côté serveur (Vercel logs) — jamais

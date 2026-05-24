@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ flux: data || [] })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ flux, ecritures_generees: ecritures.length }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

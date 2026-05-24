@@ -48,7 +48,11 @@ export async function getPeriodePaieConfig(
     .eq('id', societeId)
     .maybeSingle()
   if (!data) return { ...DEFAULT_CONFIG }
-  const r = data as any
+  const r = data as {
+    periode_paie_mode?: string | null; periode_paie_jour_cut_off?: number | string | null
+    periode_paie_jour_paiement?: number | string | null; periode_paie_offset_paiement_mois?: number | string | null
+    periode_paie_notes?: string | null
+  }
   return {
     mode: (r.periode_paie_mode as PeriodePaieMode) || 'calendaire',
     jour_cut_off: Number(r.periode_paie_jour_cut_off) || 24,
@@ -75,7 +79,10 @@ export async function calculerPeriodePaie(
     const cfg: PeriodePaieConfig = { ...DEFAULT_CONFIG }
     return calculerPeriodePaieSync(cfg, dateRef)
   }
-  const r = data as any
+  const r = data as {
+    periode_debut: string; periode_fin: string; date_paiement: string
+    mode?: string | null; jour_cut_off?: number | string | null; jour_paiement?: number | string | null
+  }
   return {
     periode_debut: String(r.periode_debut).slice(0, 10),
     periode_fin: String(r.periode_fin).slice(0, 10),

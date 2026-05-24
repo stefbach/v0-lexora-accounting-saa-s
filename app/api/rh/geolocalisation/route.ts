@@ -193,7 +193,7 @@ export async function GET(request: Request) {
     })
 
     return NextResponse.json({ positions: result, total: result.length, groupes: groupes || [] })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[geolocalisation GET]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -258,7 +258,7 @@ export async function POST(request: Request) {
       position: position || { employe_id, type: posType, latitude, longitude, adresse },
       message: 'Position mise à jour',
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[geolocalisation POST]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

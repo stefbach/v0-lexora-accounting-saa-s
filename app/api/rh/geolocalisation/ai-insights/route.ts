@@ -264,7 +264,7 @@ export async function POST(request: Request) {
         avgDistance: summary.avgDistance,
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const message = e instanceof Error ? e.message : 'Erreur IA'
     return NextResponse.json({ error: message }, { status: 500 })
   }

@@ -227,7 +227,7 @@ export default function UtilisateursPage() {
   const ROLES = getRoles(locale)
   const HR_ROLE_GUIDE = getHrRoleGuide(locale)
   const { societeId, societes: providerSocietes } = useSocieteActive()
-  const societes = providerSocietes as any as Societe[]
+  const societes = providerSocietes as unknown as Societe[]
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
 

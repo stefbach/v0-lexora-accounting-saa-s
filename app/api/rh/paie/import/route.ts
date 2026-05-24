@@ -369,7 +369,7 @@ export async function POST(request: Request) {
       headers_detected: headers,
       source_info: { filename: file.name, sheet: sheetName || 'CSV', title_texts: titleTexts.slice(0, 3) },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[paie/import]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

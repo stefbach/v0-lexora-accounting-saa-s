@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       total: data?.length || 0,
       presets: Object.keys(SHIFT_PRESETS),
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ template: data }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -151,7 +151,7 @@ export async function PATCH(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ template: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -180,7 +180,7 @@ export async function DELETE(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ template: data, message: 'Template désactivé' })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

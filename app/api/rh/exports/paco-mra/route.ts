@@ -216,7 +216,7 @@ export async function POST(request: Request) {
       societe: societeRow.nom,
       periode,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const msg = e instanceof Error ? e.message : 'Erreur PACO'
     console.error('[paco-mra] CRASH:', msg)
     return NextResponse.json({

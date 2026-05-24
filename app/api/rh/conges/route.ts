@@ -651,7 +651,7 @@ export async function GET(request: Request) {
     })
 
     return NextResponse.json({ conges: congesEnriched, employes: employees })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -1419,7 +1419,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: 'Action non reconnue' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

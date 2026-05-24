@@ -92,7 +92,7 @@ export function JustificatifDialog({ open, onOpenChange, demande, onChange }: Pr
             Les pièces jointes sont liées automatiquement à cette demande.
           </DialogDescription>
         </DialogHeader>
-        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)}>
+        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'liste' | 'ajouter')}>
           <TabsList className="grid grid-cols-2 w-full">
             <TabsTrigger value="liste">
               Documents ({docs.length})

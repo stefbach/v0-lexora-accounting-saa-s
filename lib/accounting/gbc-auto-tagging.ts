@@ -125,7 +125,13 @@ export async function applyGbcAutoTagging(
 
     const tiersLower = input.tiers.toLowerCase().trim()
     let foundRelType: string | null = null
-    for (const r of (relations || []) as any[]) {
+    interface RelationRow {
+      child_societe_id: string
+      parent_societe_id: string
+      child?: { nom?: string | null } | null
+      parent?: { nom?: string | null } | null
+    }
+    for (const r of (relations || []) as RelationRow[]) {
       const childName = (r.child?.nom || '').toLowerCase().trim()
       const parentName = (r.parent?.nom || '').toLowerCase().trim()
       if (childName && childName === tiersLower) {
@@ -209,7 +215,8 @@ export async function applyGbcAutoTagging(
         .select('id, numero_compte, debit_mur, credit_mur')
         .eq('facture_id', input.facture_id)
       let count = 0
-      for (const e of (ecritures || []) as any[]) {
+      interface EcritureRow { id: string; numero_compte: string; debit_mur: number | string | null; credit_mur: number | string | null }
+      for (const e of (ecritures || []) as EcritureRow[]) {
         const rate = getTranslationRate(e.numero_compte, rates)
         // Inverse : si écriture créée en MUR au taux de transaction,
         // la version fonctionnelle = montant_mur / rate

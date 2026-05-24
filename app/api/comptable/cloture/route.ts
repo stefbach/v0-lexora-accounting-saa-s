@@ -166,7 +166,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: `Action inconnue: ${action}` }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[comptable/cloture]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

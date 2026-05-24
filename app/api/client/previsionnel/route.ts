@@ -209,7 +209,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ previsionnel })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     console.error('Previsionnel API error:', e)

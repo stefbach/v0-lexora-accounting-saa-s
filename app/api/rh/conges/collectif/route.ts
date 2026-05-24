@@ -352,7 +352,7 @@ export async function POST(request: Request) {
       skipped_arrivee: skippedArrivee,
       skipped_depart: skippedDepart,
     }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[conges/collectif] error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

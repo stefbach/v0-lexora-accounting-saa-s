@@ -25,7 +25,7 @@ export interface RelanceTemplate {
 
 function render(tpl: string, vars: RelanceTemplateVars): string {
   return tpl.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-    const v = (vars as any)[key]
+    const v = (vars as unknown as Record<string, unknown>)[key]
     return v == null ? '' : String(v)
   })
 }

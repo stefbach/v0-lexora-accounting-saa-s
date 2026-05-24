@@ -377,7 +377,7 @@ export async function GET(request: Request) {
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[tva/export]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }

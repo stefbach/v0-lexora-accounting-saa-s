@@ -222,7 +222,7 @@ export async function POST(request: Request) {
       filename_recap: `CSG_NSF_Recap_${societe?.nom?.replace(/\s+/g, '_')}_${periode}.csv`,
       filename_detail: `CSG_NSF_Detail_${societe?.nom?.replace(/\s+/g, '_')}_${periode}.csv`,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const msg = e instanceof Error ? e.message : 'Erreur CSG'
     const stack = e instanceof Error ? e.stack?.split('\n').slice(0, 3).join(' | ') : ''
     // Sécurité : stack côté serveur uniquement (pas dans la réponse HTTP)

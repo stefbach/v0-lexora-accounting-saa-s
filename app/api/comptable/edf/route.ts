@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ declarations: data || [] })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -61,7 +61,7 @@ export async function PATCH(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ declaration: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

@@ -125,7 +125,7 @@ export async function extractBankStatement(
     const { extractText, getDocumentProxy } = await import('unpdf')
     const pdf = await getDocumentProxy(pdfBytes)
     const result = await extractText(pdf, { mergePages: true })
-    const raw: unknown = (result as any)?.text
+    const raw: unknown = (result as { text?: unknown } | null)?.text
     const text = typeof raw === 'string'
       ? raw
       : Array.isArray(raw)

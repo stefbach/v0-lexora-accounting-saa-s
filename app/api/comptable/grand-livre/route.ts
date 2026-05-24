@@ -178,7 +178,7 @@ export async function GET(request: Request) {
       lettrage: { lettrees, non_lettrees: total - lettrees, total },
       exercice: exercice || null,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[grand-livre]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }

@@ -30,7 +30,7 @@ export async function GET(
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
@@ -38,7 +38,7 @@ export async function GET(
 
     const { data: prof } = await supabase
       .from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     const isRH = ['admin', 'rh'].includes(role)
 
     const doc = await getDocument(supabase, id)
@@ -53,7 +53,7 @@ export async function GET(
         .from('employes').select('id')
         .or(`auth_user_id.eq.${user.id},email.eq.${user.email}`)
         .limit(1).maybeSingle()
-      if (!selfEmp || (selfEmp as any).id !== doc.employe_id) {
+      if (!selfEmp || (selfEmp as { id: string }).id !== doc.employe_id) {
         return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
       }
       // Marquer comme vu (side-effect non-bloquant).

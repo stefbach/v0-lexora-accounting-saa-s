@@ -120,7 +120,7 @@ export async function POST(request: Request) {
       deleted,
       failed,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[bulk-delete]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

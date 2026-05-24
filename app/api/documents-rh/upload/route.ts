@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     // Profil + rôle
     const { data: prof } = await supabase
       .from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     const isRH = ['admin', 'rh'].includes(role)
 
     // Parse form-data
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
           { status: 403 },
         )
       }
-      employeId = (selfEmp as any).id
+      employeId = (selfEmp as { id: string }).id
       direction = 'employe_vers_rh' // employé ne peut pas envoyer "depuis RH"
     }
 

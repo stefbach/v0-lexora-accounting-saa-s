@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       investissements: (data || []).filter(d => d.type === 'investissement'),
       credits: (data || []).filter(d => d.type === 'credit'),
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       if (error) throw error
       return NextResponse.json({ item: data }, { status: 201 })
     }
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -119,7 +119,7 @@ export async function DELETE(request: Request) {
     const { error } = await supabase.from('investissements_previsionnel').delete().eq('id', id)
     if (error) throw error
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })

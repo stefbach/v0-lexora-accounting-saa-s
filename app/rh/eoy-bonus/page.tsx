@@ -59,8 +59,8 @@ export default function EoyBonusPage() {
         const sb = createClient()
         const { data: { user } } = await sb.auth.getUser()
         if (!user) { setAuthorized(false); return }
-        const { data: prof } = await sb.from('profiles').select('role').eq('id', user.id).maybeSingle()
-        const role = (prof as any)?.role || ''
+        const { data: prof } = await sb.from('profiles').select('role').eq('id', user.id).maybeSingle<{ role: string | null }>()
+        const role = prof?.role || ''
         setUserRole(role)
         if (!['admin', 'rh'].includes(role)) { setAuthorized(false); return }
         setAuthorized(true)

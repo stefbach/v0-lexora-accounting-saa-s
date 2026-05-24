@@ -231,7 +231,7 @@ export async function GET() {
         orphelins: orphelins.length,
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

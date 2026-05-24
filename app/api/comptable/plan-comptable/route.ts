@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ comptes: data, par_classe: parClasse, total: data?.length })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       .single()
     if (error) throw error
     return NextResponse.json({ compte: data }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

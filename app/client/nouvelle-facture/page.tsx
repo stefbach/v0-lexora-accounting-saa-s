@@ -992,7 +992,7 @@ function NouvelleFactureContent() {
                 <Field label={t('inv.nf.frequency', locale)}>
                   <Sel
                     value={recurrentFreq}
-                    onValueChange={v => setRecurrentFreq(v as any)}
+                    onValueChange={v => setRecurrentFreq(v as "mensuel" | "trimestriel" | "annuel")}
                   >
                     <SelectItem value="mensuel">{t('inv.nf.frequency_monthly', locale)}</SelectItem>
                     <SelectItem value="trimestriel">{t('inv.nf.frequency_quarterly', locale)}</SelectItem>

@@ -148,9 +148,9 @@ export async function googleCalendarFetch(
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        ...(headers as any),
+        ...(headers as Record<string, string> | undefined),
       },
-      body: json ? JSON.stringify(json) : (rest.body as any),
+      body: json ? JSON.stringify(json) : (rest.body as BodyInit | null | undefined),
     })
   }
 

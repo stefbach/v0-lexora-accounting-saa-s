@@ -89,7 +89,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ societes }, { headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' } })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[client/societes] GET error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -182,7 +182,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ societe: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[client/societes] POST fatal:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -309,7 +309,7 @@ export async function PATCH(request: Request) {
     const { data, error } = updateRes
     if (error) throw error
     return NextResponse.json({ societe: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })

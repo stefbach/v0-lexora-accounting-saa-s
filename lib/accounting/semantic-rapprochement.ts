@@ -299,7 +299,7 @@ export async function runSemanticRapprochement(args: {
     }
   }
 
-  const json = (await response.json()) as any
+  const json = (await response.json()) as { content?: Array<{ type?: string; text?: string }> }
   const text =
     Array.isArray(json?.content) && json.content[0]?.type === "text"
       ? (json.content[0].text as string)

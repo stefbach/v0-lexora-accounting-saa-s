@@ -139,7 +139,7 @@ export async function GET(request: Request) {
         'Content-Disposition': `attachment; filename="management_accounts_${soc?.nom?.replace(/\s+/g, '_')}_${exercice}.xlsx"`,
       }
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

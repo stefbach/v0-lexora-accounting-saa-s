@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ form3s: data || [], form3: data?.[0] || null })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
 }
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ success: true, form3: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
 }
@@ -84,7 +84,7 @@ export async function PUT(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ success: true, form3: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
 }

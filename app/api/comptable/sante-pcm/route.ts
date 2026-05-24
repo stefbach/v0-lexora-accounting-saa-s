@@ -118,7 +118,7 @@ export async function GET(request: Request) {
       { mode: 'overview', societes: rows, pire },
       { headers: CACHE_HEADERS }
     )
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[sante-pcm]', e)
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur serveur' },

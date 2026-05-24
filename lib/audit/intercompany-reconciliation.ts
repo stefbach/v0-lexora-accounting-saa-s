@@ -466,8 +466,9 @@ export async function getRelatedPartyDisclosure(
   let partnerGuaranteesTotal = 0
 
   for (const flux of fluxData || []) {
-    const emettrice = (flux as any).societe_emettrice
-    const receptrice = (flux as any).societe_receptrice
+    type SocieteRel = { nom?: string | null } | Array<{ nom?: string | null }> | null | undefined
+    const emettrice = (flux as { societe_emettrice?: SocieteRel }).societe_emettrice
+    const receptrice = (flux as { societe_receptrice?: SocieteRel }).societe_receptrice
     const soemettrice = Array.isArray(emettrice) ? emettrice[0]?.nom : emettrice?.nom || 'Unknown'
     const sreceptrice = Array.isArray(receptrice) ? receptrice[0]?.nom : receptrice?.nom || 'Unknown'
 

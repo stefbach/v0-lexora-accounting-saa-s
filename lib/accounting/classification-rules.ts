@@ -409,7 +409,7 @@ export function bucketizeTransactions(txs: Array<TransactionLike & { id?: unknow
     const { amount } = amountOf(t)
     if (amount === 0) continue
     const item: BucketItem = {
-      id: String((t as any).id ?? ''),
+      id: String((t as { id?: string | number | null }).id ?? ''),
       date: String(t.date || ''),
       libelle: String(t.libelle || ''),
       tiers: String(t.tiers_detecte || t.tiers || ''),

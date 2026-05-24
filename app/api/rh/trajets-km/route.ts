@@ -247,7 +247,7 @@ export async function GET(request: Request) {
         nb_trajets: result.length,
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[trajets-km GET]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -563,7 +563,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[trajets-km POST]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

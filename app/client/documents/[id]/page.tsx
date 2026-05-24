@@ -210,8 +210,8 @@ export default function DocumentDetailPage() {
     )
   }
 
-  const extraction = (doc.n8n_result as any)?.extraction || {}
-  const routing = (doc.n8n_result as any)?.routing || {}
+  const extraction = doc.n8n_result?.extraction || {}
+  const routing = doc.n8n_result?.routing || {}
   const transactions = extraction.transactions || extraction.lignes || []
   const ecritures = extraction.ecritures_comptables || []
   const confiance = doc.confiance_type ?? routing.confiance_type ?? null
@@ -285,7 +285,7 @@ export default function DocumentDetailPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Building2 className="h-3 w-3" />{t('core.docdetail.company', locale)}</p>
-              <p className="font-medium">{doc.societe_detectee || (doc.dossiers as any)?.societes?.nom || "—"}</p>
+              <p className="font-medium">{doc.societe_detectee || doc.dossiers?.societes?.nom || "—"}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" />{t('core.docdetail.upload_date', locale)}</p>

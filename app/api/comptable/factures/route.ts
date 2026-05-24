@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ factures: data, totaux })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -218,7 +218,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ facture: data }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -336,7 +336,7 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json({ facture: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -393,7 +393,7 @@ export async function DELETE(request: Request) {
     const { error } = await admin.from('factures').delete().eq('id', id)
     if (error) throw error
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

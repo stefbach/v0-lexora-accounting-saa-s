@@ -149,6 +149,7 @@ export async function sendEmailFallbackResend(msg: EmailMessage): Promise<SendRe
       html: msg.html,
       text: msg.text,
       replyTo: msg.reply_to,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Resend SDK CreateEmailOptions accepte des overloads incompatibles avec notre union html/text
     } as any)
     if (error) return { ok: false, error: error.message, provider: 'resend' }
     return { ok: true, message_id: data?.id, provider: 'resend' }
@@ -203,6 +204,7 @@ async function sendViaResend(account: EmailAccount, msg: EmailMessage): Promise<
     html: msg.html,
     text: msg.text,
     replyTo: msg.reply_to || account.reply_to || undefined,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Resend SDK CreateEmailOptions accepte des overloads incompatibles avec notre union html/text
   } as any)
   if (error) return { ok: false, error: error.message }
   return { ok: true, message_id: data?.id }

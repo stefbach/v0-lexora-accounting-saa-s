@@ -677,7 +677,7 @@ export async function GET(request: Request) {
         available_exercices: getAvailableExercices(),
       }
     }, { headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' } })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('Financial API error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

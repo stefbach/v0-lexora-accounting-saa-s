@@ -159,7 +159,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }).then(() => {}, (e) => console.error('[password_reset_audit insert]', e?.message))
 
     return NextResponse.json({ success: true, user_id: id, email: targetProfile.email })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[admin/users/[id]/password]', e)
     return NextResponse.json({ error: 'Erreur interne' }, { status: 500 })
   }

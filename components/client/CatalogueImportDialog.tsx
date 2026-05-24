@@ -99,7 +99,7 @@ function parseRow(row: Record<string, any>, idx: number): ParsedRow {
     : parseFloat(String(prixRaw || '0').replace(/[\s,](?=\d{3})/g, '').replace(',', '.'))
   const prix_unitaire = Number.isFinite(prixClean) ? prixClean : NaN
   const deviseRaw = String(pickValue(row, COL_ALIASES.devise) || 'MUR').trim().toUpperCase()
-  const devise = DEVISES_OK.includes(deviseRaw as any) ? deviseRaw : 'MUR'
+  const devise = (DEVISES_OK as readonly string[]).includes(deviseRaw) ? deviseRaw : 'MUR'
   const tvaRaw = pickValue(row, COL_ALIASES.tva_applicable)
   const tva_applicable = tvaRaw === null ? true : parseBoolean(tvaRaw)
   const categorieRaw = pickValue(row, COL_ALIASES.categorie)

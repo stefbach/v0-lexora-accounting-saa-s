@@ -86,7 +86,8 @@ export async function countJoursOuvrablesDb(
       .gte('date', `${startYear}-01-01`)
       .lte('date', `${endYear}-12-31`)
     const { data } = await query
-    for (const r of (data || []) as any[]) {
+    interface JourFerieRow { date: string; societe_id: string | null; travail_autorise: boolean | null }
+    for (const r of (data || []) as JourFerieRow[]) {
       if (r.travail_autorise === true) continue
       // Férié soit national (societe_id NULL) soit spécifique à la société
       if (!r.societe_id || r.societe_id === params.societe_id) {
@@ -116,7 +117,7 @@ export async function countJoursOuvrablesDb(
  */
 export function buildJoursFeriesSet(dates: string[] | Date[]): Set<string> {
   const s = new Set<string>()
-  for (const d of dates as any[]) {
+  for (const d of dates as Array<string | Date>) {
     if (d instanceof Date) s.add(d.toISOString().slice(0, 10))
     else if (typeof d === 'string') s.add(d.slice(0, 10))
   }

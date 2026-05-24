@@ -1,33 +1,19 @@
-// FIXME(lint-fix): @ts-nocheck conservé temporairement — le retrait casse le typecheck (refactor OHADA cf. PR #232)
-// @ts-nocheck — TODO 2026-05-23 S2: refactor des country configs OHADA pour
-// matcher les types OhadaPayrollConfig / OhadaTaxConfig / Jurisdiction
-// (champs employee→employeeRate, standard→STANDARD, minimumAmount→minAmount,
-// statementsProvider signature, etc.). Ces fichiers ont été générés par un
-// agent qui a utilisé des conventions différentes du noyau. Cf. PR #232
-// "Known limitations".
-import { OhadaTaxConfig } from '../../tax';
+import type { OhadaTaxConfig } from '../../tax/base-tax-engine'
 
 export const TOGO_TAX_CONFIG: OhadaTaxConfig = {
   jurisdiction: 'TG',
-
-  vatRates: {
-    STANDARD: 0.18,
-    ZERO: 0.0,
-    EXEMPT: 0.0,
-  },
-
-  corporateIncomeTaxRate: 0.27,
-
-  wht: {
-    WHT_RES: 0.05,
-    NR: 0.20,
-    DIVIDENDS: 0.13,
-    INTERESTS: 0.06,
-    ROYALTIES: 0.15,
-  },
-
-  minimumCorporateTax: {
-    rate: 0.01,
-    threshold: 500000, // XOF
-  },
-};
+  vatRates: [
+    { code: 'STD', label: 'TVA Normale', rate: 0.18, description: 'Taux normal 18%' },
+    { code: 'ZERO', label: 'TVA 0%', rate: 0, description: 'Exportations' },
+    { code: 'EXEMPT', label: 'Exonéré', rate: 0, description: 'Produits exonérés' },
+  ],
+  corporateIncomeTaxRate: 0.27, // IS 27%
+  withholdingTaxes: [
+    { code: 'WHT_RES', rate: 0.05, appliesTo: ['SERVICES'] },
+    { code: 'WHT_NR', rate: 0.20, appliesTo: ['SERVICES_NR'] },
+    { code: 'WHT_DIVIDENDS', rate: 0.13, appliesTo: ['DIVIDENDS'] },
+    { code: 'WHT_INTERESTS', rate: 0.06, appliesTo: ['INTERESTS'] },
+    { code: 'WHT_ROYALTIES', rate: 0.15, appliesTo: ['ROYALTIES'] },
+  ],
+  minimumCorporateTax: { rate: 0.01, minAmount: 500000 }, // 1% du CA, min 500k XOF
+}

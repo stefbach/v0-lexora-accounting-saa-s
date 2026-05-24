@@ -176,7 +176,7 @@ export async function POST(request: Request) {
       mode: 'single',
       ...result,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

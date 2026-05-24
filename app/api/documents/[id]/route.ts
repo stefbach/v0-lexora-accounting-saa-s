@@ -260,7 +260,7 @@ export async function DELETE(
     if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
 
     return NextResponse.json({ success: true, deleted: id, warnings })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

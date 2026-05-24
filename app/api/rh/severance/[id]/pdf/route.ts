@@ -181,7 +181,7 @@ export async function GET(
     const role = (prof as { role?: string } | null)?.role || ''
     if (!['admin', 'rh'].includes(role)) return new NextResponse('Accès refusé', { status: 403 })
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     if (!id) return new NextResponse('id requis', { status: 400 })
 
@@ -199,7 +199,7 @@ export async function GET(
     const buffer = await renderToBuffer(doc as any)
     const filename = `severance_${(sim.employe_nom || 'employe').replace(/\s+/g, '_')}_${sim.date_licenciement}.pdf`
 
-    return new NextResponse(buffer as any, {
+    return new NextResponse(buffer as unknown as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

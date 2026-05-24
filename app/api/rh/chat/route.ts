@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ reply, conversation_id: convId })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

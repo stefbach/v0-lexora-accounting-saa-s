@@ -282,8 +282,8 @@ async function handlePost(request: Request): Promise<Response> {
   const sisterSocieteNames = (autresSocietes || [])
     .map((s: any) => s.nom)
     .filter(Boolean) as string[]
-  const aliasesArr = Array.isArray((societe as any).aliases)
-    ? (societe as any).aliases
+  const aliasesArr = Array.isArray((societe as { aliases?: unknown }).aliases)
+    ? (societe as { aliases?: unknown }).aliases
     : []
   const selfNames = [societe.nom, ...aliasesArr].filter(Boolean) as string[]
   // Compat : on garde societeNames pour les anciens consommateurs qui s'attendent
@@ -761,7 +761,7 @@ function buildCoherenceParTiers(opts: {
   for (const f of factures) {
     factureToTiers.set(f.id, {
       tiers: f.tiers || "",
-      type: (f.type_facture as any) || "?",
+      type: (f.type_facture as string | undefined) || "?",
     })
   }
 
@@ -829,7 +829,7 @@ function buildCoherenceParTiers(opts: {
     if (!key) continue
     const slot = facturesParTiers.get(key) || {
       tiersDisplay: f.tiers,
-      type: (f.type_facture as any) || "?",
+      type: (f.type_facture as string | undefined) || "?",
       factures: [] as MatchingFacture[],
     }
     slot.factures.push(f)
@@ -868,7 +868,7 @@ function buildCoherenceParTiers(opts: {
 
     par_tiers.push({
       tiers: group.tiersDisplay,
-      type: (group.type as any) || "?",
+      type: (group.type as string | undefined) || "?",
       nb_factures: group.factures.length,
       nb_paiements_identifies: nbPaiements,
       total_factures_mur: Math.round(totalFacturesMur * 100) / 100,
@@ -887,7 +887,7 @@ function buildCoherenceParTiers(opts: {
         code: "FACTURES_SANS_PAIEMENT",
         message: `${group.tiersDisplay} : ${group.factures.length} facture(s) émise(s), ${nbPaiements} virement(s) identifié(s). ${facturesSansPaiement.length} facture(s) sans paiement détecté — intervention humaine nécessaire.`,
         tiers: group.tiersDisplay,
-        type: (group.type as any) || "?",
+        type: (group.type as string | undefined) || "?",
         details: { factures_sans_paiement: facturesSansPaiement },
       })
     }
@@ -897,7 +897,7 @@ function buildCoherenceParTiers(opts: {
         code: "ECART_MONTANT",
         message: `${group.tiersDisplay} : total factures ${totalFacturesMur.toFixed(0)} MUR vs total virements ${totalPaiementsMur.toFixed(0)} MUR — écart ${ecartPct.toFixed(1)}%, vérifier (TDS, devise, paiement partiel ?).`,
         tiers: group.tiersDisplay,
-        type: (group.type as any) || "?",
+        type: (group.type as string | undefined) || "?",
       })
     }
     // Facture > 60j sans paiement → urgence
@@ -913,7 +913,7 @@ function buildCoherenceParTiers(opts: {
           code: "FACTURE_VIEILLE",
           message: `Facture ${f.numero || f.id.slice(0, 8)} de ${group.tiersDisplay} (${f.montant_mur.toFixed(0)} MUR) émise il y a ${ageJ}j sans paiement détecté — relance ou écriture manuelle ?`,
           tiers: group.tiersDisplay,
-          type: (group.type as any) || "?",
+          type: (group.type as string | undefined) || "?",
           details: { facture_id: f.id, age_jours: ageJ },
         })
       }

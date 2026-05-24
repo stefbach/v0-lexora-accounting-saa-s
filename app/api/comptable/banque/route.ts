@@ -148,7 +148,7 @@ export async function GET(request: Request) {
       totalBankMUR,
       rates,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[banque] error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -180,7 +180,7 @@ export async function PATCH(request: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

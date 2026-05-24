@@ -135,6 +135,8 @@ interface BalanceRow {
   vl_eligibility_status?: 'eligible' | 'eligible_via_policy_societe' | 'en_acquisition' | 'hors_wra_basic_sup_50k' | 'migrant_worker_exclu' | 'no_date_arrivee'
   /** G3 — Statut WRA 2019 S.2 : "worker" (basic ≤ 50k) ou "hors_wra" (basic > 50k). */
   statut_wra?: 'worker' | 'hors_wra' | 'indetermine'
+  /** Nb de jours d'AL basculés en UL (à afficher si > 0). */
+  al_bascule_ul?: number | null
   salaire_base?: number | null
   status_color: string
   sick_cert_alert: boolean
@@ -173,6 +175,7 @@ interface CongeRecord {
   niveau_approbation?: number
   approuve_par?: ApprovalEntry[]
   certificat_url?: string | null
+  documents_count?: number
   employe?: {
     nom: string
     prenom: string
@@ -534,6 +537,11 @@ export default function CongesPage() {
     motif: string
     demi_journee: boolean
     matin_ou_apres_midi: 'matin' | 'apres_midi'
+    deduction_source?: string
+    certificat_medical_url?: string
+    acte_naissance_url?: string
+    convocation_url?: string
+    acte_deces_url?: string
   }>({
     employe_id: "", type_conge: "AL", date_debut: "", date_fin: "", motif: "",
     demi_journee: false, matin_ou_apres_midi: 'matin',
@@ -738,7 +746,7 @@ export default function CongesPage() {
       .gte('date', `${year}-01-01`)
       .lte('date', `${year + 1}-12-31`)
       .then(({ data }) => {
-        const dates = ((data || []) as any[])
+        const dates = ((data || []) as Array<{ date: string; travail_autorise: boolean }>)
           .filter(r => !r.travail_autorise)
           .map(r => String(r.date).slice(0, 10))
         setJoursFeriesSet(buildJoursFeriesSet(dates))
@@ -1106,7 +1114,7 @@ export default function CongesPage() {
   const filteredBalances = balances.filter(b => {
     // G3 — Filtre statut WRA
     if (filterStatutWra !== 'all') {
-      const statut = (b as any).statut_wra || 'worker'
+      const statut = b.statut_wra || 'worker'
       if (statut !== filterStatutWra) return false
     }
     if (!searchBal) return true
@@ -1373,7 +1381,7 @@ export default function CongesPage() {
                             <EligibiliteBadge status={(b.eligibility_status as EligibilityStatus) || "eligible"} />
                           </TableCell>
                           <TableCell>
-                            {(b as any).statut_wra === 'hors_wra' ? (
+                            {b.statut_wra === 'hors_wra' ? (
                               <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-[10px]" title="Basic > 50 000 MUR — droits via contrat + policy société">
                                 Hors WRA
                               </Badge>
@@ -1411,9 +1419,9 @@ export default function CongesPage() {
                                     a basculé en UL (solde AL insuffisant au moment
                                     de poser). al_pris reste le compteur de suivi
                                     global indépendant du solde. */}
-                                {(b as any).al_bascule_ul && (b as any).al_bascule_ul > 0 && (
+                                {b.al_bascule_ul && b.al_bascule_ul > 0 && (
                                   <span className="text-[9px] text-amber-700 mt-0.5" title="Jours posés mais basculés en Unpaid Leave (solde AL insuffisant)">
-                                    dont {(b as any).al_bascule_ul}j UL
+                                    dont {b.al_bascule_ul}j UL
                                   </span>
                                 )}
                               </div>
@@ -1635,7 +1643,7 @@ export default function CongesPage() {
                                 date_debut: c.date_debut,
                               }}
                               requisManquant={needsJustif}
-                              initialCount={(c as any).documents_count}
+                              initialCount={c.documents_count}
                             />
                           </TableCell>
                           <TableCell>
@@ -1946,7 +1954,7 @@ export default function CongesPage() {
                                 date_debut: c.date_debut,
                               }}
                               requisManquant={requisEffectif}
-                              initialCount={(c as any).documents_count}
+                              initialCount={c.documents_count}
                             />
                           </TableCell>
                           {canImposeCollectif && (
@@ -2091,8 +2099,8 @@ export default function CongesPage() {
               <div className="space-y-2 p-3 bg-cyan-50 border border-cyan-200 rounded-md">
                 <Label className="text-xs text-cyan-900">Déduction du solde de :</Label>
                 <Select
-                  value={(form as any).deduction_source || 'AL'}
-                  onValueChange={v => setForm(f => ({ ...f, deduction_source: v } as any))}
+                  value={form.deduction_source || 'AL'}
+                  onValueChange={v => setForm(f => ({ ...f, deduction_source: v }))}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -2103,42 +2111,42 @@ export default function CongesPage() {
                 </Select>
                 <Input
                   placeholder="URL certificat médical du parent malade (requis)"
-                  value={(form as any).certificat_medical_url || ''}
-                  onChange={e => setForm(f => ({ ...f, certificat_medical_url: e.target.value } as any))}
+                  value={form.certificat_medical_url || ''}
+                  onChange={e => setForm(f => ({ ...f, certificat_medical_url: e.target.value }))}
                 />
                 <Input
                   placeholder="URL acte de naissance / preuve parenté (requis)"
-                  value={(form as any).acte_naissance_url || ''}
-                  onChange={e => setForm(f => ({ ...f, acte_naissance_url: e.target.value } as any))}
+                  value={form.acte_naissance_url || ''}
+                  onChange={e => setForm(f => ({ ...f, acte_naissance_url: e.target.value }))}
                 />
               </div>
             )}
             {form.type_conge === 'SPC_MARIAGE_SELF' && (
               <Input
                 placeholder="URL certificat de mariage (requis)"
-                value={(form as any).convocation_url || ''}
-                onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
+                value={form.convocation_url || ''}
+                onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value }))}
               />
             )}
             {form.type_conge === 'SPC_MARIAGE_ENFANT' && (
               <div className="space-y-2">
                 <Input
                   placeholder="URL certificat de mariage de l'enfant (requis)"
-                  value={(form as any).convocation_url || ''}
-                  onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
+                  value={form.convocation_url || ''}
+                  onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value }))}
                 />
                 <Input
                   placeholder="URL acte de naissance de l'enfant (requis)"
-                  value={(form as any).acte_naissance_url || ''}
-                  onChange={e => setForm(f => ({ ...f, acte_naissance_url: e.target.value } as any))}
+                  value={form.acte_naissance_url || ''}
+                  onChange={e => setForm(f => ({ ...f, acte_naissance_url: e.target.value }))}
                 />
               </div>
             )}
             {form.type_conge === 'SPC_DECES' && (
               <Input
                 placeholder="URL acte de décès (requis)"
-                value={(form as any).acte_deces_url || ''}
-                onChange={e => setForm(f => ({ ...f, acte_deces_url: e.target.value } as any))}
+                value={form.acte_deces_url || ''}
+                onChange={e => setForm(f => ({ ...f, acte_deces_url: e.target.value }))}
               />
             )}
             {['JUR', 'INT', 'CRT'].includes(form.type_conge) && (
@@ -2148,8 +2156,8 @@ export default function CongesPage() {
                   form.type_conge === 'INT' ? "URL documentation officielle événement (requis)" :
                   "URL convocation judiciaire (requis)"
                 }
-                value={(form as any).convocation_url || ''}
-                onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value } as any))}
+                value={form.convocation_url || ''}
+                onChange={e => setForm(f => ({ ...f, convocation_url: e.target.value }))}
               />
             )}
 

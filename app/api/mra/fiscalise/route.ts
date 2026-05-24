@@ -60,7 +60,7 @@ export async function GET(request: Request) {
       mra_status: facture.mra_status || 'non_fiscalise',
       type_document: facture.type_document || 'facture',
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur' },
       { status: 500 }
@@ -212,7 +212,7 @@ export async function POST(request: Request) {
       fiscalisation_date: result.fiscalisationDate,
       facture: updated,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur' },
       { status: 500 }

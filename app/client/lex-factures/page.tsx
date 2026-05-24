@@ -422,7 +422,7 @@ export default function LexFacturesPage() {
                     ).map((opt) => (
                       <button
                         key={opt.v}
-                        onClick={() => setFilter(opt.v as any)}
+                        onClick={() => setFilter(opt.v)}
                         className={`px-3 py-1 text-xs rounded border ${
                           filter === opt.v
                             ? "bg-emerald-600 text-white border-emerald-600"

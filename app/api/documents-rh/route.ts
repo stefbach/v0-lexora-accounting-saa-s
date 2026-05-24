@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     const supabase = getAdminClient()
     const { data: prof } = await supabase
       .from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     const isRH = ['admin', 'rh'].includes(role)
 
     const params = new URL(request.url).searchParams
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
           { status: 403 },
         )
       }
-      employeId = (selfEmp as any).id
+      employeId = (selfEmp as { id: string }).id
     }
 
     // Construire la query avec tous les filtres optionnels. Au moins un

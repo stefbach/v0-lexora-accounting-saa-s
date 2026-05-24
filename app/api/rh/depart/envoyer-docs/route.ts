@@ -164,7 +164,7 @@ export async function POST(request: Request) {
       sent_docs: attachments.map(a => a.filename),
       generation_errors: generationErrors.length ? generationErrors : undefined,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[depart/envoyer-docs]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

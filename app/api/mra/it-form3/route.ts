@@ -121,7 +121,7 @@ export async function GET(request: Request) {
       threshold_impot: APS_THRESHOLD_IMPOT,
       legal_reference: 'ITA s.111A(1)(a)',
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur serveur' },
       { status: 500 },

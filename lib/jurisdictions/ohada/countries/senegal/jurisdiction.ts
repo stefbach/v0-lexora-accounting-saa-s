@@ -1,22 +1,23 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck -- FIXME(lint-fix): @ts-nocheck nécessaire (whole-file suppression). TODO 2026-05-23 S2: refactor des country configs OHADA pour
-// matcher les types OhadaPayrollConfig / OhadaTaxConfig / Jurisdiction
-// (champs employee→employeeRate, standard→STANDARD, minimumAmount→minAmount,
-// statementsProvider signature, etc.). Ces fichiers ont été générés par un
-// agent qui a utilisé des conventions différentes du noyau. Cf. PR #232
-// "Known limitations".
-import type { Jurisdiction, ValidationResult } from '../../../core/jurisdiction.interface'
+import type {
+  Jurisdiction,
+  ValidationResult,
+  ValidationError,
+  ValidationWarning,
+} from '../../../core/jurisdiction.interface'
 import type { JurisdictionConfig, Account, JournalEntry, FiscalPeriod } from '../../../core/types'
-import type { StatementInput, CashFlowStatement } from '../../../core/financial-statements.interface'
+import type {
+  FinancialStatementsProvider,
+  StatementInput,
+  BalanceSheet,
+  IncomeStatement,
+  CashFlowStatement,
+  FinancialNotes,
+} from '../../../core/financial-statements.interface'
 import { ohadaChartOfAccounts } from '../../chart-of-accounts'
 import { BaseOhadaTaxEngine } from '../../tax/base-tax-engine'
 import { BaseOhadaPayrollEngine } from '../../payroll/base-payroll-engine'
 import { SENEGAL_TAX_CONFIG } from './tax-config'
 import { SENEGAL_PAYROLL_CONFIG } from './payroll-config'
-import { generateBilan } from '../../statements/bilan'
-import { generateCompteDeResultat } from '../../statements/compte-resultat'
-import { generateTAFIRE } from '../../statements/tafire'
-import { generateNotesAnnexes } from '../../statements/notes-annexes'
 
 class SenegalTaxEngine extends BaseOhadaTaxEngine {
   get jurisdiction() { return 'SN' as const }
@@ -26,31 +27,33 @@ class SenegalPayrollEngine extends BaseOhadaPayrollEngine {
   get jurisdiction() { return 'SN' as const }
 }
 
-class SenegalStatementsProvider {
+/**
+ * Stub FinancialStatementsProvider for Sénégal.
+ *
+ * Les générateurs SYSCOHADA requièrent une dépendance `getAccountBalances`
+ * injectée au moment de l'appel — la signature de
+ * `FinancialStatementsProvider` ne le permet pas. Les consommateurs
+ * doivent appeler directement les fonctions
+ * `lib/jurisdictions/ohada/statements/*` avec leurs data providers.
+ */
+class SenegalStatementsProvider implements FinancialStatementsProvider {
   readonly jurisdiction = 'SN' as const
   readonly system = 'NORMAL' as const
 
-  generateBalanceSheet = generateBilan
-  generateIncomeStatement = generateCompteDeResultat
-  generateTAFIRE = generateTAFIRE
-  generateNotes = generateNotesAnnexes
+  async generateBalanceSheet(_input: StatementInput): Promise<BalanceSheet> {
+    throw new Error('Use generateBilan(input, getAccountBalances) from lib/jurisdictions/ohada/statements/bilan')
+  }
 
-  /**
-   * Maps TAFIRE (OHADA cash-flow statement) to the generic CashFlowStatement interface.
-   * The TAFIRE is the SYSCOHADA equivalent of IAS 7 cash flow statement.
-   */
-  async generateCashFlowStatement(input: StatementInput): Promise<CashFlowStatement> {
-    const tafire = await generateTAFIRE(input)
-    return {
-      periodStart: tafire.periodStart,
-      periodEnd: tafire.periodEnd,
-      operatingCashFlow: tafire.capacityForSelfFinancing,
-      investingCashFlow: tafire.investmentActivities.reduce((s, l) => s + l.netVariation, 0),
-      financingCashFlow: tafire.financingActivities.reduce((s, l) => s + l.netVariation, 0),
-      netChange: tafire.netVariationOfTreasury,
-      beginningCash: 0,
-      endingCash: tafire.netVariationOfTreasury,
-    }
+  async generateIncomeStatement(_input: StatementInput): Promise<IncomeStatement> {
+    throw new Error('Use generateCompteDeResultat(input, getAccountBalances) from lib/jurisdictions/ohada/statements/compte-resultat')
+  }
+
+  async generateCashFlowStatement(_input: StatementInput): Promise<CashFlowStatement> {
+    throw new Error('Use generateTAFIRE(input, getBalances, getPriorBalances) from lib/jurisdictions/ohada/statements/tafire')
+  }
+
+  async generateNotes(_input: StatementInput): Promise<FinancialNotes> {
+    throw new Error('Use generateNotesAnnexes(input, dataProviders) from lib/jurisdictions/ohada/statements/notes-annexes')
   }
 }
 

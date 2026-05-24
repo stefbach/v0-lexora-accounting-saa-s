@@ -99,7 +99,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     return NextResponse.json({ certificat_url: storagePath })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const msg = e instanceof Error ? e.message : 'Erreur'
     console.error('[conges/certificat POST] exception:', msg)
     return NextResponse.json({ error: msg }, { status: 500 })
@@ -135,7 +135,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     return NextResponse.json({ signed_url: data.signedUrl, expires_in: SIGNED_URL_TTL })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const msg = e instanceof Error ? e.message : 'Erreur'
     console.error('[conges/certificat GET] exception:', msg)
     return NextResponse.json({ error: msg }, { status: 500 })

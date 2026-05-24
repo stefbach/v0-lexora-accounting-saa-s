@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     }))
 
     return NextResponse.json({ users })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ user: { id: authData.user.id, email, full_name, role } })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -235,7 +235,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[PATCH]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -310,7 +310,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: `Erreur désactivation: ${error.message}` }, { status: 500 })
     }
     return NextResponse.json({ success: true, mode: 'soft', email: target?.email })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[DELETE /api/admin/users]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

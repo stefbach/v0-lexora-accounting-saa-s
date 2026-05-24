@@ -234,7 +234,7 @@ export async function GET(request: Request) {
     alertes.sort((a, b) => (typeOrder[a.type] ?? 3) - (typeOrder[b.type] ?? 3))
 
     return NextResponse.json({ alertes })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     console.error('Alertes API error:', e)

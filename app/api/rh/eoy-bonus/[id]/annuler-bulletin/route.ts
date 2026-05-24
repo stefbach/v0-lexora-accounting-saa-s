@@ -48,7 +48,7 @@ export async function POST(
       return NextResponse.json({ error: 'portion invalide (75 ou 25)' }, { status: 400 })
     }
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 

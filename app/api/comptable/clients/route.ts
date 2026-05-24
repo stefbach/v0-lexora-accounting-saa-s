@@ -93,7 +93,7 @@ export async function GET() {
         dossiers: (dossiers || []).map(d => ({ ...d, societe: societeMap[d.societe_id] || null })),
       })
     }
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
   }
 }

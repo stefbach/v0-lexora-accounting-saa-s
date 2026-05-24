@@ -94,7 +94,7 @@ export async function GET(request: Request) {
       nb_litiges: Object.values(paires).filter(p => p.statut === 'litige').length,
       nb_ecarts_importants: Object.values(paires).filter(p => Math.abs(p.ecart) > 1000).length
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

@@ -21,7 +21,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!invoice) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 })
 
   const buffer = await renderToBuffer(InvoicePdf({ invoice: invoice as any }) as any)
-  return new NextResponse(buffer as any, {
+  return new NextResponse(buffer as unknown as BodyInit, {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',

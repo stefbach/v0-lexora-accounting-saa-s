@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, results })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
   }
 }
