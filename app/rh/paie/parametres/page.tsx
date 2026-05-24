@@ -873,7 +873,7 @@ export default function ParametresPaiePage() {
         }
         setRatesSource(d.source || "api")
       }
-    } catch {}
+    } catch { /* noop */ }
     setLoadingRates(false)
   }
 

@@ -67,7 +67,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
   useEffect(() => {
     const load = async () => {
       setLoadingH(true)
-      try { await refreshData() } catch {}
+      try { await refreshData() } catch { /* noop */ }
       setLoadingH(false)
     }
     load()

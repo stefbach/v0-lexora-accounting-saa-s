@@ -276,7 +276,7 @@ export default function ComptableEquipePage() {
   const toggleDossier = (dossierId: string) => {
     setSelectedDossierIds((prev) => {
       const next = new Set(prev)
-      next.has(dossierId) ? next.delete(dossierId) : next.add(dossierId)
+      if (next.has(dossierId)) { next.delete(dossierId) } else { next.add(dossierId) }
       return next
     })
   }
@@ -284,7 +284,7 @@ export default function ComptableEquipePage() {
   const toggleDirectClient = (clientId: string) => {
     setSelectedClientIds((prev) => {
       const next = new Set(prev)
-      next.has(clientId) ? next.delete(clientId) : next.add(clientId)
+      if (next.has(clientId)) { next.delete(clientId) } else { next.add(clientId) }
       return next
     })
   }
@@ -292,7 +292,7 @@ export default function ComptableEquipePage() {
   const toggleExpanded = (clientId: string) => {
     setExpandedClients((prev) => {
       const next = new Set(prev)
-      next.has(clientId) ? next.delete(clientId) : next.add(clientId)
+      if (next.has(clientId)) { next.delete(clientId) } else { next.add(clientId) }
       return next
     })
   }

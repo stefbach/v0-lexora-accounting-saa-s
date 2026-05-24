@@ -1,3 +1,4 @@
+// FIXME(lint-fix): @ts-nocheck pragma not convertible to @ts-expect-error (file-level vs line-level). Refactor needed.
 // @ts-nocheck — TODO 2026-05-23 S2: refactor des country configs OHADA pour
 // matcher les types OhadaPayrollConfig / OhadaTaxConfig / Jurisdiction
 // (champs employee→employeeRate, standard→STANDARD, minimumAmount→minAmount,

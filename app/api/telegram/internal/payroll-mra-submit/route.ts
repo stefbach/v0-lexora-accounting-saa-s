@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
             `${TYPE_INFO[type].label} · ${periode}`,
           )
         }
-      } catch {}
+      } catch { /* noop */ }
       return {
         result: {
           status: submission.status,
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
           'Accusé de réception MRA',
         )
       }
-    } catch {}
+    } catch { /* noop */ }
 
     return {
       result: {

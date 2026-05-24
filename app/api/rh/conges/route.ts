@@ -439,7 +439,7 @@ export async function GET(request: Request) {
           | 'en_acquisition'
           | 'hors_wra_basic_sup_50k'
           | 'migrant_worker_exclu'
-          | 'no_date_arrivee' = 'no_date_arrivee'
+          | 'no_date_arrivee'
         if (!emp.date_arrivee) {
           vlEligibilityStatus = 'no_date_arrivee'
         } else if (emp.is_migrant_worker) {

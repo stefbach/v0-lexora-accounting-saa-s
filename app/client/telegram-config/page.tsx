@@ -41,7 +41,7 @@ export default function TelegramConfigPage() {
     try {
       const res = await fetch(`/api/client/telegram-alerts-config?societe_id=${societeId}`)
       if (res.ok) setCfg(await res.json())
-    } catch {}
+    } catch { /* noop */ }
   }
 
   useEffect(() => { loadLink(); loadCfg() }, [societeId])
@@ -77,7 +77,7 @@ export default function TelegramConfigPage() {
         body: JSON.stringify(next),
       })
       setCfg(next)
-    } catch {} finally { setSaving(false) }
+    } catch { /* noop */ } finally { setSaving(false) }
   }
 
   if (loading) return <div className="p-8"><Loader2 className="animate-spin h-5 w-5 text-slate-500" /></div>

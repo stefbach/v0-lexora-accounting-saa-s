@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Trouve / crée la prime catalogue "TELEGRAM_BONUS" pour cette société
-    let prime_id: string | null = null
+    let prime_id: string | null
     const { data: existingPrime } = await admin
       .from('catalogue_primes')
       .select('id')

@@ -195,7 +195,7 @@ export async function ocrExpenseTicket(args: {
     .join('')
     .trim()
 
-  let parsed: any = null
+  let parsed: any
   try {
     const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim()
     parsed = JSON.parse(clean)

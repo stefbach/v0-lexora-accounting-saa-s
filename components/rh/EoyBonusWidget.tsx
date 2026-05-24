@@ -48,7 +48,7 @@ export function EoyBonusWidget() {
         if (!cancelled && d?.recap && (d.recap.total_bonus > 0 || d.recap.nb_eligibles > 0)) {
           setRecap(d.recap as EoyBonusRecap)
         }
-      } catch {}
+      } catch { /* noop */ }
       finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true }

@@ -107,7 +107,7 @@ async function createOne(
     }, { onConflict: 'id' })
     if (profileErr) {
       // Tentative de rollback auth — best effort.
-      try { await supabase.auth.admin.deleteUser(userId) } catch {}
+      try { await supabase.auth.admin.deleteUser(userId) } catch { /* noop */ }
       return { employe_id: input.employe_id, status: 'error', error: `Erreur profil : ${profileErr.message}` }
     }
 

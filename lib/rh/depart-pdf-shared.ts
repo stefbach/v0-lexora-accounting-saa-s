@@ -45,7 +45,7 @@ export function fmtMur(n: number | null | undefined): string {
   return new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(v).replace(/[   ]/g, ' ') + ' MUR'
+  }).format(v).replace(/[\u00a0\u202f\u2009]/g, ' ') + ' MUR'
 }
 
 export function ancienneteLabel(start: string | null, end: string | null): string {

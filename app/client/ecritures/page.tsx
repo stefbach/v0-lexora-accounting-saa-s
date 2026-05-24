@@ -212,7 +212,7 @@ function ClientEcrituresContent() {
         facture_id: e.facture_id || null,
       }))
       setEcritures(arr)
-    } catch {}
+    } catch { /* noop */ }
     finally {
       setLoading(false)
     }

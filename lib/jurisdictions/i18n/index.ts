@@ -1,9 +1,11 @@
-export { OHADA_FR_TRANSLATIONS } from './ohada-fr'
+import { OHADA_FR_TRANSLATIONS } from './ohada-fr'
+
+export { OHADA_FR_TRANSLATIONS }
 
 export function getOhadaTranslation(path: string, locale: 'fr' | 'en' = 'fr'): string {
   // Simple dot notation accessor
   // 'chart.classes.1' → 'Ressources Durables'
-  const tree = locale === 'fr' ? require('./ohada-fr').OHADA_FR_TRANSLATIONS : null
+  const tree = locale === 'fr' ? OHADA_FR_TRANSLATIONS : null
   if (!tree) return path
 
   const parts = path.split('.')

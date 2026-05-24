@@ -41,9 +41,9 @@ export async function GET(req: NextRequest) {
   // Si la colonne telegram_capabilities n'a pas encore été migrée (migration 266
   // pas appliquée), on retombe gracieusement sur le SELECT sans cette colonne :
   // les overrides ne fonctionneront pas mais l'UI reste utilisable.
-  let members: any[] | null = null
+  let members: any[] | null
   let capsColumnAvailable = true
-  let membersErr: any = null
+  let membersErr: any
   {
     const res = await admin
       .from('user_societes')

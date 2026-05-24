@@ -79,7 +79,7 @@ async function loadJoursFeriesForYears(
     for (const r of data || []) {
       if (!(r as any).travail_autorise) set.add(String((r as any).date).slice(0, 10))
     }
-  } catch {}
+  } catch { /* noop */ }
   if (set.size === 0) {
     for (const y of years) for (const h of getMauritiusPublicHolidays(y)) set.add(h)
   }

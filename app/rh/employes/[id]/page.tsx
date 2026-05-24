@@ -166,7 +166,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         setEmploye((prev: any) => ({ ...prev, photo_url: data.photo_url }))
         setForm((prev: any) => ({ ...prev, photo_url: data.photo_url }))
       }
-    } catch {}
+    } catch { /* noop */ }
   }
 
   const load = useCallback(async (y?: string, pm?: string) => {

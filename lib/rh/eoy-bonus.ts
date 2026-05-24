@@ -300,7 +300,7 @@ export function calculerRecapSociete(
 // ─── Format ──────────────────────────────────────────────────────────
 export function formaterMontantMUR(n: number): string {
   if (!Number.isFinite(n)) return '—'
-  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(n))} MUR`.replace(/[   ]/g, ' ')
+  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round(n))} MUR`.replace(/[\u00A0\u202F\u2009]/g, ' ')
 }
 
 export function formaterPct(n: number, decimals = 0): string {

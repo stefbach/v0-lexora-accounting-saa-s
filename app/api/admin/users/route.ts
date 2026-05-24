@@ -251,7 +251,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (email) {
-      try { await supabase.auth.admin.updateUserById(user_id, { email }) } catch {}
+      try { await supabase.auth.admin.updateUserById(user_id, { email }) } catch { /* noop */ }
     }
 
     return NextResponse.json({ success: true })

@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
   // 2. Get access token
   let access_token: string | null = null
-  let used_account: any = null
+  let used_account: any
   try {
     const r = await getGoogleAccessToken(tg.user_id, account_email_param)
     access_token = r.access_token
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
     start: { dateTime: tomorrow.toISOString(), timeZone: 'Indian/Mauritius' },
     end: { dateTime: tomorrowEnd.toISOString(), timeZone: 'Indian/Mauritius' },
   }
-  let createdId: string | null = null
+  let createdId: string | null | undefined
   try {
     const created = await googleCalendarFetch(tg.user_id, account_email_param, '/calendars/primary/events', {
       method: 'POST', json: testEvent, query: { sendUpdates: 'none' },

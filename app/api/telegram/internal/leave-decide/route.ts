@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     const nouveauStatut = decision === 'approuve' ? 'approuve' : 'refuse'
 
     // Tenter de récupérer l'employe_id du décideur (pour approuve_par)
-    let approverEmployeId: string | null = null
+    let approverEmployeId: string | null
     if (ctx.employe_id) {
       approverEmployeId = ctx.employe_id
     } else {

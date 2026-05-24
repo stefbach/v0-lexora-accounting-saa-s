@@ -106,7 +106,7 @@ export default function PrimesPage() {
     try {
       const data = await fetch(`/api/rh/primes/regles?societe_id=${societe}`).then(r => r.json())
       setRegles(data.regles || [])
-    } catch {} finally { setLoading(false) }
+    } catch { /* noop */ } finally { setLoading(false) }
   }, [societe])
 
   useEffect(() => {

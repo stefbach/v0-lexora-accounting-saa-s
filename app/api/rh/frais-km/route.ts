@@ -315,7 +315,7 @@ export async function POST(request: Request) {
         const { data: profile } = await supabase
           .from('profiles').select('employe_id').eq('id', user.id).maybeSingle()
         approuveParEmpId = profile?.employe_id || null
-      } catch {}
+      } catch { /* noop */ }
 
       const { data, error } = await supabase
         .from('frais_km_mois')

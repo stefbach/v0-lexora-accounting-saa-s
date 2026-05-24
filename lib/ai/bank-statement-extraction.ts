@@ -37,14 +37,14 @@ const tryParseTransactionsArray = (text: string): any[] | null => {
     if (Array.isArray(p)) return p
     if (Array.isArray(p?.transactions)) return p.transactions
     if (Array.isArray(p?.lignes)) return p.lignes
-  } catch {}
+  } catch { /* noop */ }
   const first = trimmed.indexOf('[')
   const last  = trimmed.lastIndexOf(']')
   if (first !== -1 && last > first) {
     try {
       const arr = JSON.parse(trimmed.substring(first, last + 1))
       if (Array.isArray(arr)) return arr
-    } catch {}
+    } catch { /* noop */ }
   }
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (fence) {
@@ -52,20 +52,20 @@ const tryParseTransactionsArray = (text: string): any[] | null => {
       const p = JSON.parse(fence[1].trim())
       if (Array.isArray(p)) return p
       if (Array.isArray(p?.transactions)) return p.transactions
-    } catch {}
+    } catch { /* noop */ }
   }
   return null
 }
 
 const tryParseFullJson = (text: string): any | null => {
   const trimmed = text.trim()
-  try { return JSON.parse(trimmed) } catch {}
+  try { return JSON.parse(trimmed) } catch { /* noop */ }
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fence) { try { return JSON.parse(fence[1].trim()) } catch {} }
+  if (fence) { try { return JSON.parse(fence[1].trim()) } catch { /* noop */ } }
   const first = trimmed.indexOf('{')
   const last  = trimmed.lastIndexOf('}')
   if (first !== -1 && last > first) {
-    try { return JSON.parse(trimmed.substring(first, last + 1)) } catch {}
+    try { return JSON.parse(trimmed.substring(first, last + 1)) } catch { /* noop */ }
   }
   // Strategy: truncated JSON — try to close braces/brackets
   const firstBrace = trimmed.indexOf('{')
@@ -89,7 +89,7 @@ const tryParseFullJson = (text: string): any | null => {
     }
     for (let i = 0; i < openBrackets; i++) cand += ']'
     for (let i = 0; i < openBraces; i++) cand += '}'
-    try { return JSON.parse(cand) } catch {}
+    try { return JSON.parse(cand) } catch { /* noop */ }
   }
   return null
 }

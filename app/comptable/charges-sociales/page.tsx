@@ -68,7 +68,7 @@ export default function BalancePage() {
   const toggleClasse = (c: string) => {
     setExpandedClasses(prev => {
       const next = new Set(prev)
-      next.has(c) ? next.delete(c) : next.add(c)
+      if (next.has(c)) next.delete(c); else next.add(c)
       return next
     })
   }

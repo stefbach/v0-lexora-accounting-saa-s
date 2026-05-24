@@ -185,19 +185,19 @@ export function repairBankJSON(text: string): any | null {
   const trimmed = text.trim()
 
   // Strategy 1: Direct parse (response is pure JSON)
-  try { return JSON.parse(trimmed) } catch {}
+  try { return JSON.parse(trimmed) } catch { /* noop */ }
 
   // Strategy 2: Extract from markdown code fences ```json ... ```
   const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (fenceMatch) {
-    try { return JSON.parse(fenceMatch[1].trim()) } catch {}
+    try { return JSON.parse(fenceMatch[1].trim()) } catch { /* noop */ }
   }
 
   // Strategy 3: Find first { to last } in text
   const firstBrace = trimmed.indexOf('{')
   const lastBrace = trimmed.lastIndexOf('}')
   if (firstBrace !== -1 && lastBrace > firstBrace) {
-    try { return JSON.parse(trimmed.substring(firstBrace, lastBrace + 1)) } catch {}
+    try { return JSON.parse(trimmed.substring(firstBrace, lastBrace + 1)) } catch { /* noop */ }
   }
 
   // Strategy 4: JSON truncated by token limit — try to repair
@@ -227,7 +227,7 @@ export function repairBankJSON(text: string): any | null {
     // Close unclosed brackets and braces
     for (let i = 0; i < openBrackets; i++) jsonCandidate += ']'
     for (let i = 0; i < openBraces; i++) jsonCandidate += '}'
-    try { return JSON.parse(jsonCandidate) } catch {}
+    try { return JSON.parse(jsonCandidate) } catch { /* noop */ }
   }
 
   return null

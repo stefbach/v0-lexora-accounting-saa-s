@@ -189,7 +189,7 @@ export default function ExportPaiePage() {
         body: JSON.stringify({ [field]: value }),
       })
       setEmployes(prev => prev.map(e => e.id === empId ? { ...e, [field]: value } : e))
-    } catch {}
+    } catch { /* noop */ }
   }
 
   // Stats par mode

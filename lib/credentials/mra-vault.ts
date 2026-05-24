@@ -59,7 +59,7 @@ export async function getMRACredentials(
     }
   } catch (e) {
     console.error('[getMRACredentials] Decryption failed:', e instanceof Error ? e.message : e)
-    throw new Error('Failed to decrypt MRA credentials. Check CRYPT_KEY configuration.')
+    throw new Error('Failed to decrypt MRA credentials. Check CRYPT_KEY configuration.', { cause: e })
   }
 
   return result

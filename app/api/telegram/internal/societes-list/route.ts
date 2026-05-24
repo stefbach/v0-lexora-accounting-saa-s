@@ -17,7 +17,7 @@ import { getAccessibleSocieteIds } from '@/lib/supabase/assert-societe-access'
  */
 async function fetchAccessibleSocietes(userId: string, currentSocieteId: string) {
   const admin = getAdminClient()
-  let ids: string[] = []
+  let ids: string[]
   try {
     ids = await getAccessibleSocieteIds(admin, userId)
   } catch {

@@ -41,7 +41,7 @@ export default function HistoriquePaiePage() {
       const res = await fetch(`/api/rh/import-paie?action=history&societe_id=${societe}`)
       const data = await res.json()
       setPeriodes((data.history || []).sort((a: any, b: any) => b.periode.localeCompare(a.periode)))
-    } catch {}
+    } catch { /* noop */ }
     setLoading(false)
   }, [societe])
 

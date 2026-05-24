@@ -102,7 +102,7 @@ export default function EspaceEmployePage() {
         }
         fetch("/api/rh/annonces").then(r => r.json()).then(d => setAnnonces(d.annonces || [])).catch(() => {})
       }
-    } catch {}
+    } catch { /* noop */ }
     setLoading(false)
   }, [])
 

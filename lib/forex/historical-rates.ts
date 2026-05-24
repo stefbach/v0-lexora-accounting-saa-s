@@ -49,7 +49,7 @@ export async function getHistoricalRate(query: HistoricalRateQuery): Promise<Exc
         source: 'ECB',
       }
     }
-  } catch {}
+  } catch { /* noop */ }
 
   throw new Error(`No historical rate available for ${base}/${quote} on ${dateStr}`)
 }

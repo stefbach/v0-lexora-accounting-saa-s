@@ -303,7 +303,7 @@ export default function UtilisateursPage() {
       )
     }
     list.sort((a, b) => {
-      let cmp = 0
+      let cmp: number
       if (sortField === "full_name") cmp = (a.full_name || "").localeCompare(b.full_name || "")
       else if (sortField === "role") cmp = a.role.localeCompare(b.role)
       else cmp = (a.created_at || "").localeCompare(b.created_at || "")
@@ -373,7 +373,7 @@ export default function UtilisateursPage() {
       const res = await fetch(`/api/client/users?user_id=${user.id}&action=societes`)
       const data = await res.json()
       if (data.societe_ids && data.societe_ids.length > 0) userSocieteIds = data.societe_ids
-    } catch {}
+    } catch { /* noop */ }
     setEditForm({
       full_name: user.full_name || "",
       email: user.email,

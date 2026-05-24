@@ -53,7 +53,7 @@ const s = StyleSheet.create({
 function fmt(n: number): string {
   return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
     .format(Math.round(n))
-    .replace(/[   ]/g, ' ')
+    .replace(/[\u00A0\u202F\u2009]/g, ' ')
 }
 
 function SeverancePDF({ sim, soc }: any) {

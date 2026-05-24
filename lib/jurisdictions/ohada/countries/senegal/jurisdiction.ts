@@ -1,4 +1,5 @@
-// @ts-nocheck — TODO 2026-05-23 S2: refactor des country configs OHADA pour
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck -- FIXME(lint-fix): @ts-nocheck nécessaire (whole-file suppression). TODO 2026-05-23 S2: refactor des country configs OHADA pour
 // matcher les types OhadaPayrollConfig / OhadaTaxConfig / Jurisdiction
 // (champs employee→employeeRate, standard→STANDARD, minimumAmount→minAmount,
 // statementsProvider signature, etc.). Ces fichiers ont été générés par un

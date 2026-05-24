@@ -141,7 +141,7 @@ export default function PlanComptablePage() {
         map.set(num, cur)
       }
       setUsage(map)
-    } catch {}
+    } catch { /* noop */ }
     finally {
       setLoading(false)
     }

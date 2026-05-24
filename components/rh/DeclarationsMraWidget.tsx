@@ -73,7 +73,7 @@ export function DeclarationsMraWidget() {
             totalMra,
           })
         }
-      } catch {}
+      } catch { /* noop */ }
       finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true }

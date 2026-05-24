@@ -310,8 +310,8 @@ function tryAmountAndTiers(tx: MatchingTransaction, factures: MatchingFacture[],
     const isExactAmount = diff < 0.005
     const isStrongTiers = score >= 0.75
 
-    let confidence = 0.5
-    let strategy: MatchStrategy = 'close_amount'
+    let confidence: number
+    let strategy: MatchStrategy
 
     if (isExactAmount && isStrongTiers) {
       confidence = 0.95

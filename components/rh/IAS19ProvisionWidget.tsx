@@ -55,7 +55,7 @@ export function IAS19ProvisionWidget() {
         const dateFin = finDeMois()
         const match = (d?.snapshots || []).find((s: IAS19Snapshot) => s.date_snapshot === dateFin)
         if (!cancelled && match) setSnapshot(match)
-      } catch {}
+      } catch { /* noop */ }
       finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true }

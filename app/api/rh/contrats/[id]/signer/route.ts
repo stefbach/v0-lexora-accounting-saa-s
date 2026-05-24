@@ -25,7 +25,7 @@ async function envoyerWhatsApp(telephone: string, message: string): Promise<void
   }
 
   // Normaliser le numéro : retirer +, espaces, tirets
-  const numero = telephone.replace(/[\s\-\+]/g, '')
+  const numero = telephone.replace(/[\s\-+]/g, '')
 
   try {
     const res = await fetch(`${watiUrl}/api/v1/sendSessionMessage/${numero}`, {

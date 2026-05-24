@@ -129,7 +129,7 @@ async function fetchRateFromProvider(base: ISO4217, quote: ISO4217): Promise<Exc
           }
         }
       }
-    } catch {}
+    } catch { /* noop */ }
   }
 
   // Cross-rate via EUR if base ≠ EUR
@@ -150,7 +150,7 @@ async function fetchRateFromProvider(base: ISO4217, quote: ISO4217): Promise<Exc
           }
         }
       }
-    } catch {}
+    } catch { /* noop */ }
   }
 
   return null

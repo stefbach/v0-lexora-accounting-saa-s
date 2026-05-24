@@ -58,7 +58,7 @@ export function DocumentsEnAttenteWidget() {
               }
               if (!cancelled) setEmpMap(map)
             }
-          } catch {}
+          } catch { /* noop */ }
         }
       })
       .catch(() => { if (!cancelled) setDocs([]) })

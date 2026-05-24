@@ -46,7 +46,7 @@ export function IAS19EoyProvisionWidget() {
           (s: IAS19EoySnapshot) => s.annee === anneeCourante && s.mois === moisCourant,
         )
         if (!cancelled && match) setSnapshot(match)
-      } catch {}
+      } catch { /* noop */ }
       finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true }

@@ -90,7 +90,7 @@ export default function LexOcrPage() {
     try {
       const raw = localStorage.getItem(`${RESOLVED_KEY}:${societeId}`)
       if (raw) setResolved(new Set(JSON.parse(raw)))
-    } catch {}
+    } catch { /* noop */ }
   }, [societeId])
 
   const persistResolved = useCallback(
@@ -101,7 +101,7 @@ export default function LexOcrPage() {
           `${RESOLVED_KEY}:${societeId}`,
           JSON.stringify(Array.from(next))
         )
-      } catch {}
+      } catch { /* noop */ }
     },
     [societeId]
   )

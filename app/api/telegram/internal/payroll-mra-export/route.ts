@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
       totalFiles += r.files.length
       try {
         await sendTelegramMessage(ctx.chat_id, `📊 <b>Déclaration ${MAP[t].label}</b> — ${periode} (${r.files.length} fichier(s))`)
-      } catch {}
+      } catch { /* noop */ }
       for (const f of r.files) {
         try {
           await sendTelegramDocumentBuffer(

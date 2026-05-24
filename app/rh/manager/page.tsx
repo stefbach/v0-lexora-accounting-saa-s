@@ -72,7 +72,7 @@ export default function ManagerDashboard() {
       setGroupes(grpRes.groupes || [])
       setPointages(ptRes.pointages || [])
       setBalances(cgRes.balances || [])
-    } catch {}
+    } catch { /* noop */ }
     setLoading(false)
   }, [societe, today])
 

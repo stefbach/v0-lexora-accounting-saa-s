@@ -357,7 +357,7 @@ export default function GeolocalisationPage() {
       const data = await res.json()
       setPositions(data.positions || [])
       setGroupes(data.groupes || [])
-    } catch {}
+    } catch { /* noop */ }
     setLoading(false)
   }, [societe])
 

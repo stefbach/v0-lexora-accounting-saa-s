@@ -67,7 +67,7 @@ export async function resolveTelegramContext(req: NextRequest): Promise<Telegram
     try {
       const body = await req.clone().json()
       chatIdRaw = body?.chat_id ?? null
-    } catch {}
+    } catch { /* noop */ }
   }
   if (!chatIdRaw) {
     throw NextResponse.json({ error: 'chat_id requis' }, { status: 400 })
@@ -93,7 +93,7 @@ export async function resolveTelegramContext(req: NextRequest): Promise<Telegram
   // Récupère le rôle + override de capabilities dans la société active.
   // Si la colonne telegram_capabilities n'a pas été migrée (mig 266), on
   // retombe gracieusement sur le SELECT minimal et on utilise les defaults.
-  let us: any = null
+  let us: any
   {
     const res = await admin
       .from('user_societes')
@@ -231,7 +231,7 @@ export async function withTelegramAuth(
 
   let body: any = null
   if (req.method !== 'GET') {
-    try { body = await req.clone().json() } catch {}
+    try { body = await req.clone().json() } catch { /* noop */ }
   }
 
   // Fusionne query string → body. Workaround pour le bug n8n
@@ -255,8 +255,8 @@ export async function withTelegramAuth(
 
   const t0 = Date.now()
   const admin = getAdminClient()
-  let status: 'success' | 'denied' | 'error' = 'success'
-  let result: any = null
+  let status: 'success' | 'denied' | 'error'
+  let result: any
   let error_msg: string | undefined
 
   try {

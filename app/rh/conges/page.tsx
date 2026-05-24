@@ -2167,7 +2167,7 @@ export default function CongesPage() {
                   const d1 = new Date(form.date_debut + 'T12:00:00')
                   const d2 = new Date(form.date_fin + 'T12:00:00')
                   slDays = Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1)
-                } catch {}
+                } catch { /* noop */ }
               }
               const slCourt = form.type_conge === 'SL' && slDays > 0 && slDays < 3
               const justifRequis = !slCourt

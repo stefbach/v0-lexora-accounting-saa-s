@@ -173,7 +173,7 @@ export default function PlanningPage() {
             return
           }
         }
-      } catch {}
+      } catch { /* noop */ }
       if (!cancelled) setCreneaux(DEFAULT_CRENEAUX)
     })()
     return () => { cancelled = true }
@@ -344,7 +344,7 @@ export default function PlanningPage() {
   const loadRules = () => {
     const stored = localStorage.getItem(`lexora_planning_rules_${societe}`)
     if (stored) {
-      try { return JSON.parse(stored) } catch {}
+      try { return JSON.parse(stored) } catch { /* noop */ }
     }
     // defaults
     return [
@@ -615,7 +615,7 @@ export default function PlanningPage() {
       if (societe && societe !== "all") {
         localStorage.setItem("rh_planning_societe", societe)
       }
-    } catch {}
+    } catch { /* noop */ }
   }, [societe])
 
   // Sprint 1 — fetch la limite hebdo depuis les règles WRA persistées de

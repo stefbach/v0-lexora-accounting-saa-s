@@ -66,7 +66,7 @@ export default function CompteCourantPage() {
       setMouvements(ccData.mouvements || [])
       setTotalSolde(ccData.totalSolde || 0)
       setFactures((facData.factures || []).filter((f: any) => f.statut !== 'paye' && f.statut !== 'annule'))
-    } catch { }
+    } catch { /* noop */ }
     finally { setLoading(false) }
   }, [societeId])
 
@@ -83,7 +83,7 @@ export default function CompteCourantPage() {
       setCreateDialog(false)
       setFormNom(""); setFormType("associe")
       load()
-    } catch { }
+    } catch { /* noop */ }
     finally { setSaving(false) }
   }
 
@@ -106,7 +106,7 @@ export default function CompteCourantPage() {
       setFormAvanceCompte(""); setFormAvanceMontant(""); setFormAvanceDesc("")
       setFormAvanceDate(""); setFormAvanceFacture("")
       load()
-    } catch { }
+    } catch { /* noop */ }
     finally { setSaving(false) }
   }
 
@@ -127,7 +127,7 @@ export default function CompteCourantPage() {
       setRemboursementDialog(false)
       setFormRembCompte(""); setFormRembMontant(""); setFormRembDesc(""); setFormRembDate("")
       load()
-    } catch { }
+    } catch { /* noop */ }
     finally { setSaving(false) }
   }
 

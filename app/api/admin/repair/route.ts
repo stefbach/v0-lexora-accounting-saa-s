@@ -221,7 +221,7 @@ async function repair_purge_cca_doublons(
     let doublons = 0
     for (const m of mouvements || []) {
       const desc = (m.description as string) || ''
-      const match = desc.match(/[\[(](\d+\.\d+) [A-Z]{3}/)
+      const match = desc.match(/[[(](\d+\.\d+) [A-Z]{3}/)
       if (!match) continue
       const key = `${m.compte_courant_id}|${m.date_mouvement}|${match[1]}`
       if (seen.has(key)) doublons++
@@ -246,7 +246,7 @@ async function repair_purge_cca_doublons(
   )
   for (const m of sorted) {
     const desc = (m.description as string) || ''
-    const match = desc.match(/[\[(](\d+\.\d+) [A-Z]{3}/)
+    const match = desc.match(/[[(](\d+\.\d+) [A-Z]{3}/)
     if (!match) continue
     const key = `${m.compte_courant_id}|${m.date_mouvement}|${match[1]}`
     if (seen.has(key)) toDelete.push(m.id as string)

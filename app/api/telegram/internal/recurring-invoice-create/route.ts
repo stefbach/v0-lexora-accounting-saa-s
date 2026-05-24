@@ -243,7 +243,7 @@ export async function POST(req: NextRequest) {
 
     const fac = j?.facture || {}
     // Prochaine émission théorique (même règle que le cron quotidien).
-    let prochaine_emission: string | null = null
+    let prochaine_emission: string | null
     try {
       prochaine_emission = prochaineDateGeneration(date_debut, frequence, jour_emission)
     } catch {

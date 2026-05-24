@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       const { data } = await supabase.from('jours_feries')
         .select('date').gte('date', `${year}-01-01`).lte('date', `${year}-12-31`)
       set = new Set((data || []).map((r: any) => String(r.date).slice(0, 10)))
-    } catch {}
+    } catch { /* noop */ }
     if (set.size === 0) set = getMauritiusPublicHolidays(year)
     feriesByYear.set(year, set)
     return set

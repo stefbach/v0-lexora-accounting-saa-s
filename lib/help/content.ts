@@ -2619,6 +2619,8 @@ let _enRegistry: Record<string, HelpEntry> | null = null
 function getEnRegistry(): Record<string, HelpEntry> {
   if (_enRegistry) return _enRegistry
   try {
+    // FIXME(lint-fix): require() utilisé pour chargement synchrone lazy ; conversion en import statique modifierait la sémantique
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require('./content-en') as { HELP_CONTENT_EN: Record<string, HelpEntry> }
     _enRegistry = mod.HELP_CONTENT_EN || {}
   } catch {

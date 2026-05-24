@@ -575,7 +575,7 @@ export function matchBySupplier(
       if (bestFac) {
         const isExact = bestDiff < 0.005
         const looksLikeTDS = bestDiff >= 0.02 && bestDiff <= 0.06
-        let confidence = 0.60
+        let confidence: number
         if (isExact) confidence = 0.95
         else if (looksLikeTDS) confidence = 0.88
         else confidence = 0.75
@@ -1157,7 +1157,7 @@ function matchByAmountFallback(
 
     const isExact = best.diff < 0.005
     const isTDS = best.diff >= 0.02 && best.diff <= 0.06
-    let confidence = 0.50
+    let confidence: number
     if (isExact) confidence = 0.80
     else if (isTDS) confidence = 0.65
     else confidence = 0.50

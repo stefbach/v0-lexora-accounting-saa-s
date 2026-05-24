@@ -227,7 +227,7 @@ async function extractAgingAnalysis() {
     ws['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 18 }, { wch: 30 }, { wch: 18 }, { wch: 12 }]
     ws['!freeze'] = { ySplit: 4 }
 
-    const sheetName = bucket.name.slice(0, 31).replace(/[/\\?*\[\]]/g, '_')
+    const sheetName = bucket.name.slice(0, 31).replace(/[/\\?*[\]]/g, '_')
     XLSX.utils.book_append_sheet(wb, ws, sheetName)
   }
 

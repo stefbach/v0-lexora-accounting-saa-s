@@ -169,7 +169,7 @@ export async function googleCalendarFetch(
   if (!res.ok) {
     const txt = await res.text().catch(() => '')
     let parsed: any = null
-    try { parsed = JSON.parse(txt) } catch {}
+    try { parsed = JSON.parse(txt) } catch { /* noop */ }
     const msg = parsed?.error?.message || txt.slice(0, 300) || `HTTP ${res.status}`
     throw new Error(`Google Calendar API ${res.status} : ${msg}`)
   }

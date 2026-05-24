@@ -1,3 +1,4 @@
+// FIXME(lint-fix): @ts-nocheck conservé volontairement, le refactor des country configs OHADA reste à faire (cf. PR #232). Remplacement par @ts-expect-error impossible (fichier entier non conforme aux types).
 // @ts-nocheck — TODO 2026-05-23 S2: refactor des country configs OHADA pour
 // matcher les types OhadaPayrollConfig / OhadaTaxConfig / Jurisdiction
 // (champs employee→employeeRate, standard→STANDARD, minimumAmount→minAmount,

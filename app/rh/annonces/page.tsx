@@ -53,7 +53,7 @@ export default function AnnoncesPage() {
     try {
       const res = await fetch(`/api/rh/annonces?societe_id=${societe}&all=1`).then(r => r.json())
       setAnnonces(res.annonces || [])
-    } catch {}
+    } catch { /* noop */ }
     setLoading(false)
   }, [societe])
 
@@ -82,7 +82,7 @@ export default function AnnoncesPage() {
       setEditingId(null)
       setForm({ titre: "", contenu: "", type: "info", priorite: "0", date_debut: new Date().toISOString().split("T")[0], date_fin: "" })
       load()
-    } catch {}
+    } catch { /* noop */ }
     setSaving(false)
   }
 
