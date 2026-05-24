@@ -507,12 +507,12 @@ function FacturePreviewContent() {
                       <td className="py-3 px-3 text-sm text-right align-top">{qte}</td>
                       <td className="py-3 px-3 text-sm text-right font-mono align-top">
                         <div>{fmtSigned(pu)} {isForeign ? data.devise : ""}</div>
-                        {isForeign && <div className="text-[11px] text-gray-600 mt-0.5">~ {fmtSigned(puMur)} MUR</div>}
+                        {isForeign && <div className="text-[11px] text-gray-600 mt-0.5">({fmtSigned(puMur)} MUR)</div>}
                       </td>
                       <td className="py-3 px-3 text-sm text-right align-top">{l.taux_tva}%</td>
                       <td className="py-3 px-4 text-sm text-right font-mono font-semibold align-top">
                         <div>{fmtSigned(montant)} {isForeign ? data.devise : ""}</div>
-                        {isForeign && <div className="text-[11px] text-gray-600 font-normal mt-0.5">~ {fmtSigned(montantMur)} MUR</div>}
+                        {isForeign && <div className="text-[11px] text-gray-600 font-normal mt-0.5">({fmtSigned(montantMur)} MUR)</div>}
                       </td>
                     </tr>
                   )

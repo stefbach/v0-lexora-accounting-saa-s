@@ -170,6 +170,48 @@ export default function NouvelleFacturePage() {
       .catch(() => setTemplates([]))
   }, [societeId])
 
+  // Settings société depuis la DB — déclenché dès que societeId dispo.
+  // Source de vérité = table `societes` (logo, BRN, VAT, banque, mentions).
+  // Sans ça, un nouvel utilisateur sans localStorage perdait toutes les
+  // infos société sur le PDF (logo, banque, BRN, TVA). On merge avec les
+  // valeurs localStorage déjà chargées : DB prioritaire, localStorage
+  // fallback pour les champs purement "préférences" (préfixe, prochain
+  // numéro, devise par défaut) qui ne sont pas en DB.
+  useEffect(() => {
+    if (!societeId) return
+    fetch('/api/client/societes')
+      .then(r => r.json())
+      .then(d => {
+        const soc = (d.societes || []).find((s: any) => s.id === societeId)
+        if (!soc) return
+        setSettings(prev => {
+          const base = prev || ({} as CompanySettings)
+          return {
+            ...base,
+            nom: soc.nom || base.nom || '',
+            brn: soc.brn || base.brn || '',
+            vat_number: soc.numero_tva_mra || soc.vat_number || base.vat_number || '',
+            logo_url: soc.logo_url || base.logo_url || '',
+            adresse: [soc.adresse, soc.adresse2, soc.ville].filter(Boolean).join('\n') || base.adresse || '',
+            telephone: soc.telephone || base.telephone || '',
+            email: soc.email || base.email || '',
+            website: soc.website || base.website || '',
+            banque_nom: soc.banque_nom || soc.bank_name || base.banque_nom || '',
+            banque_compte: soc.banque_compte || soc.bank_account_number || base.banque_compte || '',
+            banque_iban: soc.banque_iban || soc.iban || base.banque_iban || '',
+            banque_swift: soc.banque_swift || base.banque_swift || '',
+            footer_text: soc.facture_footer_text || base.footer_text || '',
+            mention_legale: soc.facture_mention_legale || base.mention_legale || '',
+            devise_defaut: base.devise_defaut || 'MUR',
+            prefixe_facture: base.prefixe_facture || soc.facture_prefixe || 'INV-',
+            prochain_numero: base.prochain_numero || Number(soc.facture_prochain_numero) || 1,
+            conditions_paiement: base.conditions_paiement || 30,
+          } as CompanySettings
+        })
+      })
+      .catch(() => { /* fallback sur localStorage déjà chargé */ })
+  }, [societeId])
+
   // Catalogue depuis l'API — déclenché dès que societeId est disponible.
   // Remplace les items localStorage par ceux en base (source de vérité).
   useEffect(() => {

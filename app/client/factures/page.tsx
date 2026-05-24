@@ -596,8 +596,8 @@ function FactureList({
                   size="sm"
                   variant="outline"
                   className="h-7 px-2 text-[11px]"
-                  title="Télécharger le PDF"
-                  onClick={() => window.open(`/api/client/factures/${f.id}/pdf`, '_blank')}
+                  title="Imprimer / Sauvegarder en PDF"
+                  onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}&print=true`, '_blank')}
                 >
                   <Printer className="h-3 w-3 mr-1" />
                   PDF
