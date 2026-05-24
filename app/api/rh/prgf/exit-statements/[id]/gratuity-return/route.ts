@@ -124,7 +124,7 @@ export async function GET(
 
     const supabase = getAdminClient()
     const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     if (!['admin', 'rh'].includes(role)) return new NextResponse('Accès refusé', { status: 403 })
 
     const params = await Promise.resolve(context.params as any)
