@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { createEcrituresForPayment, createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 import { safeInsertBnq } from '@/lib/accounting/bnq-dedupe'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture } from '@/lib/accounting/matching-engine'
+import {
+  toMURWithRates,
+  isSelfMatch,
+  dateDiffDays,
+  BANK_FEE_PATTERNS,
+} from '@/lib/accounting/rapprochement/matching-engine'
 import { runIntelligentRapprochement, buildAliasMap } from '@/lib/accounting/intelligent-rapprochement'
 import type { SupplierAlias } from '@/lib/accounting/intelligent-rapprochement'
 import { createClient } from '@supabase/supabase-js'
@@ -15,6 +21,31 @@ import { classifyTransaction, detectDirector, getComplianceSeverity, type Classi
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
 import { resolveInterSocieteForTransaction, COMPTE_GROUPE_451 } from '@/lib/comptable/inter-societes'
 import { userHasAccessToSociete } from '@/lib/rh/access'
+// V3-22 — helpers de lettrage extraits (voir docstring du module).
+import {
+  CLASSE_COMPTES,
+  CLASSIFICATIONS_AVEC_LETTRAGE_CROISE,
+  LETTRAGE_CROISE_DATE_WINDOW_DAYS,
+  computeEcartCompte,
+  ecartRequiresQualification,
+  findAchCandidatesForBnq,
+  lettrageCroiseTolerance,
+  selectClosestByDate,
+  type TypeEcart,
+} from '@/lib/accounting/rapprochement/lettrage'
+// V3-23 batch 3 — handlers post-processing extraits (lettrage manuel,
+// CCA, marquer payé, classification manuelle, clôture, NDF, reset).
+import {
+  handleLettrerEcritures,
+  handlePayeParAssocie,
+  handleCompensation,
+  handlePaiementEmploye,
+  handleMarquerPaye,
+  handleClasserTransaction,
+  handleCloturerMois,
+  handleRembourserEmploye,
+  handleAnnulerPaiementFactures,
+} from '@/lib/accounting/rapprochement/post-processing'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -107,37 +138,12 @@ function bnqFreezeColumns(
   }
 }
 
-// ── Advanced tiers scoring for Phase 5 (BNQ↔ACH lettrage) ──
-function advancedTiersScoreForRoute(a: string, b: string): number {
-  const na = (a || '').toLowerCase().replace(/\b(ltd|limited|sarl|sa|co|inc|pvt)\b/gi, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
-  const nb = (b || '').toLowerCase().replace(/\b(ltd|limited|sarl|sa|co|inc|pvt)\b/gi, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
-  if (!na || !nb) return 0
-  if (na === nb) return 1
-  if (na.includes(nb) || nb.includes(na)) return 0.9
-  const wA = new Set(na.split(' ').filter(w => w.length > 2))
-  const wB = new Set(nb.split(' ').filter(w => w.length > 2))
-  if (wA.size === 0 || wB.size === 0) return 0
-  const inter = [...wA].filter(w => wB.has(w)).length
-  return inter / new Set([...wA, ...wB]).size
-}
-
-// Normalize tiers name for matching
-function normalizeTiers(name: string): string {
-  return (name || '')
-    .toLowerCase()
-    .replace(/\s+(ltd|limited|sarl|sas|sa|co|company|cie|inc)\.?\s*$/i, '')
-    .replace(/[^a-z0-9\s]/g, '')
-    .trim()
-}
-
-// Word overlap score between two strings
-function wordOverlap(a: string, b: string): number {
-  const wordsA = normalizeTiers(a).split(/\s+/).filter(w => w.length > 2)
-  const wordsB = normalizeTiers(b).split(/\s+/).filter(w => w.length > 2)
-  if (wordsA.length === 0 || wordsB.length === 0) return 0
-  const overlap = wordsA.filter(w => wordsB.some(wb => wb.includes(w) || w.includes(wb))).length
-  return overlap / Math.max(wordsA.length, wordsB.length)
-}
+// NOTE — V3-21 (refactor matching engine) :
+//   `advancedTiersScoreForRoute`, `normalizeTiers`, `wordOverlap` étaient
+//   définies ici sans aucun call-site dans ce fichier. Elles ont été
+//   déplacées vers `lib/accounting/rapprochement/matching-engine.ts`
+//   (exports `advancedTiersScore`, `normalizeTiers`, `wordOverlap`) où
+//   elles peuvent servir aux helpers de lettrage extraits par V3-22.
 
 function getAdminClient() {
   return createClient(
@@ -360,7 +366,7 @@ export async function GET(request: Request) {
       comptesBancaires: comptes || [],
       transit_alerts,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[rapprochement GET]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -627,20 +633,13 @@ export async function POST(request: Request) {
       // Les anciennes tx (sans tx.devise) passent par le fallback → comportement inchangé.
       // Les nouvelles tx en devise étrangère débitées sur un compte MUR (paiement Forex)
       // utilisent leur propre devise au lieu d'être reconverties ×46.5 à tort.
+      // V3-21 : implémentation déplacée dans `lib/accounting/rapprochement/matching-engine.ts`
+      // (`toMURWithRates`). On garde un wrapper local qui injecte `rates` du scope.
       const toMUR = (
         amount: number,
         txOrDevise: string | { devise?: string | null } | null | undefined,
-        compteDeviseFallback?: string
-      ): number => {
-        let effectiveDevise: string
-        if (txOrDevise && typeof txOrDevise === 'object') {
-          effectiveDevise = (txOrDevise.devise || compteDeviseFallback || 'MUR').toUpperCase()
-        } else {
-          effectiveDevise = ((txOrDevise as string | null | undefined) || 'MUR').toUpperCase()
-        }
-        if (!effectiveDevise || effectiveDevise === 'MUR') return amount
-        return amount * (rates[effectiveDevise] || 1)
-      }
+        compteDeviseFallback?: string,
+      ): number => toMURWithRates(amount, txOrDevise, rates, compteDeviseFallback)
 
       const compteDeviseMap: Record<string, string> = {}
       // FIX 1 — map compte_bancaire_id → compte_comptable (512xxx) pour
@@ -681,10 +680,8 @@ export async function POST(request: Request) {
         console.warn('[rapprochement] Second batch partially failed:', batchErr.message)
       }
 
-      // Pre-classification patterns
-      const BANK_FEE_PATTERNS = ['service fee', 'banking subs fee', 'merchant monthly fee', 'payment fee',
-        'outward transfer charge', 'tax amount due', 'card repayment', 'merchant discount',
-        'merchant settlement', 'e-commerce transaction fee', 'contra entry', 'commission', 'frais']
+      // Pre-classification patterns — V3-21 : extrait vers
+      // `lib/accounting/rapprochement/matching-engine.ts` (`BANK_FEE_PATTERNS`).
 
       let counts = { matched: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, salaire_individuel: 0, propose: 0, not_matched: 0, total: 0 }
       const matchesList: any[] = []
@@ -756,23 +753,8 @@ export async function POST(request: Request) {
           //   → "digital" ✓, "data" ✓, "solutions" → tiers has "sol" which starts solutions ✓ → MATCH
           //   "digital data solutions malta" → 1 mot extra "malta" → NO MATCH
           //   "obesity care clinic" → 0 mots en commun → NO MATCH
-          function isSelfMatch(selfName: string, tiersName: string): boolean {
-            const selfWords = selfName.split(/\s+/).filter((w: string) => w.length > 2)
-            const tiersWords = tiersName.split(/\s+/).filter((w: string) => w.length > 2)
-            if (selfWords.length === 0 || tiersWords.length === 0) return false
-            // Minimum 4 caractères pour le matching (évite "myt" matchant n'importe quoi)
-            const matchedSelf = selfWords.filter((sw: string) => tiersWords.some((tw: string) => {
-              if (sw.length < 4 || tw.length < 4) return false
-              return tw.startsWith(sw.substring(0, 4)) || sw.startsWith(tw.substring(0, 4))
-            }))
-            if (matchedSelf.length < selfWords.length * 0.7) return false
-            const unmatchedTiers = tiersWords.filter((tw: string) => !selfWords.some((sw: string) => {
-              if (sw.length < 4 || tw.length < 4) return false
-              return tw.startsWith(sw.substring(0, 4)) || sw.startsWith(tw.substring(0, 4))
-            }))
-            return unmatchedTiers.length === 0
-          }
-
+          // V3-21 : `isSelfMatch` extrait vers
+          // `lib/accounting/rapprochement/matching-engine.ts` (logique inchangée).
           const isTiersSelf = selfNamesNorm.some(n => isSelfMatch(n, txTiersNorm))
           // Un virement interne = "Own Account Transfer" vers soi-même UNIQUEMENT
           const isOwnAccountTransfer = txLib.includes('own account transfer') && isTiersSelf
@@ -907,11 +889,8 @@ export async function POST(request: Request) {
           }
         }
 
-        const dateDiffDays = (a: string, b: string): number => {
-          const da = new Date(a).getTime(), db = new Date(b).getTime()
-          if (isNaN(da) || isNaN(db)) return 999
-          return Math.abs(da - db) / (1000 * 60 * 60 * 24)
-        }
+        // V3-21 : `dateDiffDays` extrait vers
+        // `lib/accounting/rapprochement/matching-engine.ts` (logique inchangée).
 
         const paired = new Set<string>() // key: releveId:txIdx
         let viCounter = 1
@@ -2023,32 +2002,9 @@ export async function POST(request: Request) {
         // Créer l'écriture BNQ avec le bon compte.
         // Mapping étendu pour les classifications proposées par le menu
         // "Classer..." de la page rapprochement (Part 2 redesign).
-        const CLASSE_COMPTES: Record<string, string> = {
-          fournisseur: '401',
-          client: '411',
-          compte_courant_associe: '455',
-          cca: '455',
-          remboursement_associe: '108',
-          avance_personnel: '425',
-          charge_diverse: '658',
-          paiement_mra: '444',
-          frais_bancaires: '627',
-          salaire: '4210',
-          salaire_bulk: '421',
-          virement_interne: '5800',
-          remboursement_personnel: '108',
-          loyer: '613',
-          entretien: '615',
-          assurance: '616',
-          honoraires: '622',
-          deplacement: '625',
-          telecom: '626',
-          impot_taxe: '635',
-          materiel: '606',
-          produit_divers: '706',
-          charge_sociale: '431',
-          autre: '471',
-        }
+        // V3-22 : CLASSE_COMPTES extrait dans
+        // lib/accounting/rapprochement/lettrage.ts (réutilisé par d'autres
+        // handlers — éviter de dupliquer la même table).
         let compteCharge = CLASSE_COMPTES[classification] || '471'
         console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
 
@@ -2174,17 +2130,16 @@ export async function POST(request: Request) {
           //   4. Si plusieurs candidats → tentative match exact, sinon log
           //      sans rien faire (l'opérateur fera un lettrage manuel)
           //   5. Si aucune trouvée → log (cas normal pour 1ère paye, etc.)
-          const CLASSIFICATIONS_AVEC_LETTRAGE_CROISE = new Set([
-            'salaire', 'salaire_bulk', 'paiement_mra',
-            'charge_sociale', 'remboursement_personnel',
-          ])
+          // V3-22 : CLASSIFICATIONS_AVEC_LETTRAGE_CROISE,
+          // LETTRAGE_CROISE_DATE_WINDOW_DAYS, lettrageCroiseTolerance et
+          // selectClosestByDate sont extraits dans
+          // lib/accounting/rapprochement/lettrage.ts (helpers pures).
           if (CLASSIFICATIONS_AVEC_LETTRAGE_CROISE.has(classification) && isOut) {
             try {
               // Fenêtre date : ±60 jours pour gérer les paiements tardifs
-              const DATE_WINDOW_DAYS = 60
               const dateRef = new Date(dateEcr)
-              const dateMin = new Date(dateRef.getTime() - DATE_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
-              const dateMax = new Date(dateRef.getTime() + DATE_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
+              const dateMin = new Date(dateRef.getTime() - LETTRAGE_CROISE_DATE_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
+              const dateMax = new Date(dateRef.getTime() + LETTRAGE_CROISE_DATE_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
 
               const { data: candidates } = await supabase
                 .from('ecritures_comptables_v2')
@@ -2197,7 +2152,7 @@ export async function POST(request: Request) {
                 .lte('date_ecriture', dateMax)
 
               // Tolérance 0.5% pour absorber arrondis de change/centimes
-              const tolerance = Math.max(0.5, amountMurMC * 0.005)
+              const tolerance = lettrageCroiseTolerance(amountMurMC)
               const exactMatches = (candidates || []).filter((c: any) => {
                 const credit = Number(c.credit_mur) || 0
                 return credit > 0 && Math.abs(credit - amountMurMC) <= tolerance
@@ -2210,14 +2165,10 @@ export async function POST(request: Request) {
                   .eq('id', matchId)
                 console.log(`[lettrer_manuel/${classification}] lettrage croisé OK : écriture ${matchId} lettrée avec ${code}`)
               } else if (exactMatches.length === 0) {
-                console.log(`[lettrer_manuel/${classification}] aucun match pour ${amountMurMC} MUR sur compte ${compteCharge} (±${DATE_WINDOW_DAYS}j) — BNQ créée mais pas de lettrage croisé`)
+                console.log(`[lettrer_manuel/${classification}] aucun match pour ${amountMurMC} MUR sur compte ${compteCharge} (±${LETTRAGE_CROISE_DATE_WINDOW_DAYS}j) — BNQ créée mais pas de lettrage croisé`)
               } else {
                 // Plusieurs candidats : on tente le match le plus proche en date
-                const closestByDate = exactMatches.reduce((best, c) => {
-                  const cDelta = Math.abs(new Date(c.date_ecriture).getTime() - dateRef.getTime())
-                  const bestDelta = Math.abs(new Date(best.date_ecriture).getTime() - dateRef.getTime())
-                  return cDelta < bestDelta ? c : best
-                })
+                const closestByDate = selectClosestByDate(exactMatches as any[], dateRef)!
                 await supabase.from('ecritures_comptables_v2')
                   .update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0] })
                   .eq('id', closestByDate.id)
@@ -2750,13 +2701,10 @@ export async function POST(request: Request) {
       const facturesTotal = (facturesData || []).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0)
       const ecart = Math.abs(txAmount - facturesTotal)
       const ecartSigne = txAmount - facturesTotal
-      const ecartPct = facturesTotal > 0 ? ecart / facturesTotal : 0
       // Seuil auto : écarts < 2% sont acceptés automatiquement (frais bancaires,
       // TDS, arrondis de change). Au-delà de 2% → demander qualification.
-      const SEUIL_AUTO_PCT = 0.02
-      const SEUIL_AUTO_ABS = 100 // MUR — petits montants toujours acceptés
-
-      if (ecart > SEUIL_AUTO_ABS && ecartPct > SEUIL_AUTO_PCT && !type_ecart) {
+      // V3-22 : seuils + check extraits dans lettrage.ts (ecartRequiresQualification).
+      if (ecartRequiresQualification(ecart, facturesTotal, type_ecart as TypeEcart | undefined)) {
         return NextResponse.json({
           error: 'ecart_requires_qualification',
           message: `Écart de ${ecart.toFixed(2)} MUR entre la transaction (${txAmount.toFixed(2)}) et le total factures (${facturesTotal.toFixed(2)}). Règle R4 : pas de lettrage forcé. Qualifier l'écart avant de relancer.`,
@@ -2906,66 +2854,23 @@ export async function POST(request: Request) {
           // Ici on raisonne "bank moins facture" donc :
           //   - ecartSigne > 0 ⇒ on a encaissé plus que la facture (gain) ou payé plus (perte côté fournisseur)
           // La catégorisation finale est pilotée par type_ecart.
-          const ecartAbs = Math.round(ecart * 100) / 100
-          let compteEcart: string
-          let libelleEcart: string
-          if (ecart <= SEUIL_AUTO_ABS) {
-            // Régularisation automatique <1 MUR
-            compteEcart = ecartSigne > 0 ? '758' : '658'
-            libelleEcart = `Régularisation écart <1 MUR — ${lettreCode}`
-          } else {
-            switch (type_ecart) {
-              case 'change':
-                compteEcart = ecartSigne > 0 ? '766' : '666'
-                libelleEcart = `${ecartSigne > 0 ? 'Gain' : 'Perte'} de change — ${lettreCode}`
-                break
-              case 'escompte':
-                compteEcart = ecartSigne > 0 ? '765' : '665'
-                libelleEcart = `${ecartSigne > 0 ? 'Escompte obtenu' : 'Escompte accordé'} — ${lettreCode}`
-                break
-              case 'penalite':
-                // Pénalité de retard — toujours en charge (631)
-                compteEcart = '631'
-                libelleEcart = `Pénalité de retard — ${lettreCode}`
-                break
-              case 'a_regulariser':
-                // FORCE — l'opérateur ne peut/veut pas qualifier maintenant.
-                // L'écart va sur 471 (compte d'attente, classe 4 = bilan donc
-                // lettrable plus tard quand la régularisation comptable arrive).
-                // À surveiller via /admin/health (check ecritures_orphelines_471).
-                compteEcart = '471'
-                libelleEcart = `Écart forcé — à régulariser (${ecartSigne > 0 ? '+' : ''}${ecartAbs.toFixed(2)} MUR) — ${lettreCode}`
-                break
-              case 'exceptionnel':
-              default:
-                compteEcart = ecartSigne > 0 ? '758' : '658'
-                libelleEcart = `Écart exceptionnel rapprochement — ${lettreCode}`
-                break
-            }
-          }
-          // Sens débit/crédit selon classe du compte :
-          //   • 6xxx (charge) → débit
-          //   • 7xxx (produit) → crédit
-          //   • 4xxx (471 attente) → débit si ecartSigne < 0, crédit si > 0
-          //     (équilibre le solde 411/401 dans le sens opposé à l'écart)
-          let debitOd = 0, creditOd = 0
-          if (/^6/.test(compteEcart)) debitOd = ecartAbs
-          else if (/^7/.test(compteEcart)) creditOd = ecartAbs
-          else if (/^4/.test(compteEcart)) {
-            // Compte 471 (à régulariser) : on inverse le sens pour neutraliser
-            // l'écart 411/401. ecartSigne > 0 (banque > facture) → 471 crédit.
-            if (ecartSigne > 0) creditOd = ecartAbs
-            else debitOd = ecartAbs
-          }
+          // V3-22 : compute extrait dans lettrage.ts (computeEcartCompte) —
+          // gère aussi le sens débit/crédit selon classe du compte (R7).
+          const ecartOd = computeEcartCompte(
+            ecart,
+            ecartSigne,
+            lettreCode,
+            type_ecart as TypeEcart | undefined,
+          )
           await supabase.from('ecritures_comptables_v2').insert({
             societe_id,
             dossier_id: dossier.id,
             date_ecriture: new Date().toISOString().split('T')[0],
             journal: 'OD',
-            numero_compte: compteEcart,
-            libelle: libelleEcart,
-            debit_mur: debitOd,
-            credit_mur: creditOd,
+            numero_compte: ecartOd.compte,
+            libelle: ecartOd.libelle,
+            debit_mur: ecartOd.debit,
+            credit_mur: ecartOd.credit,
             // Règle R7 : pas de lettrage sur 6xxx/7xxx. Sur 471 (4xxx) le
             // lettrage est autorisé mais on l'omet ici — la régularisation
             // future créera l'écriture miroir et lettrera les deux à ce
@@ -3120,29 +3025,19 @@ export async function POST(request: Request) {
         if (bnqAmount === 0) continue
 
         // Find ACH entry: same compte, opposite direction, same amount ±2%, no lettre yet
-        const oppositeCol = isDebit ? 'credit' : 'debit'
-        const minAmt = Math.round(bnqAmount * 0.98 * 100) / 100
-        const maxAmt = Math.round(bnqAmount * 1.02 * 100) / 100
-
-        const { data: achEntries } = await supabase
-          .from('ecritures_comptables_v2')
-          .select('id, credit:credit_mur, debit:debit_mur, date_ecriture, libelle')
-          .eq('dossier_id', dossier.id)
-          .eq('compte', bnq.compte)
-          .is('lettre', null)
-          .gte(oppositeCol, minAmt)
-          .lte(oppositeCol, maxAmt)
-          .order('date_ecriture', { ascending: false })
-          .limit(5)
+        // V3-22 : recherche + sélection extraites dans lettrage.ts.
+        const achEntries = await findAchCandidatesForBnq(supabase, {
+          dossierId: dossier.id,
+          compte: bnq.compte,
+          bnqAmount,
+          isDebit,
+        })
 
         if (!achEntries || achEntries.length === 0) continue
 
         // Pick closest by date
-        const closest = achEntries.reduce((prev, curr) => {
-          const prevDiff = Math.abs(new Date(prev.date_ecriture || '').getTime() - new Date(bnq.date_ecriture || '').getTime())
-          const currDiff = Math.abs(new Date(curr.date_ecriture || '').getTime() - new Date(bnq.date_ecriture || '').getTime())
-          return currDiff < prevDiff ? curr : prev
-        })
+        const closest = selectClosestByDate(achEntries, new Date(bnq.date_ecriture || ''))
+        if (!closest) continue
 
         // Apply same lettre to ACH entry
         await supabase.from('ecritures_comptables_v2')
@@ -5224,7 +5119,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const msg = e instanceof Error ? e.message : String(e)
     const stack = e instanceof Error ? e.stack?.split('\n').slice(0, 5).join('\n') : ''
     console.error('[rapprochement POST] CRASH:', msg, stack)
