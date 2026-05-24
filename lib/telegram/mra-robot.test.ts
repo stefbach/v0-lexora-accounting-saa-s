@@ -5,38 +5,32 @@
  * Supabase, crypto) pour que le vrai code de `submitMraDeclaration` s'exécute
  * sans lancer Chromium ni toucher la BDD. Aucune connexion MRA n'est ouverte.
  *
- * On valide :
- *   • la validation d'input des wrappers (XML/CSV vide, période mal formée)
- *   • le mapping payload → MraSubmitInput (type, periode, filename)
- *   • la propagation des résultats (success, manual_needed, failed)
- *
  * Cf. CLAUDE.md : pas de test navigateur (environnement headless sans browser).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ─── Mocks bas niveau (hoistés en haut du fichier par vitest) ───────────────
-// IMPORTANT : les factories vi.mock sont hoistées et ne peuvent pas référencer
-// de variables du scope module. On utilise vi.hoisted() pour créer les
-// références partagées entre les mocks et les tests.
+// ─── Mocks hoistés ───────────────────────────────────────────────────────────
+// vi.hoisted() est évalué AVANT les vi.mock() ; on y construit les objets
+// mock et on les expose via l'identifiant `h` que les factories vi.mock
+// peuvent référencer en closure (ce qui est légal car `h` est créé par
+// vi.hoisted, donc déjà disponible lors du hoisting).
 const h = vi.hoisted(() => {
-  const page = {
-    goto: vi.fn().mockResolvedValue(undefined),
-    fill: vi.fn().mockResolvedValue(undefined),
-    click: vi.fn().mockResolvedValue(undefined),
-    waitForLoadState: vi.fn().mockResolvedValue(undefined),
-    waitForSelector: vi.fn().mockResolvedValue({
-      setInputFiles: vi.fn().mockResolvedValue(undefined),
-    }),
+  const page: any = {
+    goto: vi.fn(),
+    fill: vi.fn(),
+    click: vi.fn(),
+    waitForLoadState: vi.fn(),
+    waitForSelector: vi.fn(),
     locator: vi.fn(),
   }
-  const session = { page, close: vi.fn().mockResolvedValue(undefined) }
-  const captchaState = { captcha: false }
-  return { page, session, captchaState }
+  const session = { page, close: vi.fn() }
+  const state = { captcha: false }
+  return { page, session, state }
 })
 
 vi.mock('@/lib/banks/playwright-launcher', () => ({
-  launchBrowser: vi.fn().mockResolvedValue(h.session),
-  captureScreenshot: vi.fn().mockResolvedValue('fake-png-base64'),
+  launchBrowser: vi.fn(async () => h.session),
+  captureScreenshot: vi.fn(async () => 'fake-png-base64'),
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({
@@ -65,19 +59,21 @@ vi.mock('@/lib/crypto/symmetric', () => ({ decryptSecret: (s: string) => s }))
 import { submitCIT, submitTDS, submitMraDeclaration } from './mra-robot'
 
 beforeEach(() => {
-  h.page.goto.mockClear()
-  h.page.fill.mockClear()
-  h.page.click.mockClear()
-  h.page.waitForLoadState.mockClear()
-  h.page.waitForSelector.mockClear()
-  h.session.close.mockClear()
-  h.captchaState.captcha = false
-  // Locator par défaut : pas de CAPTCHA, pas d'erreur login,
-  // ack ref détectée = 'MRA-REF-AUTO'.
-  h.page.locator.mockImplementation((sel: string) => {
+  // Reset spies and reinstall default behaviors.
+  h.page.goto.mockReset().mockResolvedValue(undefined)
+  h.page.fill.mockReset().mockResolvedValue(undefined)
+  h.page.click.mockReset().mockResolvedValue(undefined)
+  h.page.waitForLoadState.mockReset().mockResolvedValue(undefined)
+  h.page.waitForSelector.mockReset().mockResolvedValue({
+    setInputFiles: vi.fn().mockResolvedValue(undefined),
+  })
+  h.session.close.mockReset().mockResolvedValue(undefined)
+  h.state.captcha = false
+  // Locator par défaut : pas de CAPTCHA, pas d'erreur login, ack ref = 'MRA-REF-AUTO'
+  h.page.locator.mockReset().mockImplementation((sel: string) => {
     const isCaptchaSel = typeof sel === 'string' && /captcha|otp|verif/i.test(sel)
     return {
-      count: vi.fn().mockResolvedValue(isCaptchaSel && h.captchaState.captcha ? 1 : 0),
+      count: vi.fn().mockResolvedValue(isCaptchaSel && h.state.captcha ? 1 : 0),
       first: () => ({ textContent: vi.fn().mockResolvedValue('MRA-REF-AUTO') }),
     }
   })
@@ -104,7 +100,6 @@ describe('submitCIT', () => {
       exercice: '2024-2025',
       xml: '<?xml version="1.0"?><CITReturn/>',
     })
-    if (res.status !== 'success') console.log('DBG-CIT', res)
     expect(res.status).toBe('success')
     const gotoUrls = h.page.goto.mock.calls.map((c: any[]) => c[0])
     expect(gotoUrls.some((u: string) => u.includes('eservices38.mra.mu') && u.toLowerCase().includes('login'))).toBe(true)
@@ -113,7 +108,7 @@ describe('submitCIT', () => {
   })
 
   it('détecte un CAPTCHA et retourne manual_needed', async () => {
-    h.captchaState.captcha = true
+    h.state.captcha = true
     const res = await submitCIT({ societe_id: 's', exercice: '2024-2025', xml: '<x/>' })
     expect(res.status).toBe('manual_needed')
     expect(res.screenshot_b64).toBe('fake-png-base64')
