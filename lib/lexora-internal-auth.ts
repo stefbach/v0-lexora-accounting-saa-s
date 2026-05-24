@@ -23,6 +23,8 @@
  *   })
  */
 
+import { safeBearer } from '@/lib/security/safe-equal'
+
 const INTERNAL_HEADER = 'x-internal-token'
 const INTERNAL_USER_HEADER = 'x-internal-user-id'
 const INTERNAL_EMAIL_HEADER = 'x-internal-user-email'
@@ -35,7 +37,8 @@ export type InternalAuthResult = {
 export function resolveInternalAuth(request: Request): InternalAuthResult | null {
   const token = request.headers.get(INTERNAL_HEADER)
   const expected = process.env.INTERNAL_API_TOKEN
-  if (!token || !expected || token !== expected) return null
+  // SEC-004 : comparaison en temps constant pour empêcher timing attacks
+  if (!expected || !safeBearer(token, expected)) return null
   const user_id = request.headers.get(INTERNAL_USER_HEADER)
   if (!user_id) return null
   const user_email = request.headers.get(INTERNAL_EMAIL_HEADER) || undefined

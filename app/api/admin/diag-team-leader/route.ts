@@ -5,11 +5,13 @@
  *   - Liste les CHECK constraints role sur profiles + user_societes
  *   - Indique si team_leader est autorisé sur chacune
  *   - Compte le nombre de profiles avec role='team_leader'
- *   - Vérifie l'existence de la RPC exec_sql
  *
- * POST — tente d'appliquer la migration 261 via la RPC exec_sql.
- *   Renvoie un rapport détaillé avec le SQL à lancer manuellement si
- *   la RPC n'est pas disponible.
+ * POST — DEPRECATED depuis SEC-002 : la RPC exec_sql a été révoquée
+ *   (vecteur DDL arbitraire SECURITY DEFINER). Cette route ne tente plus
+ *   d'appliquer la migration et renvoie 410 avec le SQL à lancer
+ *   manuellement dans Supabase Studio.
+ *
+ * Voir docs/audit-partials/wave2-F-secu-critique.md SEC-002.
  */
 
 import { createClient } from '@supabase/supabase-js'
