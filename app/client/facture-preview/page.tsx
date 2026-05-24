@@ -280,10 +280,23 @@ function FacturePreviewContent() {
       <style jsx global>{`
         @media print {
           body { margin: 0; padding: 0; }
+          html, body { background: white; }
           .no-print { display: none !important; }
-          .print-page { padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
+          /* Forcer la facture à tenir sur 1 page A4 :
+             - retirer min-height: 297mm qui force toujours 1 page pleine
+               et provoque débordement quand combiné aux marges @page.
+             - retirer ombre / padding écran qui poussent vers une 2e page. */
+          .print-page {
+            padding: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            min-height: auto !important;
+            max-width: 100% !important;
+            page-break-after: avoid;
+            page-break-inside: auto;
+          }
         }
-        @page { size: A4; margin: 15mm; }
+        @page { size: A4; margin: 12mm; }
       `}</style>
 
       {/* Print + MRA buttons */}
@@ -458,12 +471,12 @@ function FacturePreviewContent() {
                       <td className="py-3 px-3 text-sm text-right align-top">{qte}</td>
                       <td className="py-3 px-3 text-sm text-right font-mono align-top">
                         <div>{fmtSigned(pu)} {isForeign ? data.devise : ""}</div>
-                        {isForeign && <div className="text-[11px] text-gray-600 mt-0.5">≈ {fmtSigned(puMur)} MUR</div>}
+                        {isForeign && <div className="text-[11px] text-gray-600 mt-0.5">~ {fmtSigned(puMur)} MUR</div>}
                       </td>
                       <td className="py-3 px-3 text-sm text-right align-top">{l.taux_tva}%</td>
                       <td className="py-3 px-4 text-sm text-right font-mono font-semibold align-top">
                         <div>{fmtSigned(montant)} {isForeign ? data.devise : ""}</div>
-                        {isForeign && <div className="text-[11px] text-gray-600 font-normal mt-0.5">≈ {fmtSigned(montantMur)} MUR</div>}
+                        {isForeign && <div className="text-[11px] text-gray-600 font-normal mt-0.5">~ {fmtSigned(montantMur)} MUR</div>}
                       </td>
                     </tr>
                   )

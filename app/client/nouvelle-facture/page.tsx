@@ -145,10 +145,6 @@ export default function NouvelleFacturePage() {
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       if (tc) { try { const parsed = JSON.parse(tc); if (parsed.primaire) setAccentColor(parsed.primaire) } catch { /* ignore */ } }
     } catch { /* ignore */ }
-    // Charger les templates depuis la DB
-    fetch("/api/client/facture-template").then(r => r.json()).then(d => {
-      setTemplates(d.templates || [])
-    }).catch(() => {})
     // Load existing invoices for credit note references
     fetch("/api/client/factures?statut=en_attente").then(r => r.json()).then(d => {
       const facs = (d.factures || []).filter((f: { statut: string; type_document?: string }) => f.statut !== "brouillon" && (!f.type_document || f.type_document === "facture"))
@@ -157,6 +153,22 @@ export default function NouvelleFacturePage() {
       })))
     }).catch(() => {})
   }, [])
+
+  // Templates IA — chargés par société (POST action=list).
+  // La route /api/client/facture-template n'a PAS de GET ; un GET nu
+  // renvoyait toujours { templates: undefined } → le <Select> "Modèle"
+  // restait vide et l'utilisateur ne pouvait sélectionner aucun template IA.
+  useEffect(() => {
+    if (!societeId) { setTemplates([]); return }
+    fetch("/api/client/facture-template", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list", societe_id: societeId }),
+    })
+      .then(r => r.json())
+      .then(d => setTemplates(Array.isArray(d?.templates) ? d.templates : []))
+      .catch(() => setTemplates([]))
+  }, [societeId])
 
   // Catalogue depuis l'API — déclenché dès que societeId est disponible.
   // Remplace les items localStorage par ceux en base (source de vérité).

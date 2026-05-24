@@ -37,6 +37,8 @@ import {
   Sparkles,
   TrendingUp,
   TrendingDown,
+  Printer,
+  Eye,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -573,6 +575,34 @@ function FactureList({
                   </div>
                 </div>
               )}
+              {/* Aperçu / impression — disponible pour TOUTES les factures
+                  (y compris brouillons et annulées), pour pouvoir revoir
+                  ou réimprimer à tout moment. L'aperçu charge la facture
+                  depuis la DB via ?facture_id=, l'impression PDF passe
+                  par /api/client/factures/[id]/pdf (avec refresh=1 pour
+                  forcer la régénération si gabarit/contenu modifié). */}
+              <div className="flex gap-1 mt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px]"
+                  title="Aperçu de la facture"
+                  onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}`, '_blank')}
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  Aperçu
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px]"
+                  title="Télécharger le PDF"
+                  onClick={() => window.open(`/api/client/factures/${f.id}/pdf?refresh=1`, '_blank')}
+                >
+                  <Printer className="h-3 w-3 mr-1" />
+                  PDF
+                </Button>
+              </div>
               {canPay && onEnregistrerPaiement && (
                 <Button
                   size="sm"
