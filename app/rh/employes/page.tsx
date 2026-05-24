@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key, User, Briefcase, Banknote, Building2, Trash2, AlertTriangle, Eye, EyeOff, Mail, CheckCircle2, XCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 import { toast } from "sonner"
 import { t, getLocale } from "@/lib/i18n"
@@ -1114,10 +1115,10 @@ export default function EmployesPage() {
           {loading ? (
             <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]"/></div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
-              <Users className="w-10 h-10 mx-auto mb-2 opacity-40"/>
-              <p>{t('rha.a.emp.list_empty', locale)}</p>
-            </div>
+            <EmptyState
+              icon={Users}
+              title={t('rha.a.emp.list_empty', locale)}
+            />
           ) : (
             <>
               {/* Mobile: Card view */}

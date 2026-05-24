@@ -876,6 +876,7 @@ export default function PaiePage() {
                 )}
               </div>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1177,6 +1178,7 @@ export default function PaiePage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -1188,6 +1190,7 @@ export default function PaiePage() {
               <CardTitle className="text-sm font-semibold text-gray-600">{t('rha.a.paie.audit_title', locale)} — {periode}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1218,6 +1221,7 @@ export default function PaiePage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         )}

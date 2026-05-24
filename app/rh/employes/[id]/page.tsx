@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { toast } from "sonner"
+import { notifySuccess, notifyError, notifyWarning } from "@/lib/utils/toast"
 import {
   ArrowLeft, Save, Loader2, User, FileText, CalendarDays, Clock,
   Briefcase, CreditCard, Gift, FolderOpen, History, Shield,
@@ -104,11 +104,11 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   const handleSubmitAccount = async () => {
     if (!employe?.id) return
     if (accountPwd.length < 8) {
-      toast.error("Mot de passe min 8 caractères")
+      notifyError("Mot de passe", "minimum 8 caractères")
       return
     }
     if (accountPwd !== accountPwd2) {
-      toast.error("Mot de passe et confirmation ne correspondent pas")
+      notifyError("Mot de passe", "la confirmation ne correspond pas")
       return
     }
     setAccountSubmitting(true)
@@ -124,17 +124,17 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toast.error(data.error || "Erreur lors de l'opération")
+        notifyError("Enregistrer", data.error || "erreur inconnue")
         return
       }
       if (data.email_sent === false) {
-        toast.warning(
+        notifyWarning(
           isReset
             ? `Mot de passe mis à jour, mais email NON envoyé : ${data.email_error || 'erreur SMTP'}. Communiquer le password manuellement.`
             : `Compte créé, mais email NON envoyé : ${data.email_error || 'erreur SMTP'}. Communiquer le password manuellement.`,
         )
       } else {
-        toast.success(
+        notifySuccess(
           isReset
             ? `Mot de passe mis à jour. Email envoyé à ${employe.email}.`
             : `Compte créé. Email envoyé à ${employe.email}.`,
@@ -148,7 +148,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         setEmploye((prev: any) => prev ? { ...prev, auth_user_id: data.auth_user_id } : prev)
       }
     } catch (e) {
-      toast.error("Erreur réseau : " + (e instanceof Error ? e.message : String(e)))
+      notifyError("Erreur réseau", e)
     } finally {
       setAccountSubmitting(false)
     }

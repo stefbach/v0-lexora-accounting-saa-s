@@ -514,11 +514,11 @@ function ClientEcrituresContent() {
                 </div>
               </div>
             </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
+              <Button variant="outline" onClick={() => setEditing(null)} disabled={saving} className="w-full sm:w-auto">
                 Annuler
               </Button>
-              <Button onClick={saveEdit} disabled={saving}>
+              <Button onClick={saveEdit} disabled={saving} className="w-full sm:w-auto">
                 {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                 Enregistrer
               </Button>

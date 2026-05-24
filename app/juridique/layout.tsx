@@ -14,7 +14,7 @@ export default async function JuridiqueLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen bg-gray-50">
       <JuridiqueSidebar />
-      <main className="flex-1 overflow-auto ml-60">{children}</main>
+      <main className="flex-1 overflow-auto md:ml-60">{children}</main>
     </div>
   )
 }

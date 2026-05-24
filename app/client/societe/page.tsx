@@ -18,7 +18,13 @@ type Tab = "details" | "contact" | "payroll" | "bank"
 
 function TabButton({ id, label, active, onClick }: { id: Tab; label: string; active: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick}
+    <button
+      onClick={onClick}
+      role="tab"
+      id={`tab-${id}`}
+      aria-selected={active}
+      aria-controls={`tabpanel-${id}`}
+      tabIndex={active ? 0 : -1}
       className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${active ? "text-white" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
       style={active ? { backgroundColor: NAVY } : {}}>
       {label}
@@ -258,19 +264,26 @@ function BankTab({ data, onSave, locale }: { data: any; onSave: (d: any) => void
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('core.socset.currencies_enabled', locale)}</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-2">
-              {allDevises.map(d => (
-                <label key={d} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-gray-50">
-                  <input type="checkbox" checked={devises.includes(d)}
-                    onChange={e => {
-                      const next = e.target.checked ? [...devises, d] : devises.filter((x: string) => x !== d)
-                      u("devises_actives", next)
-                    }}
-                    className="rounded border-gray-300" />
-                  <span className="text-sm font-medium">{d}</span>
-                </label>
-              ))}
-            </div>
+            <fieldset>
+              <legend className="sr-only">{t('core.socset.currencies_enabled', locale)}</legend>
+              <div className="grid grid-cols-3 gap-2" role="group" aria-label={t('core.socset.currencies_enabled', locale)}>
+                {allDevises.map(d => (
+                  <label key={d} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={devises.includes(d)}
+                      aria-label={d}
+                      onChange={e => {
+                        const next = e.target.checked ? [...devises, d] : devises.filter((x: string) => x !== d)
+                        u("devises_actives", next)
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm font-medium">{d}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </CardContent>
         </Card>
       </div>
@@ -343,7 +356,7 @@ export default function SocieteSettingsPage() {
           {saved && <Badge className="bg-green-100 text-green-700"><CheckCircle className="h-3 w-3 mr-1" /> {t('core.socset.saved', locale)}</Badge>}
           {societes.length > 1 && (
             <Select value={societeId} onValueChange={switchSociete}>
-              <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[220px]" aria-label={t('core.socset.title', locale)}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
@@ -353,7 +366,7 @@ export default function SocieteSettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b">
+      <div className="flex border-b" role="tablist" aria-label={t('core.socset.title', locale)}>
         <TabButton id="details" label={t('core.socset.tab_details', locale)} active={tab === "details"} onClick={() => setTab("details")} />
         <TabButton id="contact" label={t('core.socset.tab_contact', locale)} active={tab === "contact"} onClick={() => setTab("contact")} />
         <TabButton id="payroll" label={t('core.socset.tab_payroll', locale)} active={tab === "payroll"} onClick={() => setTab("payroll")} />
@@ -362,7 +375,13 @@ export default function SocieteSettingsPage() {
 
       {/* Tab content — key={societeId} forces re-mount when société changes */}
       {societe && (
-        <div>
+        <div
+          role="tabpanel"
+          id={`tabpanel-${tab}`}
+          aria-labelledby={`tab-${tab}`}
+          tabIndex={0}
+          className="focus:outline-none"
+        >
           {tab === "details" && <DetailsTab key={`details-${societeId}`} data={societe} onSave={handleSave} locale={locale} />}
           {tab === "contact" && <ContactTab key={`contact-${societeId}`} data={societe} onSave={handleSave} locale={locale} />}
           {tab === "payroll" && <PayrollTab key={`payroll-${societeId}`} data={societe} onSave={handleSave} locale={locale} />}

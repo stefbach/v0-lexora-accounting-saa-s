@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { toast } from "sonner"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
 import { createClient } from "@/lib/supabase/client"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
@@ -68,7 +68,7 @@ export default function ProfilPage() {
 
   async function handleSaveProfile() {
     if (!profile?.id) {
-      toast.error("Profil non chargé")
+      notifyError("Enregistrer profil", "Profil non chargé")
       return
     }
     setSaving(true)
@@ -79,12 +79,12 @@ export default function ProfilPage() {
         .update({ full_name: fullName || null, phone: phone || null })
         .eq("id", profile.id)
       if (error) {
-        toast.error("Erreur sauvegarde : " + error.message)
+        notifyError("Enregistrer profil", error.message)
       } else {
-        toast.success(t('core.prof.save_changes', locale))
+        notifySuccess(t('core.prof.save_changes', locale))
       }
-    } catch {
-      toast.error("Erreur sauvegarde")
+    } catch (e: unknown) {
+      notifyError("Enregistrer profil", e)
     } finally {
       setSaving(false)
     }
@@ -92,7 +92,7 @@ export default function ProfilPage() {
 
   async function handleChangePassword() {
     if (!newPwd || newPwd.length < 8) {
-      toast.error("Mot de passe : 8 caractères minimum")
+      notifyError("Mot de passe", "8 caractères minimum")
       return
     }
     setPwdSaving(true)
@@ -100,14 +100,14 @@ export default function ProfilPage() {
       const supabase = createClient()
       const { error } = await supabase.auth.updateUser({ password: newPwd })
       if (error) {
-        toast.error("Erreur : " + error.message)
+        notifyError("Modifier mot de passe", error.message)
       } else {
-        toast.success(t('core.prof.change_password', locale))
+        notifySuccess(t('core.prof.change_password', locale))
         setNewPwd("")
         setPwdOpen(false)
       }
-    } catch {
-      toast.error("Erreur changement mot de passe")
+    } catch (e: unknown) {
+      notifyError("Modifier mot de passe", e)
     } finally {
       setPwdSaving(false)
     }

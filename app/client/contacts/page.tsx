@@ -52,6 +52,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { ContactsImportDialog } from "@/components/client/ContactsImportDialog"
 import { t, getLocale, type Locale } from "@/lib/i18n"
@@ -433,8 +434,11 @@ export default function ClientContactsPage() {
 
         {!societeId ? (
           <Card>
-            <CardContent className="py-16 text-center text-gray-400">
-              {t('inv.ct.no_societe', locale)}
+            <CardContent className="p-0">
+              <EmptyState
+                icon={Users}
+                title={t('inv.ct.no_societe', locale)}
+              />
             </CardContent>
           </Card>
         ) : loading ? (
@@ -443,11 +447,13 @@ export default function ClientContactsPage() {
           </div>
         ) : filtered.length === 0 ? (
           <Card>
-            <CardContent className="py-16 text-center text-gray-500">
-              <Users className="h-10 w-10 mx-auto mb-2 text-gray-400" />
-              {items.length === 0
-                ? t('inv.ct.empty', locale)
-                : t('inv.ct.empty_filter', locale)}
+            <CardContent className="p-0">
+              <EmptyState
+                icon={Users}
+                title={items.length === 0
+                  ? t('inv.ct.empty', locale)
+                  : t('inv.ct.empty_filter', locale)}
+              />
             </CardContent>
           </Card>
         ) : (

@@ -41,6 +41,7 @@ import {
   Eye,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 import { PaiementFactureDialog } from "@/components/client/PaiementFactureDialog"
@@ -526,9 +527,11 @@ function FactureList({
 
   if (factures.length === 0) {
     return (
-      <p className="py-10 text-center text-sm text-muted-foreground">
-        {t('inv.fac.no_invoice_filter', locale)}
-      </p>
+      <EmptyState
+        icon={FileText}
+        title={t('inv.fac.no_invoice_filter', locale)}
+        size="md"
+      />
     )
   }
   return (

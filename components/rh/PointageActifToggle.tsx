@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { Loader2, MapPin, AlertCircle } from "lucide-react"
-import { toast } from "sonner"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
 
 const NAVY = "#0B0F2E"
 
@@ -49,18 +49,18 @@ export function PointageActifToggle({
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        toast.error("Erreur : " + (d.error || res.statusText))
+        notifyError("Enregistrer", d.error || res.statusText)
         return
       }
       setActive(newValue)
       onSaved?.(newValue)
-      toast.success(
+      notifySuccess(
         newValue
           ? "✅ Pointage obligatoire activé — la prochaine paie déduira les absences"
           : "Pointage obligatoire désactivé — les pointages restent enregistrés sans impact paie",
       )
-    } catch (e: any) {
-      toast.error("Erreur réseau : " + (e?.message || ""))
+    } catch (e: unknown) {
+      notifyError("Erreur réseau", e)
     } finally {
       setSaving(false)
     }

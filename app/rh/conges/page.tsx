@@ -19,6 +19,7 @@ import {
   Megaphone, Trash2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { t, getLocale } from "@/lib/i18n"
 import { createClient } from "@/lib/supabase/client"
 import { countJoursOuvrablesSync, buildJoursFeriesSet } from "@/lib/rh/jours-ouvrables"
@@ -1323,9 +1324,7 @@ export default function CongesPage() {
             </CardHeader>
             <CardContent className="p-0">
               {loadingBalances ? <Spinner /> : filteredBalances.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  Aucun employe trouve
-                </div>
+                <EmptyState icon={Users} title="Aucun employé trouvé" size="md" />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>

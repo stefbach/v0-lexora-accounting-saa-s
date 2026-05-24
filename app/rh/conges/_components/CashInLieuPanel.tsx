@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, AlertTriangle, CheckCircle2, Clock, FileSpreadsheet } from "lucide-react"
 import { toast } from "sonner"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
 
 interface Cycle {
   employe_id: string
@@ -83,15 +84,15 @@ export function CashInLieuPanel() {
       const res = await fetch(`/api/admin/cash-in-lieu?jours_avance=${joursAvance}`)
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data.error || 'Erreur chargement cash-in-lieu')
+        notifyError('Charger cash-in-lieu', data.error)
         setCycles([])
         setHistorique([])
         return
       }
       setCycles(data.cycles_a_clore || [])
       setHistorique(data.historique || [])
-    } catch (e: any) {
-      toast.error('Erreur réseau : ' + (e?.message || ''))
+    } catch (e: unknown) {
+      notifyError('Erreur réseau', e)
     } finally {
       setLoading(false)
     }
@@ -114,9 +115,9 @@ export function CashInLieuPanel() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) toast.error(data.error || 'Erreur')
+      if (!res.ok) notifyError('Générer paiement', data.error)
       else {
-        toast.success(data.already_exists ? 'Paiement déjà créé' : `Paiement créé : ${fmt(data.montant_total)} MUR`)
+        notifySuccess(data.already_exists ? 'Paiement déjà créé' : `Paiement créé : ${fmt(data.montant_total)} MUR`)
         await load()
       }
     } finally {
@@ -139,13 +140,13 @@ export function CashInLieuPanel() {
       })
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data.error || 'Erreur')
+        notifyError('Générer paiements', data.error)
         return
       }
       if (dryRun) {
         toast.info(`Dry-run : ${data.nb_eligibles} cycles, total ~${fmt(data.montant_total_estime)} MUR`)
       } else {
-        toast.success(`${data.nb_traites} paiements créés (${fmt(data.montant_total)} MUR), ${data.nb_erreurs} erreurs`)
+        notifySuccess(`${data.nb_traites} paiements créés (${fmt(data.montant_total)} MUR), ${data.nb_erreurs} erreurs`)
         await load()
       }
     } finally {
@@ -162,8 +163,8 @@ export function CashInLieuPanel() {
         body: JSON.stringify({ action: 'valider', paiement_id: paiementId }),
       })
       const data = await res.json()
-      if (!res.ok) toast.error(data.error || 'Erreur')
-      else { toast.success('Paiement validé'); await load() }
+      if (!res.ok) notifyError('Valider paiement', data.error)
+      else { notifySuccess('Paiement validé'); await load() }
     } finally {
       setActionLoading(null)
     }
@@ -175,8 +176,8 @@ export function CashInLieuPanel() {
     try {
       const res = await fetch(`/api/admin/cash-in-lieu?id=${paiementId}`, { method: 'DELETE' })
       const data = await res.json()
-      if (!res.ok) toast.error(data.error || 'Erreur')
-      else { toast.success('Paiement annulé'); await load() }
+      if (!res.ok) notifyError('Annuler paiement', data.error)
+      else { notifySuccess('Paiement annulé'); await load() }
     } finally {
       setActionLoading(null)
     }
