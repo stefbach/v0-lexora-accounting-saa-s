@@ -68,15 +68,9 @@ export async function GET() {
 
   // Fix 1: Add modules_utilisateur if missing
   if (results['modules_utilisateur_column']?.startsWith('MISSING')) {
-    const { error: fix1 } = await supabase.rpc('exec_sql', {
-      sql: 'ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS modules_utilisateur JSONB DEFAULT NULL;'
-    })
-    if (!fix1) {
-      fixes.push('Added modules_utilisateur column')
-    } else {
-      // rpc might not exist, try raw
-      fixes.push(`Cannot auto-fix modules_utilisateur: ${fix1.message}. Run manually: ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS modules_utilisateur JSONB DEFAULT NULL;`)
-    }
+    // SEC-002 : exec_sql désactivé. Migration manuelle requise.
+    console.warn('[security] tryAutoFixRoleConstraint disabled (SEC-002)')
+    fixes.push('MISSING modules_utilisateur — exec_sql RPC revoked (SEC-002). Run manually in Supabase Studio: ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS modules_utilisateur JSONB DEFAULT NULL;')
   }
 
   // Fix 2: Role constraint

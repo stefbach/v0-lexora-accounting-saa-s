@@ -20,40 +20,20 @@ async function requireAdmin() {
 const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'rh_manager', 'juridique', 'employe', 'salarie', 'manager', 'team_leader', 'direction']
 
 /**
- * Auto-fix du CHECK constraint role si la migration 261 n'a pas été
- * appliquée. Évite que la création/modification d'un team_leader plante.
+ * SEC-002 — Auto-fix via exec_sql désactivé.
+ *
+ * Avant : tentait d'appliquer la migration 261 (role team_leader) à la volée
+ * via la RPC `exec_sql` (SECURITY DEFINER). Cette RPC a été révoquée et
+ * supprimée (cf. supabase/migrations/414_revoke_exec_sql_security_hardening.sql)
+ * pour fermer le vecteur de DDL arbitraire.
+ *
+ * Désormais : retourne toujours false. Si la migration 261 n'est pas appliquée
+ * en prod, la création d'un team_leader échouera et l'admin devra lancer
+ * manuellement supabase/migrations/261_team_leader_role.sql dans Supabase Studio.
  */
-async function tryAutoFixRoleConstraint(supabase: ReturnType<typeof getAdminClient>): Promise<boolean> {
-  try {
-    const { error } = await supabase.rpc('exec_sql', {
-      sql: `
-        ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
-        ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check
-          CHECK (role IN (
-            'admin','super_admin','client_admin','client_user','client_assistant',
-            'comptable','comptable_dedie','rh','rh_manager','juridique',
-            'employe','manager','team_leader','direction','salarie'
-          ));
-        DO $$
-        BEGIN
-          IF EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema='public' AND table_name='user_societes' AND column_name='role'
-          ) THEN
-            ALTER TABLE public.user_societes DROP CONSTRAINT IF EXISTS user_societes_role_check;
-            ALTER TABLE public.user_societes ADD CONSTRAINT user_societes_role_check
-              CHECK (role IN (
-                'admin','super_admin','client_admin','client_user','client_assistant',
-                'comptable','comptable_dedie','rh','rh_manager','juridique',
-                'employe','manager','team_leader','direction','salarie'
-              ));
-          END IF;
-        END $$;
-      `,
-    })
-    if (error) { console.warn('[admin/users] auto-fix RPC failed:', error.message); return false }
-    return true
-  } catch (e: any) { console.warn('[admin/users] auto-fix exception:', e?.message); return false }
+async function tryAutoFixRoleConstraint(_supabase: ReturnType<typeof getAdminClient>): Promise<boolean> {
+  console.warn('[security] tryAutoFixRoleConstraint disabled (SEC-002)')
+  return false
 }
 
 export async function GET(request: NextRequest) {

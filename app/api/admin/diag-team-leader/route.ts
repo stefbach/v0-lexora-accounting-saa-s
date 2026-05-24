@@ -111,50 +111,32 @@ export async function GET() {
     report.user_societes_exception = e?.message
   }
 
-  // Vérif RPC exec_sql
-  try {
-    const { error } = await supabase.rpc('exec_sql', { sql: 'SELECT 1;' })
-    report.exec_sql_rpc_available = !error
-    if (error) report.exec_sql_error = error.message
-  } catch (e: any) {
-    report.exec_sql_rpc_available = false
-    report.exec_sql_exception = e?.message
-  }
+  // exec_sql RPC retirée (SEC-002) — ne plus la probe
+  report.exec_sql_rpc_available = false
+  report.exec_sql_note = 'Removed by SEC-002 hardening — apply migrations via supabase/migrations/'
 
-  report.fix_via_post = `POST ${`/api/admin/diag-team-leader`} pour tenter l'application automatique`
-  report.fix_manual = 'Si auto-fix non possible : copier-coller MIGRATION_SQL dans Supabase Studio SQL Editor'
+  report.fix_via_post = `Deprecated : appliquez supabase/migrations/261_team_leader_role.sql via Supabase Studio`
+  report.fix_manual = 'Copier-coller MIGRATION_SQL dans Supabase Studio SQL Editor'
   report.migration_sql = MIGRATION_SQL
 
   return NextResponse.json(report)
 }
 
+/**
+ * POST — DEPRECATED depuis SEC-002. La RPC exec_sql ayant été révoquée
+ * pour fermer le vecteur DDL arbitraire, cette route ne tente plus
+ * l'auto-fix. Elle renvoie 410 avec le SQL à lancer manuellement.
+ */
 export async function POST() {
+  console.warn('[security] /api/admin/diag-team-leader POST disabled (SEC-002) — exec_sql RPC revoked')
+
   const adminUser = await requireAdmin()
   if (!adminUser) return NextResponse.json({ error: 'Forbidden — admin/super_admin requis' }, { status: 403 })
 
-  const supabase = getAdminClient()
-
-  try {
-    const { error } = await supabase.rpc('exec_sql', { sql: MIGRATION_SQL })
-    if (error) {
-      return NextResponse.json({
-        applied: false,
-        method: 'rpc:exec_sql',
-        error: error.message,
-        hint: "La RPC exec_sql n'existe pas (ou échoue). Lance ce SQL manuellement dans Supabase Studio :",
-        sql_to_run: MIGRATION_SQL,
-      }, { status: 400 })
-    }
-    return NextResponse.json({
-      applied: true,
-      method: 'rpc:exec_sql',
-      message: 'Constraints profiles_role_check + user_societes_role_check mises à jour avec team_leader.',
-    })
-  } catch (e: any) {
-    return NextResponse.json({
-      applied: false,
-      exception: e?.message,
-      sql_to_run: MIGRATION_SQL,
-    }, { status: 500 })
-  }
+  return NextResponse.json({
+    applied: false,
+    deprecated: true,
+    message: 'POST deprecated depuis SEC-002. Lancez le SQL ci-dessous manuellement dans Supabase Studio.',
+    sql_to_run: MIGRATION_SQL,
+  }, { status: 410 })
 }

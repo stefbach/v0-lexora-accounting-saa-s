@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { safeBearer } from '@/lib/security/safe-equal'
 
 // Instance paresseuse — ne JAMAIS instancier au niveau module, sinon tout
 // import (même un simple `CLAUDE_MODEL` ou `verifyCronSecret`) depuis un
@@ -61,5 +62,6 @@ export function verifyCronSecret(request: Request): boolean {
   const authHeader = request.headers.get('authorization')
   const secret = process.env.CRON_SECRET
   if (!secret) return false
-  return authHeader === `Bearer ${secret}`
+  // SEC-004 : comparaison en temps constant pour empêcher timing attacks
+  return safeBearer(authHeader, `Bearer ${secret}`)
 }

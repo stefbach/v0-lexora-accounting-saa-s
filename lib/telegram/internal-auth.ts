@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { safeBearer } from '@/lib/security/safe-equal'
 
 /**
  * Auth pour les endpoints /api/telegram/internal/*.
  *
  * Sécurité multi-couches :
- * 1. Header X-Internal-Token === process.env.INTERNAL_API_TOKEN
+ * 1. Header X-Internal-Token comparé en temps constant à INTERNAL_API_TOKEN (safeBearer, SEC-004)
  * 2. chat_id passé en query ou body → résolu en user_id + role + societe_id
  *    via la table telegram_users + user_societes
  * 3. Le role retourné est utilisé par chaque endpoint pour vérifier la permission
@@ -54,7 +55,9 @@ export function hasRole(ctx: TelegramContext, min: TelegramRole): boolean {
 
 export async function resolveTelegramContext(req: NextRequest): Promise<TelegramContext> {
   const internalToken = req.headers.get('x-internal-token')
-  if (!internalToken || internalToken !== process.env.INTERNAL_API_TOKEN) {
+  const expectedInternalToken = process.env.INTERNAL_API_TOKEN || ''
+  // SEC-004 : comparaison en temps constant pour empêcher timing attacks
+  if (!expectedInternalToken || !safeBearer(internalToken, expectedInternalToken)) {
     throw NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
