@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { toast } from "sonner"
+import { createClient } from "@/lib/supabase/client"
 import {
   Card,
   CardContent,
@@ -11,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { MessageSquare, Mail, Bell, CheckCircle, AlertCircle, Clock } from "lucide-react"
+import { MessageSquare, Mail, Bell, CheckCircle, AlertCircle, Clock, Loader2 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import Link from "next/link"
@@ -24,8 +26,6 @@ interface NotificationItem {
   date: string
   statut: "pending" | "sent" | "failed"
 }
-
-const notifications: NotificationItem[] = []
 
 function formatDateTime(dateStr: string) {
   const d = new Date(dateStr)
