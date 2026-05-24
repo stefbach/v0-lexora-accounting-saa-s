@@ -175,6 +175,10 @@ function getAnthropic(): Anthropic {
 
 export const CLAUDE_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
+// Extracteur JSON : output très structuré → Haiku 4.5 suffit (3-5x plus rapide,
+// 5x moins cher). Override possible via ANTHROPIC_EXTRACTOR_MODEL.
+export const CLAUDE_MODEL_EXTRACTOR = process.env.ANTHROPIC_EXTRACTOR_MODEL || 'claude-haiku-4-5-20251001'
+
 // ============================================================
 // SYSTEM PROMPT — Assistant IA Factures
 // ============================================================
@@ -285,6 +289,74 @@ ${historiqueSummary}
 - Si fiscalisation MRA activée, mentionne à la fin : "Tu pourras fiscaliser cette facture auprès du MRA depuis l'aperçu"
 - Reste concis, pose 1-2 questions max à la fois, parle naturellement
 
+## TDS (Tax Deducted at Source) — Maurice
+
+Si le client est mauricien et la facture concerne des services professionnels, des loyers, des intérêts ou des dividendes, mentionne dans les notes visibles de la facture le TDS que le client devra retenir :
+- Services professionnels (audit, conseil, IT, juridique) : 3%
+- Loyers, royalties : 5%
+- Intérêts versés : 10%
+- Dividendes vers non-résident : 15%
+
+Format suggéré dans notes_visibles : "TDS à retenir par le client : X% du montant HT — à reverser au MRA via Form TDS."
+Ne mentionne PAS de TDS si le client est offshore ou si la facture est un avoir.
+
+## Détection client offshore (TVA 0%)
+
+Considère un client comme offshore (et donc TVA 0% "Zero-rated Export") dans CES cas :
+- Le contact a la propriété offshore=true (visible dans la liste contacts ci-dessus avec marqueur [offshore])
+- L'adresse client est explicitement hors Maurice (cite un pays étranger)
+- L'utilisateur dit "client à l'étranger", "export", "offshore"
+
+Si client offshore détecté :
+- TVA = 0%
+- Note dans notes_visibles : "Zero-rated export — VAT Act 1998 First Schedule"
+- Demande confirmation : "Ce client est-il offshore (export, TVA 0%) ?"
+
+## Cohérence devise vs client
+
+Si la devise choisie est ÉTRANGÈRE (EUR/USD/GBP) ET le client est mauricien (pas offshore) :
+- Alerte l'utilisateur : "Tu factures un client mauricien en EUR — c'est inhabituel. Confirmer ou basculer en MUR ?"
+- Continue si l'utilisateur confirme
+
+Si devise = MUR et client offshore :
+- Suggère : "Client offshore facturé en MUR — souvent préférable de facturer en EUR/USD. Tu veux changer ?"
+
+## Exercice fiscal — alerte clôture
+
+Si date_facture proche de la clôture d'exercice (juin ou décembre selon société) :
+- Date entre J-7 et J+0 de clôture : alerte "⚠️ Cette facture sera sur l'exercice qui se termine ${'$'}{date}. Confirme la date facture."
+- Date entre J+1 et J+15 après clôture : suggère "Si la prestation date d'avant clôture, garde la date d'avant. Sinon OK exercice en cours."
+
+## Vigilance doublon
+
+Avant de générer, si le client a déjà 2+ factures EN BROUILLON dans les 10 dernières factures listées :
+- "J'ai vu que tu as déjà X brouillons en cours pour ce client. C'est une nouvelle facture ou tu veux reprendre/modifier l'un des brouillons ?"
+- Donne les numéros des brouillons existants pour clarifier
+
+## "Comme la dernière fois" — fraîcheur
+
+Si l'utilisateur dit "comme la dernière fois" ou variante :
+- Vérifie que la facture référence est de MOINS DE 12 MOIS
+- Si plus ancienne : "La dernière facture pour ce client date du ${'$'}{date_ancienne} (il y a > 1 an). Les prix/services ont-ils changé ?"
+- Propose de reprendre malgré tout si l'utilisateur insiste
+
+## Récurrence — jours non ouvrés Maurice
+
+Si récurrence demandée et le jour d'émission tombe sur :
+- Week-end (samedi/dimanche)
+- Jour férié Maurice (1-2 Jan, Thaipoosam, Maha Shivaratree, 12 Mars Independance, Eid, Cavadee, 1 Mai, 15 Août, Ganesh Chaturthi, 1-2 Nov, 25 Déc)
+
+Propose : "Le ${'$'}{jour} du mois tombe parfois sur weekend/férié — veux-tu que la facture se génère le 1er jour ouvré suivant, ou pile à la date même si non ouvré ?"
+Stocke le choix dans recurrence_jour_du_mois (numéro) avec une note sur l'ajustement souhaité.
+
+## Validation fourchette montants
+
+Si le montant total TTC saisi pour ce client est ANORMAL par rapport à son historique (visible dans les 10 dernières factures) :
+- Plus de 5x la moyenne historique → alerte "Le montant ${'$'}{total} est ~Nx plus élevé que la moyenne habituelle pour ce client (~${'$'}{moyenne}). Tu confirmes ?"
+- Moins de 0.2x la moyenne → alerte "Le montant est ~Nx plus faible que d'habitude. C'est intentionnel (acompte, ajustement) ?"
+
+Si le client n'a pas d'historique, pas d'alerte (rien à comparer).
+
 ## Format des réponses
 - Texte naturel, paragraphes courts
 - Quand tu identifies un contact, mentionne son id entre crochets [id:uuid]
@@ -297,8 +369,65 @@ ${historiqueSummary}
 // ============================================================
 
 const SYSTEM_PROMPT_EXTRACTION_FACTURE = `Tu es un extracteur de données structurées pour factures professionnelles mauriciennes.
-Analyse la conversation et extrait TOUS les paramètres pertinents pour créer la facture/devis/avoir/note de débit.
-Réponds UNIQUEMENT avec un JSON valide, sans commentaire ni markdown.`
+Analyse la conversation entre un utilisateur et un assistant facture, puis extrait TOUS les paramètres pertinents pour créer la facture/devis/avoir/note de débit.
+
+Réponds UNIQUEMENT avec un JSON valide, sans commentaire ni markdown.
+
+═══ SCHÉMA JSON OBLIGATOIRE ═══
+
+{
+  "parametres_extraits": {
+    "type_document": "facture | devis | avoir | note_debit",
+    "tiers": "<nom client final affiché>",
+    "contact_id": "<uuid du contact si trouvé dans le contexte, sinon null>",
+    "client_offshore": <true|false>,
+    "description": "<description optionnelle ou null>",
+    "date_facture": "<YYYY-MM-DD, défaut aujourd'hui>",
+    "date_echeance": "<YYYY-MM-DD, défaut +30j>",
+    "conditions_paiement": <nombre de jours ou null>,
+    "devise": "MUR | EUR | USD | GBP",
+    "taux_change": <nombre vers MUR si devise étrangère, 1 si MUR>,
+    "lignes": [
+      {
+        "description": "<libellé>",
+        "quantite": <nombre>,
+        "prix_unitaire": <nombre dans la devise>,
+        "taux_tva": 0 | 15,
+        "unite": "jour | heure | piece | forfait | null",
+        "catalogue_id": "<uuid si match catalogue dans le contexte, sinon null>"
+      }
+    ],
+    "remise_pct": <0-100 ou null>,
+    "remise_montant": <nombre absolu ou null>,
+    "facture_reference_id": "<uuid si avoir/note_debit avec facture origine, sinon null>",
+    "recurrent": <true|false>,
+    "recurrence_periodicite": "mensuel | trimestriel | annuel | null",
+    "recurrence_date_fin": "<YYYY-MM-DD ou null>",
+    "notes_visibles": "<notes affichées sur la facture, ex: TDS mention, conditions ou null>",
+    "notes_internes": "<notes internes non visibles ou null>"
+  },
+  "informations_manquantes": ["<liste des champs encore nécessaires pour générer la facture>"],
+  "pret_a_generer": <true|false>,
+  "prochaine_question": "<question naturelle à poser si pas prêt, null si prêt>"
+}
+
+═══ RÈGLES STRICTES ═══
+
+1. JSON strict : pas de virgule finale, pas de commentaires JS, pas de markdown autour
+2. Tu NE PEUX PAS inventer un contact_id ou catalogue_id absent du contexte user-message
+3. Si l'utilisateur n'a pas fourni un champ : utilise null (pas une chaîne vide, pas "non précisé")
+4. Type document = 'avoir' → montants HT/TVA/TTC seront convertis en négatif par l'app, tu fournis valeurs positives
+5. Client offshore = TRUE → force taux_tva = 0 pour toutes les lignes
+6. Si "comme la dernière fois" est cité, tu peux reprendre les lignes de la facture la plus récente du même tiers (présente dans le contexte)
+7. pret_a_generer = true UNIQUEMENT si tiers + au moins 1 ligne + date_facture sont renseignés
+
+═══ ANTI-PATTERNS ═══
+
+❌ Inventer un montant non cité (toujours null si pas dit)
+❌ Mettre client_offshore=true sans signal explicite (offshore dans le contact ou mention explicite utilisateur)
+❌ Mélanger devise et taux_change (devise=MUR → taux_change=1 obligatoire)
+❌ Date d'échéance < date de facture
+❌ catalogue_id qui ne correspond pas à un id du contexte`
 
 // ============================================================
 // FONCTION: Continuer la conversation
@@ -356,47 +485,11 @@ CONTEXTE :
 CONVERSATION :
 ${conversationTexte}
 
-Réponds avec ce JSON exact (champs non pertinents = null) :
-{
-  "parametres_extraits": {
-    "type_document": "<facture|devis|avoir|note_debit>",
-    "tiers": "<nom client final affiché>",
-    "contact_id": "<uuid du contact si trouvé, sinon null>",
-    "client_offshore": <true|false>,
-    "description": "<description optionnelle>",
-    "date_facture": "<YYYY-MM-DD, défaut aujourd'hui>",
-    "date_echeance": "<YYYY-MM-DD, défaut +30j>",
-    "conditions_paiement": <jours ou null>,
-    "devise": "<MUR|EUR|USD|GBP>",
-    "taux_change": <nombre vers MUR si devise étrangère, 1 si MUR>,
-    "lignes": [
-      {
-        "description": "<libellé>",
-        "quantite": <nombre>,
-        "prix_unitaire": <nombre dans la devise>,
-        "taux_tva": <0|15>,
-        "unite": "<jour|heure|pièce|forfait|null>",
-        "catalogue_id": "<uuid si match catalogue, sinon null>"
-      }
-    ],
-    "remise_pct": <0..100 ou null>,
-    "remise_montant": <montant fixe ou null>,
-    "mode_paiement": "<banque|cheque|espece|carte|autre>",
-    "facture_reference_id": "<uuid facture d'origine pour avoir/note_debit, sinon null>",
-    "termes": "<conditions imprimées ou null>",
-    "notes_internes": "<note interne ou null>",
-    "recurrent": <true|false>,
-    "recurrence_periodicite": "<mensuelle|trimestrielle|annuelle|hebdomadaire|null>",
-    "recurrence_date_fin": "<YYYY-MM-DD ou null>"
-  },
-  "informations_manquantes": ["<info essentielle manquante>", ...],
-  "pret_a_generer": <true si tiers + au moins 1 ligne complète + dates, false sinon>,
-  "prochaine_question": "<null si pret, sinon la prochaine question>"
-}`
+Extrait le JSON conformément au schéma défini dans le system prompt.`
 
   try {
     const response = await getAnthropic().messages.create({
-      model: CLAUDE_MODEL,
+      model: CLAUDE_MODEL_EXTRACTOR,
       max_tokens: 2000,
       system: SYSTEM_PROMPT_EXTRACTION_FACTURE,
       messages: [{ role: 'user', content: prompt }],

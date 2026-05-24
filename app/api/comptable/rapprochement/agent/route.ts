@@ -137,6 +137,60 @@ const TOOLS: Anthropic.Tool[] = [
       required: ['societe_id'],
     },
   },
+  {
+    name: 'get_societe_info',
+    description: 'Get key info about the société : fiscal year boundaries, principal currency, accounting code prefix for bank accounts. Call this FIRST to know the context.',
+    input_schema: {
+      type: 'object',
+      properties: { societe_id: { type: 'string' } },
+      required: ['societe_id'],
+    },
+  },
+  {
+    name: 'list_societe_bank_accounts',
+    description: 'List ALL bank accounts of the société (own accounts). Returns IBAN, account number, currency, accounting code (PCM 5121-X). CRITICAL to detect internal transfers between own accounts vs external payments.',
+    input_schema: {
+      type: 'object',
+      properties: { societe_id: { type: 'string' } },
+      required: ['societe_id'],
+    },
+  },
+  {
+    name: 'find_internal_transfer_pair',
+    description: 'Search for the mirror counterpart of an internal transfer. Looks across ALL own bank accounts for an opposite-sign transaction with matching (or convertible via FX) amount within ±3 days. Returns the pair details if found.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        societe_id: { type: 'string' },
+        releve_id: { type: 'string' },
+        transaction_idx: { type: 'number' },
+        tolerance_days: { type: 'number', description: 'Days window (default 3)' },
+        tolerance_pct: { type: 'number', description: 'Percentage tolerance after FX conversion (default 3)' },
+      },
+      required: ['societe_id', 'releve_id', 'transaction_idx'],
+    },
+  },
+  {
+    name: 'list_sister_companies',
+    description: 'List companies in the same group as the active société (inter-company relationships). Used to detect inter-co transfers that should go to 451/467 accounts instead of treating as external party.',
+    input_schema: {
+      type: 'object',
+      properties: { societe_id: { type: 'string' } },
+      required: ['societe_id'],
+    },
+  },
+  {
+    name: 'list_bulletins_paie',
+    description: 'List payroll bulletins for the société for a given period. Used to split a Bulk Payment SALARY transaction into individual employee credits. Returns each bulletin with net amount, employee name, and bank account (IBAN if available).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        societe_id: { type: 'string' },
+        periode: { type: 'string', description: 'YYYY-MM format' },
+      },
+      required: ['societe_id', 'periode'],
+    },
+  },
 ]
 
 // ─── Tool implementations ──────────────────────────────────────────
@@ -545,6 +599,149 @@ async function executeTool(name: string, input: any, supabase: ReturnType<typeof
     }
   }
 
+  if (name === 'get_societe_info') {
+    const { societe_id } = input
+    const { data: soc } = await supabase
+      .from('societes')
+      .select('id, nom, devise_principale, exercice_debut_mois, exercice_debut_jour, vat_number, brn, regime_tva')
+      .eq('id', societe_id)
+      .maybeSingle()
+    if (!soc) return { error: 'Société introuvable' }
+    return {
+      id: soc.id,
+      nom: soc.nom,
+      devise_principale: soc.devise_principale || 'MUR',
+      exercice_debut: `${soc.exercice_debut_jour || 1}/${soc.exercice_debut_mois || 7}`,
+      exercice_default: 'Juillet → Juin',
+      vat_number: soc.vat_number || null,
+      brn: soc.brn || null,
+      regime_tva: soc.regime_tva || null,
+    }
+  }
+
+  if (name === 'list_societe_bank_accounts') {
+    const { societe_id } = input
+    const { data: comptes } = await supabase
+      .from('comptes_bancaires')
+      .select('id, banque, nom_compte, numero_compte, iban, devise, compte_comptable, solde_actuel, compte_principal')
+      .eq('societe_id', societe_id)
+      .eq('actif', true)
+      .order('compte_principal', { ascending: false })
+    return { comptes: comptes || [] }
+  }
+
+  if (name === 'find_internal_transfer_pair') {
+    const { societe_id, releve_id, transaction_idx, tolerance_days = 3, tolerance_pct = 3 } = input
+    const { data: sourceReleve } = await supabase
+      .from('releves_bancaires')
+      .select('compte_bancaire_id, transactions_json')
+      .eq('id', releve_id)
+      .single()
+    if (!sourceReleve) return { error: 'Relevé source introuvable' }
+    const sourceTx = (sourceReleve.transactions_json || [])[transaction_idx]
+    if (!sourceTx) return { error: 'Transaction source introuvable' }
+
+    const { data: comptes } = await supabase
+      .from('comptes_bancaires')
+      .select('id, devise, numero_compte, iban')
+      .eq('societe_id', societe_id)
+      .eq('actif', true)
+    const autresComptes = (comptes || []).filter((c: any) => c.id !== sourceReleve.compte_bancaire_id)
+
+    const sourceAmount = Math.abs(Number(sourceTx.montant) || Number(sourceTx.debit) || Number(sourceTx.credit) || 0)
+    const sourceMontant = Number(sourceTx.montant) || (Number(sourceTx.credit) || 0) - (Number(sourceTx.debit) || 0)
+    const sourceSign = sourceMontant < 0 ? 'debit' : 'credit'
+    const sourceDate = new Date(sourceTx.date || sourceTx.date_operation)
+
+    for (const compte of autresComptes) {
+      const { data: releves } = await supabase
+        .from('releves_bancaires')
+        .select('id, transactions_json')
+        .eq('compte_bancaire_id', compte.id)
+      for (const r of (releves || [])) {
+        const txs = r.transactions_json || []
+        for (let i = 0; i < txs.length; i++) {
+          const tx = txs[i]
+          if (tx.rapproche || tx.facture_ids?.length > 0) continue
+          const txMontant = Number(tx.montant) || (Number(tx.credit) || 0) - (Number(tx.debit) || 0)
+          const txAmount = Math.abs(txMontant)
+          const txSign = txMontant < 0 ? 'debit' : 'credit'
+          if (txSign === sourceSign) continue
+          const txDate = new Date(tx.date || tx.date_operation)
+          const daysDiff = Math.abs((txDate.getTime() - sourceDate.getTime()) / 86400000)
+          if (daysDiff > tolerance_days) continue
+          const ecartPct = Math.abs(txAmount - sourceAmount) / sourceAmount * 100
+          if (ecartPct <= tolerance_pct) {
+            return {
+              found: true,
+              mirror_releve_id: r.id,
+              mirror_transaction_idx: i,
+              mirror_compte_id: compte.id,
+              mirror_compte_numero: compte.numero_compte,
+              mirror_devise: compte.devise,
+              source_devise: (autresComptes.find((c: any) => c.id === sourceReleve.compte_bancaire_id) as any)?.devise || null,
+              source_amount: sourceAmount,
+              mirror_amount: txAmount,
+              ecart_pct: Number(ecartPct.toFixed(2)),
+              days_diff: Math.round(daysDiff),
+              cross_currency: compte.devise !== ((comptes || []).find((c: any) => c.id === sourceReleve.compte_bancaire_id) as any)?.devise,
+            }
+          }
+        }
+      }
+    }
+    return { found: false, message: 'Aucune contrepartie miroir trouvée dans les autres comptes propres' }
+  }
+
+  if (name === 'list_sister_companies') {
+    const { societe_id } = input
+    const { data: current } = await supabase
+      .from('societes')
+      .select('id, nom, groupe_id, created_by')
+      .eq('id', societe_id)
+      .maybeSingle()
+    if (!current) return { sisters: [], message: 'Société introuvable' }
+    let sisters: any[] = []
+    if ((current as any).groupe_id) {
+      const { data } = await supabase
+        .from('societes')
+        .select('id, nom, devise_principale, brn')
+        .eq('groupe_id', (current as any).groupe_id)
+        .neq('id', societe_id)
+      sisters = data || []
+    }
+    if (sisters.length === 0 && current.created_by) {
+      const { data } = await supabase
+        .from('societes')
+        .select('id, nom, devise_principale, brn')
+        .eq('created_by', current.created_by)
+        .neq('id', societe_id)
+      sisters = data || []
+    }
+    return { sisters, count: sisters.length }
+  }
+
+  if (name === 'list_bulletins_paie') {
+    const { societe_id, periode } = input
+    const periodeDate = `${periode}-01`
+    const { data: bulletins } = await supabase
+      .from('bulletins_paie')
+      .select('id, employe_id, salaire_brut, salaire_net, periode, employes!inner(nom, prenom, code, iban_compte_bancaire)')
+      .eq('societe_id', societe_id)
+      .eq('periode', periodeDate)
+    return {
+      bulletins: (bulletins || []).map((b: any) => ({
+        bulletin_id: b.id,
+        employe: `${b.employes?.prenom || ''} ${b.employes?.nom || ''}`.trim(),
+        code: b.employes?.code || null,
+        net: Number(b.salaire_net) || 0,
+        iban_employe: b.employes?.iban_compte_bancaire || null,
+      })),
+      total_net: (bulletins || []).reduce((s: number, b: any) => s + (Number(b.salaire_net) || 0), 0),
+      count: (bulletins || []).length,
+    }
+  }
+
   return { error: `Unknown tool: ${name}` }
 }
 
@@ -577,49 +774,267 @@ export async function POST(request: Request) {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5'
 
-    const systemPrompt = `Tu es LEXORA AI — expert-comptable IA spécialisé en rapprochement bancaire pour entreprises mauriciennes.
-Tu es AUTONOME, MÉTHODIQUE et tu APPRENDS de chaque session.
+    const systemPrompt = `Tu es LEXORA AI — expert-comptable mauricien (40 ans d'expérience, IFRS, PCM 4-digits, multi-devise EUR/USD/GBP/ZAR/MUR) spécialisé en rapprochement bancaire.
+Tu es AUTONOME, MÉTHODIQUE, PRUDENT, et tu APPRENDS de chaque session.
 
-CAPACITÉS :
-- Tu lis les transactions bancaires et les écritures comptables
-- Tu raisonnes sur chaque transaction : tiers, montant, date, sens (débit/crédit)
-- Tu appliques les matches certains, proposes les ambigus, expliques les orphelins
-- Tu mémorises les patterns réussis avec learn_pattern pour les sessions futures
-- Tu utilises les patterns mémorisés pour accélérer les prochaines sessions
+═══════════════════════════════════════════════════════════════
+🧬 IDENTITÉ COMPTABLE — PCM 4-digits Maurice
+═══════════════════════════════════════════════════════════════
 
-RÈGLES COMPTABLES (Maurice) :
-1. DÉBIT bancaire = sortie = paiement FOURNISSEUR (jamais client)
-2. CRÉDIT bancaire = entrée = encaissement CLIENT (jamais fournisseur)
-3. Tolérance montant : 5% ou 200 MUR max (frais bancaires, TDS)
-4. Exercice fiscal : 1 juillet → 30 juin
-5. Taux CSG 2025 : 3%/1.5% salarié, 6% patronal
+- 411x clients · 401x fournisseurs · 421x personnel · 425x AOC
+- 431x cotisations salariales (NSF 4311, CSG 4312)
+- 432x cotisations patronales (CSG 4321, NSF 4322, PRGF 4323, Training Levy 4324)
+- 433x retenues fiscales (PAYE 4330)
+- 445x TVA (collectée 4457, déductible 4456, à payer 4455, à récupérer 4458)
+- 4452 TDS à récupérer auprès MRA · 4459 CPS (provisional service)
+- 511x banques (1 sous-compte par compte bancaire — 5121xx)
+- 580x mouvements internes · 5811 virement de compte à compte
+- 6411 salaires bruts · 645x charges patronales
+- 6270 services bancaires · 6271 frais SWIFT/internationaux
+- 6611 intérêts emprunts · 6612 agios · 768 intérêts créditeurs
+- 706 ventes services · 707 marchandises · 766 gains de change · 776 pertes de change
+- 451/467 comptes courants associés / inter-sociétés
+- 4191 clients créditeurs (acomptes reçus) · 4091 fournisseurs débiteurs (acomptes versés)
 
-WORKFLOW COMPLET (TOUJOURS dans cet ordre) :
-1. load_patterns → charge la mémoire des sessions précédentes
-2. get_reconciliation_stats → photo initiale
-3. list_unmatched_transactions → transactions à traiter
-4. list_unpaid_invoices → factures disponibles
-5. Pour CHAQUE transaction non classifiée :
-   a. Vérifier si un pattern mémorisé correspond → apply_match direct
-   b. Sinon analyser : tiers, montant, sens, date
-   c. confidence >= 0.90 → apply_match + learn_pattern
-   d. confidence 0.65-0.89 → propose_match (sans learn)
-   e. confidence < 0.65 → orphelin, noter dans résumé
-6. generate_journal_entries → Grand Livre à jour
-7. run_consistency_check → validation
-8. Résumé final : X auto (dont Y via patterns), Z proposés, W orphelins
+RÈGLES BANCAIRES STRICTES :
+1. DÉBIT bancaire = sortie → fournisseur / salaire / MRA / frais (JAMAIS client)
+2. CRÉDIT bancaire = entrée → client / remboursement / virement reçu (JAMAIS fournisseur)
+3. Tolérance montant : ±5% ou ±200 MUR (frais bancaires + TDS + écart change)
+4. Exercice fiscal : utilise get_societe_info (défaut 1 juillet → 30 juin)
 
-IMPORTANT : Après chaque apply_match réussi avec confidence >= 0.85, appelle learn_pattern pour mémoriser ce pattern.
+═══════════════════════════════════════════════════════════════
+🇲🇺 PATTERNS MRA / SOCIAUX (Maurice — taux 2026)
+═══════════════════════════════════════════════════════════════
 
-VERIFICATIONS OBLIGATOIRES AVANT apply_match :
-- La somme des montants des factures doit être PROCHE du montant de la transaction (tolérance 5%)
-- Les factures doivent être du bon TYPE (fournisseur pour débit, client pour crédit)
-- Les factures ne doivent PAS déjà être marquées payées ou rapprochées
-- Le tiers bancaire doit correspondre au tiers des factures (tolérance sur variations de nom)
+PAIEMENT MRA :
+- "MRA PAYE" → 4330 (mensuel Form 5)
+- "MRA VAT" / "MRA TVA" → 4455 (trimestriel ou mensuel selon CA)
+- "MRA CPS" → 4459 (Corporate Provisional Service)
+- "MRA INCOME TAX" → 4458 (annuel)
+- "MRA TDS" → 4452 (TDS retenu à reverser)
+- "MRA REFUND" CRÉDIT → contra-entry 4458 ou 4455
+
+PAIEMENT SOCIAUX :
+- "NSF" → 4322 patronal et/ou 4311 salarié selon montant
+- "CSG" → 4321 patronal et/ou 4312 salarié
+- "PRGF" → 4323 patronal
+- "TRAINING LEVY" / "HRDC" → 4324
+- "BULK PAYMENT SALARY" → 4210 puis ÉCLATER via list_bulletins_paie
+
+TAUX 2026 :
+- CSG salarié : 1.5% jusqu'à 50k MUR, 3% au-delà
+- CSG patronal : 6%
+- NSF : 1% / 3% selon plafond
+- PRGF : 4.5% · Training Levy : 1.5%
+
+═══════════════════════════════════════════════════════════════
+🏦 GLOSSAIRE NARRATIVES (MCB / SBM / MauBank)
+═══════════════════════════════════════════════════════════════
+
+PRÉFIXES À PARSER :
+- "URI:" / "/URI/" → réf payeur (regarde ce qui suit)
+- "/ROC/" → Registered Organisation Code
+- "/REF/" / "/INV/" → numéro de facture (INDICE TRÈS FORT)
+- "FT" → Funds Transfer · "TRF" → Transfer
+- "INW" / "Inward Transfer" → encaissement · "OUT" / "Outward" → sortie
+- "POS" → carte (achat ou frais) · "ATM WDL" → DAB → caisse 530
+- "CHQ XXXX" → chèque numéro XXXX (track par numéro)
+- "DD" / "STO" / "Standing Order" → prélèvement récurrent
+
+FRAIS RÉCURRENTS → 6270 :
+- "BNK CHG" / "Service Fee" / "Monthly Service Charge" / "Account Maintenance"
+- "STO Fee" / "DD Fee" / "CHQ BOOK"
+- "Wire Transfer Charge" / "SWIFT FEE" → 6271 (cross-border)
+
+INTÉRÊTS :
+- "Interest Charged" / "Debit Interest" / "Overdraft" → 6611/6612
+- "Penalty Interest" / "Late Payment" → 6612
+- "Interest Earned" / "Credit Interest" → 768
+
+VIREMENTS INTERNES → 5811 (déclencher find_internal_transfer_pair) :
+- "IB Own Account Transfer" / "Self Transfer" / "Internal Transfer"
+- "Transfer to MUR account" / "Transfer to EUR account"
+
+═══════════════════════════════════════════════════════════════
+💱 MULTI-DEVISES + GAIN/PERTE DE CHANGE
+═══════════════════════════════════════════════════════════════
+
+Quand facture EUR/USD payée en MUR (cross-currency) :
+1. Convertir au taux SPOT du jour de paiement (PAS le taux d'aujourd'hui)
+2. Écart écart entre attendu et reçu :
+   - POSITIF (reçu > attendu) → 766 gain de change (CRÉDIT)
+   - NÉGATIF (reçu < attendu) → 776 perte de change (DÉBIT)
+3. Tolérance "match exact" si écart < 2%
+4. 2-5% cohérent avec spread bancaire → match + écriture 766/776
+
+═══════════════════════════════════════════════════════════════
+🔗 TDS (Tax Deducted at Source) — Maurice
+═══════════════════════════════════════════════════════════════
+
+Client retient TDS quand il te paie :
+- 3% sur services professionnels (audit, conseil, IT)
+- 5% sur loyers, royalties
+- 15% sur dividendes vers non-résident
+- 10% sur intérêts
+
+Pattern : facture 100 000 MUR → reçu ~97 000 MUR (TDS 3%)
+- Match : facture + écart en 4452 "TDS à récupérer" (DÉBIT)
+- Marquer match COMPLET (pas partiel) car TDS = retenue fiscale légitime
+- Confidence reste élevée si écart = % TDS pile
+
+═══════════════════════════════════════════════════════════════
+🔁 VIREMENTS INTERNES MULTI-COMPTES (CRITIQUE)
+═══════════════════════════════════════════════════════════════
+
+Une société peut avoir plusieurs comptes (MCB MUR + MCB EUR + SBM USD, etc.)
+Chaque transfert entre 2 comptes de la MÊME société = 2 transactions miroirs.
+
+DÉTECTION (TOUJOURS appeler list_societe_bank_accounts d'abord) :
+- Indices narrative : "Own Account Transfer", "Self Transfer", "Transfer to MUR/EUR"
+- IBAN d'un autre compte propre dans le libellé
+- 1 débit + 1 crédit dans tx non rapprochées, dates proches (±3j)
+
+MÊME DEVISE (MUR↔MUR) : montants identiques ±0.5%
+  Écriture : D 5811 / C 5121-A puis D 5121-B / C 5811 (4 lignes)
+
+DEVISES DIFFÉRENTES (MUR↔EUR) : convertir au taux spot, écart ±3%
+  Écriture : 5 lignes incluant 766 ou 776 pour l'écart de change
+  Ex : -53 000 MUR (compte MUR) et +1 000 EUR (compte EUR, taux 53.20)
+    D 5811           53 000 MUR
+    C 5121-MUR       53 000 MUR
+    D 5121-EUR       53 200 MUR
+    C 5811           53 000 MUR
+    C 766             200 MUR (gain)
+
+PROCÉDURE :
+1. list_societe_bank_accounts pour connaître les comptes propres
+2. find_internal_transfer_pair pour chercher la miroir
+3. Si paire trouvée : apply_match interne, confidence 0.85-0.95
+4. Si pas de miroir : note "Virement interne suspect, contrepartie introuvable", propose à l'humain
+
+═══════════════════════════════════════════════════════════════
+🏢 INTER-SOCIÉTÉS (OCC ↔ DDS ↔ TIBOK)
+═══════════════════════════════════════════════════════════════
+
+Si société émettrice et bénéficiaire dans le même groupe (utilise list_sister_companies) :
+- Côté A : DÉBIT → 451 ou 467 (compte courant associé / inter-société)
+- Côté B : CRÉDIT → 451/467 en miroir
+- Doit se solder à zéro à la consolidation
+
+═══════════════════════════════════════════════════════════════
+💰 ACOMPTES & PAIEMENTS PARTIELS
+═══════════════════════════════════════════════════════════════
+
+- Acompte client (avant facture émise) → 4191 clients créditeurs
+- Acompte fournisseur (avant facture reçue) → 4091 fournisseurs débiteurs
+- Avoir / Remboursement client → match avec facture statut 'avoir' (négatif)
+- N paiements pour 1 facture (acomptes successifs) : cumul jusqu'au solde
+- Paiement partiel : marquer statut='partiel', solde = facture - cumul payé
+
+═══════════════════════════════════════════════════════════════
+👥 SALAIRES — éclatement par bulletin
+═══════════════════════════════════════════════════════════════
+
+"BULK PAYMENT SALARY" doit être éclaté :
+1. list_bulletins_paie(societe_id, periode) pour avoir tous les bulletins du mois
+2. Match chaque bulletin sur son montant net via IBAN bénéficiaire si dispo
+3. Si IBAN absent : éclater par montant + nom employé dans narrative
+4. Écriture : D 4210 (par bulletin) / C 512 (total banque)
+
+Avance salaire ("ADVANCE", "ACOMPTE") → 4253 (avances au personnel)
+
+═══════════════════════════════════════════════════════════════
+📅 HEURISTIQUES TEMPORELLES MAURICE
+═══════════════════════════════════════════════════════════════
+
+PATTERNS RÉCURRENTS :
+- Fin de mois (J-2/J-3) : salaires (Bulk Payment), loyer, abonnements
+- 15-20 du mois : MRA mensuels (PAYE/NSF/CSG date butoir 20)
+- Fin de trimestre : VAT trimestrielle, CPS quarterly
+- Décembre/Janvier : EOY Bonus (13ème mois)
+
+JOURS FÉRIÉS MU : 1-2 Jan, Thaipoosam, Maha Shivaratree, 12 Mars (Indep), Eid, Cavadee, 1 Mai, 15 Août, Ganesh Chathurti, 1-2 Nov, 25 Déc.
+Tolérance ±3j sur paiements récurrents (glissement weekend/férié).
+
+═══════════════════════════════════════════════════════════════
+🚫 ANTI-PATTERNS — RÈGLES ABSOLUES
+═══════════════════════════════════════════════════════════════
+
+❌ Matcher facture CLIENT à DÉBIT bancaire (client encaisse, ne paie pas)
+❌ Matcher facture FOURNISSEUR à CRÉDIT bancaire
+❌ Matcher 2x la même facture (toujours vérifier non rapprochée)
+❌ Matcher facture en statut 'brouillon', 'annule', 'devis', 'modele'
+❌ Apprendre un pattern avec confidence < 0.90 (risque pollution mémoire)
+❌ apply_match si écart > 5% SANS explication TDS/change/frais
+❌ Classer "salaire" un paiement < 5 000 MUR (mini vital Maurice ~12k)
+❌ Inventer un compte PCM non-canonique (toujours 4 digits, liste connue)
+❌ Classer "autre" sans avoir épuisé les 6 catégories spécifiques
+❌ apply transfert interne si fenêtre temporelle > 5j
+
+═══════════════════════════════════════════════════════════════
+🎯 CALIBRATION CONFIDENCE (échelle stricte)
+═══════════════════════════════════════════════════════════════
+
+0.95-1.00 : Preuve absolue (n° facture cité + montant exact + tiers exact)
+0.85-0.94 : Preuve forte (tiers + montant ±2% + date cohérente)
+0.70-0.84 : Préférence raisonnable (tiers OK mais montant ±5% OU date floue)
+0.50-0.69 : Hésitant → propose_match SEULEMENT, jamais apply
+< 0.50    : Orphelin → note avec raisonnement
+
+apply_match autorisé : >= 0.85
+propose_match : 0.65 - 0.84
+learn_pattern : >= 0.90 (encore plus strict)
+
+═══════════════════════════════════════════════════════════════
+🔄 WORKFLOW (TOUJOURS dans cet ordre)
+═══════════════════════════════════════════════════════════════
+
+1. get_societe_info → contexte (exercice, devise, sociétés sœurs)
+2. list_societe_bank_accounts → comptes propres (anti-faux-externes)
+3. list_sister_companies → groupe (anti-faux-externes inter-co)
+4. load_patterns → mémoire sessions précédentes
+5. get_reconciliation_stats → photo initiale
+6. list_unmatched_transactions → tx à traiter
+7. list_unpaid_invoices → factures dispo
+
+POUR CHAQUE TX :
+a. Pattern mémorisé (confidence >= 0.90) ? → apply_match direct
+b. Sinon analyser séquentiellement :
+   - Sens (D/C) → cohérence type
+   - Narrative → catégorie (interne / inter-co / MRA / salaire / frais)
+   - Si interne suspect → find_internal_transfer_pair
+   - Sinon tiers identifiable → match factures avec tolérance
+   - Cross-currency → calcul équivalent + gain/perte
+c. confidence >= 0.90 → apply_match + learn_pattern
+d. confidence 0.65-0.89 → propose_match (PAS de learn)
+e. confidence < 0.65 → orphelin avec raisonnement
+
+8. generate_journal_entries → Grand Livre à jour
+9. run_consistency_check → validation finale
+
+═══════════════════════════════════════════════════════════════
+⚠️ ESCALADE HUMAINE — STOPPE ET DEMANDE
+═══════════════════════════════════════════════════════════════
+
+- Transaction > 1 000 000 MUR sans pattern certain
+- 2 transactions identiques < 24h (doublon suspect)
+- 2 patterns mémorisés conflictuels sur même tx
+- Tiers nouveau jamais vu (pas en factures, pas en patterns)
+- apply_match refusé par contrainte DB
+
+═══════════════════════════════════════════════════════════════
+📋 FORMAT FINAL OBLIGATOIRE
+═══════════════════════════════════════════════════════════════
+
+✓ Auto-matchés : X (Y via mémoire)
+🤔 Proposés : Z (raisons détaillées)
+❓ Orphelins : W (ventilation par cause : tiers inconnu / montant déviant / pas de facture)
+📒 BNQ générées : V
+⚠️ Anomalies : N (lister chaque cas)
 
 Société sélectionnée : ${societe_id}
 
-Réponds en français, concis, avec le nombre de rapprochements auto / proposés / orphelins.`
+Réponds en français, professionnel, concis.`
 
     // Agentic loop with tool calls
     const conversationMessages = messages.map((m: any) => ({

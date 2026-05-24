@@ -894,31 +894,49 @@ function FeedTransactionsPanel({ locale }: { locale: Locale }) {
         </button>
 
         {!collapsed && (
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
-            {/* Option A : Upload manuel — toujours disponible */}
+          <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            {/* Option A : Upload web (CSV/MT940 + OCR PDF/image) — toujours dispo */}
             <div className="rounded-md border border-green-200 bg-white p-3">
               <div className="flex items-center gap-2 mb-1.5">
                 <CheckCircle2 className="h-4 w-4 text-green-700" />
                 <span className="font-semibold text-sm text-green-900">
-                  {isFr ? 'A — Upload CSV / MT940' : 'A — CSV / MT940 upload'}
+                  {isFr ? 'A — Upload web (CSV / MT940 / OCR)' : 'A — Web upload (CSV / MT940 / OCR)'}
                 </span>
               </div>
               <p className="text-xs text-gray-700 leading-relaxed">
                 {isFr
-                  ? 'Tu exportes le relevé depuis ton Internet Banking, tu le déposes ici (bouton Importer ↑). Lexora parse MCB, SBM, MauBank, formats MT940 standards. Aucun mot de passe à donner.'
-                  : 'Export the statement from your Internet Banking and drop it here (Import button ↑). Lexora parses MCB, SBM, MauBank, standard MT940. No password required.'}
+                  ? 'Tu déposes ici (bouton Importer ↑) : un export CSV/MT940 depuis ton Internet Banking, ou un PDF/image de ton relevé (l\'OCR Claude extrait les transactions). MCB, SBM, MauBank reconnus. Aucun mot de passe à donner.'
+                  : 'Drop here (Import button ↑): a CSV/MT940 export from your Internet Banking, or a PDF/image of your statement (Claude OCR extracts the transactions). MCB, SBM, MauBank recognized. No password required.'}
               </p>
               <p className="text-[11px] text-green-700 mt-1.5 font-medium">
                 {isFr ? '✅ Fonctionne tout de suite' : '✅ Works right now'}
               </p>
             </div>
 
-            {/* Option B : Scraping auto — nécessite credentials */}
+            {/* Option B : Telegram — photo du relevé envoyée au bot, OCR auto */}
+            <div className="rounded-md border border-cyan-200 bg-white p-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <Sparkles className="h-4 w-4 text-cyan-700" />
+                <span className="font-semibold text-sm text-cyan-900">
+                  {isFr ? 'B — Telegram (OCR photo)' : 'B — Telegram (photo OCR)'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-700 leading-relaxed">
+                {isFr
+                  ? 'Tu envoies une photo ou un PDF de ton relevé au bot Telegram Lexora. L\'OCR Claude extrait les transactions et les injecte directement dans la banque de la société active. Idéal en mobilité.'
+                  : 'Send a photo or PDF of your statement to the Lexora Telegram bot. Claude OCR extracts the transactions and injects them into the active company\'s bank. Ideal on the go.'}
+              </p>
+              <p className="text-[11px] text-cyan-700 mt-1.5 font-medium">
+                {isFr ? '📱 Fonctionne en mobilité' : '📱 Works on mobile'}
+              </p>
+            </div>
+
+            {/* Option C : Scraping auto — nécessite credentials */}
             <div className="rounded-md border border-amber-200 bg-white p-3">
               <div className="flex items-center gap-2 mb-1.5">
                 <KeyRound className="h-4 w-4 text-amber-700" />
                 <span className="font-semibold text-sm text-amber-900">
-                  {isFr ? 'B — Scraping nocturne auto' : 'B — Nightly auto scraping'}
+                  {isFr ? 'C — Scraping nocturne auto' : 'C — Nightly auto scraping'}
                 </span>
               </div>
               <p className="text-xs text-gray-700 leading-relaxed">
@@ -939,12 +957,12 @@ function FeedTransactionsPanel({ locale }: { locale: Locale }) {
               </div>
             </div>
 
-            {/* Option C : Email forwarding — pas encore en place */}
+            {/* Option D : Email forwarding — pas encore en place */}
             <div className="rounded-md border border-gray-200 bg-white p-3 opacity-75">
               <div className="flex items-center gap-2 mb-1.5">
                 <Mail className="h-4 w-4 text-gray-600" />
                 <span className="font-semibold text-sm text-gray-700">
-                  {isFr ? 'C — Forward email (à venir)' : 'C — Email forwarding (coming)'}
+                  {isFr ? 'D — Forward email (à venir)' : 'D — Email forwarding (coming)'}
                 </span>
               </div>
               <p className="text-xs text-gray-600 leading-relaxed">

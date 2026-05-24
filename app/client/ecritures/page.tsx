@@ -7,8 +7,9 @@
  * Lex Banque produit les écritures BNQ qui apparaîtront ici.
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, Suspense } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -75,13 +76,25 @@ function formatDate(d: string | null): string {
   })
 }
 
+// Wrapper Suspense — requis par Next.js App Router pour useSearchParams.
 export default function ClientEcrituresPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-sm text-gray-500">Chargement…</div>}>
+      <ClientEcrituresContent />
+    </Suspense>
+  )
+}
+
+function ClientEcrituresContent() {
   const locale = getLocale()
   const { societeId } = useSocieteActive()
+  const searchParams = useSearchParams()
   const [ecritures, setEcritures] = useState<Ecriture[]>([])
   const [loading, setLoading] = useState(false)
   const [journalFilter, setJournalFilter] = useState("all")
-  const [search, setSearch] = useState("")
+  // Filtre compte initialisé depuis ?compte=<num> (lien depuis grand-livre).
+  // L'utilisateur peut ensuite vider ou modifier dans le champ search.
+  const [search, setSearch] = useState(searchParams.get('compte') || '')
   const [editing, setEditing] = useState<Ecriture | null>(null)
   const [editFields, setEditFields] = useState<{
     numero_compte: string; libelle: string; debit_mur: string; credit_mur: string; date_ecriture: string
