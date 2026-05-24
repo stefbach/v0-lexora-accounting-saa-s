@@ -388,9 +388,29 @@ function FacturePreviewContent() {
         {/* Header */}
         <div className="flex justify-between items-start mb-10">
           <div className="flex items-start gap-4">
-            {(data.logo_url || s.logo_url) && (
-              <img src={data.logo_url || s.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
-            )}
+            {(() => {
+              // Guard strict : on n'affiche le logo que si l'URL est
+              // une vraie URL http(s) absolue OU un chemin /relatif.
+              // Sans ce filtre, une valeur falsy non-vide ('null', 'undefined'
+              // sous forme de string, '#') affichait l'icône "image cassée"
+              // du navigateur (le carré/pastille observé sur le PDF imprimé).
+              const raw = (data.logo_url || s.logo_url || '').trim()
+              const isValid = /^(https?:\/\/|\/)/i.test(raw)
+              if (!isValid) return null
+              return (
+                <img
+                  src={raw}
+                  alt=""
+                  // Dimensions calées sur le PDF officiel (160x80 →
+                  // ratio 2:1, lisible une fois imprimé sur A4).
+                  className="h-16 w-auto max-w-[160px] object-contain"
+                  // onError : si le logo refuse de charger (URL morte,
+                  // 403, etc.), on cache l'<img> au lieu d'afficher
+                  // l'icône "image cassée" qui pollue le PDF imprimé.
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                />
+              )
+            })()}
             <div>
               <h2 className="text-xl font-bold" style={{ color: colors.primaire }}>{s.nom || t('inv.pv.your_company', locale)}</h2>
               {s.adresse && <p className="text-sm text-gray-600 whitespace-pre-line">{s.adresse}</p>}
