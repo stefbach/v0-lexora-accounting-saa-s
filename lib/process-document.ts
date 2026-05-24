@@ -45,26 +45,20 @@ export async function processDocument(params: {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
     temperature: 0,
-    system: `Tu es un expert-comptable. Analyse ce document et retourne UN JSON (sans markdown, sans backticks):
+    system: `Tu es un expert-comptable mauricien (PCM 4-digits, multi-devise MUR/EUR/USD/GBP). Analyse ce document et retourne UN JSON (sans markdown, sans backticks) avec :
+
 {
-  "routing": {
-    "societe": "<nom société ou INCONNU>",
-    "type_document": "<facture_fournisseur|facture_client|releve_bancaire|charges_sociales|fiche_paie|contrat|autre>",
-    "confiance_type": <0-100>
-  },
-  "extraction": {
-    "emetteur": "",
-    "destinataire": "",
-    "date_document": "",
-    "numero_reference": "",
-    "devise": "",
-    "montant_ht": 0,
-    "montant_tva": 0,
-    "montant_ttc": 0,
-    "lignes": [{"description": "", "montant": 0}],
-    "ecritures_comptables": [{"compte": "", "libelle": "", "debit": 0, "credit": 0}]
-  }
-}`,
+  "type_document": "facture_fournisseur|facture_client|releve_bancaire|fiche_paie|charges_sociales|ticket_caisse|bordereau_mra|bon_livraison|contrat|autre",
+  "societe_detectee": "<nom de la société destinataire ou null>",
+  "vendor_emetteur": "<nom de l'émetteur si facture>",
+  "date_document": "<YYYY-MM-DD ou null>",
+  "montant_ttc": <nombre ou null>,
+  "devise": "<MUR|EUR|USD|GBP>",
+  "confidence": <0.0-1.0>,
+  "summary": "<1 ligne décrivant le doc>"
+}
+
+Règles : pas de markdown, pas de backticks, JSON strict uniquement. Si illisible, tous null + confidence < 0.3.`,
     messages: [{
       role: 'user',
       content: isVisual
