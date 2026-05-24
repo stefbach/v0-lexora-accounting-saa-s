@@ -321,12 +321,12 @@ export async function DELETE(request: Request) {
   }
 }
 
-const ANALYZE_PROMPT = `Analyse cette facture et extrais UNIQUEMENT les métadonnées de mise en page — PAS les données (montants, clients, lignes).
+const ANALYZE_PROMPT = `Analyse cette facture et extrais UNIQUEMENT les métadonnées de mise en page — PAS les données spécifiques (montants, clients, lignes, numéros).
 
 Retourne UNIQUEMENT un objet JSON valide (pas de texte avant ou après, pas de markdown) avec ces champs :
 
 {
-  "nom_template": "Template basé sur [nom entreprise détecté]",
+  "nom_template": "Template (devis|facture|standard) — usage générique",
   "couleur_primaire": "#hex",
   "couleur_secondaire": "#hex",
   "logo_position": "top-left|top-center|top-right",
@@ -334,10 +334,12 @@ Retourne UNIQUEMENT un objet JSON valide (pas de texte avant ou après, pas de m
   "devise": "MUR|EUR|USD|GBP",
   "taux_tva": 15,
   "colonnes": ["description", "quantite", "prix_unitaire", "montant"],
-  "entete_html": "<div>...court template HTML <500 chars. DOIT inclure <img src=\\"{{logo_url}}\\" alt=\\"logo\\" /> à la position détectée si la facture a un logo, et placeholders {{nom_societe}}, {{adresse}}, {{brn}}, {{tva_number}}, {{telephone}}, {{email}}...</div>",
-  "pied_page_html": "<div>...court <500 chars avec {{conditions_paiement}}, {{mentions_legales}}, {{coordonnees_bancaires}}</div>",
-  "mentions_legales": "texte court <300 chars",
+  "entete_html": "<div>...template HTML <2000 chars. DOIT inclure <img src=\\"{{logo_url}}\\" alt=\\"logo\\" /> si la facture a un logo, à la position détectée. Placeholders {{nom_societe}}, {{adresse}}, {{adresse2}}, {{ville}}, {{brn}}, {{tva_number}}, {{telephone}}, {{email}}, {{website}}. Aucune donnée spécifique du PDF analysé.</div>",
+  "pied_page_html": "<div>...template HTML <2000 chars avec placeholders {{conditions_paiement}}, {{mentions_legales}}, {{coordonnees_bancaires}}, {{banque_nom}}, {{banque_iban}}, {{banque_swift}}. Aucune donnée spécifique du PDF.</div>",
+  "mentions_legales": "texte court <500 chars, générique (pas le texte exact du PDF analysé si celui-ci contient des données nominatives — utilise des placeholders {{nom_societe}}, {{brn}})",
   "conditions_paiement": "ex: Net 30 jours",
+  "has_qr_code_mra": false,
+  "qr_code_position": "bottom-right|bottom-center|none",
   "style": {
     "police": "nom de police",
     "taille_titre": "18px",
@@ -349,9 +351,35 @@ Retourne UNIQUEMENT un objet JSON valide (pas de texte avant ou après, pas de m
 }
 
 CONTRAINTES STRICTES :
-- Réponse uniquement en JSON, AUCUN texte avant ou après
-- Pas de commentaires JS, pas de virgule finale, pas de markdown
-- entete_html et pied_page_html doivent rester COURTS (<500 chars chacun)
-- Utilise UNIQUEMENT des placeholders {{variable}}, pas de vraies données
-- Si la facture a un logo visible : inclus impérativement <img src="{{logo_url}}" ... /> dans entete_html à la position détectée (logo_position) et avec une largeur raisonnable (style="max-height:60px")
-- Si une info n'est pas détectable, utilise une valeur par défaut raisonnable (pas de null)`
+
+1. NOM DU TEMPLATE — Utilise un libellé GÉNÉRIQUE descriptif du type de
+   document (ex: "Template facture standard", "Template devis professionnel",
+   "Template avoir compact"). N'utilise JAMAIS le nom de l'entreprise ou
+   d'autres données nominatives extraites du PDF — c'est un template
+   réutilisable, pas un clone du document analysé.
+
+2. ENTÊTE et PIED — limite 2000 caractères chacun. Ne mets QUE des
+   placeholders {{variable}}, AUCUNE donnée extraite du PDF (pas de
+   nom d'entreprise, pas d'adresse réelle, pas de BRN/VAT réels, pas
+   de coordonnées bancaires réelles).
+
+3. MENTIONS LÉGALES — limite 500 chars. Si le PDF contient des mentions
+   spécifiques (clauses contractuelles, conditions particulières),
+   GÉNÉRALISE-les en mentions standard avec placeholders. Ne copie
+   jamais le texte tel quel s'il contient des données nominatives.
+
+4. DÉTECTION QR CODE MRA — Si tu détectes un QR code typique de la
+   fiscalisation MRA Maurice (généralement en bas à droite ou centré),
+   mets has_qr_code_mra=true et indique sa position. Sinon false +
+   position="none". Ne génère PAS de placeholder QR code dans l'entête
+   ou le pied — le QR sera ajouté dynamiquement par l'app via les
+   variables {{qr_code_mra}} si fiscalisation activée.
+
+5. STYLE — Si une info n'est pas détectable dans le PDF, utilise une
+   valeur par défaut raisonnable (couleurs neutres #0B0F2E primaire,
+   #6B7280 secondaire ; police "Inter" ou "Arial" ; tailles 18px/12px),
+   ne mets jamais null.
+
+6. FORMAT JSON — Réponse uniquement en JSON valide, AUCUN texte avant
+   ou après, AUCUN commentaire JS, AUCUNE virgule finale, AUCUN
+   markdown.`
