@@ -28,6 +28,10 @@ import {
   ArrowRight,
   Sparkles,
   Bot,
+  Pencil,
+  Trash2,
+  Save,
+  X,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -78,6 +82,96 @@ export default function ClientEcrituresPage() {
   const [loading, setLoading] = useState(false)
   const [journalFilter, setJournalFilter] = useState("all")
   const [search, setSearch] = useState("")
+  const [editing, setEditing] = useState<Ecriture | null>(null)
+  const [editFields, setEditFields] = useState<{
+    numero_compte: string; libelle: string; debit_mur: string; credit_mur: string; date_ecriture: string
+  }>({ numero_compte: '', libelle: '', debit_mur: '', credit_mur: '', date_ecriture: '' })
+  const [saving, setSaving] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 4000)
+  }
+
+  const openEdit = (e: Ecriture) => {
+    setEditing(e)
+    setEditFields({
+      numero_compte: e.numero_compte || '',
+      libelle: e.libelle || '',
+      debit_mur: String(e.debit_mur || 0),
+      credit_mur: String(e.credit_mur || 0),
+      date_ecriture: e.date_ecriture || '',
+    })
+  }
+
+  const saveEdit = async () => {
+    if (!editing) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/client/ecritures', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editing.id,
+          numero_compte: editFields.numero_compte,
+          libelle: editFields.libelle,
+          debit_mur: Number(editFields.debit_mur) || 0,
+          credit_mur: Number(editFields.credit_mur) || 0,
+          date_ecriture: editFields.date_ecriture || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || 'Erreur modification')
+      }
+      setEditing(null)
+      showToast('Écriture modifiée', 'success')
+      await load()
+    } catch (e: any) {
+      showToast(e?.message || 'Erreur modification', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deleteOne = async (e: Ecriture) => {
+    if (!confirm(`Supprimer cette écriture ?\n${e.numero_compte} · ${e.libelle || ''}\nCette suppression est DÉFINITIVE en base de données.`)) return
+    setBusyId(e.id)
+    try {
+      const res = await fetch(`/api/client/ecritures?id=${e.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || 'Erreur suppression')
+      }
+      showToast('Écriture supprimée', 'success')
+      await load()
+    } catch (e: any) {
+      showToast(e?.message || 'Erreur suppression', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const deleteBatch = async (folio: string) => {
+    if (!confirm(`Supprimer TOUT le lot d'écritures ${folio} ?\nToutes les lignes partageant ce folio seront effacées en base.`)) return
+    setBusyId(folio)
+    try {
+      const res = await fetch(`/api/client/ecritures?folio=${encodeURIComponent(folio)}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || 'Erreur suppression batch')
+      }
+      const data = await res.json()
+      showToast(`${data.deleted} ligne(s) supprimée(s)`, 'success')
+      await load()
+    } catch (e: any) {
+      showToast(e?.message || 'Erreur suppression batch', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   const load = useCallback(async () => {
     if (!societeId) return
@@ -277,13 +371,52 @@ export default function ClientEcrituresPage() {
                               </p>
                             )}
                           </div>
-                          <div className="text-right flex-shrink-0 font-mono text-sm">
-                            {e.debit_mur > 0 && (
-                              <p className="text-green-700">D {fmt(e.debit_mur)}</p>
-                            )}
-                            {e.credit_mur > 0 && (
-                              <p className="text-rose-700">C {fmt(e.credit_mur)}</p>
-                            )}
+                          <div className="text-right flex-shrink-0 font-mono text-sm flex flex-col items-end gap-1">
+                            <div>
+                              {e.debit_mur > 0 && (
+                                <p className="text-green-700">D {fmt(e.debit_mur)}</p>
+                              )}
+                              {e.credit_mur > 0 && (
+                                <p className="text-rose-700">C {fmt(e.credit_mur)}</p>
+                              )}
+                            </div>
+                            {/* Actions Modifier / Supprimer / Supprimer le lot.
+                                Toujours dispos (sous réserve qu'aucune clôture
+                                ne verrouille la période — vérifié côté API). */}
+                            <div className="flex gap-1 mt-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-1.5 text-[10px]"
+                                title="Modifier l'écriture"
+                                disabled={busyId === e.id || saving}
+                                onClick={() => openEdit(e)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-1.5 text-[10px] text-rose-600 border-rose-200 hover:bg-rose-50"
+                                title="Supprimer cette ligne"
+                                disabled={busyId === e.id}
+                                onClick={() => deleteOne(e)}
+                              >
+                                {busyId === e.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                              </Button>
+                              {e.ref_folio && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-1.5 text-[10px] text-rose-700 border-rose-300 hover:bg-rose-100"
+                                  title={`Supprimer tout le lot (${e.ref_folio})`}
+                                  disabled={busyId === e.ref_folio}
+                                  onClick={() => deleteBatch(e.ref_folio!)}
+                                >
+                                  {busyId === e.ref_folio ? <Loader2 className="h-3 w-3 animate-spin" /> : '🗑 Lot'}
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       )
@@ -295,6 +428,91 @@ export default function ClientEcrituresPage() {
           </>
         )}
       </div>
+      {/* Toast minimaliste pour feedback action */}
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white ${
+            toast.type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'
+          }`}
+        >
+          {toast.msg}
+        </div>
+      )}
+      {/* Dialog d'édition d'écriture — modal simple, pas de lib UI lourde */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !saving && setEditing(null)}>
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold">Modifier l'écriture</h2>
+                <p className="text-xs text-gray-500 font-mono mt-1">{editing.ref_folio || editing.id.slice(0, 8)}</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setEditing(null)} disabled={saving}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-700">Date</label>
+                <Input
+                  type="date"
+                  value={editFields.date_ecriture}
+                  onChange={(e) => setEditFields({ ...editFields, date_ecriture: e.target.value })}
+                  className="mt-1 h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700">Numéro de compte</label>
+                <Input
+                  value={editFields.numero_compte}
+                  onChange={(e) => setEditFields({ ...editFields, numero_compte: e.target.value })}
+                  placeholder="Ex: 411000"
+                  className="mt-1 h-9 font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700">Libellé</label>
+                <Input
+                  value={editFields.libelle}
+                  onChange={(e) => setEditFields({ ...editFields, libelle: e.target.value })}
+                  className="mt-1 h-9"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-green-700">Débit MUR</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editFields.debit_mur}
+                    onChange={(e) => setEditFields({ ...editFields, debit_mur: e.target.value })}
+                    className="mt-1 h-9 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-rose-700">Crédit MUR</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editFields.credit_mur}
+                    onChange={(e) => setEditFields({ ...editFields, credit_mur: e.target.value })}
+                    className="mt-1 h-9 font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>
+                Annuler
+              </Button>
+              <Button onClick={saveEdit} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Enregistrer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </ClientPageShell>
   )
 }

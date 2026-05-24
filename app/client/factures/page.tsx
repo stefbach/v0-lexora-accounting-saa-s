@@ -37,6 +37,8 @@ import {
   Sparkles,
   TrendingUp,
   TrendingDown,
+  Printer,
+  Eye,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -88,6 +90,13 @@ function getStatutLabels(locale: Locale): Record<string, { label: string; color:
     retard: { label: t('inv.fac.status_overdue', locale), color: "bg-red-100 text-red-700 border-red-300" },
     en_attente: { label: t('inv.fac.status_pending', locale), color: "bg-amber-100 text-amber-700 border-amber-300" },
     annule: { label: t('inv.fac.status_cancelled', locale), color: "bg-gray-100 text-gray-600 border-gray-300" },
+    // Statuts ajoutés mig 411 — sans ces entrées, une facture brouillon
+    // s'affichait avec le label "En attente" (fallback) → utilisateur ne
+    // distinguait plus brouillon vs finalisée dans la liste.
+    brouillon: { label: t('inv.fac.status_draft', locale), color: "bg-slate-100 text-slate-600 border-slate-300" },
+    devis: { label: t('inv.fac.status_quote', locale), color: "bg-purple-100 text-purple-700 border-purple-300" },
+    converti: { label: t('inv.fac.status_converted', locale), color: "bg-violet-100 text-violet-700 border-violet-300" },
+    modele: { label: t('inv.fac.status_template', locale), color: "bg-indigo-100 text-indigo-700 border-indigo-300" },
   }
 }
 
@@ -98,11 +107,11 @@ export default function ClientFacturesPage() {
   const [loading, setLoading] = useState(false)
   const searchParams = useSearchParams()
   const initialTab = (() => {
-    const tp = searchParams.get("type")
-    if (tp === "client" || tp === "fournisseur" || tp === "toutes") return tp
+    const tp = searchParams.get("type") || searchParams.get("tab")
+    if (tp === "client" || tp === "fournisseur" || tp === "toutes" || tp === "brouillons") return tp
     return "toutes" as const
   })()
-  const [activeTab, setActiveTab] = useState<"toutes" | "client" | "fournisseur">(initialTab)
+  const [activeTab, setActiveTab] = useState<"toutes" | "client" | "fournisseur" | "brouillons">(initialTab)
   const [statutFilter, setStatutFilter] = useState<string>("all")
   const [tiersFilter, setTiersFilter] = useState<string>("all")
   const [rapprochementFilter, setRapprochementFilter] = useState<string>("all")
@@ -148,7 +157,18 @@ export default function ClientFacturesPage() {
 
   const filtered = useMemo(() => {
     let list = factures
-    if (activeTab !== "toutes") list = list.filter((f) => f.type_facture === activeTab)
+    // Onglet "Brouillons" = uniquement les factures non finalisées.
+    // Onglets "Toutes / Client / Fournisseur" excluent les brouillons par
+    // défaut pour éviter qu'une facture en cours de saisie pollue le suivi
+    // comptable (bug observé : utilisateur sauvegardait brouillon et la
+    // voyait avec ses vraies factures, créant la confusion "Sauvegarder
+    // brouillon a enregistré la facture").
+    if (activeTab === "brouillons") {
+      list = list.filter((f) => f.statut === "brouillon")
+    } else {
+      list = list.filter((f) => f.statut !== "brouillon")
+      if (activeTab !== "toutes") list = list.filter((f) => f.type_facture === activeTab)
+    }
     if (statutFilter !== "all") list = list.filter((f) => f.statut === statutFilter)
     if (tiersFilter !== "all") list = list.filter((f) => f.tiers === tiersFilter)
     if (rapprochementFilter === "rapproche") list = list.filter((f) => !!f.rapproche_releve_id)
@@ -221,9 +241,13 @@ export default function ClientFacturesPage() {
 
   const counts = useMemo(
     () => ({
-      toutes: factures.length,
-      client: factures.filter((f) => f.type_facture === "client").length,
-      fournisseur: factures.filter((f) => f.type_facture === "fournisseur").length,
+      // 'toutes' / 'client' / 'fournisseur' n'incluent PAS les brouillons —
+      // ils représentent la vie comptable réelle. Les brouillons ont leur
+      // propre compteur (et leur propre onglet).
+      toutes: factures.filter((f) => f.statut !== "brouillon").length,
+      client: factures.filter((f) => f.type_facture === "client" && f.statut !== "brouillon").length,
+      fournisseur: factures.filter((f) => f.type_facture === "fournisseur" && f.statut !== "brouillon").length,
+      brouillons: factures.filter((f) => f.statut === "brouillon").length,
     }),
     [factures]
   )
@@ -352,6 +376,10 @@ export default function ClientFacturesPage() {
                         <TrendingDown className="h-3.5 w-3.5 mr-1 text-rose-600" />
                         {t('inv.fac.tab_suppliers', locale)} ({counts.fournisseur})
                       </TabsTrigger>
+                      <TabsTrigger value="brouillons" className="px-3 py-1.5">
+                        <FileText className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                        {t('inv.fac.status_draft', locale)}s ({counts.brouillons})
+                      </TabsTrigger>
                     </TabsList>
                     {hasActiveFilter && (
                       <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs">
@@ -388,11 +416,14 @@ export default function ClientFacturesPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">{t('inv.fac.all_status', locale)}</SelectItem>
+                        <SelectItem value="brouillon">{t('inv.fac.status_draft', locale)}</SelectItem>
                         <SelectItem value="en_attente">{t('inv.fac.status_pending', locale)}</SelectItem>
                         <SelectItem value="partiel">{t('inv.fac.status_partial', locale)}</SelectItem>
                         <SelectItem value="retard">{t('inv.fac.status_overdue', locale)}</SelectItem>
                         <SelectItem value="paye">{t('inv.fac.status_paid', locale)}</SelectItem>
                         <SelectItem value="annule">{t('inv.fac.status_cancelled', locale)}</SelectItem>
+                        <SelectItem value="devis">{t('inv.fac.status_quote', locale)}</SelectItem>
+                        <SelectItem value="modele">{t('inv.fac.status_template', locale)}</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={rapprochementFilter} onValueChange={setRapprochementFilter}>
@@ -426,13 +457,16 @@ export default function ClientFacturesPage() {
                 </div>
 
                 <TabsContent value="toutes" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} />
                 </TabsContent>
                 <TabsContent value="client" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} />
                 </TabsContent>
                 <TabsContent value="fournisseur" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} />
+                </TabsContent>
+                <TabsContent value="brouillons" className="mt-0 p-0">
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} />
                 </TabsContent>
               </Tabs>
             </Card>
@@ -459,12 +493,37 @@ export default function ClientFacturesPage() {
 function FactureList({
   factures,
   onEnregistrerPaiement,
+  onReload,
 }: {
   factures: Facture[]
   onEnregistrerPaiement?: (f: Facture) => void
+  onReload?: () => void
 }) {
   const locale = getLocale()
   const STATUT_LABELS = getStatutLabels(locale)
+  const [validating, setValidating] = useState<string | null>(null)
+
+  const validerBrouillon = async (f: Facture) => {
+    if (!confirm(`Valider la facture ${f.numero_facture || ''} ?\nElle passera en "En attente" et déclenchera les écritures comptables.`)) return
+    setValidating(f.id)
+    try {
+      const res = await fetch('/api/client/factures', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: f.id, statut: 'en_attente' }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || 'Erreur validation')
+      }
+      onReload?.()
+    } catch (e: any) {
+      alert(`❌ ${e?.message || 'Erreur validation'}`)
+    } finally {
+      setValidating(null)
+    }
+  }
+
   if (factures.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
@@ -483,7 +542,10 @@ function FactureList({
         const totalMur = Number(f.montant_mur) || Number(f.montant_ttc) || 0
         const soldeMur = f.solde_non_paye == null ? totalMur : Number(f.solde_non_paye)
         const pctPaye = totalMur > 0 ? Math.round(((totalMur - soldeMur) / totalMur) * 100) : 0
-        const canPay = f.statut !== "paye" && f.statut !== "annule" && totalMur > 0
+        const isBrouillon = f.statut === "brouillon"
+        // canPay : enregistrer paiement n'a de sens que sur factures finalisées.
+        // Brouillon/annulée/déjà payée → bouton masqué.
+        const canPay = !isBrouillon && f.statut !== "paye" && f.statut !== "annule" && totalMur > 0
         return (
           <div
             key={f.id}
@@ -573,6 +635,61 @@ function FactureList({
                   </div>
                 </div>
               )}
+              {/* Aperçu / impression — disponible pour TOUTES les factures
+                  (y compris brouillons et annulées), pour pouvoir revoir
+                  ou réimprimer à tout moment. L'aperçu charge la facture
+                  depuis la DB via ?facture_id=, l'impression PDF passe
+                  par /api/client/factures/[id]/pdf (avec refresh=1 pour
+                  forcer la régénération si gabarit/contenu modifié). */}
+              <div className="flex gap-1 mt-1 flex-wrap justify-end">
+                {/* Brouillon : actions spécifiques Modifier + Valider en premier
+                    (avant Aperçu/PDF) pour les mettre en avant — c'est ce que
+                    l'utilisateur va vouloir faire prioritairement sur un draft. */}
+                {isBrouillon && (
+                  <>
+                    <Link href={`/client/nouvelle-facture?id=${f.id}`}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[11px] border-slate-300"
+                        title="Modifier ce brouillon"
+                      >
+                        ✏️ Modifier
+                      </Button>
+                    </Link>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px] border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                      title="Valider et passer en En attente"
+                      disabled={validating === f.id}
+                      onClick={() => validerBrouillon(f)}
+                    >
+                      {validating === f.id ? '…' : '✓ Valider'}
+                    </Button>
+                  </>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px]"
+                  title="Aperçu de la facture"
+                  onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}`, '_blank')}
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  Aperçu
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px]"
+                  title="Imprimer / Sauvegarder en PDF"
+                  onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}&print=true`, '_blank')}
+                >
+                  <Printer className="h-3 w-3 mr-1" />
+                  PDF
+                </Button>
+              </div>
               {canPay && onEnregistrerPaiement && (
                 <Button
                   size="sm"

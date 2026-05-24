@@ -186,7 +186,43 @@ function FacturePreviewContent() {
         .then(async d => {
           if (d.factures?.[0]) {
             const f = d.factures[0]
-            const settings = JSON.parse(localStorage.getItem("lexora_invoice_settings") || "{}")
+            // Settings société : DB d'abord (source de vérité — contient
+            // VAT, BRN, coordonnées bancaires, logo, mentions légales),
+            // fallback localStorage pour les anciens utilisateurs qui
+            // n'ont pas encore migré leurs paramètres en base. Sans ce
+            // chargement DB, ouvrir une facture sauvegardée depuis un
+            // autre navigateur / device perdait VAT/BRN/banque.
+            let settings: any = {}
+            try {
+              const ls = localStorage.getItem("lexora_invoice_settings")
+              if (ls) settings = JSON.parse(ls)
+            } catch { /* ignore */ }
+            if (f.societe_id) {
+              try {
+                const socRes = await fetch('/api/client/societes')
+                const socJson = await socRes.json()
+                const soc = (socJson.societes || []).find((s: any) => s.id === f.societe_id)
+                if (soc) {
+                  settings = {
+                    ...settings,
+                    nom: soc.nom || settings.nom || '',
+                    brn: soc.brn || settings.brn || '',
+                    vat_number: soc.numero_tva_mra || soc.vat_number || settings.vat_number || '',
+                    logo_url: soc.logo_url || settings.logo_url || '',
+                    adresse: [soc.adresse, soc.adresse2, soc.ville].filter(Boolean).join('\n') || settings.adresse || '',
+                    telephone: soc.telephone || settings.telephone || '',
+                    email: soc.email || settings.email || '',
+                    website: soc.website || settings.website || '',
+                    banque_nom: soc.banque_nom || soc.bank_name || settings.banque_nom || '',
+                    banque_compte: soc.banque_compte || soc.bank_account_number || settings.banque_compte || '',
+                    banque_iban: soc.banque_iban || soc.iban || settings.banque_iban || '',
+                    banque_swift: soc.banque_swift || settings.banque_swift || '',
+                    footer_text: soc.facture_footer_text || settings.footer_text || '',
+                    mention_legale: soc.facture_mention_legale || settings.mention_legale || '',
+                  }
+                }
+              } catch { /* fallback sur localStorage déjà chargé */ }
+            }
             let contact: ContactDetail | null = null
             if (f.contact_id) {
               try {
@@ -280,10 +316,47 @@ function FacturePreviewContent() {
       <style jsx global>{`
         @media print {
           body { margin: 0; padding: 0; }
+          html, body { background: white; }
           .no-print { display: none !important; }
-          .print-page { padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
+          /* Masquer tout élément du layout global qui n'a rien à faire
+             sur le PDF imprimé : sidebar client/comptable, bandeau cabinet,
+             bouton d'aide flottant, toasts. Ces éléments ne sont pas
+             dans la zone .print-page mais sont sur la même page DOM, et
+             apparaîtraient sinon en surimpression (le ? rond observé). */
+          aside,
+          header,
+          nav,
+          [role="banner"],
+          [role="navigation"],
+          [data-sidebar],
+          [data-banner],
+          [data-floating-help] { display: none !important; }
+          /* Filet de sécurité : tout bouton ou div positionné en fixed
+             qui se trouverait HORS de la zone .print-page (sidebar mobile
+             hamburger, toasters, widgets d'aide, etc.). Ne touche pas
+             aux éléments fixed à L'INTÉRIEUR de la facture (il n'y en a
+             pas, mais ça reste safe). */
+          body > button[class*="fixed"],
+          body > div > button[class*="fixed"],
+          body > main > button[class*="fixed"],
+          [class*="fixed"][class*="top-4"][class*="left-4"] { display: none !important; }
+          /* Forcer la facture à tenir sur 1 page A4 :
+             - retirer min-height: 297mm qui force toujours 1 page pleine
+               et provoque débordement quand combiné aux marges @page.
+             - retirer ombre / padding écran qui poussent vers une 2e page.
+             - retirer ml-64 du <main> qui décalait la facture à droite. */
+          main { margin-left: 0 !important; }
+          .print-page {
+            padding: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            min-height: auto !important;
+            max-width: 100% !important;
+            page-break-after: avoid;
+            page-break-inside: auto;
+          }
         }
-        @page { size: A4; margin: 15mm; }
+        @page { size: A4; margin: 12mm; }
       `}</style>
 
       {/* Print + MRA buttons */}
@@ -324,9 +397,29 @@ function FacturePreviewContent() {
         {/* Header */}
         <div className="flex justify-between items-start mb-10">
           <div className="flex items-start gap-4">
-            {(data.logo_url || s.logo_url) && (
-              <img src={data.logo_url || s.logo_url} alt="Logo" className="w-16 h-16 object-contain" />
-            )}
+            {(() => {
+              // Guard strict : on n'affiche le logo que si l'URL est
+              // une vraie URL http(s) absolue OU un chemin /relatif.
+              // Sans ce filtre, une valeur falsy non-vide ('null', 'undefined'
+              // sous forme de string, '#') affichait l'icône "image cassée"
+              // du navigateur (le carré/pastille observé sur le PDF imprimé).
+              const raw = (data.logo_url || s.logo_url || '').trim()
+              const isValid = /^(https?:\/\/|\/)/i.test(raw)
+              if (!isValid) return null
+              return (
+                <img
+                  src={raw}
+                  alt=""
+                  // Dimensions calées sur le PDF officiel (160x80 →
+                  // ratio 2:1, lisible une fois imprimé sur A4).
+                  className="h-16 w-auto max-w-[160px] object-contain"
+                  // onError : si le logo refuse de charger (URL morte,
+                  // 403, etc.), on cache l'<img> au lieu d'afficher
+                  // l'icône "image cassée" qui pollue le PDF imprimé.
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                />
+              )
+            })()}
             <div>
               <h2 className="text-xl font-bold" style={{ color: colors.primaire }}>{s.nom || t('inv.pv.your_company', locale)}</h2>
               {s.adresse && <p className="text-sm text-gray-600 whitespace-pre-line">{s.adresse}</p>}
@@ -458,12 +551,12 @@ function FacturePreviewContent() {
                       <td className="py-3 px-3 text-sm text-right align-top">{qte}</td>
                       <td className="py-3 px-3 text-sm text-right font-mono align-top">
                         <div>{fmtSigned(pu)} {isForeign ? data.devise : ""}</div>
-                        {isForeign && <div className="text-[11px] text-gray-600 mt-0.5">≈ {fmtSigned(puMur)} MUR</div>}
+                        {isForeign && <div className="text-[11px] text-gray-600 mt-0.5">({fmtSigned(puMur)} MUR)</div>}
                       </td>
                       <td className="py-3 px-3 text-sm text-right align-top">{l.taux_tva}%</td>
                       <td className="py-3 px-4 text-sm text-right font-mono font-semibold align-top">
                         <div>{fmtSigned(montant)} {isForeign ? data.devise : ""}</div>
-                        {isForeign && <div className="text-[11px] text-gray-600 font-normal mt-0.5">≈ {fmtSigned(montantMur)} MUR</div>}
+                        {isForeign && <div className="text-[11px] text-gray-600 font-normal mt-0.5">({fmtSigned(montantMur)} MUR)</div>}
                       </td>
                     </tr>
                   )

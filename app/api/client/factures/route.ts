@@ -21,12 +21,35 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
+    const factureId = searchParams.get('id')
 
     // Tenant isolation — verify user has access to the requested societe_id
     // (unified helper, includes user_societes + dossiers + created_by branches)
     if (societe_id) {
       await assertSocieteAccess(supabase, user.id, societe_id)
     }
+
+    // Mode "fetch single facture by id" : utilisé par /client/facture-preview
+    // pour rouvrir une facture déjà enregistrée. Sans ce filtre id, l'API
+    // renvoyait toute la liste et la page preview chargeait factures[0]
+    // (la facture la plus récente) au lieu de celle demandée → bug observé :
+    // l'aperçu et le PDF montraient les infos d'une autre facture.
+    if (factureId) {
+      const { data: row, error } = await supabase
+        .from('factures')
+        .select('*')
+        .eq('id', factureId)
+        .maybeSingle()
+      if (error) throw error
+      if (!row) return NextResponse.json({ factures: [] })
+      // Tenant isolation après lecture : la facture peut appartenir à
+      // une autre société que celle active.
+      if (row.societe_id) {
+        await assertSocieteAccess(supabase, user.id, row.societe_id)
+      }
+      return NextResponse.json({ factures: [row] })
+    }
+
     const statut = searchParams.get('statut')
     const client = searchParams.get('client')
     const date_debut = searchParams.get('date_debut')
@@ -140,18 +163,18 @@ export async function POST(request: Request) {
     // L'utilisateur paramètre une fois ses préfixes + compteurs dans
     // /client/facturation-settings, ensuite tout est auto.
     let finalNumero = numero_facture
+    const filterDoc = type_document || 'facture'
+
+    // Mapping type_document → colonnes (préfixe + compteur) sur societes
+    const colMap: Record<string, { prefCol: string; numCol: string; defaultPrefix: string }> = {
+      facture:    { prefCol: 'facture_prefixe',    numCol: 'facture_prochain_numero',    defaultPrefix: 'INV-' },
+      devis:      { prefCol: 'devis_prefixe',      numCol: 'devis_prochain_numero',      defaultPrefix: 'DEV-' },
+      avoir:      { prefCol: 'avoir_prefixe',      numCol: 'avoir_prochain_numero',      defaultPrefix: 'AV-'  },
+      note_debit: { prefCol: 'note_debit_prefixe', numCol: 'note_debit_prochain_numero', defaultPrefix: 'ND-'  },
+    }
+    const cfg = colMap[filterDoc] || colMap.facture
+
     if (!finalNumero) {
-      const filterDoc = type_document || 'facture'
-
-      // Mapping type_document → colonnes (préfixe + compteur) sur societes
-      const colMap: Record<string, { prefCol: string; numCol: string; defaultPrefix: string }> = {
-        facture:    { prefCol: 'facture_prefixe',    numCol: 'facture_prochain_numero',    defaultPrefix: 'INV-' },
-        devis:      { prefCol: 'devis_prefixe',      numCol: 'devis_prochain_numero',      defaultPrefix: 'DEV-' },
-        avoir:      { prefCol: 'avoir_prefixe',      numCol: 'avoir_prochain_numero',      defaultPrefix: 'AV-'  },
-        note_debit: { prefCol: 'note_debit_prefixe', numCol: 'note_debit_prochain_numero', defaultPrefix: 'ND-'  },
-      }
-      const cfg = colMap[filterDoc] || colMap.facture
-
       // Lit le compteur + le préfixe dans societes. Si la requête échoue
       // (mig 247 non appliquée → colonne devis/avoir manquante), on
       // retombe sur la logique legacy parse-dernier-numéro.
@@ -199,6 +222,76 @@ export async function POST(request: Request) {
           if (match) nextNum = parseInt(match[1]) + 1
         }
         finalNumero = `${cfg.defaultPrefix}${String(nextNum).padStart(3, '0')}`
+      }
+    } else {
+      // Numéro fourni par l'utilisateur (souvent une valeur pré-remplie
+      // côté front à partir du compteur DB). Deux risques :
+      //  1) le numéro existe déjà en DB (compteur désynchronisé, legacy
+      //     non comptabilisé, plusieurs onglets ouverts en parallèle…)
+      //     → on régénère automatiquement plutôt que de renvoyer 409.
+      //  2) on avance le compteur DB pour que le PROCHAIN appel ne
+      //     réutilise pas le même numéro.
+      const checkRes = await supabase
+        .from('factures')
+        .select('id')
+        .eq('societe_id', societe_id)
+        .eq('numero_facture', finalNumero)
+        .eq('type_facture', 'client')
+        .limit(1)
+        .maybeSingle()
+      if (checkRes.data) {
+        // Collision détectée → trouver le prochain numéro libre en
+        // s'appuyant sur le compteur DB s'il est dispo, sinon en
+        // parsant le dernier numéro existant.
+        const counterRes = await supabase
+          .from('societes')
+          .select(`${cfg.prefCol}, ${cfg.numCol}`)
+          .eq('id', societe_id)
+          .maybeSingle()
+        const row = (counterRes.data as Record<string, any> | null) || {}
+        const prefixe = (row[cfg.prefCol] as string) || cfg.defaultPrefix
+        const matchUser = String(finalNumero).match(/(\d+)$/)
+        const usedNum = matchUser ? parseInt(matchUser[1], 10) : 0
+        let next = Math.max(Number(row[cfg.numCol]) || 0, usedNum + 1)
+        // Avance jusqu'à trouver un numéro non utilisé (au cas où plusieurs
+        // numéros consécutifs seraient déjà en DB).
+        for (let i = 0; i < 50; i++) {
+          const candidate = `${prefixe}${String(next).padStart(4, '0')}`
+          const exists = await supabase
+            .from('factures')
+            .select('id')
+            .eq('societe_id', societe_id)
+            .eq('numero_facture', candidate)
+            .eq('type_facture', 'client')
+            .limit(1)
+            .maybeSingle()
+          if (!exists.data) { finalNumero = candidate; break }
+          next++
+        }
+        await supabase
+          .from('societes')
+          .update({ [cfg.numCol]: next + 1 })
+          .eq('id', societe_id)
+      } else {
+        // Pas de collision → on avance simplement le compteur si besoin.
+        const match = String(finalNumero).match(/(\d+)$/)
+        if (match) {
+          const used = parseInt(match[1], 10)
+          if (!Number.isNaN(used)) {
+            const counterRes = await supabase
+              .from('societes')
+              .select(cfg.numCol)
+              .eq('id', societe_id)
+              .maybeSingle()
+            const current = Number((counterRes.data as Record<string, any> | null)?.[cfg.numCol]) || 0
+            if (used + 1 > current) {
+              await supabase
+                .from('societes')
+                .update({ [cfg.numCol]: used + 1 })
+                .eq('id', societe_id)
+            }
+          }
+        }
       }
     }
 
@@ -251,7 +344,21 @@ export async function POST(request: Request) {
       }
     }
 
-    if (error) throw error
+    if (error) {
+      // Erreur 23505 = violation unique (societe_id, numero_facture, type_facture).
+      // Cause typique : compteur DB pas à jour vs numéros déjà saisis →
+      // l'utilisateur recevait juste "duplicate key value violates...".
+      // On renvoie un message clair avec le numéro fautif.
+      const code = (error as { code?: string }).code
+      if (code === '23505' && /numero/i.test(error.message || '')) {
+        return NextResponse.json({
+          error: `Le numéro "${finalNumero}" existe déjà pour cette société. Modifiez le numéro manuellement ou mettez à jour le compteur dans Paramètres facturation.`,
+          code: 'DUPLICATE_INVOICE_NUMBER',
+          numero: finalNumero,
+        }, { status: 409 })
+      }
+      throw error
+    }
 
     // Auto-create a "documents" record so the invoice appears in "Documents numérisés"
     // (links the invoice to the documents folder for consistency)
@@ -334,7 +441,22 @@ export async function POST(request: Request) {
   } catch (e: unknown) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    // Extraction robuste du message — couvre les Error JS, les objets
+    // Supabase { code, message, details, hint } et les rejects génériques.
+    // Sans ça, le client recevait juste { error: undefined } → "Erreur"
+    // affiché sans contexte impossible à debugger.
+    const err = e as any
+    const message =
+      err?.message
+      || err?.error_description
+      || err?.error
+      || err?.hint
+      || err?.details
+      || (typeof err === 'string' ? err : null)
+      || 'Erreur inattendue'
+    const code = err?.code
+    console.error('[factures POST] erreur:', { code, message, details: err?.details, hint: err?.hint })
+    return NextResponse.json({ error: message, code, details: err?.details, hint: err?.hint }, { status: 500 })
   }
 }
 
@@ -444,13 +566,28 @@ export async function PATCH(request: Request) {
 
     updates.updated_at = new Date().toISOString()
 
-    const { data, error } = await supabase
-      .from('factures')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
-
+    // Update résilient — calqué sur la logique POST : si une colonne envoyée
+    // par le client n'existe pas en DB (cas typique : accent_color,
+    // contre_valeur_mur, ou champs récents pas encore migrés sur cet env),
+    // on la retire et on retente. Évite que tout le PATCH échoue à cause
+    // d'un champ optionnel inconnu.
+    const tryUpdate = async (payload: Record<string, any>) =>
+      supabase.from('factures').update(payload).eq('id', id).select().single()
+    let updateResult = await tryUpdate(updates)
+    // Boucle de retry — jusqu'à 5 colonnes inconnues retirées avant
+    // d'abandonner (évite une boucle infinie sur une vraie erreur).
+    for (let i = 0; i < 5 && updateResult.error; i++) {
+      const code = (updateResult.error as { code?: string }).code
+      const msg = updateResult.error.message || ''
+      const isSchemaError = code === '42703' || /column.*(not exist|schema cache|not found)/i.test(msg)
+      if (!isSchemaError) break
+      const missingCol = msg.match(/'([a-zA-Z_]+)'/)?.[1]
+      if (!missingCol || !(missingCol in updates)) break
+      console.warn(`[factures PATCH] colonne "${missingCol}" manquante en DB, retrait et retry.`)
+      delete updates[missingCol]
+      updateResult = await tryUpdate(updates)
+    }
+    const { data, error } = updateResult
     if (error) throw error
 
     // Auto-create ecritures when transitioning from brouillon to en_attente
@@ -482,7 +619,14 @@ export async function PATCH(request: Request) {
   } catch (e: unknown) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+    // Extraction du vrai message (Supabase, Postgres, ou Error JS) pour
+    // que le client voie quelque chose d'actionnable plutôt qu'un 'Erreur'
+    // opaque (même logique que POST).
+    const err = e as any
+    const message = err?.message || err?.error_description || err?.error || err?.hint || err?.details || (typeof err === 'string' ? err : null) || 'Erreur inattendue'
+    const code = err?.code
+    console.error('[factures PATCH] erreur:', { code, message, details: err?.details, hint: err?.hint })
+    return NextResponse.json({ error: message, code, details: err?.details, hint: err?.hint }, { status: 500 })
   }
 }
 

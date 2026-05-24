@@ -406,19 +406,19 @@ export async function GET(request: Request, { params }: Params) {
             React.createElement(Text, { style: styles.totalLabel }, 'Sous-total HT'),
             React.createElement(Text, { style: styles.totalValue }, fmtMontant(facture.montant_ht, devise)),
             isForeign && React.createElement(Text, { style: styles.totalMurValue },
-              `≈ ${fmtMontant(htMur, 'MUR')}`),
+              `(${fmtMontant(htMur, 'MUR')})`),
           ),
           React.createElement(View, { style: styles.totalRow },
             React.createElement(Text, { style: styles.totalLabel }, `TVA ${facture.client_offshore ? '0%' : '15%'}`),
             React.createElement(Text, { style: styles.totalValue }, fmtMontant(facture.montant_tva, devise)),
             isForeign && React.createElement(Text, { style: styles.totalMurValue },
-              `≈ ${fmtMontant(tvaMur, 'MUR')}`),
+              `(${fmtMontant(tvaMur, 'MUR')})`),
           ),
           React.createElement(View, { style: { ...styles.totalTTC, borderTopColor: accentColor } },
             React.createElement(Text, { style: { ...styles.ttcLabel, color: accentColor } }, 'TOTAL TTC'),
             React.createElement(Text, { style: { ...styles.ttcValue, color: accentColor } }, fmtMontant(facture.montant_ttc, devise)),
             isForeign && React.createElement(Text, { style: styles.ttcMurValue },
-              `≈ ${fmtMontant(ttcMur, 'MUR')}`),
+              `(${fmtMontant(ttcMur, 'MUR')})`),
           ),
           // Mention du taux de change utilisé (cohérence comptable + transparence client)
           isForeign && React.createElement(View, { style: styles.fxNotice },
@@ -428,9 +428,13 @@ export async function GET(request: Request, { params }: Params) {
         ),
 
         // Notes visibles
-        facture.notes_visibles && React.createElement(View, { style: styles.notes },
+        // notes_visibles est l'ancien nom legacy ; en DB la colonne réelle
+        // est `notes` (les notes internes sont dans `notes_internes`).
+        // On garde le fallback pour les factures historiques qui auraient
+        // été créées avec un payload alternatif.
+        ((facture as any).notes_visibles || facture.notes) && React.createElement(View, { style: styles.notes },
           React.createElement(Text, { style: styles.notesTitle }, 'Conditions & Notes'),
-          React.createElement(Text, { style: styles.notesText }, facture.notes_visibles),
+          React.createElement(Text, { style: styles.notesText }, (facture as any).notes_visibles || facture.notes),
         ),
 
         // Coordonnées bancaires — supporte les colonnes legacy

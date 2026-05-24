@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -76,7 +77,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><Label>{label}</Label>{children}</div>
 }
 
+// Wrapper Suspense — requis par Next.js App Router pour useSearchParams
+// dans un client component. Sans ça, le build avertit et certains cas
+// (édition d'une facture via ?id=) peuvent ne pas hydrater correctement.
 export default function NouvelleFacturePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-sm text-gray-500">Chargement…</div>}>
+      <NouvelleFactureContent />
+    </Suspense>
+  )
+}
+
+function NouvelleFactureContent() {
   const locale = getLocale()
   const router = useRouter()
   const { societeId } = useSocieteActive()
@@ -122,6 +134,12 @@ export default function NouvelleFacturePage() {
   const [templates, setTemplates] = useState<any[]>([])
   const [templateId, setTemplateId] = useState("")
   const [tvaDef, setTvaDef] = useState(15)
+  // Mode édition : si l'URL contient ?id=<uuid>, on charge la facture
+  // existante et on bascule en PATCH au lieu de POST. Utilisé par le
+  // bouton "Modifier" des brouillons sur /client/factures.
+  const searchParams = useSearchParams()
+  const editingId = searchParams.get('id') || ''
+  const [editingLoaded, setEditingLoaded] = useState(false)
 
   useEffect(() => {
     try {
@@ -145,10 +163,6 @@ export default function NouvelleFacturePage() {
       const tc = localStorage.getItem("lexora_invoice_template_colors")
       if (tc) { try { const parsed = JSON.parse(tc); if (parsed.primaire) setAccentColor(parsed.primaire) } catch { /* ignore */ } }
     } catch { /* ignore */ }
-    // Charger les templates depuis la DB
-    fetch("/api/client/facture-template").then(r => r.json()).then(d => {
-      setTemplates(d.templates || [])
-    }).catch(() => {})
     // Load existing invoices for credit note references
     fetch("/api/client/factures?statut=en_attente").then(r => r.json()).then(d => {
       const facs = (d.factures || []).filter((f: { statut: string; type_document?: string }) => f.statut !== "brouillon" && (!f.type_document || f.type_document === "facture"))
@@ -157,6 +171,130 @@ export default function NouvelleFacturePage() {
       })))
     }).catch(() => {})
   }, [])
+
+  // Chargement d'une facture existante en mode édition (?id=<uuid>).
+  // S'exécute UNE FOIS quand editingId apparaît. Pré-remplit tous les
+  // champs depuis la DB pour permettre de modifier un brouillon existant.
+  useEffect(() => {
+    if (!editingId || editingLoaded) return
+    fetch(`/api/client/factures?id=${editingId}`)
+      .then(r => r.json())
+      .then(d => {
+        const f = d.factures?.[0]
+        if (!f) { setError('Facture introuvable'); return }
+        // Hydrate tous les champs du formulaire depuis la facture DB.
+        setNumeroFacture(f.numero_facture || '')
+        setReference(f.reference || '')
+        setDateFacture(f.date_facture || today())
+        setDateEcheance(f.date_echeance || '')
+        setDevise(f.devise || 'MUR')
+        setTauxChange(Number(f.taux_change) || 1)
+        setTypeDocument(f.type_document || 'facture')
+        setFactureReferenceId(f.facture_reference_id || '')
+        setClientNom(f.tiers || '')
+        setClientOffshore(!!f.client_offshore)
+        setDescriptif(f.description || '')
+        setNotesVisibles(f.notes_visibles || f.notes || '')
+        setNotesInternes(f.notes_internes || '')
+        setModePaiement(f.mode_paiement || 'Virement')
+        setSelectedClientId(f.contact_id || '')
+        setEcheancePreset(Number(f.conditions_paiement) || 30)
+        if (Array.isArray(f.lignes) && f.lignes.length > 0) {
+          setLignes(f.lignes.map((l: any) => ({
+            id: l.id || crypto.randomUUID(),
+            description: l.description || '',
+            unite: l.unite || 'Forfait',
+            quantite: Number(l.quantite) || 0,
+            prix_unitaire: Number(l.prix_unitaire) || 0,
+            taux_tva: Number(l.taux_tva) || 0,
+            montant_ht: Number(l.montant_ht) || (Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0),
+          })))
+        }
+        if (Number(f.remise_pct) > 0) {
+          setRemiseType('pct'); setRemiseValue(Number(f.remise_pct))
+        } else if (Number(f.remise_montant) > 0) {
+          setRemiseType('fixe'); setRemiseValue(Number(f.remise_montant))
+        }
+        if (f.accent_color) setAccentColor(f.accent_color)
+        if (f.template_id) setTemplateId(f.template_id)
+        if (f.recurrent) {
+          setRecurrent(true)
+          if (f.recurrent_frequence) setRecurrentFreq(f.recurrent_frequence)
+          if (f.recurrence_jour_du_mois != null) setRecurrenceJour(String(f.recurrence_jour_du_mois))
+          if (f.recurrence_date_debut) setRecurrenceDebut(f.recurrence_date_debut)
+          if (f.recurrence_date_fin) setRecurrenceFin(f.recurrence_date_fin)
+        }
+        setEditingLoaded(true)
+      })
+      .catch(() => setError('Erreur chargement facture'))
+  }, [editingId, editingLoaded])
+
+  // Templates IA — chargés par société (POST action=list).
+  // La route /api/client/facture-template n'a PAS de GET ; un GET nu
+  // renvoyait toujours { templates: undefined } → le <Select> "Modèle"
+  // restait vide et l'utilisateur ne pouvait sélectionner aucun template IA.
+  useEffect(() => {
+    if (!societeId) { setTemplates([]); return }
+    fetch("/api/client/facture-template", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list", societe_id: societeId }),
+    })
+      .then(r => r.json())
+      .then(d => setTemplates(Array.isArray(d?.templates) ? d.templates : []))
+      .catch(() => setTemplates([]))
+  }, [societeId])
+
+  // Settings société depuis la DB — déclenché dès que societeId dispo.
+  // Source de vérité = table `societes` (logo, BRN, VAT, banque, mentions).
+  // Sans ça, un nouvel utilisateur sans localStorage perdait toutes les
+  // infos société sur le PDF (logo, banque, BRN, TVA). On merge avec les
+  // valeurs localStorage déjà chargées : DB prioritaire, localStorage
+  // fallback pour les champs purement "préférences" (préfixe, prochain
+  // numéro, devise par défaut) qui ne sont pas en DB.
+  useEffect(() => {
+    if (!societeId) return
+    fetch('/api/client/societes')
+      .then(r => r.json())
+      .then(d => {
+        const soc = (d.societes || []).find((s: any) => s.id === societeId)
+        if (!soc) return
+        // Pré-affichage du prochain numéro côté front : si l'utilisateur n'a
+        // pas encore de valeur en localStorage, on hydrate depuis la DB
+        // (table societes.facture_prefixe + facture_prochain_numero) pour
+        // que le champ "Numéro" affiche le bon prochain numéro avant
+        // sauvegarde. L'API reste source de vérité sur l'incrément (qui
+        // est atomique côté serveur).
+        const dbPrefixe = soc.facture_prefixe || 'INV-'
+        const dbProchain = Number(soc.facture_prochain_numero) || 1
+        setNumeroFacture(prev => prev || `${dbPrefixe}${String(dbProchain).padStart(4, '0')}`)
+        setSettings(prev => {
+          const base = prev || ({} as CompanySettings)
+          return {
+            ...base,
+            nom: soc.nom || base.nom || '',
+            brn: soc.brn || base.brn || '',
+            vat_number: soc.numero_tva_mra || soc.vat_number || base.vat_number || '',
+            logo_url: soc.logo_url || base.logo_url || '',
+            adresse: [soc.adresse, soc.adresse2, soc.ville].filter(Boolean).join('\n') || base.adresse || '',
+            telephone: soc.telephone || base.telephone || '',
+            email: soc.email || base.email || '',
+            website: soc.website || base.website || '',
+            banque_nom: soc.banque_nom || soc.bank_name || base.banque_nom || '',
+            banque_compte: soc.banque_compte || soc.bank_account_number || base.banque_compte || '',
+            banque_iban: soc.banque_iban || soc.iban || base.banque_iban || '',
+            banque_swift: soc.banque_swift || base.banque_swift || '',
+            footer_text: soc.facture_footer_text || base.footer_text || '',
+            mention_legale: soc.facture_mention_legale || base.mention_legale || '',
+            devise_defaut: base.devise_defaut || 'MUR',
+            prefixe_facture: base.prefixe_facture || dbPrefixe,
+            prochain_numero: base.prochain_numero || dbProchain,
+            conditions_paiement: base.conditions_paiement || 30,
+          } as CompanySettings
+        })
+      })
+      .catch(() => { /* fallback sur localStorage déjà chargé */ })
+  }, [societeId])
 
   // Catalogue depuis l'API — déclenché dès que societeId est disponible.
   // Remplace les items localStorage par ceux en base (source de vérité).
@@ -287,19 +425,36 @@ export default function NouvelleFacturePage() {
     const signedHT = isCredit ? -Math.abs(totalHTApresRemise) : totalHTApresRemise
     const signedTVA = isCredit ? -Math.abs(totalTVA) : totalTVA
     const signedTTC = isCredit ? -Math.abs(totalTTC) : totalTTC
+    // ⚠️ Liste des champs ENVOYÉS au backend : ne doit contenir QUE des
+    // colonnes qui existent réellement dans la table public.factures.
+    // Sinon le PATCH plante avec
+    //   "Could not find the '<X>' column of 'factures' in the schema cache"
+    // Le POST tolérait silencieusement les champs inconnus (il
+    // destructure uniquement les champs qu'il connaît), mais PATCH passe
+    // tout l'objet à .update() → tout champ orphelin fait planter.
+    // remise_type/remise_value/notes_visibles/contre_valeur_mur/accent_color
+    // /reference n'existent PAS en DB — on les mappe sur les vraies colonnes
+    // (remise_pct/remise_montant/notes) ou on les supprime.
     return {
-      societe_id: societeId, numero_facture: numeroFacture, reference,
-      tiers: clientNom || clientEntreprise, description: descriptif || lignes.map(l => l.description).filter(Boolean).join(", "),
-      date_facture: dateFacture, date_echeance: dateEcheance, devise, taux_change: tauxChange,
+      societe_id: societeId, numero_facture: numeroFacture,
+      tiers: clientNom || clientEntreprise,
+      description: descriptif || lignes.map(l => l.description).filter(Boolean).join(", "),
+      date_facture: dateFacture, date_echeance: dateEcheance,
+      devise, taux_change: tauxChange,
       montant_ht: signedHT, montant_tva: signedTVA, montant_ttc: signedTTC,
-      taux_tva: clientOffshore ? 0 : 15, statut, lignes, mode_paiement: modePaiement,
+      taux_tva: clientOffshore ? 0 : 15, statut, lignes,
+      mode_paiement: modePaiement,
       conditions_paiement: echeancePreset >= 0 ? echeancePreset : (settings?.conditions_paiement || 30),
-      notes_visibles: notesVisibles, notes_internes: notesInternes,
+      // notes_visibles côté UI = notes en DB (texte libre affiché sur PDF).
+      notes: notesVisibles,
+      notes_internes: notesInternes,
       template: localStorage.getItem("lexora_invoice_template") || "standard",
       template_id: templateId || undefined,
-      client_offshore: clientOffshore, remise_type: remiseType, remise_value: remiseValue, remise_montant: remiseMontant,
-      logo_url: settings?.logo_url || "", contre_valeur_mur: contreValeurMUR,
-      accent_color: accentColor,
+      client_offshore: clientOffshore,
+      // remise_type='pct' → remise_pct ; sinon → remise_montant.
+      remise_pct: remiseType === 'pct' ? remiseValue : 0,
+      remise_montant: remiseType === 'pct' ? 0 : remiseValue,
+      logo_url: settings?.logo_url || "",
       type_document: typeDocument,
       facture_reference_id: factureReferenceId || undefined,
       // Lien stable vers le contact DB (utilisé par les relances et le
@@ -333,9 +488,24 @@ export default function NouvelleFacturePage() {
     if (statut === "en_attente" && !clientNom && !clientEntreprise) { setError(t('inv.nf.err_fill_client', locale)); return }
     setSaving(true); setError(null)
     try {
-      const res = await fetch("/api/client/factures", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(buildInvoiceData(statut)) })
+      // Mode édition (?id=<uuid>) → PATCH pour mettre à jour la facture
+      // existante. Sinon POST classique pour création.
+      const isEditing = !!editingId
+      const payload = isEditing
+        ? { id: editingId, ...buildInvoiceData(statut) }
+        : buildInvoiceData(statut)
+      const res = await fetch("/api/client/factures", {
+        method: isEditing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
-      incrementNumero(); router.push("/client/factures")
+      // L'incrément local du compteur n'a de sens qu'à la création.
+      if (!isEditing) incrementNumero()
+      // Brouillons → onglet "Brouillons" pour que l'utilisateur voit
+      // immédiatement sa facture en draft (et pas mélangée aux factures
+      // finalisées dans l'onglet "Toutes").
+      router.push(statut === "brouillon" ? "/client/factures?tab=brouillons" : "/client/factures")
     } catch (e: unknown) { setError(e instanceof Error ? e.message : t('inv.nf.err_generic', locale)) }
     finally { setSaving(false) }
   }
@@ -352,7 +522,7 @@ export default function NouvelleFacturePage() {
           <Button variant="ghost" size="sm" onClick={() => router.push("/client/factures")}><ArrowLeft className="w-4 h-4 mr-1" />{t('inv.nf.back', locale)}</Button>
           <div>
             <h1 className="text-2xl font-bold" style={{ color: typeDocument === "avoir" ? "#DC2626" : "#0B0F2E" }}>
-              {typeDocument === "avoir" ? t('inv.nf.new_credit_note', locale) : typeDocument === "note_debit" ? t('inv.nf.new_debit_note', locale) : typeDocument === "devis" ? t('inv.nf.new_quote', locale) : t('inv.nf.new_invoice', locale)}
+              {editingId ? `Modifier ${numeroFacture || 'facture'}` : (typeDocument === "avoir" ? t('inv.nf.new_credit_note', locale) : typeDocument === "note_debit" ? t('inv.nf.new_debit_note', locale) : typeDocument === "devis" ? t('inv.nf.new_quote', locale) : t('inv.nf.new_invoice', locale))}
             </h1>
             <p className="text-sm text-gray-500">{t('inv.nf.mra_compliant', locale)}</p>
           </div>
