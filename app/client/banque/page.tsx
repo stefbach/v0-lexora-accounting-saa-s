@@ -47,6 +47,13 @@ import {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { ReleveVersionHistory } from "@/components/banque/ReleveVersionHistory"
 
 interface CompteBancaire {
   id: string
@@ -76,6 +83,8 @@ interface ReleveBancaire {
   statut_rapprochement: string
   transactions_json: any[] | null
   created_at: string
+  version?: number | null
+  superseded_by_id?: string | null
 }
 
 function fmt(n: number, dev = "MUR"): string {
@@ -109,6 +118,7 @@ export default function ClientBanquePage() {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [historyReleveId, setHistoryReleveId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [filtreCompte, setFiltreCompte] = useState<string>("all")
   // Taux de change MUR — fetché au mount pour cumuler les soldes multi-devises
@@ -454,6 +464,28 @@ export default function ClientBanquePage() {
                                 <Badge variant="outline" className="text-[10px]">
                                   {r.periode || formatDate(r.date_debut, locale)}
                                 </Badge>
+                                {(r.version ?? 1) > 1 && (
+                                  <TooltipProvider delayDuration={150}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            e.preventDefault()
+                                            setHistoryReleveId(r.id)
+                                          }}
+                                          className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-300 hover:bg-amber-200 transition-colors"
+                                        >
+                                          v{r.version}
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Ré-uploadé {(r.version ?? 1) - 1} fois — voir historique
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
                                 <span className="text-xs text-muted-foreground">
                                   {formatDate(r.date_debut, locale)} → {formatDate(r.date_fin, locale)}
                                 </span>
@@ -535,6 +567,12 @@ export default function ClientBanquePage() {
             )}
           </>
         )}
+
+        <ReleveVersionHistory
+          releveId={historyReleveId}
+          open={!!historyReleveId}
+          onOpenChange={(o) => { if (!o) setHistoryReleveId(null) }}
+        />
       </div>
     </ClientPageShell>
   )
