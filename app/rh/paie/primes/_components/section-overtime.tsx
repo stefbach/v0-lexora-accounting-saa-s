@@ -217,7 +217,7 @@ export function SectionOvertime({ societeId }: Props) {
         setEmployes(list)
       })
       .catch(() => {
-        if (!cancelled) toast.error('Impossible de charger la liste des employés')
+        if (!cancelled) notifyError('Charger employés')
       })
       .finally(() => {
         if (!cancelled) setLoadingEmployes(false)
@@ -266,14 +266,14 @@ export function SectionOvertime({ societeId }: Props) {
       const res = await fetch(url)
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Erreur réseau' }))
-        toast.error(err.error ?? 'Erreur lors du chargement des suggestions')
+        notifyError('Charger suggestions', err.error)
         return
       }
       const data = await res.json()
       setPreview(Array.isArray(data.lignes) ? data.lignes : [])
       setValidatedSuggestions(new Set())
-    } catch {
-      toast.error('Erreur réseau lors du chargement des suggestions')
+    } catch (e: unknown) {
+      notifyError('Charger suggestions', e instanceof Error ? e : 'Erreur réseau')
     } finally {
       setLoadingPreview(false)
     }
@@ -378,16 +378,16 @@ export function SectionOvertime({ societeId }: Props) {
         const nbBul = result.nb_bulletins_maj ?? 0
         const nbUps = result.nb_lignes_upsert ?? 0
         if (result.bulletins_bloques && result.bulletins_bloques.length > 0) {
-          toast.warning(
+          notifyWarning(
             `${nbUps} OT enregistré(s), ${nbBul} bulletin(s) mis à jour. `
             + `${result.bulletins_bloques.length} bulletin(s) verrouillé(s) — déverrouiller pour les inclure.`,
           )
         } else if (result.warnings && result.warnings.length > 0) {
-          toast.success(
+          notifySuccess(
             `${nbBul} bulletin(s) mis à jour (${result.warnings.length} avertissement(s) non bloquant(s)).`,
           )
         } else {
-          toast.success(`${nbBul} bulletin(s) mis à jour, ${nbUps} ligne(s) journalière(s) enregistrée(s).`)
+          notifySuccess(`${nbBul} bulletin(s) mis à jour, ${nbUps} ligne(s) journalière(s) enregistrée(s).`)
         }
         return
       }
@@ -403,21 +403,21 @@ export function SectionOvertime({ societeId }: Props) {
             })
             .join(' | ')
           const reste = err.erreurs_validation.length - 3
-          toast.error(`Validation : ${detail}${reste > 0 ? ` (+${reste} autre(s))` : ''}`)
+          notifyError('Validation', `${detail}${reste > 0 ? ` (+${reste} autre(s))` : ''}`)
         } else if (Array.isArray(err.details) && err.details.length > 0) {
-          toast.error(`Format invalide : ${err.details[0].path} — ${err.details[0].error}`)
+          notifyError('Format invalide', `${err.details[0].path} — ${err.details[0].error}`)
         } else {
-          toast.error(err.error ?? 'Erreur de validation')
+          notifyError('Enregistrer OT', err.error ?? 'Erreur de validation')
         }
       } else if (res.status === 403) {
-        toast.error("Accès refusé — vous n'avez pas le rôle requis sur cette société.")
+        notifyError('Enregistrer OT', "Accès refusé — rôle requis manquant")
       } else if (res.status === 401) {
-        toast.error('Session expirée — reconnectez-vous.')
+        notifyError('Enregistrer OT', 'Session expirée — reconnectez-vous')
       } else {
-        toast.error(err.error ?? "Erreur lors de l'enregistrement des heures supplémentaires.")
+        notifyError('Enregistrer OT', err.error ?? "Erreur inconnue")
       }
-    } catch {
-      toast.error('Erreur réseau lors de l\'enregistrement.')
+    } catch (e: unknown) {
+      notifyError('Enregistrer OT', e instanceof Error ? e : 'Erreur réseau')
     } finally {
       setSaving(false)
     }

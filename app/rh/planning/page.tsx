@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { toast } from "sonner"
+import { notifySuccess, notifyError, notifyWarning } from "@/lib/utils/toast"
 import { t, getLocale } from "@/lib/i18n"
 import Link from "next/link"
 import type { PlanningShift, JourCode } from "@/types/planning"
@@ -196,10 +197,10 @@ export default function PlanningPage() {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        toast.error("Erreur sauvegarde créneaux : " + (data?.error || `HTTP ${res.status}`))
+        notifyError("Enregistrer créneaux", data?.error || `HTTP ${res.status}`)
       }
-    } catch (e: any) {
-      toast.error("Erreur réseau : " + (e?.message || ""))
+    } catch (e: unknown) {
+      notifyError("Erreur réseau", e)
     }
   }, [societe])
 
@@ -533,9 +534,9 @@ export default function PlanningPage() {
     setValidationResults(violations)
     setShowValidation(true)
     if (violations.length === 0) {
-      toast.success("Planning conforme - aucune violation detectee")
+      notifySuccess("Planning conforme - aucune violation detectee")
     } else {
-      toast.warning(`${violations.length} violation(s) detectee(s)`)
+      notifyWarning(`${violations.length} violation(s) detectee(s)`)
     }
   }
 
@@ -583,7 +584,7 @@ export default function PlanningPage() {
       return next
     })
     setConfirmGenOpen(false)
-    toast.success("Planning type appliqué aux semaines restantes du mois")
+    notifySuccess("Planning type appliqué aux semaines restantes du mois")
   }
 
   // ─── Load data ──────────────────────────────────────────────────
@@ -817,7 +818,7 @@ export default function PlanningPage() {
       if (res.status === 409) {
         toast.info("Un congé existe déjà pour ce jour")
       } else if (!res.ok) {
-        toast.error("Sick leave : " + (data?.error || data?.raison || `HTTP ${res.status}`))
+        notifyError("Enregistrer sick leave", data?.error || data?.raison || `HTTP ${res.status}`)
         return
       } else {
         const finalType = data?.type_conge_final || data?.conge?.type_conge || "SL"
@@ -837,10 +838,10 @@ export default function PlanningPage() {
             [day]: { creneau_id: `conge_${finalType}`, heure_debut: "", heure_fin: "", pause_debut: "", pause_fin: "", heures_prevues: 0 },
           },
         }))
-        toast.success(data?.bascule_ul ? `Sick leave enregistré (basculé UL : solde insuffisant)` : "Sick leave enregistré")
+        notifySuccess(data?.bascule_ul ? `Sick leave enregistré (basculé UL : solde insuffisant)` : "Sick leave enregistré")
       }
     } catch (e: any) {
-      toast.error("Erreur réseau : " + (e?.message || ""))
+      notifyError("Erreur réseau", e)
     } finally {
       setSickPending(prev => { const n = new Set(prev); n.delete(key); return n })
     }
@@ -890,7 +891,7 @@ export default function PlanningPage() {
       c => c.heures_effectives > 0 && !c.nom.toLowerCase().includes("repos"),
     ) || creneaux[0]
     if (!workCreneau) {
-      toast.error("Aucun créneau de travail configuré")
+      notifyError("Remplir planning", "Aucun créneau de travail configuré")
       return
     }
     // Option B — shift par défaut par employé : si emp.shift_template_id est
@@ -930,7 +931,7 @@ export default function PlanningPage() {
       }
       return next
     })
-    toast.success(
+    notifySuccess(
       nbCustom > 0
         ? `Planning rempli — ${nbCustom} employé(s) avec shift personnalisé, reste "${workCreneau.nom}"`
         : `Planning rempli avec "${workCreneau.nom}"`,
@@ -962,7 +963,7 @@ export default function PlanningPage() {
   const applyShiftAssign = () => {
     const c = getCreneauById(shiftAssignCreneauId)
     if (!c || c.heures_effectives === 0) {
-      toast.error("Shift invalide")
+      notifyError("Appliquer shift", "Shift invalide")
       return
     }
     setPlanning(prev => {
@@ -997,7 +998,7 @@ export default function PlanningPage() {
       }
       return next
     })
-    toast.success(`Shift "${c.nom}" appliqué à ${shiftAssignEmployes.length} employé(s)`)
+    notifySuccess(`Shift "${c.nom}" appliqué à ${shiftAssignEmployes.length} employé(s)`)
     setShiftAssignOpen(false)
     setShiftAssignCreneauId("")
     setShiftAssignEmployes([])
@@ -1118,13 +1119,13 @@ export default function PlanningPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        toast.error("Erreur sauvegarde: " + (data.error || res.statusText))
+        notifyError("Enregistrer planning", data.error || res.statusText)
         return
       }
       if (publish) setPublished(true)
-      toast.success(publish ? "Planning publié !" : "Planning sauvegardé")
+      notifySuccess(publish ? "Planning publié !" : "Planning sauvegardé")
     } catch (e: any) {
-      toast.error("Erreur réseau: " + (e.message || "Impossible de sauvegarder"))
+      notifyError("Erreur réseau", e)
       console.error(e)
     }
     finally { setSaving(false) }

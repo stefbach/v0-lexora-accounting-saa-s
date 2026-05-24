@@ -14,6 +14,7 @@ import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { EmptyState } from "@/components/ui/empty-state"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 import { toast } from "sonner"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
 import { t, getLocale } from "@/lib/i18n"
 
 /* ── Section card for grouped form fields ── */
@@ -178,7 +179,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       // requêtes /api/* sans user). On redirige vers /auth/login pour que
       // l'admin se reconnecte plutôt que d'afficher un message générique.
       if (res.status === 401) {
-        toast.error("Session expirée — reconnexion requise")
+        notifyError("Créer employé", "Session expirée — reconnexion requise")
         const next = typeof window !== "undefined" ? window.location.pathname : "/rh/employes"
         window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
         return
@@ -197,7 +198,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       } else if (status === 'failed') {
         toast.warning(`Employé créé. ⚠️ Génération contrat échouée — à créer manuellement`, { duration: 6000 })
       } else if (!createAccess) {
-        toast.success('✅ Employé créé. Compte Lexora à créer plus tard.')
+        notifySuccess('✅ Employé créé. Compte Lexora à créer plus tard.')
       }
 
       // Création optionnelle du compte Lexora — enchaînée après la fiche
@@ -570,7 +571,7 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
     // écrasait silencieusement le salaire à 0 en DB.
     const salaireSaisi = parseFloat(e.salaire_base)
     if (!Number.isFinite(salaireSaisi) || salaireSaisi <= 0) {
-      toast.error("Salaire invalide — renseignez un montant > 0")
+      notifyError("Modifier salaire", "Renseignez un montant > 0")
       return
     }
     setSaving(true)
@@ -615,13 +616,13 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
         } else if (locked > 0) {
           toast.success(`Salaire mis à jour ✅ ${locked} bulletin(s) verrouillé(s) du mois inchangé(s) (audit historique).`, { duration: 6000 })
         } else {
-          toast.success("Salaire mis à jour ✅ (aucun bulletin du mois en cours)")
+          notifySuccess("Salaire mis à jour ✅ (aucun bulletin du mois en cours)")
         }
       } else {
-        toast.success("Fiche employé mise à jour ✅")
+        notifySuccess("Fiche employé mise à jour ✅")
       }
       onClose(); onSaved()
-    } catch (err: any) { toast.error(err.message || "Erreur") }
+    } catch (err: unknown) { notifyError("Modifier employé", err) }
     finally { setSaving(false) }
   }
 

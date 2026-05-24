@@ -703,24 +703,24 @@ export default function ParametresRHPage() {
                   return (
                     <tr key={lt.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <td className="px-4 py-2">
-                        {editing ? <Input value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" /> : <span className="font-mono text-xs bg-[#0B0F2E]/10 px-2 py-0.5 rounded">{lt.code}</span>}
+                        {editing ? <Input aria-label={`${t('hr.params.code', locale)} ${lt.nom}`} value={draftLt.code || ""} onChange={e => setDraftLt(p => ({ ...p, code: e.target.value }))} className="h-8 w-20" /> : <span className="font-mono text-xs bg-[#0B0F2E]/10 px-2 py-0.5 rounded">{lt.code}</span>}
                       </td>
                       <td className="px-4 py-2">
-                        {editing ? <Input value={draftLt.nom || ""} onChange={e => setDraftLt(p => ({ ...p, nom: e.target.value }))} className="h-8" /> : lt.nom}
+                        {editing ? <Input aria-label={`${t('hr.params.name', locale)} ${lt.nom}`} value={draftLt.nom || ""} onChange={e => setDraftLt(p => ({ ...p, nom: e.target.value }))} className="h-8" /> : lt.nom}
                       </td>
                       <td className="px-4 py-2 text-center">
-                        {editing ? <Input type="number" value={draftLt.daysPerYear ?? 0} onChange={e => setDraftLt(p => ({ ...p, daysPerYear: Number(e.target.value) }))} className="h-8 w-20 mx-auto" /> : (lt.daysPerYear > 0 ? lt.daysPerYear : <span className="text-gray-400">--</span>)}
+                        {editing ? <Input aria-label={`${t('hr.params.days_per_year', locale)} ${lt.nom}`} type="number" value={draftLt.daysPerYear ?? 0} onChange={e => setDraftLt(p => ({ ...p, daysPerYear: Number(e.target.value) }))} className="h-8 w-20 mx-auto" /> : (lt.daysPerYear > 0 ? lt.daysPerYear : <span className="text-gray-400">--</span>)}
                       </td>
                       <td className="px-4 py-2 text-center">
                         {editing
-                          ? <Switch checked={draftLt.requiresCertificate ?? false} onCheckedChange={v => setDraftLt(p => ({ ...p, requiresCertificate: v }))} />
+                          ? <Switch aria-label={`${t('hr.params.certificate', locale)} ${lt.nom}`} checked={draftLt.requiresCertificate ?? false} onCheckedChange={v => setDraftLt(p => ({ ...p, requiresCertificate: v }))} />
                           : (lt.requiresCertificate
                             ? <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">{t('hr.params.yes', locale)}</span>
                             : <span className="text-xs text-gray-400">{t('hr.params.no', locale)}</span>)}
                       </td>
                       <td className="px-4 py-2 text-center">
                         {editing
-                          ? <Switch checked={draftLt.paid ?? true} onCheckedChange={v => setDraftLt(p => ({ ...p, paid: v }))} />
+                          ? <Switch aria-label={`${t('hr.params.paid', locale)} ${lt.nom}`} checked={draftLt.paid ?? true} onCheckedChange={v => setDraftLt(p => ({ ...p, paid: v }))} />
                           : (lt.paid
                             ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">{t('hr.params.paid_yes', locale)}</span>
                             : <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded">{t('hr.params.paid_no', locale)}</span>)}
@@ -859,8 +859,8 @@ export default function ParametresRHPage() {
               <tbody>
                 {editPgId === '__new__' && (
                   <tr className="bg-amber-50">
-                    <td className="px-4 py-2"><Input value={draftPg.code || ""} onChange={e => setDraftPg(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" placeholder="MUT" /></td>
-                    <td className="px-4 py-2"><Input value={draftPg.nom || ""} onChange={e => setDraftPg(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Mutualisé" /></td>
+                    <td className="px-4 py-2"><Input aria-label={`${t('hr.params.code', locale)} groupe paie`} value={draftPg.code || ""} onChange={e => setDraftPg(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" placeholder="MUT" /></td>
+                    <td className="px-4 py-2"><Input aria-label={`${t('hr.params.name', locale)} groupe paie`} value={draftPg.nom || ""} onChange={e => setDraftPg(p => ({ ...p, nom: e.target.value }))} className="h-8" placeholder="Mutualisé" /></td>
                     <td className="px-4 py-2 text-center"><span className="text-xs text-gray-400">--</span></td>
                     <td className="px-4 py-2 text-right">
                       <InlineActions editing busy={busy}
@@ -878,11 +878,11 @@ export default function ParametresRHPage() {
                     <tr key={pg.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <td className="px-4 py-2">
                         {editing
-                          ? <Input value={draftPg.code || ""} onChange={e => setDraftPg(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" />
+                          ? <Input aria-label={`${t('hr.params.code', locale)} ${pg.nom}`} value={draftPg.code || ""} onChange={e => setDraftPg(p => ({ ...p, code: e.target.value }))} className="h-8 w-24" />
                           : <span className="font-mono text-xs bg-[#D4AF37]/20 text-[#0B0F2E] px-2 py-0.5 rounded font-semibold">{pg.code || '--'}</span>}
                       </td>
                       <td className="px-4 py-2">
-                        {editing ? <Input value={draftPg.nom || ""} onChange={e => setDraftPg(p => ({ ...p, nom: e.target.value }))} className="h-8" /> : pg.nom}
+                        {editing ? <Input aria-label={`${t('hr.params.name', locale)} ${pg.nom}`} value={draftPg.nom || ""} onChange={e => setDraftPg(p => ({ ...p, nom: e.target.value }))} className="h-8" /> : pg.nom}
                       </td>
                       <td className="px-4 py-2 text-center">
                         <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{pg.nb_membres ?? 0} {t('hr.params.employees_count', locale)}</span>
@@ -937,6 +937,7 @@ export default function ParametresRHPage() {
               <div className="border-2 border-amber-200 rounded-lg p-4 bg-amber-50">
                 <div className="flex items-center justify-between mb-3">
                   <Input
+                    aria-label={t('hr.params.calendar_name_ph', locale)}
                     value={draftCal.nom || ""}
                     onChange={e => setDraftCal(p => ({ ...p, nom: e.target.value }))}
                     className="h-8 font-semibold flex-1 mr-3"
@@ -949,12 +950,15 @@ export default function ParametresRHPage() {
                     onDelete={() => {}}
                   />
                 </div>
-                <div className="flex gap-2 items-center flex-wrap">
-                  <span className="text-xs text-gray-500 mr-2">{t('hr.params.days', locale)}</span>
+                <div className="flex gap-2 items-center flex-wrap" role="group" aria-label={t('hr.params.days', locale)}>
+                  <span className="text-xs text-gray-500 mr-2" id="new-cal-days-label">{t('hr.params.days', locale)}</span>
                   {ALL_DAYS.map(day => {
                     const active = (draftCal.jours_semaine || []).includes(day)
                     return (
                       <button key={day}
+                        type="button"
+                        aria-pressed={active}
+                        aria-label={`${day} actif`}
                         onClick={() => {
                           const current = draftCal.jours_semaine || []
                           setDraftCal(p => ({
@@ -968,7 +972,7 @@ export default function ParametresRHPage() {
                     )
                   })}
                   <span className="text-xs text-gray-500 ml-4 mr-2">{t('hr.params.hours_per_day', locale)}</span>
-                  <Input type="number" value={draftCal.heures_par_jour ?? 9}
+                  <Input aria-label={t('hr.params.hours_per_day', locale)} type="number" value={draftCal.heures_par_jour ?? 9}
                     onChange={e => setDraftCal(p => ({ ...p, heures_par_jour: Number(e.target.value) }))}
                     className="h-8 w-16" />
                 </div>
@@ -981,7 +985,7 @@ export default function ParametresRHPage() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex-1">
                       {editing ? (
-                        <Input value={draftCal.nom || ""} onChange={e => setDraftCal(p => ({ ...p, nom: e.target.value }))} className="h-8 font-semibold" placeholder={t('hr.params.calendar_name_ph', locale)} />
+                        <Input aria-label={`${t('hr.params.calendar_name_ph', locale)} ${cal.nom}`} value={draftCal.nom || ""} onChange={e => setDraftCal(p => ({ ...p, nom: e.target.value }))} className="h-8 font-semibold" placeholder={t('hr.params.calendar_name_ph', locale)} />
                       ) : (
                         <p className="font-semibold text-[#0B0F2E]">{cal.nom}</p>
                       )}
@@ -993,7 +997,7 @@ export default function ParametresRHPage() {
                       onDelete={() => deleteCal(cal.id)}
                     />
                   </div>
-                  <div className="flex gap-2 items-center flex-wrap">
+                  <div className="flex gap-2 items-center flex-wrap" role="group" aria-label={`${t('hr.params.days', locale)} - ${cal.nom}`}>
                     <span className="text-xs text-gray-500 mr-2">{t('hr.params.days', locale)}</span>
                     {ALL_DAYS.map(day => {
                       const active = editing
@@ -1001,6 +1005,9 @@ export default function ParametresRHPage() {
                         : (cal.jours_semaine || []).includes(day)
                       return (
                         <button key={day}
+                          type="button"
+                          aria-pressed={active}
+                          aria-label={`${day} ${active ? "actif" : "inactif"}`}
                           disabled={!editing}
                           onClick={() => {
                             if (!editing) return
@@ -1017,7 +1024,7 @@ export default function ParametresRHPage() {
                     })}
                     <span className="text-xs text-gray-500 ml-4 mr-2">{t('hr.params.hours_per_day', locale)}</span>
                     {editing ? (
-                      <Input type="number" value={draftCal.heures_par_jour ?? 9}
+                      <Input aria-label={`${t('hr.params.hours_per_day', locale)} ${cal.nom}`} type="number" value={draftCal.heures_par_jour ?? 9}
                         onChange={e => setDraftCal(p => ({ ...p, heures_par_jour: Number(e.target.value) }))}
                         className="h-8 w-16" />
                     ) : (
