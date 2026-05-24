@@ -107,11 +107,11 @@ export default function ClientFacturesPage() {
   const [loading, setLoading] = useState(false)
   const searchParams = useSearchParams()
   const initialTab = (() => {
-    const tp = searchParams.get("type")
-    if (tp === "client" || tp === "fournisseur" || tp === "toutes") return tp
+    const tp = searchParams.get("type") || searchParams.get("tab")
+    if (tp === "client" || tp === "fournisseur" || tp === "toutes" || tp === "brouillons") return tp
     return "toutes" as const
   })()
-  const [activeTab, setActiveTab] = useState<"toutes" | "client" | "fournisseur">(initialTab)
+  const [activeTab, setActiveTab] = useState<"toutes" | "client" | "fournisseur" | "brouillons">(initialTab)
   const [statutFilter, setStatutFilter] = useState<string>("all")
   const [tiersFilter, setTiersFilter] = useState<string>("all")
   const [rapprochementFilter, setRapprochementFilter] = useState<string>("all")
@@ -157,7 +157,18 @@ export default function ClientFacturesPage() {
 
   const filtered = useMemo(() => {
     let list = factures
-    if (activeTab !== "toutes") list = list.filter((f) => f.type_facture === activeTab)
+    // Onglet "Brouillons" = uniquement les factures non finalisées.
+    // Onglets "Toutes / Client / Fournisseur" excluent les brouillons par
+    // défaut pour éviter qu'une facture en cours de saisie pollue le suivi
+    // comptable (bug observé : utilisateur sauvegardait brouillon et la
+    // voyait avec ses vraies factures, créant la confusion "Sauvegarder
+    // brouillon a enregistré la facture").
+    if (activeTab === "brouillons") {
+      list = list.filter((f) => f.statut === "brouillon")
+    } else {
+      list = list.filter((f) => f.statut !== "brouillon")
+      if (activeTab !== "toutes") list = list.filter((f) => f.type_facture === activeTab)
+    }
     if (statutFilter !== "all") list = list.filter((f) => f.statut === statutFilter)
     if (tiersFilter !== "all") list = list.filter((f) => f.tiers === tiersFilter)
     if (rapprochementFilter === "rapproche") list = list.filter((f) => !!f.rapproche_releve_id)
@@ -230,9 +241,13 @@ export default function ClientFacturesPage() {
 
   const counts = useMemo(
     () => ({
-      toutes: factures.length,
-      client: factures.filter((f) => f.type_facture === "client").length,
-      fournisseur: factures.filter((f) => f.type_facture === "fournisseur").length,
+      // 'toutes' / 'client' / 'fournisseur' n'incluent PAS les brouillons —
+      // ils représentent la vie comptable réelle. Les brouillons ont leur
+      // propre compteur (et leur propre onglet).
+      toutes: factures.filter((f) => f.statut !== "brouillon").length,
+      client: factures.filter((f) => f.type_facture === "client" && f.statut !== "brouillon").length,
+      fournisseur: factures.filter((f) => f.type_facture === "fournisseur" && f.statut !== "brouillon").length,
+      brouillons: factures.filter((f) => f.statut === "brouillon").length,
     }),
     [factures]
   )
@@ -361,6 +376,10 @@ export default function ClientFacturesPage() {
                         <TrendingDown className="h-3.5 w-3.5 mr-1 text-rose-600" />
                         {t('inv.fac.tab_suppliers', locale)} ({counts.fournisseur})
                       </TabsTrigger>
+                      <TabsTrigger value="brouillons" className="px-3 py-1.5">
+                        <FileText className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                        {t('inv.fac.status_draft', locale)}s ({counts.brouillons})
+                      </TabsTrigger>
                     </TabsList>
                     {hasActiveFilter && (
                       <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs">
@@ -444,6 +463,9 @@ export default function ClientFacturesPage() {
                   <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
                 </TabsContent>
                 <TabsContent value="fournisseur" className="mt-0 p-0">
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
+                </TabsContent>
+                <TabsContent value="brouillons" className="mt-0 p-0">
                   <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
                 </TabsContent>
               </Tabs>

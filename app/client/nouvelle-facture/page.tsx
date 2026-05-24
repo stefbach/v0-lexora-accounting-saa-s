@@ -398,7 +398,11 @@ export default function NouvelleFacturePage() {
     try {
       const res = await fetch("/api/client/factures", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(buildInvoiceData(statut)) })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
-      incrementNumero(); router.push("/client/factures")
+      incrementNumero()
+      // Brouillons → onglet "Brouillons" pour que l'utilisateur voit
+      // immédiatement sa facture en draft (et pas mélangée aux factures
+      // finalisées dans l'onglet "Toutes").
+      router.push(statut === "brouillon" ? "/client/factures?tab=brouillons" : "/client/factures")
     } catch (e: unknown) { setError(e instanceof Error ? e.message : t('inv.nf.err_generic', locale)) }
     finally { setSaving(false) }
   }
