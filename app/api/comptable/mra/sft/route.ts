@@ -5,7 +5,30 @@ import { generateSftXml } from '@/lib/accounting/mra-xml'
 
 export const dynamic = 'force-dynamic'
 
-/** GET — Détecte les transactions SFT > 50k MUR + retourne les déjà déclarées */
+/**
+ * Catégories SFT légales (Income Tax SFT Regulations 2015 + MRA Comm 2019/06).
+ * Le paramètre `category` du GET filtre optionnellement sur une catégorie.
+ */
+const SFT_CATEGORIES = [
+  'immobilier',
+  'cash',
+  'virement_intl',
+  'dividende_nr',
+  'interet_nr',
+  'loyer_nr',
+] as const
+type SftCategory = (typeof SFT_CATEGORIES)[number]
+
+/**
+ * GET — Détecte les transactions SFT qualifiées selon les 6 catégories
+ * réglementaires (SFT Reg 2015) + retourne celles déjà déclarées.
+ *
+ * Params :
+ *   societe_id : UUID (requis)
+ *   year       : année de reporting (default = N-1)
+ *   category   : filtre par catégorie SFT (optionnel)
+ *   action     : 'export_xml' pour générer le XML MRA
+ */
 export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
@@ -14,7 +37,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const year       = parseInt(searchParams.get('year') || String(new Date().getFullYear() - 1))
-    const threshold  = parseFloat(searchParams.get('threshold') || '50000')
+    const categoryRaw = searchParams.get('category')
+    const category: SftCategory | null = (categoryRaw && (SFT_CATEGORIES as readonly string[]).includes(categoryRaw))
+      ? (categoryRaw as SftCategory)
+      : null
     const action     = searchParams.get('action')
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
@@ -35,17 +61,39 @@ export async function GET(request: Request) {
       return new Response(xml, { headers: { 'Content-Type': 'application/xml', 'Content-Disposition': `attachment; filename="sft_${year}.xml"` } })
     }
 
-    const [{ data: detected }, { data: declared }] = await Promise.all([
-      supabase.rpc('sft_detect_transactions', { p_societe_id: societe_id, p_year: year, p_threshold_mur: threshold }),
+    // Nouvelle RPC v2 (mig 418) — 6 catégories qualifiées avec seuils dédiés.
+    // L'ancien paramètre `threshold` est ignoré : chaque catégorie a son
+    // propre seuil légal (immobilier 2M, cash 500k cumul, virements intl
+    // 500k, dividendes NR 500k, intérêts NR 100k, loyers NR 240k).
+    const [{ data: detected, error: detectErr }, { data: declared }, { data: summary }] = await Promise.all([
+      supabase.rpc('sft_detect_transactions_v2', {
+        p_societe_id: societe_id,
+        p_year: year,
+        p_category: category,
+      }),
       supabase.from('sft_transactions').select('*').eq('societe_id', societe_id).eq('reporting_year', year),
+      supabase.rpc('sft_summary_by_category', { p_societe_id: societe_id, p_year: year }),
     ])
+
+    if (detectErr) {
+      return NextResponse.json({ error: detectErr.message, code: detectErr.code }, { status: 500 })
+    }
+
     return NextResponse.json({
-      year, threshold,
-      detected: detected || [], declared: declared || [],
+      year,
+      category,
+      categories: SFT_CATEGORIES,
+      detected: detected || [],
+      declared: declared || [],
+      summary_by_category: summary || [],
       summary: {
         nb_detected: detected?.length || 0,
         nb_declared: declared?.length || 0,
         total_amount_mur: (detected || []).reduce((s: number, t: any) => s + Number(t.amount_mur || 0), 0),
+      },
+      _meta: {
+        rpc: 'sft_detect_transactions_v2',
+        legal_ref: 'Income Tax SFT Regulations 2015 + MRA Communiqué 2019/06',
       },
     })
   } catch (e: any) {

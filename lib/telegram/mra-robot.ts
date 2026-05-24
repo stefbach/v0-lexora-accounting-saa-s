@@ -39,7 +39,7 @@ import { launchBrowser, captureScreenshot } from '@/lib/banks/playwright-launche
 
 export type MraSubmitInput = {
   societe_id: string
-  type: 'paye' | 'csg' | 'vat' | 'tds' | 'prgf'
+  type: 'paye' | 'csg' | 'vat' | 'tds' | 'prgf' | 'cit'
   periode: string                          // YYYY-MM
   files: Array<{ filename: string; content: string }>
 }
