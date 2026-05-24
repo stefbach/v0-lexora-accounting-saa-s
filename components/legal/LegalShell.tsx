@@ -315,7 +315,7 @@ export function LegalShell({
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
-                href="mailto:contact@lexora.finance"
+                href="mailto:sbach@digital-data-solutions.net"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -330,10 +330,10 @@ export function LegalShell({
                   boxShadow: `0 8px 20px -8px ${C.gold}80`,
                 }}
               >
-                contact@lexora.finance
+                sbach@digital-data-solutions.net
               </a>
               <a
-                href="mailto:dpo@lexora.finance"
+                href="mailto:sbach@digital-data-solutions.net"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -348,7 +348,7 @@ export function LegalShell({
                   border: `1px solid ${C.borderDark}`,
                 }}
               >
-                dpo@lexora.finance
+                sbach@digital-data-solutions.net
               </a>
             </div>
           </div>
@@ -396,7 +396,7 @@ export function LegalShell({
             <Link href="/mentions-legales" style={{ color: "#A8AFC7", textDecoration: "none" }}>Mentions légales</Link>
             <Link href="/cgu" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGU</Link>
             <Link href="/cgv" style={{ color: "#A8AFC7", textDecoration: "none" }}>CGV</Link>
-            <a href="mailto:contact@lexora.finance" style={{ color: "#A8AFC7", textDecoration: "none" }}>Contact</a>
+            <a href="mailto:sbach@digital-data-solutions.net" style={{ color: "#A8AFC7", textDecoration: "none" }}>Contact</a>
           </div>
         </div>
       </footer>

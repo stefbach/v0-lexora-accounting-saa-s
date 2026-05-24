@@ -612,10 +612,10 @@ function footerLinkHref(label: string): string {
     "Téléconsultation": "/#features",
     "Bien-être": "/#features",
     "Partenaires": "/inscription?role=expert",
-    "Support": "mailto:contact@lexora.finance?subject=Support",
+    "Support": "mailto:sbach@digital-data-solutions.net?subject=Support",
     "Démo": "/inscription",
     "Partenariats": "/inscription?role=expert",
-    "Presse": "mailto:contact@lexora.finance?subject=Presse",
+    "Presse": "mailto:sbach@digital-data-solutions.net?subject=Presse",
     // EN
     "Pricing": "/tarifs",
     "Security": "/protection-donnees",
@@ -625,7 +625,7 @@ function footerLinkHref(label: string): string {
     "Partners": "/inscription?role=expert",
     "Demo": "/inscription",
     "Partnerships": "/inscription?role=expert",
-    "Press": "mailto:contact@lexora.finance?subject=Press",
+    "Press": "mailto:sbach@digital-data-solutions.net?subject=Press",
   }
   return map[label] || "/#features"
 }
