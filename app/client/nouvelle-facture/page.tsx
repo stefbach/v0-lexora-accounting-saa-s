@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -122,6 +123,12 @@ export default function NouvelleFacturePage() {
   const [templates, setTemplates] = useState<any[]>([])
   const [templateId, setTemplateId] = useState("")
   const [tvaDef, setTvaDef] = useState(15)
+  // Mode édition : si l'URL contient ?id=<uuid>, on charge la facture
+  // existante et on bascule en PATCH au lieu de POST. Utilisé par le
+  // bouton "Modifier" des brouillons sur /client/factures.
+  const searchParams = useSearchParams()
+  const editingId = searchParams.get('id') || ''
+  const [editingLoaded, setEditingLoaded] = useState(false)
 
   useEffect(() => {
     try {
@@ -153,6 +160,63 @@ export default function NouvelleFacturePage() {
       })))
     }).catch(() => {})
   }, [])
+
+  // Chargement d'une facture existante en mode édition (?id=<uuid>).
+  // S'exécute UNE FOIS quand editingId apparaît. Pré-remplit tous les
+  // champs depuis la DB pour permettre de modifier un brouillon existant.
+  useEffect(() => {
+    if (!editingId || editingLoaded) return
+    fetch(`/api/client/factures?id=${editingId}`)
+      .then(r => r.json())
+      .then(d => {
+        const f = d.factures?.[0]
+        if (!f) { setError('Facture introuvable'); return }
+        // Hydrate tous les champs du formulaire depuis la facture DB.
+        setNumeroFacture(f.numero_facture || '')
+        setReference(f.reference || '')
+        setDateFacture(f.date_facture || today())
+        setDateEcheance(f.date_echeance || '')
+        setDevise(f.devise || 'MUR')
+        setTauxChange(Number(f.taux_change) || 1)
+        setTypeDocument(f.type_document || 'facture')
+        setFactureReferenceId(f.facture_reference_id || '')
+        setClientNom(f.tiers || '')
+        setClientOffshore(!!f.client_offshore)
+        setDescriptif(f.description || '')
+        setNotesVisibles(f.notes_visibles || f.notes || '')
+        setNotesInternes(f.notes_internes || '')
+        setModePaiement(f.mode_paiement || 'Virement')
+        setSelectedClientId(f.contact_id || '')
+        setEcheancePreset(Number(f.conditions_paiement) || 30)
+        if (Array.isArray(f.lignes) && f.lignes.length > 0) {
+          setLignes(f.lignes.map((l: any) => ({
+            id: l.id || crypto.randomUUID(),
+            description: l.description || '',
+            unite: l.unite || 'Forfait',
+            quantite: Number(l.quantite) || 0,
+            prix_unitaire: Number(l.prix_unitaire) || 0,
+            taux_tva: Number(l.taux_tva) || 0,
+            montant_ht: Number(l.montant_ht) || (Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0),
+          })))
+        }
+        if (Number(f.remise_pct) > 0) {
+          setRemiseType('pct'); setRemiseValue(Number(f.remise_pct))
+        } else if (Number(f.remise_montant) > 0) {
+          setRemiseType('fixe'); setRemiseValue(Number(f.remise_montant))
+        }
+        if (f.accent_color) setAccentColor(f.accent_color)
+        if (f.template_id) setTemplateId(f.template_id)
+        if (f.recurrent) {
+          setRecurrent(true)
+          if (f.recurrent_frequence) setRecurrentFreq(f.recurrent_frequence)
+          if (f.recurrence_jour_du_mois != null) setRecurrenceJour(String(f.recurrence_jour_du_mois))
+          if (f.recurrence_date_debut) setRecurrenceDebut(f.recurrence_date_debut)
+          if (f.recurrence_date_fin) setRecurrenceFin(f.recurrence_date_fin)
+        }
+        setEditingLoaded(true)
+      })
+      .catch(() => setError('Erreur chargement facture'))
+  }, [editingId, editingLoaded])
 
   // Templates IA — chargés par société (POST action=list).
   // La route /api/client/facture-template n'a PAS de GET ; un GET nu
@@ -396,9 +460,20 @@ export default function NouvelleFacturePage() {
     if (statut === "en_attente" && !clientNom && !clientEntreprise) { setError(t('inv.nf.err_fill_client', locale)); return }
     setSaving(true); setError(null)
     try {
-      const res = await fetch("/api/client/factures", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(buildInvoiceData(statut)) })
+      // Mode édition (?id=<uuid>) → PATCH pour mettre à jour la facture
+      // existante. Sinon POST classique pour création.
+      const isEditing = !!editingId
+      const payload = isEditing
+        ? { id: editingId, ...buildInvoiceData(statut) }
+        : buildInvoiceData(statut)
+      const res = await fetch("/api/client/factures", {
+        method: isEditing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
-      incrementNumero()
+      // L'incrément local du compteur n'a de sens qu'à la création.
+      if (!isEditing) incrementNumero()
       // Brouillons → onglet "Brouillons" pour que l'utilisateur voit
       // immédiatement sa facture en draft (et pas mélangée aux factures
       // finalisées dans l'onglet "Toutes").
@@ -419,7 +494,7 @@ export default function NouvelleFacturePage() {
           <Button variant="ghost" size="sm" onClick={() => router.push("/client/factures")}><ArrowLeft className="w-4 h-4 mr-1" />{t('inv.nf.back', locale)}</Button>
           <div>
             <h1 className="text-2xl font-bold" style={{ color: typeDocument === "avoir" ? "#DC2626" : "#0B0F2E" }}>
-              {typeDocument === "avoir" ? t('inv.nf.new_credit_note', locale) : typeDocument === "note_debit" ? t('inv.nf.new_debit_note', locale) : typeDocument === "devis" ? t('inv.nf.new_quote', locale) : t('inv.nf.new_invoice', locale)}
+              {editingId ? `Modifier ${numeroFacture || 'facture'}` : (typeDocument === "avoir" ? t('inv.nf.new_credit_note', locale) : typeDocument === "note_debit" ? t('inv.nf.new_debit_note', locale) : typeDocument === "devis" ? t('inv.nf.new_quote', locale) : t('inv.nf.new_invoice', locale))}
             </h1>
             <p className="text-sm text-gray-500">{t('inv.nf.mra_compliant', locale)}</p>
           </div>

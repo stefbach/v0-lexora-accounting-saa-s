@@ -457,16 +457,16 @@ export default function ClientFacturesPage() {
                 </div>
 
                 <TabsContent value="toutes" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} />
                 </TabsContent>
                 <TabsContent value="client" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} />
                 </TabsContent>
                 <TabsContent value="fournisseur" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} />
                 </TabsContent>
                 <TabsContent value="brouillons" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} />
                 </TabsContent>
               </Tabs>
             </Card>
@@ -493,12 +493,37 @@ export default function ClientFacturesPage() {
 function FactureList({
   factures,
   onEnregistrerPaiement,
+  onReload,
 }: {
   factures: Facture[]
   onEnregistrerPaiement?: (f: Facture) => void
+  onReload?: () => void
 }) {
   const locale = getLocale()
   const STATUT_LABELS = getStatutLabels(locale)
+  const [validating, setValidating] = useState<string | null>(null)
+
+  const validerBrouillon = async (f: Facture) => {
+    if (!confirm(`Valider la facture ${f.numero_facture || ''} ?\nElle passera en "En attente" et déclenchera les écritures comptables.`)) return
+    setValidating(f.id)
+    try {
+      const res = await fetch('/api/client/factures', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: f.id, statut: 'en_attente' }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || 'Erreur validation')
+      }
+      onReload?.()
+    } catch (e: any) {
+      alert(`❌ ${e?.message || 'Erreur validation'}`)
+    } finally {
+      setValidating(null)
+    }
+  }
+
   if (factures.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
@@ -517,7 +542,10 @@ function FactureList({
         const totalMur = Number(f.montant_mur) || Number(f.montant_ttc) || 0
         const soldeMur = f.solde_non_paye == null ? totalMur : Number(f.solde_non_paye)
         const pctPaye = totalMur > 0 ? Math.round(((totalMur - soldeMur) / totalMur) * 100) : 0
-        const canPay = f.statut !== "paye" && f.statut !== "annule" && totalMur > 0
+        const isBrouillon = f.statut === "brouillon"
+        // canPay : enregistrer paiement n'a de sens que sur factures finalisées.
+        // Brouillon/annulée/déjà payée → bouton masqué.
+        const canPay = !isBrouillon && f.statut !== "paye" && f.statut !== "annule" && totalMur > 0
         return (
           <div
             key={f.id}
@@ -613,7 +641,34 @@ function FactureList({
                   depuis la DB via ?facture_id=, l'impression PDF passe
                   par /api/client/factures/[id]/pdf (avec refresh=1 pour
                   forcer la régénération si gabarit/contenu modifié). */}
-              <div className="flex gap-1 mt-1">
+              <div className="flex gap-1 mt-1 flex-wrap justify-end">
+                {/* Brouillon : actions spécifiques Modifier + Valider en premier
+                    (avant Aperçu/PDF) pour les mettre en avant — c'est ce que
+                    l'utilisateur va vouloir faire prioritairement sur un draft. */}
+                {isBrouillon && (
+                  <>
+                    <Link href={`/client/nouvelle-facture?id=${f.id}`}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[11px] border-slate-300"
+                        title="Modifier ce brouillon"
+                      >
+                        ✏️ Modifier
+                      </Button>
+                    </Link>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px] border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                      title="Valider et passer en En attente"
+                      disabled={validating === f.id}
+                      onClick={() => validerBrouillon(f)}
+                    >
+                      {validating === f.id ? '…' : '✓ Valider'}
+                    </Button>
+                  </>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
