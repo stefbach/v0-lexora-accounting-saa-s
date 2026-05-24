@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { validateRocBoardComposition } from '@/lib/mra/roc-validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,6 +45,14 @@ export async function POST(request: Request) {
     }
 
     if (['submit_review', 'approve', 'submit_mra'].includes(action)) {
+      // Companies Act 2001 s.223 — bloquer le passage si directors/shareholders absents
+      // ou si la répartition d'actionnariat ne fait pas 100%.
+      if (action === 'submit_review') {
+        const { data: rocRow } = await supabase.from('roc_annual_returns')
+          .select('directors, shareholders').eq('societe_id', societe_id).eq('exercice', exercice).single()
+        const check = validateRocBoardComposition(rocRow?.directors, rocRow?.shareholders)
+        if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 })
+      }
       const updateFields: any = { updated_at: new Date().toISOString() }
       if (action === 'submit_review') { updateFields.statut = 'review'; updateFields.reviewer_id = user.id }
       if (action === 'approve')       { updateFields.statut = 'approved'; updateFields.approver_id = user.id }

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, AlertCircle, Building2, Check, Send } from 'lucide-react'
+import { Loader2, AlertCircle, Building2, Check, Send, Plus, X, Users, PieChart } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
 import { t, getLocale, type Locale } from '@/lib/i18n'
 
@@ -26,7 +26,52 @@ export default function MraRocPage() {
     date_anniversaire: '', registered_office_address: '',
     board_meetings_count: 0, agm_held: false, agm_date: '', auditor_name: '',
     share_capital_authorized: 0, share_capital_issued: 0, notes: '',
+    directors: [] as Array<any>,
+    shareholders: [] as Array<any>,
   })
+
+  // ── Directors / Shareholders (Companies Act s.223) ───────────────────────
+  const addDirector = () => setForm((f: any) => ({
+    ...f,
+    directors: [
+      ...(f.directors || []),
+      { name: '', nic: '', nationality: 'MU', date_appointed: '', resigned: false, address: '' },
+    ],
+  }))
+  const updateDirector = (i: number, key: string, value: any) => setForm((f: any) => {
+    const arr = [...(f.directors || [])]
+    arr[i] = { ...arr[i], [key]: value }
+    return { ...f, directors: arr }
+  })
+  const removeDirector = (i: number) => setForm((f: any) => ({
+    ...f,
+    directors: (f.directors || []).filter((_: any, j: number) => j !== i),
+  }))
+
+  const addShareholder = () => setForm((f: any) => ({
+    ...f,
+    shareholders: [
+      ...(f.shareholders || []),
+      { name: '', brn_or_nic: '', shares: 0, pct: 0, type: 'ordinary' },
+    ],
+  }))
+  const updateShareholder = (i: number, key: string, value: any) => setForm((f: any) => {
+    const arr = [...(f.shareholders || [])]
+    arr[i] = { ...arr[i], [key]: value }
+    return { ...f, shareholders: arr }
+  })
+  const removeShareholder = (i: number) => setForm((f: any) => ({
+    ...f,
+    shareholders: (f.shareholders || []).filter((_: any, j: number) => j !== i),
+  }))
+
+  const totalPct = (form.shareholders || []).reduce(
+    (sum: number, s: any) => sum + (Number(s.pct) || 0),
+    0,
+  )
+  const pctOk = Math.abs(totalPct - 100) <= 0.5 && (form.shareholders || []).length > 0
+  const directorsOk = (form.directors || []).some((d: any) => (d?.name || '').trim().length > 0)
+  const canSubmitReview = directorsOk && pctOk
 
   const load = async () => {
     if (!societeId) { setLoading(false); return }
@@ -84,11 +129,179 @@ export default function MraRocPage() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-2 flex-wrap">
+      {/* Directors — Companies Act 2001 s.223(1)(a) */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Users className="h-4 w-4 text-slate-600" />
+            Administrateurs ({(form.directors || []).length})
+          </CardTitle>
+          <Button size="sm" variant="outline" onClick={addDirector} aria-label="Ajouter un administrateur">
+            <Plus className="h-4 w-4 mr-1" /> Ajouter
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {(form.directors || []).length === 0 && (
+            <p className="text-sm text-amber-700 italic">
+              Aucun administrateur saisi — Companies Act s.223 requiert au moins un directeur nommé.
+            </p>
+          )}
+          <div className="space-y-2">
+            {(form.directors || []).map((d: any, i: number) => (
+              <div key={i} className="grid grid-cols-12 gap-2 p-2 border rounded bg-slate-50/50">
+                <input
+                  placeholder="Prénom"
+                  value={d.first_name || ''}
+                  onChange={e => updateDirector(i, 'first_name', e.target.value)}
+                  className="col-span-2 border rounded px-2 py-1 text-sm"
+                />
+                <input
+                  placeholder="Nom"
+                  value={d.name || ''}
+                  onChange={e => updateDirector(i, 'name', e.target.value)}
+                  className="col-span-2 border rounded px-2 py-1 text-sm"
+                />
+                <input
+                  placeholder="NIC / Passeport"
+                  value={d.nic || ''}
+                  onChange={e => updateDirector(i, 'nic', e.target.value)}
+                  className="col-span-2 border rounded px-2 py-1 text-sm"
+                />
+                <input
+                  type="date"
+                  title="Date de nomination"
+                  value={d.date_appointed || ''}
+                  onChange={e => updateDirector(i, 'date_appointed', e.target.value)}
+                  className="col-span-2 border rounded px-2 py-1 text-sm"
+                />
+                <label className="col-span-3 flex items-center gap-1 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={!!d.resigned}
+                    onChange={e => updateDirector(i, 'resigned', e.target.checked)}
+                  />
+                  Démissionnaire
+                </label>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="col-span-1 text-red-600 hover:text-red-700"
+                  onClick={() => removeDirector(i)}
+                  aria-label={`Supprimer le directeur ${i + 1}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <input
+                  placeholder="Adresse complète"
+                  value={d.address || ''}
+                  onChange={e => updateDirector(i, 'address', e.target.value)}
+                  className="col-span-12 border rounded px-2 py-1 text-sm"
+                />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Shareholders — Companies Act 2001 s.223(1)(b) */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <PieChart className="h-4 w-4 text-slate-600" />
+            Actionnaires ({(form.shareholders || []).length})
+            <Badge className={pctOk ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}>
+              Total {totalPct.toFixed(2)}%
+            </Badge>
+          </CardTitle>
+          <Button size="sm" variant="outline" onClick={addShareholder} aria-label="Ajouter un actionnaire">
+            <Plus className="h-4 w-4 mr-1" /> Ajouter
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {(form.shareholders || []).length === 0 && (
+            <p className="text-sm text-amber-700 italic">
+              Aucun actionnaire saisi — Companies Act s.223 requiert la liste des membres.
+            </p>
+          )}
+          <div className="space-y-2">
+            {(form.shareholders || []).map((s: any, i: number) => (
+              <div key={i} className="grid grid-cols-12 gap-2 p-2 border rounded bg-slate-50/50 items-center">
+                <input
+                  placeholder="Nom / dénomination"
+                  value={s.name || ''}
+                  onChange={e => updateShareholder(i, 'name', e.target.value)}
+                  className="col-span-4 border rounded px-2 py-1 text-sm"
+                />
+                <input
+                  placeholder="BRN / NIC"
+                  value={s.brn_or_nic || ''}
+                  onChange={e => updateShareholder(i, 'brn_or_nic', e.target.value)}
+                  className="col-span-2 border rounded px-2 py-1 text-sm"
+                />
+                <input
+                  type="number"
+                  placeholder="Nb parts"
+                  value={s.shares ?? 0}
+                  onChange={e => updateShareholder(i, 'shares', parseInt(e.target.value) || 0)}
+                  className="col-span-2 border rounded px-2 py-1 text-sm"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="%"
+                  value={s.pct ?? 0}
+                  onChange={e => updateShareholder(i, 'pct', parseFloat(e.target.value) || 0)}
+                  className="col-span-1 border rounded px-2 py-1 text-sm"
+                />
+                <select
+                  value={s.type || 'ordinary'}
+                  onChange={e => updateShareholder(i, 'type', e.target.value)}
+                  className="col-span-2 border rounded px-2 py-1 text-sm"
+                  aria-label="Type d'action"
+                >
+                  <option value="ordinary">Ordinaire</option>
+                  <option value="preference">Préférentielle</option>
+                </select>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="col-span-1 text-red-600 hover:text-red-700"
+                  onClick={() => removeShareholder(i)}
+                  aria-label={`Supprimer l'actionnaire ${i + 1}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          {(form.shareholders || []).length > 0 && !pctOk && (
+            <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Total % actions = {totalPct.toFixed(2)}% — doit atteindre 100% pour soumission review.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex gap-2 flex-wrap items-center">
         <Button onClick={save} className="bg-slate-700 hover:bg-slate-800 text-white">{t('mra.roc.save', locale)}</Button>
-        {roc?.statut === 'draft' && <Button onClick={() => doAction('submit_review')} variant="outline">{t('mra.roc.submit_review', locale)}</Button>}
+        {roc?.statut === 'draft' && (
+          <Button
+            onClick={() => doAction('submit_review')}
+            variant="outline"
+            disabled={!canSubmitReview}
+            title={!canSubmitReview ? 'Renseigner au moins 1 directeur nommé et un actionnariat = 100%' : ''}
+          >
+            {t('mra.roc.submit_review', locale)}
+          </Button>
+        )}
         {roc?.statut === 'review' && <Button onClick={() => doAction('approve')} variant="outline" className="text-emerald-700"><Check className="h-4 w-4 mr-2" />{t('mra.roc.approve', locale)}</Button>}
         {roc?.statut === 'approved' && <Button onClick={() => doAction('submit_mra')} className="bg-indigo-600 hover:bg-indigo-700 text-white"><Send className="h-4 w-4 mr-2" />{t('mra.roc.submit_mra', locale)}</Button>}
+        {!canSubmitReview && roc?.statut === 'draft' && (
+          <span className="text-xs text-slate-500 italic">
+            Companies Act s.223 — directors ≥ 1 et somme actions = 100%
+          </span>
+        )}
       </div>
     </div>
   )

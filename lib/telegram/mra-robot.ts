@@ -246,3 +246,90 @@ export async function submitMraDeclaration(input: MraSubmitInput): Promise<MraSu
     if (session) await session.close()
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Thin typed wrappers — préférés par les routes API pour CIT/TDS
+//
+//  Pourquoi des wrappers ? Le `submitMraDeclaration` générique est très
+//  permissif (5 types, structure files libre). Pour CIT et TDS — les deux
+//  déclarations branchées Wave 2-D problème 1A — on veut un payload TYPÉ qui
+//  documente exactement ce que l'appelant doit fournir et qui empêche les
+//  bugs du type « j'ai passé un CSV au lieu d'un XML CIT ».
+//
+//  Tests : voir lib/telegram/mra-robot.test.ts (mock du robot — pas d'appel
+//  réel MRA, car le robot ouvre Chromium et écrit en base).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CitSubmitPayload = {
+  societe_id: string
+  /** "2024-2025" — exercice fiscal (juillet→juin par défaut) */
+  exercice: string
+  /** XML CIT généré via lib/accounting/mra-xml.ts → generateCitXml() */
+  xml: string
+}
+
+export type TdsSubmitPayload = {
+  societe_id: string
+  /** "YYYY-MM" — période mensuelle (TDS se déclare mensuellement) */
+  periode: string
+  /** CSV TDS généré via lib/accounting/tds.ts → generateTdsCsv() */
+  csv: string
+}
+
+/**
+ * Soumet une déclaration CIT à eservices38.mra.mu via Playwright.
+ *
+ * Délègue à `submitMraDeclaration({ type: 'cit', … })` avec un fichier XML
+ * unique nommé `cit_<exercice>.xml`. Renvoie le résultat brut du robot
+ * (success / failed / manual_needed + ack_ref + screenshot_b64).
+ *
+ * L'appelant (route API submit) est responsable :
+ *   1. d'avoir préalablement validé que cit_returns.statut = 'approved'
+ *      (workflow 4-yeux : draft → review → approved → submitted)
+ *   2. d'écrire le résultat (ack_ref, screenshot, statut) en base
+ *   3. de gérer le cas `manual_needed` (les fichiers partent déjà en PJ
+ *      Telegram via le robot — l'utilisateur saisira la ack_ref reçue)
+ */
+export async function submitCIT(payload: CitSubmitPayload): Promise<MraSubmitResult> {
+  if (!payload.xml || payload.xml.trim().length === 0) {
+    return { status: 'failed', message: 'XML CIT vide', error: 'empty_xml' }
+  }
+  return submitMraDeclaration({
+    societe_id: payload.societe_id,
+    type: 'cit',
+    periode: payload.exercice,
+    files: [{
+      filename: `cit_${payload.exercice}.xml`,
+      content: payload.xml,
+    }],
+  })
+}
+
+/**
+ * Soumet une déclaration TDS mensuelle à eservices.mra.mu via Playwright.
+ *
+ * TDS = Tax Deducted at Source (ITA s.111E). Déclaration mensuelle obligatoire
+ * pour les sociétés ayant retenu du TDS sur paiements à fournisseurs
+ * (loyers, professions libérales, sous-traitance, etc.) — voir lib/accounting/tds.ts.
+ *
+ * Format MRA : CSV avec colonnes (TAN payeur, NIC bénéficiaire, montant brut,
+ * taux, TDS retenu, date paiement). Le CSV est généré par generateTdsCsv().
+ */
+export async function submitTDS(payload: TdsSubmitPayload): Promise<MraSubmitResult> {
+  if (!payload.csv || payload.csv.trim().length === 0) {
+    return { status: 'failed', message: 'CSV TDS vide', error: 'empty_csv' }
+  }
+  // Validation périodicité MRA : YYYY-MM strict
+  if (!/^\d{4}-\d{2}$/.test(payload.periode)) {
+    return { status: 'failed', message: `Période TDS invalide : ${payload.periode} (attendu YYYY-MM)`, error: 'invalid_periode' }
+  }
+  return submitMraDeclaration({
+    societe_id: payload.societe_id,
+    type: 'tds',
+    periode: payload.periode,
+    files: [{
+      filename: `tds_${payload.periode}.csv`,
+      content: payload.csv,
+    }],
+  })
+}

@@ -28,6 +28,7 @@ import { Calculator, FileText, Save, Download, Loader2, Upload, CheckCircle, Ale
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale } from "@/lib/i18n"
+import { computeCSR } from "@/lib/accounting/mra-csr"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -271,7 +272,15 @@ export default function ITForm3Page() {
     // basé sur l'IT Form 3 N-1.
     const isAps = revenuAffaires > 10_000_000 || (priorYearData?.impotCalcule || 0) > 50_000
     const quarterly = isAps ? impot / 4 : 0
-    const csr = revImp > 10_000_000 ? revImp * 0.02 : 0
+    // CSR = 2 % du chargeable income (ITA s.50L). Applicable à toutes
+    // les sociétés résidentes, SAUF catégories exonérées (GBC1,
+    // Authorised Company, Freeport, exonérées d'IS, production
+    // audiovisuelle). L'exonération n'est PAS basée sur un seuil de
+    // revenu. Cf. lib/accounting/mra-csr.ts et docs/audit-partials/
+    // wave2-D-mra-fiscal.md Pb 2.b.
+    const regime = (societe as { regime?: string | null } | null)?.regime ?? null
+    const csrOverride = (societe as { csr_exempt?: boolean } | null)?.csr_exempt === true
+    const csr = computeCSR(revImp, regime, csrOverride)
     // Solde = impôt + CSR − APS payé d'avance − TDS retenu à la source
     // par les clients (sur honoraires, loyers, etc. — ITA s.111A et 124)
     const solde = impot + csr - apsPayé - tdsPaye
