@@ -48,9 +48,11 @@ import {
   AlertTriangle,
   Calculator,
   Check,
+  History,
   Info,
   Loader2,
   Plus,
+  RefreshCw,
   Save,
   Trash2,
 } from 'lucide-react'
@@ -83,6 +85,17 @@ interface EmployeActif {
 
 interface Props {
   societeId: string | null   // null → état "société non sélectionnée"
+}
+
+interface OTHistoriqueLigne {
+  id: string
+  employe_id: string
+  employe_nom: string
+  date: string
+  heures_ot_1_5: number
+  heures_ot_2: number
+  montant_ot: number
+  statut_jour: string | null
 }
 
 // ─── Constantes ─────────────────────────────────────────────────────────────
@@ -125,13 +138,6 @@ function fmtHeures(n: number): string {
   // Affichage 1 décimale max, sans zéro inutile : "9", "4.5", "2.5"
   const s = n.toFixed(1)
   return (s.endsWith('.0') ? s.slice(0, -2) : s) + 'h'
-}
-
-function lastDayOfPeriode(periode: string): string {
-  const [y, m] = periode.split('-').map(Number)
-  if (!y || !m) return periode
-  const last = new Date(y, m, 0).getDate()
-  return `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`
 }
 
 function moisOptions(): Array<{ value: string; label: string }> {
@@ -184,6 +190,8 @@ export function SectionOvertime({ societeId }: Props) {
   const [validatedSuggestions, setValidatedSuggestions] = useState<Set<string>>(
     () => new Set(),
   )
+  const [historique, setHistorique] = useState<OTHistoriqueLigne[]>([])
+  const [loadingHistorique, setLoadingHistorique] = useState(false)
 
   // Charger employés actifs au changement de société.
   useEffect(() => {
@@ -225,12 +233,42 @@ export function SectionOvertime({ societeId }: Props) {
     return () => { cancelled = true }
   }, [societeId])
 
-  // Reset preview + saisies si la période change (les dates seraient invalides).
+  // Reset preview + saisies si la période change. Les dates restent
+  // valides (saisie libre depuis mig 435) mais on évite de mélanger le
+  // brouillon d'un mois avec l'autre — clearer côté UX.
   useEffect(() => {
     setPreview(null)
     setSaisies([])
     setValidatedSuggestions(new Set())
   }, [periode])
+
+  // Charger l'historique des OT enregistrées pour ce bulletin cible.
+  const loadHistorique = useCallback(async () => {
+    if (!societeId || !periode) return
+    setLoadingHistorique(true)
+    try {
+      const url = `/api/rh/paie/ot/historique?societe_id=${encodeURIComponent(societeId)}&periode=${encodeURIComponent(periode)}`
+      const res = await fetch(url)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Erreur réseau' }))
+        if (err.code === 'MIGRATION_MISSING') {
+          notifyWarning('Historique OT indisponible : migration 435 non appliquée en prod.')
+        }
+        setHistorique([])
+        return
+      }
+      const data = await res.json()
+      setHistorique(Array.isArray(data.lignes) ? data.lignes : [])
+    } catch {
+      setHistorique([])
+    } finally {
+      setLoadingHistorique(false)
+    }
+  }, [societeId, periode])
+
+  useEffect(() => {
+    loadHistorique()
+  }, [loadHistorique])
 
   // Maps de lookup rapide.
   const employesById = useMemo(() => {
@@ -389,6 +427,10 @@ export function SectionOvertime({ societeId }: Props) {
         } else {
           notifySuccess(`${nbBul} bulletin(s) mis à jour, ${nbUps} ligne(s) journalière(s) enregistrée(s).`)
         }
+        // Vider le brouillon et recharger l'historique pour refléter
+        // immédiatement ce qui vient d'être persisté.
+        setSaisies([])
+        loadHistorique()
         return
       }
       const err = await res.json().catch(() => ({ error: 'Erreur réseau' }))
@@ -421,7 +463,7 @@ export function SectionOvertime({ societeId }: Props) {
     } finally {
       setSaving(false)
     }
-  }, [societeId, periode, lignesValidesPourSave, employesById])
+  }, [societeId, periode, lignesValidesPourSave, employesById, loadHistorique])
 
   // ─── Calculs récap ────────────────────────────────────────────────────────
 
@@ -437,9 +479,6 @@ export function SectionOvertime({ societeId }: Props) {
     for (const s of lignesValidesPourSave) set.add(s.employe_id)
     return set.size
   }, [lignesValidesPourSave])
-
-  const dateMin = periode
-  const dateMax = lastDayOfPeriode(periode)
 
   // ─── Suggestions / alertes dérivées ──────────────────────────────────────
 
@@ -482,7 +521,8 @@ export function SectionOvertime({ societeId }: Props) {
       <CardHeader>
         <CardTitle>Heures supplémentaires</CardTitle>
         <p className="text-sm text-gray-600 mt-1">
-          Saisie détaillée par date — calcul WRA 2019 (×1.5 et ×2)
+          Saisie libre date par date — payable sur le bulletin de votre choix
+          (calcul WRA 2019, ×1.5 et ×2)
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -490,7 +530,7 @@ export function SectionOvertime({ societeId }: Props) {
         {/* Zone 1 : période + bouton */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Période :</span>
+            <span className="text-sm font-medium">Bulletin cible :</span>
             <Select value={periode} onValueChange={setPeriode}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue />
@@ -574,10 +614,92 @@ export function SectionOvertime({ societeId }: Props) {
           </div>
         )}
 
+        {/* Zone 3bis : historique des OT déjà enregistrées sur ce bulletin */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4 text-gray-500" />
+              <h3 className="text-sm font-medium">
+                OT déjà enregistrées sur ce bulletin
+                {historique.length > 0 && (
+                  <span className="ml-2 text-xs text-gray-500 font-normal">
+                    ({historique.length} ligne{historique.length > 1 ? 's' : ''},{' '}
+                    {fmtMUR(historique.reduce((s, h) => s + h.montant_ot, 0))} au total)
+                  </span>
+                )}
+              </h3>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={loadHistorique}
+              disabled={loadingHistorique}
+              aria-label="Rafraîchir l'historique"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${loadingHistorique ? 'animate-spin' : ''}`}
+              />
+            </Button>
+          </div>
+
+          {historique.length === 0 ? (
+            <p className="text-xs text-gray-500 italic py-3 text-center border border-dashed rounded-md">
+              {loadingHistorique
+                ? 'Chargement…'
+                : 'Aucune OT enregistrée sur ce bulletin pour le moment.'}
+            </p>
+          ) : (
+            <div className="border rounded-md overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[180px]">Employé</TableHead>
+                    <TableHead>Date OT</TableHead>
+                    <TableHead className="text-right">OT ×1.5</TableHead>
+                    <TableHead className="text-right">OT ×2</TableHead>
+                    <TableHead className="text-right">Montant</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historique.map(h => (
+                    <TableRow key={h.id}>
+                      <TableCell className="font-medium">{h.employe_nom}</TableCell>
+                      <TableCell className="tabular-nums">
+                        {h.date}
+                        {h.statut_jour === 'ferie' && (
+                          <span className="ml-1 text-[10px] uppercase tracking-wide text-amber-700">
+                            férié
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {h.heures_ot_1_5 > 0 ? fmtHeures(h.heures_ot_1_5) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {h.heures_ot_2 > 0 ? fmtHeures(h.heures_ot_2) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums font-medium">
+                        {fmtMUR(h.montant_ot)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+
         {/* Zone 4 : tableau saisie */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">OT validés à payer</h3>
+            <div>
+              <h3 className="text-sm font-medium">OT à payer sur ce bulletin</h3>
+              <p className="text-xs text-gray-500">
+                La date de l'OT peut être de n'importe quel mois — elle sera
+                payée sur le bulletin sélectionné ci-dessus.
+              </p>
+            </div>
             <Button type="button" variant="outline" size="sm" onClick={addLigne}>
               <Plus className="h-4 w-4 mr-1" />
               Ajouter une ligne
@@ -642,8 +764,6 @@ export function SectionOvertime({ societeId }: Props) {
                           <Input
                             type="date"
                             className="h-8"
-                            min={dateMin}
-                            max={dateMax}
                             value={ligne.date}
                             onChange={e => updateLigne(ligne.id, { date: e.target.value })}
                           />
@@ -708,7 +828,7 @@ export function SectionOvertime({ societeId }: Props) {
         {/* Zone 5 : récap + sauver */}
         <div className="flex flex-wrap items-center gap-4 pt-4 border-t">
           <div className="text-sm">
-            <span className="text-gray-600">Total OT du mois : </span>
+            <span className="text-gray-600">Total à payer sur ce bulletin : </span>
             <span className="font-semibold tabular-nums">{fmtMUR(totalMontant)}</span>
           </div>
           <div className="text-sm">

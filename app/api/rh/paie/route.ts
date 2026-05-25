@@ -711,8 +711,10 @@ export async function POST(request: Request) {
       // calcul auto depuis pointages. Le night shift S.20 (ajouté plus
       // bas) reste cumulé — c'est une allowance distincte de l'OT.
       {
+        // Source de vérité : périmètre bulletin (periode_paiement) et non
+        // plus fenêtre de dates physiques (mig 435 — découplage date/bulletin).
         const otFromHeuresTravaillees = await lireMontantOTDuMois(
-          supabase, emp.id, periodeStartSingle, periodeEndSingle,
+          supabase, emp.id, `${periodeStr}-01`,
         )
         if (otFromHeuresTravaillees > 0) {
           console.log(
@@ -1753,8 +1755,10 @@ export async function POST(request: Request) {
         // night shift S.20 (ajouté plus bas) reste cumulé — c'est une
         // allowance distincte de l'OT.
         {
+          // Source de vérité : périmètre bulletin (periode_paiement) et non
+          // plus fenêtre de dates physiques (mig 435 — découplage date/bulletin).
           const otFromHeuresTravaillees = await lireMontantOTDuMois(
-            supabase, emp.id, periodeStartBatch, periodeEndBatch,
+            supabase, emp.id, `${periodeStr}-01`,
           )
           if (otFromHeuresTravaillees > 0) {
             console.log(

@@ -58,6 +58,30 @@ changement de schéma ou de données via `apply_migration` / `execute_sql`
 impacte directement la prod — pas de staging. Confirmer avec
 l'utilisateur avant tout DDL ou UPDATE/DELETE de masse.
 
+### ⚠️ Vérifier que les migrations sont appliquées AVANT de coder
+
+**Leçon Alicia (mai 2026)** : la mig 281 (`employes.breakdown_depart`)
+et la 430 (`bulletins_paie.breakdown_json` + `type_bulletin`) avaient
+été créées dans le repo mais jamais appliquées en prod. Le code faisait
+un fallback silencieux qui masquait l'erreur "colonne inexistante" et
+perdait silencieusement le breakdown édité du STC. Symptôme : PDF
+téléchargé affichait 30 701 MUR au lieu de 16 684,88 MUR confirmés
+à l'écran. Diagnostic : > 2 heures.
+
+**Procédure obligatoire avant de pousser du code qui dépend d'une migration** :
+
+1. Vérifier que la migration est appliquée en prod via
+   `GET /api/admin/migrations-audit` (endpoint admin, mig à inclure au
+   catalogue dans `app/api/admin/migrations-audit/route.ts` si elle est
+   critique).
+2. Si la migration N'EST PAS appliquée → l'appliquer via Supabase MCP
+   `apply_migration` AVANT de merger la PR.
+3. **NE JAMAIS** écrire de fallback silencieux qui masque une colonne
+   manquante — préférer renvoyer un 500 explicite avec
+   `code: 'MIGRATION_MISSING'` pour rendre le problème visible.
+4. Exemple correct : `app/api/rh/depart/route.ts` action
+   `confirmer_depart` (depuis le fix Alicia).
+
 ## 📦 Stack rapide
 
 - Next.js (App Router) + TypeScript + Tailwind + Radix UI

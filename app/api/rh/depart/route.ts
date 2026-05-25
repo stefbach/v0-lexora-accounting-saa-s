@@ -397,8 +397,17 @@ export async function POST(request: Request) {
       }
 
       // 1. Update employee record with departure info
-      // Try with all fields first, fallback to minimal if columns don't exist
-      let updateErr: any = null
+      //
+      // FIX-STC-MIG281 (cause bug Alicia 18/05/2026) — avant ce fix, un fallback
+      // silencieux retirait `breakdown_depart` du UPDATE quand la colonne
+      // n'existait pas. Conséquence : le breakdown édité (16 684,88 MUR avec
+      // ajustements) était PERDU sans erreur visible côté UI, et le PDF
+      // re-téléchargé montrait des données erronées (30 701 MUR).
+      //
+      // Comportement actuel : on tente le UPDATE complet. Si la colonne
+      // breakdown_depart n'existe pas, on refuse explicitement avec un
+      // 500 + code MIGRATION_MISSING — l'admin doit appliquer la mig 281
+      // avant que les départs puissent être confirmés avec breakdown.
       const { error: err1 } = await supabase
         .from('employes')
         .update({
@@ -410,28 +419,32 @@ export async function POST(request: Request) {
         .eq('id', employe_id)
 
       if (err1) {
-        console.warn('[depart] Full update failed, trying without breakdown:', err1.message)
-        // Fallback : la colonne breakdown_depart n'est pas encore migrée
-        const { error: err1b } = await supabase
-          .from('employes')
-          .update({
-            date_depart,
-            date_depart_type: type_depart,
-            raison_depart: raison_depart || null,
-          })
-          .eq('id', employe_id)
-        if (err1b) {
-          console.warn('[depart] Without breakdown still failed, trying minimal:', err1b.message)
-          // Fallback final : seulement date_depart (toujours présent)
-          const { error: err2 } = await supabase
-            .from('employes')
-            .update({ date_depart })
-            .eq('id', employe_id)
-          updateErr = err2
+        const msg = err1.message || ''
+        // Détection spécifique de la colonne breakdown_depart manquante (mig 281)
+        if (/column.*breakdown_depart.*(does not exist|n'existe pas)/i.test(msg)) {
+          console.error('[depart] MIG_281 NOT APPLIED — refusing to silently drop breakdown_depart:', msg)
+          return NextResponse.json({
+            error: 'Migration 281 (employes.breakdown_depart) non appliquée en base. Le breakdown édité ne peut pas être persisté sans cette colonne — le PDF généré serait incomplet. Contacter l\'admin DB pour appliquer supabase/migrations/281_employes_breakdown_depart.sql.',
+            code: 'MIGRATION_MISSING',
+            migration: '281_employes_breakdown_depart',
+            hint: 'Run: ALTER TABLE public.employes ADD COLUMN IF NOT EXISTS breakdown_depart JSONB;',
+          }, { status: 500 })
         }
+        // Autres colonnes possiblement manquantes (date_depart_type, raison_depart) :
+        // fallback restreint UNIQUEMENT à date_depart, mais avec une erreur
+        // 500 visible. On ne mange pas l'erreur silencieusement.
+        console.error('[depart] UPDATE failed (other column issue), falling back to date_depart only:', msg)
+        const { error: errFb } = await supabase
+          .from('employes')
+          .update({ date_depart })
+          .eq('id', employe_id)
+        if (errFb) throw errFb
+        return NextResponse.json({
+          error: `Échec partiel de l'update employé (${msg}). Le départ est marqué mais le breakdown/raison/type ne sont pas persistés.`,
+          code: 'UPDATE_PARTIAL_FAILURE',
+          original_error: msg,
+        }, { status: 500 })
       }
-
-      if (updateErr) throw updateErr
 
       // 2. Create final settlement bulletin_paie
       const periodeDate = date_depart.slice(0, 7) + '-01' // YYYY-MM-01
