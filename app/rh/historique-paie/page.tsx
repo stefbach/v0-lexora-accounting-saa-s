@@ -8,7 +8,13 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Loader2, Calendar, Users, Banknote, ChevronDown, ChevronRight, FileText, Download, ExternalLink, Archive, CheckCircle, BookOpen } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { DecomptabilisationDialog } from "@/components/rh/DecomptabilisationDialog"
+import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
+
+const DECOMPTA_ROLES = [
+  'admin', 'super_admin', 'rh', 'rh_manager', 'direction', 'client_admin',
+] as const
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -27,6 +33,19 @@ export default function HistoriquePaiePage() {
   // (versions précédentes d'un bulletin recalculé en cours de mois,
   // typiquement cas "sortie employé" comme Alicia Désiré).
   const [includeArchived, setIncludeArchived] = useState(false)
+
+  // FIX-DECOMPTA — rôle utilisateur pour conditionner l'affichage du bouton
+  // "Décomptabiliser" dans l'historique.
+  const [userRole, setUserRole] = useState<string>("")
+  useEffect(() => {
+    const sb = createClient()
+    sb.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      sb.from('profiles').select('role').eq('id', user.id).single()
+        .then(({ data }) => { if (data?.role) setUserRole(data.role) })
+    })
+  }, [])
+  const canDecomptabiliser = (DECOMPTA_ROLES as readonly string[]).includes(userRole)
 
   useEffect(() => {
     Promise.all([
@@ -293,10 +312,37 @@ export default function HistoriquePaiePage() {
                                 <td className="px-2 py-1.5 text-right font-mono text-orange-500">{fmt(b.prgf || 0)}</td>
                                 <td className="px-2 py-1.5 text-right font-mono font-bold text-emerald-700">{fmt(b.salaire_net || 0)}</td>
                                 <td className="px-2 py-1.5 text-center">
-                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0"
-                                    onClick={() => window.open(`/rh/employes/${b.employe_id}`, '_blank')}>
-                                    <ExternalLink className="h-3 w-3" />
-                                  </Button>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0"
+                                      onClick={() => window.open(`/rh/employes/${b.employe_id}`, '_blank')}>
+                                      <ExternalLink className="h-3 w-3" />
+                                    </Button>
+                                    {/* FIX-DECOMPTA — décomptabilisation accessible RH+direction */}
+                                    {b.comptabilise && canDecomptabiliser && (
+                                      <DecomptabilisationDialog
+                                        bulletinId={b.id}
+                                        bulletin={{
+                                          id: b.id,
+                                          employe_nom: `${b.employe?.prenom || ''} ${b.employe?.nom || ''}`.trim(),
+                                          periode: b.periode || (expanded || '').slice(0, 7),
+                                          salaire_brut: b.salaire_brut || 0,
+                                          salaire_net: b.salaire_net || 0,
+                                          ecriture_id: b.ecriture_id || null,
+                                          comptabilise_at: b.comptabilise_at || null,
+                                        }}
+                                        onSuccess={() => {
+                                          // Re-fetch détail sans collapser la section dépliée.
+                                          if (!expanded) return
+                                          const archivedQs = includeArchived ? '&include_archived=true' : ''
+                                          fetch(`/api/rh/paie?societe_id=${societe}&periode=${expanded.slice(0, 7)}${archivedQs}`)
+                                            .then(r => r.json())
+                                            .then(d => setDetail((d.bulletins || []).slice()))
+                                            .catch(() => { /* noop */ })
+                                          load()
+                                        }}
+                                      />
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             ))}
