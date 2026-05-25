@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, Car, Plus, CheckCircle, Edit2, Save, DollarSign } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale, type Locale } from "@/lib/i18n"
+import { CalculDistanceWidget } from "@/components/rh/CalculDistanceWidget"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -289,6 +290,18 @@ export default function FraisKmPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Widget calcul distance — saisie manuelle 2 adresses (alternative au GPS) */}
+      <CalculDistanceWidget
+        onDistanceCalculated={(km) => {
+          // Pré-remplit le dialog d'ajout avec la distance calculée.
+          // L'utilisateur n'a plus qu'à choisir l'employé et valider.
+          setEditingFrais(null)
+          setFormEmploye("")
+          setFormKm(km.toFixed(1))
+          setDialogOpen(true)
+        }}
+      />
 
       {/* Table */}
       <Card>
