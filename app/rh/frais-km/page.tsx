@@ -336,7 +336,22 @@ export default function FraisKmPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError('Ajouter trajet', data.error || `HTTP ${res.status}`)
+        // FIX-X (mai 2026) — toast détaillé pour aider le diagnostic en
+        // prod. Avant : message générique "HTTP 500" qui ne disait rien à
+        // l'utilisateur. Maintenant on map les codes Postgres usuels et on
+        // log le payload complet en console pour le support.
+        const code = (data as { code?: string }).code
+        const details = (data as { details?: string; error?: string; hint?: string })
+        const msg =
+          code === '42P01'
+            ? 'Table trajets absente — la migration 426/428 doit être appliquée en prod'
+            : code === '42501'
+            ? 'Permissions insuffisantes pour ajouter un trajet (RLS)'
+            : code === '23505'
+            ? 'Trajet en doublon (contrainte d\'unicité)'
+            : (details.details || details.error || details.hint || `HTTP ${res.status}`)
+        notifyError('Ajouter trajet', msg)
+        console.error('[addTrajet] error:', data)
         return
       }
       notifySuccess('Trajet ajouté')

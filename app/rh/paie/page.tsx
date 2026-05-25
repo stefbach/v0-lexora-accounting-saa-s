@@ -626,6 +626,19 @@ export default function PaiePage() {
   }
 
   const [recalcId, setRecalcId] = useState<string | null>(null)
+
+  // FIX-SOLDE-STC — modal "employé sortant" : quand l'API renvoie 409 avec
+  // code=EMPLOYE_SORTANT (action `calculer` ou `calculer_batch` sur un
+  // employé dont date_depart tombe dans la période), on redirige le RH
+  // vers /rh/depart au lieu d'afficher une alerte technique.
+  const [sortantModal, setSortantModal] = useState<{
+    employe_id: string
+    employe_nom: string
+    date_depart: string
+    redirect_url: string
+    hint?: string
+  } | null>(null)
+
   const recalculerEmploye = async (employe_id: string) => {
     if (societe === "all") return
     const emp = bulletins.find(b => b.employe_id === employe_id)
@@ -636,6 +649,21 @@ export default function PaiePage() {
     // état stale, etc.).
     if (emp?.comptabilise) {
       alert(`Bulletin de ${nomComplet} déjà comptabilisé — modification interdite. Voir les écritures liées ou décomptabiliser (admin).`)
+      return
+    }
+    // FIX-SOLDE-STC — pré-check côté client : si l'employé est sortant ce
+    // mois, on déclenche directement la modal "module Départ" sans aller
+    // taper l'API (UX plus rapide). L'API reste source de vérité — voir
+    // gestion 409/EMPLOYE_SORTANT plus bas.
+    const empSortant = employesSortants.find(e => e.id === employe_id)
+    if (empSortant) {
+      setSortantModal({
+        employe_id,
+        employe_nom: `${empSortant.prenom} ${empSortant.nom}`,
+        date_depart: empSortant.date_depart,
+        redirect_url: `/rh/depart?employe_id=${employe_id}`,
+        hint: "Le bulletin paie normal ne peut pas être généré pour un employé sortant. Le solde tout compte inclut salaire prorata + indemnités (préavis, licenciement) + 13e prorata + AL payée.",
+      })
       return
     }
     if (!confirm(t('rha.a.paie.confirm_recalc_employe', locale).replace('{nom}', nomComplet))) return
@@ -649,6 +677,15 @@ export default function PaiePage() {
       // FIX-IMMUTABLE — 409 = bulletin comptabilisé, message dédié au lieu d'une alerte générique
       if (res.status === 409 && data?.code === 'BULLETIN_COMPTABILISE') {
         alert(`Bulletin de ${nomComplet} déjà comptabilisé — modification interdite.\n${data.hint || ''}`)
+      } else if (res.status === 409 && data?.code === 'EMPLOYE_SORTANT') {
+        // FIX-SOLDE-STC — l'API a refusé : ouvrir la modal de redirection.
+        setSortantModal({
+          employe_id,
+          employe_nom: data.employe_nom || nomComplet,
+          date_depart: data.date_depart,
+          redirect_url: data.redirect_url || `/rh/depart?employe_id=${employe_id}`,
+          hint: data.hint,
+        })
       } else if (!res.ok) {
         alert(data.error || t('rha.a.paie.err_generic', locale))
       }
@@ -1550,6 +1587,55 @@ export default function PaiePage() {
             })()}
           </TabsContent>
         </Tabs>
+
+        {/* FIX-SOLDE-STC — Modal "Employé sortant" : se déclenche quand on
+            tente de recalculer un bulletin pour un employé dont date_depart
+            tombe dans la période. Renvoie vers /rh/depart pour calculer un
+            vrai solde tout compte (préavis + indemnité + 13e prorata + AL). */}
+        {sortantModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 border-2 border-amber-300">
+              <div className="flex items-start gap-3 mb-4">
+                <AlertTriangle className="w-6 h-6 text-amber-600 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-amber-900">
+                    Employé sortant — utiliser le module Départ
+                  </h3>
+                  <p className="text-sm text-gray-700 mt-1">
+                    <span className="font-semibold">{sortantModal.employe_nom}</span> est sorti le{' '}
+                    <span className="font-semibold">
+                      {new Date(sortantModal.date_depart + 'T12:00:00').toLocaleDateString(
+                        locale === 'en' ? 'en-GB' : 'fr-FR',
+                        { day: '2-digit', month: '2-digit', year: 'numeric' },
+                      )}
+                    </span>
+                    .
+                  </p>
+                </div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900 mb-4">
+                {sortantModal.hint ||
+                  "Le bulletin paie normal ne peut pas être généré pour un employé sortant. Le solde tout compte inclut salaire prorata + indemnités (préavis, licenciement) + 13e prorata + AL payée."}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setSortantModal(null)}>
+                  Annuler
+                </Button>
+                <Button
+                  style={{ backgroundColor: NAVY, color: 'white' }}
+                  onClick={() => {
+                    const url = sortantModal.redirect_url
+                    setSortantModal(null)
+                    router.push(url)
+                  }}
+                >
+                  Ouvrir le module Départ
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </TooltipProvider>
     </ClientPageShell>
