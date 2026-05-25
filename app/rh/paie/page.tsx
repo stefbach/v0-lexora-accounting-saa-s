@@ -1111,6 +1111,25 @@ export default function PaiePage() {
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUT_COLORS[b.statut] || ""}`}>{b.statut}</span>
+                          {/* FIX-STC-IDENTIQUE (mig 430) — badge Solde de Tout Compte
+                              + montant retenues manuelles si > 0 */}
+                          {b.type_bulletin === 'solde_tout_compte' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded font-medium cursor-help">
+                                  Solde de Tout Compte
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs text-xs">
+                                Bulletin de paie de sortie — IDENTIQUE au calcul STC affiché dans /rh/depart.
+                                {Number(b.retenues_manuelles) > 0 && (
+                                  <div className="mt-1 pt-1 border-t border-gray-400">
+                                    Retenues manuelles : <span className="font-mono font-bold">{fmt(b.retenues_manuelles)} MUR</span>
+                                  </div>
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                           {b.verrouille && <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-xs rounded gap-0.5 flex items-center"><Lock className="w-2.5 h-2.5" />{t('rha.a.paie.badge_lock', locale)}</span>}
                           {b.jours_absence > 0 && <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-xs rounded">{t('rha.a.paie.badge_jours_abs', locale).replace('{n}', String(b.jours_absence))}</span>}
                           {/* FIX-IMMUTABLE (mig 427) — badge enrichi avec date de comptabilisation

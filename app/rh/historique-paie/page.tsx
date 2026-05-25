@@ -270,6 +270,24 @@ export default function HistoriquePaiePage() {
                               >
                                 <td className="px-2 py-1.5 font-medium">
                                   {b.employe?.prenom} {b.employe?.nom}
+                                  {/* FIX-STC-IDENTIQUE (mig 430) — badge Solde de Tout Compte */}
+                                  {b.type_bulletin === 'solde_tout_compte' && (
+                                    <span
+                                      className="ml-1.5 inline-flex items-center px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded font-medium"
+                                      title={
+                                        Number(b.retenues_manuelles) > 0
+                                          ? `Solde de Tout Compte — retenues manuelles : ${Number(b.retenues_manuelles).toFixed(2)} MUR`
+                                          : 'Solde de Tout Compte — bulletin de paie de sortie identique au calcul /rh/depart'
+                                      }
+                                    >
+                                      Solde de Tout Compte
+                                      {Number(b.retenues_manuelles) > 0 && (
+                                        <span className="ml-1 font-mono">
+                                          (−{Number(b.retenues_manuelles).toFixed(0)})
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
                                   {b.is_archived && (
                                     <span
                                       className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-gray-200 text-gray-700 text-[10px] rounded font-medium"
