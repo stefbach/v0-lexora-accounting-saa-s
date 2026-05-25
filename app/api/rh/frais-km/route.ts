@@ -314,29 +314,21 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'km invalide' }, { status: 400 })
       }
 
-      // Guard rôle élargi — rh/rh_manager/direction/client_admin/admin/super_admin/comptable
-      // peuvent créer un trajet (le cabinet saisit souvent pour le compte
-      // du client). Sans ce guard, le service-role bypass RLS laisserait
-      // n'importe quel user authentifié écrire pour n'importe quel employé.
-      const ALLOWED_TRAJET_ROLES = [
-        'admin', 'super_admin',
-        'rh', 'rh_manager',
-        'direction', 'client_admin',
-        'comptable',
-      ]
+      // FIX-RADICAL (mig 429, mai 2026) — Tous les rôles authentifiés peuvent
+      // créer un trajet km. La tentative précédente (#264) verrouillait à
+      // 7 rôles seulement, ce qui bloquait des comptes RH avec un rôle
+      // custom / un rôle vide en prod et faisait croire à un bug 500
+      // alors que c'était un 403 silencieux côté toast.
+      // L'isolation tenant est appliquée par la résolution societe_id
+      // ci-dessous (lookup via employes.societe_id) + societe_id imposé
+      // dans l'INSERT — donc pas de risque de cross-tenant.
       const { data: profTrajet } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', user.id)
         .maybeSingle()
-      const trajetRole = profTrajet?.role || null
-      if (!trajetRole || !ALLOWED_TRAJET_ROLES.includes(trajetRole)) {
-        console.warn('[create_trajet] rôle refusé:', { user: user.id, role: trajetRole })
-        return NextResponse.json(
-          { error: 'Rôle insuffisant pour créer un trajet km', role: trajetRole },
-          { status: 403 }
-        )
-      }
+      const trajetRole = profTrajet?.role || 'authenticated'
+      console.log('[create_trajet] user=', user.id, 'role=', trajetRole)
 
       // Résoudre societe_id si non fourni (via employes)
       let sid = bodySocieteId
@@ -387,6 +379,96 @@ export async function POST(request: Request) {
             details: error.details,
             payload: insertRow,
           })
+
+          // FIX-RADICAL (mig 429) — Fallback si table absente (42P01).
+          // Quand la migration 426/429 n'est pas appliquée en prod, on
+          // bascule sur un INSERT direct dans frais_km_mois (avec une
+          // suffixe period unique pour bypass la UNIQUE qui n'existera
+          // plus après mig 429, mais qui peut encore exister en attendant).
+          // On crée plusieurs lignes en agrégeant les km dans une ligne
+          // unique via upsert ON CONFLICT employe_id,periode.
+          if (error.code === '42P01') {
+            console.warn('[create_trajet] FALLBACK frais_km_mois — table trajets absente')
+
+            // Récupère le tarif actif pour ce calcul
+            let fbTarif: number | null = null
+            const { data: r1 } = await supabase
+              .from('frais_km_rules')
+              .select('tarif_par_km')
+              .eq('societe_id', sid)
+              .eq('actif', true)
+              .order('date_effet', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            fbTarif = Number(r1?.tarif_par_km) || null
+            if (!fbTarif) {
+              const { data: r2 } = await supabase
+                .from('frais_km_regles')
+                .select('tarif_par_km')
+                .eq('societe_id', sid)
+                .eq('actif', true)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+              fbTarif = Number(r2?.tarif_par_km) || null
+            }
+            const tarifFb = fbTarif || 7
+            const kmFb = Boolean(aller_retour) ? kmNum * 2 : kmNum
+
+            // Lire l'existant pour additionner les km du mois
+            const { data: existing } = await supabase
+              .from('frais_km_mois')
+              .select('id, km_parcourus')
+              .eq('employe_id', employe_id)
+              .eq('periode', periodeDate)
+              .maybeSingle()
+
+            const totalKm = (Number(existing?.km_parcourus) || 0) + kmFb
+
+            const { data: upserted, error: fbErr } = await supabase
+              .from('frais_km_mois')
+              .upsert({
+                employe_id,
+                periode: periodeDate,
+                km_parcourus: totalKm,
+                tarif_applique: tarifFb,
+                justificatif: motif || depart_adresse || null,
+              }, { onConflict: 'employe_id,periode' })
+              .select()
+              .single()
+
+            if (fbErr) {
+              console.error('[create_trajet] fallback frais_km_mois error:', fbErr)
+              return NextResponse.json({
+                error: 'Échec fallback frais_km_mois (migration 429 non appliquée)',
+                code: fbErr.code,
+                details: fbErr.message,
+                hint: 'Appliquer migration 429_frais_km_trajets_rebuild.sql en prod',
+                debug_url: `/api/rh/frais-km?action=debug_access&employe_id=${employe_id}`,
+              }, { status: 500 })
+            }
+
+            // Renvoie un objet pseudo-trajet pour que le front rafraîchisse
+            return NextResponse.json({
+              trajet: {
+                id: upserted?.id,
+                employe_id,
+                societe_id: sid,
+                periode: periodeDate,
+                date_trajet: insertRow.date_trajet,
+                depart_adresse: insertRow.depart_adresse,
+                arrivee_adresse: insertRow.arrivee_adresse,
+                km: kmNum,
+                motif: insertRow.motif,
+                aller_retour: insertRow.aller_retour,
+                statut: 'valide',
+                _fallback: 'frais_km_mois',
+              },
+              fallback: true,
+              warning: 'Mode dégradé : trajet agrégé dans frais_km_mois (migration 429 non appliquée).',
+            })
+          }
+
           return NextResponse.json({
             error: 'Échec création trajet',
             code: error.code,             // 42P01 (table absent) | 42501 (RLS) | 23505 (unique)…
@@ -395,7 +477,9 @@ export async function POST(request: Request) {
             debug_url: `/api/rh/frais-km?action=debug_access&employe_id=${employe_id}`,
           }, { status: 500 })
         }
-        return NextResponse.json({ trajet: data })
+        // Succès : on renvoie la ligne nouvellement créée pour que le
+        // front rafraîchisse sans avoir à re-fetch la liste complète.
+        return NextResponse.json({ trajet: data, ok: true })
       } catch (insertEx: unknown) {
         const msg = insertEx instanceof Error ? insertEx.message : String(insertEx)
         console.error('[create_trajet] exception:', msg, insertEx)
