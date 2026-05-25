@@ -272,12 +272,15 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
   const [newMontant, setNewMontant] = useState('')
 
   // Helper : update a single field within breakdown and recompute total
+  // FIX-STC-TRIGGER236 — chaque mutation logge le path et la nouvelle valeur,
+  // pour vérifier dans la console navigateur que React reçoit bien le changement.
   const updateField = (path: string[], value: number) => {
     const next = JSON.parse(JSON.stringify(breakdown))
     let ref: any = next
     for (let i = 0; i < path.length - 1; i++) ref = ref[path[i]]
     ref[path[path.length - 1]] = value
     next.total = recomputeTotal(next)
+    console.log('[depart.updateField]', { path, value, newTotal: next.total })
     setBreakdown(next)
   }
 
@@ -288,6 +291,12 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
     if (!Array.isArray(next.lignes_extra)) next.lignes_extra = []
     next.lignes_extra.push({ libelle: newLibelle.trim(), montant })
     next.total = recomputeTotal(next)
+    console.log('[depart.addExtraLine]', {
+      libelle: newLibelle.trim(),
+      montant,
+      lignes_extra_count: next.lignes_extra.length,
+      newTotal: next.total,
+    })
     setBreakdown(next)
     setNewLibelle('')
     setNewMontant('')
@@ -297,6 +306,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
     const next = JSON.parse(JSON.stringify(breakdown))
     next.lignes_extra = (next.lignes_extra || []).filter((_: any, i: number) => i !== index)
     next.total = recomputeTotal(next)
+    console.log('[depart.removeExtraLine]', { index, remaining: next.lignes_extra.length, newTotal: next.total })
     setBreakdown(next)
   }
 
@@ -304,6 +314,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
     const next = JSON.parse(JSON.stringify(breakdown))
     next.lignes_extra[index] = { ...next.lignes_extra[index], ...patch }
     next.total = recomputeTotal(next)
+    console.log('[depart.updateExtraLine]', { index, patch, newTotal: next.total })
     setBreakdown(next)
   }
 
@@ -928,17 +939,38 @@ export default function DepartPage() {
       const editedByUser = breakdownAuto
         ? JSON.stringify(breakdownAuto) !== JSON.stringify(breakdown)
         : false
+      const payload = {
+        action: "confirmer_depart",
+        ...formData,
+        breakdown,
+        breakdown_edite: breakdown,
+        breakdown_auto: breakdownAuto,
+        edited_by_user: editedByUser,
+      }
+      // FIX-STC-TRIGGER236 — log avant POST pour vérifier que les valeurs
+      // éditées (state React) atteignent bien le backend.
+      try {
+        console.log('[depart.confirmerDepart] payload:', JSON.stringify({
+          action: payload.action,
+          employe_id: payload.employe_id,
+          edited_by_user: editedByUser,
+          breakdown_total: breakdown?.total,
+          breakdown_auto_total: breakdownAuto?.total,
+          lignes_extra_count: Array.isArray(breakdown?.lignes_extra) ? breakdown.lignes_extra.length : 0,
+          montants_clefs: {
+            salaire_prorata: breakdown?.salaire_prorata?.montant,
+            conges_al: breakdown?.conges_al?.montant,
+            treizieme_mois: breakdown?.treizieme_mois?.montant,
+            preavis: breakdown?.preavis?.montant,
+            indemnite_licenciement: breakdown?.indemnite_licenciement?.montant,
+            allocations_prorata: breakdown?.allocations_prorata?.montant,
+          },
+        }, null, 2))
+      } catch { /* noop */ }
       const res = await fetch("/api/rh/depart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "confirmer_depart",
-          ...formData,
-          breakdown,
-          breakdown_edite: breakdown,
-          breakdown_auto: breakdownAuto,
-          edited_by_user: editedByUser,
-        }),
+        body: JSON.stringify(payload),
       })
 
       // FIX-UX-409 — Gestion explicite du conflit bulletin comptabilisé.
