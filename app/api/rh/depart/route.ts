@@ -405,12 +405,23 @@ export async function POST(request: Request) {
       // Lignes additionnelles ajoutées/éditées côté UI (primes, avances, etc.)
       const lignesExtra: Array<{ libelle: string; montant: number; note?: string }> =
         Array.isArray(breakdown?.lignes_extra) ? breakdown.lignes_extra : []
-      const lignesExtraTotal = lignesExtra.reduce((s, l) => s + (Number(l.montant) || 0), 0)
+
+      // FIX-STC-IDENTIQUE — séparer primes (positives) et retenues manuelles
+      // (négatives) pour que le bulletin de paie reflète EXACTEMENT le calcul
+      // du STC affiché dans /rh/depart. Avant, tout était noyé dans
+      // special_allowance_2 ce qui rendait le bulletin incohérent avec le STC.
+      const primesExtra = lignesExtra
+        .filter(l => Number(l.montant) > 0)
+        .reduce((s, l) => s + Number(l.montant), 0)
+      // retenuesManuelles : montant POSITIF (les lignes sont négatives côté UI)
+      const retenuesManuelles = lignesExtra
+        .filter(l => Number(l.montant) < 0)
+        .reduce((s, l) => s + Math.abs(Number(l.montant)), 0)
 
       // Le total éditable côté UI est la source de vérité — il intègre déjà
       // les éventuels ajustements manuels sur les lignes existantes ET les
-      // lignes additionnelles.
-      const totalBrut = breakdown?.total || 0
+      // lignes additionnelles (primes + retenues).
+      const totalNet = breakdown?.total || 0
 
       // Build bulletin insert — salaire_brut is GENERATED ALWAYS so must not be included
       // The salaire_base field holds the prorata salary; all other components go into allowance slots
@@ -438,26 +449,38 @@ export async function POST(request: Request) {
             .join(' ; ')
         )
       }
+      if (retenuesManuelles > 0) {
+        notesParts.push(`Retenues manuelles : ${retenuesManuelles.toFixed(2)} MUR`)
+      }
       const bulletinNotes = notesParts.join(' | ')
 
-      // Create or update final settlement bulletin
-      const bulletinData = {
+      // FIX-STC-IDENTIQUE (mig 430) — on stocke maintenant le breakdown complet
+      // pour audit et reconstruction. Les retenues manuelles ont leur colonne
+      // dédiée. type_bulletin='solde_tout_compte' permet l'affichage du badge
+      // STC dans /rh/paie et /rh/historique-paie.
+      const bulletinData: Record<string, any> = {
         employe_id,
         societe_id: emp.societe_id,
         periode: periodeDate,
         salaire_base: salaireBaseBulletin,
         transport_allowance: transportBulletin,
-        // Les ajustements positifs s'ajoutent à treizBulletin, les négatifs
-        // se déduisent. Le total_deductions reste à 0 — c'est `salaire_net`
-        // qui reflète le total final éditable côté UI.
         special_allowance_1: alPayout + slPayout,
-        special_allowance_2: treizBulletin + lignesExtraTotal,
+        // Primes positives uniquement (les retenues vont dans retenues_manuelles
+        // et total_deductions ci-dessous).
+        special_allowance_2: treizBulletin + primesExtra,
         departure_notice: preavisBulletin,
         special_allowance_3: severanceBulletin,
-        salaire_net: totalBrut,
-        total_deductions: 0,
+        // total_deductions : reflète les retenues manuelles côté UI pour que
+        // salaire_brut - total_deductions = salaire_net = total STC affiché.
+        total_deductions: retenuesManuelles,
+        salaire_net: totalNet,
         statut: 'valide',
         notes: bulletinNotes,
+        // Colonnes mig 430
+        type_bulletin: 'solde_tout_compte',
+        retenues_manuelles: retenuesManuelles,
+        acomptes: 0, // sous-cat distincte, réservé usage futur
+        breakdown_json: breakdown ?? null,
       }
 
       // FIX-SOLDE-STC — Bug Alicia : le bulletin de solde tout compte doit
@@ -486,6 +509,37 @@ export async function POST(request: Request) {
         }, { status: 409 })
       }
 
+      // FIX-STC-IDENTIQUE — helper resilient à l'absence des colonnes mig 430.
+      // Si la migration n'est pas encore appliquée sur l'env, on retire les
+      // nouvelles colonnes et on retente. Ainsi le STC reste fonctionnel même
+      // sans la migration, avec dégradation gracieuse (mais alors les retenues
+      // manuelles ne sont tracées que dans `notes` et `total_deductions`).
+      const COLS_MIG_430 = ['type_bulletin', 'retenues_manuelles', 'acomptes', 'breakdown_json'] as const
+      const insertBulletinWithFallback = async (data: Record<string, any>) => {
+        const r1 = await supabase.from('bulletins_paie').insert(data).select().single()
+        if (!r1.error) return r1
+        const msg = r1.error.message || ''
+        if (/column.*(type_bulletin|retenues_manuelles|acomptes|breakdown_json)/i.test(msg)) {
+          console.warn('[depart] mig 430 not applied, retrying STC insert without new columns:', msg)
+          const fallback: Record<string, any> = { ...data }
+          for (const c of COLS_MIG_430) delete fallback[c]
+          return await supabase.from('bulletins_paie').insert(fallback).select().single()
+        }
+        return r1
+      }
+      const updateBulletinWithFallback = async (id: string, data: Record<string, any>) => {
+        const r1 = await supabase.from('bulletins_paie').update(data).eq('id', id).select().single()
+        if (!r1.error) return r1
+        const msg = r1.error.message || ''
+        if (/column.*(type_bulletin|retenues_manuelles|acomptes|breakdown_json)/i.test(msg)) {
+          console.warn('[depart] mig 430 not applied, retrying STC update without new columns:', msg)
+          const fallback: Record<string, any> = { ...data }
+          for (const c of COLS_MIG_430) delete fallback[c]
+          return await supabase.from('bulletins_paie').update(fallback).eq('id', id).select().single()
+        }
+        return r1
+      }
+
       if (existingBul) {
         // Étape 1 — archiver l'ancien bulletin (mig 425). Fallback in-place
         // si la mig 425 n'est pas appliquée sur cet environnement.
@@ -502,21 +556,12 @@ export async function POST(request: Request) {
         if (archErr) {
           // Fallback legacy : mig 425 absente → on UPDATE in-place.
           console.warn('[depart] archivage failed, fallback update in-place:', archErr.message)
-          const { data: updated, error: upErr } = await supabase
-            .from('bulletins_paie')
-            .update(bulletinData)
-            .eq('id', existingBul.id)
-            .select()
-            .single()
+          const { data: updated, error: upErr } = await updateBulletinWithFallback(existingBul.id, bulletinData)
           bulletin = updated
           if (upErr) console.error('Erreur update bulletin départ:', upErr.message)
         } else {
           // INSERT du nouveau bulletin STC actif après archivage.
-          const { data: inserted, error: insErr } = await supabase
-            .from('bulletins_paie')
-            .insert(bulletinData)
-            .select()
-            .single()
+          const { data: inserted, error: insErr } = await insertBulletinWithFallback(bulletinData)
           bulletin = inserted
           if (insErr) {
             console.error('Erreur insert bulletin solde tout compte (post-archive):', insErr.message)
@@ -529,17 +574,19 @@ export async function POST(request: Request) {
           }
         }
       } else {
-        const { data: inserted, error: insErr } = await supabase
-          .from('bulletins_paie')
-          .insert(bulletinData)
-          .select()
-          .single()
+        const { data: inserted, error: insErr } = await insertBulletinWithFallback(bulletinData)
         bulletin = inserted
         if (insErr) console.error('Erreur insert bulletin départ:', insErr.message)
       }
 
       // 3. Create accounting entries (journal SAL)
-      if (bulletin && totalBrut > 0) {
+      // FIX-STC-IDENTIQUE — `totalNet` = total côté UI (déjà net des retenues
+      // manuelles). On reconstruit le gross = totalNet + retenuesManuelles
+      // pour passer en débit, et on crédite 4210 (net à payer) + 4250
+      // (retenues manuelles à conserver) séparément. Garantit que les
+      // écritures sont équilibrées et reflètent fidèlement le STC.
+      const grossStc = totalNet + retenuesManuelles
+      if (bulletin && grossStc > 0) {
         try {
           // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
           // V2 exige societe_id (NOT NULL) et expose dossier_id ; on garde dossier_id pour la traçabilité.
@@ -555,8 +602,8 @@ export async function POST(request: Request) {
             const pieceRef = `STC-${emp.code || employe_id.slice(0, 8)}`
             const severanceMontant = breakdown?.indemnite_licenciement?.montant || 0
             const salaireSansIndemnite = severanceMontant > 0
-              ? totalBrut - severanceMontant
-              : totalBrut
+              ? grossStc - severanceMontant
+              : grossStc
 
             const entries: any[] = [
               {
@@ -578,10 +625,28 @@ export async function POST(request: Request) {
                 numero_compte: '4210', // PCM canonique : « Salaires nets à payer »
                 libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
                 debit_mur: 0,
-                credit_mur: totalBrut,
+                credit_mur: totalNet,
                 numero_piece: pieceRef,
               },
             ]
+
+            // FIX-STC-IDENTIQUE — retenue manuelle créditée séparément
+            // (compte 4250 : retenues sur salaires). Cohérent avec
+            // lib/rh/reconstruct-bulletin-from-ecritures.ts qui mappe
+            // 4250 → retenues_manuelles.
+            if (retenuesManuelles > 0) {
+              entries.push({
+                dossier_id: dossier.id,
+                societe_id: emp.societe_id,
+                date_ecriture: date_depart,
+                journal: 'SAL',
+                numero_compte: '4250',
+                libelle: `Retenues manuelles STC — ${emp.prenom} ${emp.nom}`,
+                debit_mur: 0,
+                credit_mur: retenuesManuelles,
+                numero_piece: pieceRef,
+              })
+            }
 
             // Add specific severance entry if applicable
             if (severanceMontant > 0) {
