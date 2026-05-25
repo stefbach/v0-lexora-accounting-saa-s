@@ -70,6 +70,16 @@ export default function PaiePage() {
   const [workflow, setWorkflow] = useState<any>(null)
   const [audit, setAudit] = useState<any[]>([])
 
+  // Bug A fix — alerte employés sortis dans la période sélectionnée.
+  // On charge la liste des employés de la société + filtre ceux dont
+  // date_depart tombe dans le mois affiché → on prévient le RH avant
+  // qu'il clique "Calculer la paie" (le calcul sera fait en solde
+  // tout compte avec prorata automatique, mais l'avertissement évite
+  // l'incompréhension "pourquoi le bulletin est-il à moitié ?").
+  const [employesSortants, setEmployesSortants] = useState<Array<{
+    id: string; prenom: string; nom: string; date_depart: string
+  }>>([])
+
   // Sprint 5 FIX 4 — erreur de chargement non-bloquante (remplace l'alert
   // agressif qui gâchait l'UX et empêchait de voir la page).
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -208,6 +218,43 @@ export default function PaiePage() {
   // Ne PAS ajouter d'appel à calculerBatch() depuis un useEffect ou depuis
   // load() — cela réintroduirait le comportement auto proscrit.
   useEffect(() => { load(); loadWorkflow() }, [load, loadWorkflow])
+
+  // Bug A fix — récupère les employés avec date_depart dans le mois affiché
+  // pour pré-alerter le RH avant le calcul. Lecture seule, non-bloquant.
+  useEffect(() => {
+    if (!periode || societe === "all" || !societe) {
+      setEmployesSortants([])
+      return
+    }
+    const [yyyy, mm] = periode.split('-')
+    if (!yyyy || !mm) return
+    const moisDebut = `${yyyy}-${mm}-01`
+    const moisFin = new Date(Number(yyyy), Number(mm), 0).toISOString().slice(0, 10)
+    let cancelled = false
+    // statut=tous : retourne actifs + sortis. On filtre côté client
+    // ceux dont date_depart tombe pile dans le mois affiché.
+    fetch(`/api/rh/employes?societe_id=${societe}&statut=tous`)
+      .then(r => r.ok ? r.json() : { employes: [] })
+      .then(d => {
+        if (cancelled) return
+        const tous = d.employes || d.data || []
+        const sortantsCeMois = tous
+          .filter((e: any) => {
+            if (!e.date_depart) return false
+            const dd = String(e.date_depart).slice(0, 10)
+            return dd >= moisDebut && dd <= moisFin
+          })
+          .map((e: any) => ({
+            id: e.id,
+            prenom: e.prenom || '',
+            nom: e.nom || '',
+            date_depart: String(e.date_depart).slice(0, 10),
+          }))
+        setEmployesSortants(sortantsCeMois)
+      })
+      .catch(() => setEmployesSortants([]))
+    return () => { cancelled = true }
+  }, [societe, periode])
 
   const doAction = async (action: string, extra?: any) => {
     if (societe === "all") return alert(t('rha.a.paie.err_pick_societe', locale))
@@ -390,7 +437,11 @@ export default function PaiePage() {
         : t('rha.a.paie.desc_lancer_calcul', locale),
       done: hasBulletins, icon: Calculator,
       action: calculerBatch,
-      actionLabel: hasBulletins ? t('rha.a.paie.btn_recalculer_paie', locale) : t('rha.a.paie.btn_calculer_paie', locale),
+      // Bug A fix — si des employés sont sortis dans la période, libellé
+      // explicite "solde tout compte" pour signaler le mode de calcul.
+      actionLabel: employesSortants.length > 0
+        ? (hasBulletins ? "Recalculer (solde tout compte)" : "Calculer en solde tout compte")
+        : (hasBulletins ? t('rha.a.paie.btn_recalculer_paie', locale) : t('rha.a.paie.btn_calculer_paie', locale)),
       actionDisabled: calculating || isLocked, phase: "process",
     },
     {
@@ -669,6 +720,46 @@ export default function PaiePage() {
           </TabsList>
 
           <TabsContent value="bulletins" className="space-y-6 mt-4">
+
+        {/* Bug A fix — Alert employés sortis dans la période.
+            Prévient le RH AVANT le calcul que les bulletins de ces
+            employés seront en solde tout compte avec prorata auto.
+            Cas type : Alicia Désiré sortie le 18 → bulletin 18j et non
+            30j, et bulletin précédent éventuellement archivé. */}
+        {employesSortants.length > 0 && (
+          <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <p className="font-semibold text-amber-900">
+                  {employesSortants.length === 1
+                    ? "Sortie employé dans la période — solde tout compte"
+                    : `${employesSortants.length} sorties employés dans la période — solde tout compte`}
+                </p>
+                <ul className="text-sm text-amber-800 space-y-1">
+                  {employesSortants.map(e => {
+                    const d = new Date(e.date_depart + "T12:00:00").toLocaleDateString(
+                      locale === 'en' ? 'en-GB' : 'fr-FR',
+                      { day: '2-digit', month: '2-digit', year: 'numeric' },
+                    )
+                    return (
+                      <li key={e.id} className="flex items-center gap-2">
+                        <span className="font-medium">{e.prenom} {e.nom}</span>
+                        <span className="text-amber-700">— sortie le {d}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <p className="text-xs text-amber-700">
+                  Le bulletin sera calculé en <b>solde tout compte</b> avec prorata
+                  automatique sur la base des jours travaillés. Si un bulletin
+                  existe déjà au mois entier, il sera archivé (consultable depuis
+                  <a href="/rh/historique-paie" className="underline ml-1">Historique paie</a>).
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ═══ WORKFLOW STEPPER ═══ */}
         {societe !== "all" && (

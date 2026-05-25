@@ -259,6 +259,11 @@ export async function GET(request: Request) {
     const employe_id = searchParams.get('employe_id')
     const periode = searchParams.get('periode')
     const societe_id = searchParams.get('societe_id')
+    // Bug C fix (mig 425) — inclure les bulletins archivés (versions
+    // précédentes superseded par un recalcul). Par défaut false : on ne
+    // retourne que les bulletins actifs. Le toggle UI /rh/historique-paie
+    // active ce flag.
+    const includeArchived = searchParams.get('include_archived') === 'true'
     // Pagination — opt-in : seulement actif si ?page=N fourni. Sans ?page,
     // comportement legacy (toutes les lignes, pas de champs pagination).
     const pageParam = searchParams.get('page')
@@ -266,7 +271,7 @@ export async function GET(request: Request) {
     const paginated = pageParam !== null
     const page = Math.max(1, Number(pageParam) || 1)
     const limit = Math.min(100, Math.max(1, Number(limitParam) || 10))
-    step('step2: params', { periode, societe_id, employe_id, paginated, page, limit })
+    step('step2: params', { periode, societe_id, employe_id, paginated, page, limit, includeArchived })
 
     // Multi-tenant: verify access — wrap in try/catch pour éviter 500 si
     // une table de mapping (profiles/dossiers/user_societes/...) manque.
@@ -322,6 +327,12 @@ export async function GET(request: Request) {
       query = query.eq('societe_id', societe_id)
     } else if (!employe_id && accessibleIds.length > 0) {
       query = query.in('societe_id', accessibleIds)
+    }
+    // Bug C fix (mig 425) — filtre archivés. Par défaut on ne montre que
+    // les bulletins actifs (is_archived=false OU NULL pour bulletins
+    // antérieurs à la mig 425). Avec ?include_archived=true on remonte tout.
+    if (!includeArchived) {
+      query = query.or('is_archived.is.null,is_archived.eq.false')
     }
 
     if (paginated) {
@@ -892,6 +903,27 @@ export async function POST(request: Request) {
         console.log(`[paie calculer] PRORATA ${emp.prenom} ${emp.nom} — ${prorataSingle.motif}, base ${originalBase} → ${salaire_base_mur}`)
       }
 
+      // Bug A fix (cas Alicia Désiré sortie le 18) — détection explicite
+      // d'un employé sorti pendant la période. Si emp.date_depart tombe
+      // dans la période, on flag le bulletin "solde tout compte" pour
+      // l'UI/PDF. Le prorata est déjà appliqué ci-dessus via
+      // computeProrataFirstLastMonth(), ce log sert d'audit + alimente
+      // les meta du bulletin (is_solde_tout_compte, date_sortie).
+      let isSoldeToutCompteSingle = false
+      let dateSortieSingle: string | null = null
+      if (emp.date_depart) {
+        const dateDepartStr = String(emp.date_depart).slice(0, 10)
+        if (dateDepartStr >= periodeStartSingle && dateDepartStr <= periodeEndSingle) {
+          isSoldeToutCompteSingle = true
+          dateSortieSingle = dateDepartStr
+          console.warn(
+            `[paie calculer] Employé ${emp.id} (${emp.prenom} ${emp.nom}) ` +
+            `sortie le ${dateDepartStr} → bulletin de SOLDE TOUT COMPTE, ` +
+            `prorata=${prorataSingle.ratio.toFixed(3)} (${prorataSingle.motif})`
+          )
+        }
+      }
+
       // Sprint 10 BUG 4 — inclure les primes fixes récurrentes (mig 117)
       // stockées sur employes.prime_fixe_1/2/3. Avant : action `calculer`
       // (unitaire) ne les lisait PAS alors que `calculer_batch` oui →
@@ -1093,17 +1125,111 @@ export async function POST(request: Request) {
         // G9 — Disturbance Allowance S.17A FMPA 2024 (heures unsocial).
         disturbance_allowance: Math.round(disturbanceMontantSingle * 100) / 100,
         disturbance_heures: Math.round(disturbanceHeuresSingle * 100) / 100,
-        // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI
-        notes: prorataSingle.ratio < 1 ? `[${prorataSingle.motif}]` : null,
+        // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI.
+        // Bug A — on enrichit aussi avec le marqueur "SOLDE TOUT COMPTE"
+        // si la sortie tombe dans la période.
+        notes: (() => {
+          const parts: string[] = []
+          if (prorataSingle.ratio < 1) parts.push(`[${prorataSingle.motif}]`)
+          if (isSoldeToutCompteSingle && dateSortieSingle) {
+            parts.push(`[SOLDE_TOUT_COMPTE sortie=${dateSortieSingle}]`)
+          }
+          return parts.length > 0 ? parts.join(' ') : null
+        })(),
         statut: 'brouillon',
       }
 
+      // Bug C fix (mig 425) — archive avant insert plutôt qu'upsert
+      // destructif. Cela permet à l'UI /rh/historique-paie d'afficher
+      // les versions précédentes (cas Alicia : bulletin "mois entier"
+      // remplacé par bulletin "solde tout compte 18j" doit rester
+      // consultable).
+      const nowIso = new Date().toISOString()
+      const { data: existingActive } = await supabase
+        .from('bulletins_paie')
+        .select('id, verrouille, date_paiement')
+        .eq('employe_id', employe_id)
+        .eq('periode', periodeDate)
+        .or('is_archived.is.null,is_archived.eq.false')
+        .maybeSingle()
+
+      // Hotfix Sprint 11 — un bulletin verrouillé ou payé ne peut PAS
+      // être archivé/recalculé (immutabilité légale). On bloque ici aussi.
+      if (existingActive?.verrouille === true) {
+        return NextResponse.json({
+          error: 'Bulletin verrouillé — impossible de recalculer. Déverrouillez d\'abord.',
+        }, { status: 403 })
+      }
+      if (existingActive?.date_paiement) {
+        return NextResponse.json({
+          error: `Bulletin déjà payé le ${existingActive.date_paiement} — impossible de recalculer.`,
+        }, { status: 403 })
+      }
+
+      const archiveReasonSingle = isSoldeToutCompteSingle
+        ? `Remplacé par bulletin solde tout compte (sortie ${dateSortieSingle}) le ${new Date().toLocaleDateString('fr-FR')}`
+        : `Remplacé suite à recalcul le ${new Date().toLocaleDateString('fr-FR')}`
+
+      if (existingActive) {
+        const { error: archErr } = await supabase
+          .from('bulletins_paie')
+          .update({
+            is_archived: true,
+            archived_at: nowIso,
+            archive_reason: archiveReasonSingle,
+          })
+          .eq('id', existingActive.id)
+        if (archErr) {
+          console.warn('[paie calculer] archivage ancien bulletin failed (mig 425 absente ?):',
+            archErr.message)
+          // Fallback non-bloquant : on continue avec un upsert legacy
+          // si la migration 425 n'a pas encore tourné en prod.
+        }
+      }
+
       // F14 — force updated_at pour que le recalcul soit visible cote UI.
-      const bulletinAvecTs = { ...bulletin, updated_at: new Date().toISOString() }
-      const { data, error } = await supabase.from('bulletins_paie').upsert(bulletinAvecTs, { onConflict: 'employe_id,periode' }).select().single()
+      const bulletinAvecTs = {
+        ...bulletin,
+        updated_at: nowIso,
+        is_archived: false,
+      }
+      // INSERT le nouveau bulletin actif. Si la mig 425 n'est PAS encore
+      // appliquée, l'index uq_bulletins_paie_active n'existe pas → on
+      // retombe sur l'ancien onConflict legacy.
+      let { data, error } = await supabase
+        .from('bulletins_paie')
+        .insert(bulletinAvecTs)
+        .select()
+        .single()
+
+      if (error && (error.code === '23505' || /duplicate key/i.test(error.message))) {
+        // Collision : l'archivage a échoué OU mig 425 absente. Fallback
+        // upsert pour préserver le comportement legacy.
+        console.warn('[paie calculer] insert conflict, fallback upsert legacy:', error.message)
+        const upsertRes = await supabase
+          .from('bulletins_paie')
+          .upsert(bulletinAvecTs, { onConflict: 'employe_id,periode' })
+          .select()
+          .single()
+        data = upsertRes.data
+        error = upsertRes.error
+      }
+
       if (error) {
         console.error('[paie calculer]', error.message, error.details, error.hint)
         return NextResponse.json({ error: `Erreur bulletin: ${error.message}`, details: error.details, hint: error.hint }, { status: 500 })
+      }
+
+      // Bug C fix (mig 425) — lier l'archivé au nouveau via superseded_by
+      // (best-effort, non-bloquant si la colonne n'existe pas).
+      if (existingActive && data?.id) {
+        const { error: linkErr } = await supabase
+          .from('bulletins_paie')
+          .update({ superseded_by: data.id })
+          .eq('id', existingActive.id)
+        if (linkErr) {
+          console.warn('[paie calculer] link superseded_by failed:', linkErr.message)
+        }
       }
 
       // G9 — Sauvegarde des détails disturbance (si présents) liés au bulletin.
@@ -1988,9 +2114,13 @@ export async function POST(request: Request) {
 
         // F14 — Check if bulletin already exists + ses flags verrouille/paiement
         //        (pour compter les skip precis dans l'audit).
+        // Bug C fix (mig 425) — ne lire que le bulletin ACTIF (les
+        // archivés n'entrent plus en collision).
         const { data: existing } = await supabase.from('bulletins_paie')
           .select('id, verrouille, date_paiement')
-          .eq('employe_id', emp.id).eq('periode', periodeDate).maybeSingle()
+          .eq('employe_id', emp.id).eq('periode', periodeDate)
+          .or('is_archived.is.null,is_archived.eq.false')
+          .maybeSingle()
 
         if (existing) {
           // F14 — skip si bulletin verrouille ou deja paye (immuables).
@@ -2004,17 +2134,67 @@ export async function POST(request: Request) {
             console.log(`[paie batch F14] SKIP ${emp.prenom} ${emp.nom} — bulletin paye (${existing.date_paiement})`)
             continue
           }
-          // F14 — force updated_at pour que le recalcul soit visible cote UI.
-          const bulletinAvecTs = { ...bulletin, updated_at: new Date().toISOString() }
-          const { data: updated, error: upErr } = await supabase.from('bulletins_paie')
-            .update(bulletinAvecTs).eq('id', existing.id).select().single()
-          saved = updated
-          error = upErr
-          if (!upErr) auditNbUpdates++
+          // Bug C fix (mig 425) — archive l'ancien plutôt que de l'écraser.
+          // Permet à /rh/historique-paie d'afficher les versions précédentes
+          // (cas Alicia : bulletin mois entier → solde tout compte 18j).
+          const nowIsoBatch = new Date().toISOString()
+          // Détection sortie dans la période pour message d'archive ciblé.
+          let isSoldeBatch = false
+          let dateSortieBatch: string | null = null
+          if (emp.date_depart) {
+            const dd = String(emp.date_depart).slice(0, 10)
+            if (dd >= periodeStart && dd <= periodeEnd) {
+              isSoldeBatch = true
+              dateSortieBatch = dd
+            }
+          }
+          const archiveReasonBatch = isSoldeBatch
+            ? `Remplacé par bulletin solde tout compte (sortie ${dateSortieBatch}) le ${new Date().toLocaleDateString('fr-FR')}`
+            : `Remplacé suite à recalcul le ${new Date().toLocaleDateString('fr-FR')}`
+
+          const { error: archErrBatch } = await supabase.from('bulletins_paie')
+            .update({
+              is_archived: true,
+              archived_at: nowIsoBatch,
+              archive_reason: archiveReasonBatch,
+            })
+            .eq('id', existing.id)
+
+          if (archErrBatch) {
+            // Fallback legacy : si la mig 425 n'a pas tourné, on fait
+            // l'ancien UPDATE in-place (comportement legacy préservé).
+            console.warn('[paie batch] archivage failed, fallback update in-place:', archErrBatch.message)
+            const bulletinAvecTs = { ...bulletin, updated_at: nowIsoBatch }
+            const { data: updated, error: upErr } = await supabase.from('bulletins_paie')
+              .update(bulletinAvecTs).eq('id', existing.id).select().single()
+            saved = updated
+            error = upErr
+            if (!upErr) auditNbUpdates++
+          } else {
+            // INSERT nouveau bulletin actif après archivage de l'ancien.
+            const bulletinAvecTs = {
+              ...bulletin,
+              updated_at: nowIsoBatch,
+              is_archived: false,
+            }
+            const { data: inserted, error: insErr } = await supabase.from('bulletins_paie')
+              .insert(bulletinAvecTs).select().single()
+            saved = inserted
+            error = insErr
+            if (!insErr) {
+              auditNbUpdates++ // compté comme update logique (recalcul)
+              // Lier l'archivé au nouveau via superseded_by (best-effort).
+              if (saved?.id) {
+                await supabase.from('bulletins_paie')
+                  .update({ superseded_by: saved.id })
+                  .eq('id', existing.id)
+              }
+            }
+          }
         } else {
           // INSERT new bulletin
           const { data: inserted, error: insErr } = await supabase.from('bulletins_paie')
-            .insert(bulletin).select().single()
+            .insert({ ...bulletin, is_archived: false }).select().single()
           saved = inserted
           error = insErr
           if (!insErr) auditNbInserts++
