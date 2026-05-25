@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Loader2, Calendar, Users, Banknote, ChevronDown, ChevronRight, FileText, Download, ExternalLink, Archive, CheckCircle, BookOpen } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { DecomptabilisationDialog } from "@/components/rh/DecomptabilisationDialog"
+import { BulletinRecoveryDialog } from "@/components/rh/BulletinRecoveryDialog"
 import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
 
@@ -46,6 +47,9 @@ export default function HistoriquePaiePage() {
     })
   }, [])
   const canDecomptabiliser = (DECOMPTA_ROLES as readonly string[]).includes(userRole)
+  // AGENT FIX-ALICIA — récupération bulletin perdu (restore archive +
+  // reconstruct depuis grand livre). Mêmes rôles que la décomptabilisation.
+  const canRecover = canDecomptabiliser
 
   useEffect(() => {
     Promise.all([
@@ -317,6 +321,27 @@ export default function HistoriquePaiePage() {
                                       onClick={() => window.open(`/rh/employes/${b.employe_id}`, '_blank')}>
                                       <ExternalLink className="h-3 w-3" />
                                     </Button>
+                                    {/* AGENT FIX-ALICIA — récupération bulletin perdu */}
+                                    {canRecover && !b.is_archived && (
+                                      <BulletinRecoveryDialog
+                                        bulletin={{
+                                          id: b.id,
+                                          employe_nom: `${b.employe?.prenom || ''} ${b.employe?.nom || ''}`.trim(),
+                                          periode: b.periode || (expanded || '').slice(0, 7),
+                                          salaire_net: b.salaire_net || 0,
+                                          is_comptabilise: !!b.comptabilise,
+                                        }}
+                                        onSuccess={() => {
+                                          if (!expanded) return
+                                          const archivedQs = includeArchived ? '&include_archived=true' : ''
+                                          fetch(`/api/rh/paie?societe_id=${societe}&periode=${expanded.slice(0, 7)}${archivedQs}`)
+                                            .then(r => r.json())
+                                            .then(d => setDetail((d.bulletins || []).slice()))
+                                            .catch(() => { /* noop */ })
+                                          load()
+                                        }}
+                                      />
+                                    )}
                                     {/* FIX-DECOMPTA — décomptabilisation accessible RH+direction */}
                                     {b.comptabilise && canDecomptabiliser && (
                                       <DecomptabilisationDialog
