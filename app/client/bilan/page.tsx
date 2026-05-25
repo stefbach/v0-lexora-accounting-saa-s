@@ -6,7 +6,8 @@ import { useProfile } from "@/hooks/use-profile"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
-import { Loader2, Building2, Download, Calendar, Upload, FileText, CheckCircle, AlertCircle } from "lucide-react"
+import { Loader2, Building2, Download, Calendar, Upload, FileText, CheckCircle, AlertCircle, Camera, RefreshCw as RefreshIcon } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -657,6 +658,60 @@ export default function BilanPage() {
         </div>
       ) : (
         <>
+          {/* Indicateur source N-1 (snapshot figé vs live) */}
+          {prevData && prevExercice && (() => {
+            const meta = (prevData as any)?._snapshot_meta
+              || (prevData as any)?.snapshot_meta
+              || null
+            const dataSource: "snapshot" | "live" | null =
+              meta?.data_source
+              || ((prevData as any)?.data_source as "snapshot" | "live" | undefined)
+              || null
+            const generatedAt: string | null = meta?.generated_at
+              || (prevData as any)?.generated_at
+              || null
+            if (!dataSource) return null
+            const generatedFmt = generatedAt
+              ? new Date(generatedAt).toLocaleString("fr-FR", {
+                  day: "2-digit", month: "2-digit", year: "numeric",
+                  hour: "2-digit", minute: "2-digit",
+                })
+              : null
+            if (dataSource === "snapshot") {
+              return (
+                <div
+                  className="no-print flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800"
+                  role="status"
+                  aria-label={`Bilan N-1 ${prevExercice} figé${generatedFmt ? ` le ${generatedFmt}` : ""}`}
+                >
+                  <Camera className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>
+                    Bilan N-1 ({prevExercice}) figé
+                    {generatedFmt ? ` le ${generatedFmt}` : ""}.
+                  </span>
+                  <Badge variant="outline" className="border-blue-300 bg-white text-blue-700">
+                    Snapshot
+                  </Badge>
+                </div>
+              )
+            }
+            return (
+              <div
+                className="no-print flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+                role="status"
+                aria-label={`Bilan N-1 ${prevExercice} calculé en temps réel (exercice ouvert)`}
+              >
+                <RefreshIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>
+                  Bilan N-1 ({prevExercice}) calculé en temps réel (exercice ouvert).
+                </span>
+                <Badge variant="outline" className="border-gray-300 bg-white text-gray-600">
+                  Live
+                </Badge>
+              </div>
+            )
+          })()}
+
           {/* Company name centered */}
           <div className="text-center space-y-1">
             <h1 className="text-2xl font-bold">{selectedSocieteName.toUpperCase()}</h1>

@@ -7,9 +7,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, CheckCircle2, AlertTriangle, Calendar, TrendingUp, RefreshCw } from "lucide-react"
+import { Loader2, CheckCircle2, AlertTriangle, Calendar, TrendingUp, RefreshCw, Camera, Lock } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale } from "@/lib/i18n"
+import { ExerciceLockBadge } from "@/components/comptable/ExerciceLockBadge"
+import { useProfile } from "@/hooks/use-profile"
+import { toast } from "sonner"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -20,8 +23,20 @@ function fmt(n: number) {
 
 interface Societe { id: string; nom: string }
 
+interface ExerciceFiscal {
+  id?: string
+  annee: string
+  date_debut?: string
+  date_fin?: string
+  statut: "ouvert" | "cloture"
+  date_cloture?: string | null
+  snapshot_date?: string | null
+}
+
 export default function CloturePage() {
   const locale = getLocale()
+  const { profile } = useProfile()
+  const isAdmin = profile?.role === "admin" || profile?.role === "super_admin"
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [periode, setPeriode] = useState<string>(() => new Date().toISOString().slice(0, 7))
@@ -34,9 +49,60 @@ export default function CloturePage() {
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Exercices fiscaux + snapshot regen
+  const [exercices, setExercices] = useState<ExerciceFiscal[]>([])
+  const [exercicesLoading, setExercicesLoading] = useState(false)
+  const [regenLoading, setRegenLoading] = useState<string | null>(null)
+
   useEffect(() => {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
   }, [])
+
+  // Charger les exercices fiscaux de la société sélectionnée
+  useEffect(() => {
+    if (!societeId) { setExercices([]); return }
+    setExercicesLoading(true)
+    fetch(`/api/comptable/exercices?societe_id=${societeId}`)
+      .then(r => r.ok ? r.json() : { exercices: [] })
+      .then(d => setExercices(Array.isArray(d.exercices) ? d.exercices : []))
+      .catch(() => setExercices([]))
+      .finally(() => setExercicesLoading(false))
+  }, [societeId])
+
+  const regenerateSnapshot = async (annee: string) => {
+    if (!societeId) return
+    setRegenLoading(annee)
+    try {
+      const res = await fetch(
+        `/api/comptable/exercices/snapshot/${encodeURIComponent(annee)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ societe_id: societeId }),
+        },
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error("Échec snapshot", { description: data?.error || "Erreur inconnue" })
+        return
+      }
+      toast.success("Snapshot régénéré", {
+        description: data?.generated_at
+          ? `Bilan figé le ${new Date(data.generated_at).toLocaleString("fr-FR")}`
+          : `Exercice ${annee}`,
+      })
+      // Refresh la liste
+      const r2 = await fetch(`/api/comptable/exercices?societe_id=${societeId}`)
+      if (r2.ok) {
+        const d2 = await r2.json()
+        setExercices(Array.isArray(d2.exercices) ? d2.exercices : [])
+      }
+    } catch (e: any) {
+      toast.error("Échec snapshot", { description: e?.message || "Erreur réseau" })
+    } finally {
+      setRegenLoading(null)
+    }
+  }
 
   const callApi = async (action: string, extra: Record<string, unknown>) => {
     if (!societeId) { setError(t('cab.cloture.err_select_company', locale)); return }
@@ -85,6 +151,65 @@ export default function CloturePage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Liste des exercices fiscaux + état de clôture + snapshot */}
+        {societeId && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Lock className="w-4 h-4" /> Exercices fiscaux
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {exercicesLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Chargement des exercices…
+                </div>
+              ) : exercices.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-3">
+                  Aucun exercice fiscal trouvé pour cette société.
+                </p>
+              ) : (
+                <ul className="divide-y" role="list" aria-label="Exercices fiscaux">
+                  {exercices.map((ex) => (
+                    <li
+                      key={ex.id || ex.annee}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-sm font-semibold" style={{ color: NAVY }}>
+                          {ex.annee}
+                        </span>
+                        <ExerciceLockBadge
+                          statut={ex.statut}
+                          dateCloture={ex.date_cloture ?? undefined}
+                          snapshotDate={ex.snapshot_date ?? undefined}
+                        />
+                      </div>
+                      {isAdmin && ex.statut === "cloture" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => regenerateSnapshot(ex.annee)}
+                          disabled={regenLoading === ex.annee}
+                          aria-label={`Régénérer le snapshot du bilan pour ${ex.annee}`}
+                          className="gap-1"
+                        >
+                          {regenLoading === ex.annee ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Camera className="w-3.5 h-3.5" />
+                          )}
+                          Régénérer snapshot
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs defaultValue="mensuelle">
           <TabsList className="grid grid-cols-4 w-full max-w-3xl">
