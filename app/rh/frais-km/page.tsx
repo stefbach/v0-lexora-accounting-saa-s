@@ -115,6 +115,8 @@ export default function FraisKmPage() {
   const [editingFrais, setEditingFrais] = useState<FraisKm | null>(null)
   const [formEmploye, setFormEmploye] = useState("")
   const [formKm, setFormKm] = useState("")
+  const [formDateTrajet, setFormDateTrajet] = useState<string>(new Date().toISOString().slice(0, 10))
+  const [formMotif, setFormMotif] = useState<string>("")
   const [saving, setSaving] = useState(false)
 
   // Mig 426 — multi-trajets : dialog détail
@@ -209,6 +211,12 @@ export default function FraisKmPage() {
     setEditingFrais(null)
     setFormEmploye("")
     setFormKm("")
+    setFormMotif("")
+    // Date par défaut : aujourd'hui si dans la période, sinon dernier jour de la période
+    const today = new Date().toISOString().slice(0, 10)
+    const periodStart = `${periode}-01`
+    const periodEnd = new Date(new Date(periodStart).setMonth(new Date(periodStart).getMonth() + 1) - 1).toISOString().slice(0, 10)
+    setFormDateTrajet(today >= periodStart && today <= periodEnd ? today : periodEnd)
     setDialogOpen(true)
   }
 
@@ -221,31 +229,69 @@ export default function FraisKmPage() {
 
   const saveFrais = async () => {
     if (!formEmploye || !formKm) return
+    if (editingFrais) {
+      // Mode édition : conserve l'ancien comportement (mise à jour ligne agrégée)
+      setSaving(true)
+      try {
+        const res = await fetch("/api/rh/frais-km", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "saisir",
+            employe_id: formEmploye,
+            periode,
+            km_parcourus: parseFloat(formKm),
+            societe_id: societe !== "all" ? societe : undefined,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          notifyError("Modifier frais km", data.error || `HTTP ${res.status}`)
+          return
+        }
+        setDialogOpen(false)
+        await load()
+        notifySuccess("✅ Frais kilométriques mis à jour")
+      } catch (e: unknown) {
+        notifyError("Erreur réseau", e)
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+    // Mode AJOUT : utilise create_trajet (additif, multi-trajets supporté)
     setSaving(true)
     try {
       const res = await fetch("/api/rh/frais-km", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "saisir",
+          action: "create_trajet",
           employe_id: formEmploye,
-          periode,
-          km_parcourus: parseFloat(formKm),
+          periode: `${periode}-01`,
+          date_trajet: formDateTrajet || null,
+          km: parseFloat(formKm),
+          motif: formMotif || null,
+          aller_retour: false,
           societe_id: societe !== "all" ? societe : undefined,
         }),
       })
       const data = await res.json().catch(() => ({}))
+      console.log("[create_trajet] response:", data)
       if (!res.ok) {
-        notifyError("Ajouter frais km", data.error || `HTTP ${res.status}`)
+        const code = data.code ? ` [${data.code}]` : ""
+        const msg = data.code === "42P01"
+          ? "Table trajets absente — appliquer migration 429"
+          : data.code === "42501"
+          ? "Permissions insuffisantes (RLS)"
+          : (data.details || data.error || `HTTP ${res.status}`)
+        notifyError(`Ajouter trajet${code}`, msg)
         return
       }
-      // Fermer le dialog AVANT le rechargement pour que l'UX paraisse
-      // instantanée. await load() pour garantir que la liste est rafraîchie
-      // avant le toast — sinon l'utilisateur voit le toast mais une liste
-      // encore vide pendant 100-300 ms.
       setDialogOpen(false)
       await load()
-      notifySuccess(editingFrais ? "✅ Frais kilométriques mis à jour" : "✅ Frais kilométriques ajouté")
+      const fallbackHint = data.fallback ? " (mode dégradé)" : ""
+      notifySuccess(`✅ Trajet ajouté${fallbackHint}${data.km_total ? ` — total mois : ${data.km_total} km` : ""}`)
     } catch (e: unknown) {
       notifyError("Erreur réseau", e)
     } finally {
@@ -660,6 +706,25 @@ export default function FraisKmPage() {
                 </SelectContent>
               </Select>
             </div>
+            {!editingFrais && (
+              <div className="rounded border-2 p-3" style={{ borderColor: GOLD, backgroundColor: "#FFFDF5" }}>
+                <Label htmlFor="form-date-trajet" className="font-semibold" style={{ color: "#B91C1C" }}>
+                  📅 Date du trajet *
+                </Label>
+                <Input
+                  id="form-date-trajet"
+                  type="date"
+                  value={formDateTrajet}
+                  onChange={e => setFormDateTrajet(e.target.value)}
+                  max={new Date().toISOString().slice(0, 10)}
+                  required
+                  className="mt-1"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Date du déplacement (dans la période {periode})
+                </p>
+              </div>
+            )}
             <div>
               <Label>{t('rha.b.fraiskm.lbl_km', locale)}</Label>
               <Input
@@ -672,6 +737,19 @@ export default function FraisKmPage() {
                 className="mt-1"
               />
             </div>
+            {!editingFrais && (
+              <div>
+                <Label htmlFor="form-motif">Motif (optionnel)</Label>
+                <Input
+                  id="form-motif"
+                  type="text"
+                  value={formMotif}
+                  onChange={e => setFormMotif(e.target.value)}
+                  placeholder="Ex: Visite client, Réunion partenaire"
+                  className="mt-1"
+                />
+              </div>
+            )}
             <div className="bg-gray-50 rounded p-3">
               <p className="text-sm text-gray-600">
                 {t('rha.b.fraiskm.estimated', locale)} <strong style={{ color: GOLD }}>
