@@ -11,6 +11,21 @@ function getAdminClient() {
   return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+// Normalise une période en YYYY-MM-DD (1er du mois). Accepte :
+//   - "YYYY-MM"        (7 chars)  → "YYYY-MM-01"
+//   - "YYYY-MM-DD"     (10 chars) → "YYYY-MM-01" (force au 1er du mois)
+//   - "YYYY-MM-DDTxx"  (ISO)      → "YYYY-MM-01"
+// Évite le bug "2026-05-01-01" (concat naïve) signalé en prod.
+function normalizePeriode(input: unknown): string {
+  const s = String(input ?? '').trim()
+  if (!s) return ''
+  // YYYY-MM strict
+  if (/^\d{4}-\d{2}$/.test(s)) return `${s}-01`
+  // YYYY-MM-DD ou ISO → prendre les 7 premiers chars puis suffixer
+  const m = s.match(/^(\d{4}-\d{2})/)
+  return m ? `${m[1]}-01` : s
+}
+
 // GET /api/rh/frais-km?societe_id=...&employe_id=...&periode=YYYY-MM
 // GET /api/rh/frais-km?action=list_trajets&employe_id=...&periode=YYYY-MM
 //   → liste détail des trajets (table frais_km_trajets, mig 426)
@@ -68,7 +83,7 @@ export async function GET(request: Request) {
       if (!employe_id || !periode) {
         return NextResponse.json({ error: 'employe_id et periode requis' }, { status: 400 })
       }
-      const periodeDate = `${periode}-01`
+      const periodeDate = normalizePeriode(periode)
       const { data: trajets, error } = await supabase
         .from('frais_km_trajets')
         .select('*')
@@ -164,7 +179,7 @@ export async function GET(request: Request) {
     }
 
     if (periode) {
-      entryQuery = entryQuery.eq('periode', `${periode}-01`)
+      entryQuery = entryQuery.eq('periode', normalizePeriode(periode))
     }
 
     const { data: entries, error: entErr } = await entryQuery
@@ -344,7 +359,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'societe_id introuvable' }, { status: 400 })
       }
 
-      const periodeDate = `${periode}-01`
+      const periodeDate = normalizePeriode(periode)
       const insertRow = {
         societe_id: sid,
         employe_id,
@@ -582,7 +597,7 @@ export async function POST(request: Request) {
         kmEffectifs = Math.floor((plafond / tarif) * 100) / 100
       }
 
-      const periodeDate = `${periode}-01`
+      const periodeDate = normalizePeriode(periode)
       // frais_km_mois.montant est GENERATED ALWAYS AS (km_parcourus * tarif_applique)
       // STORED en prod → ne JAMAIS l'inclure dans l'INSERT, sinon Postgres
       // renvoie 428C9 / 42601 et l'API répond 400. Le montant est calculé
