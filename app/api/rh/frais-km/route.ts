@@ -27,6 +27,40 @@ export async function GET(request: Request) {
     const periode = searchParams.get('periode')
     const action = searchParams.get('action')
 
+    // ── Diagnostic accès trajets km (mig 428) ───────────────────────────────
+    // Réservé aux rôles admin/rh : appelle la RPC debug_frais_km_access et
+    // remonte le JSON brut. Utile pour comprendre pourquoi un INSERT échoue
+    // en prod (table absente ? helper SEC-003 KO ? rôle non reconnu ?).
+    if (action === 'debug_access') {
+      const employe_id = searchParams.get('employe_id')
+      if (!employe_id) {
+        return NextResponse.json({ error: 'employe_id requis' }, { status: 400 })
+      }
+      const ALLOWED_DEBUG_ROLES = ['admin', 'super_admin', 'rh', 'rh_manager', 'direction', 'client_admin']
+      const { data: profDbg } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (!profDbg?.role || !ALLOWED_DEBUG_ROLES.includes(profDbg.role)) {
+        return NextResponse.json(
+          { error: 'Rôle insuffisant pour le diagnostic', role: profDbg?.role || null },
+          { status: 403 }
+        )
+      }
+      const { data: dbg, error: dbgErr } = await supabase
+        .rpc('debug_frais_km_access', { p_employe_id: employe_id })
+      if (dbgErr) {
+        return NextResponse.json({
+          error: 'RPC debug_frais_km_access KO',
+          code: dbgErr.code,
+          details: dbgErr.message,
+          hint: 'Migration 428 probablement pas appliquée en prod',
+        }, { status: 500 })
+      }
+      return NextResponse.json({ debug: dbg })
+    }
+
     // ── Liste détail des trajets pour un employé/mois ──────────────────────
     // Mig 426 — chaque trajet est une ligne distincte ; l'agrégat reste
     // dans frais_km_mois (synchronisé par trigger).
@@ -252,6 +286,14 @@ export async function POST(request: Request) {
     // Plusieurs trajets par employé/mois sont autorisés. Le trigger
     // sync_frais_km_mois_from_trajets met à jour automatiquement
     // frais_km_mois (somme des km validés × tarif actif).
+    //
+    // FIX-X (mai 2026) — Cas observé en prod : utilisateur incapable
+    // d'ajouter un 2e trajet sans feedback. Causes possibles :
+    //   - migration 426 pas appliquée (code 42P01 "relation does not exist")
+    //   - permissions insuffisantes (42501) → bypass admin client improbable
+    //   - trigger sync_frais_km_mois_from_trajets en erreur silencieuse
+    // On remonte désormais le code Postgres complet + un debug_url pour
+    // diagnostic immédiat côté front.
     if (action === 'create_trajet') {
       const {
         employe_id,
@@ -270,6 +312,30 @@ export async function POST(request: Request) {
       const kmNum = Number(km)
       if (!Number.isFinite(kmNum) || kmNum < 0) {
         return NextResponse.json({ error: 'km invalide' }, { status: 400 })
+      }
+
+      // Guard rôle élargi — rh/rh_manager/direction/client_admin/admin/super_admin/comptable
+      // peuvent créer un trajet (le cabinet saisit souvent pour le compte
+      // du client). Sans ce guard, le service-role bypass RLS laisserait
+      // n'importe quel user authentifié écrire pour n'importe quel employé.
+      const ALLOWED_TRAJET_ROLES = [
+        'admin', 'super_admin',
+        'rh', 'rh_manager',
+        'direction', 'client_admin',
+        'comptable',
+      ]
+      const { data: profTrajet } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+      const trajetRole = profTrajet?.role || null
+      if (!trajetRole || !ALLOWED_TRAJET_ROLES.includes(trajetRole)) {
+        console.warn('[create_trajet] rôle refusé:', { user: user.id, role: trajetRole })
+        return NextResponse.json(
+          { error: 'Rôle insuffisant pour créer un trajet km', role: trajetRole },
+          { status: 403 }
+        )
       }
 
       // Résoudre societe_id si non fourni (via employes)
@@ -301,17 +367,44 @@ export async function POST(request: Request) {
         created_by: user.id,
       }
 
-      const { data, error } = await supabase
-        .from('frais_km_trajets')
-        .insert(insertRow)
-        .select()
-        .single()
+      // Log avant l'INSERT — grep facile dans les logs Vercel
+      console.log('[create_trajet] user=', user.id, 'role=', trajetRole,
+        'employe=', employe_id, 'societe=', sid, 'periode=', periodeDate,
+        'km=', kmNum, 'AR=', Boolean(aller_retour))
 
-      if (error) {
-        console.error('[frais-km create_trajet] insert error:', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+      try {
+        const { data, error } = await supabase
+          .from('frais_km_trajets')
+          .insert(insertRow)
+          .select()
+          .single()
+
+        if (error) {
+          console.error('[create_trajet] insert error:', {
+            message: error.message,
+            code: error.code,
+            hint: error.hint,
+            details: error.details,
+            payload: insertRow,
+          })
+          return NextResponse.json({
+            error: 'Échec création trajet',
+            code: error.code,             // 42P01 (table absent) | 42501 (RLS) | 23505 (unique)…
+            details: error.message,
+            hint: error.hint || null,
+            debug_url: `/api/rh/frais-km?action=debug_access&employe_id=${employe_id}`,
+          }, { status: 500 })
+        }
+        return NextResponse.json({ trajet: data })
+      } catch (insertEx: unknown) {
+        const msg = insertEx instanceof Error ? insertEx.message : String(insertEx)
+        console.error('[create_trajet] exception:', msg, insertEx)
+        return NextResponse.json({
+          error: 'Exception création trajet',
+          details: msg,
+          debug_url: `/api/rh/frais-km?action=debug_access&employe_id=${employe_id}`,
+        }, { status: 500 })
       }
-      return NextResponse.json({ trajet: data })
     }
 
     // ── Mig 426 — Validation/rejet d'un trajet ──────────────────────────────
