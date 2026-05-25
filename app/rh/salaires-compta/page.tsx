@@ -57,7 +57,7 @@ export default function SalairesComptaPage() {
         groups[p].charges += Number(b.total_charges_patronales) || 0
       }
       setPeriodes(Object.values(groups).sort((a: any, b: any) => b.periode.localeCompare(a.periode)))
-    } catch {}
+    } catch { /* noop */ }
     setLoading(false)
   }, [societe])
 

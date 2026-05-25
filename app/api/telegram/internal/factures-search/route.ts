@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/factures-search
@@ -17,6 +18,9 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * Rôle min : comptable.
  */
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'factures.search', async (ctx, body) => {
     if (!hasRole(ctx, 'comptable') && !hasRole(ctx, 'direction')) {
       return { result: null, status: 'denied', error_msg: 'Recherche factures réservée aux comptables et plus' }

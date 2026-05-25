@@ -46,7 +46,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { data, error } = await supabase.from('pointages').select('*, employe:employes(nom,prenom,poste,salaire_base)').eq('id', id).single()
     if (error) throw error
     return NextResponse.json({ pointage: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -117,7 +117,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { data, error } = await supabase.from('pointages').update(updates).eq('id', id).select().single()
     if (error) throw error
     return NextResponse.json({ pointage: data, message: 'Pointage mis à jour' })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

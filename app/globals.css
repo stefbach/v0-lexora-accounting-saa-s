@@ -36,6 +36,58 @@
   --chart-5: #4A5490;
   --radius: 0.5rem;
 
+  /* ─── Semantic colors (DS V4) ───────────────── */
+  /* Lexora gold remains the brand accent (--accent above).        */
+  /* These are status/feedback tokens reusable across all surfaces. */
+  --success:                 #16A34A;
+  --success-foreground:      #FFFFFF;
+  --success-soft:            #DCFCE7;
+  --success-soft-foreground: #14532D;
+
+  --warning:                 #F59E0B;
+  --warning-foreground:      #0B0F2E;
+  --warning-soft:            #FEF3C7;
+  --warning-soft-foreground: #78350F;
+
+  --danger:                  #DC2626;
+  --danger-foreground:       #FFFFFF;
+  --danger-soft:             #FEE2E2;
+  --danger-soft-foreground:  #7F1D1D;
+
+  --info:                    #2563EB;
+  --info-foreground:         #FFFFFF;
+  --info-soft:               #DBEAFE;
+  --info-soft-foreground:    #1E3A8A;
+
+  /* ─── Spacing scale (4-pt grid) ─────────────── */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ─── Typography scale ──────────────────────── */
+  --text-xs:    0.75rem;
+  --text-sm:    0.875rem;
+  --text-base:  1rem;
+  --text-lg:    1.125rem;
+  --text-xl:    1.25rem;
+  --text-2xl:   1.5rem;
+  --text-3xl:   1.875rem;
+  --text-4xl:   2.25rem;
+
+  --leading-xs:   1rem;
+  --leading-sm:   1.25rem;
+  --leading-base: 1.5rem;
+  --leading-lg:   1.75rem;
+  --leading-xl:   1.75rem;
+  --leading-2xl:  2rem;
+  --leading-3xl:  2.25rem;
+  --leading-4xl:  2.5rem;
+
   /* Sidebars stay dark */
   --sidebar: #0B0F2E;
   --sidebar-foreground: #E8EAFC;
@@ -112,6 +164,27 @@
   --sidebar-accent-foreground: #E8EAFC;
   --sidebar-border: #1E2760;
   --sidebar-ring: #4191FF;
+
+  /* Semantic colors — dark variants (tuned for legibility on #0B0F2E). */
+  --success:                 #22C55E;
+  --success-foreground:      #052E16;
+  --success-soft:            #052E16;
+  --success-soft-foreground: #BBF7D0;
+
+  --warning:                 #FBBF24;
+  --warning-foreground:      #0B0F2E;
+  --warning-soft:            #422006;
+  --warning-soft-foreground: #FDE68A;
+
+  --danger:                  #EF4444;
+  --danger-foreground:       #450A0A;
+  --danger-soft:             #450A0A;
+  --danger-soft-foreground:  #FECACA;
+
+  --info:                    #3B82F6;
+  --info-foreground:         #0B0F2E;
+  --info-soft:               #172554;
+  --info-soft-foreground:    #BFDBFE;
 }
 
 @theme inline {
@@ -153,6 +226,29 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Semantic color utilities — usable as bg-success, text-warning, etc. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-success-soft-foreground: var(--success-soft-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-soft-foreground: var(--warning-soft-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-soft-foreground: var(--danger-soft-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-soft: var(--info-soft);
+  --color-info-soft-foreground: var(--info-soft-foreground);
+
+  /* Brand alias — Lexora gold is the marketing brand color.            */
+  /* `accent` (token) remains for shadcn semantics; `brand` is explicit. */
+  --color-brand: var(--accent);
+  --color-brand-foreground: var(--accent-foreground);
 }
 
 @layer base {

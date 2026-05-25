@@ -628,16 +628,16 @@ export default function PaiePage() {
 
         {/* Period selector */}
         <Card>
-          <CardContent className="p-4 flex gap-3 items-center flex-wrap">
+          <CardContent className="p-4 flex flex-col sm:flex-row gap-3 sm:items-center flex-wrap">
             <Select value={societe} onValueChange={setSociete}>
-              <SelectTrigger className="w-56"><SelectValue placeholder={t('rha.a.paie.societe_ph', locale)} /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder={t('rha.a.paie.societe_ph', locale)} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('rha.a.paie.toutes', locale)}</SelectItem>
                 {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={periode} onValueChange={setPeriode}>
-              <SelectTrigger className="w-72"><SelectValue placeholder={t('rha.a.paie.periode_ph', locale)} /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-72"><SelectValue placeholder={t('rha.a.paie.periode_ph', locale)} /></SelectTrigger>
               <SelectContent>
                 {availablePeriodes.map(p => {
                   const d = new Date(p + "-15")
@@ -876,6 +876,7 @@ export default function PaiePage() {
                 )}
               </div>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1177,6 +1178,7 @@ export default function PaiePage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -1188,6 +1190,7 @@ export default function PaiePage() {
               <CardTitle className="text-sm font-semibold text-gray-600">{t('rha.a.paie.audit_title', locale)} — {periode}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1218,6 +1221,7 @@ export default function PaiePage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         )}

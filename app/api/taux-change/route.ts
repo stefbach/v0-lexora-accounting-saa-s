@@ -40,7 +40,7 @@ export async function GET() {
         'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=300',
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

@@ -76,7 +76,7 @@ export async function GET(request: Request) {
         errors.push({ employe_id: emp.id, error: rpcErr?.message || 'RPC null' })
         continue
       }
-      const newAcquis = Number((v2 as any).al_acquis) || 0
+      const newAcquis = Number((v2 as { al_acquis?: number }).al_acquis) || 0
       const oldAcquis = Number(solde.al_acquis) || 0
       if (Math.abs(newAcquis - oldAcquis) < 0.01) continue
 

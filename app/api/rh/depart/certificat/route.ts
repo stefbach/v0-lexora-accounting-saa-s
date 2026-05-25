@@ -151,13 +151,13 @@ export async function GET(request: Request) {
     const buffer = await renderToBuffer(
       React.createElement(CertificatPDF, { emp, soc, dateDepart, typeDepart, draft }) as any
     )
-    return new NextResponse(buffer as any, {
+    return new NextResponse(buffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="Certificat_Travail_${emp.prenom}_${emp.nom}.pdf"`,
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[depart/certificat] GET', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -184,13 +184,13 @@ export async function POST(request: Request) {
     const buffer = await renderToBuffer(
       React.createElement(CertificatPDF, { emp, soc, dateDepart: date_depart, typeDepart: type_depart || '', draft }) as any
     )
-    return new NextResponse(buffer as any, {
+    return new NextResponse(buffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="Certificat_Travail_${emp.prenom}_${emp.nom}.pdf"`,
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[depart/certificat] POST', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

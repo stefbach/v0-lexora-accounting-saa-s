@@ -61,8 +61,8 @@ export default function ExportsLegauxPage() {
           if (!cancelled) { setAuthorized(false); setRoleMsg(t('rha.b.exleg.not_auth', locale)) }
           return
         }
-        const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-        const role = (prof as any)?.role || ''
+        const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle<{ role: string | null }>()
+        const role = prof?.role || ''
         const ok = ['admin', 'rh'].includes(role)
         if (cancelled) return
         setAuthorized(ok)

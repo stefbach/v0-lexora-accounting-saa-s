@@ -109,7 +109,7 @@ export async function GET(request: Request) {
       page,
       totalPages: Math.ceil((count || 0) / limit),
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur' },
       { status: 500 }

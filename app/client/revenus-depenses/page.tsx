@@ -85,7 +85,7 @@ export default function ClientRevenusDepensesPage() {
         map.set(num, cur)
       }
       setComptes(Array.from(map.values()))
-    } catch {}
+    } catch { /* noop */ }
     finally {
       setLoading(false)
     }

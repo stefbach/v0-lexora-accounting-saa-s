@@ -378,7 +378,7 @@ export async function POST(request: Request) {
       },
       nb_ecritures: ecritures?.length || 0,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[tva/calculer]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }

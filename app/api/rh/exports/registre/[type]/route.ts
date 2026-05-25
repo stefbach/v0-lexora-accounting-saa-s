@@ -134,7 +134,7 @@ export async function GET(
       )
     }
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const type = String(params.type || '').toLowerCase() as RegistreType
     if (!VALID_TYPES.includes(type)) {
       return NextResponse.json(
@@ -170,7 +170,7 @@ export async function GET(
 
     if (format === 'pdf') {
       const buffer = await renderPdf(rows, columns, type, societeNom, annee, mois)
-      return new NextResponse(buffer as any, {
+      return new NextResponse(buffer as unknown as BodyInit, {
         status: 200,
         headers: {
           'Content-Type': 'application/pdf',
@@ -197,7 +197,7 @@ export async function GET(
     XLSX.utils.book_append_sheet(wb, ws, sheetName)
 
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
-    return new NextResponse(buffer as any, {
+    return new NextResponse(buffer as unknown as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

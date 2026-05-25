@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ actionnaires: data || [] })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ actionnaire: data }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -87,7 +87,7 @@ export async function DELETE(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

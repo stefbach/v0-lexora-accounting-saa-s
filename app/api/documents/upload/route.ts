@@ -519,7 +519,7 @@ Respond with ONLY the type word. Nothing else.`,
           if (Array.isArray(parsed)) return parsed
           if (parsed.transactions && Array.isArray(parsed.transactions)) return parsed.transactions
           if (parsed.lignes && Array.isArray(parsed.lignes)) return parsed.lignes
-        } catch {}
+        } catch { /* noop */ }
         // Essai 2 : trouver le premier `[` et le dernier `]`
         const first = trimmed.indexOf('[')
         const last  = trimmed.lastIndexOf(']')
@@ -527,7 +527,7 @@ Respond with ONLY the type word. Nothing else.`,
           try {
             const arr = JSON.parse(trimmed.substring(first, last + 1))
             if (Array.isArray(arr)) return arr
-          } catch {}
+          } catch { /* noop */ }
         }
         // Essai 3 : code fence
         const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -536,7 +536,7 @@ Respond with ONLY the type word. Nothing else.`,
             const parsed = JSON.parse(fence[1].trim())
             if (Array.isArray(parsed)) return parsed
             if (parsed.transactions && Array.isArray(parsed.transactions)) return parsed.transactions
-          } catch {}
+          } catch { /* noop */ }
         }
         return null
       }
@@ -613,13 +613,13 @@ Respond with ONLY the type word. Nothing else.`,
       let bankParsed: any = null
 
       // Strategy 1: direct parse (response is pure JSON)
-      try { bankParsed = JSON.parse(bankText.trim()) } catch {}
+      try { bankParsed = JSON.parse(bankText.trim()) } catch { /* noop */ }
 
       // Strategy 2: extract from code fences ```json ... ```
       if (!bankParsed) {
         const fenceMatch = bankText.match(/```(?:json)?\s*([\s\S]*?)```/)
         if (fenceMatch) {
-          try { bankParsed = JSON.parse(fenceMatch[1].trim()) } catch {}
+          try { bankParsed = JSON.parse(fenceMatch[1].trim()) } catch { /* noop */ }
         }
       }
 
@@ -628,7 +628,7 @@ Respond with ONLY the type word. Nothing else.`,
         const firstBrace = bankText.indexOf('{')
         const lastBrace = bankText.lastIndexOf('}')
         if (firstBrace !== -1 && lastBrace > firstBrace) {
-          try { bankParsed = JSON.parse(bankText.substring(firstBrace, lastBrace + 1)) } catch {}
+          try { bankParsed = JSON.parse(bankText.substring(firstBrace, lastBrace + 1)) } catch { /* noop */ }
         }
       }
 
@@ -664,7 +664,7 @@ Respond with ONLY the type word. Nothing else.`,
           try {
             bankParsed = JSON.parse(jsonCandidate)
             console.log('[upload] Bank JSON repaired from truncated response')
-          } catch {}
+          } catch { /* noop */ }
         }
       }
 
@@ -790,10 +790,10 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         const bankText = bankResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
         let bankParsed: any = null
         const bankCleaned = bankText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
-        try { bankParsed = JSON.parse(bankCleaned) } catch {}
+        try { bankParsed = JSON.parse(bankCleaned) } catch { /* noop */ }
         if (!bankParsed) {
           const m = bankText.match(/\{[\s\S]*\}/)
-          if (m) try { bankParsed = JSON.parse(m[0]) } catch {}
+          if (m) try { bankParsed = JSON.parse(m[0]) } catch { /* noop */ }
         }
         if (bankParsed) {
           extraction = bankParsed

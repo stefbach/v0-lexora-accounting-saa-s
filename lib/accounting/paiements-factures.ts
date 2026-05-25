@@ -70,7 +70,7 @@ export async function enregistrerPaiement(
 
   // 2. Vérifier qu'on ne dépasse pas le total dû (tolérance 1 MUR pour arrondis)
   const totalDuMur = Number(facture.montant_mur) || Number(facture.montant_ttc) * taux || 0
-  const dejaPayeMur = totalDuMur - (Number(facture.solde_non_paye) ?? totalDuMur)
+  const dejaPayeMur = totalDuMur - (facture.solde_non_paye !== null && facture.solde_non_paye !== undefined ? Number(facture.solde_non_paye) : totalDuMur)
   const apresPaiement = dejaPayeMur + montantMur
   if (apresPaiement > totalDuMur + 1) {
     return {

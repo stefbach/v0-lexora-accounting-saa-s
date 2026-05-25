@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { notifyError } from "@/lib/utils/toast"
+import { createClient } from "@/lib/supabase/client"
 import {
   Card,
   CardContent,
@@ -11,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { MessageSquare, Mail, Bell, CheckCircle, AlertCircle, Clock } from "lucide-react"
+import { MessageSquare, Mail, Bell, CheckCircle, AlertCircle, Clock, Loader2 } from "lucide-react"
 import { useProfile } from "@/hooks/use-profile"
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import Link from "next/link"
@@ -24,8 +26,6 @@ interface NotificationItem {
   date: string
   statut: "pending" | "sent" | "failed"
 }
-
-const notifications: NotificationItem[] = []
 
 function formatDateTime(dateStr: string) {
   const d = new Date(dateStr)
@@ -85,6 +85,50 @@ export default function NotificationsPage() {
   const locale = getLocale()
   const { profile } = useProfile()
   const [filter, setFilter] = useState("tous")
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const supabase = createClient()
+        const { data, error } = await supabase
+          .from("notifications")
+          .select("id, type, message, created_at, statut")
+          .order("created_at", { ascending: false })
+          .limit(200)
+        if (cancelled) return
+        if (error) {
+          notifyError(t('core.notif.title', locale), error.message)
+          setNotifications([])
+        } else {
+          setNotifications(
+            (data || []).map((n) => ({
+              id: String(n.id),
+              type: (n.type === "email" ? "email" : "whatsapp") as "whatsapp" | "email",
+              message: String(n.message ?? ""),
+              date: String(n.created_at ?? new Date().toISOString()),
+              statut: (["pending", "sent", "failed"].includes(n.statut as string)
+                ? n.statut
+                : "pending") as "pending" | "sent" | "failed",
+            }))
+          )
+        }
+      } catch {
+        if (!cancelled) {
+          notifyError("Charger notifications")
+          setNotifications([])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [locale])
 
   if (profile?.role === "client_user") {
     return <RequireRole roles={NON_CLIENT_USER_ROLES}>{null}</RequireRole>
@@ -211,7 +255,13 @@ export default function NotificationsPage() {
                 </div>
               </div>
             ))}
-            {filteredNotifications.length === 0 && (
+            {loading && (
+              <div className="text-center py-12 text-muted-foreground">
+                <Loader2 className="h-8 w-8 mx-auto mb-3 animate-spin" style={{ color: "#0B0F2E" }} />
+                <p className="text-sm">…</p>
+              </div>
+            )}
+            {!loading && filteredNotifications.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
                 <Bell className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
                 <p>{t('core.notif.no_notifications', locale)}</p>

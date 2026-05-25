@@ -37,7 +37,7 @@ export default function DirectionPage() {
         if (allBulletins.length > 0) {
           latestPeriode = (allBulletins[0].periode || "").slice(0, 7)
         }
-      } catch {}
+      } catch { /* noop */ }
       if (!latestPeriode) {
         latestPeriode = new Date().toISOString().slice(0, 7)
       }

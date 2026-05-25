@@ -503,7 +503,7 @@ export async function GET(request: Request, { params }: Params) {
         'Cache-Control': 'no-store',
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur PDF' }, { status: 500 })

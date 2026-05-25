@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ShieldCheck, Baby, AlertTriangle, Loader2, Heart } from "lucide-react"
-import { toast } from "sonner"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
 
 interface Props {
   employe: {
@@ -111,7 +111,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
   useEffect(() => { load() }, [load])
 
   const declarerGrossesse = async () => {
-    if (!datePresume) { toast.error('Date présumée accouchement requise'); return }
+    if (!datePresume) { notifyError('Validation', 'Date présumée accouchement requise'); return }
     setActionLoading(true)
     try {
       const res = await fetch('/api/rh/maternite', {
@@ -127,8 +127,8 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
-      toast.success('Grossesse déclarée — protection WRA S.64 active.')
+      if (!res.ok) { notifyError('Déclarer grossesse', data.error); return }
+      notifySuccess('Grossesse déclarée — protection WRA S.64 active.')
       setDialog(null)
       setDatePresume(""); setGrossesseMultiple(false); setCommentaire(""); setCertificatUrl("")
       await load()
@@ -138,7 +138,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
   }
 
   const enregistrerAccouchement = async () => {
-    if (!grossesse || !dateReelle) { toast.error('Date réelle requise'); return }
+    if (!grossesse || !dateReelle) { notifyError('Validation', 'Date réelle requise'); return }
     setActionLoading(true)
     try {
       const res = await fetch('/api/rh/maternite', {
@@ -153,8 +153,8 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
-      toast.success(`Accouchement enregistré — congé jusqu'au ${fmtDate(data.conge_mat_fin)}.`)
+      if (!res.ok) { notifyError('Enregistrer accouchement', data.error); return }
+      notifySuccess(`Accouchement enregistré — congé jusqu'au ${fmtDate(data.conge_mat_fin)}.`)
       setDialog(null)
       setDateReelle(""); setNaissancePrematuree(false); setMortinaissance(false)
       await load()
@@ -174,8 +174,8 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         body: JSON.stringify({ action: 'retour', grossesse_id: grossesse.id }),
       })
       const data = await res.json()
-      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
-      toast.success('Retour enregistré.')
+      if (!res.ok) { notifyError('Enregistrer retour', data.error); return }
+      notifySuccess('Retour enregistré.')
       await load()
     } finally {
       setActionLoading(false)
@@ -183,7 +183,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
   }
 
   const annuler = async () => {
-    if (!grossesse || !motifAnnulation) { toast.error('Motif requis'); return }
+    if (!grossesse || !motifAnnulation) { notifyError('Validation', 'Motif requis'); return }
     setActionLoading(true)
     try {
       const res = await fetch('/api/rh/maternite', {
@@ -196,8 +196,8 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
-      toast.success('Grossesse annulée.')
+      if (!res.ok) { notifyError('Annuler grossesse', data.error); return }
+      notifySuccess('Grossesse annulée.')
       setDialog(null)
       setMotifAnnulation("")
       await load()
@@ -207,7 +207,7 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
   }
 
   const declarerPaternite = async () => {
-    if (!dateNaissanceEnfant) { toast.error('Date naissance enfant requise'); return }
+    if (!dateNaissanceEnfant) { notifyError('Validation', 'Date naissance enfant requise'); return }
     setActionLoading(true)
     try {
       const res = await fetch('/api/rh/paternite', {
@@ -221,8 +221,8 @@ export function ProtectionLegalePanel({ employe, canManage }: Props) {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { toast.error(data.error || 'Erreur'); return }
-      toast.success(`Paternité déclarée — 4 sem ${data.conge_paye ? 'payées' : 'non-payées (ancienneté < 12 mois)'}.`)
+      if (!res.ok) { notifyError('Déclarer paternité', data.error); return }
+      notifySuccess(`Paternité déclarée — 4 sem ${data.conge_paye ? 'payées' : 'non-payées (ancienneté < 12 mois)'}.`)
       setDialog(null)
       setDateNaissanceEnfant(""); setActeNaissanceUrl("")
       await load()

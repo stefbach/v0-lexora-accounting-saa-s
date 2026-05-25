@@ -124,10 +124,10 @@ export async function GET(
 
     const supabase = getAdminClient()
     const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     if (!['admin', 'rh'].includes(role)) return new NextResponse('Accès refusé', { status: 403 })
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     if (!id) return new NextResponse('id requis', { status: 400 })
 
@@ -146,7 +146,7 @@ export async function GET(
     const nomFile = `${(emp as any)?.nom || 'employe'}`.replace(/\s+/g, '_')
     const filename = `gratuity_return_${nomFile}_${(ex as any).date_exit}.pdf`
 
-    return new NextResponse(buffer as any, {
+    return new NextResponse(buffer as unknown as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

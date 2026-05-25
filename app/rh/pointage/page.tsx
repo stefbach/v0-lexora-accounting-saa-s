@@ -238,9 +238,10 @@ export default function PointagePage() {
 
       // Filter congés that cover today
       const today = todayISO()
-      const todayConges: CongeToday[] = ((congesRes.conges || []) as any[])
-        .filter((c: any) => c.date_debut <= today && c.date_fin >= today)
-        .map((c: any) => ({
+      type RawConge = { employe_id: string; type_conge: string; demi_journee?: boolean; matin_ou_apres_midi?: string | null; date_debut: string; date_fin: string }
+      const todayConges: CongeToday[] = ((congesRes.conges || []) as RawConge[])
+        .filter((c) => c.date_debut <= today && c.date_fin >= today)
+        .map((c) => ({
           employe_id: c.employe_id,
           type_conge: c.type_conge,
           demi_journee: c.demi_journee === true,
@@ -312,7 +313,6 @@ export default function PointagePage() {
       })
 
       const data = await res.json()
-      console.log('[pointage response]', res.status, JSON.stringify(data).substring(0, 300))
 
       if (res.status === 409) {
         // Already clocked in/out
@@ -357,7 +357,6 @@ export default function PointagePage() {
             heures_sup: returnedPointage.heures_sup || null,
             employe: returnedPointage.employe || (emp ? { nom: emp.nom, prenom: emp.prenom, poste: emp.poste } : undefined),
           }
-          console.log('[local update]', enriched.employe_id, 'entree:', enriched.heure_entree, 'sortie:', enriched.heure_sortie)
           setPointages(prev => {
             const idx = prev.findIndex(x => x.employe_id === empId)
             if (idx >= 0) {

@@ -308,7 +308,7 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
     byPack[key].push(p)
   }
   Object.values(byPack).forEach(arr => arr.sort((a, b) => {
-    const order = { solo: 1, petite: 2, pme: 3, grande: 4, null: 5 } as any
+    const order: Record<string, number> = { solo: 1, petite: 2, pme: 3, grande: 4, null: 5 }
     return (order[a.taille_entreprise || 'null'] || 99) - (order[b.taille_entreprise || 'null'] || 99)
   }))
 

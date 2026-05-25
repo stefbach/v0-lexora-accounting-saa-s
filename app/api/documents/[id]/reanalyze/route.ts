@@ -735,8 +735,8 @@ export async function POST(
       try {
         const { id: resolvedId } = await params
         if (resolvedId) await supabase.from('documents').update({ statut: 'erreur' }).eq('id', resolvedId)
-      } catch {}
-    } catch {}
+      } catch { /* noop */ }
+    } catch { /* noop */ }
     return NextResponse.json({ error: errMsg }, { status: 500 })
   }
 }

@@ -78,7 +78,7 @@ export async function ingestTelegramDocument(args: {
   const admin = getAdminClient()
 
   // 3. Résoudre dossier_id (premier dossier de la société) — auto-création si absent
-  let dossierId: string | null = null
+  let dossierId: string
   {
     const { data: dossier } = await admin
       .from('dossiers')

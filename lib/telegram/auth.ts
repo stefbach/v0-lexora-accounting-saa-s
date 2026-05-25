@@ -1,11 +1,13 @@
 import { getAdminClient } from '@/lib/supabase/admin'
+import { safeBearer } from '@/lib/security/safe-equal'
 
 const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || ''
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || ''
 
 export function assertWebhookSecret(headerSecret: string | null) {
   if (!SECRET) throw new Error('TELEGRAM_WEBHOOK_SECRET not configured on server')
-  if (headerSecret !== SECRET) {
+  // SEC-004 : comparaison en temps constant pour empêcher timing attacks
+  if (!safeBearer(headerSecret, SECRET)) {
     throw Object.assign(new Error('Invalid webhook secret'), { status: 403 })
   }
 }
@@ -93,6 +95,7 @@ export async function sendTelegramDocumentBuffer(
   contentType: string,
   caption?: string,
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- BlobPart accepte ces 3 types mais TS l'a strict avec Buffer
   const blob = new Blob([buffer as any], { type: contentType })
   const form = new FormData()
   form.set('chat_id', String(chat_id))

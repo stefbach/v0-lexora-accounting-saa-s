@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 
@@ -10,6 +11,14 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * alors que l'utilisateur a clairement des sociétés liées.
  */
 export async function GET(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'societes.debug', async (ctx) => {
     const admin = getAdminClient()
     const userId = ctx.user_id

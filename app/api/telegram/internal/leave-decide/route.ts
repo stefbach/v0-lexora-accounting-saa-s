@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { notifyLeaveDecided } from '@/lib/telegram/notify'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/leave-decide
@@ -20,6 +21,9 @@ import { notifyLeaveDecided } from '@/lib/telegram/notify'
  * Retour : { id, statut, employe_id, employe_chat_id_to_notify }
  */
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'leave.decide', async (ctx, body) => {
     if (!hasRole(ctx, 'manager')) {
       return { result: null, status: 'denied', error_msg: 'Validation des congés réservée aux managers et plus' }
@@ -61,7 +65,7 @@ export async function POST(req: NextRequest) {
     const nouveauStatut = decision === 'approuve' ? 'approuve' : 'refuse'
 
     // Tenter de récupérer l'employe_id du décideur (pour approuve_par)
-    let approverEmployeId: string | null = null
+    let approverEmployeId: string | null
     if (ctx.employe_id) {
       approverEmployeId = ctx.employe_id
     } else {

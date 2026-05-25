@@ -139,8 +139,8 @@ export async function GET(request: Request) {
       )
     )
     const buffer = await renderToBuffer(pdf as any)
-    return new NextResponse(buffer as any, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="Declaration_Workfare_TUB_${empForPdf.prenom}_${empForPdf.nom}.pdf"` } })
-  } catch (e: unknown) {
+    return new NextResponse(buffer as unknown as BodyInit, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="Declaration_Workfare_TUB_${empForPdf.prenom}_${empForPdf.nom}.pdf"` } })
+  } catch (e: any) {
     console.error('[depart/workfare]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

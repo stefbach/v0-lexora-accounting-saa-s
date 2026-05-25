@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ annual_returns: data || [] })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ annual_return: data }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -105,7 +105,7 @@ export async function PATCH(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ annual_return: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

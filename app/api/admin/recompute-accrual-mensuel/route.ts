@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       .select('role')
       .eq('id', user.id)
       .maybeSingle()
-    if (!prof || !['admin', 'super_admin'].includes((prof as any).role)) {
+    if (!prof || !['admin', 'super_admin'].includes((prof as { role?: string }).role || '')) {
       return NextResponse.json({ error: 'Accès admin requis' }, { status: 403 })
     }
 
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
         errors.push({ employe_id: emp.id, error: rpcErr?.message || 'RPC null' })
         continue
       }
-      const newAcquis = Number((v2 as any).al_acquis) || 0
+      const newAcquis = Number((v2 as { al_acquis?: number }).al_acquis) || 0
       const oldAcquis = Number(solde.al_acquis) || 0
       // Ne fait un UPDATE que si la valeur a changé (>0.01 delta) — évite
       // de polluer les audit logs avec des no-op.

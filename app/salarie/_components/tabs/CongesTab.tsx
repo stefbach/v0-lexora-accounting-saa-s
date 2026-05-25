@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
+import { notifySuccess, notifyWarning } from "@/lib/utils/toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -67,7 +68,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
   useEffect(() => {
     const load = async () => {
       setLoadingH(true)
-      try { await refreshData() } catch {}
+      try { await refreshData() } catch { /* noop */ }
       setLoadingH(false)
     }
     load()
@@ -143,10 +144,10 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
               toast.error("Erreur upload certificat", { description: err.error || `HTTP ${certRes.status}` })
             }
           } else {
-            toast.success("Certificat médical transmis")
+            notifySuccess("Certificat médical transmis")
           }
         } catch {
-          toast.warning("Certificat non transmis (réseau)")
+          notifyWarning("Certificat non transmis (réseau)")
         }
       }
 

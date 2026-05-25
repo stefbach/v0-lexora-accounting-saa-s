@@ -28,12 +28,12 @@ export async function GET(
 
     const supabase = getAdminClient()
     const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     if (!['admin', 'rh'].includes(role)) {
       return NextResponse.json({ error: 'Accès réservé RH/admin' }, { status: 403 })
     }
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const sim = await getSimulation(supabase, String(params.id || ''))
     if (!sim) return NextResponse.json({ error: 'Simulation introuvable' }, { status: 404 })
     return NextResponse.json({ simulation: sim })
@@ -53,12 +53,12 @@ export async function DELETE(
 
     const supabase = getAdminClient()
     const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     if (role !== 'admin') {
       return NextResponse.json({ error: 'Annulation réservée admin' }, { status: 403 })
     }
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const result = await annulerSimulation(supabase, String(params.id || ''))
     if (!result.ok) return NextResponse.json({ error: result.erreur }, { status: 500 })
     return NextResponse.json({ success: true })

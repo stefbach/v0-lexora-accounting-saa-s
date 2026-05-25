@@ -273,7 +273,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ error: 'type invalide — utiliser pnl|bilan|cashflow' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[etats-financiers]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }

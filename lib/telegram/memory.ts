@@ -143,6 +143,7 @@ export async function memorySet(input: MemorySetInput): Promise<{ id: string; up
         tags: input.tags ?? [],
         importance: input.importance ?? 50,
         source: input.source ?? 'agent',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- colonne pgvector typée comme string mais Supabase générique l'attend en number[]
         embedding: embeddingStr as any,
         expires_at: input.expires_at ?? null,
         metadata: input.metadata ?? null,
@@ -161,6 +162,7 @@ export async function memorySet(input: MemorySetInput): Promise<{ id: string; up
     tags: input.tags ?? [],
     importance: input.importance ?? 50,
     source: input.source ?? 'agent',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- colonne pgvector typée comme string mais Supabase générique l'attend en number[]
     embedding: embeddingStr as any,
     expires_at: input.expires_at ?? null,
     metadata: input.metadata ?? null,
@@ -189,6 +191,7 @@ export async function memoryRecall(args: {
   const { data, error } = await admin.rpc('agent_memory_recall', {
     p_societe_id: args.societe_id,
     p_user_id: args.user_id,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- arg RPC pgvector typé string non assignable au générique
     p_query_emb: queryEmbStr as any,
     p_top_k: topK,
     p_tag_filter: args.tags && args.tags.length > 0 ? args.tags : null,

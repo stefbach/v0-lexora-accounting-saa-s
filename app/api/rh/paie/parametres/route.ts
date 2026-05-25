@@ -12,7 +12,7 @@ export async function GET() {
 
     const { data } = await supabase.from('parametres_paie_mra').select('*').order('annee', { ascending: false }).limit(1).maybeSingle()
     return NextResponse.json({ params: data || PARAMS_MRA_DEFAUT })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ params: data, message: 'Paramètres sauvegardés' })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

@@ -3,7 +3,7 @@ import { validateLogo, logoPath, MAX_BYTES } from './societe-logo'
 
 describe('validateLogo', () => {
   it('refuse un fichier manquant', () => {
-    const r = validateLogo({ type: '', size: 0 } as any)
+    const r = validateLogo({ type: '', size: 0 } as Parameters<typeof validateLogo>[0])
     expect(r.ok).toBe(false)
   })
 

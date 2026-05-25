@@ -52,7 +52,7 @@ export function PlanningTab({ employe }: { employe: any }) {
         setRawPlanning((plRes.planning || []).filter((p: any) => p.employe_id === employe.id))
         setRawLeaves((cgRes.conges || cgRes.demandes || []).filter((c: any) => c.statut === "approuve" || c.statut === "approved"))
         setRawFeries(jfRes.jours_feries || [])
-      } catch {}
+      } catch { /* noop */ }
       finally {
         if (!cancelled) setLoading(false)
       }

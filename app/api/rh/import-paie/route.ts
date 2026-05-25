@@ -372,7 +372,7 @@ export async function POST(request: Request) {
               const s = String(d).trim()
               if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
               if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) { const [dd, mm, yy] = s.split('/'); return `${yy}-${mm}-${dd}` }
-              try { const dt = new Date(s); if (!isNaN(dt.getTime())) return dt.toISOString().slice(0, 10) } catch {}
+              try { const dt = new Date(s); if (!isNaN(dt.getTime())) return dt.toISOString().slice(0, 10) } catch { /* noop */ }
               return null
             }
             const { data: n, error: empErr } = await supabase.from('employes').insert({

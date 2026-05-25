@@ -169,9 +169,9 @@ function normalizeDate(raw: any): string | null {
   if (!raw) return null
   const s = String(raw).trim()
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-  let m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/)
+  let m = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/)
   if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`
-  m = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/)
+  m = s.match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/)
   if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`
   const d = new Date(s)
   if (!isNaN(d.getTime())) return d.toISOString().split("T")[0]
@@ -319,7 +319,7 @@ export async function processReleveBancaire(
       .eq("iban", iban)
       .limit(1)
       .maybeSingle()
-    if (data) bankAccount = data as any
+    if (data) bankAccount = data as typeof bankAccount
   }
   // 2. Numero de compte scoped to société
   if (!bankAccount && numeroCompte) {
@@ -330,7 +330,7 @@ export async function processReleveBancaire(
       .eq("numero_compte", numeroCompte)
       .limit(1)
       .maybeSingle()
-    if (data) bankAccount = data as any
+    if (data) bankAccount = data as typeof bankAccount
   }
   // 3. Banque + devise (only if bank name looks legit)
   if (!bankAccount && bankName) {
@@ -342,7 +342,7 @@ export async function processReleveBancaire(
       .eq("devise", bankDevise)
       .limit(1)
       .maybeSingle()
-    if (data) bankAccount = data as any
+    if (data) bankAccount = data as typeof bankAccount
   }
   // 4. Last-resort: any account of the société with matching devise (most recent).
   if (!bankAccount) {
@@ -354,7 +354,7 @@ export async function processReleveBancaire(
       .order("date_dernier_releve", { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle()
-    if (data) bankAccount = data as any
+    if (data) bankAccount = data as typeof bankAccount
   }
 
   // -- Soft create a fallback account if still nothing -----------------------
@@ -395,7 +395,7 @@ export async function processReleveBancaire(
         reason: `compte_bancaire_create_failed: ${accErr?.message || "unknown"}`,
       }
     }
-    bankAccount = created as any
+    bankAccount = created as typeof bankAccount
     createdAccount = true
   }
 
@@ -477,7 +477,7 @@ export async function processReleveBancaire(
           societe_id: societeId,
           date_transaction: dt,
           libelle_banque: (t.libelle || "(sans libellé)").slice(0, 500),
-          reference: ((t as any).reference || null) as string | null,
+          reference: ((t as { reference?: string | null }).reference || null) as string | null,
           debit,
           credit,
           tiers_identifie: (t.tiers_detecte || null) as string | null,

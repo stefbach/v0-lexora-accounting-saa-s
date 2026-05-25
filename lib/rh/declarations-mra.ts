@@ -149,7 +149,7 @@ export async function agregerDeclarationsMraMois(
     .rpc('agreger_declarations_mra', { p_societe_id: societeId, p_periode: p })
     .maybeSingle()
   if (error) throw new Error(error.message)
-  const r = (data || {}) as any
+  const r = (data || {}) as Record<string, unknown>
   return {
     societe_id: societeId,
     periode: p,
@@ -164,16 +164,17 @@ export async function agregerDeclarationsMraMois(
     total_training_levy: Number(r.total_training_levy) || 0,
     total_prgf: Number(r.total_prgf) || 0,
     total_a_remettre_mra: Number(r.total_a_remettre_mra) || 0,
-    details: (Array.isArray(r.details) ? r.details : []).map(normaliserDetail),
+    details: (Array.isArray(r.details) ? r.details as Array<Record<string, unknown>> : []).map(normaliserDetail),
   }
 }
 
-function normaliserDetail(d: any): DetailEmployeMra {
+function normaliserDetail(raw: Record<string, unknown>): DetailEmployeMra {
+  const d = raw as Record<string, unknown>
   return {
     employe_id: String(d.employe_id),
     nom: String(d.nom || '').trim(),
-    nic: d.nic || null,
-    tan: d.tan || null,
+    nic: (d.nic as string | null) || null,
+    tan: (d.tan as string | null) || null,
     basic: Number(d.basic) || 0,
     salaire_brut: Number(d.salaire_brut) || 0,
     overtime: Number(d.overtime) || 0,
@@ -185,7 +186,7 @@ function normaliserDetail(d: any): DetailEmployeMra {
     training_levy: Number(d.training_levy) || 0,
     prgf: Number(d.prgf) || 0,
     prgf_eligible: Boolean(d.prgf_eligible),
-    prgf_motif_exemption: d.prgf_motif_exemption || null,
+    prgf_motif_exemption: (d.prgf_motif_exemption as string | null) || null,
   }
 }
 
@@ -335,7 +336,7 @@ async function resolveDossierId(supabase: SupabaseLike, societeId: string): Prom
     .eq('societe_id', societeId)
     .order('created_at', { ascending: false })
     .limit(1).maybeSingle()
-  return (data as any)?.id || null
+  return (data as { id?: string } | null)?.id || null
 }
 
 async function insertEcriture(
@@ -365,7 +366,7 @@ async function insertEcriture(
     })
     .select('id').single()
   if (error) return null
-  return String((data as any).id)
+  return String((data as { id: string }).id)
 }
 
 export interface PaiementMraResult {
@@ -394,8 +395,8 @@ export async function marquerPayeMra(
   if (!paye) return { ok: false, erreur: 'Déclaration PAYE introuvable' }
   if (!csg) return { ok: false, erreur: 'Déclaration CSG introuvable' }
 
-  const p = paye as any
-  const c = csg as any
+  const p = paye as Record<string, unknown>
+  const c = csg as Record<string, unknown>
   const totalPaye = Number(p.total_paye_retenu) || 0
   const totalCsgNsf = (Number(c.total_csg_salarie) || 0)
     + (Number(c.total_csg_patronal) || 0)
@@ -417,8 +418,8 @@ export async function marquerPayeMra(
   }
 
   const dossierId = await resolveDossierId(supabase, args.societeId)
-  const periodeLib = libellePeriode(p.periode)
-  const piece = pieceMra(p.periode)
+  const periodeLib = libellePeriode(String(p.periode))
+  const piece = pieceMra(String(p.periode))
   const exercice = String(args.datePaiement).slice(0, 4)
   const ecritures: string[] = []
 
@@ -517,11 +518,12 @@ export async function getDeclarationsAnnee(
       .order('periode', { ascending: false }),
   ])
   return {
-    paye: ((paye || []) as any[]).map(mapPaye),
-    csg: ((csg || []) as any[]).map(mapCsg),
+    paye: (paye || []).map(mapPaye),
+    csg: (csg || []).map(mapCsg),
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- row Supabase brute, mapping vers DeclarationPayeRecord
 function mapPaye(r: any): DeclarationPayeRecord {
   return {
     id: String(r.id),
@@ -544,6 +546,7 @@ function mapPaye(r: any): DeclarationPayeRecord {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- row Supabase brute, mapping vers DeclarationCsgRecord
 function mapCsg(r: any): DeclarationCsgRecord {
   return {
     id: String(r.id),
@@ -617,7 +620,7 @@ export async function calculerFinalRemuneration(
     .lte('periode', dateExit)
     .order('periode', { ascending: false })
     .limit(1).maybeSingle()
-  const dernier = Number((last as any)?.salaire_brut) || 0
+  const dernier = Number((last as { salaire_brut?: number | string } | null)?.salaire_brut) || 0
 
   // Moyenne 12 derniers mois
   const dateDebut = new Date(dateExit + 'T12:00:00')
@@ -628,7 +631,7 @@ export async function calculerFinalRemuneration(
     .eq('employe_id', employeId)
     .gte('periode', dateDebut.toISOString().slice(0, 10))
     .lte('periode', dateExit)
-  const bulletins = (all || []) as any[]
+  const bulletins = (all || []) as Array<{ salaire_brut?: number | string | null }>
   const sum = bulletins.reduce((a, b) => a + (Number(b.salaire_brut) || 0), 0)
   const moyenne = bulletins.length > 0 ? sum / bulletins.length : 0
 
@@ -677,6 +680,7 @@ export async function getExitStatementsSociete(
     .select(`*, employes:employe_id(prenom, nom)`)
     .eq('societe_id', societeId)
     .order('date_exit', { ascending: false })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- row Supabase avec embed employes:employe_id() — typage manuel coûteux
   return ((data || []) as any[]).map(r => ({
     id: String(r.id),
     employe_id: String(r.employe_id),

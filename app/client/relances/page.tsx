@@ -27,6 +27,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from "@/lib/i18n"
 
@@ -295,8 +296,11 @@ export default function ClientRelancesPage() {
 
         {!societeId ? (
           <Card>
-            <CardContent className="py-16 text-center text-gray-400">
-              {t('inv.rel.no_societe', locale)}
+            <CardContent className="p-0">
+              <EmptyState
+                icon={AlertTriangle}
+                title={t('inv.rel.no_societe', locale)}
+              />
             </CardContent>
           </Card>
         ) : loading ? (
@@ -399,9 +403,12 @@ export default function ClientRelancesPage() {
               <TabsContent value="apreleance" className="space-y-2">
                 {factures.length === 0 ? (
                   <Card>
-                    <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                      <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-500" />
-                      {t('inv.rel.empty_pending', locale)}
+                    <CardContent className="p-0">
+                      <EmptyState
+                        icon={CheckCircle2}
+                        title={t('inv.rel.empty_pending', locale)}
+                        size="md"
+                      />
                     </CardContent>
                   </Card>
                 ) : (
@@ -482,8 +489,12 @@ export default function ClientRelancesPage() {
               <TabsContent value="historique">
                 {historique.length === 0 ? (
                   <Card>
-                    <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                      {t('inv.rel.empty_history', locale)}
+                    <CardContent className="p-0">
+                      <EmptyState
+                        icon={Clock}
+                        title={t('inv.rel.empty_history', locale)}
+                        size="md"
+                      />
                     </CardContent>
                   </Card>
                 ) : (

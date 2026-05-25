@@ -35,7 +35,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ parametres: data ?? getDefaults() })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
     if (result.error) throw result.error
     return NextResponse.json({ parametres: result.data, success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

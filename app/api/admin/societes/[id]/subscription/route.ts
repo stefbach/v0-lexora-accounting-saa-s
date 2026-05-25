@@ -78,9 +78,9 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const admin = getAdminClient()
 
   // Calcul : tente d'abord la fonction SQL (mig 284), fallback JS sinon.
-  let prixMensuel = 0
-  let prixPeriode = 0
-  let modulesInclus: Record<string, boolean> = {}
+  let prixMensuel: number
+  let prixPeriode: number
+  let modulesInclus: Record<string, boolean>
 
   const { data: comp, error: cErr } = await admin.rpc('compute_subscription', {
     p_plan_id: plan_id, p_addon_codes: addons, p_periodicite: period,
@@ -101,13 +101,13 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     }
     prixMensuel = Number(planRow.prix_mensuel_mur || 0)
     prixPeriode = period === 'annuelle'
-      ? Number(planRow.prix_annuel_mur ?? planRow.prix_mensuel_mur * 12 ?? 0)
+      ? Number(planRow.prix_annuel_mur ?? planRow.prix_mensuel_mur * 12)
       : prixMensuel
     modulesInclus = { ...(planRow.modules_inclus || {}) }
     for (const a of addonRows) {
       prixMensuel += Number(a.prix_mensuel_mur || 0)
       prixPeriode += period === 'annuelle'
-        ? Number(a.prix_annuel_mur ?? a.prix_mensuel_mur * 12 ?? 0)
+        ? Number(a.prix_annuel_mur ?? a.prix_mensuel_mur * 12)
         : Number(a.prix_mensuel_mur || 0)
       for (const [k, v] of Object.entries(a.modules_inclus || {})) {
         if (v) modulesInclus[k] = true

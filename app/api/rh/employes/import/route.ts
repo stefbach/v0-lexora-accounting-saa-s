@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ imported, errors, total_rows: rawRows.length, headers_detected: detectedHeaders })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[employes/import]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur import' }, { status: 500 })
   }

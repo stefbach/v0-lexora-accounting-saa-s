@@ -45,7 +45,7 @@ export async function findTiersInAnnuaire(
     .not('nom_variants', 'is', null)
   if (variantCandidates) {
     for (const c of variantCandidates) {
-      const variants = (c as any).nom_variants as string[] | null
+      const variants = (c as { nom_variants?: string[] | null }).nom_variants ?? null
       if (variants && variants.some(v => v.toLowerCase() === lower)) {
         return c as TiersAnnuaireRecord
       }

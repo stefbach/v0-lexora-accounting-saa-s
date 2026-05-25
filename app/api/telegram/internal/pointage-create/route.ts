@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import {
@@ -55,6 +56,14 @@ function parseLatLng(value: any): number | null {
 }
 
 export async function POST(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'pointage.create', async (ctx, body) => {
     if (!ctx.employe_id) {
       return {

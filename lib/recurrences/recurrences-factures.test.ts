@@ -138,7 +138,7 @@ describe('findGenerationsAFaire', () => {
         ],
       },
     })
-    const plans = await findGenerationsAFaire(supabase as any, {
+    const plans = await findGenerationsAFaire(supabase as unknown as Parameters<typeof findGenerationsAFaire>[0], {
       today: '2026-05-10',
     })
     expect(plans).toHaveLength(1)
@@ -166,7 +166,7 @@ describe('runRecurrencesQuotidiennes — dry_run', () => {
         }],
       },
     })
-    const summary = await runRecurrencesQuotidiennes(supabase as any, {
+    const summary = await runRecurrencesQuotidiennes(supabase as unknown as Parameters<typeof findGenerationsAFaire>[0], {
       dry_run: true,
       today: '2026-02-15',
     })

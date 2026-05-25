@@ -272,7 +272,7 @@ export async function verifierProtectionLicenciement(
       p_date_reference: dateRef || new Date().toISOString().slice(0, 10),
     })
     .maybeSingle()
-  const row = data as any
+  const row = data as { est_protege?: boolean; motif?: string | null; date_fin_protection?: string | null } | null
   return {
     est_protege: Boolean(row?.est_protege),
     motif: String(row?.motif || ''),

@@ -107,13 +107,20 @@ export async function calculerProvisionEoySociete(
       .eq('annee', prec.annee)
       .eq('mois', prec.mois)
       .maybeSingle()
-    const details: any[] = Array.isArray((prevSnap as any)?.details_par_employe)
-      ? (prevSnap as any).details_par_employe
+    interface SnapDetail { employe_id: string | number; provision_cumulee: number | string }
+    const snap = prevSnap as { details_par_employe?: unknown } | null
+    const details: SnapDetail[] = Array.isArray(snap?.details_par_employe)
+      ? (snap.details_par_employe as SnapDetail[])
       : []
     provisionsPrec = new Map(details.map(d => [String(d.employe_id), Number(d.provision_cumulee) || 0]))
   }
 
-  const lignes: IAS19EoyLigne[] = ((data || []) as any[]).map(r => {
+  interface RpcRow {
+    employe_id: string; employe_nom?: string | null; salaire_base?: number | string
+    nb_mois_travailles?: number | string; earnings_cumulees?: number | string
+    provision_cumulee?: number | string; eligible?: boolean; motif_non_eligible?: string | null
+  }
+  const lignes: IAS19EoyLigne[] = ((data || []) as RpcRow[]).map(r => {
     const provCum = Number(r.provision_cumulee) || 0
     const eligible = Boolean(r.eligible)
     // Provision effective uniquement si éligible
@@ -188,7 +195,7 @@ async function resolveDossierId(supabase: SupabaseLike, societeId: string): Prom
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
-  return (data as any)?.id || null
+  return (data as { id?: string } | null)?.id || null
 }
 
 export async function genererEcrituresComptablesEoy(
@@ -202,6 +209,7 @@ export async function genererEcrituresComptablesEoy(
     .maybeSingle()
   if (!snap) return { ok: false, erreur: 'Snapshot introuvable' }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- snapshot polymorphe (statut, dates, montants) — typage manuel coûteux pour ce volume de propriétés
   const s = snap as any
   if (s.statut === 'comptabilise') return { ok: false, erreur: 'Déjà comptabilisé' }
 
@@ -264,20 +272,20 @@ export async function genererEcrituresComptablesEoy(
     .select('id')
     .single()
   if (errCrd || !crd) {
-    await supabase.from('ecritures_comptables_v2').delete().eq('id', (dbt as any).id)
+    await supabase.from('ecritures_comptables_v2').delete().eq('id', (dbt as { id: string }).id)
     return { ok: false, erreur: errCrd?.message || 'Insert crédit failed' }
   }
 
   await supabase
     .from('ias19_provisions_eoy_snapshots')
     .update({
-      ecriture_debit_id: (dbt as any).id,
-      ecriture_credit_id: (crd as any).id,
+      ecriture_debit_id: (dbt as { id: string }).id,
+      ecriture_credit_id: (crd as { id: string }).id,
       statut: 'comptabilise',
     })
     .eq('id', snapshotId)
 
-  return { ok: true, debitId: String((dbt as any).id), creditId: String((crd as any).id) }
+  return { ok: true, debitId: String((dbt as { id: string }).id), creditId: String((crd as { id: string }).id) }
 }
 
 // ─── 4. Extourne du mois précédent ──────────────────────────────────
@@ -293,6 +301,7 @@ export async function extournerSnapshotEoy(
     .maybeSingle()
   if (!snap) return { ok: false, erreur: 'Snapshot à extourner introuvable' }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- snapshot polymorphe (statut, dates, montants) — typage manuel coûteux pour ce volume de propriétés
   const s = snap as any
   if (s.statut !== 'comptabilise') {
     return { ok: false, erreur: `Snapshot pas comptabilisé (statut=${s.statut})` }
@@ -351,20 +360,20 @@ export async function extournerSnapshotEoy(
     .select('id')
     .single()
   if (errCrd || !crd) {
-    await supabase.from('ecritures_comptables_v2').delete().eq('id', (dbt as any).id)
+    await supabase.from('ecritures_comptables_v2').delete().eq('id', (dbt as { id: string }).id)
     return { ok: false, erreur: errCrd?.message || 'Insert extourne crédit failed' }
   }
 
   await supabase
     .from('ias19_provisions_eoy_snapshots')
     .update({
-      ecriture_extourne_debit_id: (dbt as any).id,
-      ecriture_extourne_credit_id: (crd as any).id,
+      ecriture_extourne_debit_id: (dbt as { id: string }).id,
+      ecriture_extourne_credit_id: (crd as { id: string }).id,
       statut: 'extourne',
     })
     .eq('id', snapshotId)
 
-  return { ok: true, debitId: String((dbt as any).id), creditId: String((crd as any).id) }
+  return { ok: true, debitId: String((dbt as { id: string }).id), creditId: String((crd as { id: string }).id) }
 }
 
 // ─── 5. Historique ──────────────────────────────────────────────────
@@ -381,6 +390,7 @@ export async function getSnapshotsEoySociete(
     .order('mois', { ascending: false })
   if (annee) q = q.eq('annee', annee)
   const { data } = await q
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- snapshot rows polymorphes
   return ((data || []) as any[]).map(mapSnapshotEoy)
 }
 

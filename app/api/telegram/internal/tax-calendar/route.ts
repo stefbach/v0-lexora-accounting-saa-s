@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 
@@ -7,6 +8,14 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * Rôle requis : comptable+
  */
 export async function GET(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'tax_calendar.get', async (ctx) => {
     if (!hasRole(ctx, 'manager')) {
       return { result: null, status: 'denied', error_msg: 'Échéances réservées aux managers et plus' }

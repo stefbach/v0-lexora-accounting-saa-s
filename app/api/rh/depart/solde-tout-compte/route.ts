@@ -312,13 +312,13 @@ export async function GET(request: Request) {
     const buffer = await renderToBuffer(
       React.createElement(SoldePDF, { emp, soc, dateDepart, typeDepart, lines, total, raison, draft }) as any
     )
-    return new NextResponse(buffer as any, {
+    return new NextResponse(buffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="Solde_Tout_Compte_${emp.prenom}_${emp.nom}.pdf"`,
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[depart/solde] GET', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -349,13 +349,13 @@ export async function POST(request: Request) {
         lines, total, raison: raison_depart, draft,
       }) as any
     )
-    return new NextResponse(buffer as any, {
+    return new NextResponse(buffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="Solde_Tout_Compte_${emp.prenom}_${emp.nom}.pdf"`,
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[depart/solde] POST', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

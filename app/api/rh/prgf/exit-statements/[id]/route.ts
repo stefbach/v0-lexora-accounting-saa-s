@@ -30,12 +30,12 @@ export async function PATCH(
 
     const supabase = getAdminClient()
     const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     if (!['admin', 'rh'].includes(role)) {
       return NextResponse.json({ error: 'Accès réservé RH/admin' }, { status: 403 })
     }
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
@@ -46,7 +46,7 @@ export async function PATCH(
       .eq('id', id)
       .maybeSingle()
     if (!existing) return NextResponse.json({ error: 'Exit statement introuvable' }, { status: 404 })
-    const hasAccess = await userHasAccessToSociete(user.id, String((existing as any).societe_id))
+    const hasAccess = await userHasAccessToSociete(user.id, String((existing as { societe_id: string }).societe_id))
     if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
     const body = await request.json().catch(() => ({}))
@@ -87,12 +87,12 @@ export async function DELETE(
 
     const supabase = getAdminClient()
     const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     if (role !== 'admin') {
       return NextResponse.json({ error: 'Annulation réservée admin' }, { status: 403 })
     }
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
@@ -103,7 +103,7 @@ export async function DELETE(
       .eq('id', id)
       .maybeSingle()
     if (!existing) return NextResponse.json({ error: 'Exit statement introuvable' }, { status: 404 })
-    const hasAccess = await userHasAccessToSociete(user.id, String((existing as any).societe_id))
+    const hasAccess = await userHasAccessToSociete(user.id, String((existing as { societe_id: string }).societe_id))
     if (!hasAccess) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
     const { error } = await supabase.from('prgf_exit_statements')

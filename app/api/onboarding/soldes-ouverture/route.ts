@@ -98,7 +98,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ societe, saisie })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur inconnue' },
       { status: 500 }
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
     const { user } = await requireUserWithRole()
     if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    const body = await request.json().catch(() => ({} as Record<string, unknown>))
+    const body = await request.json().catch(() => ({} as any))
     const societe_id = body.societe_id as string | undefined
     const exercice = body.exercice as string | undefined
     const lignesRaw = body.lignes as LigneSolde[] | undefined
@@ -223,7 +223,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ status: 'ok', result: rpcResult })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur inconnue' },
       { status: 500 }

@@ -78,7 +78,7 @@ export default function ClientEcheancesPage() {
       const d = await res.json()
       const fin = d?.financial || {}
       setFactures(fin.factures || [])
-    } catch {}
+    } catch { /* noop */ }
     finally {
       setLoading(false)
     }

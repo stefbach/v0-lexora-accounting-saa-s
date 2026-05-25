@@ -197,7 +197,7 @@ export async function GET(request: Request) {
       alerts_created: nbInserted,
       date_run: todayStr,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[compliance-scan]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

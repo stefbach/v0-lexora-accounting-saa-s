@@ -16,8 +16,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { ChevronRight, Search, Loader2, Plus } from "lucide-react"
+import { ChevronRight, Search, Loader2, Plus, Users } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useProfile } from "@/hooks/use-profile"
 import { t, getLocale } from "@/lib/i18n"
 
@@ -290,6 +291,15 @@ export default function ComptableClientsPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+      ) : filteredClients.length === 0 ? (
+        <Card>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={Users}
+              title={t('cab.clients.empty', locale)}
+            />
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -351,9 +361,6 @@ export default function ComptableClientsPage() {
                     </TableRow>
                   )
                 })}
-                {filteredClients.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t('cab.clients.empty', locale)}</TableCell></TableRow>
-                )}
               </TableBody>
             </Table>
           </CardContent>

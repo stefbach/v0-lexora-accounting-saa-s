@@ -343,7 +343,7 @@ export default function GeolocalisationPage() {
       fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
     ]).then(([d1, d2]) => {
       const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values()) as any[]
+      const unique = Array.from(new Map(all.map((s: { id: string }) => [s.id, s])).values())
       setSocietes(unique)
       if (unique.length > 0) setSociete(unique[0].id)
     })
@@ -357,7 +357,7 @@ export default function GeolocalisationPage() {
       const data = await res.json()
       setPositions(data.positions || [])
       setGroupes(data.groupes || [])
-    } catch {}
+    } catch { /* noop */ }
     setLoading(false)
   }, [societe])
 

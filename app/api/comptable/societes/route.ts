@@ -85,7 +85,7 @@ export async function GET() {
     const result = Array.from(societeMap.values())
     console.log(`[comptable/societes] returning ${result.length} societes for user ${user.id}`)
     return NextResponse.json({ societes: result })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
   }
 }

@@ -1,60 +1,24 @@
-// @ts-nocheck — TODO 2026-05-23 S2: refactor des country configs OHADA pour
-// matcher les types OhadaPayrollConfig / OhadaTaxConfig / Jurisdiction
-// (champs employee→employeeRate, standard→STANDARD, minimumAmount→minAmount,
-// statementsProvider signature, etc.). Ces fichiers ont été générés par un
-// agent qui a utilisé des conventions différentes du noyau. Cf. PR #232
-// "Known limitations".
-import { OhadaTaxConfig } from '../../tax';
+import type { OhadaTaxConfig } from '../../tax/base-tax-engine'
 
 /**
- * Congo Brazzaville (CG) - CEMAC, devise XAF
- * Configuration fiscale pour la Republique du Congo
- * Source: Code General des Impots - Congo
+ * Congo Brazzaville (CG) — CEMAC, devise XAF
+ * Source: Code Général des Impôts Congo
  */
 export const CONGO_TAX_CONFIG: OhadaTaxConfig = {
   jurisdiction: 'CG',
-  country: 'Congo Brazzaville',
-  region: 'CEMAC',
-  currency: 'XAF',
-
-  // TVA Configuration
-  // TVA standard 18% + surtaxe 5% = 18.9% effectif
-  vatRates: {
-    standard: 0.189, // 18% + 5% surtaxe = 18.9%
-    zero: 0.0,
-    exempt: 0.0,
-  },
-  vatThreshold: 50000000, // XAF
-
-  // Impôt sur les sociétés
-  corporateIncomeTaxRate: 0.30, // 30%
-
-  // Retenues à la source (RAS)
-  withholding: {
-    SERVICES_RESIDENT: 0.077, // Services 7.7%
-    NON_RESIDENT: 0.20, // Non-résidents 20%
-    DIVIDENDS: 0.20, // Dividendes 20%
-    INTERESTS: 0.20, // Intérêts 20%
-    ROYALTIES: 0.20, // Royalties 20%
-  },
-
-  // Impôt minimum
-  minimumCorporateTax: {
-    rate: 0.01, // 1% du chiffre d'affaires
-    minimumAmount: 1000000, // XAF
-  },
-
-  // Fiscalité des établissements permanents
-  permanentEstablishment: {
-    threshold: 183, // jours
-    taxRate: 0.30,
-  },
-
-  // Régimes spéciaux
-  specialRegimes: {
-    smallBusiness: {
-      enabled: true,
-      thresholdCA: 100000000, // XAF
-    },
-  },
-};
+  vatRates: [
+    // TVA standard 18% + surtaxe 5% = 18.9% effectif
+    { code: 'STD', label: 'TVA Normale', rate: 0.189, description: 'Taux normal 18.9% (TVA 18% + surtaxe 5%)' },
+    { code: 'ZERO', label: 'TVA 0%', rate: 0, description: 'Exportations' },
+    { code: 'EXEMPT', label: 'Exonéré', rate: 0, description: 'Produits exonérés' },
+  ],
+  corporateIncomeTaxRate: 0.30, // IS 30%
+  withholdingTaxes: [
+    { code: 'WHT_SERVICES_RESIDENT', rate: 0.077, appliesTo: ['SERVICES'] },
+    { code: 'WHT_NON_RESIDENT', rate: 0.20, appliesTo: ['SERVICES_NR'] },
+    { code: 'WHT_DIVIDENDS', rate: 0.20, appliesTo: ['DIVIDENDS'] },
+    { code: 'WHT_INTERESTS', rate: 0.20, appliesTo: ['INTERESTS'] },
+    { code: 'WHT_ROYALTIES', rate: 0.20, appliesTo: ['ROYALTIES'] },
+  ],
+  minimumCorporateTax: { rate: 0.01, minAmount: 1000000 }, // 1% du CA, min 1M XAF
+}

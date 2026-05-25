@@ -31,7 +31,7 @@ interface MenuSection {
   /** Affichage conditionnel selon régime de la société active (mig 258).
    *  Si défini, la section apparaît UNIQUEMENT pour ces régimes. */
   requiredRegime?: ('gbc1' | 'authorised_company' | 'holding' | 'branch_foreign_pe' | 'domestic')[]
-  items: { href: string; label: string; labelKey?: string; icon: any }[]
+  items: { href: string; label: string; labelKey?: string; icon: any; visibleForRoles?: string[] }[]
 }
 
 interface ActiveModules {
@@ -95,10 +95,10 @@ const MENU: MenuSection[] = [
       { href: "/client/tableau-de-bord", label: "Tableau de bord", labelKey: "nav.dashboard", icon: LayoutDashboard },
       { href: "/client/societes", label: "Mes Sociétés", labelKey: "nav.companies", icon: Building2 },
       { href: "/client/documents", label: "Documents & OCR", labelKey: "nav.documents", icon: FileText },
-      { href: "/client/lex-ocr", label: "Lex OCR (contrôle)", labelKey: "comp.client_sidebar.lex_ocr", icon: Sparkles } as any,
+      { href: "/client/lex-ocr", label: "Lex OCR (contrôle)", labelKey: "comp.client_sidebar.lex_ocr", icon: Sparkles },
       { href: "/client/utilisateurs", label: "Mon Équipe", labelKey: "nav.team", icon: Users },
       { href: "/client/alertes", label: "Alertes", labelKey: "nav.alerts", icon: Bell },
-      { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload, visibleForRoles: ["client_assistant"] } as any,
+      { href: "/client/assistant", label: "Espace Assistant", labelKey: "nav.assistant", icon: Upload, visibleForRoles: ["client_assistant"] },
     ]
   },
   {
@@ -106,13 +106,13 @@ const MENU: MenuSection[] = [
     requiredModule: "facturation",
     items: [
       { href: "/client/factures", label: "Mes Factures", labelKey: "inv.my_invoices", icon: Receipt },
-      { href: "/client/lex-factures", label: "Lex Factures (analyse)", labelKey: "comp.client_sidebar.lex_factures", icon: Sparkles } as any,
+      { href: "/client/lex-factures", label: "Lex Factures (analyse)", labelKey: "comp.client_sidebar.lex_factures", icon: Sparkles },
       { href: "/client/nouvelle-facture", label: "Nouvelle Facture", labelKey: "inv.new_invoice", icon: FilePlus2 },
-      { href: "/client/catalogue", label: "Catalogue services", icon: Package } as any,
-      { href: "/client/contacts", label: "Contacts clients", icon: Users } as any,
-      { href: "/client/recurrences", label: "Récurrences", icon: Repeat } as any,
-      { href: "/client/relances", label: "Relances", icon: Send } as any,
-      { href: "/client/contrats", label: "Contrats Clients", labelKey: "comp.client_sidebar.client_contracts", icon: FileText, visibleForRoles: ["client_admin", "direction"] } as any,
+      { href: "/client/catalogue", label: "Catalogue services", icon: Package },
+      { href: "/client/contacts", label: "Contacts clients", icon: Users },
+      { href: "/client/recurrences", label: "Récurrences", icon: Repeat },
+      { href: "/client/relances", label: "Relances", icon: Send },
+      { href: "/client/contrats", label: "Contrats Clients", labelKey: "comp.client_sidebar.client_contracts", icon: FileText, visibleForRoles: ["client_admin", "direction"] },
       { href: "/client/facturation-settings", label: "Paramètres Facturation", labelKey: "inv.settings", icon: SlidersHorizontal },
     ]
   },
@@ -135,7 +135,7 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/bilan", label: "Bilan & P&L", labelKey: "fin.balance_sheet", icon: BookOpen },
       { href: "/client/ifrs9-ecl", label: "Provision IFRS 9 (ECL)", icon: Scale },
-      { href: "/client/leases", label: "Contrats IFRS 16", icon: FilePen } as any,
+      { href: "/client/leases", label: "Contrats IFRS 16", icon: FilePen },
       { href: "/client/echeances", label: "Échéances", labelKey: "fin.deadlines", icon: CalendarDays },
     ]
   },
@@ -144,26 +144,26 @@ const MENU: MenuSection[] = [
     requiredModule: "etats_financiers",
     requiredRegime: ['gbc1', 'authorised_company', 'holding', 'branch_foreign_pe'],
     items: [
-      { href: "/client/gbc-dashboard", label: "Dashboard GBC", icon: Globe } as any,
-      { href: "/client/gbc-per", label: "PER 80% + FTC", icon: Banknote } as any,
-      { href: "/client/gbc-substance", label: "Substance (CIGA)", icon: Scale } as any,
-      { href: "/client/gbc-transfer-pricing", label: "Transfer Pricing", icon: BarChart3 } as any,
-      { href: "/client/gbc-ubo", label: "Beneficial Owners", icon: Users } as any,
-      { href: "/client/gbc-consolidation", label: "Consolidation IFRS 10", icon: Building2 } as any,
-      { href: "/client/gbc-crs-fatca", label: "CRS / FATCA", icon: FileText } as any,
-      { href: "/client/gbc-pillar-two", label: "BEPS Pillar Two", icon: Globe } as any,
+      { href: "/client/gbc-dashboard", label: "Dashboard GBC", icon: Globe },
+      { href: "/client/gbc-per", label: "PER 80% + FTC", icon: Banknote },
+      { href: "/client/gbc-substance", label: "Substance (CIGA)", icon: Scale },
+      { href: "/client/gbc-transfer-pricing", label: "Transfer Pricing", icon: BarChart3 },
+      { href: "/client/gbc-ubo", label: "Beneficial Owners", icon: Users },
+      { href: "/client/gbc-consolidation", label: "Consolidation IFRS 10", icon: Building2 },
+      { href: "/client/gbc-crs-fatca", label: "CRS / FATCA", icon: FileText },
+      { href: "/client/gbc-pillar-two", label: "BEPS Pillar Two", icon: Globe },
     ]
   },
   {
     section: "Fiscal MRA", sectionKey: "tax.fiscal_mra",
     requiredModule: "fiscal",
     items: [
-      { href: "/client/mra-hub", label: "MRA Hub (Tax Calendar)", icon: Calendar } as any,
+      { href: "/client/mra-hub", label: "MRA Hub (Tax Calendar)", icon: Calendar },
       { href: "/client/tva", label: "TVA MRA", labelKey: "tax.vat", icon: Receipt },
-      { href: "/client/mra-tds", label: "TDS (Section 111A)", icon: Banknote } as any,
-      { href: "/client/mra-cit", label: "CIT (Income Tax Return)", icon: Calculator } as any,
-      { href: "/client/mra-roc", label: "ROC Annual Return", icon: Building2 } as any,
-      { href: "/client/mra-sft", label: "SFT (AML/CFT)", icon: ClipboardList } as any,
+      { href: "/client/mra-tds", label: "TDS (Section 111A)", icon: Banknote },
+      { href: "/client/mra-cit", label: "CIT (Income Tax Return)", icon: Calculator },
+      { href: "/client/mra-roc", label: "ROC Annual Return", icon: Building2 },
+      { href: "/client/mra-sft", label: "SFT (AML/CFT)", icon: ClipboardList },
       { href: "/client/annual-return", label: "Annual Return (Legacy)", labelKey: "tax.annual_return", icon: ClipboardList },
       { href: "/client/it-form3", label: "IT Form 3 (MRA)", labelKey: "tax.it_form3", icon: FileText },
     ]
@@ -173,7 +173,7 @@ const MENU: MenuSection[] = [
     requiredModule: "rh",
     items: [
       { href: "/rh/employes", label: "Employés", labelKey: "hr.employees", icon: Users },
-      { href: "/rh/juridique", label: "Contrats Travail", labelKey: "comp.client_sidebar.work_contracts", icon: FilePen, visibleForRoles: ["client_admin", "direction", "rh", "rh_manager"] } as any,
+      { href: "/rh/juridique", label: "Contrats Travail", labelKey: "comp.client_sidebar.work_contracts", icon: FilePen, visibleForRoles: ["client_admin", "direction", "rh", "rh_manager"] },
       { href: "/rh/groupes", label: "Groupes / Équipes", labelKey: "comp.client_sidebar.groups_teams", icon: Users },
       { href: "/rh/planning", label: "Planning", labelKey: "hr.planning", icon: CalendarDays },
       { href: "/rh/pointage", label: "Pointage", labelKey: "hr.time_clock", icon: Clock },
@@ -193,13 +193,13 @@ const MENU: MenuSection[] = [
     section: "Mon Compte", sectionKey: "account.my_account",
     items: [
       { href: "/client/profil", label: "Mon Profil", labelKey: "account.my_profile", icon: Settings },
-      { href: "/client/telegram-config", label: "Telegram Bot", labelKey: "account.telegram_bot", icon: MessageCircle } as any,
-      { href: "/client/telegram-permissions", label: "Permissions Bot", labelKey: "account.telegram_permissions", icon: MessageCircle, visibleForRoles: ["direction","client_admin","client_assistant","admin","super_admin","rh"] } as any,
-      { href: "/client/settings/google-accounts", label: "Comptes Google (Agenda)", labelKey: "account.google_accounts", icon: Calendar } as any,
-      { href: "/client/email-accounts", label: "Comptes Email", labelKey: "account.email_accounts", icon: Mail } as any,
-      { href: "/client/direction/mra-credentials", label: "Accès MRA (Direction)", labelKey: "account.mra_credentials", icon: KeyRound, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
-      { href: "/client/direction/bank-credentials", label: "Accès Bancaires (Direction)", labelKey: "account.bank_credentials", icon: Banknote, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
-      { href: "/client/direction/mcp-setup", label: "Connecter à Claude Desktop", icon: Sparkles, visibleForRoles: ["direction","client_admin","admin","super_admin"] } as any,
+      { href: "/client/telegram-config", label: "Telegram Bot", labelKey: "account.telegram_bot", icon: MessageCircle },
+      { href: "/client/telegram-permissions", label: "Permissions Bot", labelKey: "account.telegram_permissions", icon: MessageCircle, visibleForRoles: ["direction","client_admin","client_assistant","admin","super_admin","rh"] },
+      { href: "/client/settings/google-accounts", label: "Comptes Google (Agenda)", labelKey: "account.google_accounts", icon: Calendar },
+      { href: "/client/email-accounts", label: "Comptes Email", labelKey: "account.email_accounts", icon: Mail },
+      { href: "/client/direction/mra-credentials", label: "Accès MRA (Direction)", labelKey: "account.mra_credentials", icon: KeyRound, visibleForRoles: ["direction","client_admin","admin","super_admin"] },
+      { href: "/client/direction/bank-credentials", label: "Accès Bancaires (Direction)", labelKey: "account.bank_credentials", icon: Banknote, visibleForRoles: ["direction","client_admin","admin","super_admin"] },
+      { href: "/client/direction/mcp-setup", label: "Connecter à Claude Desktop", icon: Sparkles, visibleForRoles: ["direction","client_admin","admin","super_admin"] },
     ]
   },
 ]
@@ -301,8 +301,9 @@ export function ClientSidebarFull() {
     : MENU.filter(section => {
         if (section.requiredModule && !activeModules[section.requiredModule]) return false
         if (section.requiredRegime && section.requiredRegime.length > 0) {
-          const currentRegime = (societe as any)?.regime || 'domestic'
-          if (!section.requiredRegime.includes(currentRegime as any)) return false
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- societe type from provider may not include `regime` champ (mig 258)
+          const currentRegime = ((societe as any)?.regime || 'domestic') as 'gbc1' | 'authorised_company' | 'holding' | 'branch_foreign_pe' | 'domestic'
+          if (!section.requiredRegime.includes(currentRegime)) return false
         }
         return true
       })
@@ -508,7 +509,7 @@ export function ClientSidebarFull() {
                   {!isCollapsed && (
                     <div className="mt-1 space-y-0.5">
                       {items.map(item => {
-                        const vRoles = (item as any).visibleForRoles
+                        const vRoles = item.visibleForRoles
                         if (vRoles && !effectiveRoles.some(r => vRoles.includes(r))) return null
                       const Icon = item.icon
                       const active = isActive(item.href)

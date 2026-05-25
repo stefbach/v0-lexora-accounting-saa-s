@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
     const reply = response.content[0].type === 'text' ? response.content[0].text : ''
     return NextResponse.json({ reply, tokens: response.usage })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

@@ -163,7 +163,7 @@ export async function GET(request: Request) {
     if (empErr || !emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
 
     return NextResponse.json({ employe: emp })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -646,7 +646,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: 'Action non reconnue. Utilisez calculer_solde, confirmer_depart, sortie_manuelle ou reintegrer.' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

@@ -11,8 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Search, Plus, Loader2, Users, Upload, Download, FileSpreadsheet, Pencil, ExternalLink, UserPlus, Key, User, Briefcase, Banknote, Building2, Trash2, AlertTriangle, Eye, EyeOff, Mail, CheckCircle2, XCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { BANQUES_MAURITIUS } from "@/lib/rh/banques-mauritius"
 import { toast } from "sonner"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
 import { t, getLocale } from "@/lib/i18n"
 
 /* ── Section card for grouped form fields ── */
@@ -177,7 +179,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       // requêtes /api/* sans user). On redirige vers /auth/login pour que
       // l'admin se reconnecte plutôt que d'afficher un message générique.
       if (res.status === 401) {
-        toast.error("Session expirée — reconnexion requise")
+        notifyError("Créer employé", "Session expirée — reconnexion requise")
         const next = typeof window !== "undefined" ? window.location.pathname : "/rh/employes"
         window.location.href = `/auth/login?next=${encodeURIComponent(next)}`
         return
@@ -196,7 +198,7 @@ function CreateEmployeForm({ societes, onCreated, onClose }: { societes: any[]; 
       } else if (status === 'failed') {
         toast.warning(`Employé créé. ⚠️ Génération contrat échouée — à créer manuellement`, { duration: 6000 })
       } else if (!createAccess) {
-        toast.success('✅ Employé créé. Compte Lexora à créer plus tard.')
+        notifySuccess('✅ Employé créé. Compte Lexora à créer plus tard.')
       }
 
       // Création optionnelle du compte Lexora — enchaînée après la fiche
@@ -569,7 +571,7 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
     // écrasait silencieusement le salaire à 0 en DB.
     const salaireSaisi = parseFloat(e.salaire_base)
     if (!Number.isFinite(salaireSaisi) || salaireSaisi <= 0) {
-      toast.error("Salaire invalide — renseignez un montant > 0")
+      notifyError("Modifier salaire", "Renseignez un montant > 0")
       return
     }
     setSaving(true)
@@ -614,13 +616,13 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
         } else if (locked > 0) {
           toast.success(`Salaire mis à jour ✅ ${locked} bulletin(s) verrouillé(s) du mois inchangé(s) (audit historique).`, { duration: 6000 })
         } else {
-          toast.success("Salaire mis à jour ✅ (aucun bulletin du mois en cours)")
+          notifySuccess("Salaire mis à jour ✅ (aucun bulletin du mois en cours)")
         }
       } else {
-        toast.success("Fiche employé mise à jour ✅")
+        notifySuccess("Fiche employé mise à jour ✅")
       }
       onClose(); onSaved()
-    } catch (err: any) { toast.error(err.message || "Erreur") }
+    } catch (err: unknown) { notifyError("Modifier employé", err) }
     finally { setSaving(false) }
   }
 
@@ -736,13 +738,13 @@ function EditEmployeForm({ emp, onSaved, onClose }: { emp: any; onSaved: () => v
               return (
                 <div key={n} className="grid grid-cols-[1fr_140px] gap-2">
                   <Input
-                    value={(e as any)[libKey]||""}
+                    value={(e as unknown as Record<string, string | number | null>)[libKey]||""}
                     onChange={ev=>u(libKey,ev.target.value)}
                     placeholder={`Libellé prime ${n} (ex: Electricity, Loyer...)`}
                   />
                   <Input
                     type="number" min="0" step="0.01"
-                    value={(e as any)[montantKey]??""}
+                    value={(e as unknown as Record<string, string | number | null>)[montantKey]??""}
                     onChange={ev=>u(montantKey,ev.target.value)}
                     placeholder="Montant MUR"
                     className="font-mono"
@@ -1114,10 +1116,10 @@ export default function EmployesPage() {
           {loading ? (
             <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-[#0B0F2E]"/></div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
-              <Users className="w-10 h-10 mx-auto mb-2 opacity-40"/>
-              <p>{t('rha.a.emp.list_empty', locale)}</p>
-            </div>
+            <EmptyState
+              icon={Users}
+              title={t('rha.a.emp.list_empty', locale)}
+            />
           ) : (
             <>
               {/* Mobile: Card view */}

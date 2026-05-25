@@ -25,6 +25,7 @@ import {
   AlertTriangle,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from "@/lib/i18n"
 
@@ -235,8 +236,12 @@ export default function ClientRecurrencesPage() {
               <TabsContent value="modeles">
                 {modeles.length === 0 ? (
                   <Card>
-                    <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                      {t('inv.rec.no_models', locale)}
+                    <CardContent className="p-0">
+                      <EmptyState
+                        icon={Repeat}
+                        title={t('inv.rec.no_models', locale)}
+                        size="md"
+                      />
                     </CardContent>
                   </Card>
                 ) : (
@@ -283,8 +288,12 @@ export default function ClientRecurrencesPage() {
               <TabsContent value="preview">
                 {plans.length === 0 ? (
                   <Card>
-                    <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                      {t('inv.rec.no_pending', locale)}
+                    <CardContent className="p-0">
+                      <EmptyState
+                        icon={Calendar}
+                        title={t('inv.rec.no_pending', locale)}
+                        size="md"
+                      />
                     </CardContent>
                   </Card>
                 ) : (

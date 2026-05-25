@@ -449,7 +449,7 @@ export async function POST(request: Request) {
       fichiers: fichiersGeneres,
     })
 
-  } catch (e: unknown) {
+  } catch (e: any) {
     const msg = e instanceof Error ? e.message : 'Erreur génération virement'
     const stack = e instanceof Error ? e.stack?.split('\n').slice(0, 3).join(' | ') : ''
     // Sécurité : la stack reste côté serveur (Vercel logs), JAMAIS exposée
@@ -490,7 +490,7 @@ export async function GET(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ virements: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

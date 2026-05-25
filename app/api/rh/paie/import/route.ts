@@ -35,9 +35,9 @@ function extractPeriod(texts: string[]): string | null {
       if (m) return `${m[1]}-${num}`
     }
     // "2025-07", "07/2025", "07-2025"
-    const ymd = s.match(/(\d{4})[-\/](\d{2})/)
+    const ymd = s.match(/(\d{4})[-/](\d{2})/)
     if (ymd) return `${ymd[1]}-${ymd[2]}`
-    const dmy = s.match(/(\d{2})[-\/](\d{4})/)
+    const dmy = s.match(/(\d{2})[-/](\d{4})/)
     if (dmy) return `${dmy[2]}-${dmy[1]}`
   }
   return null
@@ -51,10 +51,10 @@ function normalizeHeader(h: string, prevRowCell?: string): string {
   // If previous row has [ER] prefix, combine
   const prev = String(prevRowCell || '').trim()
   if (prev.match(/^\[?ER\]?\s/i) || prev.match(/^\d{4}$/)) {
-    label = prev.replace(/[\[\]]/g, '') + (label ? ' ' + label : '')
+    label = prev.replace(/[[\]]/g, '') + (label ? ' ' + label : '')
   }
 
-  const s = label.toLowerCase().replace(/\s+/g, '_').replace(/[()@.#\[\]]/g, '').replace(/__+/g, '_').replace(/^_|_$/g, '')
+  const s = label.toLowerCase().replace(/\s+/g, '_').replace(/[()@.#[\]]/g, '').replace(/__+/g, '_').replace(/^_|_$/g, '')
 
   const MAP: Record<string, string> = {
     'code': 'code', 'employee_code': 'code', 'employe_code': 'code', 'emp_code': 'code',
@@ -369,7 +369,7 @@ export async function POST(request: Request) {
       headers_detected: headers,
       source_info: { filename: file.name, sheet: sheetName || 'CSV', title_texts: titleTexts.slice(0, 3) },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[paie/import]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

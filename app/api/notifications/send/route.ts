@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ notification })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const message = e instanceof Error ? e.message : 'Erreur interne du serveur'
     return NextResponse.json({ error: message }, { status: 500 })
   }

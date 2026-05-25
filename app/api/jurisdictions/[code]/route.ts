@@ -35,11 +35,11 @@ export async function GET(
       try {
         const taxMod = await import(`@/lib/jurisdictions/ohada/countries/${folder}/tax-config`)
         taxConfig = Object.values(taxMod)[0]
-      } catch {}
+      } catch { /* noop */ }
       try {
         const payMod = await import(`@/lib/jurisdictions/ohada/countries/${folder}/payroll-config`)
         payrollConfig = Object.values(payMod)[0]
-      } catch {}
+      } catch { /* noop */ }
     }
   } catch (e) {
     // Config not found, return basic info only

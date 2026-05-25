@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * GET /api/telegram/internal/expenses-list?chat_id=<n>&statut=brouillon,en_validation
@@ -13,6 +14,9 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * (pas une erreur — l'agent IA pourra orienter vers contact RH).
  */
 export async function GET(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'expense.list', async (ctx) => {
     if (!ctx.employe_id) {
       return { result: { count: 0, expenses: [], note: 'Aucun employé lié à votre compte' } }

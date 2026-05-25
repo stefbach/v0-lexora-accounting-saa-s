@@ -41,7 +41,7 @@ export default function AnnoncesPage() {
       fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
     ]).then(([d1, d2]) => {
       const all = [...(d1.societes || []), ...(d2.societes || [])]
-      const unique = Array.from(new Map(all.map((s: any) => [s.id, s])).values()) as any[]
+      const unique = Array.from(new Map(all.map((s: { id: string }) => [s.id, s])).values())
       setSocietes(unique)
       if (unique.length > 0) setSociete(unique[0].id)
     })
@@ -53,7 +53,7 @@ export default function AnnoncesPage() {
     try {
       const res = await fetch(`/api/rh/annonces?societe_id=${societe}&all=1`).then(r => r.json())
       setAnnonces(res.annonces || [])
-    } catch {}
+    } catch { /* noop */ }
     setLoading(false)
   }, [societe])
 
@@ -82,7 +82,7 @@ export default function AnnoncesPage() {
       setEditingId(null)
       setForm({ titre: "", contenu: "", type: "info", priorite: "0", date_debut: new Date().toISOString().split("T")[0], date_fin: "" })
       load()
-    } catch {}
+    } catch { /* noop */ }
     setSaving(false)
   }
 

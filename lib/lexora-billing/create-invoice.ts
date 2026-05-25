@@ -51,7 +51,7 @@ export async function createLexoraInvoice(input: CreateInvoiceInput): Promise<{
       .select('*')
       .eq('demande_id', input.demande_id)
       .maybeSingle()
-    if (existing) return { invoice: existing as any, reused: true }
+    if (existing) return { invoice: existing as unknown as LexoraInvoice, reused: true }
   }
 
   // 1) Config émetteur
@@ -103,7 +103,7 @@ export async function createLexoraInvoice(input: CreateInvoiceInput): Promise<{
   if (numErr || !numRows) {
     return { invoice: null, reused: false, error: `Échec génération numéro : ${numErr?.message}` }
   }
-  const invoiceNumber: string = typeof numRows === 'string' ? numRows : (numRows as any)?.toString()
+  const invoiceNumber: string = typeof numRows === 'string' ? numRows : (numRows as { toString(): string } | null)?.toString() ?? ''
 
   // 4) Date d'échéance
   const dueDate = new Date(input.invoice_date)
@@ -139,10 +139,10 @@ export async function createLexoraInvoice(input: CreateInvoiceInput): Promise<{
 
   // 6) Écriture comptable (Sprint 2)
   if (settings.dossier_id) {
-    await createAccountingEntry(supabaseAdmin, inserted as any, settings)
+    await createAccountingEntry(supabaseAdmin, inserted as unknown as LexoraInvoice, settings)
   }
 
-  return { invoice: inserted as any, reused: false }
+  return { invoice: inserted as unknown as LexoraInvoice, reused: false }
 }
 
 /**
@@ -162,7 +162,7 @@ async function createAccountingEntry(
   settings: any,
 ): Promise<void> {
   const numeroPiece = invoice.invoice_number
-  const libelle = `Facture ${invoice.invoice_number} — ${(invoice.customer_snapshot as any)?.nom || 'Client'}`
+  const libelle = `Facture ${invoice.invoice_number} — ${(invoice.customer_snapshot as { nom?: string } | null)?.nom || 'Client'}`
 
   const lignes = [
     { compte: settings.compte_client,  debit: invoice.amount_ttc, credit: 0 },

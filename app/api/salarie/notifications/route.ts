@@ -80,7 +80,7 @@ export async function GET() {
       contrats_a_signer: contratsCount || 0,
       bulletins_non_lus: bulletinsCount,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[/api/salarie/notifications] error:', e)
     return NextResponse.json({ contrats_a_signer: 0, bulletins_non_lus: 0 })
   }

@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { callLexoraHeaders, getLexoraBaseUrl } from '@/lib/lexora-internal-auth'
 import { submitMraDeclaration } from '@/lib/telegram/mra-robot'
@@ -25,6 +26,14 @@ const TYPE_INFO: Record<string, { label: string; path: string; method?: 'POST' |
 }
 
 export async function POST(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'payroll.mra_submit', async (ctx, body) => {
     if (!hasRole(ctx, 'direction')) {
       return { result: null, status: 'denied', error_msg: 'Soumission MRA réservée à la direction' }
@@ -108,7 +117,7 @@ export async function POST(req: NextRequest) {
             `${TYPE_INFO[type].label} · ${periode}`,
           )
         }
-      } catch {}
+      } catch { /* noop */ }
       return {
         result: {
           status: submission.status,
@@ -134,7 +143,7 @@ export async function POST(req: NextRequest) {
           'Accusé de réception MRA',
         )
       }
-    } catch {}
+    } catch { /* noop */ }
 
     return {
       result: {

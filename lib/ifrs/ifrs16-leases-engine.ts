@@ -129,8 +129,8 @@ function generateSchedule(
       currentPayment = lease.paymentAmount * Math.pow(1 + lease.indexRate, Math.floor(yearsFromStart))
     }
 
-    let interestPortion = 0
-    let principalPortion = currentPayment
+    let interestPortion: number
+    let principalPortion: number
 
     if (lease.paymentTiming === 'IN_ARREARS') {
       interestPortion = openingLiability * ratePerPeriod

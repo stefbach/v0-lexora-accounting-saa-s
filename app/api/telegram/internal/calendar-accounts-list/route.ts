@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * GET /api/telegram/internal/calendar-accounts-list
@@ -10,6 +11,9 @@ import { getAdminClient } from '@/lib/supabase/admin'
  * create_event / list_events / find_slot.
  */
 export async function GET(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'calendar.accounts_list', async (ctx) => {
     const admin = getAdminClient()
     const { data } = await admin

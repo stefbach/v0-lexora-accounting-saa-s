@@ -181,7 +181,7 @@ export default function EmailAccountsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-slate-600">Provider</label>
-                <select value={provider} onChange={e => setProvider(e.target.value as any)} className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5">
+                <select value={provider} onChange={e => setProvider(e.target.value as 'smtp' | 'resend')} className="mt-1 w-full text-sm border border-slate-300 rounded px-2 py-1.5">
                   <option value="smtp">SMTP (Gmail App Password, OVH, etc.)</option>
                   <option value="resend">Resend (domaine vérifié)</option>
                 </select>

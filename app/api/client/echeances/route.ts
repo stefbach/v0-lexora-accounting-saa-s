@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       let parsed: any = null
       try { parsed = JSON.parse(cleaned) } catch {
         const match = cleaned.match(/\{[\s\S]*\}/)
-        if (match) try { parsed = JSON.parse(match[0]) } catch {}
+        if (match) try { parsed = JSON.parse(match[0]) } catch { /* noop */ }
       }
 
       if (parsed?.date_echeance) {
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
         let parsed: any = null
         try { parsed = JSON.parse(cleaned) } catch {
           const match = cleaned.match(/\{[\s\S]*\}/)
-          if (match) try { parsed = JSON.parse(match[0]) } catch {}
+          if (match) try { parsed = JSON.parse(match[0]) } catch { /* noop */ }
         }
 
         if (parsed?.date_echeance) {
@@ -191,7 +191,7 @@ export async function POST(request: Request) {
       not_found: notFound,
       errors,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })

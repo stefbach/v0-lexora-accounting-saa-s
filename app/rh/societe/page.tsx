@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
 import {
   Loader2, Save, Building2, Phone, Banknote, Settings,
   MapPin, CheckCircle, AlertCircle, FileText, Scale,
@@ -285,7 +286,7 @@ function ContactsEditor({
   // On PUT toute la société avec les contacts mis à jour.
   const saveContactsToDb = async (nextContacts: Contact[], idxTouched: number, op: 'save' | 'delete' = 'save') => {
     if (!societeId) {
-      if (op === 'save') toast.error(t('rha.a.soc.contacts_id_missing', locale))
+      if (op === 'save') notifyError(t('rha.a.soc.contacts_id_missing', locale))
       return
     }
     if (op === 'save') setSavingIdx(idxTouched)
@@ -297,21 +298,21 @@ function ContactsEditor({
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        toast.error(t('rha.a.soc.contacts_err_prefix', locale) + (d.error || res.statusText))
+        notifyError(t('rha.a.soc.contacts_err_prefix', locale), d.error || res.statusText)
         return
       }
       if (op === 'save') {
-        toast.success(t('rha.a.soc.contacts_saved', locale))
+        notifySuccess(t('rha.a.soc.contacts_saved', locale))
         setEditingIdx(prev => {
           const s = new Set(prev)
           s.delete(idxTouched)
           return s
         })
       } else {
-        toast.success(t('rha.a.soc.contacts_deleted', locale))
+        notifySuccess(t('rha.a.soc.contacts_deleted', locale))
       }
-    } catch (e: any) {
-      toast.error(t('rha.a.soc.contacts_network_err', locale) + (e?.message || ''))
+    } catch (e: unknown) {
+      notifyError(t('rha.a.soc.contacts_network_err', locale), e)
     } finally {
       if (op === 'save') setSavingIdx(null)
     }
@@ -321,7 +322,7 @@ function ContactsEditor({
     // Validation minimale : nom ou prénom requis
     const c = contacts[i]
     if (!c.nom?.trim() && !c.prenom?.trim()) {
-      toast.error(t('rha.a.soc.contacts_name_required', locale))
+      notifyError(t('rha.a.soc.contacts_name_required', locale))
       return
     }
     void saveContactsToDb(contacts, i, 'save')

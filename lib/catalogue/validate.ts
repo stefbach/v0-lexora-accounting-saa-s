@@ -29,7 +29,7 @@ export function validateCataloguePayload(
     return { ok: false, error: 'prix_unitaire invalide' }
   }
   const devise = typeof body.devise === 'string' ? body.devise.toUpperCase() : 'MUR'
-  if (!DEVISES_OK.includes(devise as any)) {
+  if (!DEVISES_OK.includes(devise as (typeof DEVISES_OK)[number])) {
     return { ok: false, error: `devise invalide (${DEVISES_OK.join(', ')})` }
   }
   const tva_applicable = body.tva_applicable === true || body.tva_applicable === undefined

@@ -110,7 +110,7 @@ export async function GET(request: Request) {
         taux_mra_reference:   TAUX_MRA,
       },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[annual-allowance GET]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
@@ -159,7 +159,7 @@ export async function POST(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ success: true, actif: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[annual-allowance POST]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
@@ -206,7 +206,7 @@ export async function PUT(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ success: true, actif: data, calcul })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[annual-allowance PUT]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
@@ -226,7 +226,7 @@ export async function DELETE(request: Request) {
     const { error } = await supabase.from('annual_allowance').delete().eq('id', id)
     if (error) throw error
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }
 }

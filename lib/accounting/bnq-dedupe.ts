@@ -117,7 +117,7 @@ export async function dedupeBnqEntries(
       // doublon toute entrée BNQ existante sur le même facture_id + compte +
       // direction (debit/credit) — sans dépendre du libellé qui varie entre
       // les différents code paths (« Paiement X — Y » vs « Règlement Y — X »).
-      const factureId = (e as any).facture_id
+      const factureId = (e as { facture_id?: string | null }).facture_id
       if (factureId) {
         let qf = supabase
           .from('ecritures_comptables_v2')
@@ -132,7 +132,7 @@ export async function dedupeBnqEntries(
         if (byFacture) {
           skipped++
           skipReasons.push(
-            `BNQ ${k.numero_compte} ${k.debit_mur}/${k.credit_mur} facture_id=${factureId} — déjà présent (id=${(byFacture as any).id})`,
+            `BNQ ${k.numero_compte} ${k.debit_mur}/${k.credit_mur} facture_id=${factureId} — déjà présent (id=${(byFacture as { id: string }).id})`,
           )
           continue
         }
@@ -159,7 +159,7 @@ export async function dedupeBnqEntries(
       if (data) {
         skipped++
         skipReasons.push(
-          `BNQ ${k.numero_compte} ${k.debit_mur}/${k.credit_mur} ${k.date_ecriture} — déjà présent (id=${(data as any).id})`,
+          `BNQ ${k.numero_compte} ${k.debit_mur}/${k.credit_mur} ${k.date_ecriture} — déjà présent (id=${(data as { id: string }).id})`,
         )
         continue
       }

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { notifyLeaveCreated } from '@/lib/telegram/notify'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/leave-create
@@ -47,6 +48,9 @@ function countBusinessDays(start: string, end: string): number {
 }
 
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'leave.create', async (ctx, body) => {
     if (!ctx.employe_id) {
       return { result: null, status: 'denied', error_msg: 'Aucun employé lié à votre compte — impossible de créer une demande de congé' }

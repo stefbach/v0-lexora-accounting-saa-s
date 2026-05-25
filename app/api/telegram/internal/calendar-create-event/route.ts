@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { googleCalendarFetch, extractMeetUrl } from '@/lib/google/calendar-client'
 import { randomUUID } from 'crypto'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/calendar-create-event
@@ -19,6 +20,9 @@ import { randomUUID } from 'crypto'
  *   send_invites?      bool (default false → sendUpdates=none)
  */
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'calendar.create_event', async (ctx, body) => {
     // Lit summary/start_iso/end_iso depuis body OU query string (n8n
     // placeholderDefinitions injecte les valeurs en URL params).

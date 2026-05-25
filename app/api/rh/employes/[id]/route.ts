@@ -75,7 +75,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       soldes: soldes.data,
       pointages: pointages.data,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -252,7 +252,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       bulletins_updated: bulletinsUpdated,
       bulletins_locked: bulletinsLocked,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -309,7 +309,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     if (error) throw error
 
     return NextResponse.json({ success: true, mode: 'soft', employe: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

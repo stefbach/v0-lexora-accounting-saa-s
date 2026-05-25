@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { toast } from "sonner"
+import { notifySuccess, notifyError, notifyWarning } from "@/lib/utils/toast"
 import {
   ArrowLeft, Save, Loader2, User, FileText, CalendarDays, Clock,
   Briefcase, CreditCard, Gift, FolderOpen, History, Shield,
@@ -104,11 +104,11 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
   const handleSubmitAccount = async () => {
     if (!employe?.id) return
     if (accountPwd.length < 8) {
-      toast.error("Mot de passe min 8 caractères")
+      notifyError("Mot de passe", "minimum 8 caractères")
       return
     }
     if (accountPwd !== accountPwd2) {
-      toast.error("Mot de passe et confirmation ne correspondent pas")
+      notifyError("Mot de passe", "la confirmation ne correspond pas")
       return
     }
     setAccountSubmitting(true)
@@ -124,17 +124,17 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toast.error(data.error || "Erreur lors de l'opération")
+        notifyError("Enregistrer", data.error || "erreur inconnue")
         return
       }
       if (data.email_sent === false) {
-        toast.warning(
+        notifyWarning(
           isReset
             ? `Mot de passe mis à jour, mais email NON envoyé : ${data.email_error || 'erreur SMTP'}. Communiquer le password manuellement.`
             : `Compte créé, mais email NON envoyé : ${data.email_error || 'erreur SMTP'}. Communiquer le password manuellement.`,
         )
       } else {
-        toast.success(
+        notifySuccess(
           isReset
             ? `Mot de passe mis à jour. Email envoyé à ${employe.email}.`
             : `Compte créé. Email envoyé à ${employe.email}.`,
@@ -148,7 +148,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         setEmploye((prev: any) => prev ? { ...prev, auth_user_id: data.auth_user_id } : prev)
       }
     } catch (e) {
-      toast.error("Erreur réseau : " + (e instanceof Error ? e.message : String(e)))
+      notifyError("Erreur réseau", e)
     } finally {
       setAccountSubmitting(false)
     }
@@ -166,7 +166,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         setEmploye((prev: any) => ({ ...prev, photo_url: data.photo_url }))
         setForm((prev: any) => ({ ...prev, photo_url: data.photo_url }))
       }
-    } catch {}
+    } catch { /* noop */ }
   }
 
   const load = useCallback(async (y?: string, pm?: string) => {
@@ -305,21 +305,26 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
     </div>
   )
 
-  const Field = ({ label, field, type = "text", disabled = false, placeholder = "" }: any) => (
-    <div>
-      <Label className="text-xs text-gray-500 mb-1">{label}</Label>
-      <Input
-        key={`${field}-${employe?.id}`}
-        type={type}
-        defaultValue={type === "date" ? dateVal(form[field]) : (form[field] ?? "")}
-        onBlur={e => u(field, e.target.value)}
-        onChange={type === "date" ? (e => u(field, e.target.value)) : undefined}
-        disabled={disabled}
-        className={`h-11 ${disabled ? "bg-gray-50" : ""}`}
-        placeholder={placeholder}
-      />
-    </div>
-  )
+  const Field = ({ label, field, type = "text", disabled = false, placeholder = "" }: any) => {
+    const fieldId = `emp-${field}`
+    return (
+      <div>
+        <Label className="text-xs text-gray-500 mb-1" htmlFor={fieldId}>{label}</Label>
+        <Input
+          id={fieldId}
+          key={`${field}-${employe?.id}`}
+          type={type}
+          defaultValue={type === "date" ? dateVal(form[field]) : (form[field] ?? "")}
+          onBlur={e => u(field, e.target.value)}
+          onChange={type === "date" ? (e => u(field, e.target.value)) : undefined}
+          disabled={disabled}
+          className={`h-11 ${disabled ? "bg-gray-50" : ""}`}
+          placeholder={placeholder}
+          aria-label={label}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
@@ -327,10 +332,17 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
       <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-[#0B0F2E] via-[#0B0F2E]/95 to-[#4191FF]/80 p-6 shadow-sm">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImciIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjA1KSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiBmaWxsPSJ1cmwoI2cpIi8+PC9zdmc+')] opacity-40" />
         <div className="relative flex items-center gap-5">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/rh/employes")} className="text-white/80 hover:bg-white/10 hover:text-white shrink-0">
-            <ArrowLeft className="w-5 h-5" />
+          <Button aria-label="Retour aux employés" variant="ghost" size="icon" onClick={() => router.push("/rh/employes")} className="text-white/80 hover:bg-white/10 hover:text-white shrink-0">
+            <ArrowLeft className="w-5 h-5" aria-hidden="true" />
           </Button>
-          <div className="relative group shrink-0 cursor-pointer" onClick={() => photoInputRef.current?.click()}>
+          <div
+            className="relative group shrink-0 cursor-pointer"
+            onClick={() => photoInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            aria-label="Modifier la photo de profil"
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); photoInputRef.current?.click() } }}
+          >
             {employe.photo_url ? (
               <img src={employe.photo_url} alt={`${employe.prenom} ${employe.nom}`} className="rounded-full object-cover w-20 h-20 ring-4 ring-white/20 shadow-lg" />
             ) : (
@@ -341,7 +353,7 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
             <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <Camera className="w-6 h-6 text-white" />
             </div>
-            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} aria-label="Photo de profil employé" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
@@ -466,8 +478,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 <Field label="Nom usuel" field="common_name" placeholder="Nom usuel / surnom" />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-gray-500">NIC</Label>
-                    <Input value={form.nic_number || ""} onChange={e => u("nic_number", e.target.value)} placeholder="A1234567890123" />
+                    <Label htmlFor="emp-nic" className="text-xs text-gray-500">NIC</Label>
+                    <Input id="emp-nic" value={form.nic_number || ""} onChange={e => u("nic_number", e.target.value)} placeholder="A1234567890123" />
                   </div>
                   <div className="flex items-end gap-2">
                     <Checkbox checked={form.is_mauritian ?? true} onCheckedChange={v => u("is_mauritian", v)} id="mauritian" />
@@ -476,9 +488,9 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-gray-500">Genre</Label>
+                    <Label className="text-xs text-gray-500" id="emp-genre-label">Genre</Label>
                     <Select value={form.genre || form.gender || "M"} onValueChange={v => u("genre", v)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-labelledby="emp-genre-label" aria-label="Genre"><SelectValue /></SelectTrigger>
                       <SelectContent>{GENDERS.map(g => <SelectItem key={g.v} value={g.v}>{g.l}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -486,16 +498,16 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-gray-500">Statut familial</Label>
+                    <Label className="text-xs text-gray-500" id="emp-statut-familial-label">Statut familial</Label>
                     <Select value={form.statut_familial || ""} onValueChange={v => u("statut_familial", v)}>
-                      <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                      <SelectTrigger aria-labelledby="emp-statut-familial-label" aria-label="Statut familial"><SelectValue placeholder="Choisir..." /></SelectTrigger>
                       <SelectContent>{MARITAL.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-gray-500">Niveau education</Label>
+                    <Label className="text-xs text-gray-500" id="emp-education-label">Niveau education</Label>
                     <Select value={form.education || ""} onValueChange={v => u("education", v)}>
-                      <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                      <SelectTrigger aria-labelledby="emp-education-label" aria-label="Niveau education"><SelectValue placeholder="Choisir..." /></SelectTrigger>
                       <SelectContent>{EDUCATION.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -511,9 +523,9 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   <Field label="Nationalité" field="nationalite" placeholder="MU" />
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Langue préférée</Label>
+                  <Label className="text-xs text-gray-500" id="emp-langue-label">Langue préférée</Label>
                   <Select value={form.langue_preferee || "FR"} onValueChange={v => u("langue_preferee", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-labelledby="emp-langue-label" aria-label="Langue préférée"><SelectValue /></SelectTrigger>
                     <SelectContent>{LANGUES.map(l => <SelectItem key={l.v} value={l.v}>{l.l}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
@@ -737,9 +749,9 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Code contribution" field="contribution_code" placeholder="S2" />
                     <div>
-                      <Label className="text-xs text-gray-500">Categorie CSG</Label>
+                      <Label className="text-xs text-gray-500" id="emp-csg-cat-label">Categorie CSG</Label>
                       <Select value={form.csg_categorie || "A"} onValueChange={v => u("csg_categorie", v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-labelledby="emp-csg-cat-label" aria-label="Categorie CSG"><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="A">A</SelectItem><SelectItem value="B">B</SelectItem></SelectContent>
                       </Select>
                     </div>
@@ -762,18 +774,18 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                   <Label htmlFor="bank" className="text-sm">Paye par virement bancaire</Label>
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Banque</Label>
+                  <Label className="text-xs text-gray-500" id="emp-banque-label">Banque</Label>
                   <Select value={form.bank_name || ""} onValueChange={v => u("bank_name", v)}>
-                    <SelectTrigger><SelectValue placeholder="Choisir une banque..." /></SelectTrigger>
+                    <SelectTrigger aria-labelledby="emp-banque-label" aria-label="Banque"><SelectValue placeholder="Choisir une banque..." /></SelectTrigger>
                     <SelectContent>{BANQUES_MAURITIUS.map(b => <SelectItem key={b.code} value={b.code}>{b.nom}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <Field label="N. compte bancaire" field="bank_account" placeholder="000012345678" />
                 <Field label="IBAN" field="iban" placeholder="MU17BOMM0101101030300200000MUR" />
                 <div>
-                  <Label className="text-xs text-gray-500">Devise salaire</Label>
+                  <Label className="text-xs text-gray-500" id="emp-devise-label">Devise salaire</Label>
                   <Select value={form.devise_salaire || "MUR"} onValueChange={v => u("devise_salaire", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-labelledby="emp-devise-label" aria-label="Devise salaire"><SelectValue /></SelectTrigger>
                     <SelectContent>{DEVISES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
@@ -1089,8 +1101,8 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
         {/* ===== TAB 7: Pointage ===== */}
         <TabsContent value="pointage" className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#0B0F2E]">Pointage</h2>
-            <Input type="month" value={pointageMois} onChange={e => setPointageMois(e.target.value)} className="w-48" />
+            <h2 className="text-lg font-semibold text-[#0B0F2E]" id="pointage-heading">Pointage</h2>
+            <Input aria-label="Mois de pointage" type="month" value={pointageMois} onChange={e => setPointageMois(e.target.value)} className="w-48" />
           </div>
           <div className="grid grid-cols-3 gap-4">
             <Card className="rounded-2xl shadow-sm"><CardContent className="pt-6 text-center">
@@ -1225,25 +1237,30 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
                 : <>Définissez un mot de passe pour <span className="font-mono">{employe.email}</span>. L'employé recevra un email avec ses identifiants et pourra se connecter immédiatement.</>}
             </p>
             <div>
-              <Label className="text-xs text-gray-500">Mot de passe (min 8 caractères)</Label>
+              <Label htmlFor="emp-account-pwd" className="text-xs text-gray-500">Mot de passe (min 8 caractères)</Label>
               <Input
+                id="emp-account-pwd"
                 type="password"
                 value={accountPwd}
                 onChange={(e) => setAccountPwd(e.target.value)}
                 autoComplete="new-password"
                 minLength={8}
                 placeholder="••••••••"
+                aria-required="true"
               />
             </div>
             <div>
-              <Label className="text-xs text-gray-500">Confirmer le mot de passe</Label>
+              <Label htmlFor="emp-account-pwd2" className="text-xs text-gray-500">Confirmer le mot de passe</Label>
               <Input
+                id="emp-account-pwd2"
                 type="password"
                 value={accountPwd2}
                 onChange={(e) => setAccountPwd2(e.target.value)}
                 autoComplete="new-password"
                 minLength={8}
                 placeholder="••••••••"
+                aria-required="true"
+                aria-invalid={accountPwd2.length > 0 && accountPwd !== accountPwd2}
               />
               {accountPwd2.length > 0 && accountPwd !== accountPwd2 && (
                 <p className="text-xs text-red-600 mt-1">Les mots de passe ne correspondent pas.</p>

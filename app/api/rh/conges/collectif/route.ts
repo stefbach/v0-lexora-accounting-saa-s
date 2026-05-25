@@ -79,7 +79,7 @@ async function loadJoursFeriesForYears(
     for (const r of data || []) {
       if (!(r as any).travail_autorise) set.add(String((r as any).date).slice(0, 10))
     }
-  } catch {}
+  } catch { /* noop */ }
   if (set.size === 0) {
     for (const y of years) for (const h of getMauritiusPublicHolidays(y)) set.add(h)
   }
@@ -352,7 +352,7 @@ export async function POST(request: Request) {
       skipped_arrivee: skippedArrivee,
       skipped_depart: skippedDepart,
     }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[conges/collectif] error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

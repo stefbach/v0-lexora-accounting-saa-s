@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { safeBearer } from '@/lib/security/safe-equal'
 
 /**
  * Auth pour les endpoints /api/telegram/internal/*.
  *
  * Sécurité multi-couches :
- * 1. Header X-Internal-Token === process.env.INTERNAL_API_TOKEN
+ * 1. Header X-Internal-Token comparé en temps constant à INTERNAL_API_TOKEN (safeBearer, SEC-004)
  * 2. chat_id passé en query ou body → résolu en user_id + role + societe_id
  *    via la table telegram_users + user_societes
  * 3. Le role retourné est utilisé par chaque endpoint pour vérifier la permission
@@ -54,7 +55,9 @@ export function hasRole(ctx: TelegramContext, min: TelegramRole): boolean {
 
 export async function resolveTelegramContext(req: NextRequest): Promise<TelegramContext> {
   const internalToken = req.headers.get('x-internal-token')
-  if (!internalToken || internalToken !== process.env.INTERNAL_API_TOKEN) {
+  const expectedInternalToken = process.env.INTERNAL_API_TOKEN || ''
+  // SEC-004 : comparaison en temps constant pour empêcher timing attacks
+  if (!expectedInternalToken || !safeBearer(internalToken, expectedInternalToken)) {
     throw NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -67,7 +70,7 @@ export async function resolveTelegramContext(req: NextRequest): Promise<Telegram
     try {
       const body = await req.clone().json()
       chatIdRaw = body?.chat_id ?? null
-    } catch {}
+    } catch { /* noop */ }
   }
   if (!chatIdRaw) {
     throw NextResponse.json({ error: 'chat_id requis' }, { status: 400 })
@@ -93,7 +96,7 @@ export async function resolveTelegramContext(req: NextRequest): Promise<Telegram
   // Récupère le rôle + override de capabilities dans la société active.
   // Si la colonne telegram_capabilities n'a pas été migrée (mig 266), on
   // retombe gracieusement sur le SELECT minimal et on utilise les defaults.
-  let us: any = null
+  let us: any
   {
     const res = await admin
       .from('user_societes')
@@ -231,7 +234,7 @@ export async function withTelegramAuth(
 
   let body: any = null
   if (req.method !== 'GET') {
-    try { body = await req.clone().json() } catch {}
+    try { body = await req.clone().json() } catch { /* noop */ }
   }
 
   // Fusionne query string → body. Workaround pour le bug n8n
@@ -255,8 +258,8 @@ export async function withTelegramAuth(
 
   const t0 = Date.now()
   const admin = getAdminClient()
-  let status: 'success' | 'denied' | 'error' = 'success'
-  let result: any = null
+  let status: 'success' | 'denied' | 'error'
+  let result: any
   let error_msg: string | undefined
 
   try {

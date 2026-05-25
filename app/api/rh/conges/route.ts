@@ -439,7 +439,7 @@ export async function GET(request: Request) {
           | 'en_acquisition'
           | 'hors_wra_basic_sup_50k'
           | 'migrant_worker_exclu'
-          | 'no_date_arrivee' = 'no_date_arrivee'
+          | 'no_date_arrivee'
         if (!emp.date_arrivee) {
           vlEligibilityStatus = 'no_date_arrivee'
         } else if (emp.is_migrant_worker) {
@@ -651,7 +651,7 @@ export async function GET(request: Request) {
     })
 
     return NextResponse.json({ conges: congesEnriched, employes: employees })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -1419,7 +1419,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: 'Action non reconnue' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

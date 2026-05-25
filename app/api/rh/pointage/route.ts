@@ -463,7 +463,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ pointages: enriched, date, pointage_actif: pointage_actif_daily })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[pointage GET]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -703,7 +703,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: 'type_pointage invalide. Utiliser: entree, sortie, pause_debut, pause_fin, absence_justifiee, manuel' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[pointage POST]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

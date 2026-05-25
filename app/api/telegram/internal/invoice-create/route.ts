@@ -7,6 +7,7 @@ import {
   type ContexteFactureIA,
   type MessageFactureIA,
 } from '@/lib/factures/ia-assistant'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/invoice-create
@@ -88,6 +89,9 @@ async function buildContexte(societe_id: string): Promise<ContexteFactureIA> {
 }
 
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'invoice.create', async (ctx, body) => {
     if (!roleAllowed(ctx)) {
       return {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHash } from 'crypto'
 import { buildSystemPrompt } from '@/lib/telegram/knowledge-base'
 
 /**
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
   const rawPrompt = buildSystemPrompt(locale)
   const prompt = fillTemplate(rawPrompt, ctx)
 
-  const version = require('crypto').createHash('sha1').update(prompt).digest('hex').slice(0, 12)
+  const version = createHash('sha1').update(prompt).digest('hex').slice(0, 12)
 
   return NextResponse.json({
     prompt,

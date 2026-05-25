@@ -259,7 +259,7 @@ export default function ElaborationPaiePage() {
                     {employes.map(e => (
                       <TableRow key={e.id} className="hover:bg-gray-50">
                         <TableCell><Checkbox checked={selected.has(e.id)} onCheckedChange={(checked) => {
-                          const next = new Set(selected); checked ? next.add(e.id) : next.delete(e.id); setSelected(next)
+                          const next = new Set(selected); if (checked) { next.add(e.id) } else { next.delete(e.id) } setSelected(next)
                         }} /></TableCell>
                         <TableCell className="font-medium">{e.prenom} {e.nom}</TableCell>
                         <TableCell className="text-gray-500">{e.poste || "--"}</TableCell>

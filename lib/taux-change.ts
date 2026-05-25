@@ -217,7 +217,7 @@ export async function fetchAndStoreRates(): Promise<{ success: boolean; rates: R
   const errors: string[] = []
 
   // ── 1. Source officielle BOM (devises principales) ──
-  let bomDate = today
+  let bomDate: string
   try {
     const bom = await fetchBomRates()
     const bomMap = toRateMap(bom)

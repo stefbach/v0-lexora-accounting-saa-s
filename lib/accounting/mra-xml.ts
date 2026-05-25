@@ -4,7 +4,7 @@
  */
 
 const escape = (s: string | null | undefined) => String(s || '').replace(/[<>&'"]/g, c =>
-  ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' } as any)[c])
+  ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' } as Record<string, string>)[c])
 
 export function generateVatReturnXml(opts: {
   societe_brn: string; societe_tan: string; periode: string;

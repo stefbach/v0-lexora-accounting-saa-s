@@ -107,7 +107,7 @@ async function createOne(
     }, { onConflict: 'id' })
     if (profileErr) {
       // Tentative de rollback auth — best effort.
-      try { await supabase.auth.admin.deleteUser(userId) } catch {}
+      try { await supabase.auth.admin.deleteUser(userId) } catch { /* noop */ }
       return { employe_id: input.employe_id, status: 'error', error: `Erreur profil : ${profileErr.message}` }
     }
 
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: result.error, result }, { status: 400 })
     }
     return NextResponse.json({ success: true, result })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

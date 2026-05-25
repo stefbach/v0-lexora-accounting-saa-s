@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ photo_url: photoUrl, storage_path: storagePath })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const msg = e instanceof Error ? e.message : 'Erreur'
     console.error('[employes/me/photo] exception:', msg)
     return NextResponse.json({ error: msg }, { status: 500 })

@@ -1,44 +1,23 @@
-// @ts-nocheck — TODO 2026-05-23 S2: refactor des country configs OHADA pour
-// matcher les types OhadaPayrollConfig / OhadaTaxConfig / Jurisdiction
-// (champs employee→employeeRate, standard→STANDARD, minimumAmount→minAmount,
-// statementsProvider signature, etc.). Ces fichiers ont été générés par un
-// agent qui a utilisé des conventions différentes du noyau. Cf. PR #232
-// "Known limitations".
-import { OhadaTaxConfig } from '../../tax';
+import type { OhadaTaxConfig } from '../../tax/base-tax-engine'
 
+/**
+ * Guinée (Conakry) — devise GNF
+ * Source: Code Général des Impôts Guinée
+ */
 export const GUINEA_TAX_CONFIG: OhadaTaxConfig = {
   jurisdiction: 'GN',
-  country: 'Guinea',
-  currency: 'GNF',
-
-  vatRates: {
-    standard: 0.18,
-    zero: 0.0,
-    exempt: null,
-  },
-
-  corporateIncomeTax: {
-    rate: 0.25,
-    jurisdictionCode: 'GN',
-  },
-
-  withholdingTax: {
-    services_resident: 0.05,
-    services_nonresident: 0.15,
-    dividends: 0.10,
-    interests: 0.10,
-    royalties: 0.15,
-  },
-
-  minimumCorporateTax: {
-    rate: 0.015,
-    flatAmount: 15000000, // GNF
-    currency: 'GNF',
-  },
-
-  deductibilityRules: {
-    interest_limitation: null,
-    transfer_pricing_required: false,
-    documentation_threshold: null,
-  },
-};
+  vatRates: [
+    { code: 'STD', label: 'TVA Normale', rate: 0.18, description: 'Taux normal 18%' },
+    { code: 'ZERO', label: 'TVA 0%', rate: 0, description: 'Exportations' },
+    { code: 'EXEMPT', label: 'Exonéré', rate: 0, description: 'Produits exonérés' },
+  ],
+  corporateIncomeTaxRate: 0.25, // IS 25%
+  withholdingTaxes: [
+    { code: 'WHT_SERVICES_RESIDENT', rate: 0.05, appliesTo: ['SERVICES'] },
+    { code: 'WHT_SERVICES_NONRESIDENT', rate: 0.15, appliesTo: ['SERVICES_NR'] },
+    { code: 'WHT_DIVIDENDS', rate: 0.10, appliesTo: ['DIVIDENDS'] },
+    { code: 'WHT_INTERESTS', rate: 0.10, appliesTo: ['INTERESTS'] },
+    { code: 'WHT_ROYALTIES', rate: 0.15, appliesTo: ['ROYALTIES'] },
+  ],
+  minimumCorporateTax: { rate: 0.015, minAmount: 15000000 }, // 1.5% du CA, min 15M GNF
+}

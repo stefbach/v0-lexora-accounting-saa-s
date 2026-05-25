@@ -71,7 +71,7 @@ Règles : pas de markdown, pas de backticks, JSON strict uniquement. Si illisibl
     .filter((b): b is Anthropic.TextBlock => b.type === 'text')
     .map(b => b.text).join('')
 
-  let parsed: any = {}
+  let parsed: any
   try {
     parsed = JSON.parse(text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim())
   } catch {

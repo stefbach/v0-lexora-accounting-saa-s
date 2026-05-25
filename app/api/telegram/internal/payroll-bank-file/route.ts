@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { callLexoraHeaders, getLexoraBaseUrl } from '@/lib/lexora-internal-auth'
 import { sendTelegramDocumentBuffer, sendTelegramMessage } from '@/lib/telegram/auth'
@@ -16,6 +17,14 @@ import { sendTelegramDocumentBuffer, sendTelegramMessage } from '@/lib/telegram/
  * Sortie : un fichier par banque + un récap CSV des employés sans coordonnées.
  */
 export async function POST(req: NextRequest) {
+  const __hmac = await verifyHmac(req)
+  if (!__hmac.ok) {
+    return NextResponse.json(
+      { status: 'error', error_msg: `hmac_failed:${__hmac.reason}`, result: null },
+      { status: 403 },
+    )
+  }
+
   return withTelegramAuth(req, 'payroll.bank_file', async (ctx, body) => {
     if (!hasRole(ctx, 'direction')) {
       return { result: null, status: 'denied', error_msg: 'Génération des virements salaires réservée à la direction' }
@@ -54,7 +63,7 @@ export async function POST(req: NextRequest) {
       `Total MUR : ${(recap.montant_total_mur || 0).toLocaleString('fr-FR')}\n` +
       (recap.nb_employes_sans_banque ? `⚠️ ${recap.nb_employes_sans_banque} employé(s) sans coord. bancaires\n` : '') +
       `\n📎 ${fichiers.length} fichier(s) à transmettre à ta banque :`
-    try { await sendTelegramMessage(ctx.chat_id, recapMsg) } catch {}
+    try { await sendTelegramMessage(ctx.chat_id, recapMsg) } catch { /* noop */ }
 
     // Envoie chaque fichier
     let sent = 0

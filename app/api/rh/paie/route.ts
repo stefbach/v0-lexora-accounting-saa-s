@@ -1295,7 +1295,7 @@ export async function POST(request: Request) {
         const { data: reglesData } = await supabase.from('regles_primes')
           .select('*').eq('societe_id', societe_id).eq('actif', true)
         autoRegles = reglesData || []
-      } catch {} // table may not exist
+      } catch { /* noop */ } // table may not exist
 
       for (const emp of finalEmployes || []) {
         // 1. OT depuis pointages
@@ -2409,13 +2409,13 @@ export async function POST(request: Request) {
         const { data: lr } = await supabase.from('paie_periodes_lock')
           .select('*').eq('societe_id', sid).eq('periode', `${periodeStr}-01`).maybeSingle()
         lockRecord = lr
-      } catch {}
+      } catch { /* noop */ }
       try {
         const { data: al } = await supabase.from('paie_audit_log')
           .select('*').eq('societe_id', sid).eq('periode', `${periodeStr}-01`)
           .order('created_at', { ascending: false }).limit(10)
         auditLog = al || []
-      } catch {}
+      } catch { /* noop */ }
 
       return NextResponse.json({
         workflow: {
@@ -2467,7 +2467,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

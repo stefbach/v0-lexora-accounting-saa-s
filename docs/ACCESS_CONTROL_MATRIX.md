@@ -1,10 +1,17 @@
 # ACCESS CONTROL MATRIX
 ## Role-Based Access Control (RBAC) for Lexora SaaS
 
-**Document Version:** 1.0  
-**Last Updated:** 2026-05-22  
+**Document Version:** 1.1  
+**Last Updated:** 2026-05-24  
 **Owner:** Security & Access Control Team  
 **Applicable Standards:** ISO 27001, SOX-equivalent, MRA compliance
+
+> **v1.1 (2026-05-24) — Roadmap V5 9/10 :** ajout de la section
+> *Role hierarchy enforcement (SEC-001)* qui formalise la règle
+> ROLE_LEVEL : **un rôle ne peut gérer qu'un rôle de niveau strictement
+> inférieur**. Mises à jour dans la SOD matrix (User Access),
+> et nouvelles fonctions RLS `user_has_societe_access` /
+> `user_has_employe_access` (SEC-003, migrations 415 A→D).
 
 ---
 
@@ -15,6 +22,40 @@ This document defines Role-Based Access Control (RBAC) for Lexora, ensuring:
 - **Segregation of Duties (SOD):** Critical functions separated
 - **Audit Trail:** All access logged and reviewable
 - **Regulatory Compliance:** MRA, GDPR, ISO 27001
+
+---
+
+## ROLE HIERARCHY ENFORCEMENT (SEC-001)
+
+Lexora enforces a **strict numeric role hierarchy** to prevent privilege
+escalation. The hierarchy is encoded in `lib/auth/roles.ts` as the
+`ROLE_LEVEL` constant:
+
+| Role | Level | Can manage (≤ self − 1) |
+|------|------:|--------------------------|
+| `super_admin` | 100 | all other roles |
+| `admin` | 80 | comptable, rh, assistant, client_admin, client_user |
+| `comptable` | 60 | assistant_comptable, client_user |
+| `rh` / `rh_manager` | 60 | client_user only |
+| `assistant_comptable` | 40 | client_user only |
+| `client_admin` | 30 | client_user (own societe) |
+| `client_user` | 10 | none |
+| `service_account` | 0 | none |
+
+**Hard rules (enforced server-side via `canManageRole(actor, target)`):**
+
+- ❌ `rh` (or `rh_manager`) **cannot reset, promote, or delete** a
+  `super_admin` or `admin` — historical incident: a `rh` user was able
+  to trigger a password reset on a `super_admin` account before SEC-001.
+- ❌ `comptable` cannot modify an `admin` or `super_admin`.
+- ❌ `client_admin` cannot modify any internal Lexora role.
+- ❌ No user (other than `super_admin`) may elevate another user above
+  their own level.
+- ✅ Only `super_admin` can create another `super_admin`.
+
+All role-changing endpoints (`/api/admin/users/**`,
+`/api/rh/employes/[id]/reset-password`, etc.) MUST call `canManageRole`
+before any `auth.admin.*` mutation.
 
 ---
 
@@ -365,6 +406,12 @@ Service Account: mra-filing-lexora
 | **Payroll** | RH Manager | RH Manager (review) | RH Manager | Comptable (GL post) |
 | **MRA Filing** | RH/Comptable | Comptable (review) | Admin (encrypted) | Admin (verify) |
 | **User Access** | Admin | Admin (different) | Admin (different) | Admin (audit log) |
+| **Password Reset** | RH (own level) | Admin/Super_Admin | n/a | Audit (413) |
+
+> **SEC-001:** Password reset of a higher-or-equal role is **blocked
+> server-side** (see `canManageRole`). `rh` cannot reset `super_admin`,
+> `comptable` cannot reset `admin`. All password resets are logged to
+> `password_reset_audit` (migration 413_password_reset_audit.sql).
 
 **Example: Invoice-to-Payment**
 
@@ -381,6 +428,39 @@ Service Account: mra-filing-lexora
 ---
 
 ## ROW-LEVEL SECURITY (RLS) POLICIES
+
+### RLS Helper Functions (SEC-003, Phase 2)
+
+Since migrations **415 A→D** (May 2026), all new RLS policies MUST use
+the two `SECURITY DEFINER` helper functions instead of inline
+sub-queries. They centralise the access logic, respect the role
+hierarchy, and avoid Postgres planner blow-ups on nested `IN (SELECT…)`.
+
+```sql
+-- Returns true if the current auth.uid() can access the given societe
+-- (admin/super_admin = always true; comptable/rh = via dossiers or
+-- societes_users; client_admin = own societe only).
+public.user_has_societe_access(p_societe_id uuid) RETURNS boolean
+
+-- Returns true if the current auth.uid() can access the given employe
+-- (admin/rh of the societe = full; client_user = only own employe row).
+public.user_has_employe_access(p_employe_id uuid) RETURNS boolean
+```
+
+**Required pattern for new policies:**
+
+```sql
+CREATE POLICY p_select ON public.<table>
+  FOR SELECT
+  USING (public.user_has_societe_access(societe_id));
+```
+
+**Anti-pattern (do NOT do this — bypasses hierarchy, slow):**
+
+```sql
+-- ❌ Will be rejected in code review
+USING (societe_id IN (SELECT id FROM societes WHERE created_by = auth.uid()))
+```
 
 ### RLS Architecture
 
@@ -634,6 +714,10 @@ Automatic alerts for:
 | | | 180+ table × field access levels |
 | | | SOD requirements documented |
 | | | Service account framework |
+| 1.1 | 2026-05-24 | Roadmap V5 9/10 security hotfixes |
+| | | SEC-001 ROLE_LEVEL hierarchy + `canManageRole` |
+| | | SEC-003 RLS helpers `user_has_societe_access` / `user_has_employe_access` |
+| | | Password reset audit row in SOD matrix (migration 413) |
 
 ---
 

@@ -93,7 +93,7 @@ export async function GET() {
       plans: plansRes.data || [],
       societes: enrichedSocietes,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
       default:
         return NextResponse.json({ error: `Action inconnue: ${action}` }, { status: 400 })
     }
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

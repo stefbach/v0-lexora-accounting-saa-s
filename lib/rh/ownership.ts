@@ -45,19 +45,20 @@ export async function resolveOwnership(
     .eq('id', userId)
     .maybeSingle()
 
-  const role = (profile as any)?.role || ''
+  const p = (profile ?? null) as { role?: string | null; groupe_gere_id?: string | null; employe_id?: string | null } | null
+  const role = p?.role || ''
   const isRH = RH_ROLES.includes(role)
-  const groupe_gere_id = (profile as any)?.groupe_gere_id || null
+  const groupe_gere_id = p?.groupe_gere_id || null
   const isManagerScoped = MANAGER_ROLES.includes(role) && !!groupe_gere_id
 
-  let employe_id = (profile as any)?.employe_id || null
+  let employe_id = p?.employe_id || null
   if (!employe_id) {
     const { data: emp } = await supabase
       .from('employes')
       .select('id')
       .eq('auth_user_id', userId)
       .maybeSingle()
-    employe_id = (emp as any)?.id || null
+    employe_id = (emp as { id?: string } | null)?.id || null
   }
 
   return { isRH, isManagerScoped, employe_id, groupe_gere_id, role }
@@ -85,7 +86,7 @@ export async function canManageEmploye(
       .select('groupe_id')
       .eq('id', employe_id)
       .maybeSingle()
-    return (emp as any)?.groupe_id === ownership.groupe_gere_id
+    return (emp as { groupe_id?: string } | null)?.groupe_id === ownership.groupe_gere_id
   }
   // Sinon : accès uniquement à soi-même.
   return ownership.employe_id !== null && ownership.employe_id === employe_id

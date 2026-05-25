@@ -43,8 +43,8 @@ describe('detectPointageIntent', () => {
     expect(detectPointageIntent('comment vas-tu ?')).toBe(null)
     expect(detectPointageIntent('quel est mon solde de congés ?')).toBe(null)
     expect(detectPointageIntent('je veux savoir mes KPIs')).toBe(null)
-    expect(detectPointageIntent(null as any)).toBe(null)
-    expect(detectPointageIntent(undefined as any)).toBe(null)
+    expect(detectPointageIntent(null as unknown as string)).toBe(null)
+    expect(detectPointageIntent(undefined as unknown as string)).toBe(null)
   })
 })
 

@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const supabase = getAdminClient()
     const { data: prof } = await supabase
       .from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     if (!['admin', 'rh'].includes(role)) {
       return NextResponse.json({ error: 'Accès réservé RH/admin' }, { status: 403 })
     }
@@ -59,8 +59,8 @@ export async function POST(request: Request) {
     )
     const recap = calculerRecapSociete(
       societeId, annee, calculs, joursFeries,
-      (soc as any)?.eoy_bonus_date_paiement_75pct || null,
-      (soc as any)?.eoy_bonus_date_paiement_25pct || null,
+      (soc as { eoy_bonus_date_paiement_75pct?: string | null } | null)?.eoy_bonus_date_paiement_75pct || null,
+      (soc as { eoy_bonus_date_paiement_25pct?: string | null } | null)?.eoy_bonus_date_paiement_25pct || null,
     )
 
     return NextResponse.json({ calculs, recap, saved: false, preview: true })

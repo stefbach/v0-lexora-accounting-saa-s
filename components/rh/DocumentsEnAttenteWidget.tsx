@@ -53,12 +53,12 @@ export function DocumentsEnAttenteWidget() {
             if (er.ok) {
               const ej = await er.json()
               const map: Record<string, string> = {}
-              for (const e of (ej?.employes || []) as any[]) {
+              for (const e of (ej?.employes || []) as Array<{ id?: string; prenom?: string; nom?: string; email?: string }>) {
                 if (e?.id) map[e.id] = `${e.prenom || ''} ${e.nom || ''}`.trim() || e.email || e.id
               }
               if (!cancelled) setEmpMap(map)
             }
-          } catch {}
+          } catch { /* noop */ }
         }
       })
       .catch(() => { if (!cancelled) setDocs([]) })

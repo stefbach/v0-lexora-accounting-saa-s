@@ -29,7 +29,7 @@ const FACTURE_BASE = {
 describe('enregistrerPaiement', () => {
   it('refuse un montant invalide', async () => {
     const supabase = createMockSupabase({ tables: { factures: [FACTURE_BASE] } })
-    const res = await enregistrerPaiement(supabase as any, {
+    const res = await enregistrerPaiement(supabase as unknown as Parameters<typeof enregistrerPaiement>[0], {
       facture_id: 'fac-1',
       montant: 0,
       date_paiement: '2026-05-10',
@@ -43,7 +43,7 @@ describe('enregistrerPaiement', () => {
     const supabase = createMockSupabase({
       tables: { factures: [{ ...FACTURE_BASE, statut: 'annule' }] },
     })
-    const res = await enregistrerPaiement(supabase as any, {
+    const res = await enregistrerPaiement(supabase as unknown as Parameters<typeof enregistrerPaiement>[0], {
       facture_id: 'fac-1',
       montant: 500,
       date_paiement: '2026-05-10',
@@ -59,7 +59,7 @@ describe('enregistrerPaiement', () => {
         factures: [{ ...FACTURE_BASE, solde_non_paye: 200 }],
       },
     })
-    const res = await enregistrerPaiement(supabase as any, {
+    const res = await enregistrerPaiement(supabase as unknown as Parameters<typeof enregistrerPaiement>[0], {
       facture_id: 'fac-1',
       montant: 500,
       date_paiement: '2026-05-10',
@@ -74,7 +74,7 @@ describe('enregistrerPaiement', () => {
       tables: { factures: [FACTURE_BASE] },
     })
     const res = await enregistrerPaiement(
-      supabase as any,
+      supabase as unknown as Parameters<typeof enregistrerPaiement>[0],
       {
         facture_id: 'fac-1',
         montant: 500,
@@ -111,7 +111,7 @@ describe('enregistrerPaiement', () => {
         }],
       },
     })
-    const res = await enregistrerPaiement(supabase as any, {
+    const res = await enregistrerPaiement(supabase as unknown as Parameters<typeof enregistrerPaiement>[0], {
       facture_id: 'fac-1',
       montant: 60,
       date_paiement: '2026-05-10',
@@ -130,7 +130,7 @@ describe('enregistrerPaiement', () => {
       tables: { factures: [FACTURE_BASE] },
     })
     vi.mocked(createEcrituresForPayment).mockClear()
-    const res = await enregistrerPaiement(supabase as any, {
+    const res = await enregistrerPaiement(supabase as unknown as Parameters<typeof enregistrerPaiement>[0], {
       facture_id: 'fac-1',
       montant: 500,
       date_paiement: '2026-05-10',
@@ -146,7 +146,7 @@ describe('enregistrerPaiement', () => {
 describe('annulerPaiement', () => {
   it('refuse si paiement_id manquant', async () => {
     const supabase = createMockSupabase()
-    const res = await annulerPaiement(supabase as any, '')
+    const res = await annulerPaiement(supabase as unknown as Parameters<typeof enregistrerPaiement>[0], '')
     expect(res.ok).toBe(false)
   })
 
@@ -158,13 +158,13 @@ describe('annulerPaiement', () => {
         ],
       },
     })
-    const res = await annulerPaiement(supabase as any, 'pay-1')
+    const res = await annulerPaiement(supabase as unknown as Parameters<typeof enregistrerPaiement>[0], 'pay-1')
     expect(res.ok).toBe(true)
 
     const ecrDel = supabase._state.deletes.filter((d) => d.table === 'ecritures_comptables_v2')
     expect(ecrDel).toHaveLength(1)
     const refFolioFilter = ecrDel[0].filters.find((f) => f.op === 'eq' && f.col === 'ref_folio')
-    expect(refFolioFilter && (refFolioFilter as any).val).toBe('PAY-pay-1')
+    expect(refFolioFilter && (refFolioFilter as { val?: unknown }).val).toBe('PAY-pay-1')
 
     const paiementDel = supabase._state.deletes.filter((d) => d.table === 'factures_paiements')
     expect(paiementDel).toHaveLength(1)
@@ -178,7 +178,7 @@ describe('annulerPaiement', () => {
         ],
       },
     })
-    const res = await annulerPaiement(supabase as any, 'pay-2')
+    const res = await annulerPaiement(supabase as unknown as Parameters<typeof enregistrerPaiement>[0], 'pay-2')
     expect(res.ok).toBe(true)
     const ecrDel = supabase._state.deletes.filter((d) => d.table === 'ecritures_comptables_v2')
     expect(ecrDel).toHaveLength(0)

@@ -45,7 +45,7 @@ export function fmtMur(n: number | null | undefined): string {
   return new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(v).replace(/[   ]/g, ' ') + ' MUR'
+  }).format(v).replace(/[\u00a0\u202f\u2009]/g, ' ') + ' MUR'
 }
 
 export function ancienneteLabel(start: string | null, end: string | null): string {
@@ -193,15 +193,18 @@ export function PdfHeader({ soc, docKind, docNumber }: { soc: any; docKind: stri
 }
 
 export function PdfFooter({ legal }: { legal?: string }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- @react-pdf/renderer props `fixed`/`render` non typés sur React.createElement
   return React.createElement(View, { style: sharedStyles.pageFooter, fixed: true } as any,
     React.createElement(Text, { style: sharedStyles.footerText },
       legal || "Conforme au Workers' Rights Act 2019 (Mauritius)."
     ),
-    React.createElement(Text, { style: sharedStyles.footerText, render: ({ pageNumber, totalPages }: any) => `${pageNumber} / ${totalPages}` } as any),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- @react-pdf/renderer `render` callback typing
+    React.createElement(Text, { style: sharedStyles.footerText, render: ({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) => `${pageNumber} / ${totalPages}` } as any),
   )
 }
 
 export function PdfWatermark({ text = 'BROUILLON' }: { text?: string }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- @react-pdf/renderer `fixed` prop non typé sur React.createElement
   return React.createElement(Text, { style: sharedStyles.watermark, fixed: true } as any, text)
 }
 

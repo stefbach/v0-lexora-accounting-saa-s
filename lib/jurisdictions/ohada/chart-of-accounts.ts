@@ -119,7 +119,7 @@ const DEFAULT_ACCOUNTS: Record<AccountingOperation, string> = {
 }
 
 export class OhadaChartOfAccounts implements ChartOfAccountsProvider {
-  readonly jurisdiction: 'OHADA' = 'OHADA'
+  readonly jurisdiction = 'OHADA' as const
   readonly framework = 'SYSCOHADA'
 
   getClasses(): AccountClass[] {

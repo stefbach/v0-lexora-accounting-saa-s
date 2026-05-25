@@ -49,7 +49,7 @@ describe('createEcrituresForFacture', () => {
 
   it('refuse une facture sans societe_id', async () => {
     const supabase = makeClient()
-    const res = await createEcrituresForFacture(supabase, makeFacture({ societe_id: '' as any }))
+    const res = await createEcrituresForFacture(supabase, makeFacture({ societe_id: '' as unknown as string }))
     expect(res.ok).toBe(false)
     expect(res.error).toMatch(/societe_id/i)
   })

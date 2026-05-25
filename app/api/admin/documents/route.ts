@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
     })
 
     return NextResponse.json({ documents, stats, societes: societes || [] })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('Admin documents API error:', e)
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur serveur' },

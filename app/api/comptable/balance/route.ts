@@ -137,7 +137,7 @@ export async function GET(request: Request) {
       nb_comptes: comptes.length,
       periode: { date_debut: dDebut, date_fin: dFin, exercice },
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[balance]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })
   }

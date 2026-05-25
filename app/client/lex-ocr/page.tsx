@@ -90,7 +90,7 @@ export default function LexOcrPage() {
     try {
       const raw = localStorage.getItem(`${RESOLVED_KEY}:${societeId}`)
       if (raw) setResolved(new Set(JSON.parse(raw)))
-    } catch {}
+    } catch { /* noop */ }
   }, [societeId])
 
   const persistResolved = useCallback(
@@ -101,7 +101,7 @@ export default function LexOcrPage() {
           `${RESOLVED_KEY}:${societeId}`,
           JSON.stringify(Array.from(next))
         )
-      } catch {}
+      } catch { /* noop */ }
     },
     [societeId]
   )
@@ -359,10 +359,10 @@ export default function LexOcrPage() {
                       { v: "warning", label: t('core.lex.f_warning', locale), count: alerts.filter((a) => a.severity === "warning").length, color: "border-amber-300" },
                       { v: "info", label: t('core.lex.f_info', locale), count: alerts.filter((a) => a.severity === "info").length, color: "border-blue-300" },
                     ] as const
-                  ).map((opt: any) => (
+                  ).map((opt) => (
                     <button
                       key={opt.v}
-                      onClick={() => setFilter(opt.v as any)}
+                      onClick={() => setFilter(opt.v)}
                       className={`px-3 py-1 text-xs rounded border ${
                         filter === opt.v
                           ? "bg-indigo-600 text-white border-indigo-600"

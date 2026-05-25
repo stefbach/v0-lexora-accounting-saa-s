@@ -218,7 +218,7 @@ export default function ClientGrandLivrePage() {
       setComptes(Array.from(map.values()))
       setEcritures(allEcritures)
       setPcm(pcmList)
-    } catch {}
+    } catch { /* noop */ }
     finally {
       setLoading(false)
     }

@@ -90,7 +90,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ documents: enriched, stats })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })
   }
 }

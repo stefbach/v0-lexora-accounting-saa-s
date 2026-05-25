@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -94,7 +95,7 @@ export default function ReglesPlanningPage() {
             : DEFAULT_REGLES_WRA,
         )
       })
-      .catch(() => toast.error("Impossible de charger les règles"))
+      .catch(() => notifyError("Charger les règles"))
       .finally(() => setLoading(false))
   }, [societe])
 
@@ -195,12 +196,12 @@ export default function ReglesPlanningPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toast.error("Erreur : " + (data?.error || `HTTP ${res.status}`))
+        notifyError("Enregistrer les règles", data?.error || `HTTP ${res.status}`)
         return
       }
-      toast.success("✅ Règles de planning enregistrées")
-    } catch (e: any) {
-      toast.error("Erreur réseau : " + (e?.message || ""))
+      notifySuccess("✅ Règles de planning enregistrées")
+    } catch (e: unknown) {
+      notifyError("Erreur réseau", e)
     } finally {
       setSaving(false)
     }

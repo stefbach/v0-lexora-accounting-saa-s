@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { googleCalendarFetch } from '@/lib/google/calendar-client'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/calendar-delete-event
@@ -12,6 +13,9 @@ import { googleCalendarFetch } from '@/lib/google/calendar-client'
  *   send_cancellations? bool → sendUpdates=all si true (notifie attendees)
  */
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'calendar.delete_event', async (ctx, body) => {
     const account_email = body?.account_email ? String(body.account_email) : undefined
     const calendar_id = String(body?.calendar_id || '').trim()

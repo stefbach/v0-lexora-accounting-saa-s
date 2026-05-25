@@ -148,9 +148,9 @@ export async function googleCalendarFetch(
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        ...(headers as any),
+        ...(headers as Record<string, string> | undefined),
       },
-      body: json ? JSON.stringify(json) : (rest.body as any),
+      body: json ? JSON.stringify(json) : (rest.body as BodyInit | null | undefined),
     })
   }
 
@@ -169,7 +169,7 @@ export async function googleCalendarFetch(
   if (!res.ok) {
     const txt = await res.text().catch(() => '')
     let parsed: any = null
-    try { parsed = JSON.parse(txt) } catch {}
+    try { parsed = JSON.parse(txt) } catch { /* noop */ }
     const msg = parsed?.error?.message || txt.slice(0, 300) || `HTTP ${res.status}`
     throw new Error(`Google Calendar API ${res.status} : ${msg}`)
   }

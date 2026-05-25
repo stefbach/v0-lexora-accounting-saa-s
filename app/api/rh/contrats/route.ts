@@ -198,7 +198,7 @@ export async function POST(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ contrat }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

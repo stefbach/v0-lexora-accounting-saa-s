@@ -25,7 +25,7 @@ async function envoyerWhatsApp(telephone: string, message: string): Promise<void
   }
 
   // Normaliser le numéro : retirer +, espaces, tirets
-  const numero = telephone.replace(/[\s\-\+]/g, '')
+  const numero = telephone.replace(/[\s\-+]/g, '')
 
   try {
     const res = await fetch(`${watiUrl}/api/v1/sendSessionMessage/${numero}`, {
@@ -195,7 +195,7 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     return NextResponse.json({ error: 'Action inconnue. Utilisez "generer_token" ou "signer"' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -225,7 +225,7 @@ export async function GET(request: Request, { params }: Params) {
 
     const { token_signature: _, ...safe } = contrat as any
     return NextResponse.json({ contrat: safe, valide: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

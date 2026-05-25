@@ -481,7 +481,7 @@ export default function RapprochementPage() {
   const toggleTx = (id: string) =>
     setSelectedTxIds((prev) => {
       const n = new Set(prev)
-      n.has(id) ? n.delete(id) : n.add(id)
+      if (n.has(id)) n.delete(id); else n.add(id)
       return n
     })
   const toggleAllInGroup = (items: BankTx[]) =>
@@ -877,7 +877,7 @@ function LinkFacturesDialog({
 
   const toggle = (fid: string) => {
     const n = new Set(selectedFids)
-    n.has(fid) ? n.delete(fid) : n.add(fid)
+    if (n.has(fid)) n.delete(fid); else n.add(fid)
     setSelectedFids(n)
   }
 

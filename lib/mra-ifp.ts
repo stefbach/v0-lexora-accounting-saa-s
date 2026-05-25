@@ -404,7 +404,7 @@ export function generateQRCode(data: string): string {
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      let filled = false
+      let filled: boolean
 
       if (isFinderCell(x, y)) {
         filled = true
@@ -543,12 +543,12 @@ export async function fiscaliseInvoiceWithAudit(
         success: res.success,
         irn: res.irn || null,
         qr_code_url: res.qrCodeData || null,
-        http_status: (res as any).httpStatus || null,
+        http_status: (res as { httpStatus?: number | null }).httpStatus || null,
         duration_ms: durationMs,
         error_code: res.errorCode || null,
         error_message: res.errorMessage || null,
         request_payload: invoice as unknown as object,
-        response_payload: (res as any).rawResponse || res,
+        response_payload: (res as { rawResponse?: unknown }).rawResponse || res,
         source,
         created_by,
       })

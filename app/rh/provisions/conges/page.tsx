@@ -75,8 +75,8 @@ export default function ProvisionsCongesPage() {
         const sb = createClient()
         const { data: { user } } = await sb.auth.getUser()
         if (!user) { setAuthorized(false); return }
-        const { data: prof } = await sb.from('profiles').select('role').eq('id', user.id).maybeSingle()
-        const role = (prof as any)?.role || ''
+        const { data: prof } = await sb.from('profiles').select('role').eq('id', user.id).maybeSingle<{ role: string | null }>()
+        const role = prof?.role || ''
         setUserRole(role)
         if (!['admin', 'rh'].includes(role)) { setAuthorized(false); return }
         setAuthorized(true)
@@ -97,8 +97,8 @@ export default function ProvisionsCongesPage() {
         const sb = createClient()
         const { data } = await sb.from('societes')
           .select('ias19_charges_patronales_pct')
-          .eq('id', societeId).maybeSingle()
-        setChargesPct(Number((data as any)?.ias19_charges_patronales_pct ?? 0.13))
+          .eq('id', societeId).maybeSingle<{ ias19_charges_patronales_pct: number | null }>()
+        setChargesPct(Number(data?.ias19_charges_patronales_pct ?? 0.13))
       } catch { setChargesPct(0.13) }
     })()
     loadHistorique()

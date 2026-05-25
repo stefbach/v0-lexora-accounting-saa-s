@@ -268,7 +268,8 @@ export async function createEcrituresForFacture(
       // de ce montant et on crédite 4471 (TDS retenu à reverser à la MRA).
       // Lecture défensive : ces colonnes peuvent ne pas exister sur env legacy
       // pré-mig 226 → fallback à 0.
-      const tdsMontant = Number((facture as any).tds_montant) || 0
+      const factureExt = facture as FactureForEcritures & { tds_montant?: number | null; tds_categorie?: string | null; tds_taux_pct?: number | null; montant_mur?: number | null }
+      const tdsMontant = Number(factureExt.tds_montant) || 0
       const ttcAprèsTds = ttcMur - tdsMontant
 
       // Credit 401/401<HASH> Fournisseurs — TTC NET du TDS retenu
@@ -301,7 +302,7 @@ export async function createEcrituresForFacture(
           numero_compte: '4471',
           nom_compte: 'TDS retenu à reverser à la MRA',
           libelle: `TDS retenu — ${facture.tiers || ''}`,
-          description: `TDS retenu (cat. ${(facture as any).tds_categorie || '?'}, taux ${(facture as any).tds_taux_pct || '?'}%)`,
+          description: `TDS retenu (cat. ${factureExt.tds_categorie || '?'}, taux ${factureExt.tds_taux_pct || '?'}%)`,
           debit_mur: 0,
           credit_mur: tdsMontant,
           exercice,
@@ -535,7 +536,7 @@ export async function createEcrituresForPayment(
           .maybeSingle()
 
         if (facture) {
-          const factureMurAmount = Number((facture as any).montant_mur) || 0
+          const factureMurAmount = Number((facture as { montant_mur?: number | string | null }).montant_mur) || 0
           const ecart = Math.round((payment.amount_mur - factureMurAmount) * 100) / 100
 
           if (Math.abs(ecart) >= 0.02) {

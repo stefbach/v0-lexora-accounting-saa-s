@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ factures: data, totaux })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -218,7 +218,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ facture: data }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -336,7 +336,7 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json({ facture: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -372,7 +372,7 @@ export async function DELETE(request: Request) {
     try {
       const { data: linkedDocs } = await admin.from('documents').select('id').contains('n8n_result', { facture_id: id })
       for (const doc of linkedDocs || []) await admin.from('documents').delete().eq('id', doc.id)
-    } catch {}
+    } catch { /* noop */ }
 
     // Cascade: delete accounting entries
     // Cascade: delete all journal entries linked to this facture (by ref_folio)
@@ -380,7 +380,7 @@ export async function DELETE(request: Request) {
       await admin.from('ecritures_comptables_v2').delete()
         .eq('societe_id', existing.societe_id)
         .eq('ref_folio', `FAC-${id}`)
-    } catch {}
+    } catch { /* noop */ }
     // Also delete payment entries for this facture
     try {
       const { data: f } = await admin.from('factures').select('rapproche_releve_id, rapproche_transaction_idx').eq('id', id).maybeSingle()
@@ -388,12 +388,12 @@ export async function DELETE(request: Request) {
         await admin.from('ecritures_comptables_v2').delete()
           .eq('ref_folio', `BANK-${f.rapproche_releve_id}-${f.rapproche_transaction_idx}`)
       }
-    } catch {}
+    } catch { /* noop */ }
 
     const { error } = await admin.from('factures').delete().eq('id', id)
     if (error) throw error
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

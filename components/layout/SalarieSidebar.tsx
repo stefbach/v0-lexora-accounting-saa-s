@@ -109,7 +109,7 @@ export function SalarieSidebar() {
           contrats_a_signer: Number(data.contrats_a_signer) || 0,
           bulletins_non_lus: Number(data.bulletins_non_lus) || 0,
         })
-      } catch {}
+      } catch { /* noop */ }
     }
     fetchBadges()
     const t = setInterval(fetchBadges, 60_000)

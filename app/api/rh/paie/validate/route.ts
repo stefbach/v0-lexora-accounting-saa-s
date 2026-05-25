@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       const { data: socData, error: socErr } = await supabase
         .from('societes').select('pointage_actif').eq('id', societe_id).maybeSingle()
       if (!socErr) pointageActif = (socData as any)?.pointage_actif === true
-    } catch {}
+    } catch { /* noop */ }
 
     // Sprint 2 bug #3 — seuil OT lu depuis parametres_paie_mra
     // (ot_seuil_alerte) ou regles_planning.max_heures_ot_mois — fallback
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
         .from('parametres_paie_mra').select('ot_seuil_alerte').eq('societe_id', societe_id).maybeSingle()
       const v = Number((paramsData as any)?.ot_seuil_alerte)
       if (Number.isFinite(v) && v > 0) otSeuilAlerte = v
-    } catch {}
+    } catch { /* noop */ }
 
     const [annee, mois] = periode.split('-').map(Number)
     const nbJours = new Date(annee, mois, 0).getDate()
@@ -253,7 +253,7 @@ export async function POST(request: Request) {
       periode,
       societe_id,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       }).catch(() => null)
     }
-  } catch {}
+  } catch { /* noop */ }
 
   const { error } = await admin.from('user_oauth_accounts').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

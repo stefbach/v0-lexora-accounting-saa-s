@@ -16,6 +16,7 @@ import {
   Key, Eye, EyeOff, AlertTriangle, Loader2
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from "@/lib/i18n"
 
@@ -227,7 +228,7 @@ export default function UtilisateursPage() {
   const ROLES = getRoles(locale)
   const HR_ROLE_GUIDE = getHrRoleGuide(locale)
   const { societeId, societes: providerSocietes } = useSocieteActive()
-  const societes = providerSocietes as any as Societe[]
+  const societes = providerSocietes as unknown as Societe[]
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -303,7 +304,7 @@ export default function UtilisateursPage() {
       )
     }
     list.sort((a, b) => {
-      let cmp = 0
+      let cmp: number
       if (sortField === "full_name") cmp = (a.full_name || "").localeCompare(b.full_name || "")
       else if (sortField === "role") cmp = a.role.localeCompare(b.role)
       else cmp = (a.created_at || "").localeCompare(b.created_at || "")
@@ -373,7 +374,7 @@ export default function UtilisateursPage() {
       const res = await fetch(`/api/client/users?user_id=${user.id}&action=societes`)
       const data = await res.json()
       if (data.societe_ids && data.societe_ids.length > 0) userSocieteIds = data.societe_ids
-    } catch {}
+    } catch { /* noop */ }
     setEditForm({
       full_name: user.full_name || "",
       email: user.email,
@@ -711,10 +712,12 @@ export default function UtilisateursPage() {
         <div className="text-center text-gray-400 py-16">{t('core.users.loading_users', locale)}</div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent className="p-12 text-center">
-            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="font-medium text-gray-500">{t('core.users.none_found', locale)}</p>
-            <p className="text-sm text-gray-400 mt-1">{t('core.users.adjust_or_create', locale)}</p>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={Users}
+              title={t('core.users.none_found', locale)}
+              description={t('core.users.adjust_or_create', locale)}
+            />
           </CardContent>
         </Card>
       ) : (

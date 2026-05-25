@@ -1,10 +1,11 @@
 "use client"
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
+import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
-import { Scale, FileText, Users, ShieldCheck, Settings, LogOut, FileSignature } from "lucide-react"
+import { Scale, FileText, Users, ShieldCheck, Settings, LogOut, FileSignature, Menu, X } from "lucide-react"
 
 const LINKS = [
   { href: '/juridique', label: 'Tableau de bord', labelKey: 'comp.legal_sidebar.dashboard', icon: Scale, exact: true },
@@ -16,6 +17,10 @@ export function JuridiqueSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const locale = getLocale()
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Close sidebar on navigation (mobile)
+  useEffect(() => { setMobileOpen(false) }, [pathname])
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href)
@@ -27,8 +32,30 @@ export function JuridiqueSidebar() {
   }
 
   return (
+    <>
+      {/* Mobile hamburger */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        aria-label={t('comp.sidebar.open_nav', locale)}
+        className="fixed top-4 left-4 z-50 md:hidden print:hidden inline-flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-lg backdrop-blur"
+        style={{
+          background: "linear-gradient(135deg, rgba(11,15,46,0.92) 0%, rgba(11,15,46,0.78) 100%)",
+          border: "1px solid rgba(212,175,55,0.30)",
+        }}
+      >
+        <Menu className="w-4 h-4" />
+        <span className="text-xs font-semibold tracking-wide">LEX</span>
+      </button>
+
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+        />
+      )}
+
     <aside data-lenis-prevent
-      className="w-60 min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-40"
+      className={`w-60 min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-50 overflow-y-auto transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
       style={{
         background:
           "radial-gradient(ellipse 140% 50% at 50% 0%, rgba(65,145,255,0.10) 0%, transparent 70%), radial-gradient(ellipse 140% 40% at 50% 100%, rgba(212,175,55,0.08) 0%, transparent 70%), #0B0F2E",
@@ -36,6 +63,13 @@ export function JuridiqueSidebar() {
         fontFamily: "'Poppins', sans-serif",
       }}
     >
+      <button
+        onClick={() => setMobileOpen(false)}
+        className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10"
+        aria-label={t('comp.sidebar.close_nav', locale)}
+      >
+        <X className="w-5 h-5" />
+      </button>
       <div className="p-5 flex-shrink-0" style={{ borderBottom: "1px solid rgba(232,234,252,0.06)" }}>
         <div className="flex flex-col">
           <div className="flex items-baseline">
@@ -133,5 +167,6 @@ export function JuridiqueSidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }

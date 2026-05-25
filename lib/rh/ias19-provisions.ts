@@ -85,7 +85,7 @@ export async function calculerProvisionSociete(
     .select('ias19_charges_patronales_pct')
     .eq('id', societeId)
     .maybeSingle()
-  const chargesPct = Number((soc as any)?.ias19_charges_patronales_pct ?? 0.13)
+  const chargesPct = Number((soc as { ias19_charges_patronales_pct?: number | string | null } | null)?.ias19_charges_patronales_pct ?? 0.13)
 
   const { data, error } = await supabase.rpc('calculer_provision_conges_ias19', {
     p_societe_id: societeId,

@@ -180,7 +180,8 @@ export async function getSimulationsSociete(
     .order('date_licenciement', { ascending: false })
   if (filtres.statut) q = q.eq('statut', filtres.statut)
   const { data } = await q
-  return ((data || []) as any[]).map(r => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- row Supabase brute avec ~25 colonnes + embed employes
+  return ((data || []) as any[]).map((r: any) => ({
     id: String(r.id),
     employe_id: String(r.employe_id),
     societe_id: String(r.societe_id),
@@ -221,6 +222,7 @@ export async function getSimulation(
     .eq('id', simulationId)
     .maybeSingle()
   if (!data) return null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- row Supabase brute avec ~25 colonnes + embed employes
   const r = data as any
   return {
     id: String(r.id),

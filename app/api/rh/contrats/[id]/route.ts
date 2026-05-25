@@ -143,7 +143,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
     if (error) throw error
     return NextResponse.json({ contrat: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     try {
       const r = await assertAdminForSociete(admin, user.id, societe_id)
       role = r.role
-    } catch (e: unknown) {
+    } catch (e: any) {
       return NextResponse.json({ error: e instanceof Error ? e.message : 'Forbidden' }, { status: 403 })
     }
 
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({ ok: true, ...report })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[admin/cascade-delete]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

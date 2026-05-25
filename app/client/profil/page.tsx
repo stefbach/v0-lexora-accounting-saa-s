@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
+import { createClient } from "@/lib/supabase/client"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { RequireRole, NON_CLIENT_USER_ROLES } from "@/components/client/RequireRole"
 import {
@@ -41,6 +43,10 @@ export default function ProfilPage() {
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [pwdOpen, setPwdOpen] = useState(false)
+  const [newPwd, setNewPwd] = useState("")
+  const [pwdSaving, setPwdSaving] = useState(false)
 
   const societe = activeSociete as Societe | null
   const loadingSociete = societeLoading
@@ -59,6 +65,53 @@ export default function ProfilPage() {
       setPhone(profile.phone || "")
     }
   }, [profile])
+
+  async function handleSaveProfile() {
+    if (!profile?.id) {
+      notifyError("Enregistrer profil", "Profil non chargé")
+      return
+    }
+    setSaving(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from("profiles")
+        .update({ full_name: fullName || null, phone: phone || null })
+        .eq("id", profile.id)
+      if (error) {
+        notifyError("Enregistrer profil", error.message)
+      } else {
+        notifySuccess(t('core.prof.save_changes', locale))
+      }
+    } catch (e: unknown) {
+      notifyError("Enregistrer profil", e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleChangePassword() {
+    if (!newPwd || newPwd.length < 8) {
+      notifyError("Mot de passe", "8 caractères minimum")
+      return
+    }
+    setPwdSaving(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.updateUser({ password: newPwd })
+      if (error) {
+        notifyError("Modifier mot de passe", error.message)
+      } else {
+        notifySuccess(t('core.prof.change_password', locale))
+        setNewPwd("")
+        setPwdOpen(false)
+      }
+    } catch (e: unknown) {
+      notifyError("Modifier mot de passe", e)
+    } finally {
+      setPwdSaving(false)
+    }
+  }
 
 
   if (loading) {
@@ -105,7 +158,9 @@ export default function ProfilPage() {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                readOnly
+                disabled
+                title="Pour modifier votre email, contactez votre comptable."
               />
             </div>
             <div className="space-y-2">
@@ -126,8 +181,19 @@ export default function ProfilPage() {
             </div>
           </div>
           <div className="flex justify-end">
-            <Button style={{ backgroundColor: "#D4AF37", color: "white" }}>
-              {t('core.prof.save_changes', locale)}
+            <Button
+              disabled={saving}
+              onClick={handleSaveProfile}
+              style={{ backgroundColor: "#D4AF37", color: "white" }}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {t('core.prof.save_changes', locale)}
+                </>
+              ) : (
+                t('core.prof.save_changes', locale)
+              )}
             </Button>
           </div>
         </CardContent>
@@ -255,10 +321,43 @@ export default function ProfilPage() {
                 {t('core.prof.password_desc', locale)}
               </p>
             </div>
-            <Button variant="outline" style={{ borderColor: "#0B0F2E", color: "#0B0F2E" }}>
+            <Button
+              variant="outline"
+              onClick={() => setPwdOpen((v) => !v)}
+              style={{ borderColor: "#0B0F2E", color: "#0B0F2E" }}
+            >
               {t('core.prof.change_password', locale)}
             </Button>
           </div>
+          {pwdOpen && (
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-end pt-4 border-t">
+              <div className="space-y-1 flex-1">
+                <Label htmlFor="new-pwd">{t('core.prof.password', locale)}</Label>
+                <Input
+                  id="new-pwd"
+                  type="password"
+                  value={newPwd}
+                  onChange={(e) => setNewPwd(e.target.value)}
+                  placeholder="Min. 8 caractères"
+                  autoComplete="new-password"
+                />
+              </div>
+              <Button
+                onClick={handleChangePassword}
+                disabled={pwdSaving}
+                style={{ backgroundColor: "#D4AF37", color: "white" }}
+              >
+                {pwdSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    OK
+                  </>
+                ) : (
+                  "OK"
+                )}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
       </div>

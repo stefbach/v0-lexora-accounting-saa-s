@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     const filtered = all ? data : (data || []).filter((a: any) => !a.date_fin || a.date_fin >= today)
 
     return NextResponse.json({ annonces: filtered || [] })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
       if (error) throw error
       return NextResponse.json({ annonce: data }, { status: 201 })
     }
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

@@ -30,12 +30,12 @@ export async function PATCH(
 
     const supabase = getAdminClient()
     const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    const role = (prof as any)?.role || ''
+    const role = (prof as { role?: string } | null)?.role || ''
     if (role !== 'admin') {
       return NextResponse.json({ error: 'Validation réservée admin' }, { status: 403 })
     }
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 

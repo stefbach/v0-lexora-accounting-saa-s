@@ -26,7 +26,7 @@ function getAdminClient() {
 
 async function requireRH(userId: string, supabase: ReturnType<typeof getAdminClient>) {
   const { data } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle()
-  const role = (data as any)?.role || ''
+  const role = (data as { role?: string } | null)?.role || ''
   return ['admin', 'rh'].includes(role) ? role : null
 }
 
@@ -43,7 +43,7 @@ export async function PATCH(
     const role = await requireRH(user.id, supabase)
     if (!role) return NextResponse.json({ error: 'RH/admin requis' }, { status: 403 })
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     const body = await request.json().catch(() => ({} as any))
 
@@ -88,7 +88,7 @@ export async function DELETE(
     const role = await requireRH(user.id, supabase)
     if (!role) return NextResponse.json({ error: 'RH/admin requis' }, { status: 403 })
 
-    const params = await Promise.resolve(context.params as any)
+    const params = await (Promise.resolve(context.params) as Promise<Record<string, string>>)
     const id = String(params.id || '')
     if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 

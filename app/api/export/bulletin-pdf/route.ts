@@ -117,7 +117,7 @@ export async function GET(request: Request) {
         'Content-Disposition': `attachment; filename="bulletin_${emp?.code}_${bulletin.periode}.html"`,
       }
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

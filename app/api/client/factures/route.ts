@@ -97,7 +97,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ factures: data || [], totaux })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -438,7 +438,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ facture: data }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     // Extraction robuste du message — couvre les Error JS, les objets
@@ -616,7 +616,7 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json({ facture: data })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     // Extraction du vrai message (Supabase, Postgres, ou Error JS) pour
@@ -696,7 +696,7 @@ export async function DELETE(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })

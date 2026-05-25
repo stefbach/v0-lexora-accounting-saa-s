@@ -129,7 +129,7 @@ export default function LexFacturesPage() {
       if (raw) setResolved(new Set(JSON.parse(raw)))
       const tagged = localStorage.getItem(`${RESOLVED_KEY}-tagged:${societeId}`)
       if (tagged) setTaggedFactures(new Set(JSON.parse(tagged)))
-    } catch {}
+    } catch { /* noop */ }
   }, [societeId])
 
   const persistResolved = useCallback(
@@ -140,7 +140,7 @@ export default function LexFacturesPage() {
           `${RESOLVED_KEY}:${societeId}`,
           JSON.stringify(Array.from(next))
         )
-      } catch {}
+      } catch { /* noop */ }
     },
     [societeId]
   )
@@ -153,7 +153,7 @@ export default function LexFacturesPage() {
           `${RESOLVED_KEY}-tagged:${societeId}`,
           JSON.stringify(Array.from(next))
         )
-      } catch {}
+      } catch { /* noop */ }
     },
     [societeId]
   )
@@ -422,7 +422,7 @@ export default function LexFacturesPage() {
                     ).map((opt) => (
                       <button
                         key={opt.v}
-                        onClick={() => setFilter(opt.v as any)}
+                        onClick={() => setFilter(opt.v)}
                         className={`px-3 py-1 text-xs rounded border ${
                           filter === opt.v
                             ? "bg-emerald-600 text-white border-emerald-600"

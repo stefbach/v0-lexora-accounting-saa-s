@@ -17,7 +17,7 @@ export async function GET() {
     if (error) throw error
 
     return NextResponse.json({ profile, email: user.email })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -44,7 +44,7 @@ export async function PATCH(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ profile: data, message: 'Profil mis à jour' })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

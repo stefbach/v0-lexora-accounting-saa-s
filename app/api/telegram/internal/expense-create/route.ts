@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { ocrExpenseTicket } from '@/lib/telegram/expense-ocr'
+import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
  * POST /api/telegram/internal/expense-create
@@ -27,6 +28,9 @@ const ALLOWED_CATEGORIES = ['repas', 'taxi', 'essence', 'hotel', 'deplacement', 
 const ALLOWED_STATUTS = ['brouillon', 'en_validation']
 
 export async function POST(req: NextRequest) {
+  const _hmac = await verifyHmac(req)
+  if (!_hmac.ok) return new Response(JSON.stringify({ error: _hmac.reason }), { status: 401, headers: { 'content-type': 'application/json' } })
+
   return withTelegramAuth(req, 'expense.create', async (ctx, body) => {
     const admin = getAdminClient()
 

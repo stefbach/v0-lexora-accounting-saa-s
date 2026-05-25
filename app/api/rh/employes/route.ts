@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     const { data, error } = await query
     if (error) throw error
     return NextResponse.json({ employes: data, total: data?.length || 0 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -272,7 +272,7 @@ export async function POST(request: Request) {
       contrat_id: contratId,
       stripped_columns: strippedCols, // info debug : colonnes absentes en prod stripp-ées
     }, { status: 201 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[employes POST] UNCAUGHT:', e)
     return NextResponse.json({
       error: e instanceof Error ? e.message : 'Erreur',

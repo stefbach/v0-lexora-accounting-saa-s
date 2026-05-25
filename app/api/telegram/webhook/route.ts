@@ -307,7 +307,7 @@ async function handleSocieteSelect(chatId: number, target: string) {
     return NextResponse.json({ ok: true })
   }
 
-  let chosen = null as any
+  let chosen: any
   const idx = parseInt(target, 10)
   if (!Number.isNaN(idx) && idx >= 1 && idx <= list.length) {
     chosen = list[idx - 1]
@@ -770,7 +770,7 @@ async function handleDocumentMessage(
           ]],
         )
         return NextResponse.json({ ok: true })
-      } catch {}
+      } catch { /* noop */ }
     }
     await sendTelegramMessage(chatId, lines.join('\n'))
     return NextResponse.json({ ok: true })

@@ -135,7 +135,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ recap, periode, nb_employes: recap.length })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }

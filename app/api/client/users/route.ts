@@ -8,51 +8,20 @@ export const dynamic = 'force-dynamic'
 const VALID_ROLES = ['admin', 'super_admin', 'client_admin', 'client_user', 'client_assistant', 'comptable', 'comptable_dedie', 'rh', 'juridique', 'employe', 'manager', 'team_leader', 'direction']
 
 /**
- * Détecte si la migration 261 (rôle team_leader) n'a pas été appliquée
- * et tente de la rejouer via la fonction RPC `exec_sql` (admin-only).
- * Retourne true si le constraint a été mis à jour, false sinon.
+ * SEC-002 — Auto-fix via exec_sql désactivé.
  *
- * Filet de sécurité : évite que la création d'un team_leader échoue
- * silencieusement quand la migration n'a pas été lancée en prod.
+ * Avant : tentait d'appliquer la migration 261 (role team_leader) à la volée
+ * via la RPC `exec_sql` (SECURITY DEFINER). Cette RPC a été révoquée et
+ * supprimée (cf. supabase/migrations/414_revoke_exec_sql_security_hardening.sql)
+ * pour fermer le vecteur de DDL arbitraire.
+ *
+ * Désormais : retourne toujours false. Si la migration 261 n'est pas appliquée
+ * en prod, la création d'un team_leader échouera et l'admin devra lancer
+ * manuellement supabase/migrations/261_team_leader_role.sql dans Supabase Studio.
  */
-async function tryAutoFixRoleConstraint(supabase: ReturnType<typeof getAdminClient>): Promise<boolean> {
-  try {
-    const { error } = await supabase.rpc('exec_sql', {
-      sql: `
-        ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
-        ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check
-          CHECK (role IN (
-            'admin','super_admin','client_admin','client_user','client_assistant',
-            'comptable','comptable_dedie','rh','rh_manager','juridique',
-            'employe','manager','team_leader','direction','salarie'
-          ));
-        DO $$
-        BEGIN
-          IF EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_schema='public' AND table_name='user_societes' AND column_name='role'
-          ) THEN
-            ALTER TABLE public.user_societes DROP CONSTRAINT IF EXISTS user_societes_role_check;
-            ALTER TABLE public.user_societes ADD CONSTRAINT user_societes_role_check
-              CHECK (role IN (
-                'admin','super_admin','client_admin','client_user','client_assistant',
-                'comptable','comptable_dedie','rh','rh_manager','juridique',
-                'employe','manager','team_leader','direction','salarie'
-              ));
-          END IF;
-        END $$;
-      `,
-    })
-    if (error) {
-      console.warn('[tryAutoFixRoleConstraint] exec_sql RPC failed:', error.message)
-      return false
-    }
-    console.log('[tryAutoFixRoleConstraint] role constraint updated (team_leader incl.)')
-    return true
-  } catch (e: any) {
-    console.warn('[tryAutoFixRoleConstraint] exception:', e?.message || e)
-    return false
-  }
+async function tryAutoFixRoleConstraint(_supabase: ReturnType<typeof getAdminClient>): Promise<boolean> {
+  console.warn('[security] tryAutoFixRoleConstraint disabled (SEC-002)')
+  return false
 }
 
 async function getAuthUser() {
@@ -209,7 +178,7 @@ export async function GET(request: NextRequest) {
     }))
 
     return NextResponse.json({ users })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
@@ -363,7 +332,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ user: { id: authData.user.id, email, full_name, role } })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
 }
@@ -452,11 +421,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (email) {
-      try { await supabase.auth.admin.updateUserById(user_id, { email }) } catch {}
+      try { await supabase.auth.admin.updateUserById(user_id, { email }) } catch { /* noop */ }
     }
 
     return NextResponse.json({ success: true })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[PATCH]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

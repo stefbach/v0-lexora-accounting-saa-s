@@ -74,7 +74,7 @@ IMPORTANT:
       updated_at: new Date().toISOString(),
       model: 'claude-sonnet-4-20250514',
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur IA' }, { status: 500 })
   }
 }

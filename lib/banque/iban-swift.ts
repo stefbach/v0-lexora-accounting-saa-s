@@ -76,7 +76,7 @@ export function parseIban(ibanInput: string | null | undefined): IbanParseResult
   //   DE : positions 5..12 (8 chiffres — Bankleitzahl)
   //   GB : positions 5..8 (4 lettres SWIFT racine) + 6 chiffres sort code
   //   Default : 5..8
-  let bankCode: string | null = null
+  let bankCode: string | null
   if (countryCode === 'FR') bankCode = cleaned.slice(4, 9)
   else if (countryCode === 'DE') bankCode = cleaned.slice(4, 12)
   else if (countryCode === 'GB') bankCode = cleaned.slice(4, 8)

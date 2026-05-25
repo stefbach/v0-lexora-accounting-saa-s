@@ -118,7 +118,6 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
     slSolde = slDroitCivil - slPrisCivil
   }
 
-  let fmlUtilisesTotal = 0
   const cycleDebut = soldeCourant?.periode_debut || `${annee}-01-01`
   const cycleFin = soldeCourant?.periode_fin || `${annee}-12-31`
   const { data: fmlRows } = await supabase
@@ -129,7 +128,7 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
     .eq('statut', 'approuve')
     .gte('date_debut', cycleDebut)
     .lte('date_debut', cycleFin)
-  fmlUtilisesTotal = (fmlRows || []).reduce(
+  const fmlUtilisesTotal = (fmlRows || []).reduce(
     (sum: number, r: any) => sum + (Number(r.nb_jours) || 0),
     0,
   )
@@ -153,7 +152,7 @@ async function fetchBulletinData(supabase: any, bulletin: any) {
     totalFraisKm = (fraisKm || []).reduce(
       (s: number, f: any) => s + (Number(f.montant) || 0), 0
     )
-  } catch {}
+  } catch { /* noop */ }
 
   // Seniority
   let anciennete = '—'

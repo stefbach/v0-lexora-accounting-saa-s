@@ -129,7 +129,7 @@ async function sendTelegram(supabaseAdmin: SupabaseClient, invoice: LexoraInvoic
       .select('chat_id')
       .eq('user_id', invoice.client_user_id)
       .maybeSingle()
-    chatId = (data as any)?.chat_id || null
+    chatId = (data as { chat_id?: string | null } | null)?.chat_id || null
   }
   if (!chatId) return { channel: 'telegram', status: 'skipped', recipient: '', error: 'pas de chat_id lié' }
 

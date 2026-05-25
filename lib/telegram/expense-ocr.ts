@@ -178,6 +178,7 @@ export async function ocrExpenseTicket(args: {
           content: [
             {
               type: 'image',
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- media_type Anthropic SDK est un union restreint, supportedMime déjà validé en amont
               source: { type: 'base64', media_type: supportedMime as any, data: base64 },
             },
             { type: 'text', text: 'Extrait le JSON conforme au schéma.' },
@@ -195,7 +196,7 @@ export async function ocrExpenseTicket(args: {
     .join('')
     .trim()
 
-  let parsed: any = null
+  let parsed: any
   try {
     const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim()
     parsed = JSON.parse(clean)

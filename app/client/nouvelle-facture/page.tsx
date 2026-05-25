@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback, Suspense } from "react"
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -70,11 +70,28 @@ function getEcheances(locale: Locale) {
   ] as const
 }
 
-function Sel({ value, onValueChange, placeholder, children }: { value?: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode }) {
-  return <Select value={value} onValueChange={onValueChange}><SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent>{children}</SelectContent></Select>
+function Sel({ value, onValueChange, placeholder, children, ariaLabel }: { value?: string; onValueChange: (v: string) => void; placeholder?: string; children: React.ReactNode; ariaLabel?: string }) {
+  return <Select value={value} onValueChange={onValueChange}><SelectTrigger aria-label={ariaLabel || placeholder}><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent>{children}</SelectContent></Select>
 }
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><Label>{label}</Label>{children}</div>
+// Auto-generate a stable id from label so Label htmlFor + control id link up.
+// We clone the unique child to inject id + aria-labelledby when present.
+let __fieldUid = 0
+function Field({ label, children, id }: { label: string; children: React.ReactNode; id?: string }) {
+  const fieldId = id || `nf-fld-${++__fieldUid}`
+  const labelId = `${fieldId}-label`
+  // Inject id into the (single) child if it doesn't already have one.
+  const child = React.isValidElement(children)
+    ? React.cloneElement(children as React.ReactElement<any>, {
+        id: (children as React.ReactElement<any>).props.id || fieldId,
+        "aria-labelledby": (children as React.ReactElement<any>).props["aria-labelledby"] || labelId,
+      })
+    : children
+  return (
+    <div>
+      <Label id={labelId} htmlFor={fieldId}>{label}</Label>
+      {child}
+    </div>
+  )
 }
 
 // Wrapper Suspense — requis par Next.js App Router pour useSearchParams
@@ -547,13 +564,16 @@ function NouvelleFactureContent() {
       <Card className={`border-t-4 ${typeDocument === "avoir" ? "border-t-red-500" : typeDocument === "note_debit" ? "border-t-orange-500" : "border-t-[#0B0F2E]"}`}>
         <CardHeader className="pb-2"><CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2"><FileText className="w-4 h-4" />{t('inv.nf.document_type', locale)}</CardTitle></CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-label={t('inv.nf.document_type', locale)}>
             <button
               type="button"
+              role="radio"
+              aria-checked={typeDocument === "facture"}
+              aria-label={`${t('inv.nf.invoice_label', locale)} — ${t('inv.nf.invoice_subtype_invoice', locale)}`}
               onClick={() => { setTypeDocument("facture"); setFactureReferenceId("") }}
               className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${typeDocument === "facture" ? "border-[#0B0F2E] bg-[#0B0F2E]/5" : "border-gray-200 hover:border-gray-300"}`}
             >
-              <FileText className={`w-5 h-5 ${typeDocument === "facture" ? "text-[#0B0F2E]" : "text-gray-400"}`} />
+              <FileText className={`w-5 h-5 ${typeDocument === "facture" ? "text-[#0B0F2E]" : "text-gray-400"}`} aria-hidden="true" />
               <div className="text-left">
                 <p className={`font-medium text-sm ${typeDocument === "facture" ? "text-[#0B0F2E]" : "text-gray-700"}`}>{t('inv.nf.invoice_label', locale)}</p>
                 <p className="text-xs text-gray-400">{t('inv.nf.invoice_subtype_invoice', locale)}</p>
@@ -561,10 +581,13 @@ function NouvelleFactureContent() {
             </button>
             <button
               type="button"
+              role="radio"
+              aria-checked={typeDocument === "avoir"}
+              aria-label={`${t('inv.nf.credit_note_label', locale)} — ${t('inv.nf.invoice_subtype_credit', locale)}`}
               onClick={() => setTypeDocument("avoir")}
               className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${typeDocument === "avoir" ? "border-red-500 bg-red-50" : "border-gray-200 hover:border-gray-300"}`}
             >
-              <FileMinus className={`w-5 h-5 ${typeDocument === "avoir" ? "text-red-600" : "text-gray-400"}`} />
+              <FileMinus className={`w-5 h-5 ${typeDocument === "avoir" ? "text-red-600" : "text-gray-400"}`} aria-hidden="true" />
               <div className="text-left">
                 <p className={`font-medium text-sm ${typeDocument === "avoir" ? "text-red-700" : "text-gray-700"}`}>{t('inv.nf.credit_note_label', locale)}</p>
                 <p className="text-xs text-gray-400">{t('inv.nf.invoice_subtype_credit', locale)}</p>
@@ -572,10 +595,13 @@ function NouvelleFactureContent() {
             </button>
             <button
               type="button"
+              role="radio"
+              aria-checked={typeDocument === "note_debit"}
+              aria-label={`${t('inv.nf.debit_note_label', locale)} — ${t('inv.nf.invoice_subtype_debit', locale)}`}
               onClick={() => setTypeDocument("note_debit")}
               className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${typeDocument === "note_debit" ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:border-gray-300"}`}
             >
-              <FileWarning className={`w-5 h-5 ${typeDocument === "note_debit" ? "text-orange-600" : "text-gray-400"}`} />
+              <FileWarning className={`w-5 h-5 ${typeDocument === "note_debit" ? "text-orange-600" : "text-gray-400"}`} aria-hidden="true" />
               <div className="text-left">
                 <p className={`font-medium text-sm ${typeDocument === "note_debit" ? "text-orange-700" : "text-gray-700"}`}>{t('inv.nf.debit_note_label', locale)}</p>
                 <p className="text-xs text-gray-400">{t('inv.nf.invoice_subtype_debit', locale)}</p>
@@ -583,10 +609,13 @@ function NouvelleFactureContent() {
             </button>
             <button
               type="button"
+              role="radio"
+              aria-checked={typeDocument === "devis"}
+              aria-label={`${t('inv.nf.quote', locale)} — ${t('inv.nf.quote_subtype', locale)}`}
               onClick={() => { setTypeDocument("devis"); setFactureReferenceId("") }}
               className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${typeDocument === "devis" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"}`}
             >
-              <FileText className={`w-5 h-5 ${typeDocument === "devis" ? "text-blue-600" : "text-gray-400"}`} />
+              <FileText className={`w-5 h-5 ${typeDocument === "devis" ? "text-blue-600" : "text-gray-400"}`} aria-hidden="true" />
               <div className="text-left">
                 <p className={`font-medium text-sm ${typeDocument === "devis" ? "text-blue-700" : "text-gray-700"}`}>{t('inv.nf.quote', locale)}</p>
                 <p className="text-xs text-gray-400">{t('inv.nf.quote_subtype', locale)}</p>
@@ -759,19 +788,20 @@ function NouvelleFactureContent() {
               ) : lignes.map((l, idx) => (
                 <TableRow key={l.id} className="group">
                   <TableCell className="text-center text-gray-400 text-sm">{idx + 1}</TableCell>
-                  <TableCell><Input value={l.description} onChange={e => updateLigne(l.id, "description", e.target.value)} placeholder={t('inv.nf.line_description_placeholder', locale)} className="border-0 bg-transparent focus:bg-white" /></TableCell>
+                  <TableCell><Input aria-label={`${t('inv.nf.description', locale)} ${idx + 1}`} value={l.description} onChange={e => updateLigne(l.id, "description", e.target.value)} placeholder={t('inv.nf.line_description_placeholder', locale)} className="border-0 bg-transparent focus:bg-white" /></TableCell>
                   <TableCell>
                     <Select value={l.unite} onValueChange={v => updateLigne(l.id, "unite", v)}>
-                      <SelectTrigger className="border-0 bg-transparent text-sm"><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={`${t('inv.nf.unit', locale)} ${idx + 1}`} className="border-0 bg-transparent text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>{UNITES.map(u => <SelectItem key={u} value={u}>{getUniteLabel(u, locale)}</SelectItem>)}</SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell><Input type="number" min={0} step="0.01" value={l.quantite} onChange={e => updateLigne(l.id, "quantite", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-20" /></TableCell>
+                  <TableCell><Input aria-label={`${t('inv.nf.quantity', locale)} ${idx + 1}`} type="number" min={0} step="0.01" value={l.quantite} onChange={e => updateLigne(l.id, "quantite", parseFloat(e.target.value) || 0)} className="text-right border-0 bg-transparent focus:bg-white w-20" /></TableCell>
                   <TableCell>
                     {devise === "MUR" || tauxChange <= 1.0001 ? (
                       <Input
                         type="number"
                         step="0.01"
+                        aria-label={`${t('inv.nf.unit_price', locale)} ${idx + 1}`}
                         value={l.prix_unitaire}
                         onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)}
                         className="text-right border-0 bg-transparent focus:bg-white w-28"
@@ -784,20 +814,22 @@ function NouvelleFactureContent() {
                       // devise qui lui parle (prix d'achat en MUR, vente en EUR).
                       <div className="space-y-1">
                         <div className="flex items-center gap-1 justify-end">
-                          <span className="text-[10px] text-gray-500 w-7">{devise}</span>
+                          <span className="text-[10px] text-gray-500 w-7" aria-hidden="true">{devise}</span>
                           <Input
                             type="number"
                             step="0.01"
+                            aria-label={`${t('inv.nf.unit_price', locale)} ${idx + 1} (${devise})`}
                             value={l.prix_unitaire}
                             onChange={e => updateLigne(l.id, "prix_unitaire", parseFloat(e.target.value) || 0)}
                             className="text-right border-0 bg-transparent focus:bg-white w-24 h-8"
                           />
                         </div>
                         <div className="flex items-center gap-1 justify-end">
-                          <span className="text-[10px] text-gray-500 w-7">MUR</span>
+                          <span className="text-[10px] text-gray-500 w-7" aria-hidden="true">MUR</span>
                           <Input
                             type="number"
                             step="0.01"
+                            aria-label={`${t('inv.nf.unit_price', locale)} ${idx + 1} (MUR)`}
                             value={Number((l.prix_unitaire * tauxChange).toFixed(2))}
                             onChange={e => {
                               const mur = parseFloat(e.target.value) || 0
@@ -811,7 +843,7 @@ function NouvelleFactureContent() {
                   </TableCell>
                   <TableCell>
                     <Select value={String(l.taux_tva)} onValueChange={v => updateLigne(l.id, "taux_tva", parseFloat(v))}>
-                      <SelectTrigger className="border-0 bg-transparent w-20 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={`TVA % ${idx + 1}`} className="border-0 bg-transparent w-20 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="15">15%</SelectItem><SelectItem value="0">0%</SelectItem></SelectContent>
                     </Select>
                   </TableCell>
@@ -828,7 +860,7 @@ function NouvelleFactureContent() {
                       </div>
                     )}
                   </TableCell>
-                  <TableCell><Button variant="ghost" size="sm" onClick={() => removeLigne(l.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></Button></TableCell>
+                  <TableCell><Button aria-label={`${t('inv.nf.line_description_placeholder', locale)} - supprimer ligne ${idx + 1}`} variant="ghost" size="sm" onClick={() => removeLigne(l.id)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" aria-hidden="true" /></Button></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -992,7 +1024,7 @@ function NouvelleFactureContent() {
                 <Field label={t('inv.nf.frequency', locale)}>
                   <Sel
                     value={recurrentFreq}
-                    onValueChange={v => setRecurrentFreq(v as any)}
+                    onValueChange={v => setRecurrentFreq(v as "mensuel" | "trimestriel" | "annuel")}
                   >
                     <SelectItem value="mensuel">{t('inv.nf.frequency_monthly', locale)}</SelectItem>
                     <SelectItem value="trimestriel">{t('inv.nf.frequency_quarterly', locale)}</SelectItem>

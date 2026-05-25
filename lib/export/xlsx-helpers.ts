@@ -92,7 +92,7 @@ export function buildWorkbook(
   }
   for (const { name, ws } of sheets) {
     // Excel : noms de feuille max 31 chars, pas de caractères [ ] : * ? / \
-    const safe = name.slice(0, 31).replace(/[\[\]:*?/\\]/g, '_')
+    const safe = name.slice(0, 31).replace(/[[\]:*?/\\]/g, '_')
     XLSX.utils.book_append_sheet(wb, ws, safe)
   }
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true }) as Buffer

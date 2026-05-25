@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { createEcrituresForPayment, createEcrituresForFacture } from '@/lib/accounting/ecritures-factures'
 import { safeInsertBnq } from '@/lib/accounting/bnq-dedupe'
 import { analyzeAllTransactions, MatchingTransaction, MatchingFacture } from '@/lib/accounting/matching-engine'
+import {
+  toMURWithRates,
+  isSelfMatch,
+  dateDiffDays,
+  BANK_FEE_PATTERNS,
+} from '@/lib/accounting/rapprochement/matching-engine'
 import { runIntelligentRapprochement, buildAliasMap } from '@/lib/accounting/intelligent-rapprochement'
 import type { SupplierAlias } from '@/lib/accounting/intelligent-rapprochement'
 import { createClient } from '@supabase/supabase-js'
@@ -15,6 +21,31 @@ import { classifyTransaction, detectDirector, getComplianceSeverity, type Classi
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
 import { resolveInterSocieteForTransaction, COMPTE_GROUPE_451 } from '@/lib/comptable/inter-societes'
 import { userHasAccessToSociete } from '@/lib/rh/access'
+// V3-22 — helpers de lettrage extraits (voir docstring du module).
+import {
+  CLASSE_COMPTES,
+  CLASSIFICATIONS_AVEC_LETTRAGE_CROISE,
+  LETTRAGE_CROISE_DATE_WINDOW_DAYS,
+  computeEcartCompte,
+  ecartRequiresQualification,
+  findAchCandidatesForBnq,
+  lettrageCroiseTolerance,
+  selectClosestByDate,
+  type TypeEcart,
+} from '@/lib/accounting/rapprochement/lettrage'
+// V3-23 batch 3 — handlers post-processing extraits (lettrage manuel,
+// CCA, marquer payé, classification manuelle, clôture, NDF, reset).
+import {
+  handleLettrerEcritures,
+  handlePayeParAssocie,
+  handleCompensation,
+  handlePaiementEmploye,
+  handleMarquerPaye,
+  handleClasserTransaction,
+  handleCloturerMois,
+  handleRembourserEmploye,
+  handleAnnulerPaiementFactures,
+} from '@/lib/accounting/rapprochement/post-processing'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -107,37 +138,12 @@ function bnqFreezeColumns(
   }
 }
 
-// ── Advanced tiers scoring for Phase 5 (BNQ↔ACH lettrage) ──
-function advancedTiersScoreForRoute(a: string, b: string): number {
-  const na = (a || '').toLowerCase().replace(/\b(ltd|limited|sarl|sa|co|inc|pvt)\b/gi, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
-  const nb = (b || '').toLowerCase().replace(/\b(ltd|limited|sarl|sa|co|inc|pvt)\b/gi, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
-  if (!na || !nb) return 0
-  if (na === nb) return 1
-  if (na.includes(nb) || nb.includes(na)) return 0.9
-  const wA = new Set(na.split(' ').filter(w => w.length > 2))
-  const wB = new Set(nb.split(' ').filter(w => w.length > 2))
-  if (wA.size === 0 || wB.size === 0) return 0
-  const inter = [...wA].filter(w => wB.has(w)).length
-  return inter / new Set([...wA, ...wB]).size
-}
-
-// Normalize tiers name for matching
-function normalizeTiers(name: string): string {
-  return (name || '')
-    .toLowerCase()
-    .replace(/\s+(ltd|limited|sarl|sas|sa|co|company|cie|inc)\.?\s*$/i, '')
-    .replace(/[^a-z0-9\s]/g, '')
-    .trim()
-}
-
-// Word overlap score between two strings
-function wordOverlap(a: string, b: string): number {
-  const wordsA = normalizeTiers(a).split(/\s+/).filter(w => w.length > 2)
-  const wordsB = normalizeTiers(b).split(/\s+/).filter(w => w.length > 2)
-  if (wordsA.length === 0 || wordsB.length === 0) return 0
-  const overlap = wordsA.filter(w => wordsB.some(wb => wb.includes(w) || w.includes(wb))).length
-  return overlap / Math.max(wordsA.length, wordsB.length)
-}
+// NOTE — V3-21 (refactor matching engine) :
+//   `advancedTiersScoreForRoute`, `normalizeTiers`, `wordOverlap` étaient
+//   définies ici sans aucun call-site dans ce fichier. Elles ont été
+//   déplacées vers `lib/accounting/rapprochement/matching-engine.ts`
+//   (exports `advancedTiersScore`, `normalizeTiers`, `wordOverlap`) où
+//   elles peuvent servir aux helpers de lettrage extraits par V3-22.
 
 function getAdminClient() {
   return createClient(
@@ -360,7 +366,7 @@ export async function GET(request: Request) {
       comptesBancaires: comptes || [],
       transit_alerts,
     })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[rapprochement GET]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
@@ -627,20 +633,13 @@ export async function POST(request: Request) {
       // Les anciennes tx (sans tx.devise) passent par le fallback → comportement inchangé.
       // Les nouvelles tx en devise étrangère débitées sur un compte MUR (paiement Forex)
       // utilisent leur propre devise au lieu d'être reconverties ×46.5 à tort.
+      // V3-21 : implémentation déplacée dans `lib/accounting/rapprochement/matching-engine.ts`
+      // (`toMURWithRates`). On garde un wrapper local qui injecte `rates` du scope.
       const toMUR = (
         amount: number,
         txOrDevise: string | { devise?: string | null } | null | undefined,
-        compteDeviseFallback?: string
-      ): number => {
-        let effectiveDevise: string
-        if (txOrDevise && typeof txOrDevise === 'object') {
-          effectiveDevise = (txOrDevise.devise || compteDeviseFallback || 'MUR').toUpperCase()
-        } else {
-          effectiveDevise = ((txOrDevise as string | null | undefined) || 'MUR').toUpperCase()
-        }
-        if (!effectiveDevise || effectiveDevise === 'MUR') return amount
-        return amount * (rates[effectiveDevise] || 1)
-      }
+        compteDeviseFallback?: string,
+      ): number => toMURWithRates(amount, txOrDevise, rates, compteDeviseFallback)
 
       const compteDeviseMap: Record<string, string> = {}
       // FIX 1 — map compte_bancaire_id → compte_comptable (512xxx) pour
@@ -681,10 +680,8 @@ export async function POST(request: Request) {
         console.warn('[rapprochement] Second batch partially failed:', batchErr.message)
       }
 
-      // Pre-classification patterns
-      const BANK_FEE_PATTERNS = ['service fee', 'banking subs fee', 'merchant monthly fee', 'payment fee',
-        'outward transfer charge', 'tax amount due', 'card repayment', 'merchant discount',
-        'merchant settlement', 'e-commerce transaction fee', 'contra entry', 'commission', 'frais']
+      // Pre-classification patterns — V3-21 : extrait vers
+      // `lib/accounting/rapprochement/matching-engine.ts` (`BANK_FEE_PATTERNS`).
 
       let counts = { matched: 0, interne: 0, frais_bancaires: 0, salaire_bulk: 0, mra: 0, salaire_individuel: 0, propose: 0, not_matched: 0, total: 0 }
       const matchesList: any[] = []
@@ -756,23 +753,8 @@ export async function POST(request: Request) {
           //   → "digital" ✓, "data" ✓, "solutions" → tiers has "sol" which starts solutions ✓ → MATCH
           //   "digital data solutions malta" → 1 mot extra "malta" → NO MATCH
           //   "obesity care clinic" → 0 mots en commun → NO MATCH
-          function isSelfMatch(selfName: string, tiersName: string): boolean {
-            const selfWords = selfName.split(/\s+/).filter((w: string) => w.length > 2)
-            const tiersWords = tiersName.split(/\s+/).filter((w: string) => w.length > 2)
-            if (selfWords.length === 0 || tiersWords.length === 0) return false
-            // Minimum 4 caractères pour le matching (évite "myt" matchant n'importe quoi)
-            const matchedSelf = selfWords.filter((sw: string) => tiersWords.some((tw: string) => {
-              if (sw.length < 4 || tw.length < 4) return false
-              return tw.startsWith(sw.substring(0, 4)) || sw.startsWith(tw.substring(0, 4))
-            }))
-            if (matchedSelf.length < selfWords.length * 0.7) return false
-            const unmatchedTiers = tiersWords.filter((tw: string) => !selfWords.some((sw: string) => {
-              if (sw.length < 4 || tw.length < 4) return false
-              return tw.startsWith(sw.substring(0, 4)) || sw.startsWith(tw.substring(0, 4))
-            }))
-            return unmatchedTiers.length === 0
-          }
-
+          // V3-21 : `isSelfMatch` extrait vers
+          // `lib/accounting/rapprochement/matching-engine.ts` (logique inchangée).
           const isTiersSelf = selfNamesNorm.some(n => isSelfMatch(n, txTiersNorm))
           // Un virement interne = "Own Account Transfer" vers soi-même UNIQUEMENT
           const isOwnAccountTransfer = txLib.includes('own account transfer') && isTiersSelf
@@ -907,11 +889,8 @@ export async function POST(request: Request) {
           }
         }
 
-        const dateDiffDays = (a: string, b: string): number => {
-          const da = new Date(a).getTime(), db = new Date(b).getTime()
-          if (isNaN(da) || isNaN(db)) return 999
-          return Math.abs(da - db) / (1000 * 60 * 60 * 24)
-        }
+        // V3-21 : `dateDiffDays` extrait vers
+        // `lib/accounting/rapprochement/matching-engine.ts` (logique inchangée).
 
         const paired = new Set<string>() // key: releveId:txIdx
         let viCounter = 1
@@ -2023,32 +2002,9 @@ export async function POST(request: Request) {
         // Créer l'écriture BNQ avec le bon compte.
         // Mapping étendu pour les classifications proposées par le menu
         // "Classer..." de la page rapprochement (Part 2 redesign).
-        const CLASSE_COMPTES: Record<string, string> = {
-          fournisseur: '401',
-          client: '411',
-          compte_courant_associe: '455',
-          cca: '455',
-          remboursement_associe: '108',
-          avance_personnel: '425',
-          charge_diverse: '658',
-          paiement_mra: '444',
-          frais_bancaires: '627',
-          salaire: '4210',
-          salaire_bulk: '421',
-          virement_interne: '5800',
-          remboursement_personnel: '108',
-          loyer: '613',
-          entretien: '615',
-          assurance: '616',
-          honoraires: '622',
-          deplacement: '625',
-          telecom: '626',
-          impot_taxe: '635',
-          materiel: '606',
-          produit_divers: '706',
-          charge_sociale: '431',
-          autre: '471',
-        }
+        // V3-22 : CLASSE_COMPTES extrait dans
+        // lib/accounting/rapprochement/lettrage.ts (réutilisé par d'autres
+        // handlers — éviter de dupliquer la même table).
         let compteCharge = CLASSE_COMPTES[classification] || '471'
         console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
 
@@ -2174,17 +2130,16 @@ export async function POST(request: Request) {
           //   4. Si plusieurs candidats → tentative match exact, sinon log
           //      sans rien faire (l'opérateur fera un lettrage manuel)
           //   5. Si aucune trouvée → log (cas normal pour 1ère paye, etc.)
-          const CLASSIFICATIONS_AVEC_LETTRAGE_CROISE = new Set([
-            'salaire', 'salaire_bulk', 'paiement_mra',
-            'charge_sociale', 'remboursement_personnel',
-          ])
+          // V3-22 : CLASSIFICATIONS_AVEC_LETTRAGE_CROISE,
+          // LETTRAGE_CROISE_DATE_WINDOW_DAYS, lettrageCroiseTolerance et
+          // selectClosestByDate sont extraits dans
+          // lib/accounting/rapprochement/lettrage.ts (helpers pures).
           if (CLASSIFICATIONS_AVEC_LETTRAGE_CROISE.has(classification) && isOut) {
             try {
               // Fenêtre date : ±60 jours pour gérer les paiements tardifs
-              const DATE_WINDOW_DAYS = 60
               const dateRef = new Date(dateEcr)
-              const dateMin = new Date(dateRef.getTime() - DATE_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
-              const dateMax = new Date(dateRef.getTime() + DATE_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
+              const dateMin = new Date(dateRef.getTime() - LETTRAGE_CROISE_DATE_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
+              const dateMax = new Date(dateRef.getTime() + LETTRAGE_CROISE_DATE_WINDOW_DAYS * 86400000).toISOString().split('T')[0]
 
               const { data: candidates } = await supabase
                 .from('ecritures_comptables_v2')
@@ -2197,7 +2152,7 @@ export async function POST(request: Request) {
                 .lte('date_ecriture', dateMax)
 
               // Tolérance 0.5% pour absorber arrondis de change/centimes
-              const tolerance = Math.max(0.5, amountMurMC * 0.005)
+              const tolerance = lettrageCroiseTolerance(amountMurMC)
               const exactMatches = (candidates || []).filter((c: any) => {
                 const credit = Number(c.credit_mur) || 0
                 return credit > 0 && Math.abs(credit - amountMurMC) <= tolerance
@@ -2210,14 +2165,10 @@ export async function POST(request: Request) {
                   .eq('id', matchId)
                 console.log(`[lettrer_manuel/${classification}] lettrage croisé OK : écriture ${matchId} lettrée avec ${code}`)
               } else if (exactMatches.length === 0) {
-                console.log(`[lettrer_manuel/${classification}] aucun match pour ${amountMurMC} MUR sur compte ${compteCharge} (±${DATE_WINDOW_DAYS}j) — BNQ créée mais pas de lettrage croisé`)
+                console.log(`[lettrer_manuel/${classification}] aucun match pour ${amountMurMC} MUR sur compte ${compteCharge} (±${LETTRAGE_CROISE_DATE_WINDOW_DAYS}j) — BNQ créée mais pas de lettrage croisé`)
               } else {
                 // Plusieurs candidats : on tente le match le plus proche en date
-                const closestByDate = exactMatches.reduce((best, c) => {
-                  const cDelta = Math.abs(new Date(c.date_ecriture).getTime() - dateRef.getTime())
-                  const bestDelta = Math.abs(new Date(best.date_ecriture).getTime() - dateRef.getTime())
-                  return cDelta < bestDelta ? c : best
-                })
+                const closestByDate = selectClosestByDate(exactMatches as any[], dateRef)!
                 await supabase.from('ecritures_comptables_v2')
                   .update({ lettre: code, date_lettrage: new Date().toISOString().split('T')[0] })
                   .eq('id', closestByDate.id)
@@ -2750,13 +2701,10 @@ export async function POST(request: Request) {
       const facturesTotal = (facturesData || []).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0)
       const ecart = Math.abs(txAmount - facturesTotal)
       const ecartSigne = txAmount - facturesTotal
-      const ecartPct = facturesTotal > 0 ? ecart / facturesTotal : 0
       // Seuil auto : écarts < 2% sont acceptés automatiquement (frais bancaires,
       // TDS, arrondis de change). Au-delà de 2% → demander qualification.
-      const SEUIL_AUTO_PCT = 0.02
-      const SEUIL_AUTO_ABS = 100 // MUR — petits montants toujours acceptés
-
-      if (ecart > SEUIL_AUTO_ABS && ecartPct > SEUIL_AUTO_PCT && !type_ecart) {
+      // V3-22 : seuils + check extraits dans lettrage.ts (ecartRequiresQualification).
+      if (ecartRequiresQualification(ecart, facturesTotal, type_ecart as TypeEcart | undefined)) {
         return NextResponse.json({
           error: 'ecart_requires_qualification',
           message: `Écart de ${ecart.toFixed(2)} MUR entre la transaction (${txAmount.toFixed(2)}) et le total factures (${facturesTotal.toFixed(2)}). Règle R4 : pas de lettrage forcé. Qualifier l'écart avant de relancer.`,
@@ -2906,66 +2854,23 @@ export async function POST(request: Request) {
           // Ici on raisonne "bank moins facture" donc :
           //   - ecartSigne > 0 ⇒ on a encaissé plus que la facture (gain) ou payé plus (perte côté fournisseur)
           // La catégorisation finale est pilotée par type_ecart.
-          const ecartAbs = Math.round(ecart * 100) / 100
-          let compteEcart: string
-          let libelleEcart: string
-          if (ecart <= SEUIL_AUTO_ABS) {
-            // Régularisation automatique <1 MUR
-            compteEcart = ecartSigne > 0 ? '758' : '658'
-            libelleEcart = `Régularisation écart <1 MUR — ${lettreCode}`
-          } else {
-            switch (type_ecart) {
-              case 'change':
-                compteEcart = ecartSigne > 0 ? '766' : '666'
-                libelleEcart = `${ecartSigne > 0 ? 'Gain' : 'Perte'} de change — ${lettreCode}`
-                break
-              case 'escompte':
-                compteEcart = ecartSigne > 0 ? '765' : '665'
-                libelleEcart = `${ecartSigne > 0 ? 'Escompte obtenu' : 'Escompte accordé'} — ${lettreCode}`
-                break
-              case 'penalite':
-                // Pénalité de retard — toujours en charge (631)
-                compteEcart = '631'
-                libelleEcart = `Pénalité de retard — ${lettreCode}`
-                break
-              case 'a_regulariser':
-                // FORCE — l'opérateur ne peut/veut pas qualifier maintenant.
-                // L'écart va sur 471 (compte d'attente, classe 4 = bilan donc
-                // lettrable plus tard quand la régularisation comptable arrive).
-                // À surveiller via /admin/health (check ecritures_orphelines_471).
-                compteEcart = '471'
-                libelleEcart = `Écart forcé — à régulariser (${ecartSigne > 0 ? '+' : ''}${ecartAbs.toFixed(2)} MUR) — ${lettreCode}`
-                break
-              case 'exceptionnel':
-              default:
-                compteEcart = ecartSigne > 0 ? '758' : '658'
-                libelleEcart = `Écart exceptionnel rapprochement — ${lettreCode}`
-                break
-            }
-          }
-          // Sens débit/crédit selon classe du compte :
-          //   • 6xxx (charge) → débit
-          //   • 7xxx (produit) → crédit
-          //   • 4xxx (471 attente) → débit si ecartSigne < 0, crédit si > 0
-          //     (équilibre le solde 411/401 dans le sens opposé à l'écart)
-          let debitOd = 0, creditOd = 0
-          if (/^6/.test(compteEcart)) debitOd = ecartAbs
-          else if (/^7/.test(compteEcart)) creditOd = ecartAbs
-          else if (/^4/.test(compteEcart)) {
-            // Compte 471 (à régulariser) : on inverse le sens pour neutraliser
-            // l'écart 411/401. ecartSigne > 0 (banque > facture) → 471 crédit.
-            if (ecartSigne > 0) creditOd = ecartAbs
-            else debitOd = ecartAbs
-          }
+          // V3-22 : compute extrait dans lettrage.ts (computeEcartCompte) —
+          // gère aussi le sens débit/crédit selon classe du compte (R7).
+          const ecartOd = computeEcartCompte(
+            ecart,
+            ecartSigne,
+            lettreCode,
+            type_ecart as TypeEcart | undefined,
+          )
           await supabase.from('ecritures_comptables_v2').insert({
             societe_id,
             dossier_id: dossier.id,
             date_ecriture: new Date().toISOString().split('T')[0],
             journal: 'OD',
-            numero_compte: compteEcart,
-            libelle: libelleEcart,
-            debit_mur: debitOd,
-            credit_mur: creditOd,
+            numero_compte: ecartOd.compte,
+            libelle: ecartOd.libelle,
+            debit_mur: ecartOd.debit,
+            credit_mur: ecartOd.credit,
             // Règle R7 : pas de lettrage sur 6xxx/7xxx. Sur 471 (4xxx) le
             // lettrage est autorisé mais on l'omet ici — la régularisation
             // future créera l'écriture miroir et lettrera les deux à ce
@@ -3120,29 +3025,19 @@ export async function POST(request: Request) {
         if (bnqAmount === 0) continue
 
         // Find ACH entry: same compte, opposite direction, same amount ±2%, no lettre yet
-        const oppositeCol = isDebit ? 'credit' : 'debit'
-        const minAmt = Math.round(bnqAmount * 0.98 * 100) / 100
-        const maxAmt = Math.round(bnqAmount * 1.02 * 100) / 100
-
-        const { data: achEntries } = await supabase
-          .from('ecritures_comptables_v2')
-          .select('id, credit:credit_mur, debit:debit_mur, date_ecriture, libelle')
-          .eq('dossier_id', dossier.id)
-          .eq('compte', bnq.compte)
-          .is('lettre', null)
-          .gte(oppositeCol, minAmt)
-          .lte(oppositeCol, maxAmt)
-          .order('date_ecriture', { ascending: false })
-          .limit(5)
+        // V3-22 : recherche + sélection extraites dans lettrage.ts.
+        const achEntries = await findAchCandidatesForBnq(supabase, {
+          dossierId: dossier.id,
+          compte: bnq.compte,
+          bnqAmount,
+          isDebit,
+        })
 
         if (!achEntries || achEntries.length === 0) continue
 
         // Pick closest by date
-        const closest = achEntries.reduce((prev, curr) => {
-          const prevDiff = Math.abs(new Date(prev.date_ecriture || '').getTime() - new Date(bnq.date_ecriture || '').getTime())
-          const currDiff = Math.abs(new Date(curr.date_ecriture || '').getTime() - new Date(bnq.date_ecriture || '').getTime())
-          return currDiff < prevDiff ? curr : prev
-        })
+        const closest = selectClosestByDate(achEntries, new Date(bnq.date_ecriture || ''))
+        if (!closest) continue
 
         // Apply same lettre to ACH entry
         await supabase.from('ecritures_comptables_v2')
@@ -3623,1608 +3518,40 @@ export async function POST(request: Request) {
       })
     }
 
-    // === LETTRER ECRITURES COMPTABLES (401/411) ===
-    // FIX 9 — applique les règles R1/R2/R7 avant de poser la lettre :
-    //   R1 Équilibre  — ∑débit = ∑crédit sur les écritures groupées
-    //   R2 Unicité    — aucune écriture ne doit déjà porter une lettre ≠
-    //   R7 Pas de 6xxx/7xxx/skip — refus si un compte de résultat/skip
-    // Retourne 409 avec le détail de la violation pour que le client
-    // surface le message à l'utilisateur.
-    if (action === 'lettrer_ecritures') {
-      const { ecriture_ids, societe_id: socId } = body
-      if (!ecriture_ids || !Array.isArray(ecriture_ids) || ecriture_ids.length < 2) {
-        return NextResponse.json({ error: 'Au moins 2 ecriture_ids requis' }, { status: 400 })
-      }
-      const lettreCode = `LE${String(Date.now()).slice(-4)}`
-      const now = new Date().toISOString().split('T')[0]
-
-      // Charger les écritures pour valider les règles AVANT toute mutation
-      const { data: ecrituresToLetter } = await supabase
-        .from('ecritures_comptables_v2')
-        .select('id, compte:numero_compte, debit:debit_mur, credit:credit_mur, date_ecriture, lettre, journal')
-        .in('id', ecriture_ids)
-      if (!ecrituresToLetter || ecrituresToLetter.length !== ecriture_ids.length) {
-        return NextResponse.json({ error: 'Certaines écritures sont introuvables' }, { status: 404 })
-      }
-      const violation = validateLettrageGroup({
-        ecritures: ecrituresToLetter as any,
-        newLettre: lettreCode,
-      })
-      if (violation) {
-        return NextResponse.json({
-          error: 'rule_violation',
-          rule_violation: violation,
-          message: violation,
-        }, { status: 409 })
-      }
-
-      for (const eid of ecriture_ids) {
-        await supabase.from('ecritures_comptables_v2')
-          .update({ lettre: lettreCode, date_lettrage: now })
-          .eq('id', eid)
-      }
-      return NextResponse.json({ success: true, lettre: lettreCode, nb: ecriture_ids.length })
+    // ─────────────────────────────────────────────────────────────────────
+    // V3-23 batch 3 — Dispatcher post-processing.
+    //
+    // Les ~1600 lignes d'actions ci-dessous (lettrer_ecritures, paye_par_associe,
+    // compensation, paiement_employe, marquer_paye, classer_transaction,
+    // cloturer_mois, rembourser_employe, annuler_paiement_factures) ont été
+    // extraites dans `@/lib/accounting/rapprochement/post-processing.ts`.
+    //
+    // Chaque handler reçoit les dépendances (supabase admin, user, body) ainsi
+    // que les 3 helpers conservés ici (bnqFreezeColumns, resolveHistoricalRateSafe,
+    // creerMiroirInterSociete) pour préserver la sémantique 1:1 et éviter une
+    // dépendance circulaire avec lib/comptable/inter-societes.
+    // ─────────────────────────────────────────────────────────────────────
+    const deps = {
+      supabase,
+      user,
+      body,
+      bnqFreezeColumns,
+      resolveHistoricalRateSafe,
+      creerMiroirInterSociete,
     }
 
-    // === PAYE PAR ASSOCIE — l'associé a payé des factures ===
-    if (action === 'paye_par_associe') {
-      const { transaction_id, releve_id, facture_ids, societe_id, associe_nom, compte_courant_id } = body
-      if (!societe_id || !facture_ids || facture_ids.length === 0) {
-        return NextResponse.json({ error: 'societe_id et facture_ids[] requis' }, { status: 400 })
-      }
-
-      // Trouver ou créer le compte courant associé
-      let ccaId = compte_courant_id
-      if (!ccaId && associe_nom) {
-        const { data: existingCCA } = await supabase.from('comptes_courants_associes')
-          .select('id').eq('societe_id', societe_id).eq('nom', associe_nom).maybeSingle()
-        if (existingCCA) {
-          ccaId = existingCCA.id
-        } else {
-          const { data: newCCA } = await supabase.from('comptes_courants_associes')
-            .insert({ societe_id, nom: associe_nom, type: 'associe', solde: 0 }).select('id').single()
-          ccaId = newCCA?.id
-        }
-      }
-      if (!ccaId) return NextResponse.json({ error: 'associe_nom ou compte_courant_id requis' }, { status: 400 })
-
-      // Calculer le total des factures
-      const { data: factures } = await supabase.from('factures').select('id, montant_ttc, tiers, numero_facture').in('id', facture_ids)
-      const totalMontant = (factures || []).reduce((s, f) => s + (Number(f.montant_ttc) || 0), 0)
-
-      // Marquer les factures comme payées par associé
-      // FIX 1 — rapproche_date jamais NULL (fallback date du jour).
-      const associePayDate = new Date().toISOString().split('T')[0]
-      for (const f of factures || []) {
-        await supabase.from('factures').update({
-          statut: 'paye',
-          mode_paiement: 'associe',
-          paye_par: associe_nom,
-          rapproche_date: associePayDate,
-          rapproche_source: 'paye_par_associe',
-        }).eq('id', f.id)
-      }
-
-      // Créer le mouvement CCA (avance)
-      const description = facture_ids.length === 1
-        ? `Paiement facture ${(factures || [])[0]?.numero_facture || ''}`
-        : `Paiement ${facture_ids.length} factures`
-      await supabase.from('mouvements_compte_courant').insert({
-        compte_courant_id: ccaId, societe_id,
-        date_mouvement: new Date().toISOString().split('T')[0],
-        type: 'avance', montant: totalMontant,
-        description,
-        facture_id: facture_ids.length === 1 ? facture_ids[0] : null,
-      })
-
-      // Mettre à jour le solde CCA
-      const { error: rpcError } = await supabase.rpc('increment_solde_cca', { cca_id: ccaId, delta: totalMontant })
-      if (rpcError) {
-        // Si la fonction RPC n'existe pas, faire manuellement
-        const { data: ccaData } = await supabase.from('comptes_courants_associes')
-          .select('solde').eq('id', ccaId).single()
-        const newSolde = (Number(ccaData?.solde) || 0) + totalMontant
-        await supabase.from('comptes_courants_associes').update({ solde: newSolde }).eq('id', ccaId)
-      }
-
-      // Créer les écritures comptables
-      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
-      if (dossier) {
-        // Débit charges/fournisseur, Crédit 455 (CCA)
-        for (const f of factures || []) {
-          await supabase.from('ecritures_comptables_v2').insert([
-            { societe_id, dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'OD', numero_compte: '401', libelle: `Fournisseur ${f.tiers || ''} — payé par ${associe_nom}`, debit_mur: Number(f.montant_ttc), credit_mur: 0 },
-            { societe_id, dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'OD', numero_compte: '455', libelle: `CCA ${associe_nom} — ${f.numero_facture || ''}`, debit_mur: 0, credit_mur: Number(f.montant_ttc) },
-          ])
-        }
-      }
-
-      // Si transaction bancaire fournie, la marquer aussi
-      if (releve_id && transaction_id) {
-        const { data: releve } = await supabase.from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
-        if (releve) {
-          const txIdx = parseInt(transaction_id.split('-').pop() || '0')
-          const txs = [...(releve.transactions_json || [])]
-          if (txIdx < txs.length) {
-            // FIX 4 — stocker facture_id(s) pour que la transaction reste
-            // traçable jusqu'aux factures payées via CCA.
-            txs[txIdx] = {
-              ...txs[txIdx],
-              lettre: `CCA${String(Date.now()).slice(-4)}`,
-              statut: 'rapproche',
-              paye_par_associe: associe_nom,
-              facture_id: facture_ids[0] || null,
-              facture_ids,
-            }
-            await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
-          }
-        }
-      }
-
-      return NextResponse.json({
-        success: true,
-        cca_id: ccaId,
-        montant_total: totalMontant,
-        nb_factures: facture_ids.length,
-        associe: associe_nom,
-      })
-    }
-
-    // === COMPENSATION — remboursement associé via virement bancaire ===
-    if (action === 'compensation') {
-      const { transaction_id, releve_id, compte_courant_id, societe_id, montant } = body
-      if (!compte_courant_id || !societe_id || !montant) {
-        return NextResponse.json({ error: 'compte_courant_id, societe_id, montant requis' }, { status: 400 })
-      }
-
-      // Récupérer le CCA
-      const { data: cca } = await supabase.from('comptes_courants_associes')
-        .select('id, nom, solde').eq('id', compte_courant_id).single()
-      if (!cca) return NextResponse.json({ error: 'Compte courant non trouvé' }, { status: 404 })
-
-      const remboursementMontant = Number(montant)
-
-      // Créer mouvement de remboursement
-      await supabase.from('mouvements_compte_courant').insert({
-        compte_courant_id, societe_id,
-        date_mouvement: new Date().toISOString().split('T')[0],
-        type: 'remboursement',
-        montant: -remboursementMontant,
-        description: `Remboursement par virement bancaire`,
-      })
-
-      // Mettre à jour le solde
-      const newSolde = (Number(cca.solde) || 0) - remboursementMontant
-      await supabase.from('comptes_courants_associes').update({ solde: newSolde }).eq('id', compte_courant_id)
-
-      // Écritures comptables: Débit 455 (CCA) / Crédit 512 (Banque)
-      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
-      if (dossier) {
-        await supabase.from('ecritures_comptables_v2').insert([
-          { societe_id, dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'BNQ', numero_compte: '455', libelle: `Remboursement CCA ${cca.nom}`, debit_mur: remboursementMontant, credit_mur: 0 },
-          { societe_id, dossier_id: dossier.id, date_ecriture: new Date().toISOString().split('T')[0], journal: 'BNQ', numero_compte: '512', libelle: `Virement remboursement ${cca.nom}`, debit_mur: 0, credit_mur: remboursementMontant },
-        ])
-      }
-
-      // Marquer la transaction bancaire si fournie
-      if (releve_id && transaction_id) {
-        const { data: releve } = await supabase.from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
-        if (releve) {
-          const txIdx = parseInt(transaction_id.split('-').pop() || '0')
-          const txs = [...(releve.transactions_json || [])]
-          if (txIdx < txs.length) {
-            txs[txIdx] = { ...txs[txIdx], lettre: `RMB${String(Date.now()).slice(-4)}`, statut: 'rapproche', compensation_cca: cca.nom }
-            await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
-          }
-        }
-      }
-
-      return NextResponse.json({
-        success: true,
-        ancien_solde: Number(cca.solde),
-        nouveau_solde: newSolde,
-        associe: cca.nom,
-        montant_rembourse: remboursementMontant,
-      })
-    }
-
-    // === PAIEMENT EMPLOYÉ — virement individuel (hors bulk) ===
-    if (action === 'paiement_employe') {
-      const { transaction_id, releve_id, employe_id, societe_id, periode } = body
-      if (!employe_id || !societe_id) {
-        return NextResponse.json({ error: 'employe_id et societe_id requis' }, { status: 400 })
-      }
-
-      // Trouver l'employé
-      const { data: employe } = await supabase.from('employes').select('id, nom, prenom, salaire_base').eq('id', employe_id).single()
-      if (!employe) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
-
-      // Trouver le bulletin de paie (si période fournie)
-      let bulletin: any = null
-      if (periode) {
-        const periodeDate = periode.length === 7 ? `${periode}-01` : periode
-        const { data: bul } = await supabase.from('bulletins_paie')
-          .select('id, salaire_net, salaire_base, periode')
-          .eq('employe_id', employe_id)
-          .gte('periode', periodeDate)
-          .lte('periode', lastDayOfMonth(periode))
-          .limit(1).maybeSingle()
-        bulletin = bul
-      }
-
-      const montantNet = bulletin ? Number(bulletin.salaire_net) : Number(employe.salaire_base) || 0
-      const lettreCode = `SAL${String(Date.now()).slice(-4)}`
-      const nomComplet = `${employe.prenom} ${employe.nom}`
-
-      // Marquer la transaction bancaire
-      if (releve_id && transaction_id) {
-        const { data: releve } = await supabase.from('releves_bancaires').select('id, transactions_json').eq('id', releve_id).single()
-        if (releve) {
-          const txIdx = parseInt(transaction_id.split('-').pop() || '0')
-          const txs = [...(releve.transactions_json || [])]
-          if (txIdx < txs.length) {
-            txs[txIdx] = {
-              ...txs[txIdx],
-              lettre: lettreCode,
-              statut: 'rapproche',
-              employe_id,
-              employe_nom: nomComplet,
-              type_rapprochement: 'salaire_individuel',
-              bulletin_id: bulletin?.id || null,
-            }
-            await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
-          }
-        }
-      }
-
-      // Créer les écritures comptables (Débit 421 / Crédit 512)
-      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
-      if (dossier) {
-        const dateEcriture = new Date().toISOString().split('T')[0]
-        await supabase.from('ecritures_comptables_v2').insert([
-          { societe_id, dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', numero_compte: '4210', libelle: `Virement salaire ${nomComplet}`, debit_mur: Math.round(montantNet), credit_mur: 0, lettre: lettreCode },
-          { societe_id, dossier_id: dossier.id, date_ecriture: dateEcriture, journal: 'BNQ', numero_compte: '512', libelle: `Virement salaire ${nomComplet}`, debit_mur: 0, credit_mur: Math.round(montantNet), lettre: lettreCode },
-        ])
-      }
-
-      // Si bulletin trouvé, marquer comme payé
-      if (bulletin) {
-        await supabase.from('bulletins_paie').update({ statut: 'paye' }).eq('id', bulletin.id)
-      }
-
-      return NextResponse.json({
-        success: true,
-        lettre: lettreCode,
-        employe: nomComplet,
-        montant: montantNet,
-        bulletin_id: bulletin?.id || null,
-        bulletin_found: !!bulletin,
-      })
-    }
-
-    // === MARQUER PAYÉE — action rapide sans transaction bancaire ===
-    // Crée directement les écritures BNQ (D: 401, C: 512) et le lettrage,
-    // marque la facture comme payée, sans nécessiter de transaction bancaire.
-    // Utilisé depuis la liste "Factures fournisseurs" quand l'utilisateur
-    // sait que le paiement a été effectué mais que le relevé n'est pas importé
-    // ou que la tx n'a pas matché.
-    if (action === 'marquer_paye') {
-      const { facture_id, societe_id, date_paiement, compte_bancaire } = body
-      if (!facture_id || !societe_id) {
-        return NextResponse.json({ error: 'facture_id et societe_id requis' }, { status: 400 })
-      }
-
-      // Récupérer la facture
-      const { data: facture, error: factErr } = await supabase
-        .from('factures')
-        .select('id, numero_facture, tiers, montant_ttc, montant_mur, devise, type_facture, date_facture, statut')
-        .eq('id', facture_id)
-        .single()
-      if (factErr || !facture) {
-        return NextResponse.json({ error: `Facture non trouvée: ${factErr?.message}` }, { status: 404 })
-      }
-      if (facture.statut === 'paye') {
-        return NextResponse.json({ error: 'Facture déjà payée' }, { status: 400 })
-      }
-
-      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
-      if (!dossier) {
-        return NextResponse.json({ error: 'Dossier comptable introuvable' }, { status: 400 })
-      }
-
-      const isFournisseur = facture.type_facture === 'fournisseur' || !facture.type_facture
-      const compteAux = isFournisseur ? '401' : '411'
-      const compteBanque = compte_bancaire || '512'
-      const montantMUR = Math.round((Number(facture.montant_mur) || Number(facture.montant_ttc) || 0) * 100) / 100
-      if (montantMUR <= 0) {
-        return NextResponse.json({ error: 'Montant facture invalide' }, { status: 400 })
-      }
-      const dateOp = date_paiement || new Date().toISOString().split('T')[0]
-      const lettre = `MP${String(Date.now()).slice(-6)}`
-      const refFolio = `MP-${facture.id.substring(0, 8)}`
-      const tiers = (facture.tiers || '').substring(0, 80)
-
-      // Pour un fournisseur payé:
-      //   D: 401 Fournisseur (solde la dette) — lettre avec ACH
-      //   C: 512 Banque (sortie de trésorerie)
-      // Pour un client encaissé:
-      //   D: 512 Banque (entrée)
-      //   C: 411 Client (solde la créance) — lettre avec VTE
-      const buildEcritures = (withFactureId: boolean) => {
-        const withFk = (fkId: string) => withFactureId ? { facture_id: fkId } : {}
-        return isFournisseur
-          ? [
-              {
-                dossier_id: dossier.id, societe_id,
-                date_ecriture: dateOp, journal: 'BNQ',
-                numero_compte: compteAux,
-                libelle: `Paiement ${tiers} — ${facture.numero_facture}`.substring(0, 100),
-                debit_mur: montantMUR, credit_mur: 0,
-                lettre, ref_folio: refFolio,
-                ...withFk(facture.id),
-              },
-              {
-                dossier_id: dossier.id, societe_id,
-                date_ecriture: dateOp, journal: 'BNQ',
-                numero_compte: compteBanque,
-                libelle: `Banque — Paiement ${tiers}`.substring(0, 100),
-                debit_mur: 0, credit_mur: montantMUR,
-                lettre, ref_folio: refFolio,
-              },
-            ]
-          : [
-              {
-                dossier_id: dossier.id, societe_id,
-                date_ecriture: dateOp, journal: 'BNQ',
-                numero_compte: compteBanque,
-                libelle: `Banque — Encaissement ${tiers}`.substring(0, 100),
-                debit_mur: montantMUR, credit_mur: 0,
-                lettre, ref_folio: refFolio,
-              },
-              {
-                dossier_id: dossier.id, societe_id,
-                date_ecriture: dateOp, journal: 'BNQ',
-                numero_compte: compteAux,
-                libelle: `Encaissement ${tiers} — ${facture.numero_facture}`.substring(0, 100),
-                debit_mur: 0, credit_mur: montantMUR,
-                lettre, ref_folio: refFolio,
-                ...withFk(facture.id),
-              },
-            ]
-      }
-
-      // Tenter d'abord avec facture_id (migration 133) puis fallback sans
-      let insResult = await supabase.from('ecritures_comptables_v2').insert(buildEcritures(true))
-      let insErr: any = insResult.error
-      if (insErr && /facture_id/i.test(String(insErr.message || '')) && /(does not exist|column)/i.test(String(insErr.message || ''))) {
-        console.warn('[marquer_paye] facture_id column missing, retry without it')
-        insResult = await supabase.from('ecritures_comptables_v2').insert(buildEcritures(false))
-        insErr = insResult.error
-      }
-      if (insErr) {
-        console.error('[marquer_paye] insertion failed:', insErr.message)
-        // Si doublon (unique index ref_folio), on peut considérer que c'est déjà fait
-        if (/duplicate key value|unique constraint/i.test(String(insErr.message || ''))) {
-          console.log('[marquer_paye] already inserted previously, continuing to mark facture paye')
-        } else {
-          return NextResponse.json({
-            error: `Erreur insertion écritures: ${insErr.message}`,
-            hint: 'La migration 128 (ref_folio unique) et 133 (facture_id) doivent être appliquées.',
-          }, { status: 500 })
-        }
-      }
-
-      // Lettrer l'ACH/VTE existante sur le compte auxiliaire pour cette facture
-      // (l'écriture originale créée lors de l'import facture)
-      // On tente plusieurs stratégies : par facture_id (m133), sinon par ref_folio
-      // qui matche le numero_facture, sinon par libellé contenant le numero.
-      try {
-        const upd1 = await supabase
-          .from('ecritures_comptables_v2')
-          .update({ lettre, date_lettrage: dateOp })
-          .eq('dossier_id', dossier.id)
-          .eq('facture_id', facture.id)
-          .in('journal', ['ACH', 'VTE'])
-          .is('lettre', null)
-        if (upd1.error && /facture_id/i.test(String(upd1.error.message || ''))) {
-          // Fallback : par libellé
-          await supabase
-            .from('ecritures_comptables_v2')
-            .update({ lettre, date_lettrage: dateOp })
-            .eq('dossier_id', dossier.id)
-            .in('journal', ['ACH', 'VTE'])
-            .is('lettre', null)
-            .ilike('libelle', `%${facture.numero_facture}%`)
-        }
-      } catch (e: any) { console.warn('[marquer_paye] lettrage ACH failed:', e.message) }
-
-      // Marquer la facture payée (avec fallback progressif si colonnes manquantes)
-      // Migration 128 ajoute solde_non_paye, migration 121 ajoute rapproche_date/source
-      const tryUpdate = async (payload: Record<string, any>) => {
-        return supabase.from('factures').update(payload).eq('id', facture_id).select('id, statut')
-      }
-      let factUpdData: any = null
-      let factUpdErr: any = null
-      // Niveau 1 : tout
-      let r = await tryUpdate({ statut: 'paye', solde_non_paye: 0, rapproche_date: dateOp, rapproche_source: 'marquer_paye' })
-      if (r.error && /solde_non_paye/i.test(r.error.message || '')) {
-        console.warn('[marquer_paye] fallback: colonne solde_non_paye manquante (migration 128)')
-        r = await tryUpdate({ statut: 'paye', rapproche_date: dateOp, rapproche_source: 'marquer_paye' })
-      }
-      if (r.error && /(rapproche_source|rapproche_date)/i.test(r.error.message || '')) {
-        console.warn('[marquer_paye] fallback: colonnes rapproche_* manquantes (migration 121)')
-        r = await tryUpdate({ statut: 'paye' })
-      }
-      factUpdErr = r.error
-      factUpdData = r.data
-      if (factUpdErr) {
-        console.error('[marquer_paye] facture update FAILED:', factUpdErr.message, factUpdErr)
-        return NextResponse.json({
-          error: `Ecritures creees (lettre ${lettre}) MAIS facture non marquee payee: ${factUpdErr.message}`,
-          hint: 'Verifiez que les colonnes statut/rapproche_date/solde_non_paye existent',
-          lettre,
-          nb_ecritures: 2,
-        }, { status: 500 })
-      }
-      if (!factUpdData || factUpdData.length === 0) {
-        console.error('[marquer_paye] update silencieusement ignore - RLS ou ligne non trouvee')
-        return NextResponse.json({
-          error: `Facture non mise a jour (0 ligne affectee). Verifiez RLS ou que la facture existe bien`,
-          lettre,
-          nb_ecritures: 2,
-        }, { status: 500 })
-      }
-      console.log('[marquer_paye] facture updated:', factUpdData)
-
-      return NextResponse.json({
-        success: true,
-        facture_id,
-        lettre,
-        montant: montantMUR,
-        nb_ecritures: 2,
-        facture_updated: factUpdData[0],
-      })
-    }
-
-    // === CLASSER TRANSACTION — raccourci avec auto-learn pattern ===
-    // Classe manuellement une transaction "à vérifier" avec une nature comptable,
-    // crée les écritures BNQ associées, ET sauvegarde le pattern (tiers) comme
-    // règle de classification pour appliquer automatiquement la prochaine fois.
-    // Si apply_to_similar=true : classe aussi TOUTES les autres tx de la société
-    // avec le même tiers (propagation retroactive en 1 clic).
-    if (action === 'classer_transaction') {
-      const { transaction_id, releve_id, societe_id, classification, learn_pattern, apply_to_similar, compte_custom } = body
-      if (!releve_id || !transaction_id || !classification) {
-        return NextResponse.json({ error: 'releve_id, transaction_id, classification requis' }, { status: 400 })
-      }
-      // Si un compte_custom est fourni (via le picker plan comptable), on valide
-      // qu'il correspond à un compte réel avant d'accepter la classification.
-      if (compte_custom) {
-        const { data: pc } = await supabase.from('plan_comptable').select('compte:numero_compte').eq('compte', compte_custom).maybeSingle()
-        if (!pc) {
-          return NextResponse.json({ error: `Compte "${compte_custom}" absent du plan comptable` }, { status: 400 })
-        }
-      }
-      console.log(`[classer_transaction] societe=${societe_id} tx=${transaction_id} classification=${classification}`)
-
-      const { data: releve, error: relErr } = await supabase
-        .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id').eq('id', releve_id).single()
-      if (relErr || !releve) {
-        console.error('[classer_transaction] relevé introuvable:', relErr?.message)
-        return NextResponse.json({ error: `Relevé non trouvé: ${relErr?.message}` }, { status: 404 })
-      }
-
-      // Recuperer la devise du compte bancaire + taux de change pour conversion MUR
-      const { data: compteBancaire } = await supabase
-        .from('comptes_bancaires').select('devise').eq('id', releve.compte_bancaire_id).maybeSingle()
-      const compteDeviseClasser = (compteBancaire?.devise || 'MUR').toUpperCase()
-      const rates: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
-      // F8/F10 — tx.devise prioritaire ; fallback sur la devise du compte bancaire (compat legacy).
-      // La tx vit dans releve.transactions_json[txIdx] — résolution plus bas après lecture de txIdx.
-      // On garde txDevise et tauxDevise comme valeurs par défaut issues du compte ;
-      // elles seront ré-évaluées par ligne si la tx porte sa propre devise.
-      const txDevise = compteDeviseClasser
-      const tauxDevise = rates[txDevise] || 1
-      console.log(`[classer_transaction] devise_compte=${txDevise} taux=${tauxDevise}`)
-
-      const txIdx = parseInt(transaction_id.split('-').pop() || '0')
-      const txs = [...(releve.transactions_json || [])]
-      if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
-
-      const txDate = txs[txIdx]?.date
-      if (txDate && societe_id) {
-        const lockStatus = await checkPeriodLock(supabase, societe_id, txDate)
-        if (lockStatus.locked) {
-          return NextResponse.json({ error: `Période verrouillée — ${lockStatus.reason}` }, { status: 403 })
-        }
-      }
-
-      const code = `CL${String(Date.now()).slice(-6)}`
-      // Lire l'ancien état de la tx AVANT de mettre à jour. Sert au cleanup
-      // systémique (écritures BNQ, lettres ACH, factures liées, CCA).
-      const prevTx = { ...(txs[txIdx] || {}) }
-      const oldLettre = prevTx.lettre || null
-      const oldFactureIds: string[] = Array.isArray(prevTx.facture_ids) && prevTx.facture_ids.length > 0
-        ? prevTx.facture_ids
-        : (prevTx.facture_id ? [prevTx.facture_id] : [])
-
-      // Garde-fou anti-doublon : si cette transaction a DÉJÀ été classifiée
-      // (statut='rapproche'), on refuse une 2e classification — même
-      // classification ou nouvelle. Le user doit explicitement déclasser
-      // d'abord. Bug observé en prod : compte courant déjà comptabilisé
-      // via la page CCA → la tx réapparaissait dans rapprochement → user
-      // re-classifiait → écritures comptabilisées 2 fois.
-      if (prevTx.statut === 'rapproche' || prevTx.statut === 'interne') {
-        return NextResponse.json({
-          error: 'Cette transaction est déjà rapprochée — déclassez-la d\'abord pour la reclassifier.',
-          duplicate: true,
-          previous_classification: prevTx.matched_type || prevTx.classification || null,
-        }, { status: 409 })
-      }
-      // Garde-fou spécifique CCA : si un mouvement_compte_courant existe
-      // déjà pour ce (releve_id, txIdx), on bloque (cas où la classif a
-      // été faite via la page /client/compte-courant et que la tx n'a
-      // pas été marquée correctement à l'époque).
-      if (classification === 'compte_courant_associe' || classification === 'remboursement_associe') {
-        // 1. Match exact via source_releve_id + source_transaction_idx
-        const { data: existingCcaMvt } = await supabase
-          .from('mouvements_compte_courant')
-          .select('id, type, montant')
-          .eq('source_releve_id', releve_id)
-          .eq('source_transaction_idx', txIdx)
-          .limit(1).maybeSingle()
-        if (existingCcaMvt) {
-          return NextResponse.json({
-            error: `Cette transaction a déjà été enregistrée en CCA (mouvement ${existingCcaMvt.type}, ${existingCcaMvt.montant} MUR) — pas de double-comptabilisation.`,
-            duplicate: true,
-            mouvement_id: existingCcaMvt.id,
-          }, { status: 409 })
-        }
-        // 2. Match heuristique date+montant pour les mouvements legacy créés
-        // via la page CCA SANS source_releve_id. Évite le double-comptage
-        // typique : avance saisie manuellement le 15/04 puis tx bancaire
-        // du même montant le 15/04 reclassifiée en rapprochement.
-        const txAmtMUR = Math.max(Number(prevTx.debit) || 0, Number(prevTx.credit) || 0)
-        const txDateForMatch = prevTx.date || null
-        if (txDateForMatch && txAmtMUR > 0) {
-          const { data: ccaList } = await supabase
-            .from('mouvements_compte_courant')
-            .select('id, type, montant, date_mouvement, source_releve_id, comptes_courants_associes!inner(societe_id)')
-            .is('source_releve_id', null)
-            .eq('comptes_courants_associes.societe_id', societe_id)
-            .eq('date_mouvement', txDateForMatch)
-          const tolerance = Math.max(1, txAmtMUR * 0.001) // 0.1% ou 1 MUR
-          const heuristicMatch = (ccaList || []).find((m: any) =>
-            Math.abs(Math.abs(Number(m.montant)) - txAmtMUR) < tolerance,
-          )
-          if (heuristicMatch) {
-            return NextResponse.json({
-              error: `Un mouvement CCA non rapproché existe le ${txDateForMatch} pour ${heuristicMatch.montant} MUR — il s'agit probablement de la même opération. Liez-le manuellement avant de classifier (ou supprimez le doublon).`,
-              duplicate: true,
-              mouvement_id: heuristicMatch.id,
-              heuristic: true,
-            }, { status: 409 })
-          }
-        }
-      }
-      txs[txIdx] = { ...txs[txIdx], statut: 'rapproche', matched_type: classification, lettre: code, note: `Classification manuelle: ${classification}` }
-      const { error: updRelErr, data: updRelData } = await supabase
-        .from('releves_bancaires')
-        .update({ transactions_json: txs })
-        .eq('id', releve_id)
-        .select('id')
-      if (updRelErr) {
-        console.error('[classer_transaction] update releve FAILED:', updRelErr.message, updRelErr)
-        return NextResponse.json({ error: `MAJ releve echouee: ${updRelErr.message}` }, { status: 500 })
-      }
-      if (!updRelData || updRelData.length === 0) {
-        console.error('[classer_transaction] update silencieusement ignore (0 ligne) - probablement RLS')
-        return NextResponse.json({
-          error: `Relevé non mis à jour (0 ligne affectée). RLS bloquante ou relevé inexistant.`,
-        }, { status: 500 })
-      }
-      console.log(`[classer_transaction] releve ${releve_id} mis a jour, tx ${txIdx} classee en ${classification}`)
-
-      // Mapping classification → compte comptable
-      const CLASSE_COMPTES: Record<string, string> = {
-        fournisseur: '401',
-        client: '411',
-        compte_courant_associe: '455',
-        remboursement_associe: '108',
-        avance_personnel: '425',
-        charge_diverse: '658',
-        paiement_mra: '447',
-        frais_bancaires: '627',
-        salaire: '4210',
-        salaire_bulk: '421',
-        virement_interne: '5800',
-        remboursement_personnel: '108',
-        charge_sociale: '431',
-        loyer: '613',
-        entretien: '615',
-        assurance: '616',
-        honoraires: '622',
-        deplacement: '625',
-        telecom: '626',
-        impot_taxe: '635',
-        materiel: '606',
-        produit_divers: '706',
-        autre: '471',
-      }
-      let compte = compte_custom || CLASSE_COMPTES[classification] || '471'
-
-      // ── DÉTECTION INTER-SOCIÉTÉS (migration 302 / fix bug 291-293) ──
-      // Pour les classifications de virement interne, on tente de matcher
-      // la tx contre les autres sociétés du même groupe. Match positif →
-      // bascule 5800 → 451 + création du miroir comptable côté dest.
-      // Si l'utilisateur a explicitement choisi un compte_custom, on respecte
-      // son choix (pas de surcharge automatique).
-      const ctTxForDetect = txs[txIdx] || {}
-      const ctLibelleForDetect: string = String(ctTxForDetect.libelle || '')
-      const ctTiersForDetect: string = String(ctTxForDetect.tiers_detecte || '')
-      let ctInterSocieteDest: string | null = null
-      let ctInterSocieteScore = 0
-      if (
-        !compte_custom &&
-        (classification === 'virement_interne' || classification === 'inter_societe')
-      ) {
-        try {
-          const detection = await resolveInterSocieteForTransaction(
-            supabase,
-            societe_id as string,
-            ctLibelleForDetect,
-            ctTiersForDetect,
-          )
-          if (detection.is_inter && detection.societe_dest_id) {
-            compte = COMPTE_GROUPE_451  // basculer 5800 → 451
-            ctInterSocieteDest = detection.societe_dest_id
-            ctInterSocieteScore = detection.score
-            console.log(
-              `[classer_transaction] INTER-SOCIÉTÉS détecté ` +
-              `(${detection.match_method}, score=${detection.score.toFixed(2)}) — ` +
-              `compte forcé à 451, dest=${detection.societe_dest_id}`,
-            )
-          }
-        } catch (detErr: any) {
-          console.warn('[classer_transaction] détection inter-sociétés échouée:', detErr?.message)
-        }
-      }
-
-      const { data: dossier, error: dossierErr } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
-      let nbEcritures = 0
-      let nbEcrituresSupprimees = 0
-      let ecrituresError: string | null = null
-      let ecrituresAlreadyExisted = false
-      if (!dossier) {
-        ecrituresError = `Aucun dossier comptable trouve pour societe ${societe_id}${dossierErr ? ' : ' + dossierErr.message : ''}`
-        console.warn('[classer_transaction]', ecrituresError)
-      } else {
-        const tx = txs[txIdx]
-        const txAmt = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
-        const isOut = (Number(tx.debit) || 0) > 0
-        // F8/F10 — si la tx porte sa propre devise (paiement Forex), on l'utilise.
-        // Sinon on reste sur la devise du compte (comportement legacy).
-        const effectiveDevise = ((tx.devise as string | undefined) || compteDeviseClasser || 'MUR').toUpperCase()
-        const dateEcrCT = tx.date || new Date().toISOString().split('T')[0]
-        // Migration 171/172 — taux HISTORIQUE figé. Fallback live si absent,
-        // mais avec log ; on continue pour ne pas bloquer la classification.
-        const ctOutcome = await resolveHistoricalRateSafe(supabase, dateEcrCT, effectiveDevise, rates)
-        const effectiveTaux = ctOutcome.rate != null
-          ? ctOutcome.rate
-          : (effectiveDevise === 'MUR' ? 1 : (rates[effectiveDevise] || 1))
-        // Conversion en MUR : si la tx est en EUR/USD/GBP, on convertit via le taux
-        const txAmtMUR = Math.round(txAmt * effectiveTaux * 100) / 100
-        const deviseLabel = effectiveDevise === 'MUR' ? '' : ` [${effectiveDevise} @ ${effectiveTaux}]`
-        const txMontantOrigineCT = effectiveDevise === 'MUR' ? null : Math.round(txAmt * 100) / 100
-        const freezeCT = bnqFreezeColumns(effectiveDevise, txMontantOrigineCT, effectiveTaux)
-        // ref_folio determinISTE pour cette tx specifique (releve_id complet + txIdx)
-        // Permet la detection idempotente du doublon = re-click sur la meme tx.
-        const refFolio = `CL-${releve_id}-${txIdx}`
-
-        // ── RECLASSIFICATION : supprimer les anciennes écritures AVANT d'insérer ──
-        // Quand l'utilisateur corrige une classification, les écritures de l'ancienne
-        // classification (ref_folio CL-xxx ou CLS-xxx ou ancien code lettre) doivent
-        // disparaître. Sinon le compte comptable précédent reste pollué avec un montant
-        // fantôme.
-        // 1) Supprimer par ref_folio CL-xxx (reclassification manuelle précédente)
-        const { count: delByFolio } = await supabase
-          .from('ecritures_comptables_v2')
-          .delete({ count: 'exact' })
-          .eq('societe_id', societe_id)
-          .eq('ref_folio', refFolio)
-        nbEcrituresSupprimees += (delByFolio || 0)
-        // 2) Supprimer par ref_folio CLS-xxx (créé par auto_rapprocher phase finale)
-        const refFolioCLS = `CLS-${releve_id}-${txIdx}`
-        const { count: delByCLS } = await supabase
-          .from('ecritures_comptables_v2')
-          .delete({ count: 'exact' })
-          .eq('societe_id', societe_id)
-          .eq('ref_folio', refFolioCLS)
-        nbEcrituresSupprimees += (delByCLS || 0)
-        // 2bis) Supprimer les écritures BANK-xxx-txIdx (créées par marquer_paye
-        // ou par lettrer_multi côté BNQ) — couvre les paiements groupés avec
-        // ref_folio unique par facture : BANK-<rel>-<idx>-<facId_short>
-        const bankPrefix = `BANK-${releve_id}-${txIdx}`
-        const { count: delByBankExact } = await supabase
-          .from('ecritures_comptables_v2')
-          .delete({ count: 'exact' })
-          .eq('societe_id', societe_id)
-          .eq('ref_folio', bankPrefix)
-        nbEcrituresSupprimees += (delByBankExact || 0)
-        const { count: delByBankPrefix } = await supabase
-          .from('ecritures_comptables_v2')
-          .delete({ count: 'exact' })
-          .eq('societe_id', societe_id)
-          .like('ref_folio', `${bankPrefix}-%`)
-        nbEcrituresSupprimees += (delByBankPrefix || 0)
-        // 2ter) Supprimer TDS-xxx et MC-xxx (retenues à source + classifications manuelles)
-        for (const prefix of [`TDS-${releve_id}-${txIdx}`, `MC-${releve_id}-${txIdx}`]) {
-          const { count } = await supabase
-            .from('ecritures_comptables_v2')
-            .delete({ count: 'exact' })
-            .eq('societe_id', societe_id)
-            .eq('ref_folio', prefix)
-          nbEcrituresSupprimees += (count || 0)
-        }
-        // 3) Supprimer par ancien code lettre (A043, CLS005, etc.)
-        // oldLettre est lu AVANT la mise à jour de txs[txIdx] (ligne 3200)
-        if (oldLettre && oldLettre !== code) {
-          const { count: delByLettre } = await supabase
-            .from('ecritures_comptables_v2')
-            .delete({ count: 'exact' })
-            .eq('societe_id', societe_id)
-            .eq('lettre', oldLettre)
-            .eq('journal', 'BNQ')
-          nbEcrituresSupprimees += (delByLettre || 0)
-          // 3bis) Délettrer les ACH/OD/VTE qui partagaient la même lettre
-          // (elles sont préservées mais leur lettre est retirée pour permettre
-          // un re-lettrage ultérieur si besoin).
-          await supabase
-            .from('ecritures_comptables_v2')
-            .update({ lettre: null, date_lettrage: null })
-            .eq('societe_id', societe_id)
-            .eq('lettre', oldLettre)
-            .neq('journal', 'BNQ')
-        }
-        if (nbEcrituresSupprimees > 0) {
-          console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folios CL/CLS/BANK/TDS/MC, lettre=${oldLettre})`)
-        }
-
-        // ── RECLASSIFICATION FACTURES : détacher les factures qui étaient
-        // rapprochées à cette tx. Sans ça, une facture reste en statut 'paye'
-        // avec un rapproche_releve_id pointant vers la tx alors qu'on vient
-        // de classer la tx en autre chose (ex: 'loyer') → incohérence visible
-        // sur /client/fournisseurs et dans les rapports fiscaux.
-        if (oldFactureIds.length > 0 && classification !== 'fournisseur' && classification !== 'client') {
-          const { error: resetFacErr } = await supabase
-            .from('factures')
-            .update({
-              statut: 'en_attente',
-              rapproche_releve_id: null,
-              rapproche_transaction_idx: null,
-              rapproche_date: null,
-              rapproche_source: null,
-            })
-            .in('id', oldFactureIds)
-          if (!resetFacErr) {
-            console.log(`[classer_transaction] ${oldFactureIds.length} facture(s) remise(s) en_attente (classification devient ${classification})`)
-          }
-          // Et on clear les facture_id/facture_ids de la tx dans transactions_json
-          txs[txIdx] = { ...txs[txIdx], facture_id: null, facture_ids: undefined, rapprochement_multi: undefined, nb_factures: undefined }
-          await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
-        }
-
-        // ── RECLASSIFICATION CCA : nettoyer les mouvements_compte_courant ──
-        // Si la tx était classée 'compte_courant_associe' avant, ou si elle l'est
-        // maintenant et qu'un mouvement existe déjà pour ce (releve_id, txIdx),
-        // on supprime le mouvement précédent. Sans ça, re-classer une tx CCA
-        // (changer d'associé) OU classer en autre type laisse un fantôme dans
-        // mouvements_compte_courant + un solde CCA faux.
-        // Idempotent : si rien à supprimer, count=0.
-        try {
-          const { data: oldMvts, count: nbMvtsSupprimees } = await supabase
-            .from('mouvements_compte_courant')
-            .delete({ count: 'exact' })
-            .eq('societe_id', societe_id)
-            .eq('source_releve_id', releve_id)
-            .eq('source_transaction_idx', txIdx)
-            .select('compte_courant_id, type, montant')
-          // Ré-équilibrer le solde du/des CCA impactés (sans les anciens mouvements)
-          if (oldMvts && oldMvts.length > 0) {
-            const ccaIds = Array.from(new Set(oldMvts.map((m: any) => m.compte_courant_id)))
-            for (const ccaId of ccaIds) {
-              const { data: remaining } = await supabase
-                .from('mouvements_compte_courant')
-                .select('type, montant')
-                .eq('compte_courant_id', ccaId)
-              const newSolde = (remaining || []).reduce((sum: number, m: any) => {
-                const sign = ['avance', 'retrait'].includes(m.type) ? -1 :
-                             ['apport', 'remboursement'].includes(m.type) ? 1 : 0
-                return sum + sign * (Number(m.montant) || 0)
-              }, 0)
-              await supabase.from('comptes_courants_associes')
-                .update({ solde: Math.round(newSolde * 100) / 100, updated_at: new Date().toISOString() })
-                .eq('id', ccaId)
-            }
-            console.log(`[classer_transaction] ${nbMvtsSupprimees} ancien(s) mouvement(s) CCA supprimé(s) sur ${ccaIds.length} compte(s) — soldes recalculés`)
-          }
-        } catch (cleanupErr) {
-          console.warn('[classer_transaction] CCA cleanup failed:', cleanupErr)
-          // Non bloquant — on continue avec la nouvelle classification
-        }
-
-        // R7 : pas de lettre sur comptes de résultat (6xxx/7xxx).
-        // Le ref_folio assure la traçabilité, la lettre ne va que sur le 512.
-        const compteClass = compte.charAt(0)
-        const lettreOnCompte = (compteClass !== '6' && compteClass !== '7') ? code : null
-
-        const ecrituresPayload = [
-          {
-            dossier_id: dossier.id, societe_id, date_ecriture: dateEcrCT,
-            journal: 'BNQ', numero_compte: compte,
-            libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 60)}${deviseLabel}`,
-            debit_mur: isOut ? txAmtMUR : 0, credit_mur: isOut ? 0 : txAmtMUR,
-            lettre: lettreOnCompte, ref_folio: refFolio,
-            ...freezeCT,
-          },
-          {
-            dossier_id: dossier.id, societe_id, date_ecriture: dateEcrCT,
-            journal: 'BNQ', numero_compte: '512',
-            libelle: `Banque${deviseLabel} — ${(tx.tiers_detecte || '').substring(0, 25)}`,
-            debit_mur: isOut ? 0 : txAmtMUR, credit_mur: isOut ? txAmtMUR : 0,
-            lettre: code, ref_folio: refFolio,
-            ...freezeCT,
-          },
-        ]
-        const { error: insEcrErr, data: insEcrData } = await supabase
-          .from('ecritures_comptables_v2')
-          .insert(ecrituresPayload)
-          .select('id')
-        if (insEcrErr) {
-          // Cas idempotent : ecritures deja inserees pour ce ref_folio (re-click)
-          if (/duplicate key value|unique constraint/i.test(String(insEcrErr.message || ''))) {
-            ecrituresAlreadyExisted = true
-            // Mettre a jour la classification sur les ecritures existantes (compte + lettre + classification)
-            const { data: existing } = await supabase
-              .from('ecritures_comptables_v2')
-              .update({ lettre: code, numero_compte: compte })
-              .eq('ref_folio', refFolio)
-              .neq('numero_compte', '512')
-              .select('id')
-            // Update libelle pour refleter la nouvelle classification choisie
-            await supabase
-              .from('ecritures_comptables_v2')
-              .update({ libelle: `${classification} — ${(tx.tiers_detecte || tx.libelle || '').substring(0, 60)}` })
-              .eq('ref_folio', refFolio)
-              .neq('numero_compte', '512')
-            nbEcritures = (existing?.length || 0) + 1
-            console.log(`[classer_transaction] ecritures deja existantes (re-click) pour ref_folio=${refFolio}, mises a jour avec nouvelle classif=${classification}`)
-          } else {
-            ecrituresError = insEcrErr.message
-            console.error('[classer_transaction] insertion ecritures FAILED:', insEcrErr.message, insEcrErr)
-          }
-        } else {
-          nbEcritures = insEcrData?.length || 2
-          console.log('[classer_transaction] ecritures inserees:', nbEcritures)
-        }
-
-        // ── MIROIR INTER-SOCIÉTÉS ─────────────────────────────────────────
-        // Si la détection a trouvé une société destinataire du même groupe,
-        // on crée immédiatement la contre-partie miroir (DR 512_dest / CR 451)
-        // pour éviter le bug historique 291-293 (transit 5800 qui s'accumule).
-        if (ctInterSocieteDest && !ecrituresError) {
-          try {
-            const mirrorRes = await creerMiroirInterSociete(supabase, {
-              user_id: user.id,
-              societe_source_id: societe_id as string,
-              societe_dest_id: ctInterSocieteDest,
-              date_ecriture: dateEcrCT,
-              montant_mur: txAmtMUR,
-              libelle_source: `${classification} — ${ctLibelleForDetect.substring(0, 100)}`,
-              isOut,
-              ref_folio_source: refFolio,
-              devise_origine: freezeCT.devise_origine,
-              montant_origine: freezeCT.montant_origine,
-              taux_change_applique: freezeCT.taux_change_applique,
-              lettre_code: code,
-            })
-            if (mirrorRes.created) {
-              console.log(`[classer_transaction/inter] miroir créé dest=${ctInterSocieteDest} score=${ctInterSocieteScore.toFixed(2)}`)
-            } else {
-              console.log(`[classer_transaction/inter] miroir non créé : ${mirrorRes.reason}`)
-            }
-          } catch (mirrorErr: any) {
-            console.warn('[classer_transaction/inter] miroir échoué (non-bloquant):', mirrorErr?.message)
-          }
-        }
-      }
-
-      // === SYNC CCA : si classification = compte_courant_associe, creer/maj
-      // le compte courant + le mouvement pour que la page CCA le voie ===
-      let ccaSynced = false
-      let ccaError: string | null = null
-      if (classification === 'compte_courant_associe') {
-        try {
-          const tx = txs[txIdx]
-          const nomAssocie = (tx.tiers_detecte || '').trim()
-          // Blocklist : noms de banques / frais / tiers techniques qui ne
-          // peuvent JAMAIS être un compte courant associé. Évite la création
-          // de faux CCA "MCB", "SBM", "MAURITIUS TELECOM" etc. observée en
-          // prod (libellés bancaires détectés comme tiers à tort).
-          const BANK_LIKE_NAMES = /^(mcb|sbm|bom|bank of mauritius|mauritius commercial bank|state bank|absa|hsbc|barclays|afrasia|standard chartered)(\s|$)/i
-          const FEE_LIKE_NAMES = /^(tax amount due|service fee|outward transfer|swift charge|stamp duty|merchant|bank charge|commission)/i
-          if (!nomAssocie || nomAssocie.length < 3) {
-            ccaError = 'Tiers absent ou trop court pour creer le CCA'
-          } else if (BANK_LIKE_NAMES.test(nomAssocie) || FEE_LIKE_NAMES.test(nomAssocie)) {
-            ccaError = `Tiers "${nomAssocie}" ressemble à une banque ou un frais bancaire — refus de créer un CCA. Re-classifie cette transaction en 'frais_bancaires'.`
-          } else {
-            // Trouver ou creer le compte courant associe
-            const { data: existingCompte } = await supabase
-              .from('comptes_courants_associes')
-              .select('id, solde')
-              .eq('societe_id', societe_id)
-              .ilike('nom', nomAssocie)
-              .limit(1)
-              .maybeSingle()
-
-            let compteId: string | null = existingCompte?.id || null
-            let currentSolde = Number(existingCompte?.solde || 0)
-
-            if (!compteId) {
-              const { data: newCompte, error: createErr } = await supabase
-                .from('comptes_courants_associes')
-                .insert({ societe_id, nom: nomAssocie, type: 'associe', solde: 0 })
-                .select('id, solde')
-                .single()
-              if (createErr) {
-                ccaError = `Impossible de creer le compte courant: ${createErr.message}`
-              } else {
-                compteId = newCompte.id
-                currentSolde = 0
-              }
-            }
-
-            if (compteId) {
-              const montantOrig = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
-              // F8/F10 — tx.devise > devise du compte (si tx en Forex sur compte MUR).
-              const ccaDevise = ((tx.devise as string | undefined) || compteDeviseClasser || 'MUR').toUpperCase()
-              const ccaTaux = ccaDevise === 'MUR' ? 1 : (rates[ccaDevise] || 1)
-              // Conversion en MUR : le solde du CCA doit etre coherent en MUR
-              // meme si la tx est en EUR/USD/GBP. On convertit avec le taux.
-              const montant = Math.round(montantOrig * ccaTaux * 100) / 100
-              const isOut = (Number(tx.debit) || 0) > 0
-              const type = isOut ? 'avance' : 'apport'
-              const deltaSolde = isOut ? -montant : montant
-              const conversionLabel = ccaDevise === 'MUR' ? '' : ` (${montantOrig.toFixed(2)} ${ccaDevise} @ ${ccaTaux})`
-              const description = `${isOut ? 'Avance societe a associe' : 'Apport associe a societe'}${conversionLabel} — ${(tx.libelle || '').substring(0, 60)}`
-
-              const { error: mvtErr } = await supabase
-                .from('mouvements_compte_courant')
-                .insert({
-                  compte_courant_id: compteId,
-                  societe_id,
-                  date_mouvement: tx.date || new Date().toISOString().split('T')[0],
-                  type,
-                  montant,
-                  description,
-                  // Traçabilité + clé d'unicité (migration 167) — empêche un 2e
-                  // INSERT pour la même tx bancaire (propagation self-target).
-                  source_releve_id: releve_id,
-                  source_transaction_idx: txIdx,
-                  source_kind: 'classifier',
-                })
-              if (mvtErr) {
-                ccaError = `Mouvement CCA non cree: ${mvtErr.message}`
-              } else {
-                // Mettre a jour le solde
-                await supabase
-                  .from('comptes_courants_associes')
-                  .update({ solde: currentSolde + deltaSolde, updated_at: new Date().toISOString() })
-                  .eq('id', compteId)
-                ccaSynced = true
-                console.log(`[classer_transaction] CCA synced: ${nomAssocie} type=${type} montant=${montant} nouveau_solde=${currentSolde + deltaSolde}`)
-              }
-            }
-          }
-        } catch (e: any) {
-          ccaError = e.message
-          console.error('[classer_transaction] CCA sync exception:', e)
-        }
-      }
-
-      // === AUTO-LEARN : sauvegarder le pattern comme règle de classification ===
-      let patternSaved = false
-      let learnError: string | null = null
-      try {
-        const tx = txs[txIdx]
-        const patternTiers = (learn_pattern?.tiers || tx.tiers_detecte || '').trim()
-        if (!patternTiers || patternTiers.length < 3) {
-          learnError = 'Pattern tiers trop court ou absent'
-        } else {
-          const { data: existing, error: existErr } = await supabase
-            .from('classification_rules')
-            .select('id')
-            .eq('societe_id', societe_id)
-            .eq('pattern_tiers', patternTiers)
-            .eq('classification', classification)
-            .maybeSingle()
-          if (existErr && /does not exist/i.test(String(existErr.message || ''))) {
-            learnError = 'Table classification_rules absente (migration 135 non appliquee)'
-          } else if (existing) {
-            patternSaved = true // Règle déjà présente = OK
-            console.log(`[classer_transaction] regle existe deja pour "${patternTiers}" -> ${classification}`)
-          } else {
-            const ruleCode = `LEARN_${societe_id.substring(0, 8)}_${Date.now().toString(36)}`
-            const { error: ruleErr } = await supabase.from('classification_rules').insert({
-              rule_code: ruleCode,
-              societe_id,
-              priority: 100,
-              active: true,
-              pattern_libelle: null,
-              pattern_tiers: patternTiers,
-              classification,
-              compte_debit: compte,
-              compte_credit: '512',
-              libelle_template: `${classification} — {{tiers}}`,
-              requires_validation: false,
-            })
-            if (ruleErr) {
-              learnError = ruleErr.message
-              console.error('[classer_transaction] auto-learn insert FAILED:', ruleErr.message, ruleErr)
-            } else {
-              patternSaved = true
-              console.log(`[classer_transaction] auto-learn: regle ${ruleCode} creee pour tiers="${patternTiers}" -> ${classification}`)
-            }
-          }
-        }
-      } catch (e: any) {
-        learnError = e.message
-        console.warn('[classer_transaction] auto-learn exception:', e.message)
-      }
-
-      // === PROPAGATION : appliquer la classification à toutes les tx similaires ===
-      // Avec compteurs diagnostiques detaillés pour identifier pourquoi une tx
-      // serait ecartee du lot. Match sur tiers_detecte OR tiers (fallback).
-      let nbPropagated = 0
-      let propagationError: string | null = null
-      const propStats = { scanned: 0, skip_facture: 0, skip_already: 0, skip_tiers_vide: 0, skip_tiers_diff: 0, matched: 0 }
-      const normalize = (s: string) => (s || '')
-        .trim()
-        .toLowerCase()
-        .replace(/\b(mr|mrs|ms|mme|monsieur|madame|m\.|sir)\b/g, '')
-        .replace(/[^a-z0-9\s]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-      if (apply_to_similar) {
-        try {
-          const currentTx = txs[txIdx]
-          const rawTiers = currentTx.tiers_detecte || currentTx.tiers || ''
-          const targetTiers = normalize(rawTiers)
-          console.log(`[classer_transaction] propagation demarree - raw="${rawTiers}" normalized="${targetTiers}"`)
-          if (!targetTiers || targetTiers.length < 3) {
-            propagationError = `Tiers trop court pour propager (raw="${rawTiers}", normalized="${targetTiers}")`
-          } else {
-            const { data: allReleves } = await supabase
-              .from('releves_bancaires')
-              .select('id, transactions_json, compte_bancaire_id')
-              .eq('societe_id', societe_id)
-
-            // Map relev_id -> devise du compte bancaire pour conversion MUR par tx
-            const cbIds = Array.from(new Set((allReleves || []).map((r: any) => r.compte_bancaire_id).filter(Boolean)))
-            const { data: cbData } = cbIds.length > 0
-              ? await supabase.from('comptes_bancaires').select('id, devise').in('id', cbIds)
-              : { data: [] }
-            const deviseByCb: Record<string, string> = {}
-            for (const c of cbData || []) deviseByCb[(c as any).id] = ((c as any).devise || 'MUR').toUpperCase()
-
-            for (const rel of allReleves || []) {
-              const relTxs = [...(rel.transactions_json || [])]
-              let changed = false
-              const relDevise = deviseByCb[(rel as any).compte_bancaire_id] || 'MUR'
-              const relTauxDevise = rates[relDevise] || 1
-              for (let i = 0; i < relTxs.length; i++) {
-                const t = relTxs[i]
-                if (rel.id === releve_id && i === txIdx) continue
-                propStats.scanned++
-                if (t.facture_id) { propStats.skip_facture++; continue }
-                if (t.matched_type === classification) { propStats.skip_already++; continue }
-                const rawTxTiers = t.tiers_detecte || t.tiers || ''
-                const txTiers = normalize(rawTxTiers)
-                if (!txTiers || txTiers.length < 3) { propStats.skip_tiers_vide++; continue }
-                if (txTiers !== targetTiers) { propStats.skip_tiers_diff++; continue }
-                // Match trouve - on classifie meme si matched_type commence par rule_
-                // (l utilisateur a explicitement demande la propagation)
-                propStats.matched++
-                const propCode = `CL${String(Date.now()).slice(-6)}${i}`
-                relTxs[i] = {
-                  ...t,
-                  statut: 'rapproche',
-                  matched_type: classification,
-                  lettre: propCode,
-                  note: `Propage depuis ${transaction_id} (classifie manuellement en ${classification})`,
-                }
-                changed = true
-                nbPropagated++
-                if (dossier) {
-                  const txAmtOrig = Math.max(Number(t.debit) || 0, Number(t.credit) || 0)
-                  const isOut = (Number(t.debit) || 0) > 0
-                  const propRef = `CL-${rel.id}-${i}`
-                  const propDate = t.date || new Date().toISOString().split('T')[0]
-                  const propDevise = (t.devise || relDevise || 'MUR').toUpperCase()
-                  // Migration 171/172 — taux HISTORIQUE par tx propagée
-                  const propOutcome = await resolveHistoricalRateSafe(
-                    supabase, propDate, propDevise, rates,
-                  )
-                  const propRate = propOutcome.rate != null
-                    ? propOutcome.rate
-                    : (propDevise === 'MUR' ? 1 : (rates[propDevise] || 1))
-                  const txAmt = Math.round(
-                    (propDevise === 'MUR' ? txAmtOrig : txAmtOrig * propRate) * 100,
-                  ) / 100
-                  const propMontantOrig = propDevise === 'MUR' ? null : Math.round(txAmtOrig * 100) / 100
-                  const freezeProp = bnqFreezeColumns(propDevise, propMontantOrig, propRate)
-                  const devLbl = propDevise === 'MUR' ? '' : ` [${propDevise} @ ${propRate}]`
-                  try {
-                    const { error: insErr } = await supabase.from('ecritures_comptables_v2').insert([
-                      {
-                        dossier_id: dossier.id, societe_id,
-                        date_ecriture: propDate,
-                        journal: 'BNQ', numero_compte: compte,
-                        libelle: `${classification} — ${(rawTxTiers || t.libelle || '').substring(0, 60)}${devLbl}`,
-                        debit_mur: isOut ? txAmt : 0, credit_mur: isOut ? 0 : txAmt,
-                        lettre: propCode, ref_folio: propRef,
-                        ...freezeProp,
-                      },
-                      {
-                        dossier_id: dossier.id, societe_id,
-                        date_ecriture: propDate,
-                        journal: 'BNQ', numero_compte: '512',
-                        libelle: `Banque${devLbl} — ${(rawTxTiers || '').substring(0, 25)}`,
-                        debit_mur: isOut ? 0 : txAmt, credit_mur: isOut ? txAmt : 0,
-                        lettre: propCode, ref_folio: propRef,
-                        ...freezeProp,
-                      },
-                    ])
-                    if (insErr && !/duplicate key|unique constraint/i.test(String(insErr.message))) {
-                      console.warn(`[propagation] ecritures insert failed for tx=${rel.id}-${i}:`, insErr.message)
-                    }
-                  } catch (e: any) {
-                    console.warn(`[propagation] ecritures exception for tx=${rel.id}-${i}:`, e.message)
-                  }
-
-                  // CCA sync pour les tx propagees aussi
-                  if (classification === 'compte_courant_associe' && rawTxTiers) {
-                    try {
-                      const { data: existingCcaProp } = await supabase
-                        .from('comptes_courants_associes')
-                        .select('id, solde')
-                        .eq('societe_id', societe_id)
-                        .ilike('nom', rawTxTiers.trim())
-                        .limit(1)
-                        .maybeSingle()
-                      let ccaId = existingCcaProp?.id
-                      let solde = Number(existingCcaProp?.solde || 0)
-                      if (!ccaId) {
-                        const { data: newCca } = await supabase
-                          .from('comptes_courants_associes')
-                          .insert({ societe_id, nom: rawTxTiers.trim(), type: 'associe', solde: 0 })
-                          .select('id, solde')
-                          .single()
-                        ccaId = newCca?.id
-                      }
-                      if (ccaId) {
-                        const delta = isOut ? -txAmt : txAmt
-                        // Idempotent : si la tx (rel.id, i) a déjà un mouvement
-                        // sur ce compte, on skip (index unique partiel
-                        // ux_mouvements_cca_source — migration 167).
-                        const { data: existingMvt } = await supabase
-                          .from('mouvements_compte_courant')
-                          .select('id')
-                          .eq('compte_courant_id', ccaId)
-                          .eq('source_releve_id', rel.id)
-                          .eq('source_transaction_idx', i)
-                          .limit(1)
-                        if (!existingMvt || existingMvt.length === 0) {
-                          const { error: propInsErr } = await supabase.from('mouvements_compte_courant').insert({
-                            compte_courant_id: ccaId, societe_id,
-                            date_mouvement: t.date || new Date().toISOString().split('T')[0],
-                            type: isOut ? 'avance' : 'apport',
-                            montant: txAmt,
-                            description: `Propage (${classification}) ${propDevise !== 'MUR' ? `[${txAmtOrig.toFixed(2)} ${propDevise} @ ${propRate}]` : ''} — ${(t.libelle || '').substring(0, 60)}`,
-                            source_releve_id: rel.id,
-                            source_transaction_idx: i,
-                            source_kind: 'propagation',
-                          })
-                          if (!propInsErr) {
-                            await supabase.from('comptes_courants_associes')
-                              .update({ solde: solde + delta, updated_at: new Date().toISOString() })
-                              .eq('id', ccaId)
-                          }
-                          // Si l'INSERT échoue sur violation unique, l'index a
-                          // bien fait son travail — on ignore silencieusement.
-                        }
-                      }
-                    } catch (e: any) {
-                      console.warn(`[propagation] CCA sync exception:`, e.message)
-                    }
-                  }
-                }
-              }
-              if (changed) {
-                await supabase.from('releves_bancaires').update({ transactions_json: relTxs }).eq('id', rel.id)
-              }
-            }
-            console.log(`[classer_transaction] propagation: ${nbPropagated} tx classees avec tiers "${targetTiers}" = ${classification}. Stats=`, propStats)
-          }
-        } catch (e: any) {
-          propagationError = e.message
-          console.error('[classer_transaction] propagation FAILED:', e)
-        }
-      }
-
-      return NextResponse.json({
-        success: true,
-        lettre: code,
-        classification,
-        nb_ecritures: nbEcritures,
-        ecritures_already_existed: ecrituresAlreadyExisted,
-        pattern_saved: patternSaved,
-        cca_synced: ccaSynced,
-        nb_propagated: nbPropagated,
-        propagation_stats: apply_to_similar ? propStats : undefined,
-        warnings: {
-          ecritures: ecrituresError,
-          learn: learnError,
-          propagation: propagationError,
-          cca: ccaError,
-        },
-      })
-    }
-
-    // === CLOTURER MOIS — Verifie invariants + cree bank_reconciliation + verrouille ===
-    // body: { societe_id, mois: 'YYYY-MM', force?: boolean }
-    // Invariants :
-    //   - Aucune tx non_identifie ou a_verifier dans le mois
-    //   - Aucune ecriture 401/411 non lettree du mois
-    //   - Solde 580 = 0 (virements internes soldes)
-    // Si force=true, cree quand meme en mode 'draft' avec warnings.
-    if (action === 'cloturer_mois') {
-      const { societe_id, mois, force } = body
-      if (!societe_id || !mois) {
-        return NextResponse.json({ error: 'societe_id et mois (YYYY-MM) requis' }, { status: 400 })
-      }
-      if (!/^\d{4}-\d{2}$/.test(mois)) {
-        return NextResponse.json({ error: 'Format mois invalide - attendu YYYY-MM' }, { status: 400 })
-      }
-
-      const [annee, moisNum] = mois.split('-').map(Number)
-      const period_start = `${annee}-${String(moisNum).padStart(2, '0')}-01`
-      const lastDay = new Date(annee, moisNum, 0).getDate()
-      const period_end = `${annee}-${String(moisNum).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-
-      // === Verification des invariants ===
-      const invariants: { check: string; ok: boolean; details?: string }[] = []
-
-      // 1. Transactions bancaires du mois
-      const { data: releves } = await supabase
-        .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id').eq('societe_id', societe_id).is('superseded_by_id', null)
-      let tx_non_identifie = 0
-      let tx_a_verifier = 0
-      let tx_total_mois = 0
-      for (const r of releves || []) {
-        for (const tx of ((r as any).transactions_json || [])) {
-          const d = tx.date || ''
-          if (d.substring(0, 7) !== mois) continue
-          tx_total_mois++
-          if (tx.statut === 'non_identifie') tx_non_identifie++
-          else if (tx.statut === 'a_verifier') tx_a_verifier++
-        }
-      }
-      invariants.push({
-        check: 'Aucune transaction non identifiee',
-        ok: tx_non_identifie === 0,
-        details: tx_non_identifie > 0 ? `${tx_non_identifie} tx en statut non_identifie` : undefined,
-      })
-      invariants.push({
-        check: 'Aucune transaction a verifier',
-        ok: tx_a_verifier === 0,
-        details: tx_a_verifier > 0 ? `${tx_a_verifier} tx en statut a_verifier` : undefined,
-      })
-
-      // 2. Ecritures 401/411 non lettrees du mois
-      const { data: dossierClosure } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
-      let ecr_non_lettrees = 0
-      let solde_580 = 0
-      if (dossierClosure) {
-        const { data: ecrs } = await supabase
-          .from('ecritures_comptables_v2')
-          .select('numero_compte, debit_mur, credit_mur, lettre')
-          .eq('dossier_id', dossierClosure.id)
-          .gte('date_ecriture', period_start)
-          .lte('date_ecriture', period_end)
-        for (const e of ecrs || []) {
-          const c = String(e.numero_compte || '')
-          if (!e.lettre && (c.startsWith('401') || c.startsWith('411'))) ecr_non_lettrees++
-          if (c.startsWith('580')) solde_580 += (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0)
-        }
-      }
-      invariants.push({
-        check: 'Toutes ecritures 401/411 du mois lettrees',
-        ok: ecr_non_lettrees === 0,
-        details: ecr_non_lettrees > 0 ? `${ecr_non_lettrees} ecritures 401/411 non lettrees` : undefined,
-      })
-      invariants.push({
-        check: 'Solde 580 (virements internes) = 0',
-        ok: Math.abs(solde_580) < 0.01,
-        details: Math.abs(solde_580) >= 0.01 ? `Solde restant : ${solde_580.toFixed(2)} MUR` : undefined,
-      })
-
-      const allOk = invariants.every(i => i.ok)
-      const failedChecks = invariants.filter(i => !i.ok)
-
-      if (!allOk && !force) {
-        return NextResponse.json({
-          error: 'Invariants non respectes - classez toutes les transactions et lettrez les ecritures avant la cloture',
-          invariants,
-          blockers: failedChecks.map(f => f.check + (f.details ? ` (${f.details})` : '')),
-        }, { status: 400 })
-      }
-
-      // === Creer ou mettre a jour bank_reconciliations pour chaque compte bancaire ===
-      const compteBancaireIds = Array.from(new Set((releves || []).map((r: any) => r.compte_bancaire_id).filter(Boolean)))
-      const createdReconciliations: any[] = []
-      for (const cbId of compteBancaireIds) {
-        const { data: cb } = await supabase.from('comptes_bancaires')
-          .select('compte_comptable').eq('id', cbId).single()
-        const numeroCompteCompta = cb?.compte_comptable || '512'
-
-        // GL balance au period_end
-        let gl_balance = 0
-        if (dossierClosure) {
-          const { data: ecrGl } = await supabase
-            .from('ecritures_comptables_v2')
-            .select('debit_mur, credit_mur')
-            .eq('dossier_id', dossierClosure.id)
-            .eq('numero_compte', numeroCompteCompta)
-            .lte('date_ecriture', period_end)
-          gl_balance = (ecrGl || []).reduce((s: number, e: any) => s + (Number(e.debit_mur) || 0) - (Number(e.credit_mur) || 0), 0)
-          gl_balance = Math.round(gl_balance * 100) / 100
-        }
-
-        const { data: reconCreated, error: reconErr } = await supabase.from('bank_reconciliations').upsert({
-          societe_id, compte_bancaire_id: cbId,
-          numero_compte_compta: numeroCompteCompta,
-          period_start, period_end,
-          bank_balance: 0, // A saisir manuellement si besoin dans le tableau officiel
-          gl_balance,
-          adjusted_bank_balance: 0,
-          adjusted_gl_balance: gl_balance,
-          residual_gap: -gl_balance,
-          status: allOk ? 'validated' : 'draft',
-          prepared_by: user.id,
-          validated_by: allOk ? user.id : null,
-          validated_at: allOk ? new Date().toISOString() : null,
-        }, { onConflict: 'societe_id,compte_bancaire_id,period_end' }).select().single()
-
-        if (!reconErr && reconCreated) createdReconciliations.push(reconCreated)
-      }
-
-      // === Verrouiller accounting_periods (seulement si invariants OK) ===
-      let periodLocked = false
-      if (allOk) {
-        const { error: lockErr } = await supabase.from('accounting_periods').upsert({
-          societe_id, period_start, period_end,
-          status: 'locked',
-          closed_by: user.id,
-          closed_at: new Date().toISOString(),
-        }, { onConflict: 'societe_id,period_end' })
-        if (!lockErr) periodLocked = true
-      }
-
-      return NextResponse.json({
-        success: true,
-        mois,
-        period_start, period_end,
-        all_invariants_ok: allOk,
-        invariants,
-        stats: { tx_total_mois, tx_non_identifie, tx_a_verifier, ecr_non_lettrees, solde_580 },
-        reconciliations_created: createdReconciliations.length,
-        period_locked: periodLocked,
-        forced: !!force,
-      })
-    }
-
-    // === REMBOURSER NOTE DE FRAIS (NDF) EMPLOYE ===
-    // Cree l ecriture comptable : D 425 Avances personnel / C 512 Banque
-    // Avec lien optionnel a un employe_id + description de la depense.
-    // Le montant est converti MUR selon la devise du compte bancaire.
-    if (action === 'rembourser_employe') {
-      const { transaction_id, releve_id, societe_id, employe_id, employe_nom, description, compte_charge } = body
-      if (!releve_id || !transaction_id || !societe_id) {
-        return NextResponse.json({ error: 'releve_id, transaction_id, societe_id requis' }, { status: 400 })
-      }
-
-      const { data: releve } = await supabase
-        .from('releves_bancaires')
-        .select('id, transactions_json, compte_bancaire_id')
-        .eq('id', releve_id).single()
-      if (!releve) return NextResponse.json({ error: 'Releve non trouve' }, { status: 404 })
-
-      const { data: cb } = await supabase
-        .from('comptes_bancaires').select('devise').eq('id', releve.compte_bancaire_id).maybeSingle()
-      const compteDeviseNdf = (cb?.devise || 'MUR').toUpperCase()
-      const ratesNdfLive: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
-
-      const txIdx = parseInt(transaction_id.split('-').pop() || '0')
-      const txs = [...(releve.transactions_json || [])]
-      if (txIdx >= txs.length) return NextResponse.json({ error: 'Transaction non trouvee' }, { status: 404 })
-
-      // Verif periode non verrouillee
-      const txDate = txs[txIdx]?.date
-      if (txDate) {
-        const lockStatus = await checkPeriodLock(supabase, societe_id, txDate)
-        if (lockStatus.locked) {
-          return NextResponse.json({ error: `Periode verrouillee — ${lockStatus.reason}` }, { status: 403 })
-        }
-      }
-
-      const tx = txs[txIdx]
-      const montantOrig = Math.max(Number(tx.debit) || 0, Number(tx.credit) || 0)
-      // Migration 171/172 — taux HISTORIQUE à la date de la tx.
-      const devise = (tx.devise || compteDeviseNdf || 'MUR').toUpperCase()
-      const dateEcrNdf = tx.date || new Date().toISOString().split('T')[0]
-      const ndfOutcome = await resolveHistoricalRateSafe(supabase, dateEcrNdf, devise, ratesNdfLive)
-      const taux = ndfOutcome.rate != null
-        ? ndfOutcome.rate
-        : (devise === 'MUR' ? 1 : (ratesNdfLive[devise] || 1))
-      const montantMUR = Math.round(montantOrig * taux * 100) / 100
-      const montantOrigineNdf = devise === 'MUR' ? null : Math.round(montantOrig * 100) / 100
-      const freezeNdf = bnqFreezeColumns(devise, montantOrigineNdf, taux)
-
-      // Employe optionnel
-      let employeInfo = null
-      if (employe_id) {
-        const { data: emp } = await supabase.from('employes').select('id, nom, prenom').eq('id', employe_id).single()
-        if (emp) employeInfo = emp
-      }
-      const nomEmploye = employeInfo
-        ? `${employeInfo.prenom || ''} ${employeInfo.nom || ''}`.trim()
-        : (employe_nom || 'Employé')
-
-      const code = `NDF${String(Date.now()).slice(-6)}`
-      const compteDebit = compte_charge || '425' // 425 Avances personnel par defaut
-      const refFolio = `NDF-${releve_id}-${txIdx}`
-
-      // Marquer la transaction
-      txs[txIdx] = {
-        ...tx,
-        statut: 'rapproche',
-        matched_type: 'remboursement_personnel',
-        lettre: code,
-        employe_id: employeInfo?.id || null,
-        employe_nom: nomEmploye,
-        note: `Remboursement ${nomEmploye} — ${description || 'Note de frais'}`,
-      }
-      await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
-
-      // Ecritures BNQ : D 425 (ou compte_charge) / C 512
-      const { data: dossier } = await supabase.from('dossiers').select('id').eq('societe_id', societe_id).limit(1).maybeSingle()
-      if (dossier) {
-        const devLbl = devise === 'MUR' ? '' : ` [${devise} @ ${taux}]`
-        await supabase.from('ecritures_comptables_v2').insert([
-          {
-            dossier_id: dossier.id, societe_id,
-            date_ecriture: dateEcrNdf,
-            journal: 'BNQ', numero_compte: compteDebit,
-            libelle: `Remboursement ${nomEmploye} — ${(description || 'NDF').substring(0, 60)}${devLbl}`,
-            debit_mur: montantMUR, credit_mur: 0,
-            lettre: code, ref_folio: refFolio,
-            ...freezeNdf,
-          },
-          {
-            dossier_id: dossier.id, societe_id,
-            date_ecriture: dateEcrNdf,
-            journal: 'BNQ', numero_compte: '512',
-            libelle: `Banque${devLbl} — Remboursement ${nomEmploye.substring(0, 40)}`,
-            debit_mur: 0, credit_mur: montantMUR,
-            lettre: code, ref_folio: refFolio,
-            ...freezeNdf,
-          },
-        ])
-      }
-
-      return NextResponse.json({
-        success: true,
-        lettre: code,
-        montant_mur: montantMUR,
-        devise,
-        employe: nomEmploye,
-        compte: compteDebit,
-      })
-    }
-
-    // ── annuler_paiement_factures : remettre N factures en "en_attente" ──
-    // Remet le statut, clear rapproche_*, et délettrer les tx bancaires associées.
-    // Si facture_ids = ['ALL'], remet TOUTES les factures + TOUTES les tx bancaires
-    // à zéro pour la société (reset complet du rapprochement).
-    if (action === 'annuler_paiement_factures') {
-      const { societe_id: socId, facture_ids } = body
-      if (!socId) {
-        return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
-      }
-
-      const isResetAll = Array.isArray(facture_ids) && facture_ids.length === 1 && facture_ids[0] === 'ALL'
-
-      // 1. Remettre les factures en attente
-      let resetQuery = supabase
-        .from('factures')
-        .update({
-          statut: 'en_attente',
-          rapproche_releve_id: null,
-          rapproche_transaction_idx: null,
-          rapproche_date: null,
-          rapproche_source: null,
-        })
-        .eq('societe_id', socId)
-        .neq('statut', 'annule')
-        .neq('statut', 'brouillon')
-
-      if (!isResetAll && Array.isArray(facture_ids) && facture_ids.length > 0) {
-        resetQuery = resetQuery.in('id', facture_ids)
-      }
-
-      const { data: resetData, error: resetErr } = await resetQuery.select('id')
-      if (resetErr) {
-        return NextResponse.json({ error: resetErr.message }, { status: 500 })
-      }
-
-      // 2. Remettre TOUTES les tx bancaires à non_identifie
-      // (pas seulement celles liées aux factures, car les tx auto-classifiées
-      // Phase 1/3 ne sont liées à aucune facture mais bloquent le re-rapprochement)
-      let txReset = 0
-      const { data: releves } = await supabase
-        .from('releves_bancaires')
-        .select('id, transactions_json')
-        .eq('societe_id', socId)
-
-      for (const rel of releves || []) {
-        const txs = [...(rel.transactions_json || [])]
-        let changed = false
-        for (let i = 0; i < txs.length; i++) {
-          const tx = txs[i]
-          if (!tx) continue
-          // Garder les virements internes (ils sont corrects)
-          if (tx.statut === 'interne' || tx.matched_type === 'transfert_interne') continue
-          // Tout le reste → non_identifie
-          if (tx.statut === 'rapproche' || tx.statut === 'propose' || tx.lettre || tx.facture_id || tx.facture_ids || tx.matched_type) {
-            const { lettre, facture_id, facture_ids: fids, ecriture_id, matched_type, match_confidence, note, rapproche_at, rapprochement_multi, nb_factures, ecart_montant, ...rest } = tx
-            txs[i] = { ...rest, statut: 'non_identifie' }
-            changed = true
-            txReset++
-          }
-        }
-        if (changed) {
-          await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', rel.id)
-        }
-      }
-
-      // 3. Supprimer les écritures BNQ liées au rapprochement
-      const { count: ecrituresDeleted } = await supabase
-        .from('ecritures_comptables_v2')
-        .delete({ count: 'exact' })
-        .eq('societe_id', socId)
-        .eq('journal', 'BNQ')
-
-      return NextResponse.json({
-        ok: true,
-        nb_factures_reset: (resetData || []).length,
-        nb_tx_delettrees: txReset,
-        nb_ecritures_supprimees: ecrituresDeleted || 0,
-      })
-    }
+    if (action === 'lettrer_ecritures') return handleLettrerEcritures(deps)
+    if (action === 'paye_par_associe') return handlePayeParAssocie(deps)
+    if (action === 'compensation') return handleCompensation(deps)
+    if (action === 'paiement_employe') return handlePaiementEmploye(deps)
+    if (action === 'marquer_paye') return handleMarquerPaye(deps)
+    if (action === 'classer_transaction') return handleClasserTransaction(deps)
+    if (action === 'cloturer_mois') return handleCloturerMois(deps)
+    if (action === 'rembourser_employe') return handleRembourserEmploye(deps)
+    if (action === 'annuler_paiement_factures') return handleAnnulerPaiementFactures(deps)
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
-  } catch (e: unknown) {
+  } catch (e: any) {
     const msg = e instanceof Error ? e.message : String(e)
     const stack = e instanceof Error ? e.stack?.split('\n').slice(0, 5).join('\n') : ''
     console.error('[rapprochement POST] CRASH:', msg, stack)

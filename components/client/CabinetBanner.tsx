@@ -54,7 +54,7 @@ export function CabinetBanner() {
           } catch { /* silent fallback */ }
         }
         setState(j)
-      } catch {}
+      } catch { /* noop */ }
     }
     load()
     return () => { cancelled = true }
@@ -66,7 +66,7 @@ export function CabinetBanner() {
     setExiting(true)
     try {
       await fetch("/api/comptable/act-as", { method: "DELETE" })
-    } catch {}
+    } catch { /* noop */ }
     // Nettoie aussi la société active normale (au cas où elle aurait
     // été synchronisée) — fail-safe pour ne pas garder un état hybride.
     document.cookie = "lexora_acting_as_societe=; max-age=0; path=/"

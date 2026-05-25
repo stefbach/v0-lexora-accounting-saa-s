@@ -104,7 +104,7 @@ export async function GET(
     }))
 
     return NextResponse.json({ versions })
-  } catch (e: unknown) {
+  } catch (e: any) {
     console.error('[releves/history] error:', e)
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erreur' },
