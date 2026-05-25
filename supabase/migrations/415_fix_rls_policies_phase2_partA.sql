@@ -224,21 +224,38 @@ DO $$ BEGIN
 END $$;
 
 -- ------------------------------------------------------------
--- A9. tiers_annuaire  (mig 128) — annuaire tiers commerciaux
+-- A9. tiers_annuaire  (mig 128) — annuaire tiers commerciaux PARTAGÉ
+-- Pas de societe_id : c'est un registre commun à toutes les sociétés.
+-- Pattern : tous authentifiés peuvent lire et ajouter, seuls le créateur
+-- ou un lexora-admin peuvent modifier/supprimer.
 -- ------------------------------------------------------------
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='tiers_annuaire') THEN
     DROP POLICY IF EXISTS "tiers_annuaire_auth" ON public.tiers_annuaire;
     DROP POLICY IF EXISTS "tiers_select_auth" ON public.tiers_annuaire;
-    IF NOT EXISTS (
-      SELECT 1 FROM pg_policies
-      WHERE schemaname='public' AND tablename='tiers_annuaire'
-        AND policyname='tiers_annuaire_tenant'
-    ) THEN
-      CREATE POLICY tiers_annuaire_tenant ON public.tiers_annuaire
-        FOR ALL
-        USING (public.user_has_societe_access(societe_id))
-        WITH CHECK (public.user_has_societe_access(societe_id));
+    DROP POLICY IF EXISTS "tiers_annuaire_tenant" ON public.tiers_annuaire;
+    -- SELECT : tous authentifiés (registre partagé)
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='tiers_annuaire' AND policyname='tiers_annuaire_select') THEN
+      CREATE POLICY tiers_annuaire_select ON public.tiers_annuaire
+        FOR SELECT TO authenticated USING (true);
+    END IF;
+    -- INSERT : tous authentifiés (ajout libre, sera enrichi par tous)
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='tiers_annuaire' AND policyname='tiers_annuaire_insert') THEN
+      CREATE POLICY tiers_annuaire_insert ON public.tiers_annuaire
+        FOR INSERT TO authenticated WITH CHECK (true);
+    END IF;
+    -- UPDATE : créateur ou lexora-admin
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='tiers_annuaire' AND policyname='tiers_annuaire_update') THEN
+      CREATE POLICY tiers_annuaire_update ON public.tiers_annuaire
+        FOR UPDATE TO authenticated
+        USING (created_by = auth.uid() OR public.user_is_lexora_admin())
+        WITH CHECK (created_by = auth.uid() OR public.user_is_lexora_admin());
+    END IF;
+    -- DELETE : lexora-admin uniquement (un tiers peut être référencé par plusieurs sociétés)
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='tiers_annuaire' AND policyname='tiers_annuaire_delete') THEN
+      CREATE POLICY tiers_annuaire_delete ON public.tiers_annuaire
+        FOR DELETE TO authenticated
+        USING (public.user_is_lexora_admin());
     END IF;
   END IF;
 END $$;
