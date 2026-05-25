@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Car, Plus, CheckCircle, Edit2, Save, DollarSign } from "lucide-react"
+import { Loader2, Car, Plus, CheckCircle, Edit2, Save, DollarSign, MapPin, Trash2, XCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale, type Locale } from "@/lib/i18n"
 import { CalculDistanceWidget } from "@/components/rh/CalculDistanceWidget"
@@ -46,6 +46,29 @@ interface FraisKm {
   statut: string
 }
 
+interface TrajetKm {
+  id: string
+  societe_id: string
+  employe_id: string
+  periode: string
+  date_trajet: string | null
+  depart_adresse: string | null
+  arrivee_adresse: string | null
+  km: number
+  motif: string | null
+  aller_retour: boolean
+  statut: 'en_attente' | 'valide' | 'rejete' | 'paye'
+  rejected_reason: string | null
+  created_at: string
+}
+
+const TRAJET_STATUT_COLORS: Record<string, string> = {
+  en_attente: 'bg-yellow-100 text-yellow-800',
+  valide: 'bg-green-100 text-green-800',
+  rejete: 'bg-red-100 text-red-800',
+  paye: 'bg-blue-100 text-blue-800',
+}
+
 export default function FraisKmPage() {
   const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
@@ -65,6 +88,19 @@ export default function FraisKmPage() {
   const [formEmploye, setFormEmploye] = useState("")
   const [formKm, setFormKm] = useState("")
   const [saving, setSaving] = useState(false)
+
+  // Mig 426 — multi-trajets : dialog détail
+  const [trajetsDialogOpen, setTrajetsDialogOpen] = useState(false)
+  const [trajetsEmploye, setTrajetsEmploye] = useState<FraisKm | null>(null)
+  const [trajets, setTrajets] = useState<TrajetKm[]>([])
+  const [loadingTrajets, setLoadingTrajets] = useState(false)
+  const [newTrajetDate, setNewTrajetDate] = useState("")
+  const [newTrajetMotif, setNewTrajetMotif] = useState("")
+  const [newTrajetKm, setNewTrajetKm] = useState("")
+  const [newTrajetAR, setNewTrajetAR] = useState(false)
+  const [newTrajetDepart, setNewTrajetDepart] = useState("")
+  const [newTrajetArrivee, setNewTrajetArrivee] = useState("")
+  const [addingTrajet, setAddingTrajet] = useState(false)
 
   useEffect(() => {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
@@ -192,6 +228,135 @@ export default function FraisKmPage() {
       notifySuccess("✅ Frais kilométriques approuvés")
     } catch (e: unknown) {
       notifyError("Erreur réseau", e)
+    }
+  }
+
+  // ── Mig 426 — Multi-trajets handlers ───────────────────────────────────
+  const loadTrajets = useCallback(async (employe_id: string, per: string) => {
+    setLoadingTrajets(true)
+    try {
+      const params = new URLSearchParams({
+        action: 'list_trajets',
+        employe_id,
+        periode: per,
+      })
+      const res = await fetch(`/api/rh/frais-km?${params}`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        notifyError('Trajets km', data.error || `HTTP ${res.status}`)
+        setTrajets([])
+        return
+      }
+      setTrajets(data.trajets || [])
+    } catch (e: unknown) {
+      notifyError('Erreur réseau', e)
+      setTrajets([])
+    } finally {
+      setLoadingTrajets(false)
+    }
+  }, [])
+
+  const openTrajetsDialog = (f: FraisKm) => {
+    setTrajetsEmploye(f)
+    setTrajets([])
+    setNewTrajetDate("")
+    setNewTrajetMotif("")
+    setNewTrajetKm("")
+    setNewTrajetAR(false)
+    setNewTrajetDepart("")
+    setNewTrajetArrivee("")
+    setTrajetsDialogOpen(true)
+    void loadTrajets(f.employe_id, periode)
+  }
+
+  const addTrajet = async () => {
+    if (!trajetsEmploye) return
+    const kmNum = parseFloat(newTrajetKm)
+    if (!kmNum || kmNum <= 0) {
+      notifyError('Trajet', 'Km invalide')
+      return
+    }
+    setAddingTrajet(true)
+    try {
+      const res = await fetch('/api/rh/frais-km', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_trajet',
+          employe_id: trajetsEmploye.employe_id,
+          periode,
+          date_trajet: newTrajetDate || null,
+          depart_adresse: newTrajetDepart || null,
+          arrivee_adresse: newTrajetArrivee || null,
+          km: kmNum,
+          motif: newTrajetMotif || null,
+          aller_retour: newTrajetAR,
+          societe_id: societe !== 'all' ? societe : undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        notifyError('Ajouter trajet', data.error || `HTTP ${res.status}`)
+        return
+      }
+      notifySuccess('Trajet ajouté')
+      setNewTrajetDate("")
+      setNewTrajetMotif("")
+      setNewTrajetKm("")
+      setNewTrajetAR(false)
+      setNewTrajetDepart("")
+      setNewTrajetArrivee("")
+      await loadTrajets(trajetsEmploye.employe_id, periode)
+      await load()
+    } catch (e: unknown) {
+      notifyError('Erreur réseau', e)
+    } finally {
+      setAddingTrajet(false)
+    }
+  }
+
+  const validateTrajet = async (id: string, statut: 'valide' | 'rejete') => {
+    try {
+      const res = await fetch('/api/rh/frais-km', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'validate_trajet', id, statut }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        notifyError('Validation trajet', data.error || `HTTP ${res.status}`)
+        return
+      }
+      notifySuccess(statut === 'valide' ? 'Trajet validé' : 'Trajet rejeté')
+      if (trajetsEmploye) {
+        await loadTrajets(trajetsEmploye.employe_id, periode)
+      }
+      await load()
+    } catch (e: unknown) {
+      notifyError('Erreur réseau', e)
+    }
+  }
+
+  const deleteTrajet = async (id: string) => {
+    if (!window.confirm('Supprimer ce trajet ?')) return
+    try {
+      const res = await fetch('/api/rh/frais-km', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_trajet', id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        notifyError('Suppression trajet', data.error || `HTTP ${res.status}`)
+        return
+      }
+      notifySuccess('Trajet supprimé')
+      if (trajetsEmploye) {
+        await loadTrajets(trajetsEmploye.employe_id, periode)
+      }
+      await load()
+    } catch (e: unknown) {
+      notifyError('Erreur réseau', e)
     }
   }
 
@@ -354,6 +519,14 @@ export default function FraisKmPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openTrajetsDialog(f)}
+                            title="Détail des trajets du mois"
+                          >
+                            <MapPin className="h-3 w-3 mr-1" /> Détail trajets
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => openEditDialog(f)} disabled={f.statut === "approuve"}>
                             <Edit2 className="h-3 w-3" />
                           </Button>
@@ -431,6 +604,196 @@ export default function FraisKmPage() {
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {editingFrais ? t('rha.b.fraiskm.btn_update', locale) : t('rha.b.fraiskm.btn_save', locale)}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mig 426 — Multi-trajets : dialog détail par employé/mois */}
+      <Dialog open={trajetsDialogOpen} onOpenChange={setTrajetsDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle style={{ color: NAVY }}>
+              <MapPin className="inline h-4 w-4 mr-1" />
+              Détail des trajets — {trajetsEmploye?.employe_prenom} {trajetsEmploye?.employe_nom} ({periode})
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Formulaire ajout trajet */}
+          <Card className="border" style={{ borderColor: GOLD }}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium" style={{ color: NAVY }}>
+                <Plus className="inline h-4 w-4 mr-1" /> Ajouter un trajet
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Date du trajet</Label>
+                  <Input
+                    type="date"
+                    value={newTrajetDate}
+                    onChange={e => setNewTrajetDate(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Motif</Label>
+                  <Input
+                    value={newTrajetMotif}
+                    onChange={e => setNewTrajetMotif(e.target.value)}
+                    placeholder="Ex: Client X, formation, partenaire"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Départ (adresse)</Label>
+                  <Input
+                    value={newTrajetDepart}
+                    onChange={e => setNewTrajetDepart(e.target.value)}
+                    placeholder="Adresse de départ"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Arrivée (adresse)</Label>
+                  <Input
+                    value={newTrajetArrivee}
+                    onChange={e => setNewTrajetArrivee(e.target.value)}
+                    placeholder="Adresse d'arrivée"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Km</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={newTrajetKm}
+                    onChange={e => setNewTrajetKm(e.target.value)}
+                    placeholder="Ex: 35"
+                    className="mt-1"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newTrajetAR}
+                      onChange={e => setNewTrajetAR(e.target.checked)}
+                    />
+                    Aller-retour (× 2)
+                  </label>
+                </div>
+              </div>
+
+              {/* Widget calcul distance — pré-remplit km + adresses */}
+              <CalculDistanceWidget
+                onDistanceCalculated={(km, depart, arrivee) => {
+                  setNewTrajetKm(km.toFixed(1))
+                  if (depart) setNewTrajetDepart(depart)
+                  if (arrivee) setNewTrajetArrivee(arrivee)
+                }}
+              />
+
+              <Button
+                onClick={addTrajet}
+                disabled={addingTrajet || !newTrajetKm}
+                style={{ backgroundColor: NAVY }}
+                className="text-white w-full"
+              >
+                {addingTrajet ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-1" />}
+                Ajouter le trajet
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Liste des trajets existants */}
+          <div className="mt-4">
+            <h3 className="font-semibold text-sm mb-2" style={{ color: NAVY }}>
+              Trajets enregistrés ({trajets.length})
+            </h3>
+            {loadingTrajets ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              </div>
+            ) : trajets.length === 0 ? (
+              <p className="text-center text-gray-400 py-6 text-sm">
+                Aucun trajet pour ce mois.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Motif</TableHead>
+                      <TableHead>Trajet</TableHead>
+                      <TableHead className="text-right">Km</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {trajets.map(tr => (
+                      <TableRow key={tr.id}>
+                        <TableCell className="text-sm">{tr.date_trajet || '—'}</TableCell>
+                        <TableCell className="text-sm">{tr.motif || '—'}</TableCell>
+                        <TableCell className="text-xs text-gray-600">
+                          {tr.depart_adresse && tr.arrivee_adresse
+                            ? `${tr.depart_adresse} → ${tr.arrivee_adresse}`
+                            : (tr.depart_adresse || tr.arrivee_adresse || '—')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {Number(tr.km).toLocaleString('fr-FR')} km
+                          {tr.aller_retour && <span className="text-xs text-gray-500 ml-1">(A/R)</span>}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={TRAJET_STATUT_COLORS[tr.statut] || 'bg-gray-100 text-gray-700'}>
+                            {tr.statut}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {tr.statut === 'en_attente' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-green-700 border-green-300 hover:bg-green-50"
+                                  onClick={() => validateTrajet(tr.id, 'valide')}
+                                  title="Valider"
+                                >
+                                  <CheckCircle className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-red-700 border-red-300 hover:bg-red-50"
+                                  onClick={() => validateTrajet(tr.id, 'rejete')}
+                                  title="Rejeter"
+                                >
+                                  <XCircle className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:bg-red-50"
+                              onClick={() => deleteTrajet(tr.id)}
+                              title="Supprimer"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
