@@ -92,18 +92,36 @@ export default function FraisKmPage() {
   useEffect(() => { load() }, [load])
 
   const saveTarifKm = async () => {
+    // FIX BUG 1 — feedback explicite : avant, l'utilisateur n'avait AUCUN
+    // toast en cas d'échec (RLS rejet silencieux), il croyait que le tarif
+    // était sauvegardé alors que l'API renvoyait 403.
+    if (societe === "all") {
+      notifyError("Tarif km", "Sélectionnez une société avant de modifier le tarif")
+      return
+    }
+    const tarifNum = parseFloat(newTarif)
+    if (!tarifNum || tarifNum <= 0) {
+      notifyError("Tarif km", "Tarif invalide")
+      return
+    }
     setSavingTarif(true)
     try {
-      await fetch("/api/rh/frais-km", {
+      const res = await fetch("/api/rh/frais-km", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update_tarif", societe_id: societe, tarif_km: parseFloat(newTarif) }),
+        body: JSON.stringify({ action: "update_tarif", societe_id: societe, tarif_km: tarifNum }),
       })
-      setTarif(parseFloat(newTarif))
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        notifyError("Sauvegarde tarif km", data.error || `HTTP ${res.status}`)
+        return
+      }
+      setTarif(tarifNum)
       setEditingTarif(false)
-      load()
-    } catch (e) {
-      console.error(e)
+      notifySuccess(`✅ Tarif km mis à jour : ${tarifNum} MUR/km`)
+      await load()
+    } catch (e: unknown) {
+      notifyError("Erreur réseau", e)
     } finally {
       setSavingTarif(false)
     }

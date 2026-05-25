@@ -171,13 +171,36 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'societe_id et tarif requis' }, { status: 400 })
       }
 
+      // FIX BUG 1 — vérification explicite du rôle AVANT toute écriture.
+      // Sans ça, RLS policy `rh_full_fkr` rejette silencieusement et le
+      // front pensait que la sauvegarde avait fonctionné (pas de feedback).
+      const ALLOWED_ROLES = ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin']
+      const { data: prof, error: profErr } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (profErr) {
+        console.error('[frais-km update_tarif] profile lookup error:', profErr.message)
+      }
+      const userRole = prof?.role || null
+      if (!userRole || !ALLOWED_ROLES.includes(userRole)) {
+        return NextResponse.json(
+          { error: 'Rôle insuffisant pour modifier le tarif km', role: userRole },
+          { status: 403 }
+        )
+      }
+
       // Try frais_km_rules first, fallback to frais_km_regles
       let tableName = 'frais_km_rules'
-      let deactivateErr = null
       const r1 = await supabase.from('frais_km_rules').update({ actif: false }).eq('societe_id', societe_id)
       if (r1.error) {
+        console.error('[frais-km update_tarif] deactivate frais_km_rules error:', r1.error.message)
         tableName = 'frais_km_regles'
-        await supabase.from('frais_km_regles').update({ actif: false }).eq('societe_id', societe_id)
+        const r2 = await supabase.from('frais_km_regles').update({ actif: false }).eq('societe_id', societe_id)
+        if (r2.error) {
+          console.error('[frais-km update_tarif] deactivate frais_km_regles error:', r2.error.message)
+        }
       }
 
       const { data, error } = await supabase
@@ -194,10 +217,10 @@ export async function POST(request: Request) {
         .single()
 
       if (error) {
-        console.error('[frais-km set_rule]', error.message)
+        console.error('[frais-km update_tarif] insert error:', error.message, error.code, error.details)
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
-      return NextResponse.json({ rule: data, tarif_km: tarifValue })
+      return NextResponse.json({ ok: true, rule: data, tarif_km: tarifValue })
     }
 
     // ── Enter km for an employee for a period ────────────────────────────────
