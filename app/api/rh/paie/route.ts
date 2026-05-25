@@ -1139,6 +1139,38 @@ export async function POST(request: Request) {
         statut: 'brouillon',
       }
 
+      // FIX-IMMUTABLE (mig 427) — pre-check bulletin comptabilisé.
+      // RÈGLE SCALABLE : si un bulletin est déjà comptabilisé (lié à des
+      // écritures dans ecritures_comptables_v2), toute action de
+      // "recalcul" doit ÉCHOUER côté API (couche 2) — la DB (couche 1)
+      // refusera de toute façon via trigger trg_bulletin_no_duplicate.
+      // On retourne 409 + l'existant pour que l'UI puisse rediriger vers
+      // un affichage lecture-seule sans créer de version concurrente.
+      {
+        const { data: comptabilise } = await supabase
+          .from('bulletins_paie')
+          .select('id, ecriture_id, comptabilise_at, salaire_brut, salaire_net')
+          .eq('employe_id', employe_id)
+          .eq('periode', periodeDate)
+          .eq('comptabilise', true)
+          .or('is_archived.is.null,is_archived.eq.false')
+          .maybeSingle()
+
+        if (comptabilise) {
+          console.warn(
+            `[paie calculer] BULLETIN_COMPTABILISE — refus recalcul ` +
+            `employe=${employe_id} periode=${periodeStr} bulletin_id=${comptabilise.id} ` +
+            `ecriture=${comptabilise.ecriture_id || 'n/a'}`,
+          )
+          return NextResponse.json({
+            error: "Bulletin déjà comptabilisé, modification interdite. Récupération de l'existant.",
+            bulletin_existant: comptabilise,
+            code: 'BULLETIN_COMPTABILISE',
+            hint: `Voir bulletin id=${comptabilise.id}, ecriture=${comptabilise.ecriture_id || 'n/a'}. Pour modifier : décomptabiliser d'abord (admin uniquement).`,
+          }, { status: 409 })
+        }
+      }
+
       // Bug C fix (mig 425) — archive avant insert plutôt qu'upsert
       // destructif. Cela permet à l'UI /rh/historique-paie d'afficher
       // les versions précédentes (cas Alicia : bulletin "mois entier"
@@ -2116,13 +2148,29 @@ export async function POST(request: Request) {
         //        (pour compter les skip precis dans l'audit).
         // Bug C fix (mig 425) — ne lire que le bulletin ACTIF (les
         // archivés n'entrent plus en collision).
+        // FIX-IMMUTABLE (mig 427) — on lit aussi `comptabilise` + `ecriture_id`
+        // pour pouvoir skip les bulletins comptabilisés sans tenter de
+        // les écraser (sinon le trigger trg_bulletin_immutable_update
+        // ferait échouer le SAVE et corromprait le batch).
         const { data: existing } = await supabase.from('bulletins_paie')
-          .select('id, verrouille, date_paiement')
+          .select('id, verrouille, date_paiement, comptabilise, ecriture_id')
           .eq('employe_id', emp.id).eq('periode', periodeDate)
           .or('is_archived.is.null,is_archived.eq.false')
           .maybeSingle()
 
         if (existing) {
+          // FIX-IMMUTABLE (mig 427) — skip immutable si comptabilisé.
+          // Règle scalable : bulletin comptabilisé = lecture seule. Le
+          // batch passe à l'employé suivant sans erreur, l'audit le note
+          // dans auditRaisonsSkip pour traçabilité.
+          if ((existing as any).comptabilise === true) {
+            auditRaisonsSkip['comptabilise'] = (auditRaisonsSkip['comptabilise'] || 0) + 1
+            console.log(
+              `[paie batch FIX-IMMUTABLE] SKIP ${emp.prenom} ${emp.nom} — bulletin comptabilisé ` +
+              `(bulletin_id=${existing.id}, ecriture_id=${(existing as any).ecriture_id || 'n/a'})`,
+            )
+            continue
+          }
           // F14 — skip si bulletin verrouille ou deja paye (immuables).
           if (existing.verrouille === true) {
             auditRaisonsSkip['verrouille'] = (auditRaisonsSkip['verrouille'] || 0) + 1

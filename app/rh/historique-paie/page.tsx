@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Loader2, Calendar, Users, Banknote, ChevronDown, ChevronRight, FileText, Download, ExternalLink, Archive } from "lucide-react"
+import { Loader2, Calendar, Users, Banknote, ChevronDown, ChevronRight, FileText, Download, ExternalLink, Archive, CheckCircle, BookOpen } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale } from "@/lib/i18n"
 
@@ -255,6 +255,30 @@ export default function HistoriquePaiePage() {
                                       <Archive className="h-2.5 w-2.5" />
                                       Archivé
                                     </span>
+                                  )}
+                                  {/* FIX-IMMUTABLE (mig 427) — badge comptabilisé + lien écritures */}
+                                  {b.comptabilise && (
+                                    <span
+                                      className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-green-100 text-green-700 text-[10px] rounded font-medium"
+                                      title={
+                                        b.ecriture_id
+                                          ? `Bulletin lié à l'écriture ${b.ecriture_id}${b.comptabilise_at ? ` — comptabilisé le ${new Date(b.comptabilise_at).toLocaleDateString('fr-FR')}` : ''}`
+                                          : 'Comptabilisé'
+                                      }
+                                    >
+                                      <CheckCircle className="h-2.5 w-2.5" />
+                                      Comptabilisé
+                                    </span>
+                                  )}
+                                  {b.comptabilise && b.ecriture_id && (
+                                    <button
+                                      type="button"
+                                      onClick={() => window.open(`/comptable/grand-livre?ecriture_id=${b.ecriture_id}`, '_blank')}
+                                      className="ml-1 inline-flex items-center gap-0.5 px-1 py-0.5 text-[10px] text-emerald-700 hover:bg-emerald-50 rounded"
+                                      title="Ouvrir les écritures comptables liées"
+                                    >
+                                      <BookOpen className="h-2.5 w-2.5" />
+                                    </button>
                                   )}
                                 </td>
                                 <td className="px-2 py-1.5 text-right font-mono">{fmt(b.salaire_base || 0)}</td>
