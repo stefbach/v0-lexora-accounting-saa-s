@@ -369,6 +369,23 @@ export async function POST(request: Request) {
       // ascendante avec d'anciens clients qui n'envoient que `breakdown`).
       const breakdown = breakdown_edite ?? breakdownLegacy
 
+      // FIX-STC-TRIGGER236 — trace ce que le serveur reçoit pour debug.
+      // Indispensable car le trigger mig 236 (BEFORE INSERT) écrasait
+      // silencieusement salaire_net si brut ≠ net (cas des retenues manuelles).
+      try {
+        console.log('[confirmer_depart] body received:', JSON.stringify({
+          action,
+          employe_id,
+          date_depart,
+          type_depart,
+          edited_by_user,
+          breakdown_edite_total: breakdown_edite?.total,
+          breakdown_auto_total: breakdown_auto?.total,
+          breakdown_legacy_total: breakdownLegacy?.total,
+          lignes_extra_count: Array.isArray(breakdown?.lignes_extra) ? breakdown.lignes_extra.length : 0,
+        }, null, 2))
+      } catch { /* noop */ }
+
       // Get employee
       const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).maybeSingle()
       if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
@@ -505,10 +522,31 @@ export async function POST(request: Request) {
       }
       const bulletinNotes = notesParts.join(' | ')
 
-      // FIX-STC-IDENTIQUE (mig 430) — on stocke maintenant le breakdown complet
-      // pour audit et reconstruction. Les retenues manuelles ont leur colonne
-      // dédiée. type_bulletin='solde_tout_compte' permet l'affichage du badge
-      // STC dans /rh/paie et /rh/historique-paie.
+      // FIX-STC-TRIGGER236 — Le trigger `bulletins_paie_enforce_net` (mig 236)
+      // recalcule `salaire_net = salaire_brut(GENERATED) - csg - nsf - paye -
+      // montant_absence` à chaque INSERT/UPDATE. Si l'écart entre la valeur
+      // qu'on envoie et le calcul du trigger > 1 MUR, le trigger ÉCRASE
+      // silencieusement `salaire_net` (et empêche l'édition de persister).
+      //
+      // Avant ce fix : on posait `total_deductions = retenuesManuelles` —
+      // mais `total_deductions` N'EST PAS dans la formule du trigger. Du coup,
+      // brut GENERATED = totalNet + retenuesManuelles, le trigger calculait
+      // net_attendu = brut > totalNet, et ÉCRASAIT salaire_net := brut.
+      // Conséquence visible côté user : « ça ne garde pas mes modifications ».
+      //
+      // Solution propre sans toucher au schéma SQL : retirer les retenues
+      // manuelles d'un composant POSITIF du brut, pour que
+      // `salaire_brut GENERATED == totalNet` exactement. On choisit
+      // `special_allowance_2` (qui porte déjà le 13e + primes extra) : on lui
+      // soustrait les retenues_manuelles. Ainsi le trigger calculera
+      //   net_attendu = brut - 0 - 0 - 0 - 0 = brut = totalNet → écart = 0
+      // et n'écrasera RIEN. La valeur éditée est préservée.
+      //
+      // La trace fonctionnelle des retenues manuelles est conservée via la
+      // colonne dédiée `retenues_manuelles` (mig 430) + `breakdown_json` +
+      // `notes`. La sortie UI (historique-paie, PDF) lit `salaire_net` qui
+      // est désormais fidèle au STC affiché.
+      const specialAlw2Adjusted = treizBulletin + primesExtra - retenuesManuelles
       const bulletinData: Record<string, any> = {
         employe_id,
         societe_id: emp.societe_id,
@@ -516,14 +554,15 @@ export async function POST(request: Request) {
         salaire_base: salaireBaseBulletin,
         transport_allowance: transportBulletin,
         special_allowance_1: alPayout + slPayout,
-        // Primes positives uniquement (les retenues vont dans retenues_manuelles
-        // et total_deductions ci-dessous).
-        special_allowance_2: treizBulletin + primesExtra,
+        // primes positives — retenues manuelles, pour que brut GENERATED == totalNet
+        // (sinon le trigger mig 236 écrase salaire_net).
+        special_allowance_2: specialAlw2Adjusted,
         departure_notice: preavisBulletin,
         special_allowance_3: severanceBulletin,
-        // total_deductions : reflète les retenues manuelles côté UI pour que
-        // salaire_brut - total_deductions = salaire_net = total STC affiché.
-        total_deductions: retenuesManuelles,
+        // total_deductions = 0 : on ne double pas la retenue (elle est déjà
+        // soustraite dans special_allowance_2 ci-dessus). retenues_manuelles
+        // reste la source de vérité fonctionnelle.
+        total_deductions: 0,
         salaire_net: totalNet,
         statut: 'valide',
         notes: bulletinNotes,
@@ -533,6 +572,35 @@ export async function POST(request: Request) {
         acomptes: 0, // sous-cat distincte, réservé usage futur
         breakdown_json: breakdown ?? null,
       }
+
+      // FIX-STC-TRIGGER236 — log de la ligne juste avant l'INSERT, pour pouvoir
+      // diagnostiquer côté Vercel si un futur changement de schéma re-casse le
+      // contrat brut==net. brut_attendu doit être ~= totalNet (écart < 1 MUR).
+      try {
+        const brutAttendu =
+          (Number(salaireBaseBulletin) || 0) +
+          (Number(transportBulletin) || 0) +
+          (alPayout + slPayout) +
+          (Number(specialAlw2Adjusted) || 0) +
+          (Number(preavisBulletin) || 0) +
+          (Number(severanceBulletin) || 0)
+        console.log('[confirmer_depart] bulletin row to insert:', JSON.stringify({
+          employe_id,
+          periode: periodeDate,
+          salaire_base: salaireBaseBulletin,
+          transport_allowance: transportBulletin,
+          special_allowance_1: alPayout + slPayout,
+          special_allowance_2: specialAlw2Adjusted,
+          departure_notice: preavisBulletin,
+          special_allowance_3: severanceBulletin,
+          salaire_net: totalNet,
+          retenues_manuelles: retenuesManuelles,
+          brut_attendu: Math.round(brutAttendu * 100) / 100,
+          ecart_brut_vs_net: Math.round((brutAttendu - totalNet) * 100) / 100,
+          wasEdited,
+          modifications_keys: Object.keys(modifications),
+        }, null, 2))
+      } catch { /* noop */ }
 
       // FIX-SOLDE-STC — Bug Alicia : le bulletin de solde tout compte doit
       //   (a) refuser de remplacer un bulletin comptabilisé (mig 427 — l'UI
