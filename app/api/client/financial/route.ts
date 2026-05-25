@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabase/paginate'
 import { NextResponse } from 'next/server'
 import { getTauxChange } from '@/lib/taux-change'
+import { getActiveSnapshot } from '@/lib/accounting/exercice-snapshot'
 
 function convertToMUR(amount: number, devise: string, rates: Record<string, number>): number {
   if (!devise || devise === 'MUR') return amount
@@ -140,7 +141,124 @@ export async function GET(request: Request) {
     }
 
     if (societeIds.length === 0) {
-      return NextResponse.json({ financial: emptyFinancial() })
+      return NextResponse.json({ financial: { ...emptyFinancial(), data_source: 'live' } })
+    }
+
+    // ── SNAPSHOT N-1 FIGÉ (clôture immutability) ────────────────────────────
+    // Si on demande explicitement un exercice + une société, et que l'exercice
+    // est clôturé (exercices_fiscaux.statut='cloture'), on tente de servir le
+    // snapshot figé au lieu de recalculer à la volée. Garantit la stabilité
+    // des comparatifs N-1 même si des écritures historiques sont modifiées
+    // (cf. CLO-A trigger 421 + CLO-B helper getActiveSnapshot mig 422).
+    // En cas d'absence de snapshot ou d'erreur → fallback live (compat ascend.)
+    //
+    // Helper shape (lib/accounting/exercice-snapshot.ts) :
+    //   snap = { id, generated_at, soldes_json, totaux_json, ratios_json, ... }
+    //   où totaux_json contient { actif_total, ca_ht, charges_total,
+    //   resultat_net, … } et soldes_json = { periode, cumule } par compte.
+    if (requestedExercice && requestedSocieteId) {
+      try {
+        const { data: exFiscal } = await supabase
+          .from('exercices_fiscaux')
+          .select('id, annee, statut')
+          .eq('societe_id', requestedSocieteId)
+          .eq('annee', requestedExercice)
+          .maybeSingle()
+
+        if (exFiscal?.statut === 'cloture') {
+          // Signature : getActiveSnapshot(societeId, exercice, type, supabase?)
+          const snap = await getActiveSnapshot(
+            requestedSocieteId,
+            requestedExercice,
+            'all',
+            supabase as never,
+          ).catch(() => null)
+
+          if (snap) {
+            // Construction du payload `financial` à partir du snapshot.
+            // Les agrégats sont déjà calculés et figés dans totaux_json.
+            const totaux = snap.totaux_json ?? null
+            const ratios = snap.ratios_json ?? null
+
+            // Société names (juste pour le selector — pas de recalcul lourd)
+            const { data: societesInfo } = await supabase
+              .from('societes').select('id, nom').in('id', societeIds)
+            const availableSocietesSnap = (societesInfo || [])
+              .map((s: { id: string; nom: string }) => ({ id: s.id, nom: s.nom }))
+
+            return NextResponse.json(
+              {
+                financial: {
+                  // Agrégats figés
+                  totalRevenue: Math.round((totaux?.ca_ht ?? 0) * 100) / 100,
+                  totalExpenses: Math.round((totaux?.charges_total ?? 0) * 100) / 100,
+                  resultat: Math.round((totaux?.resultat_net ?? 0) * 100) / 100,
+                  monthlyRevenue: 0,
+                  monthlyExpenses: 0,
+                  resultatMensuel: 0,
+                  immobilisations: Math.round((totaux?.immobilisations ?? 0) * 100) / 100,
+                  capitauxPropres: Math.round((totaux?.capitaux_propres ?? 0) * 100) / 100,
+                  // Soldes complets (lecture détaillée côté UI bilan/CR)
+                  snapshot_soldes: snap.soldes_json ?? null,
+                  snapshot_totaux: totaux,
+                  snapshot_ratios: ratios,
+                  // Métadonnées de provenance
+                  data_source: 'snapshot' as const,
+                  snapshot_generated_at: snap.generated_at ?? null,
+                  snapshot_id: snap.id ?? null,
+                  snapshot_is_active: snap.is_active ?? true,
+                  // Contexte exercices
+                  exercice_actuel: requestedExercice,
+                  exercice_precedent: exercicePrecedent,
+                  available_exercices: getAvailableExercices(),
+                  availableSocietes: availableSocietesSnap,
+                  selectedSocieteId: requestedSocieteId,
+                  // Champs vides — non recalculés en mode snapshot
+                  bankAccounts: [],
+                  totalBankMUR: 0,
+                  factures: [],
+                  ecritures: [],
+                  totalEcritures: 0,
+                  extractedInvoices: [],
+                  bankTransactions: [],
+                  docsByType: {},
+                  totalDocuments: 0,
+                  tvaCollectee: 0,
+                  tvaDeductible: 0,
+                  tvaNette: 0,
+                  tvaRecords: [],
+                  revenueByAccount: {},
+                  expensesByAccount: {},
+                  creances: 0,
+                  stocks: 0,
+                  autresCreances: 0,
+                  emprunts: 0,
+                  dettesFournisseurs: 0,
+                  dettesFiscales: 0,
+                  dettesSociales: 0,
+                  salaires: 0,
+                  chargesSociales: 0,
+                  lastMonthRevenue: 0,
+                  lastMonthExpenses: 0,
+                  currentMonth: '',
+                  taux_change: rates,
+                },
+              },
+              {
+                headers: {
+                  // snapshots immuables → cache long
+                  'Cache-Control':
+                    'private, max-age=300, stale-while-revalidate=900',
+                },
+              },
+            )
+          }
+          // pas de snapshot → fallback live (silencieux)
+        }
+      } catch (snapErr) {
+        // helper absent / table absente → fallback live transparent
+        console.warn('[financial] snapshot lookup skipped:', snapErr)
+      }
     }
 
     const dossierIds = allDossierIds
@@ -675,6 +793,7 @@ export async function GET(request: Request) {
         exercice_actuel: exerciceActuel,
         exercice_precedent: exercicePrecedent,
         available_exercices: getAvailableExercices(),
+        data_source: 'live' as const,
       }
     }, { headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=30' } })
   } catch (e: any) {
