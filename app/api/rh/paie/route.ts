@@ -573,6 +573,29 @@ export async function POST(request: Request) {
       const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).single()
       if (!emp) return NextResponse.json({ error: 'Employé non trouvé' }, { status: 404 })
 
+      // FIX-SOLDE-STC (cas Alicia) — Si l'employé a une date_depart qui tombe
+      // dans la période demandée, le bulletin "normal" calculé ici serait
+      // désynchronisé du solde tout compte (qui inclut préavis, indemnité
+      // licenciement, AL payée à la sortie, 13e prorata, etc.). On refuse
+      // explicitement et on redirige vers /rh/depart, seul endroit
+      // autorisé à générer le bulletin de sortie.
+      if (emp.date_depart) {
+        const dateDepartStr = String(emp.date_depart).slice(0, 10)
+        const ps = `${periodeStr}-01`
+        const pe = lastDayOfMonth(periodeStr)
+        if (dateDepartStr >= ps && dateDepartStr <= pe) {
+          return NextResponse.json({
+            error: 'Employé sortant détecté. Utiliser le module Départ pour générer le solde tout compte.',
+            code: 'EMPLOYE_SORTANT',
+            date_depart: dateDepartStr,
+            employe_id,
+            employe_nom: `${emp.prenom || ''} ${emp.nom || ''}`.trim(),
+            redirect_url: `/rh/depart?employe_id=${employe_id}`,
+            hint: 'Le bulletin paie normal ne peut pas être généré pour un employé sortant. Le solde tout compte inclut salaire prorata + indemnités (préavis, licenciement) + 13e prorata + AL payée.',
+          }, { status: 409 })
+        }
+      }
+
       // Migration 135 — toggle pointage_actif par société. Si OFF (défaut),
       // pas de déduction auto des absences depuis pointages : comportement
       // legacy préservé (les absences viennent de body.absences ou 0).

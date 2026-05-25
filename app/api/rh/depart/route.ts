@@ -460,18 +460,80 @@ export async function POST(request: Request) {
         notes: bulletinNotes,
       }
 
+      // FIX-SOLDE-STC — Bug Alicia : le bulletin de solde tout compte doit
+      //   (a) refuser de remplacer un bulletin comptabilisé (mig 427 — l'UI
+      //       admin doit décomptabiliser via /rh/audit-decomptabilisation
+      //       avant un nouveau calcul de solde tout compte),
+      //   (b) archiver l'ancien actif via mig 425 (is_archived / superseded_by)
+      //       plutôt que de l'écraser, pour preserver la version "mois entier"
+      //       dans /rh/historique-paie.
+      // On ne cherche que les bulletins actifs (is_archived=false OR null).
       let bulletin: any = null
-      const { data: existingBul } = await supabase.from('bulletins_paie')
-        .select('id').eq('employe_id', employe_id).eq('periode', periodeDate).maybeSingle()
+      const { data: existingBul } = await supabase
+        .from('bulletins_paie')
+        .select('id, comptabilise')
+        .eq('employe_id', employe_id)
+        .eq('periode', periodeDate)
+        .or('is_archived.is.null,is_archived.eq.false')
+        .maybeSingle()
+
+      if (existingBul?.comptabilise === true) {
+        return NextResponse.json({
+          error: 'Bulletin déjà comptabilisé. Décomptabiliser via /rh/audit-decomptabilisation avant de confirmer le départ.',
+          bulletin_id: existingBul.id,
+          code: 'BULLETIN_COMPTABILISE',
+          hint: 'Le bulletin existant pour cette période est verrouillé par la comptabilité. Un admin doit le décomptabiliser pour permettre le solde tout compte.',
+        }, { status: 409 })
+      }
 
       if (existingBul) {
-        const { data: updated, error: upErr } = await supabase.from('bulletins_paie')
-          .update(bulletinData).eq('id', existingBul.id).select().single()
-        bulletin = updated
-        if (upErr) console.error('Erreur update bulletin départ:', upErr.message)
+        // Étape 1 — archiver l'ancien bulletin (mig 425). Fallback in-place
+        // si la mig 425 n'est pas appliquée sur cet environnement.
+        const nowIso = new Date().toISOString()
+        const { error: archErr } = await supabase
+          .from('bulletins_paie')
+          .update({
+            is_archived: true,
+            archived_at: nowIso,
+            archive_reason: `Remplacé par solde tout compte (sortie ${date_depart})`,
+          })
+          .eq('id', existingBul.id)
+
+        if (archErr) {
+          // Fallback legacy : mig 425 absente → on UPDATE in-place.
+          console.warn('[depart] archivage failed, fallback update in-place:', archErr.message)
+          const { data: updated, error: upErr } = await supabase
+            .from('bulletins_paie')
+            .update(bulletinData)
+            .eq('id', existingBul.id)
+            .select()
+            .single()
+          bulletin = updated
+          if (upErr) console.error('Erreur update bulletin départ:', upErr.message)
+        } else {
+          // INSERT du nouveau bulletin STC actif après archivage.
+          const { data: inserted, error: insErr } = await supabase
+            .from('bulletins_paie')
+            .insert(bulletinData)
+            .select()
+            .single()
+          bulletin = inserted
+          if (insErr) {
+            console.error('Erreur insert bulletin solde tout compte (post-archive):', insErr.message)
+          } else if (bulletin?.id) {
+            // Lier l'ancien à la nouvelle version pour traçabilité.
+            await supabase
+              .from('bulletins_paie')
+              .update({ superseded_by: bulletin.id })
+              .eq('id', existingBul.id)
+          }
+        }
       } else {
-        const { data: inserted, error: insErr } = await supabase.from('bulletins_paie')
-          .insert(bulletinData).select().single()
+        const { data: inserted, error: insErr } = await supabase
+          .from('bulletins_paie')
+          .insert(bulletinData)
+          .select()
+          .single()
         bulletin = inserted
         if (insErr) console.error('Erreur insert bulletin départ:', insErr.message)
       }
