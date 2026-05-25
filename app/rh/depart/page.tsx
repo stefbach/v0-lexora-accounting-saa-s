@@ -8,10 +8,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote, Plus, Trash2, Edit2, FileText, Mail, Download } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Loader2, UserMinus, Calculator, CheckCircle, AlertTriangle, Clock, Banknote, Plus, Trash2, Edit2, FileText, Mail, Download, Unlock } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale, type Locale } from "@/lib/i18n"
+import { notifySuccess, notifyError } from "@/lib/utils/toast"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", {
@@ -675,11 +676,15 @@ function DocumentsDialog({ depart, onClose }: { depart: any; onClose: () => void
 
   return (
     <Dialog open={true} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" aria-describedby="depart-docs-dialog-desc">
         <DialogHeader>
           <DialogTitle className="text-[#0B0F2E]">
             Documents de fin de contrat — {depart.prenom} {depart.nom}
           </DialogTitle>
+          <DialogDescription id="depart-docs-dialog-desc">
+            Téléchargez les documents officiels (certificat, attestation, solde de tout compte)
+            ou envoyez-les par email à l'employé.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -869,6 +874,10 @@ function RecentDepartures({ refreshKey, onReintegrated, locale }: { refreshKey: 
 }
 
 // ── Main page ──
+type BulletinComptabiliseModalState =
+  | { open: false }
+  | { open: true; bulletin_id: string; message: string }
+
 export default function DepartPage() {
   const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
@@ -877,6 +886,11 @@ export default function DepartPage() {
   const [confirming, setConfirming] = useState(false)
   const [confirmResult, setConfirmResult] = useState<any>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  // FIX-UX-409 — état pour gérer le HTTP 409 BULLETIN_COMPTABILISE
+  const [bulletinComptabiliseModal, setBulletinComptabiliseModal] =
+    useState<BulletinComptabiliseModalState>({ open: false })
+  const [raisonDecomptabilisation, setRaisonDecomptabilisation] = useState("")
+  const [decomptabilisationLoading, setDecomptabilisationLoading] = useState(false)
 
   useEffect(() => {
     fetch("/api/comptable/societes")
@@ -891,8 +905,10 @@ export default function DepartPage() {
     setConfirmResult(null)
   }
 
-  const handleConfirm = async () => {
-    if (!breakdown || !formData) return
+  // Effectue l'appel `confirmer_depart`. Retourne true si succès, false sinon
+  // (notamment le 409 BULLETIN_COMPTABILISE qui ouvre la modal).
+  const confirmerDepart = useCallback(async (): Promise<boolean> => {
+    if (!breakdown || !formData) return false
     setConfirming(true)
     try {
       const res = await fetch("/api/rh/depart", {
@@ -904,16 +920,73 @@ export default function DepartPage() {
           breakdown,
         }),
       })
+
+      // FIX-UX-409 — Gestion explicite du conflit bulletin comptabilisé.
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}))
+        if (data?.code === "BULLETIN_COMPTABILISE" && data?.bulletin_id) {
+          setBulletinComptabiliseModal({
+            open: true,
+            bulletin_id: data.bulletin_id,
+            message: data.error || "Bulletin déjà comptabilisé.",
+          })
+          return false
+        }
+      }
+
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Erreur")
       setConfirmResult(data)
       setBreakdown(null)
       setFormData(null)
       setRefreshKey(k => k + 1)
+      return true
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Erreur")
+      notifyError("Confirmer le départ", e)
+      return false
     } finally {
       setConfirming(false)
+    }
+  }, [breakdown, formData])
+
+  const handleConfirm = () => {
+    void confirmerDepart()
+  }
+
+  // Décomptabilise le bulletin existant puis relance `confirmer_depart`.
+  const decomptabiliserEtRetry = async () => {
+    if (!bulletinComptabiliseModal.open) return
+    const raison = raisonDecomptabilisation.trim()
+    if (raison.length < 5) {
+      notifyError("Décomptabiliser", "Raison requise (5 caractères minimum).")
+      return
+    }
+    const bulletin_id = bulletinComptabiliseModal.bulletin_id
+    setDecomptabilisationLoading(true)
+    try {
+      const dec = await fetch(`/api/rh/paie/${bulletin_id}/decomptabiliser`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raison, type_correction: "depart_reprise_solde" }),
+      })
+      if (!dec.ok) {
+        const e = await dec.json().catch(() => ({}))
+        notifyError("Décomptabiliser", e?.error || `HTTP ${dec.status}`)
+        return
+      }
+      notifySuccess("Bulletin décomptabilisé")
+
+      // Fermer la modal + reset
+      setBulletinComptabiliseModal({ open: false })
+      setRaisonDecomptabilisation("")
+
+      // Re-essai automatique de confirmer_depart.
+      const ok = await confirmerDepart()
+      if (ok) notifySuccess("Départ confirmé")
+    } catch (e: unknown) {
+      notifyError("Décomptabiliser", e)
+    } finally {
+      setDecomptabilisationLoading(false)
     }
   }
 
@@ -958,6 +1031,81 @@ export default function DepartPage() {
 
       {/* Recent departures */}
       <RecentDepartures refreshKey={refreshKey} locale={locale} />
+
+      {/* FIX-UX-409 — Modal de gestion du conflit BULLETIN_COMPTABILISE.
+          Permet à l'utilisateur de décomptabiliser le bulletin existant
+          (avec raison tracée) puis de relancer automatiquement le départ. */}
+      <Dialog
+        open={bulletinComptabiliseModal.open}
+        onOpenChange={o => {
+          if (!o && !decomptabilisationLoading) {
+            setBulletinComptabiliseModal({ open: false })
+            setRaisonDecomptabilisation("")
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg" aria-describedby="depart-409-dialog-desc">
+          <DialogHeader>
+            <DialogTitle className="text-amber-700 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Bulletin déjà comptabilisé
+            </DialogTitle>
+            <DialogDescription id="depart-409-dialog-desc">
+              Le bulletin existant de cet employé est déjà comptabilisé en grand livre.
+              Pour reprendre le solde de tout compte, il faut d'abord décomptabiliser
+              le bulletin. L'opération sera tracée dans le journal d'audit.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
+              {bulletinComptabiliseModal.open && bulletinComptabiliseModal.message}
+            </div>
+
+            <div>
+              <Label htmlFor="raison-decompta" className="text-sm">
+                Raison de la décomptabilisation
+                <span className="text-red-600 ml-1">*</span>
+              </Label>
+              <Textarea
+                id="raison-decompta"
+                value={raisonDecomptabilisation}
+                onChange={e => setRaisonDecomptabilisation(e.target.value)}
+                placeholder="Ex. : reprise du solde de tout compte suite à départ effectif (au moins 5 caractères)"
+                rows={3}
+                disabled={decomptabilisationLoading}
+              />
+              <p className="text-[11px] text-gray-500 mt-1">
+                Minimum 5 caractères. Cette raison sera enregistrée dans le log d'audit
+                (table <code>bulletin_decomptabilisation_log</code>).
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBulletinComptabiliseModal({ open: false })
+                setRaisonDecomptabilisation("")
+              }}
+              disabled={decomptabilisationLoading}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={decomptabiliserEtRetry}
+              disabled={decomptabilisationLoading || raisonDecomptabilisation.trim().length < 5}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {decomptabilisationLoading
+                ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                : <Unlock className="w-4 h-4 mr-2" />}
+              Décomptabiliser puis reprendre
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
     </ClientPageShell>
   )
