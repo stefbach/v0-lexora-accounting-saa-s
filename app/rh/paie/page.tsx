@@ -12,7 +12,13 @@ import { Loader2, Calculator, Download, FileText, BookOpen, AlertTriangle, Check
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { PaieValidationPanel } from "@/components/rh/PaieValidationPanel"
+import { DecomptabilisationDialog } from "@/components/rh/DecomptabilisationDialog"
+import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
+
+const DECOMPTA_ROLES = [
+  'admin', 'super_admin', 'rh', 'rh_manager', 'direction', 'client_admin',
+] as const
 import {
   calculerPeriodePaieSync,
   DEFAULT_CONFIG as DEFAULT_PERIODE_CFG,
@@ -83,6 +89,20 @@ export default function PaiePage() {
   // Sprint 5 FIX 4 — erreur de chargement non-bloquante (remplace l'alert
   // agressif qui gâchait l'UX et empêchait de voir la page).
   const [loadError, setLoadError] = useState<string | null>(null)
+
+  // FIX-DECOMPTA — rôle de l'utilisateur courant pour conditionner l'affichage
+  // du bouton "Décomptabiliser". Whitelist : admin/super_admin/rh/rh_manager/
+  // direction/client_admin (alignée sur l'API).
+  const [userRole, setUserRole] = useState<string>("")
+  useEffect(() => {
+    const sb = createClient()
+    sb.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      sb.from('profiles').select('role').eq('id', user.id).single()
+        .then(({ data }) => { if (data?.role) setUserRole(data.role) })
+    })
+  }, [])
+  const canDecomptabiliser = (DECOMPTA_ROLES as readonly string[]).includes(userRole)
 
   // Comptabilisation
   const [comptabilisationLoading, setComptabilisationLoading] = useState(false)
@@ -1132,6 +1152,22 @@ export default function PaiePage() {
                               </TooltipTrigger>
                               <TooltipContent>Bulletin comptabilisé — lecture seule</TooltipContent>
                             </Tooltip>
+                          )}
+                          {/* FIX-DECOMPTA — bouton décomptabilisation accessible RH+direction */}
+                          {b.comptabilise && canDecomptabiliser && (
+                            <DecomptabilisationDialog
+                              bulletinId={b.id}
+                              bulletin={{
+                                id: b.id,
+                                employe_nom: `${b.employe?.prenom || ''} ${b.employe?.nom || ''}`.trim(),
+                                periode: b.periode || periode,
+                                salaire_brut: b.salaire_brut || 0,
+                                salaire_net: b.salaire_net || 0,
+                                ecriture_id: b.ecriture_id || null,
+                                comptabilise_at: b.comptabilise_at || null,
+                              }}
+                              onSuccess={() => { load(); loadWorkflow() }}
+                            />
                           )}
                           <Tooltip>
                             <TooltipTrigger asChild>

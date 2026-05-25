@@ -21,6 +21,34 @@ function fmt(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "MUR", maximumFractionDigits: 2 }).format(n)
 }
 
+// Format ISO date (YYYY-MM-DD) -> DD/MM/YYYY (FR). Renvoie '—' si vide/invalide.
+function fmtDateFR(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  // On accepte aussi les timestamps "YYYY-MM-DDTHH:mm..." en ne gardant que la date.
+  const dateOnly = iso.slice(0, 10)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly)
+  if (!m) return '—'
+  return `${m[3]}/${m[2]}/${m[1]}`
+}
+
+// Aujourd'hui au format YYYY-MM-DD (local).
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+// Date par défaut pour un nouveau trajet, en fonction de la période courante.
+// - Si aujourd'hui appartient au mois de la période -> aujourd'hui (cas normal).
+// - Sinon (saisie sur un mois passé) -> dernier jour du mois de la période.
+function getDefaultTrajetDate(periode: string): string {
+  const today = todayISO()
+  if (today.startsWith(periode)) return today
+  // periode = "YYYY-MM" -> dernier jour du mois
+  const [y, mo] = periode.split('-').map(Number)
+  if (!y || !mo) return today
+  const lastDay = new Date(y, mo, 0).getDate() // mois 1-12 = day 0 du mois suivant
+  return `${periode}-${String(lastDay).padStart(2, '0')}`
+}
+
 const STATUT_COLORS: Record<string, string> = {
   en_attente: "bg-yellow-100 text-yellow-800",
   approuve: "bg-green-100 text-green-800",
@@ -259,7 +287,10 @@ export default function FraisKmPage() {
   const openTrajetsDialog = (f: FraisKm) => {
     setTrajetsEmploye(f)
     setTrajets([])
-    setNewTrajetDate("")
+    // Date par défaut : aujourd'hui si dans la période sélectionnée,
+    // sinon dernier jour du mois de la période (UX : éviter les valeurs vides
+    // qui poussent l'utilisateur à oublier ce champ).
+    setNewTrajetDate(getDefaultTrajetDate(periode))
     setNewTrajetMotif("")
     setNewTrajetKm("")
     setNewTrajetAR(false)
@@ -276,6 +307,15 @@ export default function FraisKmPage() {
       notifyError('Trajet', 'Km invalide')
       return
     }
+    // Date obligatoire : si l'utilisateur a vidé le champ, on retombe sur la
+    // valeur par défaut (aujourd'hui ou dernier jour de la période). Bloque
+    // aussi les dates dans le futur, déjà filtrées par l'attribut HTML max
+    // mais on garde la garde côté JS pour les navigateurs anciens / paste.
+    const effectiveDate = newTrajetDate || getDefaultTrajetDate(periode)
+    if (effectiveDate > todayISO()) {
+      notifyError('Trajet', 'La date du trajet ne peut pas être dans le futur')
+      return
+    }
     setAddingTrajet(true)
     try {
       const res = await fetch('/api/rh/frais-km', {
@@ -285,7 +325,7 @@ export default function FraisKmPage() {
           action: 'create_trajet',
           employe_id: trajetsEmploye.employe_id,
           periode,
-          date_trajet: newTrajetDate || null,
+          date_trajet: effectiveDate,
           depart_adresse: newTrajetDepart || null,
           arrivee_adresse: newTrajetArrivee || null,
           km: kmNum,
@@ -300,7 +340,10 @@ export default function FraisKmPage() {
         return
       }
       notifySuccess('Trajet ajouté')
-      setNewTrajetDate("")
+      // Reset : on remet la date à la valeur par défaut (pas "" qui laisserait
+      // le champ vide et obligerait l'utilisateur à le re-cliquer pour le
+      // prochain trajet).
+      setNewTrajetDate(getDefaultTrajetDate(periode))
       setNewTrajetMotif("")
       setNewTrajetKm("")
       setNewTrajetAR(false)
@@ -626,16 +669,38 @@ export default function FraisKmPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Champ Date — placé EN PREMIER, pleine largeur, visuellement
+                  mis en avant (bordure dorée + label explicite + warning si la
+                  date sort du mois de la période sélectionnée). Avant cette
+                  refonte le champ était noyé dans une grille à 2 colonnes et
+                  les utilisateurs l'oubliaient régulièrement. */}
+              <div
+                className="space-y-2 rounded-md border-2 p-3"
+                style={{ borderColor: GOLD, backgroundColor: '#FFFDF5' }}
+              >
+                <Label htmlFor="date_trajet" className="text-sm font-semibold" style={{ color: NAVY }}>
+                  📅 Date du trajet <span className="text-red-600">*</span>
+                </Label>
+                <Input
+                  id="date_trajet"
+                  type="date"
+                  value={newTrajetDate || getDefaultTrajetDate(periode)}
+                  onChange={e => setNewTrajetDate(e.target.value)}
+                  required
+                  max={todayISO()}
+                  className="w-full text-base"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Date à laquelle le trajet a été effectué (mois courant : <strong>{periode}</strong>).
+                </p>
+                {newTrajetDate && !newTrajetDate.startsWith(periode) && (
+                  <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                    ⚠️ Cette date n&apos;appartient pas au mois sélectionné ({periode}). Le trajet sera enregistré sur la période <strong>{periode}</strong>.
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Date du trajet</Label>
-                  <Input
-                    type="date"
-                    value={newTrajetDate}
-                    onChange={e => setNewTrajetDate(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
                 <div>
                   <Label className="text-xs">Motif</Label>
                   <Input
@@ -675,7 +740,7 @@ export default function FraisKmPage() {
                     className="mt-1"
                   />
                 </div>
-                <div className="flex items-end">
+                <div className="flex items-end md:col-span-2">
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input
                       type="checkbox"
@@ -698,7 +763,7 @@ export default function FraisKmPage() {
 
               <Button
                 onClick={addTrajet}
-                disabled={addingTrajet || !newTrajetKm}
+                disabled={addingTrajet || !newTrajetKm || !(newTrajetDate || getDefaultTrajetDate(periode))}
                 style={{ backgroundColor: NAVY }}
                 className="text-white w-full"
               >
@@ -737,7 +802,7 @@ export default function FraisKmPage() {
                   <TableBody>
                     {trajets.map(tr => (
                       <TableRow key={tr.id}>
-                        <TableCell className="text-sm">{tr.date_trajet || '—'}</TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">{fmtDateFR(tr.date_trajet)}</TableCell>
                         <TableCell className="text-sm">{tr.motif || '—'}</TableCell>
                         <TableCell className="text-xs text-gray-600">
                           {tr.depart_adresse && tr.arrivee_adresse
