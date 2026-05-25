@@ -268,7 +268,10 @@ export default function FraisKmPage() {
         body: JSON.stringify({
           action: "create_trajet",
           employe_id: formEmploye,
-          periode: `${periode}-01`,
+          // periode doit être YYYY-MM-DD (1er du mois) côté API.
+          // Si l'UI envoie YYYY-MM (7 chars) on suffixe -01.
+          // Si elle envoie déjà YYYY-MM-DD on garde tel quel.
+          periode: periode.length === 7 ? `${periode}-01` : periode.slice(0, 10),
           date_trajet: formDateTrajet || null,
           km: parseFloat(formKm),
           motif: formMotif || null,
