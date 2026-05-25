@@ -20,15 +20,30 @@ WHERE periode_paiement IS NULL AND date IS NOT NULL;
 
 -- Pour les lignes "agrégat" (pointage_id NULL, voir lib/rh/ot-aggregate.ts)
 -- qui n'ont parfois pas de `date` mais ont une `periode` text → fallback.
-UPDATE public.heures_travaillees
-SET periode_paiement = (periode || '-01')::date
-WHERE periode_paiement IS NULL
-  AND periode ~ '^\d{4}-\d{2}$';
-
-UPDATE public.heures_travaillees
-SET periode_paiement = periode::date
-WHERE periode_paiement IS NULL
-  AND periode ~ '^\d{4}-\d{2}-\d{2}$';
+-- Bloc défensif : la colonne `periode` n'existe plus dans certaines bases
+-- (a été supprimée par une migration antérieure non versionnée dans le repo).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'heures_travaillees'
+      AND column_name = 'periode'
+  ) THEN
+    EXECUTE $sql$
+      UPDATE public.heures_travaillees
+      SET periode_paiement = (periode || '-01')::date
+      WHERE periode_paiement IS NULL
+        AND periode ~ '^\d{4}-\d{2}$'
+    $sql$;
+    EXECUTE $sql$
+      UPDATE public.heures_travaillees
+      SET periode_paiement = periode::date
+      WHERE periode_paiement IS NULL
+        AND periode ~ '^\d{4}-\d{2}-\d{2}$'
+    $sql$;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_heures_travaillees_employe_periode_paiement
   ON public.heures_travaillees(employe_id, periode_paiement);
