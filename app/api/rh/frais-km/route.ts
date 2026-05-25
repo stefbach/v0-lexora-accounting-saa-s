@@ -428,7 +428,7 @@ export async function POST(request: Request) {
               fbTarif = Number(r2?.tarif_par_km) || null
             }
             const tarifFb = fbTarif || 7
-            const kmFb = Boolean(aller_retour) ? kmNum * 2 : kmNum
+            const kmFb = aller_retour ? kmNum * 2 : kmNum
 
             // Lire l'existant pour additionner les km du mois
             const { data: existing } = await supabase
