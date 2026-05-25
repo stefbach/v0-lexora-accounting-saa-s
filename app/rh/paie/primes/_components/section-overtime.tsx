@@ -127,13 +127,6 @@ function fmtHeures(n: number): string {
   return (s.endsWith('.0') ? s.slice(0, -2) : s) + 'h'
 }
 
-function lastDayOfPeriode(periode: string): string {
-  const [y, m] = periode.split('-').map(Number)
-  if (!y || !m) return periode
-  const last = new Date(y, m, 0).getDate()
-  return `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`
-}
-
 function moisOptions(): Array<{ value: string; label: string }> {
   const now = new Date()
   const out: Array<{ value: string; label: string }> = []
@@ -438,9 +431,6 @@ export function SectionOvertime({ societeId }: Props) {
     return set.size
   }, [lignesValidesPourSave])
 
-  const dateMin = periode
-  const dateMax = lastDayOfPeriode(periode)
-
   // ─── Suggestions / alertes dérivées ──────────────────────────────────────
 
   const suggestionsAvecOT = useMemo(() => {
@@ -482,7 +472,8 @@ export function SectionOvertime({ societeId }: Props) {
       <CardHeader>
         <CardTitle>Heures supplémentaires</CardTitle>
         <p className="text-sm text-gray-600 mt-1">
-          Saisie détaillée par date — calcul WRA 2019 (×1.5 et ×2)
+          Saisie libre date par date — payable sur le bulletin de votre choix
+          (calcul WRA 2019, ×1.5 et ×2)
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -490,7 +481,7 @@ export function SectionOvertime({ societeId }: Props) {
         {/* Zone 1 : période + bouton */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Période :</span>
+            <span className="text-sm font-medium">Bulletin cible :</span>
             <Select value={periode} onValueChange={setPeriode}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue />
@@ -577,7 +568,13 @@ export function SectionOvertime({ societeId }: Props) {
         {/* Zone 4 : tableau saisie */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">OT validés à payer</h3>
+            <div>
+              <h3 className="text-sm font-medium">OT à payer sur ce bulletin</h3>
+              <p className="text-xs text-gray-500">
+                La date de l'OT peut être de n'importe quel mois — elle sera
+                payée sur le bulletin sélectionné ci-dessus.
+              </p>
+            </div>
             <Button type="button" variant="outline" size="sm" onClick={addLigne}>
               <Plus className="h-4 w-4 mr-1" />
               Ajouter une ligne
@@ -642,8 +639,6 @@ export function SectionOvertime({ societeId }: Props) {
                           <Input
                             type="date"
                             className="h-8"
-                            min={dateMin}
-                            max={dateMax}
                             value={ligne.date}
                             onChange={e => updateLigne(ligne.id, { date: e.target.value })}
                           />
@@ -708,7 +703,7 @@ export function SectionOvertime({ societeId }: Props) {
         {/* Zone 5 : récap + sauver */}
         <div className="flex flex-wrap items-center gap-4 pt-4 border-t">
           <div className="text-sm">
-            <span className="text-gray-600">Total OT du mois : </span>
+            <span className="text-gray-600">Total à payer sur ce bulletin : </span>
             <span className="font-semibold tabular-nums">{fmtMUR(totalMontant)}</span>
           </div>
           <div className="text-sm">

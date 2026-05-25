@@ -362,32 +362,57 @@ function calculerOTEmploye(
 
 /**
  * Lit le total montant_ot persisté en heures_travaillees pour un
- * employé sur une période. Source de vérité pour le bulletin paie
- * quand la saisie OT manuelle a été faite via la section
+ * employé sur un mois de bulletin. Source de vérité pour le bulletin
+ * paie quand la saisie OT manuelle a été faite via la section
  * /rh/paie/primes (lib saveOvertimeMois). Retourne 0 si aucune ligne.
  *
- * Utilisé par le moteur de recalcul (app/api/rh/paie/route.ts) pour
- * que `bulletins_paie.heures_sup_montant` ne soit plus écrasé à 0
- * après un click "Recalculer la paie" — la lib est l'unique source
- * de vérité quand elle a écrit (priorité sur le calcul auto depuis
- * pointages).
+ * Depuis la mig 435 : la requête se fait par `periode_paiement` (le
+ * mois du bulletin cible) et non plus par la `date` réelle de l'OT.
+ * Cela permet à une OT du 15 mai d'être payée sur le bulletin de
+ * juin sans bouger sa date réelle.
  *
- * `periodeDebut` / `periodeFin` : 'YYYY-MM-DD'. Le caller fournit la
- * fenêtre déjà résolue selon le cycle paie société (calendaire vs
- * cut_off — résolu par calculerPeriodePaie en amont).
+ * `periodePaiement` : 'YYYY-MM-01' — 1er du mois logique du bulletin.
+ *
+ * Fallback compat : si la colonne `periode_paiement` n'est pas (encore)
+ * appliquée en prod (erreur Postgres "column does not exist"), on lit
+ * en mode legacy via `date BETWEEN periodeDebut AND periodeFin`. Ce
+ * fallback EST silencieux par défaut — la migration 435 doit avoir été
+ * appliquée pour que la sémantique "payer quand je veux" fonctionne.
+ * Visibilité : on log warn pour qu'un opérateur attentif voie qu'on
+ * tourne en mode dégradé.
  */
 export async function lireMontantOTDuMois(
   supabase: SupabaseLike,
   employeId: string,
-  periodeDebut: string,
-  periodeFin: string,
+  periodePaiement: string,
 ): Promise<number> {
-  const { data } = await supabase
+  const periodeIso = periodePaiement.slice(0, 10)
+  const { data, error } = await supabase
     .from('heures_travaillees')
     .select('montant_ot')
     .eq('employe_id', employeId)
-    .gte('date', periodeDebut)
-    .lte('date', periodeFin)
+    .eq('periode_paiement', periodeIso)
+
+  if (error) {
+    if (/periode_paiement/i.test(error.message)) {
+      console.warn('[lireMontantOTDuMois] migration 435 non appliquée — fallback date range:', error.message)
+      const debut = firstDayOfMonth(periodeIso)
+      const fin = lastDayOfMonth(periodeIso)
+      const { data: legacy } = await supabase
+        .from('heures_travaillees')
+        .select('montant_ot')
+        .eq('employe_id', employeId)
+        .gte('date', debut)
+        .lte('date', fin)
+      if (!legacy || legacy.length === 0) return 0
+      return (legacy as Array<{ montant_ot?: number | string | null }>).reduce(
+        (s, r) => s + (Number(r.montant_ot) || 0),
+        0,
+      )
+    }
+    return 0
+  }
+
   if (!data || data.length === 0) return 0
   return (data as Array<{ montant_ot?: number | string | null }>).reduce(
     (s, r) => s + (Number(r.montant_ot) || 0),
@@ -464,7 +489,11 @@ export async function previewOvertimeMois(
  * Validation par ligne :
  *   1. employe_id existe et appartient à la société active
  *   2. champ `jours` est un array (peut être vide → ligne validée à 0)
- *   3. chaque jour a une date dans [periode_debut, periode_fin] et heures ≥ 0
+ *   3. chaque jour a une date ISO valide et heures ≥ 0
+ *   Depuis mig 435, la date de l'OT n'a PLUS à être dans la fenêtre du
+ *   bulletin cible : l'utilisateur peut payer une OT du 15 mai sur le
+ *   bulletin de juin. La `periode` reçue identifie le bulletin cible
+ *   (`periode_paiement`) et non plus la fenêtre des dates autorisées.
  *   Erreur sur n'importe quel point → ligne entière skippée, push dans
  *   `erreurs_validation`. Les autres lignes continuent (l'API route
  *   choisit de rejeter le batch entier en V1).
@@ -519,17 +548,30 @@ export async function preparerLignesPourSave(
     return { lignes_validees, erreurs_validation }
   }
 
-  // Vérité serveur en parallèle (params + fenêtre + employés). loadFeries
-  // dépend de la fenêtre → second tour.
-  const dateRef = firstDayOfMonth(periode)
-  const [params, periodeInfo, employes] = await Promise.all([
+  // Vérité serveur en parallèle (params + employés). Depuis mig 435 la
+  // date de l'OT est libre (pas de fenêtre bornée par la période du
+  // bulletin) ; on charge néanmoins les fériés sur une fenêtre large
+  // [date_min_saisie, date_max_saisie] pour résoudre statut_jour.
+  const [params, employes] = await Promise.all([
     loadParametres(supabase),
-    calculerPeriodePaie(supabase, societeId, dateRef),
     loadEmployesActifs(supabase, societeId),
   ])
-  const dateDebut = periodeInfo.periode_debut
-  const dateFin = periodeInfo.periode_fin
-  const feries = await loadFeries(supabase, societeId, dateDebut, dateFin)
+
+  // Fenêtre fériés = bornes des dates saisies (sinon défaut = mois cible).
+  let dateMinSaisie: string | null = null
+  let dateMaxSaisie: string | null = null
+  for (const l of lignesDedup.values()) {
+    if (!Array.isArray(l.jours)) continue
+    for (const j of l.jours) {
+      if (!j || typeof j.date !== 'string' || j.date.length < 10) continue
+      const d = j.date.slice(0, 10)
+      if (dateMinSaisie === null || d < dateMinSaisie) dateMinSaisie = d
+      if (dateMaxSaisie === null || d > dateMaxSaisie) dateMaxSaisie = d
+    }
+  }
+  const feriesDebut = dateMinSaisie ?? firstDayOfMonth(periode)
+  const feriesFin = dateMaxSaisie ?? lastDayOfMonth(periode)
+  const feries = await loadFeries(supabase, societeId, feriesDebut, feriesFin)
 
   const employeMap = new Map(employes.map(e => [e.id, e]))
 
@@ -560,14 +602,11 @@ export async function preparerLignesPourSave(
       }
     }
 
-    // Validation des jours (date dans la fenêtre + heures ≥ 0).
+    // Validation des jours (heures ≥ 0). Depuis mig 435 la date est
+    // libre : pas de check de fenêtre — payable sur n'importe quel
+    // bulletin via `periode` du save.
     let ligneError: string | null = null
     for (const j of joursMap.values()) {
-      const dateIso = j.date.slice(0, 10)
-      if (dateIso < dateDebut || dateIso > dateFin) {
-        ligneError = `date ${dateIso} hors période paie [${dateDebut}, ${dateFin}]`
-        break
-      }
       const ot15 = Number(j.heures_ot_1_5)
       const ot2 = Number(j.heures_ot_2)
       if (!Number.isFinite(ot15) || !Number.isFinite(ot2) || ot15 < 0 || ot2 < 0) {
@@ -700,6 +739,9 @@ export async function saveOvertimeMois(
   const params = await loadParametres(supabase)
 
   // 3. UPSERT heures_travaillees — une ligne par (employe, date) avec OT > 0.
+  //    Toutes les lignes du batch sont rattachées au bulletin cible via
+  //    `periode_paiement = periodeDb` (mig 435). La date réelle de l'OT
+  //    reste libre.
   let nbUpsert = 0
   for (const ligne of lignes) {
     const rows = ligne.jours
@@ -707,6 +749,7 @@ export async function saveOvertimeMois(
       .map(j => ({
         employe_id: ligne.employe_id,
         date: j.date,
+        periode_paiement: periodeDb,
         heures_normales: j.heures_normales,
         heures_ot_1_5: j.heures_ot_1_5,
         heures_ot_2: j.heures_ot_2,
@@ -722,21 +765,31 @@ export async function saveOvertimeMois(
       .from('heures_travaillees')
       .upsert(rows, { onConflict: 'employe_id,date' })
     if (error) {
-      erreurs.push(`upsert heures_travaillees ${ligne.employe_id}: ${error.message}`)
+      if (/periode_paiement/i.test(error.message)) {
+        erreurs.push(
+          `upsert heures_travaillees ${ligne.employe_id}: colonne periode_paiement manquante — appliquer la migration 435 (code MIGRATION_MISSING).`,
+        )
+      } else {
+        erreurs.push(`upsert heures_travaillees ${ligne.employe_id}: ${error.message}`)
+      }
       continue
     }
     nbUpsert += rows.length
   }
 
-  // 4. UPDATE bulletins_paie.heures_sup_montant (seulement non verrouillés
-  //    + non validés). Le filtre côté requête garantit qu'on ne touche
-  //    pas à un bulletin protégé même en cas de race condition.
+  // 4. UPDATE bulletins_paie.heures_sup_montant. Recompute le total depuis
+  //    TOUTES les lignes heures_travaillees rattachées au bulletin cible
+  //    (periode_paiement = periodeDb) — pas seulement les lignes du batch.
+  //    Cela garantit que des sauves successives ne s'écrasent pas et que
+  //    des OT rattachées à ce bulletin depuis d'autres mois (date hors
+  //    fenêtre) sont bien comptées.
   let nbBulletinsMaj = 0
   for (const ligne of lignes) {
+    const totalMois = await lireMontantOTDuMois(supabase, ligne.employe_id, periodeDb)
     const { error, count } = await supabase
       .from('bulletins_paie')
       .update({
-        heures_sup_montant: ligne.total_ot_montant,
+        heures_sup_montant: round2(totalMois),
         updated_at: new Date().toISOString(),
       }, { count: 'exact' })
       .eq('societe_id', societeId)

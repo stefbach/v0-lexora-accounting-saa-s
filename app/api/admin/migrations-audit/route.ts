@@ -138,6 +138,14 @@ const MIGRATIONS_TO_AUDIT: MigrationCheck[] = [
         query: `SELECT 1 FROM pg_proc WHERE proname='check_bulletin_immutable_when_comptabilise'` },
     ],
   },
+  {
+    migration: '435_heures_travaillees_periode_paiement',
+    description: 'Découplage date OT / bulletin de paiement (colonne periode_paiement)',
+    checks: [
+      { kind: 'column', target: 'heures_travaillees.periode_paiement',
+        query: `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='heures_travaillees' AND column_name='periode_paiement'` },
+    ],
+  },
 ]
 
 export async function GET() {
