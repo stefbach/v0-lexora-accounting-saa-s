@@ -232,21 +232,65 @@ function parseAjustementsFromNotes(notes: string | null | undefined): {
 }
 
 // Construit la liste depuis le bulletin sauvegardé (mode officiel).
-// Parse les notes pour ré-éclater les ajustements en lignes individuelles.
+//
+// Cascade de sources (du plus précis au plus dégradé) :
+//   A) bulletin.breakdown_json (mig 430)  — dump intégral du breakdown UI,
+//      identique-à-l'écran. Source canonique depuis mai 2026.
+//   B) reconstruction depuis les colonnes décomposées du bulletin
+//      (salaire_base, special_allowance_*, departure_notice, ...) +
+//      parsing des `notes` pour ré-éclater les `lignes_extra`. Legacy.
+//
+// Sélection du bulletin source — résilient aux migrations partiellement
+// appliquées : on tente le SELECT complet, puis on retombe successivement
+// sur des selects plus pauvres si la colonne n'existe pas. Côté tri :
+//   1. exclure les archivés (mig 425, `is_archived`)
+//   2. prioriser le STC officiel (mig 430, `type_bulletin='solde_tout_compte'`)
+//      sur un éventuel bulletin mensuel cohabitant pour la même période.
 async function linesFromBulletin(supabase: any, employe_id: string): Promise<{ lines: SoldeLine[]; total: number; raison?: string }> {
-  const { data: bul } = await supabase.from('bulletins_paie')
-    .select('salaire_base, transport_allowance, special_allowance_1, special_allowance_2, departure_notice, special_allowance_3, salaire_net, notes')
-    .eq('employe_id', employe_id)
-    .order('periode', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  // Tentative SELECT complet → fallback successifs si colonnes absentes.
+  const SELECT_FULL = 'salaire_base, transport_allowance, special_allowance_1, special_allowance_2, departure_notice, special_allowance_3, salaire_net, notes, breakdown_json, type_bulletin, is_archived'
+  const SELECT_NO_MIG430 = 'salaire_base, transport_allowance, special_allowance_1, special_allowance_2, departure_notice, special_allowance_3, salaire_net, notes, is_archived'
+  const SELECT_MIN = 'salaire_base, transport_allowance, special_allowance_1, special_allowance_2, departure_notice, special_allowance_3, salaire_net, notes'
 
-  if (!bul) return { lines: [], total: 0 }
+  const tryFetch = async (cols: string) =>
+    supabase.from('bulletins_paie')
+      .select(cols)
+      .eq('employe_id', employe_id)
+      .order('periode', { ascending: false })
+      .limit(5)
 
-  // 1) Extraire les ajustements du champ notes
+  let bulletins: any[] = []
+  let r = await tryFetch(SELECT_FULL)
+  if (r.error) {
+    console.warn('[depart/solde] SELECT_FULL failed, retrying without mig 430 columns:', r.error.message)
+    r = await tryFetch(SELECT_NO_MIG430)
+    if (r.error) {
+      console.warn('[depart/solde] SELECT_NO_MIG430 failed, retrying minimal:', r.error.message)
+      r = await tryFetch(SELECT_MIN)
+    }
+  }
+  bulletins = Array.isArray(r.data) ? r.data : []
+  if (bulletins.length === 0) return { lines: [], total: 0 }
+
+  // Filtrer archivés (si la colonne existe — sinon `is_archived` est undefined
+  // et le filtre est neutre).
+  const activeOnly = bulletins.filter(b => b.is_archived !== true)
+  if (activeOnly.length > 0) bulletins = activeOnly
+
+  // Privilégier le bulletin STC officiel si présent.
+  const stc = bulletins.find(b => b.type_bulletin === 'solde_tout_compte')
+  const bul = stc || bulletins[0]
+
+  // ─── Source A : breakdown_json (mig 430) ────────────────────────────
+  if (bul.breakdown_json && typeof bul.breakdown_json === 'object') {
+    const r2 = linesFromBreakdown(bul.breakdown_json)
+    const { rawRaison } = parseAjustementsFromNotes(bul.notes)
+    return { lines: r2.lines, total: r2.total, raison: rawRaison || undefined }
+  }
+
+  // ─── Source B : reconstruction colonne par colonne (legacy) ─────────
   const { ajustements, total: ajustTotal, rawRaison } = parseAjustementsFromNotes(bul.notes)
-
-  // 2) special_allowance_2 = treizMois + ajustementsTotal → on isole le 13e mois pur
+  // special_allowance_2 = treizMois + ajustementsTotal → on isole le 13e mois pur
   const treizPur = (Number(bul.special_allowance_2) || 0) - ajustTotal
 
   const lines: SoldeLine[] = []
@@ -260,7 +304,7 @@ async function linesFromBulletin(supabase: any, employe_id: string): Promise<{ l
   add('Indemnité de préavis',             'Préavis selon WRA §32 ou règle entreprise', Number(bul.departure_notice) || 0)
   add('Indemnité de licenciement (WRA §70)', 'Severance Allowance — licenciement non fautif', Number(bul.special_allowance_3) || 0)
 
-  // 3) Lignes additionnelles reconstituées
+  // Lignes additionnelles reconstituées depuis le champ notes
   for (const a of ajustements) {
     add(a.libelle, a.note ? a.note : 'Ajustement manuel', a.montant)
   }
@@ -290,22 +334,36 @@ export async function GET(request: Request) {
 
     const admin = getAdminClient()
 
-    // 1) Source de vérité prioritaire : breakdown JSONB enregistré sur la
-    //    fiche employé au moment de la confirmation (préserve les libellés
-    //    des lignes_extra et tous les sous-détails de calcul).
-    // 2) Fallback : on reconstruit depuis bulletins_paie (agrégat) si le
-    //    breakdown n'a pas été persisté (départs antérieurs à la migration 281).
+    // Cascade de sources (FIX-STC-DOWNLOAD mai 2026) :
+    //   P1) employes.breakdown_depart (mig 281) — snapshot complet posé à
+    //       la confirmation, source canonique
+    //   P2) bulletins_paie.breakdown_json (mig 430) — dump intégral du
+    //       breakdown UI ; géré dans linesFromBulletin
+    //   P3) reconstruction depuis colonnes décomposées du bulletin
+    //       (salaire_base + special_allowance_* + notes parsées) ; géré
+    //       aussi dans linesFromBulletin en fallback
+    //
+    // Le PDF téléchargé depuis la modale "Documents de fin de contrat"
+    // doit être IDENTIQUE à l'aperçu écran. Avant ce fix, P2 n'était pas
+    // consulté ; en l'absence de P1 on tombait direct sur P3 (qui rate
+    // les ajustements stockés uniquement dans breakdown_json).
     let lines: SoldeLine[] = []
     let total = 0
     let raison: string | undefined
+    let source: 'emp.breakdown_depart' | 'bulletin' | 'empty' = 'empty'
     if (emp.breakdown_depart && typeof emp.breakdown_depart === 'object') {
       const r2 = linesFromBreakdown(emp.breakdown_depart)
       lines = r2.lines; total = r2.total
       raison = emp.raison_depart || undefined
+      source = 'emp.breakdown_depart'
     } else {
       const fb = await linesFromBulletin(admin, employe_id)
       lines = fb.lines; total = fb.total; raison = fb.raison
+      source = 'bulletin'
     }
+    console.log('[depart/solde] GET PDF source resolved', {
+      employe_id, source, lines_count: lines.length, total,
+    })
 
     const draft = !emp.date_depart
 
