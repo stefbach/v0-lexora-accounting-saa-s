@@ -224,6 +224,13 @@ export async function GET(request: Request) {
       const indemnite = Math.round(dist * tx * 100) / 100
       return {
         ...t,
+        // Mapping noms DB → noms attendus par le front (sinon formatDate(undefined)
+        // affiche "Invalid Date" partout et les adresses sont vides). On garde
+        // aussi les originaux via `...t` pour compat ascendante.
+        date_depart: t.depart_heure ?? null,
+        date_arrivee: t.arrivee_heure ?? null,
+        adresse_depart: t.depart_adresse ?? null,
+        adresse_arrivee: t.arrivee_adresse ?? null,
         employe_nom: emp.nom || '',
         employe_prenom: emp.prenom || '',
         employe_poste: emp.poste || '',
