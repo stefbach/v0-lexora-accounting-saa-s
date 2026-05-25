@@ -70,6 +70,16 @@ export default function PaiePage() {
   const [workflow, setWorkflow] = useState<any>(null)
   const [audit, setAudit] = useState<any[]>([])
 
+  // Bug A fix — alerte employés sortis dans la période sélectionnée.
+  // On charge la liste des employés de la société + filtre ceux dont
+  // date_depart tombe dans le mois affiché → on prévient le RH avant
+  // qu'il clique "Calculer la paie" (le calcul sera fait en solde
+  // tout compte avec prorata automatique, mais l'avertissement évite
+  // l'incompréhension "pourquoi le bulletin est-il à moitié ?").
+  const [employesSortants, setEmployesSortants] = useState<Array<{
+    id: string; prenom: string; nom: string; date_depart: string
+  }>>([])
+
   // Sprint 5 FIX 4 — erreur de chargement non-bloquante (remplace l'alert
   // agressif qui gâchait l'UX et empêchait de voir la page).
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -208,6 +218,43 @@ export default function PaiePage() {
   // Ne PAS ajouter d'appel à calculerBatch() depuis un useEffect ou depuis
   // load() — cela réintroduirait le comportement auto proscrit.
   useEffect(() => { load(); loadWorkflow() }, [load, loadWorkflow])
+
+  // Bug A fix — récupère les employés avec date_depart dans le mois affiché
+  // pour pré-alerter le RH avant le calcul. Lecture seule, non-bloquant.
+  useEffect(() => {
+    if (!periode || societe === "all" || !societe) {
+      setEmployesSortants([])
+      return
+    }
+    const [yyyy, mm] = periode.split('-')
+    if (!yyyy || !mm) return
+    const moisDebut = `${yyyy}-${mm}-01`
+    const moisFin = new Date(Number(yyyy), Number(mm), 0).toISOString().slice(0, 10)
+    let cancelled = false
+    // statut=tous : retourne actifs + sortis. On filtre côté client
+    // ceux dont date_depart tombe pile dans le mois affiché.
+    fetch(`/api/rh/employes?societe_id=${societe}&statut=tous`)
+      .then(r => r.ok ? r.json() : { employes: [] })
+      .then(d => {
+        if (cancelled) return
+        const tous = d.employes || d.data || []
+        const sortantsCeMois = tous
+          .filter((e: any) => {
+            if (!e.date_depart) return false
+            const dd = String(e.date_depart).slice(0, 10)
+            return dd >= moisDebut && dd <= moisFin
+          })
+          .map((e: any) => ({
+            id: e.id,
+            prenom: e.prenom || '',
+            nom: e.nom || '',
+            date_depart: String(e.date_depart).slice(0, 10),
+          }))
+        setEmployesSortants(sortantsCeMois)
+      })
+      .catch(() => setEmployesSortants([]))
+    return () => { cancelled = true }
+  }, [societe, periode])
 
   const doAction = async (action: string, extra?: any) => {
     if (societe === "all") return alert(t('rha.a.paie.err_pick_societe', locale))
@@ -390,7 +437,11 @@ export default function PaiePage() {
         : t('rha.a.paie.desc_lancer_calcul', locale),
       done: hasBulletins, icon: Calculator,
       action: calculerBatch,
-      actionLabel: hasBulletins ? t('rha.a.paie.btn_recalculer_paie', locale) : t('rha.a.paie.btn_calculer_paie', locale),
+      // Bug A fix — si des employés sont sortis dans la période, libellé
+      // explicite "solde tout compte" pour signaler le mode de calcul.
+      actionLabel: employesSortants.length > 0
+        ? (hasBulletins ? "Recalculer (solde tout compte)" : "Calculer en solde tout compte")
+        : (hasBulletins ? t('rha.a.paie.btn_recalculer_paie', locale) : t('rha.a.paie.btn_calculer_paie', locale)),
       actionDisabled: calculating || isLocked, phase: "process",
     },
     {
@@ -559,6 +610,14 @@ export default function PaiePage() {
     if (societe === "all") return
     const emp = bulletins.find(b => b.employe_id === employe_id)
     const nomComplet = emp?.employe ? `${emp.employe.prenom} ${emp.employe.nom}` : employe_id
+    // FIX-IMMUTABLE (mig 427) — garde côté UI : un bulletin comptabilisé
+    // ne peut pas être recalculé. Le bouton est déjà masqué quand
+    // comptabilise=true mais on garde la garde au cas où (URL forgée,
+    // état stale, etc.).
+    if (emp?.comptabilise) {
+      alert(`Bulletin de ${nomComplet} déjà comptabilisé — modification interdite. Voir les écritures liées ou décomptabiliser (admin).`)
+      return
+    }
     if (!confirm(t('rha.a.paie.confirm_recalc_employe', locale).replace('{nom}', nomComplet))) return
     setRecalcId(employe_id)
     try {
@@ -567,7 +626,12 @@ export default function PaiePage() {
         body: JSON.stringify({ action: "calculer_batch", societe_id: societe, periode, employe_ids: [employe_id] })
       })
       const data = await res.json()
-      if (!res.ok) alert(data.error || t('rha.a.paie.err_generic', locale))
+      // FIX-IMMUTABLE — 409 = bulletin comptabilisé, message dédié au lieu d'une alerte générique
+      if (res.status === 409 && data?.code === 'BULLETIN_COMPTABILISE') {
+        alert(`Bulletin de ${nomComplet} déjà comptabilisé — modification interdite.\n${data.hint || ''}`)
+      } else if (!res.ok) {
+        alert(data.error || t('rha.a.paie.err_generic', locale))
+      }
       load(); loadWorkflow()
     } catch (e: any) { alert(t('rha.a.paie.compta_err_prefix', locale) + (e.message || "")) }
     finally { setRecalcId(null) }
@@ -669,6 +733,46 @@ export default function PaiePage() {
           </TabsList>
 
           <TabsContent value="bulletins" className="space-y-6 mt-4">
+
+        {/* Bug A fix — Alert employés sortis dans la période.
+            Prévient le RH AVANT le calcul que les bulletins de ces
+            employés seront en solde tout compte avec prorata auto.
+            Cas type : Alicia Désiré sortie le 18 → bulletin 18j et non
+            30j, et bulletin précédent éventuellement archivé. */}
+        {employesSortants.length > 0 && (
+          <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <p className="font-semibold text-amber-900">
+                  {employesSortants.length === 1
+                    ? "Sortie employé dans la période — solde tout compte"
+                    : `${employesSortants.length} sorties employés dans la période — solde tout compte`}
+                </p>
+                <ul className="text-sm text-amber-800 space-y-1">
+                  {employesSortants.map(e => {
+                    const d = new Date(e.date_depart + "T12:00:00").toLocaleDateString(
+                      locale === 'en' ? 'en-GB' : 'fr-FR',
+                      { day: '2-digit', month: '2-digit', year: 'numeric' },
+                    )
+                    return (
+                      <li key={e.id} className="flex items-center gap-2">
+                        <span className="font-medium">{e.prenom} {e.nom}</span>
+                        <span className="text-amber-700">— sortie le {d}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+                <p className="text-xs text-amber-700">
+                  Le bulletin sera calculé en <b>solde tout compte</b> avec prorata
+                  automatique sur la base des jours travaillés. Si un bulletin
+                  existe déjà au mois entier, il sera archivé (consultable depuis
+                  <a href="/rh/historique-paie" className="underline ml-1">Historique paie</a>).
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ═══ WORKFLOW STEPPER ═══ */}
         {societe !== "all" && (
@@ -952,12 +1056,35 @@ export default function PaiePage() {
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUT_COLORS[b.statut] || ""}`}>{b.statut}</span>
                           {b.verrouille && <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-xs rounded gap-0.5 flex items-center"><Lock className="w-2.5 h-2.5" />{t('rha.a.paie.badge_lock', locale)}</span>}
                           {b.jours_absence > 0 && <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-xs rounded">{t('rha.a.paie.badge_jours_abs', locale).replace('{n}', String(b.jours_absence))}</span>}
-                          {b.comptabilise && <span className="px-1.5 py-0.5 bg-green-100 text-green-600 text-xs rounded flex items-center gap-0.5"><CheckCircle className="w-2.5 h-2.5" />{t('rha.a.paie.badge_cpt', locale)}</span>}
+                          {/* FIX-IMMUTABLE (mig 427) — badge enrichi avec date de comptabilisation
+                              et lien vers les écritures comptables liées. */}
+                          {b.comptabilise && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span
+                                  className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded flex items-center gap-0.5 font-medium cursor-help"
+                                  title={b.comptabilise_at ? `Comptabilisé le ${new Date(b.comptabilise_at).toLocaleDateString('fr-FR')}` : 'Comptabilisé'}
+                                >
+                                  <CheckCircle className="w-2.5 h-2.5" />
+                                  {b.comptabilise_at
+                                    ? `Comptabilisé ${new Date(b.comptabilise_at).toLocaleDateString('fr-FR')}`
+                                    : t('rha.a.paie.badge_cpt', locale)}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Bulletin verrouillé en comptabilité — modification interdite.
+                                {b.ecriture_id ? ' Cliquer le bouton "Écritures" pour voir le détail.' : ''}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1 flex-wrap">
-                          {!b.verrouille && b.statut === "brouillon" && (
+                          {/* FIX-IMMUTABLE (mig 427) — bulletin comptabilisé = aucune modif possible,
+                              seulement consultation PDF + lien vers écritures comptables.
+                              Le bouton "Recalculer" est masqué et remplacé par "Voir (verrouillé)". */}
+                          {!b.verrouille && !b.comptabilise && b.statut === "brouillon" && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => startEdit(b)}>
@@ -967,7 +1094,7 @@ export default function PaiePage() {
                               <TooltipContent>{t('rha.a.paie.tt_modifier', locale)}</TooltipContent>
                             </Tooltip>
                           )}
-                          {!b.verrouille && (
+                          {!b.verrouille && !b.comptabilise && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => recalculerEmploye(b.employe_id)} disabled={recalcId === b.employe_id}>
@@ -975,6 +1102,35 @@ export default function PaiePage() {
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>{t('rha.a.paie.tt_recalculer_all', locale)}</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {/* FIX-IMMUTABLE (mig 427) — bulletin comptabilisé : remplacer "Recalculer"
+                              par "Voir écritures" qui ouvre le grand livre filtré sur l'écriture liée. */}
+                          {b.comptabilise && b.ecriture_id && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50"
+                                  onClick={() => window.open(`/comptable/grand-livre?ecriture_id=${b.ecriture_id}`, '_blank')}
+                                >
+                                  <BookOpen className="w-3 h-3" />
+                                  Écritures
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Voir les écritures comptables liées (lecture seule)</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {b.comptabilise && !b.ecriture_id && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="px-2 py-1 text-xs text-gray-500 italic flex items-center gap-1">
+                                  <Lock className="w-3 h-3" />
+                                  Verrouillé
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>Bulletin comptabilisé — lecture seule</TooltipContent>
                             </Tooltip>
                           )}
                           <Tooltip>
@@ -994,7 +1150,10 @@ export default function PaiePage() {
                               {t('rha.a.paie.btn_hors_mra', locale)}
                             </Button>
                           )}
-                          {!b.verrouille && b.statut === "brouillon" && (
+                          {/* FIX-IMMUTABLE (mig 427) — masquer suppression si comptabilisé.
+                              Le trigger trg_bulletin_immutable_delete refuserait de toute
+                              façon, on évite simplement l'erreur côté UI. */}
+                          {!b.verrouille && !b.comptabilise && b.statut === "brouillon" && (
                             <Button size="sm" variant="ghost" className="h-7 text-[10px] text-red-500 hover:bg-red-50 px-1.5" onClick={async () => {
                               if (!confirm(t('rha.a.paie.confirm_supprimer_bulletin', locale).replace('{nom}', `${b.employe?.prenom} ${b.employe?.nom}`))) return
                               await doAction("supprimer_bulletin", { bulletin_id: b.id })

@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Calendar, Users, Banknote, ChevronDown, ChevronRight, FileText, Download, ExternalLink } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Loader2, Calendar, Users, Banknote, ChevronDown, ChevronRight, FileText, Download, ExternalLink, Archive, CheckCircle, BookOpen } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale } from "@/lib/i18n"
 
@@ -21,6 +23,10 @@ export default function HistoriquePaiePage() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [detail, setDetail] = useState<any[]>([])
   const [ecritures, setEcritures] = useState<any[]>([])
+  // Bug C fix (mig 425) — toggle pour afficher les bulletins archivés
+  // (versions précédentes d'un bulletin recalculé en cours de mois,
+  // typiquement cas "sortie employé" comme Alicia Désiré).
+  const [includeArchived, setIncludeArchived] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -47,15 +53,62 @@ export default function HistoriquePaiePage() {
 
   useEffect(() => { load() }, [load])
 
+  // Bug C fix — recharger le détail si l'utilisateur toggle archivés
+  // alors qu'une période est déjà dépliée.
+  useEffect(() => {
+    if (expanded) {
+      // Refetch le détail avec le nouveau flag
+      const periode = expanded
+      const archivedQs = includeArchived ? '&include_archived=true' : ''
+      fetch(`/api/rh/paie?societe_id=${societe}&periode=${periode.slice(0, 7)}${archivedQs}`)
+        .then(r => r.json())
+        .then(d => {
+          const bulletins = (d.bulletins || []).slice()
+          bulletins.sort((a: any, b: any) => {
+            const aArch = a.is_archived ? 1 : 0
+            const bArch = b.is_archived ? 1 : 0
+            if (aArch !== bArch) return aArch - bArch
+            if (aArch === 1) return String(b.archived_at || '').localeCompare(String(a.archived_at || ''))
+            return String(a.employe?.nom || '').localeCompare(String(b.employe?.nom || ''))
+          })
+          setDetail(bulletins)
+        })
+        .catch(() => { /* noop */ })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeArchived])
+
   const toggleExpand = async (periode: string) => {
     if (expanded === periode) { setExpanded(null); return }
     setExpanded(periode)
-    // Load detail for this period
+    // Load detail for this period.
+    // Bug C fix (mig 425) — passer include_archived selon toggle. La
+    // route /api/rh/paie GET filtre is_archived=false par défaut ; quand
+    // l'utilisateur veut voir l'historique complet (recalculs), on
+    // active le flag.
+    const archivedQs = includeArchived ? '&include_archived=true' : ''
     const [detRes, ecrRes] = await Promise.all([
-      fetch(`/api/rh/import-paie?action=detail&periode=${periode}&societe_id=${societe}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
-      fetch(`/api/rh/paie?action=list&societe_id=${societe}&periode=${periode.slice(0, 7)}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
+      fetch(`/api/rh/import-paie?action=detail&periode=${periode}&societe_id=${societe}${archivedQs}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
+      fetch(`/api/rh/paie?societe_id=${societe}&periode=${periode.slice(0, 7)}${archivedQs}`).then(r => r.json()).catch(() => ({ bulletins: [] })),
     ])
-    setDetail(detRes.bulletins || [])
+    // Préférer la réponse de /api/rh/paie (qui supporte include_archived
+    // côté backend) si elle contient des bulletins ; sinon fallback sur
+    // l'agrégation import-paie.
+    const bulletinsFromPaie = (ecrRes && Array.isArray(ecrRes.bulletins) && ecrRes.bulletins.length > 0)
+      ? ecrRes.bulletins : null
+    const detailBulletins = bulletinsFromPaie || (detRes.bulletins || [])
+    // Tri : actifs en premier (par employé), archivés grisés ensuite,
+    // par date d'archivage descendante.
+    detailBulletins.sort((a: any, b: any) => {
+      const aArch = a.is_archived ? 1 : 0
+      const bArch = b.is_archived ? 1 : 0
+      if (aArch !== bArch) return aArch - bArch
+      if (aArch === 1) {
+        return String(b.archived_at || '').localeCompare(String(a.archived_at || ''))
+      }
+      return String(a.employe?.nom || '').localeCompare(String(b.employe?.nom || ''))
+    })
+    setDetail(detailBulletins)
     // Load accounting entries for this period
     try {
       const ecrRes2 = await fetch(`/api/comptable/ecritures?societe_id=${societe}&journal=SAL&date_debut=${periode}&date_fin=${periode}`).then(r => r.json()).catch(() => ({ ecritures: [] }))
@@ -84,6 +137,21 @@ export default function HistoriquePaiePage() {
             <FileText className="h-4 w-4 mr-1" /> {t('rha.a.common.importer', locale)}
           </Button>
         </div>
+      </div>
+
+      {/* Bug C fix (mig 425) — toggle pour inclure les bulletins archivés
+          (versions précédentes d'un recalcul, ex: bulletin "mois entier"
+          remplacé par "solde tout compte" après saisie sortie). */}
+      <div className="flex items-center justify-end gap-3 -mt-2">
+        <Label htmlFor="toggle-archived" className="text-sm text-gray-600 cursor-pointer flex items-center gap-2">
+          <Archive className="h-4 w-4 text-gray-500" />
+          Inclure les bulletins archivés (recalculs antérieurs)
+        </Label>
+        <Switch
+          id="toggle-archived"
+          checked={includeArchived}
+          onCheckedChange={setIncludeArchived}
+        />
       </div>
 
       {/* KPIs globaux */}
@@ -172,8 +240,47 @@ export default function HistoriquePaiePage() {
                           </thead>
                           <tbody className="divide-y">
                             {detail.map((b: any) => (
-                              <tr key={b.id} className="hover:bg-gray-50">
-                                <td className="px-2 py-1.5 font-medium">{b.employe?.prenom} {b.employe?.nom}</td>
+                              <tr
+                                key={b.id}
+                                className={`hover:bg-gray-50 ${b.is_archived ? 'opacity-60 bg-gray-50/50 italic' : ''}`}
+                                title={b.is_archived ? `Archivé — ${b.archive_reason || 'recalcul'}` : undefined}
+                              >
+                                <td className="px-2 py-1.5 font-medium">
+                                  {b.employe?.prenom} {b.employe?.nom}
+                                  {b.is_archived && (
+                                    <span
+                                      className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-gray-200 text-gray-700 text-[10px] rounded font-medium"
+                                      title={b.archive_reason || 'Bulletin remplacé par une version plus récente'}
+                                    >
+                                      <Archive className="h-2.5 w-2.5" />
+                                      Archivé
+                                    </span>
+                                  )}
+                                  {/* FIX-IMMUTABLE (mig 427) — badge comptabilisé + lien écritures */}
+                                  {b.comptabilise && (
+                                    <span
+                                      className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-green-100 text-green-700 text-[10px] rounded font-medium"
+                                      title={
+                                        b.ecriture_id
+                                          ? `Bulletin lié à l'écriture ${b.ecriture_id}${b.comptabilise_at ? ` — comptabilisé le ${new Date(b.comptabilise_at).toLocaleDateString('fr-FR')}` : ''}`
+                                          : 'Comptabilisé'
+                                      }
+                                    >
+                                      <CheckCircle className="h-2.5 w-2.5" />
+                                      Comptabilisé
+                                    </span>
+                                  )}
+                                  {b.comptabilise && b.ecriture_id && (
+                                    <button
+                                      type="button"
+                                      onClick={() => window.open(`/comptable/grand-livre?ecriture_id=${b.ecriture_id}`, '_blank')}
+                                      className="ml-1 inline-flex items-center gap-0.5 px-1 py-0.5 text-[10px] text-emerald-700 hover:bg-emerald-50 rounded"
+                                      title="Ouvrir les écritures comptables liées"
+                                    >
+                                      <BookOpen className="h-2.5 w-2.5" />
+                                    </button>
+                                  )}
+                                </td>
                                 <td className="px-2 py-1.5 text-right font-mono">{fmt(b.salaire_base || 0)}</td>
                                 <td className="px-2 py-1.5 text-right font-mono">{fmt(b.heures_sup_montant || 0)}</td>
                                 <td className="px-2 py-1.5 text-right font-mono">{fmt(b.special_allowance_1 || 0)}</td>

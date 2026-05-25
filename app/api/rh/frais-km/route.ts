@@ -12,6 +12,8 @@ function getAdminClient() {
 }
 
 // GET /api/rh/frais-km?societe_id=...&employe_id=...&periode=YYYY-MM
+// GET /api/rh/frais-km?action=list_trajets&employe_id=...&periode=YYYY-MM
+//   → liste détail des trajets (table frais_km_trajets, mig 426)
 export async function GET(request: Request) {
   try {
     const supabaseAuth = await createServerClient()
@@ -23,6 +25,29 @@ export async function GET(request: Request) {
     const societe_id = searchParams.get('societe_id')
     const employe_id = searchParams.get('employe_id')
     const periode = searchParams.get('periode')
+    const action = searchParams.get('action')
+
+    // ── Liste détail des trajets pour un employé/mois ──────────────────────
+    // Mig 426 — chaque trajet est une ligne distincte ; l'agrégat reste
+    // dans frais_km_mois (synchronisé par trigger).
+    if (action === 'list_trajets') {
+      if (!employe_id || !periode) {
+        return NextResponse.json({ error: 'employe_id et periode requis' }, { status: 400 })
+      }
+      const periodeDate = `${periode}-01`
+      const { data: trajets, error } = await supabase
+        .from('frais_km_trajets')
+        .select('*')
+        .eq('employe_id', employe_id)
+        .eq('periode', periodeDate)
+        .order('date_trajet', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+      if (error) {
+        console.error('[frais-km list_trajets] error:', error.message)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ trajets: trajets || [] })
+    }
 
     // Multi-tenant : si pas de societe_id, on étend la recherche à TOUTES
     // les sociétés accessibles. Avant : on prenait juste la première, ce
@@ -221,6 +246,116 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
       return NextResponse.json({ ok: true, rule: data, tarif_km: tarifValue })
+    }
+
+    // ── Mig 426 — Création d'un trajet détail ───────────────────────────────
+    // Plusieurs trajets par employé/mois sont autorisés. Le trigger
+    // sync_frais_km_mois_from_trajets met à jour automatiquement
+    // frais_km_mois (somme des km validés × tarif actif).
+    if (action === 'create_trajet') {
+      const {
+        employe_id,
+        periode,
+        date_trajet,
+        depart_adresse,
+        arrivee_adresse,
+        km,
+        motif,
+        aller_retour,
+        societe_id: bodySocieteId,
+      } = body
+      if (!employe_id || !periode || km === undefined || km === null) {
+        return NextResponse.json({ error: 'employe_id, periode, km requis' }, { status: 400 })
+      }
+      const kmNum = Number(km)
+      if (!Number.isFinite(kmNum) || kmNum < 0) {
+        return NextResponse.json({ error: 'km invalide' }, { status: 400 })
+      }
+
+      // Résoudre societe_id si non fourni (via employes)
+      let sid = bodySocieteId
+      if (!sid) {
+        const { data: emp } = await supabase
+          .from('employes')
+          .select('societe_id')
+          .eq('id', employe_id)
+          .single()
+        sid = emp?.societe_id
+      }
+      if (!sid) {
+        return NextResponse.json({ error: 'societe_id introuvable' }, { status: 400 })
+      }
+
+      const periodeDate = `${periode}-01`
+      const insertRow = {
+        societe_id: sid,
+        employe_id,
+        periode: periodeDate,
+        date_trajet: date_trajet || null,
+        depart_adresse: depart_adresse || null,
+        arrivee_adresse: arrivee_adresse || null,
+        km: kmNum,
+        motif: motif || null,
+        aller_retour: Boolean(aller_retour),
+        statut: 'en_attente' as const,
+        created_by: user.id,
+      }
+
+      const { data, error } = await supabase
+        .from('frais_km_trajets')
+        .insert(insertRow)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('[frais-km create_trajet] insert error:', error.message)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ trajet: data })
+    }
+
+    // ── Mig 426 — Validation/rejet d'un trajet ──────────────────────────────
+    if (action === 'validate_trajet') {
+      const { id, statut, rejected_reason } = body
+      if (!id || !statut) {
+        return NextResponse.json({ error: 'id et statut requis' }, { status: 400 })
+      }
+      const allowed = ['en_attente', 'valide', 'rejete', 'paye']
+      if (!allowed.includes(statut)) {
+        return NextResponse.json({ error: 'statut invalide' }, { status: 400 })
+      }
+      const update: Record<string, unknown> = { statut }
+      if (statut === 'valide' || statut === 'paye') {
+        update.validated_by = user.id
+        update.validated_at = new Date().toISOString()
+        update.rejected_reason = null
+      } else if (statut === 'rejete') {
+        update.rejected_reason = rejected_reason || null
+      }
+      const { data, error } = await supabase
+        .from('frais_km_trajets')
+        .update(update)
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) {
+        console.error('[frais-km validate_trajet] error:', error.message)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ trajet: data })
+    }
+
+    // ── Mig 426 — Suppression d'un trajet ───────────────────────────────────
+    // Le trigger AFTER DELETE recalcule l'agrégat frais_km_mois.
+    if (action === 'delete_trajet') {
+      const { id } = body
+      if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+      const { error } = await supabase.from('frais_km_trajets').delete().eq('id', id)
+      if (error) {
+        console.error('[frais-km delete_trajet] error:', error.message)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ ok: true })
     }
 
     // ── Enter km for an employee for a period ────────────────────────────────
