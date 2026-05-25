@@ -130,6 +130,19 @@ export default function FraisKmPage() {
   const [newTrajetArrivee, setNewTrajetArrivee] = useState("")
   const [addingTrajet, setAddingTrajet] = useState(false)
 
+  // FIX-RADICAL (mig 429) — Panel debug accessible via ?debug=1.
+  // Capture la dernière requête + réponse API create_trajet pour permettre
+  // au support de voir EXACTEMENT ce qui est envoyé/reçu, sans avoir à
+  // ouvrir la console DevTools.
+  const [debugMode, setDebugMode] = useState(false)
+  const [lastRequest, setLastRequest] = useState<unknown>(null)
+  const [lastResponse, setLastResponse] = useState<unknown>(null)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('debug') === '1') setDebugMode(true)
+  }, [])
+
   useEffect(() => {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))
   }, [])
@@ -317,24 +330,29 @@ export default function FraisKmPage() {
       return
     }
     setAddingTrajet(true)
+    const payload = {
+      action: 'create_trajet',
+      employe_id: trajetsEmploye.employe_id,
+      periode,
+      date_trajet: effectiveDate,
+      depart_adresse: newTrajetDepart || null,
+      arrivee_adresse: newTrajetArrivee || null,
+      km: kmNum,
+      motif: newTrajetMotif || null,
+      aller_retour: newTrajetAR,
+      societe_id: societe !== 'all' ? societe : undefined,
+    }
+    setLastRequest(payload)
     try {
       const res = await fetch('/api/rh/frais-km', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create_trajet',
-          employe_id: trajetsEmploye.employe_id,
-          periode,
-          date_trajet: effectiveDate,
-          depart_adresse: newTrajetDepart || null,
-          arrivee_adresse: newTrajetArrivee || null,
-          km: kmNum,
-          motif: newTrajetMotif || null,
-          aller_retour: newTrajetAR,
-          societe_id: societe !== 'all' ? societe : undefined,
-        }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json().catch(() => ({}))
+      // FIX-RADICAL (mig 429) — log systématique + capture pour panel debug.
+      console.log('[addTrajet] response:', { status: res.status, data })
+      setLastResponse({ status: res.status, data })
       if (!res.ok) {
         // FIX-X (mai 2026) — toast détaillé pour aider le diagnostic en
         // prod. Avant : message générique "HTTP 500" qui ne disait rien à
@@ -354,7 +372,16 @@ export default function FraisKmPage() {
         console.error('[addTrajet] error:', data)
         return
       }
-      notifySuccess('Trajet ajouté')
+      // FIX-RADICAL (mig 429) — Si l'API a basculé en fallback (table
+      // frais_km_trajets absente en prod), on informe explicitement
+      // l'utilisateur. Le trajet est sauvé mais l'agrégat est dans
+      // frais_km_mois, pas le détail trajet par trajet.
+      if ((data as { fallback?: boolean }).fallback) {
+        notifySuccess('Trajet ajouté (mode dégradé — agrégé sur le mois)')
+        console.warn('[addTrajet] FALLBACK actif :', (data as { warning?: string }).warning)
+      } else {
+        notifySuccess('Trajet ajouté')
+      }
       // Reset : on remet la date à la valeur par défaut (pas "" qui laisserait
       // le champ vide et obligerait l'utilisateur à le re-cliquer pour le
       // prochain trajet).
@@ -787,6 +814,37 @@ export default function FraisKmPage() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* FIX-RADICAL (mig 429) — Panel debug ?debug=1
+              Affiche la dernière requête + réponse de l'API create_trajet.
+              Permet au support de diagnostiquer un blocage sans DevTools. */}
+          {debugMode && (
+            <div className="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-xs">
+              <p className="font-semibold text-red-800 mb-2">
+                🐞 Panel debug (?debug=1)
+              </p>
+              <p className="font-semibold text-red-700">Dernière requête :</p>
+              <pre className="bg-white border rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
+                {lastRequest ? JSON.stringify(lastRequest, null, 2) : '— aucune —'}
+              </pre>
+              <p className="font-semibold text-red-700 mt-2">Dernière réponse :</p>
+              <pre className="bg-white border rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
+                {lastResponse ? JSON.stringify(lastResponse, null, 2) : '— aucune —'}
+              </pre>
+              {trajetsEmploye && (
+                <p className="mt-2">
+                  <a
+                    className="text-blue-700 underline"
+                    href={`/api/rh/frais-km?action=debug_access&employe_id=${trajetsEmploye.employe_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    → Appeler /api/rh/frais-km?action=debug_access
+                  </a>
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Liste des trajets existants */}
           <div className="mt-4">
