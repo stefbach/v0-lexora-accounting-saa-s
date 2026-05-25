@@ -347,10 +347,27 @@ export async function POST(request: Request) {
     // ACTION: confirmer_depart — Process departure
     // ═══════════════════════════════════════════════════════
     if (action === 'confirmer_depart') {
-      const { employe_id, date_depart, type_depart, raison_depart, breakdown } = body
+      const {
+        employe_id,
+        date_depart,
+        type_depart,
+        raison_depart,
+        breakdown: breakdownLegacy,
+        // FIX-STC-EDITION — édition primante. `breakdown_edite` est la source de
+        // vérité (version utilisateur). On ne RE-CALCULE PAS depuis zéro côté
+        // serveur — on prend les chiffres confirmés à l'écran. `breakdown_auto`
+        // (optionnel) sert au log d'audit (mig 434) pour comparer auto vs édité.
+        breakdown_edite,
+        breakdown_auto,
+        edited_by_user,
+      } = body
       if (!employe_id || !date_depart || !type_depart) {
         return NextResponse.json({ error: 'employe_id, date_depart et type_depart requis' }, { status: 400 })
       }
+
+      // breakdown édité prime sur le legacy field `breakdown` (compatibilité
+      // ascendante avec d'anciens clients qui n'envoient que `breakdown`).
+      const breakdown = breakdown_edite ?? breakdownLegacy
 
       // Get employee
       const { data: emp } = await supabase.from('employes').select('*').eq('id', employe_id).maybeSingle()
@@ -440,6 +457,34 @@ export async function POST(request: Request) {
         : type_depart === 'retraite' ? 'Retraite'
         : 'Décès'
 
+      // ── FIX-STC-EDITION — diff serveur entre breakdown auto et édité ──
+      // Calculé même si l'UI n'a pas fourni breakdown_auto (cas legacy) : on
+      // détecte alors « édité » uniquement via la présence de lignes_extra.
+      const r2num = (n: any) => Math.round((Number(n) || 0) * 100) / 100
+      const flattenForDiff = (b: any): Record<string, number> => ({
+        salaire_prorata:        r2num(b?.salaire_prorata?.montant),
+        conges_al:              r2num(b?.conges_al?.montant),
+        conges_sl:              r2num(b?.conges_sl?.montant),
+        treizieme_mois:         r2num(b?.treizieme_mois?.montant),
+        allocations_prorata:    r2num(b?.allocations_prorata?.montant),
+        preavis:                r2num(b?.preavis?.montant),
+        indemnite_licenciement: r2num(b?.indemnite_licenciement?.montant),
+        total:                  r2num(b?.total),
+      })
+      const modifications: Record<string, { auto: number; edite: number }> = {}
+      if (breakdown_auto && breakdown) {
+        const fa = flattenForDiff(breakdown_auto)
+        const fe = flattenForDiff(breakdown)
+        for (const k of Object.keys(fa)) {
+          if (fa[k] !== fe[k]) modifications[k] = { auto: fa[k], edite: fe[k] }
+        }
+      }
+      const wasEdited = Boolean(
+        edited_by_user ||
+        Object.keys(modifications).length > 0 ||
+        lignesExtra.length > 0
+      )
+
       // Notes du bulletin : on encode les lignes extra pour traçabilité
       const notesParts = [`Solde de tout compte — ${typeLabel}`]
       if (lignesExtra.length > 0) {
@@ -451,6 +496,12 @@ export async function POST(request: Request) {
       }
       if (retenuesManuelles > 0) {
         notesParts.push(`Retenues manuelles : ${retenuesManuelles.toFixed(2)} MUR`)
+      }
+      if (wasEdited) {
+        // Marqueur lisible par humain ET pattern fixe `ÉDITÉ par <id> le <date>`
+        // que l'UI (badge « ✏️ Édité manuellement ») peut détecter en regex.
+        const today = new Date().toISOString().slice(0, 10)
+        notesParts.push(`[SOLDE_TOUT_COMPTE ÉDITÉ par user ${user.id} le ${today}]`)
       }
       const bulletinNotes = notesParts.join(' | ')
 
@@ -697,10 +748,36 @@ export async function POST(request: Request) {
         // Table may not exist, non-blocking
       }
 
+      // ── FIX-STC-EDITION — Audit log STC édition (mig 434) ────────────────
+      // Non-bloquant : si la table n'existe pas (mig 434 pas appliquée), on
+      // logge l'erreur en console et on continue. Le bulletin reste valide.
+      try {
+        const { error: auditErr } = await supabase
+          .from('stc_edition_log')
+          .insert({
+            employe_id,
+            societe_id: emp.societe_id,
+            user_id: user.id,
+            breakdown_auto: breakdown_auto ?? null,
+            breakdown_edite: breakdown ?? null,
+            modifications: Object.keys(modifications).length > 0 ? modifications : null,
+            bulletin_id: bulletin?.id || null,
+            edited_by_user: wasEdited,
+            notes: `STC ${typeLabel} ${date_depart} — édité=${wasEdited}, lignes_extra=${lignesExtra.length}, retenues_man=${retenuesManuelles.toFixed(2)}`,
+          })
+        if (auditErr) {
+          console.warn('[depart] stc_edition_log insert skipped:', auditErr.message)
+        }
+      } catch (auditCatch) {
+        console.warn('[depart] stc_edition_log insert exception (non-blocking):', auditCatch)
+      }
+
       return NextResponse.json({
         success: true,
         message: `Départ de ${emp.prenom} ${emp.nom} confirmé au ${date_depart}`,
         bulletin_id: bulletin?.id || null,
+        edited_by_user: wasEdited,
+        modifications_count: Object.keys(modifications).length,
       })
     }
 

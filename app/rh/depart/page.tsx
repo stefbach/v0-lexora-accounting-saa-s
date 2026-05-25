@@ -882,6 +882,10 @@ export default function DepartPage() {
   const locale: Locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [breakdown, setBreakdown] = useState<any>(null)
+  // FIX-STC-EDITION — on conserve une copie IMMUABLE du breakdown auto initial
+  // (snapshot renvoyé par calculer_solde) pour le diff côté serveur. Le state
+  // `breakdown` lui évolue librement avec les éditions utilisateur.
+  const [breakdownAuto, setBreakdownAuto] = useState<any>(null)
   const [formData, setFormData] = useState<any>(null)
   const [confirming, setConfirming] = useState(false)
   const [confirmResult, setConfirmResult] = useState<any>(null)
@@ -901,6 +905,8 @@ export default function DepartPage() {
 
   const handleCalculated = (b: any, fd: any) => {
     setBreakdown(b)
+    // Snapshot immuable (clone deep) du breakdown auto pour audit serveur.
+    setBreakdownAuto(JSON.parse(JSON.stringify(b)))
     setFormData(fd)
     setConfirmResult(null)
   }
@@ -911,6 +917,17 @@ export default function DepartPage() {
     if (!breakdown || !formData) return false
     setConfirming(true)
     try {
+      // FIX-STC-EDITION — édition primante : on envoie EXPLICITEMENT
+      //   • `breakdown`           — version éditée par l'utilisateur (legacy field, garde la compat)
+      //   • `breakdown_edite`     — alias clair : version éditée (priorité absolue côté serveur)
+      //   • `breakdown_auto`      — snapshot du calcul auto initial (pour diff/audit)
+      //   • `edited_by_user`      — flag « a-t-il modifié quelque chose ? »
+      // Le backend doit utiliser breakdown_edite pour créer le bulletin (jamais
+      // recalculer depuis zéro) et logger breakdown_auto + diff dans
+      // stc_edition_log (mig 434).
+      const editedByUser = breakdownAuto
+        ? JSON.stringify(breakdownAuto) !== JSON.stringify(breakdown)
+        : false
       const res = await fetch("/api/rh/depart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -918,6 +935,9 @@ export default function DepartPage() {
           action: "confirmer_depart",
           ...formData,
           breakdown,
+          breakdown_edite: breakdown,
+          breakdown_auto: breakdownAuto,
+          edited_by_user: editedByUser,
         }),
       })
 
@@ -938,6 +958,7 @@ export default function DepartPage() {
       if (!res.ok) throw new Error(data.error || "Erreur")
       setConfirmResult(data)
       setBreakdown(null)
+      setBreakdownAuto(null)
       setFormData(null)
       setRefreshKey(k => k + 1)
       return true
@@ -947,7 +968,7 @@ export default function DepartPage() {
     } finally {
       setConfirming(false)
     }
-  }, [breakdown, formData])
+  }, [breakdown, breakdownAuto, formData])
 
   const handleConfirm = () => {
     void confirmerDepart()
