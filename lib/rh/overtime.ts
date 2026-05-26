@@ -665,8 +665,19 @@ export async function saveOvertimeMois(
   const dateFin = lastDayOfMonth(periode)
   const employesIds = lignes.map(l => l.employe_id)
 
-  // 1. Vérifier qu'aucun bulletin n'est verrouillé/validé sur la période
-  //    pour les employés concernés.
+  // 1. Identifier les employés dont le bulletin de la période est verrouillé
+  //    ou validé. AVANT mig 440 : on rejetait TOUTE la sauvegarde dès qu'UN
+  //    seul employé était bloqué (all-or-nothing). Très bloquant en pratique :
+  //    avec 9 bulletins déjà validés sur DDS mai 2026, un user ne pouvait
+  //    PLUS jamais sauver d'OT sur cette période pour aucun employé, même
+  //    pour ceux dont le bulletin était encore en brouillon.
+  //
+  //    MAINTENANT (mig 440) : on filtre les employés bloqués des données à
+  //    sauver. Les autres employés sont traités normalement. On retourne la
+  //    liste des bloqués en avertissement pour que l'UI invite l'utilisateur
+  //    à les déverrouiller s'il veut les inclure.
+  let bloques: string[] = []
+  let lignesFiltrees = lignes
   if (employesIds.length > 0) {
     const { data: bulsBloques } = await supabase
       .from('bulletins_paie')
@@ -676,7 +687,7 @@ export async function saveOvertimeMois(
       .lte('periode', dateFin)
       .in('employe_id', employesIds)
 
-    const bloques = ((bulsBloques ?? []) as Array<{
+    bloques = ((bulsBloques ?? []) as Array<{
       employe_id: string
       statut: string | null
       verrouille: boolean | null
@@ -685,13 +696,19 @@ export async function saveOvertimeMois(
       .map(b => b.employe_id)
 
     if (bloques.length > 0) {
-      return {
-        success: false,
-        nb_lignes_upsert: 0,
-        nb_bulletins_maj: 0,
-        bulletins_bloques: bloques,
-        erreurs: [`${bloques.length} bulletin(s) verrouillé(s) ou validé(s) — déverrouillez avant de modifier les OT.`],
-        warnings: [],
+      const bloquesSet = new Set(bloques)
+      lignesFiltrees = lignes.filter(l => !bloquesSet.has(l.employe_id))
+      // Si TOUS les employés sont bloqués → on garde le retour rouge
+      // historique (success: false) pour signaler clairement.
+      if (lignesFiltrees.length === 0) {
+        return {
+          success: false,
+          nb_lignes_upsert: 0,
+          nb_bulletins_maj: 0,
+          bulletins_bloques: bloques,
+          erreurs: [`${bloques.length} bulletin(s) verrouillé(s) ou validé(s) — déverrouillez pour modifier leurs OT.`],
+          warnings: [],
+        }
       }
     }
   }
@@ -701,7 +718,7 @@ export async function saveOvertimeMois(
 
   // 3. UPSERT heures_travaillees — une ligne par (employe, date) avec OT > 0.
   let nbUpsert = 0
-  for (const ligne of lignes) {
+  for (const ligne of lignesFiltrees) {
     const rows = ligne.jours
       .filter(j => j.heures_ot_1_5 > 0 || j.heures_ot_2 > 0)
       .map(j => ({
