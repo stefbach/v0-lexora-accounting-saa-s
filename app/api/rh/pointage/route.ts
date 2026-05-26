@@ -335,12 +335,43 @@ export async function GET(request: Request) {
         }
       }
 
+      // FIX bug calendrier : charger les demandes_conges approuvées qui
+      // couvrent le mois pour que l'UI distingue "absent" vs "en congé".
+      // Le filtre cherche les demandes qui chevauchent le mois (date_debut
+      // <= dateFin ET date_fin >= dateDebut).
+      const empIdsForConges = employe_id ? [employe_id] : uniqueEmpIds
+      let congesMois: any[] = []
+      if (empIdsForConges.length > 0) {
+        const { data: cgs } = await supabase
+          .from('demandes_conges')
+          .select('id, employe_id, type_conge, date_debut, date_fin, nb_jours, demi_journee, matin_ou_apres_midi, motif')
+          .eq('statut', 'approuve')
+          .lte('date_debut', dateFin)
+          .gte('date_fin', dateDebut)
+          .in('employe_id', empIdsForConges)
+        congesMois = cgs || []
+      }
+      // Map key=`${employe_id}|${date}` → conge actif ce jour-là
+      const congeMap = new Map<string, any>()
+      for (const c of congesMois) {
+        const debut = String(c.date_debut).slice(0, 10)
+        const fin = String(c.date_fin).slice(0, 10)
+        // Itérer sur les jours du congé (typiquement 1 jour, parfois plusieurs)
+        const d1 = new Date(debut + 'T00:00:00Z')
+        const d2 = new Date(fin + 'T00:00:00Z')
+        for (let d = new Date(d1); d <= d2; d.setUTCDate(d.getUTCDate() + 1)) {
+          const iso = d.toISOString().slice(0, 10)
+          congeMap.set(`${c.employe_id}|${iso}`, c)
+        }
+      }
+
       const enriched = (data || []).map(p => {
         const pa = planMap.get(`${p.employe_id}|${p.date_pointage}`) || null
         // F12 — seuil OT = heures_prevues du shift (fallback 9h WRA Art. 20(1))
         const seuilOT = Number(pa?.heures_prevues) > 0 ? Number(pa.heures_prevues) : DEFAULT_SEUIL_OT_HEURES
         const { duree_minutes, heures_travaillees, heures_sup } = computeHours(p.heure_entree, p.heure_sortie, p.duree_minutes, seuilOT)
         const punctuality = computePointagePunctuality(pa, p.heure_entree, p.heure_sortie, heures_travaillees)
+        const conge = congeMap.get(`${p.employe_id}|${p.date_pointage}`) || null
         return {
           ...p,
           date: p.date_pointage,
@@ -350,6 +381,12 @@ export async function GET(request: Request) {
           employe: empMap[p.employe_id] || null,
           planning: pa, // shift info brut pour l'UI
           punctuality,  // retard / départ anticipé / écart
+          // FIX bug calendrier — marquage congé approuvé
+          type_absence: conge ? 'conge_approuve' : null,
+          type_conge: conge?.type_conge || null,
+          demi_conge: conge?.demi_journee || false,
+          demi_conge_quand: conge?.matin_ou_apres_midi || null,
+          en_conge: !!conge && !conge.demi_journee,
         }
       })
 
@@ -382,7 +419,17 @@ export async function GET(request: Request) {
         }
       }
 
-      return NextResponse.json({ pointages: enriched, mois, nb: enriched.length, pointage_actif })
+      // FIX bug calendrier — retourner aussi la liste des congés du mois.
+      // Le client en a besoin pour colorer en bleu les jours en congé
+      // qui n'ont AUCUN pointage (et qui donc n'apparaissent pas dans
+      // `enriched`).
+      return NextResponse.json({
+        pointages: enriched,
+        conges: congesMois,
+        mois,
+        nb: enriched.length,
+        pointage_actif,
+      })
     }
 
     // Daily view
