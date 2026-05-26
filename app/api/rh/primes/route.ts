@@ -5,12 +5,20 @@ import { resolveOwnership } from '@/lib/rh/ownership'
 
 export const dynamic = 'force-dynamic'
 
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+/**
+ * Renvoie un client admin (service_role, bypasse RLS) si la clé est
+ * configurée. Sinon `null` — l'appelant doit alors retomber sur le
+ * client utilisateur (authentifié JWT) pour éviter les requêtes
+ * silencieusement bloquées par la RLS.
+ */
+function getAdminClient(): ReturnType<typeof createClient> | null {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!key || !url) {
+    console.error('[primes] SUPABASE_SERVICE_ROLE_KEY ou URL manquante — fallback sur client auth user')
+    return null
+  }
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
 export async function GET(request: Request) {
@@ -19,7 +27,10 @@ export async function GET(request: Request) {
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const supabase = getAdminClient()
+    // Fallback : si pas de service_role_key, on utilise le client auth user.
+    // L'admin/RH passe la RLS grâce à son JWT.
+    const supabase = getAdminClient() ?? supabaseAuth
+    const usingAdminClient = getAdminClient() !== null
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const periode = searchParams.get('periode')
@@ -78,7 +89,16 @@ export async function GET(request: Request) {
         employe: empMap[p.employe_id] || null,
         prime: primeMap[p.prime_id] || null,
       }))
-      return NextResponse.json({ primes: enriched, nb: enriched.length })
+      return NextResponse.json({
+        primes: enriched,
+        nb: enriched.length,
+        _debug: {
+          using_admin_client: usingAdminClient,
+          user_role: ownership.role,
+          is_rh: ownership.isRH,
+          nb_employes_societe: societe_id ? 'computed' : 'not_filtered',
+        },
+      })
     }
 
     // Catalogue

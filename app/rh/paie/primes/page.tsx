@@ -513,9 +513,20 @@ export default function PrimesPage() {
                 <p><strong>HTTP :</strong> {saisiesDebug.httpStatus ?? "Erreur réseau"}</p>
                 <p><strong>Réponse brute :</strong> {JSON.stringify(saisiesDebug.rawBody)?.slice(0, 500) || "vide"}</p>
               </div>
-              {saisiesDebug.httpOk && (
+              {saisiesDebug.httpOk && saisiesDebug.rawBody?._debug && (
+                <div className="text-xs mt-2 bg-white/50 p-2 rounded">
+                  <p><strong>Diagnostic serveur :</strong></p>
+                  <p>• Mode admin (bypass RLS) : <strong>{saisiesDebug.rawBody._debug.using_admin_client ? "OUI ✅" : "NON ⚠️ — SUPABASE_SERVICE_ROLE_KEY manquante sur Vercel"}</strong></p>
+                  <p>• Rôle utilisateur : <strong>{saisiesDebug.rawBody._debug.user_role || "(inconnu)"}</strong></p>
+                  <p>• Considéré RH/admin : <strong>{saisiesDebug.rawBody._debug.is_rh ? "OUI" : "NON"}</strong></p>
+                  {!saisiesDebug.rawBody._debug.using_admin_client && !saisiesDebug.rawBody._debug.is_rh && (
+                    <p className="text-red-700 mt-1">→ Ton rôle ({saisiesDebug.rawBody._debug.user_role}) ne passe pas la RLS sur primes_variables_mois (qui exige admin/comptable/comptable_dedie). Solution rapide : ajouter ton rôle à la policy, ou configurer la variable Vercel.</p>
+                  )}
+                </div>
+              )}
+              {saisiesDebug.httpOk && !saisiesDebug.rawBody?._debug && (
                 <p className="text-xs mt-2">
-                  Causes possibles : aucune prime saisie pour cette période/société, ou bug serveur. Vérifie la BDD ou les filtres employés.
+                  Causes possibles : aucune prime saisie pour cette période/société, ou bug serveur.
                 </p>
               )}
               {!saisiesDebug.httpOk && saisiesDebug.httpStatus === 401 && (
