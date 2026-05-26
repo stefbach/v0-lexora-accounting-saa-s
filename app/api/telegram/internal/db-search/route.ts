@@ -74,7 +74,8 @@ export async function POST(req: NextRequest) {
     if (scopes.includes('contacts')) {
       const { data } = await admin
         .from('factures_contacts')
-        .select('id, nom, entreprise, email, telephone, vat_number, type_contact')
+        // FIX colonne : 'type_contact' n'existe pas sur factures_contacts → retiré
+        .select('id, nom, entreprise, email, telephone, vat_number')
         .eq('societe_id', ctx.societe_id)
         .or(`nom.ilike.${like},entreprise.ilike.${like},email.ilike.${like}`)
         .limit(limit)
@@ -111,20 +112,27 @@ export async function POST(req: NextRequest) {
     if (scopes.includes('transactions') && hasRole(ctx, 'comptable')) {
       const { data } = await admin
         .from('transactions_bancaires')
-        .select('id, date_transaction, libelle, montant, sens, compte_bancaire_id')
+        // FIX colonnes : 'libelle', 'montant', 'sens' n'existent pas sur
+        // transactions_bancaires (mig 010). Les vraies colonnes sont
+        // 'libelle_banque', 'debit' et 'credit'.
+        .select('id, date_transaction, libelle_banque, debit, credit, compte_bancaire_id')
         .eq('societe_id', ctx.societe_id)
-        .ilike('libelle', like)
+        .ilike('libelle_banque', like)
         .order('date_transaction', { ascending: false })
         .limit(limit)
       hits.transactions = data || []
     }
 
-    // écritures comptables (rôle comptable+)
+    // écritures comptables (rôle comptable+) — passe par la VUE
+    // ecritures_comptables (mig 120) qui expose les colonnes v1
+    // (compte, debit, credit, libelle, journal, numero_piece).
     if (scopes.includes('ecritures') && hasRole(ctx, 'comptable')) {
       const { data } = await admin
-        .from('ecritures')
-        .select('id, date_ecriture, libelle, code_journal, montant_debit, montant_credit, compte_comptable')
-        .eq('societe_id', ctx.societe_id)
+        // FIX table : 'ecritures' (sans suffixe) n'existe pas → vue 'ecritures_comptables'.
+        // FIX colonnes : 'code_journal', 'montant_debit', 'montant_credit',
+        // 'compte_comptable' n'existent pas → journal, debit, credit, compte.
+        .from('ecritures_comptables')
+        .select('id, date_ecriture, libelle, journal, debit, credit, compte')
         .ilike('libelle', like)
         .order('date_ecriture', { ascending: false })
         .limit(limit)
@@ -135,9 +143,12 @@ export async function POST(req: NextRequest) {
     if (scopes.includes('ecritures_v2') && hasRole(ctx, 'comptable')) {
       const { data } = await admin
         .from('ecritures_comptables_v2')
-        .select('id, date_ecriture, libelle, journal_code, debit, credit, compte_general, piece_ref')
+        // FIX colonnes : 'journal_code', 'debit', 'credit', 'compte_general',
+        // 'piece_ref' n'existent pas → journal, debit_mur, credit_mur,
+        // numero_compte, ref_folio (mig 007).
+        .select('id, date_ecriture, libelle, journal, debit_mur, credit_mur, numero_compte, ref_folio')
         .eq('societe_id', ctx.societe_id)
-        .or(`libelle.ilike.${like},piece_ref.ilike.${like},compte_general.ilike.${like}`)
+        .or(`libelle.ilike.${like},ref_folio.ilike.${like},numero_compte.ilike.${like}`)
         .order('date_ecriture', { ascending: false })
         .limit(limit)
       hits.ecritures_v2 = data || []
@@ -162,9 +173,10 @@ export async function POST(req: NextRequest) {
     if (scopes.includes('comptes_bancaires') && hasRole(ctx, 'comptable')) {
       const { data } = await admin
         .from('comptes_bancaires')
-        .select('id, nom, banque, iban, devise, solde_actuel')
+        // FIX colonne : 'nom' n'existe pas → 'nom_compte' (mig 010).
+        .select('id, nom_compte, banque, iban, devise, solde_actuel')
         .eq('societe_id', ctx.societe_id)
-        .or(`nom.ilike.${like},banque.ilike.${like},iban.ilike.${like}`)
+        .or(`nom_compte.ilike.${like},banque.ilike.${like},iban.ilike.${like}`)
         .limit(limit)
       hits.comptes_bancaires = data || []
     }
