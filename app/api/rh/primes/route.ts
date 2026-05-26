@@ -49,11 +49,13 @@ export async function GET(request: Request) {
     if (type === 'saisie' || periode) {
       // RÉÉCRITURE : une seule query avec JOINS PostgREST.
       // Plus de problème de double filtre employes → primes_variables_mois.
+      // ⚠ Préciser la FK : il y a 3 FKs entre primes_variables_mois et employes
+      //   (employe_id, saisi_par, approuve_par). Sans spec, PostgREST refuse.
       let query = supabase
         .from('primes_variables_mois')
         .select(`
           *,
-          employe:employes!inner(id, nom, prenom, poste, societe_id),
+          employe:employes!primes_variables_mois_employe_id_fkey!inner(id, nom, prenom, poste, societe_id),
           prime:catalogue_primes(id, code, libelle, type_prime)
         `)
         .order('created_at', { ascending: false })

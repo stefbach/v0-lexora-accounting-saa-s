@@ -530,7 +530,14 @@ export default function PrimesPage() {
                 }
               }
             } else if (dbg) {
-              if (!dbg.using_admin_client) {
+              if (dbg.error) {
+                conclusion = {
+                  titre: "Erreur lors du chargement des primes",
+                  cause: dbg.error,
+                  fix: "Le développeur a probablement besoin de corriger la requête API. Voir les détails techniques.",
+                  severity: "red",
+                }
+              } else if (!dbg.using_admin_client) {
                 conclusion = {
                   titre: "Variable SUPABASE_SERVICE_ROLE_KEY manquante sur Vercel",
                   cause: "Le serveur n'a pas pu créer le client admin → la RLS bloque ton rôle.",
