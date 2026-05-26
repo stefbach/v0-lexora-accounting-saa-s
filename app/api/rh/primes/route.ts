@@ -37,13 +37,14 @@ export async function GET(request: Request) {
     let employe_id = searchParams.get('employe_id')
     const type = searchParams.get('type')
 
-    // P0 Sécurité — ownership check
+    // Sécurité — ownership check : bloquer seulement si un employé connecté
+    // demande explicitement les primes d'un AUTRE employé. Pas de restriction
+    // silencieuse (avant : si !isRH on forçait employe_id = own, ce qui
+    // cachait toutes les primes RH/admin dont le profil n'a pas de rôle
+    // correctement configuré).
     const ownership = await resolveOwnership(supabase, user.id)
-    if (!ownership.isRH) {
-      if (employe_id && ownership.employe_id && employe_id !== ownership.employe_id) {
-        return NextResponse.json({ error: 'Accès refusé — vous ne pouvez voir que vos propres primes.' }, { status: 403 })
-      }
-      if (!employe_id && ownership.employe_id) employe_id = ownership.employe_id
+    if (!ownership.isRH && employe_id && ownership.employe_id && employe_id !== ownership.employe_id) {
+      return NextResponse.json({ error: 'Accès refusé — vous ne pouvez voir que vos propres primes.' }, { status: 403 })
     }
 
     if (type === 'saisie' || periode) {
