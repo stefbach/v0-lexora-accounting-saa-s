@@ -212,25 +212,53 @@ export async function POST(request: Request) {
       const lastMonth = daysWorkedLastMonth(date_depart)
       const salaryProrata = r2((salaireBase / lastMonth.totalDaysInMonth) * lastMonth.days)
 
-      // 4. Prorata AL: (20 x months_worked_this_year / 12) - AL already taken
+      // 4. AL restant à payer au départ
+      //
+      // FIX (mai 2026) — Le calcul ne doit PAS recalculer "from scratch" un
+      // prorata 20 j × mois_année_civile : ça ignore les jours reportés
+      // d'années antérieures et les droits supérieurs (22 j/an WRA Maurice,
+      // ou + selon contrat société). On lit directement `soldes_conges` qui
+      // contient la vérité (al_droit + report + al_pris + al_solde).
+      //
+      // Fallback (si soldes_conges absent) : prorata 22 j × mWorked / 12.
       const mWorked = monthsWorkedThisYear(dateArrivee, date_depart)
-      const alEntitled = Math.round((20 * mWorked) / 12 * 100) / 100
       const currentYear = new Date(date_depart + 'T00:00:00').getFullYear()
 
-      const { data: alTakenData } = await supabase
-        .from('demandes_conges')
-        .select('nb_jours')
+      const { data: soldeAuDepart } = await supabase
+        .from('soldes_conges')
+        .select('al_droit, al_pris, al_solde, periode_debut, periode_fin')
         .eq('employe_id', employe_id)
-        .eq('type_conge', 'AL')
-        .eq('statut', 'approuve')
-        .gte('date_debut', `${currentYear}-01-01`)
-        .lte('date_debut', `${currentYear}-12-31`)
+        .lte('periode_debut', date_depart)
+        .gte('periode_fin', date_depart)
+        .order('periode_debut', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-      const alTaken = (alTakenData || []).reduce((s: number, c: any) => s + (c.nb_jours || 0), 0)
-      // WRA s.46 — Si l'employé a pris plus de jours que ses droits acquis
-      // (solde négatif), l'employeur peut récupérer la valeur correspondante
-      // sur le solde de tout compte (déduction). On garde donc le SIGNE.
-      const alRemaining = Math.round((alEntitled - alTaken) * 100) / 100
+      let alEntitled: number
+      let alTaken: number
+      let alRemaining: number
+
+      if (soldeAuDepart) {
+        // Source de vérité : la table soldes_conges entretient déjà
+        // al_droit (incluant report) - al_pris = al_solde.
+        alEntitled = Number(soldeAuDepart.al_droit) || 0
+        alTaken = Number(soldeAuDepart.al_pris) || 0
+        alRemaining = Math.round((Number(soldeAuDepart.al_solde) || 0) * 100) / 100
+      } else {
+        // Fallback : prorata 22 j (WRA standard Maurice)
+        alEntitled = Math.round((22 * mWorked) / 12 * 100) / 100
+        const { data: alTakenData } = await supabase
+          .from('demandes_conges')
+          .select('nb_jours')
+          .eq('employe_id', employe_id)
+          .eq('type_conge', 'AL')
+          .eq('statut', 'approuve')
+          .gte('date_debut', `${currentYear}-01-01`)
+          .lte('date_debut', `${currentYear}-12-31`)
+        alTaken = (alTakenData || []).reduce((s: number, c: any) => s + (c.nb_jours || 0), 0)
+        // WRA s.46 — solde négatif possible (déduction sur solde de tout compte)
+        alRemaining = Math.round((alEntitled - alTaken) * 100) / 100
+      }
       const alPayout = r2(alRemaining * dailySalary)
 
       // 5. SL restant — WRA Art. 48(2) : le Sick Leave non pris N'EST PAS
