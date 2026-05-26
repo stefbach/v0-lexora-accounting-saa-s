@@ -47,24 +47,41 @@ export async function GET(request: Request) {
     }
 
     if (type === 'saisie' || periode) {
+      // DEBUG : compte global sans filtre pour vérifier que l'admin client
+      // accède bien à la table (devrait être > 0 si BDD non vide).
+      const probe = await supabase.from('primes_variables_mois').select('id', { count: 'exact', head: true })
+      const probeTotal = probe.count
+      const probeError = probe.error?.message || null
+
       let query = supabase
         .from('primes_variables_mois')
         .select('*')
         .order('created_at', { ascending: false })
       if (periode) query = query.eq('periode', `${periode}-01`)
       if (employe_id) query = query.eq('employe_id', employe_id)
+
+      let nbEmpsSociete: number | null = null
+      let empsError: string | null = null
       if (societe_id) {
-        // FIX (mai 2026) — ne pas exclure les employés partis : les primes
-        // déjà saisies/intégrées dans la paie du mois en cours doivent
-        // rester visibles même après la confirmation du départ. Avant on
-        // filtrait actif=true + date_depart IS NULL, ce qui cachait les
-        // primes des départs récents et créait l'impression "0 primes".
-        const { data: emps } = await supabase.from('employes').select('id')
+        const { data: emps, error: empsErr } = await supabase.from('employes').select('id')
           .eq('societe_id', societe_id)
         const ids = emps?.map(e => e.id) || []
-        console.log(`[primes GET saisie] periode=${periode} societe=${societe_id} → ${ids.length} employes`)
+        nbEmpsSociete = ids.length
+        empsError = empsErr?.message || null
+        console.log(`[primes GET saisie] periode=${periode} societe=${societe_id} → ${ids.length} employes (probeTotal=${probeTotal})`)
         if (ids.length) query = query.in('employe_id', ids)
-        else return NextResponse.json({ primes: [], nb: 0 })
+        else {
+          return NextResponse.json({
+            primes: [], nb: 0,
+            _debug: {
+              using_admin_client: usingAdminClient,
+              user_role: ownership.role, is_rh: ownership.isRH,
+              probe_total_primes: probeTotal, probe_error: probeError,
+              nb_employes_societe: 0, employes_error: empsError,
+              reason: 'EMPLOYES_FILTER_EMPTY',
+            },
+          })
+        }
       }
       const { data, error } = await query
       if (error) { console.error('[primes GET saisie]', error.message); throw error }
@@ -96,7 +113,11 @@ export async function GET(request: Request) {
           using_admin_client: usingAdminClient,
           user_role: ownership.role,
           is_rh: ownership.isRH,
-          nb_employes_societe: societe_id ? 'computed' : 'not_filtered',
+          probe_total_primes: probeTotal,
+          probe_error: probeError,
+          nb_employes_societe: nbEmpsSociete,
+          employes_error: empsError,
+          query_periode_filter: `${periode}-01`,
         },
       })
     }
