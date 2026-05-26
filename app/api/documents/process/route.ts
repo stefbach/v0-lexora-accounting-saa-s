@@ -705,6 +705,32 @@ ${excelText}`
             const taux = explicitTaux !== null && !isNaN(explicitTaux)
               ? explicitTaux
               : (ht > 0 && tva > 0 ? Number(((tva / ht) * 100).toFixed(2)) : 0)
+            // Lignes : si Claude OCR a extrait un détail ligne par ligne, on
+            // l'utilise. Sinon on synthétise UNE ligne "Prestation — voir PDF
+            // original" avec le montant HT (ou TTC si HT=0), pour que l'aperçu
+            // facture ne soit pas vide. Sans ça, /client/facture-preview
+            // affichait une facture sans tableau de lignes → utilisateur voit
+            // toujours "la même facture vide" sur toutes les factures importées.
+            const extractedLignes = Array.isArray(extraction.lignes) ? extraction.lignes : []
+            const lignes = extractedLignes.length > 0
+              ? extractedLignes.map((l: any) => ({
+                  id: crypto.randomUUID(),
+                  description: String(l.description || l.libelle || 'Prestation').slice(0, 500),
+                  quantite: Number(l.quantite ?? l.qte ?? 1) || 1,
+                  unite: String(l.unite || 'Unité').slice(0, 50),
+                  prix_unitaire: Number(l.prix_unitaire ?? l.pu ?? l.montant_ht ?? 0) || 0,
+                  taux_tva: Number(l.taux_tva ?? l.tva ?? taux) || 0,
+                  montant_ht: Number(l.montant_ht ?? l.total_ht ?? ((Number(l.quantite) || 1) * (Number(l.prix_unitaire) || 0))) || 0,
+                }))
+              : [{
+                  id: crypto.randomUUID(),
+                  description: 'Prestation — voir PDF original pour le détail',
+                  quantite: 1,
+                  unite: 'Forfait',
+                  prix_unitaire: ht > 0 ? ht : ttc,
+                  taux_tva: taux,
+                  montant_ht: ht > 0 ? ht : ttc,
+                }]
             // Conversion en MUR pour alimenter le CA dashboard (qui somme montant_mur)
             let tauxChange = 1
             let montantMur = ttc
@@ -761,6 +787,7 @@ ${excelText}`
               montant_mur: montantMur,
               statut: 'en_attente',
               document_id: documentId,
+              lignes,
             }).select('id').single()
             if (facErr) {
               console.error('[process] Insert factures failed:', facErr.message)

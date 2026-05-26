@@ -192,36 +192,47 @@ function FacturePreviewContent() {
             // n'ont pas encore migré leurs paramètres en base. Sans ce
             // chargement DB, ouvrir une facture sauvegardée depuis un
             // autre navigateur / device perdait VAT/BRN/banque.
+            // Settings société : DB d'abord (source de vérité par societe_id).
+            // Le fallback localStorage ne s'applique QUE si on n'a pas pu lire
+            // la société en DB. Bug fix : avant, on commençait par charger
+            // localStorage puis on merge la DB par-dessus avec ` || settings.xxx`
+            // → si DDS n'a pas de logo_url en DB mais que localStorage avait
+            // celui d'OCC (cache d'une session précédente), DDS héritait du
+            // logo d'OCC. Inversion de l'ordre + retrait du fallback localStorage
+            // intra-société.
             let settings: any = {}
-            try {
-              const ls = localStorage.getItem("lexora_invoice_settings")
-              if (ls) settings = JSON.parse(ls)
-            } catch { /* ignore */ }
+            let socLoaded = false
             if (f.societe_id) {
               try {
                 const socRes = await fetch('/api/client/societes')
                 const socJson = await socRes.json()
                 const soc = (socJson.societes || []).find((s: any) => s.id === f.societe_id)
                 if (soc) {
+                  socLoaded = true
                   settings = {
-                    ...settings,
-                    nom: soc.nom || settings.nom || '',
-                    brn: soc.brn || settings.brn || '',
-                    vat_number: soc.numero_tva_mra || soc.vat_number || settings.vat_number || '',
-                    logo_url: soc.logo_url || settings.logo_url || '',
-                    adresse: [soc.adresse, soc.adresse2, soc.ville].filter(Boolean).join('\n') || settings.adresse || '',
-                    telephone: soc.telephone || settings.telephone || '',
-                    email: soc.email || settings.email || '',
-                    website: soc.website || settings.website || '',
-                    banque_nom: soc.banque_nom || soc.bank_name || settings.banque_nom || '',
-                    banque_compte: soc.banque_compte || soc.bank_account_number || settings.banque_compte || '',
-                    banque_iban: soc.banque_iban || soc.iban || settings.banque_iban || '',
-                    banque_swift: soc.banque_swift || settings.banque_swift || '',
-                    footer_text: soc.facture_footer_text || settings.footer_text || '',
-                    mention_legale: soc.facture_mention_legale || settings.mention_legale || '',
+                    nom: soc.nom || '',
+                    brn: soc.brn || '',
+                    vat_number: soc.numero_tva_mra || soc.vat_number || '',
+                    logo_url: soc.logo_url || '',
+                    adresse: [soc.adresse, soc.adresse2, soc.ville].filter(Boolean).join('\n') || '',
+                    telephone: soc.telephone || '',
+                    email: soc.email || '',
+                    website: soc.website || '',
+                    banque_nom: soc.banque_nom || soc.bank_name || '',
+                    banque_compte: soc.banque_compte || soc.bank_account_number || '',
+                    banque_iban: soc.banque_iban || soc.iban || '',
+                    banque_swift: soc.banque_swift || '',
+                    footer_text: soc.facture_footer_text || '',
+                    mention_legale: soc.facture_mention_legale || '',
                   }
                 }
-              } catch { /* fallback sur localStorage déjà chargé */ }
+              } catch { /* fallback localStorage ci-dessous */ }
+            }
+            if (!socLoaded) {
+              try {
+                const ls = localStorage.getItem("lexora_invoice_settings")
+                if (ls) settings = JSON.parse(ls)
+              } catch { /* ignore */ }
             }
             let contact: ContactDetail | null = null
             if (f.contact_id) {

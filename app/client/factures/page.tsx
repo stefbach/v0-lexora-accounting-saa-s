@@ -59,6 +59,12 @@ interface Facture {
   statut: string | null
   rapproche_releve_id: string | null
   solde_non_paye: number | null
+  // Mig 248 — id du document source (PDF importé via Telegram/OCR ou
+  // upload web). Si non-null, l'aperçu/PDF doit ouvrir le PDF original
+  // plutôt que le template DDS regénéré (qui ne reflète pas le contenu
+  // réel, surtout pour les factures FOURNISSEUR où DDS n'est pas
+  // l'émetteur).
+  document_id?: string | null
   // MRA e-invoicing (mig 102 + 248)
   mra_status?: string | null
   irn?: string | null
@@ -672,26 +678,62 @@ function FactureList({
                     </Button>
                   </>
                 )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-[11px]"
-                  title="Aperçu de la facture"
-                  onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}`, '_blank')}
-                >
-                  <Eye className="h-3 w-3 mr-1" />
-                  Aperçu
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-[11px]"
-                  title="Imprimer / Sauvegarder en PDF"
-                  onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}&print=true`, '_blank')}
-                >
-                  <Printer className="h-3 w-3 mr-1" />
-                  PDF
-                </Button>
+                {/* Si la facture a un PDF original (importée via OCR/Telegram),
+                    on ouvre directement ce PDF — c'est la source de vérité.
+                    Sinon (facture créée manuellement via /client/nouvelle-facture),
+                    on ouvre le template Lexora regénéré.
+                    Pour les FOURNISSEURS, le template Lexora est faux par
+                    construction (DDS n'est pas l'émetteur), donc on N'affiche
+                    le bouton template que si pas de PDF original. */}
+                {f.document_id ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px]"
+                      title="Voir le PDF original"
+                      onClick={() => window.open(`/api/documents/${f.document_id}/download`, '_blank')}
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      PDF original
+                    </Button>
+                    {f.type_facture === 'client' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[11px]"
+                        title="Aperçu au format Lexora (regénéré depuis les montants OCR)"
+                        onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}`, '_blank')}
+                      >
+                        <Printer className="h-3 w-3 mr-1" />
+                        Format Lexora
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px]"
+                      title="Aperçu de la facture"
+                      onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}`, '_blank')}
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      Aperçu
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px]"
+                      title="Imprimer / Sauvegarder en PDF"
+                      onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}&print=true`, '_blank')}
+                    >
+                      <Printer className="h-3 w-3 mr-1" />
+                      PDF
+                    </Button>
+                  </>
+                )}
               </div>
               {canPay && onEnregistrerPaiement && (
                 <Button
