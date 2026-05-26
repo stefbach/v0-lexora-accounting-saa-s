@@ -496,47 +496,109 @@ export default function PrimesPage() {
 
           {societe === "all" && <p className="text-sm text-gray-500">{t('rha.a.primes.saisie_pick_societe', locale)}</p>}
 
-          {/* Bannière diagnostique : pourquoi la liste est vide ?
-              Affichée seulement quand saisies est vide ET le debug est disponible. */}
-          {!loading && saisies.length === 0 && saisiesDebug && (
-            <div className={`rounded-lg border px-4 py-3 text-sm ${
-              !saisiesDebug.httpOk ? "border-red-300 bg-red-50 text-red-900"
-              : "border-amber-300 bg-amber-50 text-amber-900"
-            }`}>
-              <p className="font-semibold mb-1">
-                {!saisiesDebug.httpOk
-                  ? `❌ L'API a échoué — ${saisiesDebug.errorMessage}`
-                  : "ℹ️ L'API a répondu mais aucune prime n'est remontée"}
-              </p>
-              <div className="text-xs space-y-1 mt-2 font-mono break-all">
-                <p><strong>URL :</strong> {saisiesDebug.requestUrl}</p>
-                <p><strong>HTTP :</strong> {saisiesDebug.httpStatus ?? "Erreur réseau"}</p>
-                <p><strong>Réponse brute :</strong> {JSON.stringify(saisiesDebug.rawBody)?.slice(0, 500) || "vide"}</p>
-              </div>
-              {saisiesDebug.httpOk && saisiesDebug.rawBody?._debug && (
-                <div className="text-xs mt-2 bg-white/50 p-2 rounded">
-                  <p><strong>Diagnostic serveur :</strong></p>
-                  <p>• Mode admin (bypass RLS) : <strong>{saisiesDebug.rawBody._debug.using_admin_client ? "OUI ✅" : "NON ⚠️ — SUPABASE_SERVICE_ROLE_KEY manquante sur Vercel"}</strong></p>
-                  <p>• Rôle utilisateur : <strong>{saisiesDebug.rawBody._debug.user_role || "(inconnu)"}</strong></p>
-                  <p>• Considéré RH/admin : <strong>{saisiesDebug.rawBody._debug.is_rh ? "OUI" : "NON"}</strong></p>
-                  {!saisiesDebug.rawBody._debug.using_admin_client && !saisiesDebug.rawBody._debug.is_rh && (
-                    <p className="text-red-700 mt-1">→ Ton rôle ({saisiesDebug.rawBody._debug.user_role}) ne passe pas la RLS sur primes_variables_mois (qui exige admin/comptable/comptable_dedie). Solution rapide : ajouter ton rôle à la policy, ou configurer la variable Vercel.</p>
-                  )}
-                </div>
-              )}
-              {saisiesDebug.httpOk && !saisiesDebug.rawBody?._debug && (
-                <p className="text-xs mt-2">
-                  Causes possibles : aucune prime saisie pour cette période/société, ou bug serveur.
+          {/* Bannière diagnostique — DIAGNOSTIC + FIX en un message clair. */}
+          {!loading && saisies.length === 0 && saisiesDebug && (() => {
+            const dbg = saisiesDebug.rawBody?._debug
+            // Conclusion = un seul message qui dit la cause + le fix
+            let conclusion: { titre: string; cause: string; fix: string; severity: "red" | "amber" } = {
+              titre: "Aucune prime trouvée pour cette période/société",
+              cause: "Soit il n'y en a vraiment pas, soit la requête API ne remonte rien.",
+              fix: "Si tu en as saisi récemment, vérifie qu'elles sont approuvées en BDD.",
+              severity: "amber",
+            }
+            if (!saisiesDebug.httpOk) {
+              if (saisiesDebug.httpStatus === 401) {
+                conclusion = {
+                  titre: "Session expirée",
+                  cause: "Tu n'es plus authentifié.",
+                  fix: "Reconnecte-toi (logout + login).",
+                  severity: "red",
+                }
+              } else if (saisiesDebug.httpStatus === 500) {
+                conclusion = {
+                  titre: "Erreur serveur",
+                  cause: saisiesDebug.errorMessage || "Erreur 500 sans message.",
+                  fix: "Vérifier SUPABASE_SERVICE_ROLE_KEY dans Vercel + logs serveur.",
+                  severity: "red",
+                }
+              } else {
+                conclusion = {
+                  titre: `Erreur HTTP ${saisiesDebug.httpStatus}`,
+                  cause: saisiesDebug.errorMessage || "Erreur réseau",
+                  fix: "Vérifier la connexion + l'URL de l'API.",
+                  severity: "red",
+                }
+              }
+            } else if (dbg) {
+              if (dbg.error) {
+                conclusion = {
+                  titre: "Erreur lors du chargement des primes",
+                  cause: dbg.error,
+                  fix: "Le développeur a probablement besoin de corriger la requête API. Voir les détails techniques.",
+                  severity: "red",
+                }
+              } else if (!dbg.using_admin_client) {
+                conclusion = {
+                  titre: "Variable SUPABASE_SERVICE_ROLE_KEY manquante sur Vercel",
+                  cause: "Le serveur n'a pas pu créer le client admin → la RLS bloque ton rôle.",
+                  fix: "Demander à l'admin de configurer SUPABASE_SERVICE_ROLE_KEY dans les env vars Vercel.",
+                  severity: "red",
+                }
+              } else if (dbg.probe_error) {
+                conclusion = {
+                  titre: "Le client admin ne peut pas lire primes_variables_mois",
+                  cause: `Erreur Postgres : ${dbg.probe_error}`,
+                  fix: "Vérifier que la SERVICE_ROLE_KEY est la bonne (peut-être expirée ou copiée incorrectement).",
+                  severity: "red",
+                }
+              } else if (dbg.probe_total_primes === 0) {
+                conclusion = {
+                  titre: "La table primes_variables_mois est vide (ou bloquée par RLS)",
+                  cause: "Même en mode admin, aucune prime n'est lisible dans toute la table.",
+                  fix: "Soit SERVICE_ROLE_KEY invalide, soit la table est vraiment vide. Vérifier directement en SQL.",
+                  severity: "red",
+                }
+              } else if (dbg.nb_employes_societe === 0) {
+                conclusion = {
+                  titre: "Aucun employé visible pour cette société",
+                  cause: `${dbg.probe_total_primes} primes existent au total, mais la requête sur 'employes' filtrée par cette société renvoie 0.`,
+                  fix: "Soit la société n'a vraiment aucun employé, soit la RLS sur 'employes' bloque. Si bloque : configurer le mapping user_societes pour ton compte.",
+                  severity: "red",
+                }
+              } else {
+                // Admin OK, primes existent en table, employés visibles, mais 0 prime pour ce filtre
+                const periodesDB = dbg.periodes_existantes_en_db || []
+                const periodesAffichees = periodesDB.length > 0 ? periodesDB.join(', ') : 'aucune visible'
+                const url = dbg.supabase_url_partial || '?'
+                conclusion = {
+                  titre: "L'API ne voit aucune prime pour cette période — mismatch BDD probable",
+                  cause: `Le serveur (URL: ${url}) voit ${dbg.probe_total_primes} primes au total et ${dbg.nb_employes_societe} employés DDS, MAIS aucune avec periode='${dbg.query_periode_filter}'. Périodes existantes côté API: [${periodesAffichees}]. Si '2026-05-01' n'est pas dans cette liste alors que tu sais qu'il devrait y être, c'est que Vercel hit une AUTRE base Supabase que celle que tu vois.`,
+                  fix: "1) Vérifier dans Vercel que NEXT_PUBLIC_SUPABASE_URL ET SUPABASE_SERVICE_ROLE_KEY pointent bien sur le projet 'dqepdoimpqhmuhkklxva'. 2) Sinon, regarder dans la liste 'Périodes existantes' ci-dessus quelle base Vercel utilise.",
+                  severity: "red",
+                }
+              }
+            }
+
+            return (
+              <div className={`rounded-lg border-2 px-4 py-3 ${
+                conclusion.severity === "red" ? "border-red-400 bg-red-50 text-red-950" : "border-amber-400 bg-amber-50 text-amber-950"
+              }`}>
+                <p className="font-bold text-base mb-2">
+                  {conclusion.severity === "red" ? "🔴" : "🟠"} {conclusion.titre}
                 </p>
-              )}
-              {!saisiesDebug.httpOk && saisiesDebug.httpStatus === 401 && (
-                <p className="text-xs mt-2">Reconnecte-toi (session expirée).</p>
-              )}
-              {!saisiesDebug.httpOk && saisiesDebug.httpStatus === 500 && (
-                <p className="text-xs mt-2">Erreur serveur — probablement la variable SUPABASE_SERVICE_ROLE_KEY manquante sur Vercel, ou un problème de RLS.</p>
-              )}
-            </div>
-          )}
+                <p className="text-sm mb-1"><strong>Pourquoi :</strong> {conclusion.cause}</p>
+                <p className="text-sm"><strong>Solution :</strong> {conclusion.fix}</p>
+                <details className="mt-2 text-xs">
+                  <summary className="cursor-pointer opacity-70 hover:opacity-100">Détails techniques (cliquer)</summary>
+                  <div className="mt-2 font-mono space-y-1 bg-white/60 p-2 rounded">
+                    <p>URL : {saisiesDebug.requestUrl}</p>
+                    <p>HTTP : {saisiesDebug.httpStatus ?? "Erreur réseau"}</p>
+                    <p>Réponse : {JSON.stringify(saisiesDebug.rawBody)?.slice(0, 800) || "vide"}</p>
+                  </div>
+                </details>
+              </div>
+            )
+          })()}
 
           <Card>
             <CardHeader><CardTitle className="text-[#0B0F2E]">{t('rha.a.primes.primes_de', locale)} {periode} ({saisies.length})</CardTitle></CardHeader>
