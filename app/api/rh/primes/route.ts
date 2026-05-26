@@ -86,6 +86,13 @@ export async function GET(request: Request) {
           user_role: ownership.role,
           is_rh: ownership.isRH,
           rpc_count: rows?.length || 0,
+          enriched_count: enriched.length,
+          final_count: final.length,
+          rows_is_array: Array.isArray(rows),
+          rows_type: typeof rows,
+          first_row_keys: rows && Array.isArray(rows) && rows[0] ? Object.keys(rows[0]).slice(0, 10) : null,
+          first_row_id: rows && Array.isArray(rows) && rows[0] ? rows[0].id : null,
+          first_enriched: enriched[0] ?? null,
         },
       })
     }
