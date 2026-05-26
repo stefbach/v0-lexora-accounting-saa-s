@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, RefreshCw, AlertCircle, UserCheck, Plus } from 'lucide-react'
+import { Loader2, RefreshCw, AlertCircle, UserCheck, Plus, FileDown } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
 import { t, getLocale, type Locale } from '@/lib/i18n'
 
@@ -27,6 +27,30 @@ export default function GbcUboPage() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const exportPDF = async () => {
+    if (!societeId) return
+    setExporting(true)
+    try {
+      const res = await fetch(`/api/comptable/gbc/beneficial-owners/export-pdf?societe_id=${societeId}`)
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || `HTTP ${res.status}`)
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `gbc-ubo-${new Date().toISOString().slice(0, 10)}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      setError(e?.message || 'Erreur export PDF')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const load = async () => {
     if (!societeId) { setLoading(false); return }
@@ -83,6 +107,10 @@ export default function GbcUboPage() {
         </div>
         <div className="flex gap-2">
           <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />{t('gbc.common.refresh', locale)}</Button>
+          <Button onClick={exportPDF} variant="outline" disabled={exporting}>
+            {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
+            Exporter PDF
+          </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="h-4 w-4 mr-2" />{t('gbc.ubo.declare_btn', locale)}</Button></DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
