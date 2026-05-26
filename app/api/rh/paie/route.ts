@@ -48,12 +48,18 @@ function countLeaveDaysInPeriod(
 function listWorkingDaysInPeriod(
   periodeStart: string,
   periodeEnd: string,
-  emp: { working_days?: any } | null | undefined,
+  emp: { working_days?: any; date_arrivee?: string | null; date_depart?: string | null } | null | undefined,
   joursFeries: Set<string>,
 ): string[] {
   const dayKeys: Array<'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'> =
     ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
   const wd = getWorkingDaysForEmploye(emp)
+  // Bug régression mai 2026 — sans cette borne, un employé arrivé le 5 mai
+  // (Julie RENEVIER) se retrouvait avec les jours ouvrés du 1er au 4 mai
+  // comptés comme absences injustifiées (idem pour départ en cours de mois).
+  // On clampe la période sur [date_arrivee, date_depart] de l'employé.
+  const dateArrivee = emp?.date_arrivee ? String(emp.date_arrivee).slice(0, 10) : null
+  const dateDepart = emp?.date_depart ? String(emp.date_depart).slice(0, 10) : null
   const result: string[] = []
   const [ys, ms, ds] = periodeStart.split('-').map(n => parseInt(n, 10))
   const [ye, me, de] = periodeEnd.split('-').map(n => parseInt(n, 10))
@@ -62,7 +68,8 @@ function listWorkingDaysInPeriod(
   while (cursor <= end) {
     const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
     const key = dayKeys[cursor.getDay()]
-    if (wd[key] && !joursFeries.has(iso)) result.push(iso)
+    const inEmployment = (!dateArrivee || iso >= dateArrivee) && (!dateDepart || iso <= dateDepart)
+    if (wd[key] && !joursFeries.has(iso) && inEmployment) result.push(iso)
     cursor.setDate(cursor.getDate() + 1)
   }
   return result

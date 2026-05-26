@@ -235,32 +235,37 @@ export function SectionOvertime({ societeId }: Props) {
   // (table heures_travaillees) au chargement et à chaque changement
   // de société/période. Avant on partait toujours vide → impression que
   // "rien n'a été saisi" alors que les données existaient.
-  useEffect(() => {
+  // Extrait en useCallback pour pouvoir relancer après un save (sinon
+  // l'utilisateur ne voyait pas immédiatement l'OT qu'il vient de saisir,
+  // ce qui donnait l'impression que le save n'avait rien fait).
+  const reloadSaisies = useCallback(async () => {
     if (!societeId || !periode) {
       setSaisies([])
       return
     }
     const params = new URLSearchParams({ periode, societe_id: societeId })
-    let cancelled = false
-    fetch(`/api/rh/paie/ot/saisies?${params}`)
-      .then(r => r.json())
-      .then(data => {
-        if (cancelled) return
-        const rows = (data.saisies || []).map((h: any) => ({
-          id: h.id || `db-${h.employe_id}-${h.date}`,
-          employe_id: h.employe_id,
-          date: h.date,
-          heures_ot_1_5: Number(h.heures_ot_1_5) || 0,
-          heures_ot_2: Number(h.heures_ot_2) || 0,
-          motif: '',
-        }))
-        setSaisies(rows)
-      })
-      .catch(e => {
-        if (!cancelled) console.warn('[OT] auto-load saisies failed:', e)
-      })
-    return () => { cancelled = true }
+    try {
+      const r = await fetch(`/api/rh/paie/ot/saisies?${params}`)
+      const data = await r.json()
+      const rows = (data.saisies || []).map((h: any) => ({
+        id: h.id || `db-${h.employe_id}-${h.date}`,
+        employe_id: h.employe_id,
+        date: h.date,
+        heures_ot_1_5: Number(h.heures_ot_1_5) || 0,
+        heures_ot_2: Number(h.heures_ot_2) || 0,
+        motif: '',
+      }))
+      setSaisies(rows)
+    } catch (e) {
+      console.warn('[OT] auto-load saisies failed:', e)
+    }
   }, [societeId, periode])
+
+  useEffect(() => {
+    let cancelled = false
+    reloadSaisies().catch(() => {})
+    return () => { cancelled = true; void cancelled }
+  }, [reloadSaisies])
 
   // Maps de lookup rapide.
   const employesById = useMemo(() => {
@@ -419,6 +424,10 @@ export function SectionOvertime({ societeId }: Props) {
         } else {
           notifySuccess(`${nbBul} bulletin(s) mis à jour, ${nbUps} ligne(s) journalière(s) enregistrée(s).`)
         }
+        // Reload depuis la DB pour que l'utilisateur voie les saisies
+        // persistées (replace l'état local par la vérité serveur — évite
+        // l'impression "ça n'a rien sauvegardé" quand on rafraîchit).
+        await reloadSaisies().catch(() => {})
         return
       }
       const err = await res.json().catch(() => ({ error: 'Erreur réseau' }))
@@ -451,7 +460,7 @@ export function SectionOvertime({ societeId }: Props) {
     } finally {
       setSaving(false)
     }
-  }, [societeId, periode, lignesValidesPourSave, employesById])
+  }, [societeId, periode, lignesValidesPourSave, employesById, reloadSaisies])
 
   // ─── Calculs récap ────────────────────────────────────────────────────────
 
