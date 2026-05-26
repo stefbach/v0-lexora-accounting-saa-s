@@ -570,6 +570,15 @@ function BulletinPDF({ bulletin, emp, soc, moisLabel, annee, periodeDate, alPris
         React.createElement(Text, { style: s.otSubLabel }, 'Sous-total heures supplementaires'),
         React.createElement(Text, { style: s.otSubValue }, `${fmt(bulletin.heures_sup_montant)} MUR`)
       ) : null,
+      // Mig 436 — Jour férié travaillé : +1 jour de base par férié travaillé.
+      // Ligne dédiée sur le payslip pour la transparence vis-à-vis du salarié.
+      Number(bulletin.montant_ferie_travaille) > 0
+        ? React.createElement(Row, {
+            label: `Jour férié travaillé (${Number(bulletin.jours_ferie_travaille) || 0}j)`,
+            value: `${fmt(Number(bulletin.montant_ferie_travaille))} MUR`,
+            key: 'ferie-travaille',
+          })
+        : null,
       // G1 — Cash-in-lieu (WRA S.45 AL / S.47 VL) ligne dediee dans Gains.
       Number(bulletin.montant_cash_in_lieu) > 0
         ? React.createElement(Row, {

@@ -671,12 +671,16 @@ export async function POST(request: Request) {
       let total_heures_nuit_single = 0
       const taux_horaire = Number(emp.salaire_base) / (45 * 52 / 12)
       let jours_travailles = 0
+      // Mig 436 — Jour férié travaillé : compte les jours fériés où l'employé
+      // a pointé. Bonus = +1 jour de base par férié travaillé (salaire_base / 26).
+      let jours_ferie_travaille_single = 0
 
       for (const pt of pointagesMois || []) {
         if (!pt.heure_entree) continue
         jours_travailles++
         // G9bis.2 — détection férié via Set depuis DB.
         const ferie = joursFeriesSetSingle.has(pt.date_pointage)
+        if (ferie) jours_ferie_travaille_single++
         const plan = planMap[pt.date_pointage]
         // If planning exists, use planned hours as OT threshold; default to 9 (standard)
         const planningHours = plan ? plan.heures_prevues : 9
@@ -1148,6 +1152,9 @@ export async function POST(request: Request) {
         // G9 — Disturbance Allowance S.17A FMPA 2024 (heures unsocial).
         disturbance_allowance: Math.round(disturbanceMontantSingle * 100) / 100,
         disturbance_heures: Math.round(disturbanceHeuresSingle * 100) / 100,
+        // Mig 436 — Jour férié travaillé : +1 jour de base par férié pointé.
+        jours_ferie_travaille: jours_ferie_travaille_single,
+        montant_ferie_travaille: isHorsMRA ? 0 : Math.round(jours_ferie_travaille_single * (Number(emp.salaire_base) / 26) * 100) / 100,
         // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI.
         // Bug A — on enrichit aussi avec le marqueur "SOLDE TOUT COMPTE"
         // si la sortie tombe dans la période.
@@ -1499,11 +1506,14 @@ export async function POST(request: Request) {
         let total_heures_nuit = 0
         const taux_horaire = Number(emp.salaire_base) / (45 * 52 / 12)
         let jours_travailles = 0
+        // Mig 436 — Jour férié travaillé : compte les jours fériés pointés.
+        let jours_ferie_travaille_batch = 0
 
         for (const pt of pointagesMois || []) {
           if (!pt.heure_entree) continue
           jours_travailles++
           const ferie = joursFeriesSetBatch.has(pt.date_pointage)
+          if (ferie) jours_ferie_travaille_batch++
           const weekend = isWeekend(pt.date_pointage)
           const plan = planMap[pt.date_pointage]
           const planningHours = plan ? plan.heures_prevues : 9
@@ -2149,6 +2159,9 @@ export async function POST(request: Request) {
           cash_in_lieu_type: cilTypeBatch,
           // G7 — Allocation naissance 3 000 MUR (WRA S.52, non-imposable)
           allocation_naissance: Math.round(allocMontantBatch * 100) / 100,
+          // Mig 436 — Jour férié travaillé : +1 jour de base par férié pointé.
+          jours_ferie_travaille: isHorsMRA ? 0 : jours_ferie_travaille_batch,
+          montant_ferie_travaille: isHorsMRA ? 0 : Math.round(jours_ferie_travaille_batch * (Number(emp.salaire_base) / 26) * 100) / 100,
           notes: notesResume,
           statut: 'brouillon',
         }
