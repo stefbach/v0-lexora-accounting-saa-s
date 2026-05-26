@@ -95,14 +95,41 @@ export default function PrimesPage() {
     } catch (e) { console.error(e) } finally { setLoading(false) }
   }, [societe])
 
+  const [saisiesDebug, setSaisiesDebug] = useState<{
+    httpStatus: number | null
+    httpOk: boolean
+    requestUrl: string
+    rawBody: any
+    errorMessage: string | null
+  } | null>(null)
+
   const loadSaisies = useCallback(async () => {
     setLoading(true)
+    const params = new URLSearchParams({ periode, type: "saisie" })
+    if (societe !== "all") params.set("societe_id", societe)
+    const requestUrl = `/api/rh/primes?${params}`
     try {
-      const params = new URLSearchParams({ periode, type: "saisie" })
-      if (societe !== "all") params.set("societe_id", societe)
-      const data = await fetch(`/api/rh/primes?${params}`).then(r => r.json())
-      setSaisies(data.primes || [])
-    } catch (e) { console.error(e) } finally { setLoading(false) }
+      const res = await fetch(requestUrl)
+      const body = await res.json().catch(() => ({ error: "Réponse non-JSON" }))
+      setSaisies(Array.isArray(body?.primes) ? body.primes : [])
+      setSaisiesDebug({
+        httpStatus: res.status,
+        httpOk: res.ok,
+        requestUrl,
+        rawBody: body,
+        errorMessage: res.ok ? null : (body?.error || `HTTP ${res.status}`),
+      })
+    } catch (e: any) {
+      console.error(e)
+      setSaisies([])
+      setSaisiesDebug({
+        httpStatus: null,
+        httpOk: false,
+        requestUrl,
+        rawBody: null,
+        errorMessage: `Erreur réseau : ${e?.message || e}`,
+      })
+    } finally { setLoading(false) }
   }, [societe, periode])
 
   const loadRegles = useCallback(async () => {
@@ -468,6 +495,37 @@ export default function PrimesPage() {
           </div>
 
           {societe === "all" && <p className="text-sm text-gray-500">{t('rha.a.primes.saisie_pick_societe', locale)}</p>}
+
+          {/* Bannière diagnostique : pourquoi la liste est vide ?
+              Affichée seulement quand saisies est vide ET le debug est disponible. */}
+          {!loading && saisies.length === 0 && saisiesDebug && (
+            <div className={`rounded-lg border px-4 py-3 text-sm ${
+              !saisiesDebug.httpOk ? "border-red-300 bg-red-50 text-red-900"
+              : "border-amber-300 bg-amber-50 text-amber-900"
+            }`}>
+              <p className="font-semibold mb-1">
+                {!saisiesDebug.httpOk
+                  ? `❌ L'API a échoué — ${saisiesDebug.errorMessage}`
+                  : "ℹ️ L'API a répondu mais aucune prime n'est remontée"}
+              </p>
+              <div className="text-xs space-y-1 mt-2 font-mono break-all">
+                <p><strong>URL :</strong> {saisiesDebug.requestUrl}</p>
+                <p><strong>HTTP :</strong> {saisiesDebug.httpStatus ?? "Erreur réseau"}</p>
+                <p><strong>Réponse brute :</strong> {JSON.stringify(saisiesDebug.rawBody)?.slice(0, 500) || "vide"}</p>
+              </div>
+              {saisiesDebug.httpOk && (
+                <p className="text-xs mt-2">
+                  Causes possibles : aucune prime saisie pour cette période/société, ou bug serveur. Vérifie la BDD ou les filtres employés.
+                </p>
+              )}
+              {!saisiesDebug.httpOk && saisiesDebug.httpStatus === 401 && (
+                <p className="text-xs mt-2">Reconnecte-toi (session expirée).</p>
+              )}
+              {!saisiesDebug.httpOk && saisiesDebug.httpStatus === 500 && (
+                <p className="text-xs mt-2">Erreur serveur — probablement la variable SUPABASE_SERVICE_ROLE_KEY manquante sur Vercel, ou un problème de RLS.</p>
+              )}
+            </div>
+          )}
 
           <Card>
             <CardHeader><CardTitle className="text-[#0B0F2E]">{t('rha.a.primes.primes_de', locale)} {periode} ({saisies.length})</CardTitle></CardHeader>
