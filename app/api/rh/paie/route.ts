@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { calculerBulletin, PARAMS_MRA_DEFAUT } from '@/lib/rh/paie'
 import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } from '@/lib/rh/access'
 import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
@@ -256,8 +257,8 @@ export async function GET(request: Request) {
     console.log(`[paie GET] ${label}`, extra !== undefined ? extra : '')
   try {
     step('START')
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
+    // FIX MCP : resolveUserAuth pour outil MCP `list_bulletins_paie` (session + X-Lexora-Api-Key).
+    const user = await resolveUserAuth(request)
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     step('step1: auth OK', { userId: user.id })
     const supabase = getAdminClient()

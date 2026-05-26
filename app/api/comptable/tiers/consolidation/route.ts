@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -46,8 +47,8 @@ function similarity(a: string, b: string): number {
  */
 export async function GET(request: Request) {
   try {
-    const auth = await createServerClient()
-    const { data: { user } } = await auth.auth.getUser()
+    // FIX MCP : resolveUserAuth pour outil MCP `list_tiers` (annuaire consolidé).
+    const user = await resolveUserAuth(request)
     if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)

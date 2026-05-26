@@ -3,6 +3,7 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -40,14 +41,17 @@ function getAdminClient() {
 
 export async function GET(request: Request) {
   try {
-    const auth = await createServerClient()
-    const { data: { user } } = await auth.auth.getUser()
+    // FIX MCP : resolveUserAuth accepte session + X-Lexora-Api-Key (outil MCP `list_ecritures`).
+    const user = await resolveUserAuth(request)
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const compte = searchParams.get('compte')
     const mois = searchParams.get('mois')
+    const date_debut = searchParams.get('date_debut')
+    const date_fin = searchParams.get('date_fin')
+    const journal = searchParams.get('journal')
     const limit = Math.min(parseInt(searchParams.get('limit') || '200'), 1000)
 
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
@@ -63,7 +67,10 @@ export async function GET(request: Request) {
       .limit(limit)
 
     if (compte) query = query.eq('numero_compte', compte)
-    if (mois) {
+    if (journal) query = query.eq('journal', journal)
+    if (date_debut) query = query.gte('date_ecriture', date_debut)
+    if (date_fin) query = query.lte('date_ecriture', date_fin)
+    if (mois && !date_debut && !date_fin) {
       const [y, m] = mois.split('-').map(Number)
       const debut = `${y}-${String(m).padStart(2, '0')}-01`
       const finMois = new Date(y, m, 0).getDate()

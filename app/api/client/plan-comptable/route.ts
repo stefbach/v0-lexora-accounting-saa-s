@@ -8,17 +8,15 @@
  * cette route GET).
  */
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
 import { getAdminClient } from "@/lib/supabase/admin"
+import { resolveUserAuth } from "@/lib/supabase/auth-resolver"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(request: Request) {
   try {
-    const auth = await createClient()
-    const {
-      data: { user },
-    } = await auth.auth.getUser()
+    // FIX MCP : resolveUserAuth pour outil MCP `get_plan_comptable`.
+    const user = await resolveUserAuth(request)
     if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
