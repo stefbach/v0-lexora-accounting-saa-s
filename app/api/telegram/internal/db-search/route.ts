@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
     if (scopes.includes('contacts')) {
       const { data } = await admin
         .from('factures_contacts')
-        .select('id, nom, entreprise, email, telephone, vat_number, type_contact')
+        // FIX colonne : 'type_contact' n'existe pas sur factures_contacts → retiré
+        .select('id, nom, entreprise, email, telephone, vat_number')
         .eq('societe_id', ctx.societe_id)
         .or(`nom.ilike.${like},entreprise.ilike.${like},email.ilike.${like}`)
         .limit(limit)
@@ -97,20 +98,27 @@ export async function POST(req: NextRequest) {
     if (scopes.includes('transactions') && hasRole(ctx, 'comptable')) {
       const { data } = await admin
         .from('transactions_bancaires')
-        .select('id, date_transaction, libelle, montant, sens, compte_bancaire_id')
+        // FIX colonnes : 'libelle', 'montant', 'sens' n'existent pas sur
+        // transactions_bancaires (mig 010). Les vraies colonnes sont
+        // 'libelle_banque', 'debit' et 'credit'.
+        .select('id, date_transaction, libelle_banque, debit, credit, compte_bancaire_id')
         .eq('societe_id', ctx.societe_id)
-        .ilike('libelle', like)
+        .ilike('libelle_banque', like)
         .order('date_transaction', { ascending: false })
         .limit(limit)
       hits.transactions = data || []
     }
 
-    // écritures comptables (rôle comptable+)
+    // écritures comptables (rôle comptable+) — via la VUE ecritures_comptables
+    // (mig 120) qui expose les colonnes v1 (compte, debit, credit, libelle,
+    // journal, numero_piece) au-dessus de la table physique v2.
     if (scopes.includes('ecritures') && hasRole(ctx, 'comptable')) {
       const { data } = await admin
-        .from('ecritures')
-        .select('id, date_ecriture, libelle, code_journal, montant_debit, montant_credit, compte_comptable')
-        .eq('societe_id', ctx.societe_id)
+        // FIX table : 'ecritures' (sans suffixe) n'existe pas → 'ecritures_comptables' (vue).
+        // FIX colonnes : 'code_journal', 'montant_debit', 'montant_credit',
+        // 'compte_comptable' n'existent pas → journal, debit, credit, compte.
+        .from('ecritures_comptables')
+        .select('id, date_ecriture, libelle, journal, debit, credit, compte')
         .ilike('libelle', like)
         .order('date_ecriture', { ascending: false })
         .limit(limit)

@@ -28,7 +28,11 @@ export async function GET(req: NextRequest) {
       .select('periode, salaire_brut, salaire_net, paye, csg_salarie, nsf_salarie, statut, created_at')
       .eq('employe_id', ctx.employe_id)
       .eq('societe_id', ctx.societe_id)
-      .in('statut', ['valide', 'paye', 'comptabilise'])
+      // FIX valeur : la CHECK constraint de bulletins_paie.statut (mig 015) ne
+      // permet que 'brouillon','valide','paye','declare_mra'. La valeur
+      // 'comptabilise' n'est jamais stockée dans la colonne statut — la
+      // comptabilisation est tracée par la colonne is_comptabilise (mig 433).
+      .in('statut', ['valide', 'paye', 'declare_mra'])
       .order('periode', { ascending: false })
       .limit(1)
       .maybeSingle()
