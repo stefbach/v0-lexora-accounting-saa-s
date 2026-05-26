@@ -579,6 +579,13 @@ export async function POST(request: Request) {
       const transportBulletin = breakdown?.allocations_prorata?.montant || 0
       const alPayout = breakdown?.conges_al?.montant || 0
       const slPayout = breakdown?.conges_sl?.montant || 0
+      // Mig 441 — VL (Vacation Leave, WRA s.47, 30j/5 ans) doit aussi remonter
+      // dans le bulletin. Sans ça, le breakdown affichait 70 009 MUR mais le
+      // bulletin n'avait que 45 138 MUR (cas Mélanie RAVINA, écart 24 871 MUR
+      // = exactement le montant VL). On agrège AL + SL + VL dans le slot
+      // special_allowance_1 (= « congés payés à la sortie »).
+      const vlPayout = breakdown?.conges_vl?.montant || 0
+      const congesPayoutTotal = alPayout + slPayout + vlPayout
       const treizBulletin = breakdown?.treizieme_mois?.montant || 0
       const preavisBulletin = breakdown?.preavis?.montant || 0
       const severanceBulletin = breakdown?.indemnite_licenciement?.montant || 0
@@ -669,7 +676,7 @@ export async function POST(request: Request) {
         periode: periodeDate,
         salaire_base: salaireBaseBulletin,
         transport_allowance: transportBulletin,
-        special_allowance_1: alPayout + slPayout,
+        special_allowance_1: congesPayoutTotal,
         // primes positives — retenues manuelles, pour que brut GENERATED == totalNet
         // (sinon le trigger mig 236 écrase salaire_net).
         special_allowance_2: specialAlw2Adjusted,
@@ -696,7 +703,7 @@ export async function POST(request: Request) {
         const brutAttendu =
           (Number(salaireBaseBulletin) || 0) +
           (Number(transportBulletin) || 0) +
-          (alPayout + slPayout) +
+          (Number(congesPayoutTotal) || 0) +
           (Number(specialAlw2Adjusted) || 0) +
           (Number(preavisBulletin) || 0) +
           (Number(severanceBulletin) || 0)
@@ -705,7 +712,7 @@ export async function POST(request: Request) {
           periode: periodeDate,
           salaire_base: salaireBaseBulletin,
           transport_allowance: transportBulletin,
-          special_allowance_1: alPayout + slPayout,
+          special_allowance_1: congesPayoutTotal,
           special_allowance_2: specialAlw2Adjusted,
           departure_notice: preavisBulletin,
           special_allowance_3: severanceBulletin,
