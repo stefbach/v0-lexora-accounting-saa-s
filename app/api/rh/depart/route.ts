@@ -255,14 +255,25 @@ export async function POST(request: Request) {
       let vlCycleDebut: string | null = null
       let vlCycleFin: string | null = null
 
+      // ── Debug VL — log de tous les paramètres avant l'appel RPC ─────
+      const vlRpcParams = {
+        p_date_arrivee: dateArrivee,
+        p_salaire_base: salaireBase,
+        p_is_migrant: Boolean(emp.is_migrant_worker ?? false),
+        p_date_reference: date_depart,
+        p_policy_hors_wra: 'applique_wra_etendu',
+      }
+      console.log('[VL debug] Calling get_vacation_leave_droit with:', vlRpcParams)
+
       try {
-        const { data: vlRow } = await supabase.rpc('get_vacation_leave_droit', {
-          p_date_arrivee: dateArrivee,
-          p_salaire_base: salaireBase,
-          p_is_migrant: Boolean(emp.is_migrant_worker ?? false),
-          p_date_reference: date_depart,
-          p_policy_hors_wra: 'applique_wra_etendu',
-        })
+        // ⚠️ La RPC retourne SETOF (TABLE) — il FAUT .maybeSingle() pour
+        //    récupérer l'objet (sinon `data` est un array, row.vl_droit
+        //    devient undefined → vlDroit = 0 silencieusement).
+        const { data: vlRow, error: vlErr } = await supabase
+          .rpc('get_vacation_leave_droit', vlRpcParams)
+          .maybeSingle()
+
+        console.log('[VL debug] RPC response:', { vlRow, vlErr })
 
         if (vlRow) {
           const row = vlRow as { vl_droit?: number; eligibility_status?: string; vl_cycle_debut?: string; vl_cycle_fin?: string }
@@ -270,6 +281,8 @@ export async function POST(request: Request) {
           vlEligibilityStatus = String(row.eligibility_status) || 'no_date_arrivee'
           vlCycleDebut = row.vl_cycle_debut ? String(row.vl_cycle_debut).slice(0, 10) : null
           vlCycleFin = row.vl_cycle_fin ? String(row.vl_cycle_fin).slice(0, 10) : null
+        } else if (vlErr) {
+          console.warn('[VL debug] RPC returned error:', vlErr)
         }
 
         // VL pris dans le cycle courant
@@ -288,8 +301,25 @@ export async function POST(request: Request) {
         console.warn('[calculer_solde] VL RPC failed:', e instanceof Error ? e.message : String(e))
       }
 
+      // Fallback manuel : si RPC indispo (no_date_arrivee alors qu'on a
+      // l'ancienneté), recalculer en JS pour ne pas perdre le droit.
+      if (vlDroit === 0 && vlEligibilityStatus === 'no_date_arrivee'
+          && dateArrivee && anciennete.totalMonths >= 60
+          && salaireBase <= 50000
+          && !(emp.is_migrant_worker ?? false)) {
+        console.warn('[VL debug] Fallback manuel: ancienneté >= 5 ans + WRA worker, droit 30j')
+        vlDroit = 30
+        vlEligibilityStatus = 'manual_fallback'
+      }
+
       const vlRemaining = Math.max(0, vlDroit - vlTaken)
       const vlPayout = r2(vlRemaining * dailySalary)
+
+      console.log('[VL debug] Final values:', {
+        vlDroit, vlTaken, vlRemaining, vlPayout,
+        vlEligibilityStatus, vlCycleDebut, vlCycleFin,
+        ancienneteMonths: anciennete.totalMonths,
+      })
 
       // 6. Prorata 13th month (EOY bonus)
       const treizMois = r2((salaireBase / 12) * mWorked)
