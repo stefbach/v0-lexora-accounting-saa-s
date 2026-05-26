@@ -843,16 +843,18 @@ export async function POST(request: Request) {
       // sauf si l'opérateur a saisi body.absences ou body.jours_absence.
       const anomaliesPointage: string[] = []
       let jours_absence_injust = 0
-      // Heuristique anti-faux-positifs : si un employé a ZÉRO pointage sur
-      // tout le mois, c'est très probablement un cadre/dirigeant qui ne
-      // pointe pas (ex. Juliana HAGGOO, dirigeante DDS, salaire 79k, jamais
-      // pointé). Mieux vaut le considérer exempt que de le flag absent toute
-      // la période. Risque : un vrai absent toute la période n'est plus
-      // compté — mais ce cas est très rare et la RH saisit normalement une
-      // absence justifiée (maladie, etc.) qui crée alors des pointages.
+      // Mig 440 — flag explicite `pointage_exempt` sur l'employé. Si true,
+      // on skip la boucle d'absences (cadre/dirigeant qui ne pointe pas).
+      // Remplace l'heuristique "0 pointage du mois = exempt" (cf. mig 437)
+      // qui avait un faux négatif sur les vrais absents complets. Fallback
+      // sur l'heuristique conservé en filet de sécurité tant que le backfill
+      // n'a pas tagué tous les cadres.
       const employePointeJamais = pointageActifSingle
         && (pointagesMois || []).filter((pt: any) => pt.heure_entree).length === 0
-      if (pointageActifSingle && !employePointeJamais) {
+      const employeExemptPointage = pointageActifSingle && (
+        emp.pointage_exempt === true || employePointeJamais
+      )
+      if (pointageActifSingle && !employeExemptPointage) {
         const pointageByDate = new Map<string, any>()
         for (const pt of pointagesMois || []) {
           pointageByDate.set(pt.date_pointage, pt)
@@ -1826,12 +1828,14 @@ export async function POST(request: Request) {
         // ON            → boucle complète sur les jours ouvrés.
         let jours_absence_injust = 0
         const anomaliesPointageBatch: string[] = []
-        // Heuristique anti-faux-positifs (cf. chemin single ligne ~852) :
-        // un employé sans aucun pointage du mois est probablement un cadre
-        // qui ne pointe pas → ne pas le flag absent toute la période.
+        // Mig 440 — flag pointage_exempt par employé (cf. chemin single).
+        // Fallback heuristique conservé.
         const employePointeJamaisBatch = pointageActifBatch
           && (pointagesMois || []).filter((pt: any) => pt.heure_entree).length === 0
-        if (pointageActifBatch && !employePointeJamaisBatch) {
+        const employeExemptPointageBatch = pointageActifBatch && (
+          emp.pointage_exempt === true || employePointeJamaisBatch
+        )
+        if (pointageActifBatch && !employeExemptPointageBatch) {
           const pointageByDateBatch = new Map<string, any>()
           for (const pt of pointagesMois || []) {
             pointageByDateBatch.set(pt.date_pointage, pt)

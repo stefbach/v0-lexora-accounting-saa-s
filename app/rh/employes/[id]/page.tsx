@@ -864,6 +864,30 @@ export default function EmployeDetailPage({ params }: { params: Promise<{ id: st
               {form.regime_fiscal === "consultant" && (
                 <p className="text-xs text-orange-600">Aucune charge MRA ne s'applique — prestataire externe</p>
               )}
+
+              {/* Mig 440 — pointage_exempt : à cocher pour les cadres/dirigeants
+                  qui ne pointent pas. Sans ça, sur une société à pointage_actif=true
+                  le code paie compte tous les jours ouvrés sans pointage comme
+                  absence injustifiée. */}
+              <div className="pt-3 border-t mt-3">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="pointage_exempt"
+                    checked={form.pointage_exempt === true}
+                    onCheckedChange={v => u("pointage_exempt", v)}
+                  />
+                  <div className="flex flex-col">
+                    <Label htmlFor="pointage_exempt" className="text-sm font-medium cursor-pointer">
+                      Exempt de pointage
+                    </Label>
+                    <span className="text-xs text-gray-500">
+                      Cocher pour les cadres / dirigeants qui ne pointent pas. Le code paie
+                      ne comptera plus de jours d'absence automatique pour cet employé
+                      (la RH peut toujours saisir manuellement si besoin).
+                    </span>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
