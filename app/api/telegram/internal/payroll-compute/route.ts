@@ -64,9 +64,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 2) Snapshot bulletins de la période
+    // FIX colonnes : la table bulletins_paie n'a PAS total_cotisations_employeur
+    // ni total_cotisations_salarie (signalé en prod). Les vraies colonnes sont :
+    //   - total_charges_patronales (côté employeur, mig 015)
+    //   - csg_salarie + nsf_salarie (côté salarié, à sommer)
     const { data: bulletins, error: bErr } = await admin
       .from('bulletins_paie')
-      .select('id, employe_id, statut, salaire_brut, salaire_net, total_cotisations_employeur, total_cotisations_salarie, paye, taxes_total')
+      .select('id, employe_id, statut, salaire_brut, salaire_net, total_charges_patronales, csg_salarie, nsf_salarie, paye, taxes_total')
       .eq('societe_id', ctx.societe_id)
       .gte('periode', periodeStart)
       .lte('periode', periodeEnd)
@@ -94,8 +98,9 @@ export async function POST(req: NextRequest) {
 
     const masse_brute = rows.reduce((s: number, b: any) => s + Number(b.salaire_brut || 0), 0)
     const masse_nette = rows.reduce((s: number, b: any) => s + Number(b.salaire_net || 0), 0)
-    const charges_employeur = rows.reduce((s: number, b: any) => s + Number(b.total_cotisations_employeur || 0), 0)
-    const charges_salarie = rows.reduce((s: number, b: any) => s + Number(b.total_cotisations_salarie || 0), 0)
+    const charges_employeur = rows.reduce((s: number, b: any) => s + Number(b.total_charges_patronales || 0), 0)
+    // côté salarié : pas de colonne agrégée → on somme csg + nsf
+    const charges_salarie = rows.reduce((s: number, b: any) => s + Number(b.csg_salarie || 0) + Number(b.nsf_salarie || 0), 0)
     const paye = rows.reduce((s: number, b: any) => s + Number(b.paye || 0), 0)
     const total_charges = charges_employeur + charges_salarie + paye
 
