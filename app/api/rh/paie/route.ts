@@ -1154,7 +1154,7 @@ export async function POST(request: Request) {
         disturbance_heures: Math.round(disturbanceHeuresSingle * 100) / 100,
         // Mig 436 — Jour férié travaillé : +1 jour de base par férié pointé.
         jours_ferie_travaille: jours_ferie_travaille_single,
-        montant_ferie_travaille: isHorsMRA ? 0 : Math.round(jours_ferie_travaille_single * (Number(emp.salaire_base) / 26) * 100) / 100,
+        montant_ferie_travaille: Math.round(jours_ferie_travaille_single * (Number(emp.salaire_base) / 26) * 100) / 100,
         // Sprint 13 BUG 1 — trace prorata dans les notes pour l'UI.
         // Bug A — on enrichit aussi avec le marqueur "SOLDE TOUT COMPTE"
         // si la sortie tombe dans la période.
