@@ -228,9 +228,39 @@ export function SectionOvertime({ societeId }: Props) {
   // Reset preview + saisies si la période change (les dates seraient invalides).
   useEffect(() => {
     setPreview(null)
-    setSaisies([])
     setValidatedSuggestions(new Set())
   }, [periode])
+
+  // FIX UX : charger automatiquement les OT déjà sauvegardés en BDD
+  // (table heures_travaillees) au chargement et à chaque changement
+  // de société/période. Avant on partait toujours vide → impression que
+  // "rien n'a été saisi" alors que les données existaient.
+  useEffect(() => {
+    if (!societeId || !periode) {
+      setSaisies([])
+      return
+    }
+    const params = new URLSearchParams({ periode, societe_id: societeId })
+    let cancelled = false
+    fetch(`/api/rh/paie/ot/saisies?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        const rows = (data.saisies || []).map((h: any) => ({
+          id: h.id || `db-${h.employe_id}-${h.date}`,
+          employe_id: h.employe_id,
+          date: h.date,
+          heures_ot_1_5: Number(h.heures_ot_1_5) || 0,
+          heures_ot_2: Number(h.heures_ot_2) || 0,
+          motif: '',
+        }))
+        setSaisies(rows)
+      })
+      .catch(e => {
+        if (!cancelled) console.warn('[OT] auto-load saisies failed:', e)
+      })
+    return () => { cancelled = true }
+  }, [societeId, periode])
 
   // Maps de lookup rapide.
   const employesById = useMemo(() => {
