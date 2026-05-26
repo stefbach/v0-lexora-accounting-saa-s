@@ -33,9 +33,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'periode et societe_id requis' }, { status: 400 })
     }
 
+    // Normaliser : on accepte YYYY-MM ou YYYY-MM-01 (le composant OT envoie
+    // déjà avec -01, contrairement à l'onglet primes qui envoie YYYY-MM).
+    const periodeDate = periode.length === 7 ? `${periode}-01` : periode
+
     // Mig 439 — Postgres function avec JOIN. Même pattern que primes.
     const { data: rows, error: rpcErr } = await supabase.rpc('get_ot_societe_mois', {
-      p_periode: `${periode}-01`,
+      p_periode: periodeDate,
       p_societe_id: societe_id,
     })
 
