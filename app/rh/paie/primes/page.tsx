@@ -560,11 +560,14 @@ export default function PrimesPage() {
                 }
               } else {
                 // Admin OK, primes existent en table, employés visibles, mais 0 prime pour ce filtre
+                const periodesDB = dbg.periodes_existantes_en_db || []
+                const periodesAffichees = periodesDB.length > 0 ? periodesDB.join(', ') : 'aucune visible'
+                const url = dbg.supabase_url_partial || '?'
                 conclusion = {
-                  titre: "Aucune prime saisie pour cette période exacte",
-                  cause: `Le serveur a trouvé ${dbg.probe_total_primes} primes au total et ${dbg.nb_employes_societe} employés pour cette société, mais aucune ne matche periode=${dbg.query_periode_filter}.`,
-                  fix: "Vérifier que la période en BDD est bien stockée comme 2026-05-01 (ou changer le format de filtre dans l'API).",
-                  severity: "amber",
+                  titre: "L'API ne voit aucune prime pour cette période — mismatch BDD probable",
+                  cause: `Le serveur (URL: ${url}) voit ${dbg.probe_total_primes} primes au total et ${dbg.nb_employes_societe} employés DDS, MAIS aucune avec periode='${dbg.query_periode_filter}'. Périodes existantes côté API: [${periodesAffichees}]. Si '2026-05-01' n'est pas dans cette liste alors que tu sais qu'il devrait y être, c'est que Vercel hit une AUTRE base Supabase que celle que tu vois.`,
+                  fix: "1) Vérifier dans Vercel que NEXT_PUBLIC_SUPABASE_URL ET SUPABASE_SERVICE_ROLE_KEY pointent bien sur le projet 'dqepdoimpqhmuhkklxva'. 2) Sinon, regarder dans la liste 'Périodes existantes' ci-dessus quelle base Vercel utilise.",
+                  severity: "red",
                 }
               }
             }

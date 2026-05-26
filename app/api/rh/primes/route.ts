@@ -47,11 +47,18 @@ export async function GET(request: Request) {
     }
 
     if (type === 'saisie' || periode) {
-      // DEBUG : compte global sans filtre pour vérifier que l'admin client
-      // accède bien à la table (devrait être > 0 si BDD non vide).
+      // DEBUG : compte global + sample des periodes existantes pour vérifier
+      // si l'admin client hit bien la même BDD qu'attendu.
       const probe = await supabase.from('primes_variables_mois').select('id', { count: 'exact', head: true })
       const probeTotal = probe.count
       const probeError = probe.error?.message || null
+
+      // Sample : récupérer les périodes distinctes existantes
+      const probeSample = await supabase.from('primes_variables_mois')
+        .select('periode')
+        .limit(50)
+      const periodesUniques = [...new Set((probeSample.data || []).map((r: any) => String(r.periode)))]
+      const probeUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'undefined'
 
       let query = supabase
         .from('primes_variables_mois')
@@ -115,6 +122,8 @@ export async function GET(request: Request) {
           is_rh: ownership.isRH,
           probe_total_primes: probeTotal,
           probe_error: probeError,
+          periodes_existantes_en_db: periodesUniques.slice(0, 10),
+          supabase_url_partial: probeUrl.slice(0, 50) + '...',
           nb_employes_societe: nbEmpsSociete,
           employes_error: empsError,
           query_periode_filter: `${periode}-01`,
