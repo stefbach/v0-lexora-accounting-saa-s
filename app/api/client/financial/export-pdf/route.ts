@@ -77,7 +77,14 @@ export async function GET(request: Request) {
     const exerciceActuel = json?.exercice_actuel
 
     const { data: societe } = await supabase
-      .from('societes').select('nom, brn, vat_number, adresse, exercice_debut').eq('id', societe_id).single()
+      .from('societes').select('nom, brn, vat_number, adresse, exercice_debut, regime, devise_fonctionnelle').eq('id', societe_id).single()
+
+    // GBC offshore regimes → Full IFRS. Sinon → IFRS for SMEs (PME locale).
+    const gbcRegimes = ['gbc1', 'authorised_company', 'holding']
+    const isGbc = !!societe?.regime && gbcRegimes.includes(String(societe.regime).toLowerCase())
+    const referentielLabel = isGbc ? 'Full IFRS' : 'IFRS for SMEs'
+    const deviseFonctionnelle = (societe?.devise_fonctionnelle || 'MUR').toUpperCase()
+    const hasForeignFunctionalCcy = deviseFonctionnelle !== 'MUR'
 
     // Calculs cascade
     const ca = Number(fin.chiffreAffaires) || 0
@@ -105,7 +112,7 @@ export async function GET(request: Request) {
           societe?.brn && elt(Text, { style: styles.subtitle }, `BRN : ${societe.brn}${societe.vat_number ? ' · VAT : ' + societe.vat_number : ''}`),
           elt(Text, { style: styles.title }, 'Compte de Résultat'),
           elt(Text, { style: styles.subtitle }, `Exercice ${exerciceActuel || fin.exercice || '—'} · Période ${fmtDate(fin.date_debut)} → ${fmtDate(fin.date_fin)}`),
-          elt(Text, { style: styles.subtitle }, `Référentiel : IFRS for SMEs · Companies Act 2001 Mauritius · Devise : MUR`),
+          elt(Text, { style: styles.subtitle }, `Référentiel : ${referentielLabel} · Companies Act 2001 Mauritius · Devise : ${deviseFonctionnelle}`),
         ),
 
         // PRODUITS
@@ -200,7 +207,8 @@ export async function GET(request: Request) {
         elt(View, { style: styles.notes },
           elt(Text, { style: { fontFamily: 'Helvetica-Bold', marginBottom: 4 } }, 'Notes'),
           elt(Text, {}, '• Tous les montants sont exprimés en Roupies Mauriciennes (MUR), arrondis à 2 décimales.'),
-          elt(Text, {}, '• La comptabilité respecte le Plan Comptable Mauricien (PCM) et les normes IFRS for SMEs.'),
+          elt(Text, {}, `• La comptabilité respecte le Plan Comptable Mauricien (PCM) et les normes ${referentielLabel}${isGbc ? ' (régime GBC offshore — application complète des IFRS).' : '.'}`),
+          hasForeignFunctionalCcy && elt(Text, {}, `• IAS 21 — Devise fonctionnelle : ${deviseFonctionnelle}. Les états convertis en MUR pour dépôt légal utilisent les taux de clôture (postes bilanciels) et taux moyens (postes de résultat) ; écarts comptabilisés en OCI (Other Comprehensive Income).`),
           elt(Text, {}, "• L'impôt sur les bénéfices est calculé au taux standard de 15 % (Income Tax Act 1995, sec. 44A)."),
           elt(Text, {}, `• Document généré le ${fmtDate(new Date().toISOString())} à partir des écritures comptables enregistrées dans Lexora.`),
         ),
