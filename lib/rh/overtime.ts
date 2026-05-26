@@ -667,17 +667,13 @@ export async function saveOvertimeMois(
 
   // 1. Identifier les employés dont le bulletin de la période est verrouillé
   //    ou validé. AVANT mig 440 : on rejetait TOUTE la sauvegarde dès qu'UN
-  //    seul employé était bloqué (all-or-nothing). Très bloquant en pratique :
-  //    avec 9 bulletins déjà validés sur DDS mai 2026, un user ne pouvait
-  //    PLUS jamais sauver d'OT sur cette période pour aucun employé, même
-  //    pour ceux dont le bulletin était encore en brouillon.
-  //
-  //    MAINTENANT (mig 440) : on filtre les employés bloqués des données à
-  //    sauver. Les autres employés sont traités normalement. On retourne la
-  //    liste des bloqués en avertissement pour que l'UI invite l'utilisateur
-  //    à les déverrouiller s'il veut les inclure.
+  //    seul employé était bloqué (all-or-nothing). MAINTENANT : on sauve
+  //    TOUJOURS les données brutes dans heures_travaillees (qui ne touche
+  //    PAS les bulletins), et on n'évite que le UPDATE bulletins_paie pour
+  //    les employés bloqués. La RH peut ainsi saisir l'OT, voir le
+  //    warning sur les bloqués, et après décomptabilisation un recalcul
+  //    de paie intégrera automatiquement les heures saisies.
   let bloques: string[] = []
-  let lignesFiltrees = lignes
   if (employesIds.length > 0) {
     const { data: bulsBloques } = await supabase
       .from('bulletins_paie')
@@ -694,31 +690,18 @@ export async function saveOvertimeMois(
     }>)
       .filter(b => b.statut === 'valide' || b.verrouille === true)
       .map(b => b.employe_id)
-
-    if (bloques.length > 0) {
-      const bloquesSet = new Set(bloques)
-      lignesFiltrees = lignes.filter(l => !bloquesSet.has(l.employe_id))
-      // Si TOUS les employés sont bloqués → on garde le retour rouge
-      // historique (success: false) pour signaler clairement.
-      if (lignesFiltrees.length === 0) {
-        return {
-          success: false,
-          nb_lignes_upsert: 0,
-          nb_bulletins_maj: 0,
-          bulletins_bloques: bloques,
-          erreurs: [`${bloques.length} bulletin(s) verrouillé(s) ou validé(s) — déverrouillez pour modifier leurs OT.`],
-          warnings: [],
-        }
-      }
-    }
   }
+  const bloquesSet = new Set(bloques)
 
   // 2. Recharger les taux depuis la DB (jamais depuis le front).
   const params = await loadParametres(supabase)
 
-  // 3. UPSERT heures_travaillees — une ligne par (employe, date) avec OT > 0.
+  // 3. UPSERT heures_travaillees POUR TOUS LES EMPLOYÉS — y compris ceux
+  //    dont le bulletin est verrouillé. La saisie OT brute ne dépend pas
+  //    du bulletin ; quand la RH décomptabilisera et recalculera, le
+  //    nouveau bulletin lira ces heures automatiquement.
   let nbUpsert = 0
-  for (const ligne of lignesFiltrees) {
+  for (const ligne of lignes) {
     const rows = ligne.jours
       .filter(j => j.heures_ot_1_5 > 0 || j.heures_ot_2 > 0)
       .map(j => ({
