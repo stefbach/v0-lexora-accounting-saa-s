@@ -871,6 +871,14 @@ export async function POST(request: Request) {
         // société working_days=7j/7 + planning ~21 shifts compterait
         // ~9 absences fausses/mois/employé. planMap est déjà chargé
         // ligne 618-625.
+        // Si l'employé a au moins UN planning_assignments sur le mois, c'est
+        // qu'il utilise le système de planning. Les jours sans planning sur ce
+        // mois sont alors présumés "pas encore saisis" et ne doivent PAS être
+        // comptés comme absences (faux positifs typiquement sur les derniers
+        // jours du mois : le planning de la semaine n'a pas encore été fait).
+        // Sans ce check, Eveline/Léa/Fabiola/Catty étaient flag absentes sur
+        // le 25-26 mai juste parce que le planning de la semaine traînait.
+        const employeUtilisePlanning = Object.keys(planMap).length > 0
         let nbJoursSansPlanning = 0
         const WARN_INDIVIDUAL_MAX = 5
         for (const day of workingDaysList) {
@@ -881,6 +889,11 @@ export async function POST(request: Request) {
             if (nbJoursSansPlanning <= WARN_INDIVIDUAL_MAX) {
               console.warn(`[paie] Employé ${emp.id} sans planning sur ${day}, working_days appliqué`)
             }
+            // L'employé planifie son équipe : un jour non planifié = non
+            // confirmé, on ne le compte pas en absence. (Si la société n'a
+            // jamais saisi de planning du tout pour cet employé, on bascule
+            // sur working_days comme avant — comportement legacy.)
+            if (employeUtilisePlanning) continue
           }
           const pt = pointageByDate.get(day)
           // G-leaves-fix (debug+fix) : normaliser les bornes du congé
@@ -1819,6 +1832,12 @@ export async function POST(request: Request) {
           // est_repos=true n'est PAS une journée travaillée attendue ; ne
           // pas le compter comme absence injustifiée. planMap est déjà
           // chargé ligne 1276-1283.
+          // Symétrique du fix single (cf. ligne ~874) : l'employé utilise
+          // le système de planning → un jour sans planning saisi est présumé
+          // "pas encore confirmé" et ne compte pas en absence. Empêche les
+          // faux positifs sur les derniers jours du mois quand le planning
+          // de la semaine n'a pas encore été fait.
+          const employeUtilisePlanningBatch = Object.keys(planMap).length > 0
           let nbJoursSansPlanningBatch = 0
           const WARN_INDIVIDUAL_MAX_BATCH = 5
           for (const day of workingDaysListBatch) {
@@ -1829,6 +1848,7 @@ export async function POST(request: Request) {
               if (nbJoursSansPlanningBatch <= WARN_INDIVIDUAL_MAX_BATCH) {
                 console.warn(`[paie batch] Employé ${emp.id} sans planning sur ${day}, working_days appliqué`)
               }
+              if (employeUtilisePlanningBatch) continue
             }
             const pt = pointageByDateBatch.get(day)
             // G-leaves-fix (debug+fix) : normalisation défensive des
