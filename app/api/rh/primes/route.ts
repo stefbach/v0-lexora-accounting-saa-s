@@ -118,7 +118,8 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const supabase = getAdminClient()
+    // Même fallback que GET : si pas de service_role, on utilise le JWT user.
+    const supabase = getAdminClient() ?? supabaseAuth
     const body = await request.json()
     const { action } = body
 
