@@ -98,9 +98,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (type === 'pl' || type === 'balance') {
-      // Synthèse simple depuis ecritures (debit/credit par classe)
-      let q = admin.from('ecritures')
-        .select('compte_comptable, montant_debit, montant_credit')
+      // Synthèse simple depuis ecritures_comptables_v2 (debit/credit par classe)
+      // FIX table : 'ecritures' (sans suffixe) n'existe pas → 'ecritures_comptables_v2' (mig 007).
+      // FIX colonnes : 'compte_comptable' → 'numero_compte',
+      //                'montant_debit' → 'debit_mur',
+      //                'montant_credit' → 'credit_mur'.
+      let q = admin.from('ecritures_comptables_v2')
+        .select('numero_compte, debit_mur, credit_mur')
         .eq('societe_id', ctx.societe_id)
       if (periode && /^\d{4}-\d{2}$/.test(periode)) {
         const [y, m] = periode.split('-').map(Number)
@@ -111,10 +115,10 @@ export async function POST(req: NextRequest) {
       const { data } = await q
       const byClass = new Map<string, { debit: number; credit: number }>()
       for (const e of data || []) {
-        const cls = String(e.compte_comptable || '?').slice(0, 1)
+        const cls = String(e.numero_compte || '?').slice(0, 1)
         const v = byClass.get(cls) || { debit: 0, credit: 0 }
-        v.debit += Number(e.montant_debit || 0)
-        v.credit += Number(e.montant_credit || 0)
+        v.debit += Number(e.debit_mur || 0)
+        v.credit += Number(e.credit_mur || 0)
         byClass.set(cls, v)
       }
       const result: any = { type, periode, classes: {} as Record<string, { debit: number; credit: number; net: number }> }
@@ -140,7 +144,11 @@ export async function POST(req: NextRequest) {
       const end = `${p}-${new Date(y, m, 0).getDate()}`
       const { data } = await admin
         .from('bulletins_paie')
-        .select('id, employe_id, salaire_brut, salaire_net, paye, csg_employe, csg_employeur, nsf_employe, nsf_employeur, verrouille')
+        // FIX colonnes : 'csg_employe', 'csg_employeur', 'nsf_employe',
+        // 'nsf_employeur' n'existent pas sur bulletins_paie. Les vraies
+        // colonnes (mig 015 / 016) sont csg_salarie, csg_patronal,
+        // nsf_salarie, nsf_patronal.
+        .select('id, employe_id, salaire_brut, salaire_net, paye, csg_salarie, csg_patronal, nsf_salarie, nsf_patronal, verrouille')
         .eq('societe_id', ctx.societe_id)
         .gte('periode', start)
         .lte('periode', end)
@@ -154,8 +162,9 @@ export async function POST(req: NextRequest) {
         agg.total_brut += Number(b.salaire_brut || 0)
         agg.total_net += Number(b.salaire_net || 0)
         agg.total_paye += Number(b.paye || 0)
-        agg.total_csg += Number(b.csg_employe || 0) + Number(b.csg_employeur || 0)
-        agg.total_nsf += Number(b.nsf_employe || 0) + Number(b.nsf_employeur || 0)
+        // FIX colonnes : csg_salarie/csg_patronal + nsf_salarie/nsf_patronal
+        agg.total_csg += Number(b.csg_salarie || 0) + Number(b.csg_patronal || 0)
+        agg.total_nsf += Number(b.nsf_salarie || 0) + Number(b.nsf_patronal || 0)
       }
       for (const k of ['total_brut', 'total_net', 'total_paye', 'total_csg', 'total_nsf'] as const) {
         ;(agg as any)[k] = Math.round((agg as any)[k])
