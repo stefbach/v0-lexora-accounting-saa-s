@@ -406,23 +406,54 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
               </TableCell>
             </TableRow>
 
-            {/* VL — WRA s.47 (30 jours / 5 ans, payable à la sortie) */}
-            {breakdown.conges_vl && breakdown.conges_vl.droit > 0 && (
-              <TableRow className="bg-purple-50">
+            {/* VL — WRA s.47 (30 jours / 5 ans, payable à la sortie)
+                TOUJOURS visible : montre le statut d'éligibilité même
+                quand droit = 0 (sinon l'utilisateur ne voit pas pourquoi
+                la ligne manque — cas Mélanie Ravina, mai 2026). */}
+            {breakdown.conges_vl ? (
+              <TableRow className={breakdown.conges_vl.droit > 0 ? "bg-purple-50" : "bg-gray-50"}>
                 <TableCell className="font-medium">
                   Congés VL (WRA s.47 — 30j/5ans)
+                  {breakdown.conges_vl.droit === 0 && (
+                    <span className="block text-xs text-amber-600 mt-1">
+                      ⚠️ Non éligible : {breakdown.conges_vl.eligibility_status || 'inconnu'}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell className="text-center text-sm text-gray-600">
-                  {breakdown.conges_vl.restant}j restants ({breakdown.conges_vl.droit} − {breakdown.conges_vl.pris}) × {fmt(breakdown.conges_vl.taux_journalier)}/j
+                  {breakdown.conges_vl.droit > 0 ? (
+                    <>{breakdown.conges_vl.restant}j restants ({breakdown.conges_vl.droit} − {breakdown.conges_vl.pris}) × {fmt(breakdown.conges_vl.taux_journalier)}/j</>
+                  ) : (
+                    <span className="text-xs text-gray-500">
+                      Cycle : {breakdown.conges_vl.cycle_debut || 'n/a'} → {breakdown.conges_vl.cycle_fin || 'n/a'}
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {editMode ? (
-                    <MontantInput
-                      value={breakdown.conges_vl.montant}
-                      onChange={v => updateField(['conges_vl', 'montant'], v)}
-                    />
-                  ) : fmt(breakdown.conges_vl.montant)}
+                  {breakdown.conges_vl.droit > 0 ? (
+                    editMode ? (
+                      <MontantInput
+                        value={breakdown.conges_vl.montant}
+                        onChange={v => updateField(['conges_vl', 'montant'], v)}
+                      />
+                    ) : fmt(breakdown.conges_vl.montant)
+                  ) : (
+                    <span className="text-xs text-gray-400">— info —</span>
+                  )}
                 </TableCell>
+              </TableRow>
+            ) : (
+              <TableRow className="bg-gray-50">
+                <TableCell className="font-medium">
+                  Congés VL (WRA s.47 — 30j/5ans)
+                  <span className="block text-xs text-amber-600 mt-1">
+                    ⚠️ VL non disponible — vérifier déploiement / mig 161
+                  </span>
+                </TableCell>
+                <TableCell className="text-center text-xs text-gray-500">
+                  breakdown.conges_vl manquant
+                </TableCell>
+                <TableCell className="text-right text-xs text-gray-400">— info —</TableCell>
               </TableRow>
             )}
 
