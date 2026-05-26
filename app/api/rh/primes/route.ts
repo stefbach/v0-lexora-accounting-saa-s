@@ -47,45 +47,75 @@ export async function GET(request: Request) {
     }
 
     if (type === 'saisie' || periode) {
-      // RÉÉCRITURE : une seule query avec JOINS PostgREST.
-      // Plus de problème de double filtre employes → primes_variables_mois.
-      // ⚠ Préciser la FK : il y a 3 FKs entre primes_variables_mois et employes
-      //   (employe_id, saisi_par, approuve_par). Sans spec, PostgREST refuse.
-      let query = supabase
+      // APPROCHE ULTRA-SIMPLE : 3 queries séparées, on filtre en JS.
+      // Aucun JOIN PostgREST, aucun .in() avec gros tableau de UUIDs.
+
+      // 1) Toutes les primes de la période
+      const { data: primesRaw, error: primesErr } = await supabase
         .from('primes_variables_mois')
-        .select(`
-          *,
-          employe:employes!primes_variables_mois_employe_id_fkey!inner(id, nom, prenom, poste, societe_id),
-          prime:catalogue_primes(id, code, libelle, type_prime)
-        `)
+        .select('*')
+        .eq('periode', `${periode}-01`)
         .order('created_at', { ascending: false })
 
-      if (periode) query = query.eq('periode', `${periode}-01`)
-      if (employe_id) query = query.eq('employe_id', employe_id)
-      if (societe_id) query = query.eq('employe.societe_id', societe_id)
-
-      const { data, error } = await query
-      if (error) {
-        console.error('[primes GET saisie]', error.message)
+      if (primesErr) {
         return NextResponse.json({
           primes: [], nb: 0,
-          _debug: {
-            using_admin_client: usingAdminClient,
-            user_role: ownership.role, is_rh: ownership.isRH,
-            error: error.message,
-          },
+          _debug: { error: `primes query: ${primesErr.message}`, using_admin_client: usingAdminClient },
         })
       }
-      console.log(`[primes GET saisie] periode=${periode} societe=${societe_id || 'all'} → ${data?.length || 0} primes`)
+
+      // 2) Tous les employés (avec societe_id pour filtrer + nom/prenom/poste pour enrichir)
+      const { data: empsRaw, error: empsErr } = await supabase
+        .from('employes')
+        .select('id, nom, prenom, poste, societe_id')
+
+      if (empsErr) {
+        return NextResponse.json({
+          primes: [], nb: 0,
+          _debug: { error: `employes query: ${empsErr.message}`, using_admin_client: usingAdminClient },
+        })
+      }
+
+      const empMap = new Map((empsRaw || []).map((e: any) => [e.id, e]))
+
+      // 3) Filtrer les primes par societe via le map employés
+      let filtered = (primesRaw || []).filter((p: any) => {
+        if (!societe_id) return true
+        const emp = empMap.get(p.employe_id)
+        return emp && emp.societe_id === societe_id
+      })
+
+      if (employe_id) {
+        filtered = filtered.filter((p: any) => p.employe_id === employe_id)
+      }
+
+      // 4) Charger les libellés primes du catalogue
+      const primeIds = [...new Set(filtered.map((p: any) => p.prime_id).filter(Boolean))]
+      const primeMap = new Map<string, any>()
+      if (primeIds.length) {
+        const { data: cats } = await supabase
+          .from('catalogue_primes')
+          .select('id, code, libelle, type_prime')
+          .in('id', primeIds)
+        for (const c of cats || []) primeMap.set(c.id, c)
+      }
+
+      const enriched = filtered.map((p: any) => ({
+        ...p,
+        employe: empMap.get(p.employe_id) || null,
+        prime: primeMap.get(p.prime_id) || null,
+      }))
 
       return NextResponse.json({
-        primes: data || [],
-        nb: data?.length || 0,
+        primes: enriched,
+        nb: enriched.length,
         _debug: {
           using_admin_client: usingAdminClient,
           user_role: ownership.role,
           is_rh: ownership.isRH,
-          query_periode_filter: periode ? `${periode}-01` : null,
+          primes_periode_brut: primesRaw?.length || 0,
+          employes_total: empsRaw?.length || 0,
+          apres_filtre_societe: filtered.length,
         },
       })
     }
