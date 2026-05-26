@@ -5,12 +5,20 @@ import { resolveOwnership } from '@/lib/rh/ownership'
 
 export const dynamic = 'force-dynamic'
 
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+/**
+ * Renvoie un client admin (service_role, bypasse RLS) si la clé est
+ * configurée. Sinon `null` — l'appelant doit alors retomber sur le
+ * client utilisateur (authentifié JWT) pour éviter les requêtes
+ * silencieusement bloquées par la RLS.
+ */
+function getAdminClient(): ReturnType<typeof createClient> | null {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!key || !url) {
+    console.error('[primes] SUPABASE_SERVICE_ROLE_KEY ou URL manquante — fallback sur client auth user')
+    return null
+  }
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
 export async function GET(request: Request) {
@@ -19,7 +27,10 @@ export async function GET(request: Request) {
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const supabase = getAdminClient()
+    // Fallback : si pas de service_role_key, on utilise le client auth user.
+    // L'admin/RH passe la RLS grâce à son JWT.
+    const supabase = getAdminClient() ?? supabaseAuth
+    const usingAdminClient = getAdminClient() !== null
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const periode = searchParams.get('periode')
@@ -43,17 +54,21 @@ export async function GET(request: Request) {
       if (periode) query = query.eq('periode', `${periode}-01`)
       if (employe_id) query = query.eq('employe_id', employe_id)
       if (societe_id) {
-        // Sprint 5 FIX 1 — exclure employés partis (actif=false OU date_depart)
+        // FIX (mai 2026) — ne pas exclure les employés partis : les primes
+        // déjà saisies/intégrées dans la paie du mois en cours doivent
+        // rester visibles même après la confirmation du départ. Avant on
+        // filtrait actif=true + date_depart IS NULL, ce qui cachait les
+        // primes des départs récents et créait l'impression "0 primes".
         const { data: emps } = await supabase.from('employes').select('id')
           .eq('societe_id', societe_id)
-          .eq('actif', true)
-          .is('date_depart', null)
         const ids = emps?.map(e => e.id) || []
+        console.log(`[primes GET saisie] periode=${periode} societe=${societe_id} → ${ids.length} employes`)
         if (ids.length) query = query.in('employe_id', ids)
         else return NextResponse.json({ primes: [], nb: 0 })
       }
       const { data, error } = await query
       if (error) { console.error('[primes GET saisie]', error.message); throw error }
+      console.log(`[primes GET saisie] periode=${periode} societe=${societe_id || 'all'} → ${data?.length || 0} primes`)
 
       // Enrich with employee + prime names (separate queries)
       const empIds = [...new Set((data || []).map(p => p.employe_id))]
@@ -74,7 +89,16 @@ export async function GET(request: Request) {
         employe: empMap[p.employe_id] || null,
         prime: primeMap[p.prime_id] || null,
       }))
-      return NextResponse.json({ primes: enriched, nb: enriched.length })
+      return NextResponse.json({
+        primes: enriched,
+        nb: enriched.length,
+        _debug: {
+          using_admin_client: usingAdminClient,
+          user_role: ownership.role,
+          is_rh: ownership.isRH,
+          nb_employes_societe: societe_id ? 'computed' : 'not_filtered',
+        },
+      })
     }
 
     // Catalogue
@@ -94,7 +118,8 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const supabase = getAdminClient()
+    // Même fallback que GET : si pas de service_role, on utilise le JWT user.
+    const supabase = getAdminClient() ?? supabaseAuth
     const body = await request.json()
     const { action } = body
 

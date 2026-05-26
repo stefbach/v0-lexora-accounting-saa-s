@@ -161,6 +161,7 @@ export default function PointagePage() {
   const [showCalendar, setShowCalendar] = useState(false)
   const [calMonth, setCalMonth] = useState<string>(() => todayISO().slice(0, 7))
   const [calPointages, setCalPointages] = useState<Pointage[]>([])
+  const [calConges, setCalConges] = useState<any[]>([])
   const [calLoading, setCalLoading] = useState(false)
   const [selectedCalDay, setSelectedCalDay] = useState<string | null>(null)
 
@@ -278,6 +279,7 @@ export default function PointagePage() {
       const res = await fetch(`/api/rh/pointage?${params}`)
       const data = await res.json()
       setCalPointages(data.pointages || [])
+      setCalConges(data.conges || [])
     } catch (e) {
       console.error(e)
     } finally {
@@ -540,11 +542,37 @@ export default function PointagePage() {
       pointageMap.set(day, p)
     }
 
-    const weeks: { day: number; date: string; isWeekend: boolean; pointage: Pointage | null }[][] = []
-    let currentWeek: typeof weeks[0] = []
+    // FIX bug calendrier — construire un map des jours en congé approuvé
+    // pour afficher les jours sans pointage MAIS en congé en bleu.
+    const congeMap = new Map<string, { type_conge: string; demi_journee: boolean; matin_ou_apres_midi?: string | null }>()
+    for (const c of calConges) {
+      const debut = String(c.date_debut || "").slice(0, 10)
+      const fin = String(c.date_fin || "").slice(0, 10)
+      if (!debut || !fin) continue
+      const d1 = new Date(debut + "T00:00:00Z")
+      const d2 = new Date(fin + "T00:00:00Z")
+      for (let d = new Date(d1); d <= d2; d.setUTCDate(d.getUTCDate() + 1)) {
+        const iso = d.toISOString().slice(0, 10)
+        congeMap.set(iso, {
+          type_conge: c.type_conge,
+          demi_journee: !!c.demi_journee,
+          matin_ou_apres_midi: c.matin_ou_apres_midi,
+        })
+      }
+    }
+
+    type Cell = {
+      day: number
+      date: string
+      isWeekend: boolean
+      pointage: Pointage | null
+      conge: { type_conge: string; demi_journee: boolean; matin_ou_apres_midi?: string | null } | null
+    }
+    const weeks: Cell[][] = []
+    let currentWeek: Cell[] = []
 
     for (let i = 0; i < startDow; i++) {
-      currentWeek.push({ day: 0, date: "", isWeekend: false, pointage: null })
+      currentWeek.push({ day: 0, date: "", isWeekend: false, pointage: null, conge: null })
     }
 
     for (let d = 1; d <= daysInMonth; d++) {
@@ -552,11 +580,17 @@ export default function PointagePage() {
       const dow = dateObj.getDay()
       const isWeekend = dow === 0 || dow === 6
       const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-      currentWeek.push({ day: d, date: dateStr, isWeekend, pointage: pointageMap.get(dateStr) || null })
+      currentWeek.push({
+        day: d,
+        date: dateStr,
+        isWeekend,
+        pointage: pointageMap.get(dateStr) || null,
+        conge: congeMap.get(dateStr) || null,
+      })
 
       if (dow === 0 || d === daysInMonth) {
         while (currentWeek.length < 7) {
-          currentWeek.push({ day: 0, date: "", isWeekend: false, pointage: null })
+          currentWeek.push({ day: 0, date: "", isWeekend: false, pointage: null, conge: null })
         }
         weeks.push(currentWeek)
         currentWeek = []
@@ -564,7 +598,7 @@ export default function PointagePage() {
     }
 
     return { weeks, monthLabel: firstDay.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }) }
-  }, [calMonth, calPointages])
+  }, [calMonth, calPointages, calConges])
 
   const navigateMonth = (delta: number) => {
     const [y, m] = calMonth.split("-").map(Number)
@@ -973,16 +1007,29 @@ export default function PointagePage() {
                         const hasEntry = cell.pointage?.heure_entree
                         const isAbsent = cell.pointage && !cell.pointage.heure_entree
                         const isFuture = cell.date > todayISO()
+                        // FIX bug calendrier — couleur bleue pour congé approuvé
+                        const isOnLeave = !!cell.conge
+                        const isHalfLeave = isOnLeave && cell.conge?.demi_journee === true
 
                         let bg = "bg-white hover:bg-gray-50"
                         if (cell.isWeekend) bg = "bg-gray-100"
                         else if (isFuture) bg = "bg-white"
-                        else if (hasEntry) bg = "bg-emerald-100 hover:bg-emerald-200"
+                        else if (isOnLeave && isHalfLeave && hasEntry) {
+                          // demi-journée + pointage l'autre demi → mix vert/bleu
+                          bg = "bg-gradient-to-br from-blue-100 to-emerald-100 hover:from-blue-200 hover:to-emerald-200"
+                        } else if (isOnLeave) {
+                          bg = "bg-blue-100 hover:bg-blue-200"
+                        } else if (hasEntry) bg = "bg-emerald-100 hover:bg-emerald-200"
                         else if (isAbsent) bg = "bg-red-100 hover:bg-red-200"
+
+                        const congeTooltip = cell.conge
+                          ? `${cell.conge.type_conge}${cell.conge.demi_journee ? ` (demi-journée ${cell.conge.matin_ou_apres_midi || ''})` : ''}`
+                          : ''
 
                         return (
                           <button
                             key={cell.date}
+                            title={congeTooltip}
                             onClick={() => setSelectedCalDay(cell.date === selectedCalDay ? null : cell.date)}
                             className={`aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${bg} ${
                               isToday ? "ring-2 ring-[#D4AF37] ring-offset-1" : ""
@@ -1000,6 +1047,9 @@ export default function PointagePage() {
                       </span>
                       <span className="flex items-center gap-1">
                         <span className="w-3 h-3 rounded bg-red-100 border border-red-200" /> Absent
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded bg-blue-100 border border-blue-200" /> Congé
                       </span>
                       <span className="flex items-center gap-1">
                         <span className="w-3 h-3 rounded bg-gray-100 border border-gray-200" /> Weekend
