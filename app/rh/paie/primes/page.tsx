@@ -60,6 +60,11 @@ export default function PrimesPage() {
   const [saisieDialog, setSaisieDialog] = useState(false)
   const [saisieForm, setSaisieForm] = useState({ employe_id: "", prime_id: "", quantite: "", notes: "" })
 
+  // Dialog édition prime mensuelle
+  const [editDialog, setEditDialog] = useState<any | null>(null)
+  const [editForm, setEditForm] = useState({ montant: "", quantite: "", notes: "" })
+  const [editError, setEditError] = useState<string | null>(null)
+
   // Excel import
   const [importDialog, setImportDialog] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -203,6 +208,47 @@ export default function PrimesPage() {
   const approuverPrime = async (id: string) => {
     await fetch("/api/rh/primes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "approuver", id }) })
     loadSaisies()
+  }
+
+  const openEditSaisie = (s: any) => {
+    setEditForm({
+      montant: String(s.montant ?? ""),
+      quantite: String(s.quantite ?? ""),
+      notes: s.notes ?? "",
+    })
+    setEditError(null)
+    setEditDialog(s)
+  }
+
+  const sauverEditSaisie = async () => {
+    if (!editDialog) return
+    setSaving(true); setEditError(null)
+    try {
+      const res = await fetch(`/api/rh/primes/${editDialog.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          montant: Number(editForm.montant) || 0,
+          quantite: Number(editForm.quantite) || 0,
+          notes: editForm.notes || null,
+        }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Erreur") }
+      setEditDialog(null)
+      loadSaisies()
+    } catch (e: any) { setEditError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  const supprimerSaisie = async (id: string, employeName: string, primeLabel: string) => {
+    if (!confirm(`Supprimer la prime "${primeLabel}" de ${employeName} ?`)) return
+    try {
+      const res = await fetch(`/api/rh/primes/${id}`, { method: "DELETE" })
+      if (!res.ok) { const d = await res.json(); alert(d.error || "Erreur suppression"); return }
+      loadSaisies()
+    } catch (e: any) {
+      alert("Erreur réseau: " + (e?.message || ""))
+    }
   }
 
   // ─── Excel import ─────────────────────────────────────────────
@@ -456,11 +502,20 @@ export default function PrimesPage() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            {!s.approuve && (
-                              <Button size="sm" variant="ghost" className="text-green-600 h-7" onClick={() => approuverPrime(s.id)}>
-                                <CheckCircle className="w-4 h-4 mr-1" />{t('rha.a.primes.approuver', locale)}
+                            <div className="flex items-center gap-1">
+                              {!s.approuve && (
+                                <Button size="sm" variant="ghost" className="text-green-600 h-7" onClick={() => approuverPrime(s.id)}>
+                                  <CheckCircle className="w-4 h-4 mr-1" />{t('rha.a.primes.approuver', locale)}
+                                </Button>
+                              )}
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Modifier" onClick={() => openEditSaisie(s)}>
+                                <Pencil className="w-4 h-4" />
                               </Button>
-                            )}
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" title="Supprimer"
+                                onClick={() => supprimerSaisie(s.id, `${s.employe?.prenom ?? ''} ${s.employe?.nom ?? ''}`.trim(), s.prime?.libelle ?? '—')}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -810,6 +865,47 @@ export default function PrimesPage() {
                 </Button>
               </>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog : modifier une prime saisie */}
+      <Dialog open={!!editDialog} onOpenChange={open => !open && setEditDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Modifier la prime — {editDialog?.employe?.prenom} {editDialog?.employe?.nom}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            {editError && <p className="text-sm text-red-600">{editError}</p>}
+            <div className="text-sm text-gray-600 bg-gray-50 rounded p-2">
+              <p><strong>{editDialog?.prime?.libelle || '—'}</strong> · Période {periode}</p>
+              {editDialog?.integre_paie && (
+                <p className="text-amber-700 text-xs mt-1">
+                  ⚠️ Cette prime est déjà intégrée à la paie. La modification ne mettra pas automatiquement à jour le bulletin — relance le calcul paie après.
+                </p>
+              )}
+            </div>
+            <div><Label>Quantité</Label>
+              <Input type="number" step="0.01" value={editForm.quantite}
+                onChange={e => setEditForm(f => ({ ...f, quantite: e.target.value }))} />
+            </div>
+            <div><Label>Montant (MUR) *</Label>
+              <Input type="number" step="0.01" value={editForm.montant}
+                onChange={e => setEditForm(f => ({ ...f, montant: e.target.value }))} />
+            </div>
+            <div><Label>Notes</Label>
+              <Input value={editForm.notes}
+                onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Ex: Correction commission Q1..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialog(null)}>Annuler</Button>
+            <Button onClick={sauverEditSaisie} disabled={saving} className="bg-[#0B0F2E] text-white">
+              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Sauvegarder
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
