@@ -70,7 +70,7 @@ async function lexoraFetch(path: string, init: RequestInit = {}) {
 }
 
 const server = new Server(
-  { name: 'lexora-mcp', version: '0.3.0' },
+  { name: 'lexora-mcp', version: '0.4.0' },
   { capabilities: { tools: {} } },
 )
 
@@ -127,6 +127,29 @@ const TOOLS = [
     },
   },
   {
+    name: 'list_releves_bancaires',
+    description:
+      'Liste les relevés bancaires d\'une société Lexora pour une période donnée. Permet d\'accéder aux transactions bancaires pour analyse comptable, rapprochement, ou audit. Retourne aussi la liste des comptes bancaires de la société.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        societe_id: {
+          type: 'string',
+          description: 'UUID de la société (récupérer via list_societes)',
+        },
+        periode: {
+          type: 'string',
+          description: 'Période YYYY-MM (optionnel — filtre sur date_fin du relevé). Défaut : tous les relevés.',
+        },
+        compte_id: {
+          type: 'string',
+          description: 'UUID du compte bancaire (optionnel — filtre sur un compte spécifique).',
+        },
+      },
+      required: ['societe_id'],
+    },
+  },
+  {
     name: 'get_taux_change',
     description:
       'Taux de change actuels MUR vers devises étrangères (USD, EUR, GBP, JPY, AUD, CAD, CNY, INR, ZAR...). Source : Bank of Mauritius officielle, fallback ExchangeRate-API.',
@@ -174,6 +197,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
       }
 
+      case 'list_releves_bancaires': {
+        const params = new URLSearchParams()
+        if (a.societe_id) params.set('societe_id', String(a.societe_id))
+        if (a.periode) params.set('periode', String(a.periode))
+        if (a.compte_id) params.set('compte_id', String(a.compte_id))
+        const data = await lexoraFetch(`/api/client/releves-bancaires?${params}`)
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+      }
+
       case 'get_taux_change': {
         const data = await lexoraFetch('/api/taux-change')
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
@@ -196,4 +228,4 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 const transport = new StdioServerTransport()
 await server.connect(transport)
-console.error('[lexora-mcp] Server started (v0.3.0) — 5 tools: list_societes, get_financial_summary, list_factures, list_alertes, get_taux_change')
+console.error('[lexora-mcp] Server started (v0.4.0) — 6 tools: list_societes, get_financial_summary, list_factures, list_alertes, get_taux_change, list_releves_bancaires')

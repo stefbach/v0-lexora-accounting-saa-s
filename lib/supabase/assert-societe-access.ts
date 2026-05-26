@@ -160,12 +160,28 @@ export async function assertDocumentAccess(
 /**
  * Helper for route handlers: convert a SocieteAccessError / ResourceNotFoundError
  * into a structured error tuple. Returns null if the error is of another kind.
+ *
+ * Optional `context` enrichit le body 403 avec societe_id + user_id + hint pour
+ * faciliter le diagnostic côté MCP (cas typique : la clé API marche pour la
+ * société OCC mais pas pour DDS — il faut savoir QUEL user et QUELLE société
+ * sont concernés pour ajouter la bonne entrée dans user_societes).
  */
 export function mapSocieteAccessError(
   err: unknown,
-): { status: number; body: { error: string } } | null {
+  context?: { societe_id?: string | null; user_id?: string | null },
+): { status: number; body: Record<string, unknown> } | null {
   if (err instanceof SocieteAccessError) {
-    return { status: 403, body: { error: 'Accès refusé' } }
+    const body: Record<string, unknown> = {
+      error: 'Accès refusé à cette société',
+      code: 'NO_SOCIETE_ACCESS',
+    }
+    if (context?.societe_id) body.societe_id = context.societe_id
+    if (context?.user_id) body.user_id = context.user_id
+    if (context?.societe_id || context?.user_id) {
+      body.hint =
+        'Vérifier que le user a une entrée dans user_societes (ou dossiers.client_id / dossiers.comptable_id / comptable_societes / cabinet_collaborateurs_acces) pour societe_id. Voir lib/supabase/assert-societe-access.ts → getAccessibleSocieteIds.'
+    }
+    return { status: 403, body }
   }
   if (err instanceof ResourceNotFoundError) {
     return { status: 404, body: { error: err.message } }

@@ -101,7 +101,21 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ factures: data || [], totaux })
   } catch (e: any) {
-    const mapped = mapSocieteAccessError(e)
+    // Diagnostic enrichi : on injecte societe_id + user_id dans le 403 pour
+    // que le caller MCP voie immédiatement le bon couple (user, société) à
+    // corriger dans user_societes — cas typique signalé : `list_factures`
+    // marche pour OCC et échoue pour DDS, le diff étant l'absence d'entrée
+    // user_societes pour DDS côté la clé API utilisée.
+    let userIdForLog: string | null = null
+    try {
+      const u = await resolveUserAuth(request)
+      userIdForLog = u?.id ?? null
+    } catch { /* ignore */ }
+    const societeIdForLog = new URL(request.url).searchParams.get('societe_id')
+    const mapped = mapSocieteAccessError(e, {
+      societe_id: societeIdForLog,
+      user_id: userIdForLog,
+    })
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }
