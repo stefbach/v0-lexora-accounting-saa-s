@@ -230,6 +230,7 @@ function recomputeTotal(b: any): number {
     b?.salaire_prorata?.montant,
     b?.conges_al?.montant,
     b?.conges_sl?.montant,         // toujours 0 (WRA)
+    b?.conges_vl?.montant,         // WRA s.47 — payable à la sortie
     b?.treizieme_mois?.montant,
     b?.allocations_prorata?.montant,
     b?.preavis?.applicable ? b?.preavis?.montant : 0,
@@ -404,6 +405,26 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                 {fmt(breakdown.conges_sl.restant * breakdown.conges_sl.taux_journalier)}
               </TableCell>
             </TableRow>
+
+            {/* VL — WRA s.47 (30 jours / 5 ans, payable à la sortie) */}
+            {breakdown.conges_vl && breakdown.conges_vl.droit > 0 && (
+              <TableRow className="bg-purple-50">
+                <TableCell className="font-medium">
+                  Congés VL (WRA s.47 — 30j/5ans)
+                </TableCell>
+                <TableCell className="text-center text-sm text-gray-600">
+                  {breakdown.conges_vl.restant}j restants ({breakdown.conges_vl.droit} − {breakdown.conges_vl.pris}) × {fmt(breakdown.conges_vl.taux_journalier)}/j
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  {editMode ? (
+                    <MontantInput
+                      value={breakdown.conges_vl.montant}
+                      onChange={v => updateField(['conges_vl', 'montant'], v)}
+                    />
+                  ) : fmt(breakdown.conges_vl.montant)}
+                </TableCell>
+              </TableRow>
+            )}
 
             {/* 13th month */}
             <TableRow>

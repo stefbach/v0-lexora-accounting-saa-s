@@ -247,6 +247,50 @@ export async function POST(request: Request) {
       const slRemaining = Math.max(0, Math.round((slEntitled - slTaken) * 100) / 100)
       const slPayout = 0 // WRA Art. 48(2) — SL non payable à la sortie
 
+      // 5-bis. VL — WRA s.47 (30 jours / 5 ans d'ancienneté, payable à la sortie)
+      //        RPC get_vacation_leave_droit() (mig 161 + lib/rh/soldes-conges.ts)
+      let vlDroit = 0
+      let vlTaken = 0
+      let vlEligibilityStatus = 'no_date_arrivee'
+      let vlCycleDebut: string | null = null
+      let vlCycleFin: string | null = null
+
+      try {
+        const { data: vlRow } = await supabase.rpc('get_vacation_leave_droit', {
+          p_date_arrivee: dateArrivee,
+          p_salaire_base: salaireBase,
+          p_is_migrant: Boolean(emp.is_migrant_worker ?? false),
+          p_date_reference: date_depart,
+          p_policy_hors_wra: 'applique_wra_etendu',
+        })
+
+        if (vlRow) {
+          const row = vlRow as { vl_droit?: number; eligibility_status?: string; vl_cycle_debut?: string; vl_cycle_fin?: string }
+          vlDroit = Number(row.vl_droit) || 0
+          vlEligibilityStatus = String(row.eligibility_status) || 'no_date_arrivee'
+          vlCycleDebut = row.vl_cycle_debut ? String(row.vl_cycle_debut).slice(0, 10) : null
+          vlCycleFin = row.vl_cycle_fin ? String(row.vl_cycle_fin).slice(0, 10) : null
+        }
+
+        // VL pris dans le cycle courant
+        if (vlCycleDebut && vlCycleFin) {
+          const { data: vlRows } = await supabase
+            .from('demandes_conges')
+            .select('nb_jours')
+            .eq('employe_id', employe_id)
+            .eq('type_conge', 'VL')
+            .eq('statut', 'approuve')
+            .gte('date_debut', vlCycleDebut)
+            .lte('date_debut', vlCycleFin)
+          vlTaken = (vlRows || []).reduce((s, r: any) => s + (Number(r.nb_jours) || 0), 0)
+        }
+      } catch (e) {
+        console.warn('[calculer_solde] VL RPC failed:', e instanceof Error ? e.message : String(e))
+      }
+
+      const vlRemaining = Math.max(0, vlDroit - vlTaken)
+      const vlPayout = r2(vlRemaining * dailySalary)
+
       // 6. Prorata 13th month (EOY bonus)
       const treizMois = r2((salaireBase / 12) * mWorked)
 
@@ -269,7 +313,7 @@ export async function POST(request: Request) {
       const allowancesProrata = r2(((transportAllowance + petrolAllowance) / lastMonth.totalDaysInMonth) * lastMonth.days)
 
       // Total
-      const total = r2(salaryProrata + alPayout + slPayout + treizMois + noticePayout + severance + allowancesProrata)
+      const total = r2(salaryProrata + alPayout + slPayout + vlPayout + treizMois + noticePayout + severance + allowancesProrata)
 
       const breakdown = {
         employe: {
@@ -312,6 +356,16 @@ export async function POST(request: Request) {
           taux_journalier: r2(dailySalary),
           montant: 0,
           non_payable_wra: true, // WRA Art. 48(2) — info UI
+        },
+        conges_vl: {
+          droit: vlDroit,
+          pris: vlTaken,
+          restant: vlRemaining,
+          taux_journalier: r2(dailySalary),
+          montant: vlPayout,
+          eligibility_status: vlEligibilityStatus,
+          cycle_debut: vlCycleDebut,
+          cycle_fin: vlCycleFin,
         },
         treizieme_mois: {
           mois_travailles: mWorked,
