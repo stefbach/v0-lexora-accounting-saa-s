@@ -25,7 +25,21 @@ import { verifyHmac } from '@/lib/security/hmac-auth'
  * Réponse : { hits: { factures: [...], contacts: [...], ... } }
  */
 
-const ALL_SCOPES = ['factures', 'contacts', 'employes', 'documents', 'transactions', 'ecritures'] as const
+const ALL_SCOPES = [
+  'factures',
+  'contacts',
+  'employes',
+  'documents',
+  'transactions',
+  'ecritures',
+  // Extension 2026-05 (mcp-call) : on étend la recherche aux tables comptables
+  // fines pour que le bot Telegram puisse répondre à "trouve l'écriture de
+  // novembre sur 401", "mon bulletin de paie d'octobre", etc.
+  'ecritures_v2',
+  'bulletins_paie',
+  'comptes_bancaires',
+  'releves_bancaires',
+] as const
 
 export async function POST(req: NextRequest) {
   const _hmac = await verifyHmac(req)
@@ -115,6 +129,56 @@ export async function POST(req: NextRequest) {
         .order('date_ecriture', { ascending: false })
         .limit(limit)
       hits.ecritures = data || []
+    }
+
+    // écritures comptables v2 (table principale, mcp-call)
+    if (scopes.includes('ecritures_v2') && hasRole(ctx, 'comptable')) {
+      const { data } = await admin
+        .from('ecritures_comptables_v2')
+        .select('id, date_ecriture, libelle, journal_code, debit, credit, compte_general, piece_ref')
+        .eq('societe_id', ctx.societe_id)
+        .or(`libelle.ilike.${like},piece_ref.ilike.${like},compte_general.ilike.${like}`)
+        .order('date_ecriture', { ascending: false })
+        .limit(limit)
+      hits.ecritures_v2 = data || []
+    }
+
+    // bulletins de paie (RH+ pour voir au-delà de soi)
+    if (scopes.includes('bulletins_paie')) {
+      let q = admin.from('bulletins_paie')
+        .select('id, employe_id, periode, salaire_brut, salaire_net, statut, created_at')
+        .eq('societe_id', ctx.societe_id)
+        .ilike('periode', like)
+        .order('periode', { ascending: false })
+        .limit(limit)
+      if (!hasRole(ctx, 'rh')) {
+        q = q.eq('employe_id', ctx.employe_id || '00000000-0000-0000-0000-000000000000')
+      }
+      const { data } = await q
+      hits.bulletins_paie = data || []
+    }
+
+    // comptes bancaires (comptable+)
+    if (scopes.includes('comptes_bancaires') && hasRole(ctx, 'comptable')) {
+      const { data } = await admin
+        .from('comptes_bancaires')
+        .select('id, nom, banque, iban, devise, solde_actuel')
+        .eq('societe_id', ctx.societe_id)
+        .or(`nom.ilike.${like},banque.ilike.${like},iban.ilike.${like}`)
+        .limit(limit)
+      hits.comptes_bancaires = data || []
+    }
+
+    // relevés bancaires (comptable+)
+    if (scopes.includes('releves_bancaires') && hasRole(ctx, 'comptable')) {
+      const { data } = await admin
+        .from('releves_bancaires')
+        .select('id, periode, date_debut, date_fin, statut, compte_bancaire_id, created_at')
+        .eq('societe_id', ctx.societe_id)
+        .ilike('periode', like)
+        .order('date_debut', { ascending: false })
+        .limit(limit)
+      hits.releves_bancaires = data || []
     }
 
     const total = Object.values(hits).reduce((s, arr) => s + arr.length, 0)

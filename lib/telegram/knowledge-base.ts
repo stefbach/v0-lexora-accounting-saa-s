@@ -368,6 +368,48 @@ essayé db_search d'abord.
   MÉMOIRE :
   • memory_recall       — Récupère mémoires pertinentes pour une query libre.
 
+  COMPTABILITÉ FINE (via mcp_call — pont vers les 20 tools MCP Lexora) :
+  Quand l'utilisateur demande des informations comptables précises (grand livre,
+  écritures, lettrage, plan comptable, devis, avoirs, factures fournisseurs,
+  bulletins de paie, taux de change, etc.) qui ne sont PAS couvertes par les
+  tools ci-dessus, utilise le tool \`mcp_call\` avec ce format :
+    { "tool": "<nom_tool>", "params": { ...optionnel } }
+
+  Le societe_id est auto-injecté depuis la session Telegram — tu n'as PAS besoin
+  de le passer (sauf si l'utilisateur cible explicitement une autre société).
+
+  Tools mcp_call disponibles :
+  • list_societes                  — Toutes les sociétés accessibles
+  • get_financial_summary          — Synthèse financière (params: exercice?)
+  • list_factures                  — Toutes factures (params: statut?, date_debut?, date_fin?)
+  • list_factures_clients          — Factures émises (params: statut?, periode?)
+  • list_factures_fournisseurs     — Factures achats (params: statut?, periode?)
+  • list_devis                     — Devis émis (params: periode?)
+  • list_avoirs                    — Notes de crédit (params: periode?)
+  • list_alertes                   — Alertes/notifications société
+  • list_releves_bancaires         — Relevés bancaires (params: periode?)
+  • get_taux_change                — Taux de change BOM courants (pas de params)
+  • list_comptes_bancaires         — Comptes bancaires + soldes
+  • list_ecritures                 — Écritures comptables (params: date_debut, date_fin, journal?)
+  • get_grand_livre                — Grand livre d'un compte (params: compte_numero, date_debut, date_fin)
+  • get_rapprochement_status       — KPIs rapprochement bancaire (params: periode?)
+  • list_tiers                     — Annuaire clients/fournisseurs
+  • list_documents                 — PDF stockés (params: type?)
+  • list_employes                  — Employés actifs
+  • list_bulletins_paie            — Bulletins de paie (params: periode?)
+  • get_plan_comptable             — Plan comptable PCM Maurice
+  • list_lettrage_non_lettrees     — Écritures non lettrées (params: compte?)
+
+  Exemples :
+  - "factures fournisseurs de DDS d'octobre" → mcp_call { tool:"list_factures_fournisseurs", params:{ periode:"2026-10" } }
+  - "grand livre du 411 cette année" → mcp_call { tool:"get_grand_livre", params:{ compte_numero:"411", date_debut:"2026-01-01", date_fin:"2026-12-31" } }
+  - "écritures non lettrées sur 401" → mcp_call { tool:"list_lettrage_non_lettrees", params:{ compte:"401" } }
+  - "quels sont nos comptes bancaires" → mcp_call { tool:"list_comptes_bancaires", params:{} }
+  - "le taux EUR du jour" → mcp_call { tool:"get_taux_change", params:{} }
+
+  Si mcp_call retourne status="error" avec unknown_tool, c'est que le nom est
+  faux — privilégie un tool natif (db_search, factures_search, report_get).
+
 ≡ ARBRE DE DÉCISION pour choisir le bon tool ≡
 
   L'utilisateur veut SAVOIR quelque chose :
