@@ -227,7 +227,10 @@ export async function POST(request: Request) {
         .lte('date_debut', `${currentYear}-12-31`)
 
       const alTaken = (alTakenData || []).reduce((s: number, c: any) => s + (c.nb_jours || 0), 0)
-      const alRemaining = Math.max(0, Math.round((alEntitled - alTaken) * 100) / 100)
+      // WRA s.46 — Si l'employé a pris plus de jours que ses droits acquis
+      // (solde négatif), l'employeur peut récupérer la valeur correspondante
+      // sur le solde de tout compte (déduction). On garde donc le SIGNE.
+      const alRemaining = Math.round((alEntitled - alTaken) * 100) / 100
       const alPayout = r2(alRemaining * dailySalary)
 
       // 5. SL restant — WRA Art. 48(2) : le Sick Leave non pris N'EST PAS
@@ -312,7 +315,8 @@ export async function POST(request: Request) {
         vlEligibilityStatus = 'manual_fallback'
       }
 
-      const vlRemaining = Math.max(0, vlDroit - vlTaken)
+      // WRA s.46 — solde négatif déductible (cf. AL ci-dessus). On garde le signe.
+      const vlRemaining = Math.round((vlDroit - vlTaken) * 100) / 100
       const vlPayout = r2(vlRemaining * dailySalary)
 
       console.log('[VL debug] Final values:', {

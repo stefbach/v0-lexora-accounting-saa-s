@@ -377,13 +377,23 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
               </TableCell>
             </TableRow>
 
-            {/* AL payout */}
-            <TableRow>
-              <TableCell className="font-medium">{t('rha.b.depart.row_al_remain', locale)}</TableCell>
-              <TableCell className="text-center text-sm text-gray-500">
-                {breakdown.conges_al.restant} jours ({breakdown.conges_al.droit_prorata} acquis - {breakdown.conges_al.pris} pris) x {fmt(breakdown.conges_al.taux_journalier)}/j
+            {/* AL payout — WRA s.46 : solde négatif = déduction sur STC */}
+            <TableRow className={breakdown.conges_al.restant < 0 ? "bg-red-50" : ""}>
+              <TableCell className="font-medium">
+                {t('rha.b.depart.row_al_remain', locale)}
+                {breakdown.conges_al.restant < 0 && (
+                  <Badge variant="destructive" className="ml-2">Solde négatif</Badge>
+                )}
               </TableCell>
-              <TableCell className="text-right font-medium">
+              <TableCell className="text-center text-sm text-gray-500">
+                {breakdown.conges_al.restant.toFixed(2)} jours ({breakdown.conges_al.droit_prorata} acquis − {breakdown.conges_al.pris} pris) × {fmt(breakdown.conges_al.taux_journalier)}/j
+                {breakdown.conges_al.restant < 0 && (
+                  <span className="block text-[10px] text-red-600 mt-0.5">
+                    WRA s.46 — déduction sur solde de tout compte
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className={`text-right font-medium ${breakdown.conges_al.montant < 0 ? 'text-red-600' : ''}`}>
                 {editMode
                   ? <MontantInput value={breakdown.conges_al.montant} onChange={v => updateField(['conges_al', 'montant'], v)} />
                   : fmt(breakdown.conges_al.montant)}
@@ -411,26 +421,46 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
                 quand droit = 0 (sinon l'utilisateur ne voit pas pourquoi
                 la ligne manque — cas Mélanie Ravina, mai 2026). */}
             {breakdown.conges_vl ? (
-              <TableRow className={breakdown.conges_vl.droit > 0 ? "bg-purple-50" : "bg-gray-50"}>
+              <TableRow
+                className={
+                  breakdown.conges_vl.restant < 0
+                    ? "bg-red-50"
+                    : breakdown.conges_vl.droit > 0
+                      ? "bg-purple-50"
+                      : "bg-gray-50"
+                }
+              >
                 <TableCell className="font-medium">
                   Congés VL (WRA s.47 — 30j/5ans)
-                  {breakdown.conges_vl.droit === 0 && (
+                  {breakdown.conges_vl.restant < 0 && (
+                    <Badge variant="destructive" className="ml-2">Solde négatif</Badge>
+                  )}
+                  {breakdown.conges_vl.droit === 0 && breakdown.conges_vl.restant >= 0 && (
                     <span className="block text-xs text-amber-600 mt-1">
                       ⚠️ Non éligible : {breakdown.conges_vl.eligibility_status || 'inconnu'}
                     </span>
                   )}
                 </TableCell>
                 <TableCell className="text-center text-sm text-gray-600">
-                  {breakdown.conges_vl.droit > 0 ? (
-                    <>{breakdown.conges_vl.restant}j restants ({breakdown.conges_vl.droit} − {breakdown.conges_vl.pris}) × {fmt(breakdown.conges_vl.taux_journalier)}/j</>
+                  {breakdown.conges_vl.droit > 0 || breakdown.conges_vl.restant < 0 ? (
+                    <>
+                      {Number(breakdown.conges_vl.restant).toFixed(2)}j ({breakdown.conges_vl.droit} − {breakdown.conges_vl.pris}) × {fmt(breakdown.conges_vl.taux_journalier)}/j
+                      {breakdown.conges_vl.restant < 0 && (
+                        <span className="block text-[10px] text-red-600 mt-0.5">
+                          WRA s.46 — déduction sur solde de tout compte
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <span className="text-xs text-gray-500">
                       Cycle : {breakdown.conges_vl.cycle_debut || 'n/a'} → {breakdown.conges_vl.cycle_fin || 'n/a'}
                     </span>
                   )}
                 </TableCell>
-                <TableCell className="text-right font-medium">
-                  {breakdown.conges_vl.droit > 0 ? (
+                <TableCell
+                  className={`text-right font-medium ${breakdown.conges_vl.montant < 0 ? 'text-red-600' : ''}`}
+                >
+                  {breakdown.conges_vl.droit > 0 || breakdown.conges_vl.restant < 0 ? (
                     editMode ? (
                       <MontantInput
                         value={breakdown.conges_vl.montant}
