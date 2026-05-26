@@ -47,86 +47,43 @@ export async function GET(request: Request) {
     }
 
     if (type === 'saisie' || periode) {
-      // DEBUG : compte global + sample des periodes existantes pour vérifier
-      // si l'admin client hit bien la même BDD qu'attendu.
-      const probe = await supabase.from('primes_variables_mois').select('id', { count: 'exact', head: true })
-      const probeTotal = probe.count
-      const probeError = probe.error?.message || null
-
-      // Sample : récupérer les périodes distinctes existantes
-      const probeSample = await supabase.from('primes_variables_mois')
-        .select('periode')
-        .limit(50)
-      const periodesUniques = [...new Set((probeSample.data || []).map((r: any) => String(r.periode)))]
-      const probeUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'undefined'
-
+      // RÉÉCRITURE : une seule query avec JOINS PostgREST.
+      // Plus de problème de double filtre employes → primes_variables_mois.
       let query = supabase
         .from('primes_variables_mois')
-        .select('*')
+        .select(`
+          *,
+          employe:employes!inner(id, nom, prenom, poste, societe_id),
+          prime:catalogue_primes(id, code, libelle, type_prime)
+        `)
         .order('created_at', { ascending: false })
+
       if (periode) query = query.eq('periode', `${periode}-01`)
       if (employe_id) query = query.eq('employe_id', employe_id)
+      if (societe_id) query = query.eq('employe.societe_id', societe_id)
 
-      let nbEmpsSociete: number | null = null
-      let empsError: string | null = null
-      if (societe_id) {
-        const { data: emps, error: empsErr } = await supabase.from('employes').select('id')
-          .eq('societe_id', societe_id)
-        const ids = emps?.map(e => e.id) || []
-        nbEmpsSociete = ids.length
-        empsError = empsErr?.message || null
-        console.log(`[primes GET saisie] periode=${periode} societe=${societe_id} → ${ids.length} employes (probeTotal=${probeTotal})`)
-        if (ids.length) query = query.in('employe_id', ids)
-        else {
-          return NextResponse.json({
-            primes: [], nb: 0,
-            _debug: {
-              using_admin_client: usingAdminClient,
-              user_role: ownership.role, is_rh: ownership.isRH,
-              probe_total_primes: probeTotal, probe_error: probeError,
-              nb_employes_societe: 0, employes_error: empsError,
-              reason: 'EMPLOYES_FILTER_EMPTY',
-            },
-          })
-        }
-      }
       const { data, error } = await query
-      if (error) { console.error('[primes GET saisie]', error.message); throw error }
+      if (error) {
+        console.error('[primes GET saisie]', error.message)
+        return NextResponse.json({
+          primes: [], nb: 0,
+          _debug: {
+            using_admin_client: usingAdminClient,
+            user_role: ownership.role, is_rh: ownership.isRH,
+            error: error.message,
+          },
+        })
+      }
       console.log(`[primes GET saisie] periode=${periode} societe=${societe_id || 'all'} → ${data?.length || 0} primes`)
 
-      // Enrich with employee + prime names (separate queries)
-      const empIds = [...new Set((data || []).map(p => p.employe_id))]
-      const primeIds = [...new Set((data || []).map(p => p.prime_id).filter(Boolean))]
-      let empMap: Record<string, any> = {}
-      let primeMap: Record<string, any> = {}
-      if (empIds.length) {
-        const { data: emps } = await supabase.from('employes').select('id, nom, prenom, poste').in('id', empIds)
-        for (const e of emps || []) empMap[e.id] = { nom: e.nom, prenom: e.prenom, poste: e.poste }
-      }
-      if (primeIds.length) {
-        const { data: primes } = await supabase.from('catalogue_primes').select('id, code, libelle, type_prime').in('id', primeIds)
-        for (const p of primes || []) primeMap[p.id] = { code: p.code, libelle: p.libelle, type_prime: p.type_prime }
-      }
-
-      const enriched = (data || []).map(p => ({
-        ...p,
-        employe: empMap[p.employe_id] || null,
-        prime: primeMap[p.prime_id] || null,
-      }))
       return NextResponse.json({
-        primes: enriched,
-        nb: enriched.length,
+        primes: data || [],
+        nb: data?.length || 0,
         _debug: {
           using_admin_client: usingAdminClient,
           user_role: ownership.role,
           is_rh: ownership.isRH,
-          probe_total_primes: probeTotal,
-          probe_error: probeError,
-          periodes_existantes_en_db: periodesUniques.slice(0, 10),
-          supabase_url_partial: probeUrl.slice(0, 50) + '...',
-          nb_employes_societe: nbEmpsSociete,
-          employes_error: empsError,
-          query_periode_filter: `${periode}-01`,
+          query_periode_filter: periode ? `${periode}-01` : null,
         },
       })
     }
