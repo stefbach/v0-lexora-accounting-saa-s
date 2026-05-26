@@ -16,7 +16,7 @@ import {
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
-  Sparkles, Package, Send, Repeat, MessageCircle, Mail, KeyRound
+  Sparkles, Package, Send, Repeat, MessageCircle, Mail, KeyRound, ArrowRightLeft
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -122,6 +122,8 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/banque", label: "Banque", labelKey: "acc.bank", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
+      { href: "/client/rapprochement-mensuel", label: "Rapprochement mensuel", icon: Calendar },
+      { href: "/client/virements", label: "Virements", icon: ArrowRightLeft },
       { href: "/client/grand-livre", label: "Grand Livre", labelKey: "comp.client_sidebar.general_ledger", icon: BookOpen },
       { href: "/client/ecritures", label: "Écritures (édition)", labelKey: "comp.client_sidebar.entries_edit", icon: BookOpen },
       { href: "/client/plan-comptable", label: "Plan Comptable", labelKey: "comp.client_sidebar.chart_accounts", icon: BookOpen },
