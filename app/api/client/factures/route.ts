@@ -9,15 +9,18 @@ import {
   ResourceNotFoundError,
 } from '@/lib/supabase/assert-societe-access'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   try {
     const supabase = getAdminClient()
-    const authClient = await createClient()
-    const { data: { user }, error: authError } = await authClient.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
+    // FIX MCP : utiliser resolveUserAuth pour accepter aussi les clés API
+    // (header X-Lexora-Api-Key) + token interne, pas seulement session web.
+    // Sinon l'outil MCP `list_factures` exposé à Claude retourne 401.
+    const user = await resolveUserAuth(request)
+    if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
