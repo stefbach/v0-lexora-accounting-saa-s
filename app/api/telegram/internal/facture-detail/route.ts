@@ -48,7 +48,8 @@ export async function POST(req: NextRequest) {
     // Relances (historique)
     const { data: relances } = await admin
       .from('factures_relances')
-      .select('niveau, date_envoi, statut, mode_envoi')
+      // FIX colonne : 'mode_envoi' n'existe pas → 'canal' (mig 238).
+      .select('niveau, date_envoi, statut, canal')
       .eq('facture_id', facture.id)
       .order('date_envoi', { ascending: false })
 

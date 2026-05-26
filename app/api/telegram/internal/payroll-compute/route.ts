@@ -70,7 +70,8 @@ export async function POST(req: NextRequest) {
     //   - csg_salarie + nsf_salarie (côté salarié, à sommer)
     const { data: bulletins, error: bErr } = await admin
       .from('bulletins_paie')
-      .select('id, employe_id, statut, salaire_brut, salaire_net, total_charges_patronales, csg_salarie, nsf_salarie, paye, taxes_total')
+      // FIX colonne : 'taxes_total' n'existe pas sur bulletins_paie → retirée.
+      .select('id, employe_id, statut, salaire_brut, salaire_net, total_charges_patronales, csg_salarie, nsf_salarie, paye')
       .eq('societe_id', ctx.societe_id)
       .gte('periode', periodeStart)
       .lte('periode', periodeEnd)
