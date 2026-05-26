@@ -43,17 +43,21 @@ export async function GET(request: Request) {
       if (periode) query = query.eq('periode', `${periode}-01`)
       if (employe_id) query = query.eq('employe_id', employe_id)
       if (societe_id) {
-        // Sprint 5 FIX 1 — exclure employés partis (actif=false OU date_depart)
+        // FIX (mai 2026) — ne pas exclure les employés partis : les primes
+        // déjà saisies/intégrées dans la paie du mois en cours doivent
+        // rester visibles même après la confirmation du départ. Avant on
+        // filtrait actif=true + date_depart IS NULL, ce qui cachait les
+        // primes des départs récents et créait l'impression "0 primes".
         const { data: emps } = await supabase.from('employes').select('id')
           .eq('societe_id', societe_id)
-          .eq('actif', true)
-          .is('date_depart', null)
         const ids = emps?.map(e => e.id) || []
+        console.log(`[primes GET saisie] periode=${periode} societe=${societe_id} → ${ids.length} employes`)
         if (ids.length) query = query.in('employe_id', ids)
         else return NextResponse.json({ primes: [], nb: 0 })
       }
       const { data, error } = await query
       if (error) { console.error('[primes GET saisie]', error.message); throw error }
+      console.log(`[primes GET saisie] periode=${periode} societe=${societe_id || 'all'} → ${data?.length || 0} primes`)
 
       // Enrich with employee + prime names (separate queries)
       const empIds = [...new Set((data || []).map(p => p.employe_id))]
