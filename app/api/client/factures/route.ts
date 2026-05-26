@@ -59,12 +59,28 @@ export async function GET(request: Request) {
     const date_fin = searchParams.get('date_fin')
     const limit = parseInt(searchParams.get('limit') || '200')
 
+    // FIX MCP : support de tous les types de documents (client, fournisseur,
+    // devis, avoir, note_debit). Avant ce fix la route ne retournait QUE les
+    // factures clients (.eq('type_facture', 'client')), ce qui empêchait les
+    // outils MCP `list_factures_fournisseurs`, `list_devis`, `list_avoirs`
+    // de fonctionner. Si type_facture non fourni → tout retourner (paginé).
+    // type_facture distingue client/fournisseur ; type_document distingue
+    // facture/devis/avoir/note_debit.
+    const type_facture = searchParams.get('type_facture') || searchParams.get('type')
+    const type_document = searchParams.get('type_document')
+
     let query = supabase
       .from('factures')
       .select('*')
-      .eq('type_facture', 'client')
       .order('date_facture', { ascending: false })
       .limit(limit)
+
+    if (type_facture && ['client', 'fournisseur'].includes(type_facture)) {
+      query = query.eq('type_facture', type_facture)
+    }
+    if (type_document && ['facture', 'devis', 'avoir', 'note_debit'].includes(type_document)) {
+      query = query.eq('type_document', type_document)
+    }
 
     if (societe_id) {
       query = query.eq('societe_id', societe_id)

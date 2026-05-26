@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess, mapSocieteAccessError } from '@/lib/supabase/assert-societe-access'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { validateContactPayload } from '@/lib/contacts/validate'
 
 export const dynamic = 'force-dynamic'
@@ -29,9 +30,9 @@ export async function GET(request: Request) {
     }
 
     const supabase = getAdminClient()
-    const authClient = await createClient()
-    const { data: { user }, error: authError } = await authClient.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    // FIX MCP : resolveUserAuth pour outil MCP `list_tiers` (annuaire contacts).
+    const user = await resolveUserAuth(request)
+    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     await assertSocieteAccess(supabase, user.id, societe_id)
 

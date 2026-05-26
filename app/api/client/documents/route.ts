@@ -1,12 +1,13 @@
-import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { NextResponse } from 'next/server'
 
 // GET — List all documents for the current user (via their dossiers)
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
+    // FIX MCP : resolveUserAuth pour outil MCP `list_documents`
+    // (session web + X-Lexora-Api-Key).
+    const user = await resolveUserAuth(request)
 
     if (!user) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })

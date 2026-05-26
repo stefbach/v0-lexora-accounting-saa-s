@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { createClient as createServerClient } from '@/lib/supabase/server'
 import { fetchAllPaginated } from '@/lib/supabase/paginate'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,8 +27,8 @@ function getAdminClient() {
  */
 export async function GET(request: Request) {
   try {
-    const auth = await createServerClient()
-    const { data: { user } } = await auth.auth.getUser()
+    // FIX MCP : resolveUserAuth pour outil MCP `get_rapprochement_status`.
+    const user = await resolveUserAuth(request)
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
