@@ -16,7 +16,8 @@ import {
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
-  Sparkles, Package, Send, Repeat, MessageCircle, Mail, KeyRound, ArrowRightLeft
+  Sparkles, Package, Send, Repeat, MessageCircle, Mail, KeyRound, ArrowRightLeft,
+  TrendingUp
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -154,6 +155,13 @@ const MENU: MenuSection[] = [
       { href: "/client/gbc-consolidation", label: "Consolidation IFRS 10", icon: Building2 },
       { href: "/client/gbc-crs-fatca", label: "CRS / FATCA", icon: FileText },
       { href: "/client/gbc-pillar-two", label: "BEPS Pillar Two", icon: Globe },
+      // Pages Full IFRS connexes — accessibles aussi via leurs sections d'origine
+      // mais dupliquées ici pour qu'un user GBC trouve TOUT au même endroit.
+      { href: "/client/ifrs9-ecl", label: "Provision IFRS 9 (ECL)", icon: Scale },
+      { href: "/client/leases", label: "Contrats IFRS 16", icon: FilePen },
+      { href: "/client/tiers-consolidation", label: "Tiers consolidation", icon: Building2 },
+      { href: "/client/taux-change", label: "Taux de change (IAS 21)", icon: TrendingUp },
+      { href: "/client/annual-return", label: "Annual Return FSC", icon: ClipboardList },
     ]
   },
   {
