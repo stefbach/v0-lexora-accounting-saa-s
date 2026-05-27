@@ -29,62 +29,42 @@ export async function GET(request: Request) {
     const periode = searchParams.get('periode')   // YYYY-MM
     const societe_id = searchParams.get('societe_id')
 
-    if (!periode) {
-      return NextResponse.json({ error: 'periode requis (YYYY-MM)' }, { status: 400 })
+    if (!periode || !societe_id) {
+      return NextResponse.json({ error: 'periode et societe_id requis' }, { status: 400 })
     }
 
-    // Calcul des bornes mois
-    const [year, month] = periode.split('-').map(Number)
-    const dateDebut = `${periode}-01`
-    const lastDay = new Date(year, month, 0).getDate()
-    const dateFin = `${periode}-${String(lastDay).padStart(2, '0')}`
+    // Normaliser : accepter YYYY-MM ou YYYY-MM-01. Le composant
+    // SectionOvertime envoie YYYY-MM-01 via periodeCourante().
+    const periodeDate = periode.length === 7 ? `${periode}-01` : periode
 
-    // 1) Toutes les heures sauvegardées du mois
-    const { data: htRaw, error: htErr } = await supabase
-      .from('heures_travaillees')
-      .select('id, employe_id, date, heures_normales, heures_ot_1_5, heures_ot_2, montant_ot, taux_horaire_base, statut_jour')
-      .gte('date', dateDebut)
-      .lte('date', dateFin)
-      .order('date', { ascending: true })
+    // Mig 439 — Postgres function avec JOIN. Même pattern que primes.
+    const { data: rows, error: rpcErr } = await supabase.rpc('get_ot_societe_mois', {
+      p_periode: periodeDate,
+      p_societe_id: societe_id,
+    })
 
-    if (htErr) {
+    if (rpcErr) {
       return NextResponse.json({
-        saisies: [], nb: 0, _debug: { error: htErr.message },
+        saisies: [], nb: 0, _debug: { error: rpcErr.message },
       })
     }
 
-    // 2) Tous les employés (pour filtrer par société + enrichir)
-    const { data: empsRaw } = await supabase
-      .from('employes')
-      .select('id, nom, prenom, poste, societe_id')
-
-    const empMap = new Map((empsRaw || []).map((e: any) => [e.id, e]))
-
-    // 3) Filtrer par société si demandé
-    let filtered = htRaw || []
-    if (societe_id) {
-      filtered = filtered.filter((h: any) => empMap.get(h.employe_id)?.societe_id === societe_id)
-    }
-
-    // 4) Ne garder que les jours avec OT > 0 (on cache les 0 pour l'UI)
-    filtered = filtered.filter((h: any) =>
-      (Number(h.heures_ot_1_5) || 0) > 0 || (Number(h.heures_ot_2) || 0) > 0,
-    )
-
-    // 5) Enrichir avec infos employé
-    const enriched = filtered.map((h: any) => ({
-      ...h,
-      employe: empMap.get(h.employe_id) || null,
+    const enriched = (rows || []).map((r: any) => ({
+      id: r.id, employe_id: r.employe_id, date: r.date,
+      heures_normales: r.heures_normales,
+      heures_ot_1_5: r.heures_ot_1_5,
+      heures_ot_2: r.heures_ot_2,
+      montant_ot: r.montant_ot,
+      taux_horaire_base: r.taux_horaire_base,
+      statut_jour: r.statut_jour,
+      employe: { id: r.employe_id, nom: r.emp_nom, prenom: r.emp_prenom, poste: r.emp_poste },
     }))
 
     return NextResponse.json({
       saisies: enriched,
       nb: enriched.length,
-      periode: dateDebut,
-      _debug: {
-        nb_total_mois: htRaw?.length || 0,
-        apres_filtre_societe: filtered.length,
-      },
+      periode: `${periode}-01`,
+      _debug: { rpc_count: rows?.length || 0 },
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Erreur' }, { status: 500 })

@@ -37,85 +37,63 @@ export async function GET(request: Request) {
     let employe_id = searchParams.get('employe_id')
     const type = searchParams.get('type')
 
-    // P0 Sécurité — ownership check
+    // Sécurité — ownership check : bloquer seulement si un employé connecté
+    // demande explicitement les primes d'un AUTRE employé. Pas de restriction
+    // silencieuse (avant : si !isRH on forçait employe_id = own, ce qui
+    // cachait toutes les primes RH/admin dont le profil n'a pas de rôle
+    // correctement configuré).
     const ownership = await resolveOwnership(supabase, user.id)
-    if (!ownership.isRH) {
-      if (employe_id && ownership.employe_id && employe_id !== ownership.employe_id) {
-        return NextResponse.json({ error: 'Accès refusé — vous ne pouvez voir que vos propres primes.' }, { status: 403 })
-      }
-      if (!employe_id && ownership.employe_id) employe_id = ownership.employe_id
+    if (!ownership.isRH && employe_id && ownership.employe_id && employe_id !== ownership.employe_id) {
+      return NextResponse.json({ error: 'Accès refusé — vous ne pouvez voir que vos propres primes.' }, { status: 403 })
     }
 
     if (type === 'saisie' || periode) {
-      // APPROCHE ULTRA-SIMPLE : 3 queries séparées, on filtre en JS.
-      // Aucun JOIN PostgREST, aucun .in() avec gros tableau de UUIDs.
-
-      // 1) Toutes les primes de la période
-      const { data: primesRaw, error: primesErr } = await supabase
-        .from('primes_variables_mois')
-        .select('*')
-        .eq('periode', `${periode}-01`)
-        .order('created_at', { ascending: false })
-
-      if (primesErr) {
-        return NextResponse.json({
-          primes: [], nb: 0,
-          _debug: { error: `primes query: ${primesErr.message}`, using_admin_client: usingAdminClient },
-        })
+      // Mig 438 — Postgres function qui fait le JOIN proprement.
+      // Bypasse tous les bugs supabase-js (.in(), JOIN ambigu, filtrage JS).
+      if (!societe_id || !periode) {
+        return NextResponse.json({ primes: [], nb: 0, _debug: { error: 'societe_id et periode requis' } })
       }
 
-      // 2) Tous les employés (avec societe_id pour filtrer + nom/prenom/poste pour enrichir)
-      const { data: empsRaw, error: empsErr } = await supabase
-        .from('employes')
-        .select('id, nom, prenom, poste, societe_id')
-
-      if (empsErr) {
-        return NextResponse.json({
-          primes: [], nb: 0,
-          _debug: { error: `employes query: ${empsErr.message}`, using_admin_client: usingAdminClient },
-        })
-      }
-
-      const empMap = new Map((empsRaw || []).map((e: any) => [e.id, e]))
-
-      // 3) Filtrer les primes par societe via le map employés
-      let filtered = (primesRaw || []).filter((p: any) => {
-        if (!societe_id) return true
-        const emp = empMap.get(p.employe_id)
-        return emp && emp.societe_id === societe_id
+      const { data: rows, error: rpcErr } = await supabase.rpc('get_primes_societe_mois', {
+        p_periode: `${periode}-01`,
+        p_societe_id: societe_id,
       })
 
-      if (employe_id) {
-        filtered = filtered.filter((p: any) => p.employe_id === employe_id)
+      if (rpcErr) {
+        return NextResponse.json({
+          primes: [], nb: 0,
+          _debug: { error: `RPC: ${rpcErr.message}`, using_admin_client: usingAdminClient },
+        })
       }
 
-      // 4) Charger les libellés primes du catalogue
-      const primeIds = [...new Set(filtered.map((p: any) => p.prime_id).filter(Boolean))]
-      const primeMap = new Map<string, any>()
-      if (primeIds.length) {
-        const { data: cats } = await supabase
-          .from('catalogue_primes')
-          .select('id, code, libelle, type_prime')
-          .in('id', primeIds)
-        for (const c of cats || []) primeMap.set(c.id, c)
-      }
-
-      const enriched = filtered.map((p: any) => ({
-        ...p,
-        employe: empMap.get(p.employe_id) || null,
-        prime: primeMap.get(p.prime_id) || null,
+      const enriched = (rows || []).map((r: any) => ({
+        id: r.id, employe_id: r.employe_id, prime_id: r.prime_id, periode: r.periode,
+        quantite: r.quantite, tarif_unitaire_applique: r.tarif_unitaire_applique,
+        montant: r.montant, notes: r.notes, approuve: r.approuve, integre_paie: r.integre_paie,
+        created_at: r.created_at,
+        employe: { id: r.employe_id, nom: r.emp_nom, prenom: r.emp_prenom, poste: r.emp_poste },
+        prime: r.prime_id ? { id: r.prime_id, code: r.prime_code, libelle: r.prime_libelle, type_prime: r.prime_type } : null,
       }))
 
+      const final = employe_id
+        ? enriched.filter((p: any) => p.employe_id === employe_id)
+        : enriched
+
       return NextResponse.json({
-        primes: enriched,
-        nb: enriched.length,
+        primes: final,
+        nb: final.length,
         _debug: {
           using_admin_client: usingAdminClient,
           user_role: ownership.role,
           is_rh: ownership.isRH,
-          primes_periode_brut: primesRaw?.length || 0,
-          employes_total: empsRaw?.length || 0,
-          apres_filtre_societe: filtered.length,
+          rpc_count: rows?.length || 0,
+          enriched_count: enriched.length,
+          final_count: final.length,
+          rows_is_array: Array.isArray(rows),
+          rows_type: typeof rows,
+          first_row_keys: rows && Array.isArray(rows) && rows[0] ? Object.keys(rows[0]).slice(0, 10) : null,
+          first_row_id: rows && Array.isArray(rows) && rows[0] ? rows[0].id : null,
+          first_enriched: enriched[0] ?? null,
         },
       })
     }

@@ -25,7 +25,21 @@ import { verifyHmac } from '@/lib/security/hmac-auth'
  * Réponse : { hits: { factures: [...], contacts: [...], ... } }
  */
 
-const ALL_SCOPES = ['factures', 'contacts', 'employes', 'documents', 'transactions', 'ecritures'] as const
+const ALL_SCOPES = [
+  'factures',
+  'contacts',
+  'employes',
+  'documents',
+  'transactions',
+  'ecritures',
+  // Extension 2026-05 (mcp-call) : on étend la recherche aux tables comptables
+  // fines pour que le bot Telegram puisse répondre à "trouve l'écriture de
+  // novembre sur 401", "mon bulletin de paie d'octobre", etc.
+  'ecritures_v2',
+  'bulletins_paie',
+  'comptes_bancaires',
+  'releves_bancaires',
+] as const
 
 export async function POST(req: NextRequest) {
   const _hmac = await verifyHmac(req)
@@ -60,7 +74,8 @@ export async function POST(req: NextRequest) {
     if (scopes.includes('contacts')) {
       const { data } = await admin
         .from('factures_contacts')
-        .select('id, nom, entreprise, email, telephone, vat_number, type_contact')
+        // FIX colonne : 'type_contact' n'existe pas sur factures_contacts → retiré
+        .select('id, nom, entreprise, email, telephone, vat_number')
         .eq('societe_id', ctx.societe_id)
         .or(`nom.ilike.${like},entreprise.ilike.${like},email.ilike.${like}`)
         .limit(limit)
@@ -97,24 +112,85 @@ export async function POST(req: NextRequest) {
     if (scopes.includes('transactions') && hasRole(ctx, 'comptable')) {
       const { data } = await admin
         .from('transactions_bancaires')
-        .select('id, date_transaction, libelle, montant, sens, compte_bancaire_id')
+        // FIX colonnes : 'libelle', 'montant', 'sens' n'existent pas sur
+        // transactions_bancaires (mig 010). Les vraies colonnes sont
+        // 'libelle_banque', 'debit' et 'credit'.
+        .select('id, date_transaction, libelle_banque, debit, credit, compte_bancaire_id')
         .eq('societe_id', ctx.societe_id)
-        .ilike('libelle', like)
+        .ilike('libelle_banque', like)
         .order('date_transaction', { ascending: false })
         .limit(limit)
       hits.transactions = data || []
     }
 
-    // écritures comptables (rôle comptable+)
+    // écritures comptables (rôle comptable+) — passe par la VUE
+    // ecritures_comptables (mig 120) qui expose les colonnes v1
+    // (compte, debit, credit, libelle, journal, numero_piece).
     if (scopes.includes('ecritures') && hasRole(ctx, 'comptable')) {
       const { data } = await admin
-        .from('ecritures')
-        .select('id, date_ecriture, libelle, code_journal, montant_debit, montant_credit, compte_comptable')
-        .eq('societe_id', ctx.societe_id)
+        // FIX table : 'ecritures' (sans suffixe) n'existe pas → vue 'ecritures_comptables'.
+        // FIX colonnes : 'code_journal', 'montant_debit', 'montant_credit',
+        // 'compte_comptable' n'existent pas → journal, debit, credit, compte.
+        .from('ecritures_comptables')
+        .select('id, date_ecriture, libelle, journal, debit, credit, compte')
         .ilike('libelle', like)
         .order('date_ecriture', { ascending: false })
         .limit(limit)
       hits.ecritures = data || []
+    }
+
+    // écritures comptables v2 (table principale, mcp-call)
+    if (scopes.includes('ecritures_v2') && hasRole(ctx, 'comptable')) {
+      const { data } = await admin
+        .from('ecritures_comptables_v2')
+        // FIX colonnes : 'journal_code', 'debit', 'credit', 'compte_general',
+        // 'piece_ref' n'existent pas → journal, debit_mur, credit_mur,
+        // numero_compte, ref_folio (mig 007).
+        .select('id, date_ecriture, libelle, journal, debit_mur, credit_mur, numero_compte, ref_folio')
+        .eq('societe_id', ctx.societe_id)
+        .or(`libelle.ilike.${like},ref_folio.ilike.${like},numero_compte.ilike.${like}`)
+        .order('date_ecriture', { ascending: false })
+        .limit(limit)
+      hits.ecritures_v2 = data || []
+    }
+
+    // bulletins de paie (RH+ pour voir au-delà de soi)
+    if (scopes.includes('bulletins_paie')) {
+      let q = admin.from('bulletins_paie')
+        .select('id, employe_id, periode, salaire_brut, salaire_net, statut, created_at')
+        .eq('societe_id', ctx.societe_id)
+        .ilike('periode', like)
+        .order('periode', { ascending: false })
+        .limit(limit)
+      if (!hasRole(ctx, 'rh')) {
+        q = q.eq('employe_id', ctx.employe_id || '00000000-0000-0000-0000-000000000000')
+      }
+      const { data } = await q
+      hits.bulletins_paie = data || []
+    }
+
+    // comptes bancaires (comptable+)
+    if (scopes.includes('comptes_bancaires') && hasRole(ctx, 'comptable')) {
+      const { data } = await admin
+        .from('comptes_bancaires')
+        // FIX colonne : 'nom' n'existe pas → 'nom_compte' (mig 010).
+        .select('id, nom_compte, banque, iban, devise, solde_actuel')
+        .eq('societe_id', ctx.societe_id)
+        .or(`nom_compte.ilike.${like},banque.ilike.${like},iban.ilike.${like}`)
+        .limit(limit)
+      hits.comptes_bancaires = data || []
+    }
+
+    // relevés bancaires (comptable+)
+    if (scopes.includes('releves_bancaires') && hasRole(ctx, 'comptable')) {
+      const { data } = await admin
+        .from('releves_bancaires')
+        .select('id, periode, date_debut, date_fin, statut, compte_bancaire_id, created_at')
+        .eq('societe_id', ctx.societe_id)
+        .ilike('periode', like)
+        .order('date_debut', { ascending: false })
+        .limit(limit)
+      hits.releves_bancaires = data || []
     }
 
     const total = Object.values(hits).reduce((s, arr) => s + arr.length, 0)

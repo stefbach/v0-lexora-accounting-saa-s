@@ -242,9 +242,45 @@ export default function GrandLivrePage() {
             <p className="text-sm text-gray-500 mt-0.5">{t('cabclt.gl.subtitle', locale)}</p>
           </div>
         </div>
-        <Button onClick={exportCSV} variant="outline" className="gap-2" disabled={!data?.ecritures?.length}>
-          <Download className="w-4 h-4" /> {t('cabclt.gl.export_csv', locale)}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={exportCSV} variant="outline" className="gap-2" disabled={!data?.ecritures?.length}>
+            <Download className="w-4 h-4" /> {t('cabclt.gl.export_csv', locale)}
+          </Button>
+          <Button
+            onClick={() => {
+              if (!societeId) return
+              const p = new URLSearchParams({ societe_id: societeId })
+              if (compteDeb) p.append('compte_debut', compteDeb)
+              if (compteFin) p.append('compte_fin', compteFin)
+              if (dateDeb) p.append('date_debut', dateDeb)
+              if (dateFin) p.append('date_fin', dateFin)
+              window.location.href = `/api/comptable/grand-livre/export-xlsx?${p}`
+            }}
+            variant="outline"
+            className="gap-2"
+            disabled={!data?.ecritures?.length}
+            title="Exporter en Excel (xlsx)"
+          >
+            <Download className="w-4 h-4" /> Excel
+          </Button>
+          <Button
+            onClick={() => {
+              if (!societeId) return
+              const p = new URLSearchParams({ societe_id: societeId })
+              if (compteDeb) p.append('compte_debut', compteDeb)
+              if (compteFin) p.append('compte_fin', compteFin)
+              if (dateDeb) p.append('date_debut', dateDeb)
+              if (dateFin) p.append('date_fin', dateFin)
+              window.location.href = `/api/comptable/grand-livre/export-pdf?${p}`
+            }}
+            variant="outline"
+            className="gap-2"
+            disabled={!data?.ecritures?.length}
+            title="Exporter en PDF (A4 paysage, groupé par compte)"
+          >
+            <Download className="w-4 h-4" /> PDF
+          </Button>
+        </div>
       </div>
 
       {/* Filtres */}

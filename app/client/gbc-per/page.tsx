@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, RefreshCw, AlertCircle, Banknote, Info, Plus } from 'lucide-react'
+import { Loader2, RefreshCw, AlertCircle, Banknote, Info, Plus, FileDown } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
 import { t, getLocale, type Locale } from '@/lib/i18n'
 
@@ -34,6 +34,30 @@ export default function GbcPerPage() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FTC)
   const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const exportPDF = async () => {
+    if (!societeId || !exercice) return
+    setExporting(true)
+    try {
+      const res = await fetch(`/api/comptable/gbc/per-computation/export-pdf?societe_id=${societeId}&exercice=${exercice}`)
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || `HTTP ${res.status}`)
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `gbc-per-${exercice}-${new Date().toISOString().slice(0, 10)}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      setError(e?.message || 'Erreur export PDF')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const load = async () => {
     if (!societeId) { setLoading(false); return }
@@ -84,6 +108,10 @@ export default function GbcPerPage() {
         <div className="flex gap-2 items-center">
           <input value={exercice} onChange={e => setExercice(e.target.value)} className="border rounded px-2 py-1 text-sm w-32" placeholder="2025-2026" />
           <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />{t('gbc.common.refresh', locale)}</Button>
+          <Button onClick={exportPDF} variant="outline" disabled={exporting}>
+            {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
+            Exporter PDF
+          </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button className="bg-indigo-600 hover:bg-indigo-700 text-white"><Plus className="h-4 w-4 mr-2" />{t('gbc.per.ftc_btn', locale)}</Button></DialogTrigger>
             <DialogContent className="max-w-lg">

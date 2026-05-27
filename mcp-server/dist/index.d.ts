@@ -1,35 +1,32 @@
 #!/usr/bin/env node
 /**
- * Lexora MCP Server
- * Provides Claude AI direct access to Lexora accounting & HR functions.
+ * Lexora MCP Server — Model Context Protocol pour Claude Desktop, n8n, API.
  *
- * Tools exposed:
- *   - list_societes: List all companies the user has access to
- *   - get_balance: Get account balance for a period
- *   - get_chart_of_accounts: Retrieve full chart of accounts (PCM or SYSCOHADA)
- *   - search_journal_entries: Search GL entries with filters
- *   - post_journal_entry: Create a new GL entry (requires approval workflow)
- *   - get_employee: Get employee details
- *   - list_payslips: List recent payslips for an employee
- *   - calculate_payslip: Calculate a payslip (without saving)
- *   - get_invoice: Get invoice details
- *   - search_invoices: Search invoices with filters
- *   - generate_statement: Generate Bilan/CR/Cash Flow
- *   - get_forex_rate: Get real-time exchange rate
+ * Permet à Claude (et autres clients MCP) d'utiliser Lexora comme un outil
+ * natif. Read-only par défaut — pas d'écriture en compta sans approbation
+ * humaine côté Lexora UI.
  *
- * Usage in Claude Desktop:
- * Add to claude_desktop_config.json:
- * {
- *   "mcpServers": {
- *     "lexora": {
- *       "command": "npx",
- *       "args": ["@lexora/mcp-server"],
- *       "env": {
- *         "LEXORA_API_URL": "https://your-lexora.com",
- *         "LEXORA_API_KEY": "your-api-key"
+ * AUTH : header `X-Lexora-Api-Key` (mig 308 — user_api_keys).
+ * La clé est générée par l'utilisateur dans Lexora :
+ *   /client/direction/mcp-setup → "Créer une nouvelle clé"
+ * Elle est liée à son user_id, révocable, et hashée en DB.
+ *
+ * ENV CÔTÉ MCP (à mettre dans claude_desktop_config.json) :
+ *   LEXORA_API_URL    URL de l'instance Lexora (ex: https://lexora.vercel.app)
+ *   LEXORA_API_KEY    Clé générée dans Lexora (format "lex_...")
+ *
+ * USAGE Claude Desktop (~/.config/Claude/claude_desktop_config.json) :
+ *   {
+ *     "mcpServers": {
+ *       "lexora": {
+ *         "command": "node",
+ *         "args": ["/chemin/absolu/v0-lexora-accounting-saa-s/mcp-server/dist/index.js"],
+ *         "env": {
+ *           "LEXORA_API_URL": "https://ton-instance.vercel.app",
+ *           "LEXORA_API_KEY": "lex_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+ *         }
  *       }
  *     }
  *   }
- * }
  */
 export {};

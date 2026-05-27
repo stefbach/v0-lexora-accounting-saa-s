@@ -42,6 +42,7 @@ import {
   ListFilter,
   KeyRound,
   Mail,
+  Download,
   Info,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
@@ -259,6 +260,20 @@ export default function ClientBanquePage() {
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
                 {t('common.refresh', locale)}
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!societeId) return
+                  window.location.href = `/api/client/releves-bancaires/export-xlsx?societe_id=${societeId}`
+                }}
+                disabled={!societeId || loading}
+                size="sm"
+                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                title="Exporter toutes les transactions bancaires au format Excel"
+              >
+                <Download className="h-4 w-4 mr-1.5" />
+                Excel
+              </Button>
               <label>
                 <input
                   type="file"
@@ -404,12 +419,20 @@ export default function ClientBanquePage() {
                             )}
                           </div>
                         </div>
-                        <Link href="/client/rapprochement">
-                          <Button size="sm" variant="outline">
-                            <Bot className="h-4 w-4 mr-1.5" />
-                            {t('acc.bnq.reconcile', locale)}
-                          </Button>
-                        </Link>
+                        <div className="flex flex-col gap-1.5">
+                          <Link href={`/client/banque/${c.id}`}>
+                            <Button size="sm" variant="outline" className="w-full">
+                              <ArrowRight className="h-4 w-4 mr-1.5" />
+                              Voir détail
+                            </Button>
+                          </Link>
+                          <Link href="/client/rapprochement">
+                            <Button size="sm" variant="outline" className="w-full">
+                              <Bot className="h-4 w-4 mr-1.5" />
+                              {t('acc.bnq.reconcile', locale)}
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
                     )
                   })

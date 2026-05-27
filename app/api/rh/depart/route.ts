@@ -579,6 +579,13 @@ export async function POST(request: Request) {
       const transportBulletin = breakdown?.allocations_prorata?.montant || 0
       const alPayout = breakdown?.conges_al?.montant || 0
       const slPayout = breakdown?.conges_sl?.montant || 0
+      // Mig 441 — VL (Vacation Leave, WRA s.47, 30j/5 ans) doit aussi remonter
+      // dans le bulletin. Sans ça, le breakdown affichait 70 009 MUR mais le
+      // bulletin n'avait que 45 138 MUR (cas Mélanie RAVINA, écart 24 871 MUR
+      // = exactement le montant VL). On agrège AL + SL + VL dans le slot
+      // special_allowance_1 (= « congés payés à la sortie »).
+      const vlPayout = breakdown?.conges_vl?.montant || 0
+      const congesPayoutTotal = alPayout + slPayout + vlPayout
       const treizBulletin = breakdown?.treizieme_mois?.montant || 0
       const preavisBulletin = breakdown?.preavis?.montant || 0
       const severanceBulletin = breakdown?.indemnite_licenciement?.montant || 0
@@ -669,7 +676,7 @@ export async function POST(request: Request) {
         periode: periodeDate,
         salaire_base: salaireBaseBulletin,
         transport_allowance: transportBulletin,
-        special_allowance_1: alPayout + slPayout,
+        special_allowance_1: congesPayoutTotal,
         // primes positives — retenues manuelles, pour que brut GENERATED == totalNet
         // (sinon le trigger mig 236 écrase salaire_net).
         special_allowance_2: specialAlw2Adjusted,
@@ -696,7 +703,7 @@ export async function POST(request: Request) {
         const brutAttendu =
           (Number(salaireBaseBulletin) || 0) +
           (Number(transportBulletin) || 0) +
-          (alPayout + slPayout) +
+          (Number(congesPayoutTotal) || 0) +
           (Number(specialAlw2Adjusted) || 0) +
           (Number(preavisBulletin) || 0) +
           (Number(severanceBulletin) || 0)
@@ -705,7 +712,7 @@ export async function POST(request: Request) {
           periode: periodeDate,
           salaire_base: salaireBaseBulletin,
           transport_allowance: transportBulletin,
-          special_allowance_1: alPayout + slPayout,
+          special_allowance_1: congesPayoutTotal,
           special_allowance_2: specialAlw2Adjusted,
           departure_notice: preavisBulletin,
           special_allowance_3: severanceBulletin,
@@ -717,6 +724,55 @@ export async function POST(request: Request) {
           modifications_keys: Object.keys(modifications),
         }, null, 2))
       } catch { /* noop */ }
+
+      // INVARIANT-STC-VL (mig 440 fortification) — Sentinelle anti-régression
+      // pour toute société présente et future. Vérifie que les composants
+      // critiques du STC remontent bien dans le bulletin :
+      //
+      //   1) Le VL doit être inclus si le breakdown en mentionne un > 0.
+      //      Sans ça, on retombe sur le bug Mélanie (24 871 MUR perdus).
+      //   2) Le total du bulletin (brut) doit matcher le total du breakdown
+      //      moins les retenues manuelles (écart < 1 MUR). Détecte tout
+      //      futur composant ajouté au breakdown qui ne serait pas câblé
+      //      dans le bulletin.
+      //
+      // On log un warning explicite (visible Vercel) plutôt que throw —
+      // on ne veut pas BLOQUER un départ légitime parce qu'un breakdown
+      // arrive avec un composant inattendu. Mais l'écart sera visible et
+      // pourra être corrigé via /rh/depart UI ou un fix code.
+      {
+        const breakdownVL = Number(breakdown?.conges_vl?.montant) || 0
+        const bulletinIncludesVL = congesPayoutTotal >= breakdownVL - 0.5
+        if (breakdownVL > 0 && !bulletinIncludesVL) {
+          console.error(
+            `[confirmer_depart] WARN INVARIANT VL : employé ${employe_id} `
+            + `breakdown VL=${breakdownVL} mais bulletin special_allowance_1=${congesPayoutTotal}. `
+            + `Le VL semble manquer du bulletin. Vérifier que conges_vl est bien lu (cf. fix 02373797).`
+          )
+        }
+        const breakdownTotal = Number(breakdown?.total) || 0
+        // Le total breakdown peut être inférieur au brut bulletin à cause des
+        // retenues manuelles soustraites de specialAlw2Adjusted. On compare
+        // donc brut+retenues vs breakdown.total (ils doivent être égaux).
+        const brutBulletin =
+          (Number(salaireBaseBulletin) || 0) +
+          (Number(transportBulletin) || 0) +
+          (Number(congesPayoutTotal) || 0) +
+          (Number(specialAlw2Adjusted) || 0) +
+          (Number(preavisBulletin) || 0) +
+          (Number(severanceBulletin) || 0) +
+          (Number(retenuesManuelles) || 0)
+        const ecartTotal = Math.abs(breakdownTotal - brutBulletin)
+        if (breakdownTotal > 0 && ecartTotal > 1) {
+          console.error(
+            `[confirmer_depart] WARN INVARIANT TOTAL : employé ${employe_id} `
+            + `breakdown.total=${breakdownTotal} mais bulletin brut+retenues=${brutBulletin} `
+            + `(écart=${ecartTotal} MUR). Un composant breakdown n'est pas câblé dans le bulletin. `
+            + `Composants câblés : salaire_prorata, allocations_prorata, AL+SL+VL, 13e, préavis, indemnité.`
+          )
+        }
+      }
+
 
       // FIX-SOLDE-STC — Bug Alicia : le bulletin de solde tout compte doit
       //   (a) refuser de remplacer un bulletin comptabilisé (mig 427 — l'UI
@@ -821,90 +877,16 @@ export async function POST(request: Request) {
       // (retenues manuelles à conserver) séparément. Garantit que les
       // écritures sont équilibrées et reflètent fidèlement le STC.
       const grossStc = totalNet + retenuesManuelles
-      if (bulletin && grossStc > 0) {
-        try {
-          // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
-          // V2 exige societe_id (NOT NULL) et expose dossier_id ; on garde dossier_id pour la traçabilité.
-          // Renommage des clés : compte → numero_compte, debit → debit_mur, credit → credit_mur.
-          const { data: dossier } = await supabase
-            .from('dossiers')
-            .select('id')
-            .eq('societe_id', emp.societe_id)
-            .limit(1)
-            .maybeSingle()
-
-          if (dossier) {
-            const pieceRef = `STC-${emp.code || employe_id.slice(0, 8)}`
-            const severanceMontant = breakdown?.indemnite_licenciement?.montant || 0
-            const salaireSansIndemnite = severanceMontant > 0
-              ? grossStc - severanceMontant
-              : grossStc
-
-            const entries: any[] = [
-              {
-                dossier_id: dossier.id,
-                societe_id: emp.societe_id,
-                date_ecriture: date_depart,
-                journal: 'SAL',
-                numero_compte: '641', // PCM canonique : parent « Rémunérations du personnel »
-                libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
-                debit_mur: salaireSansIndemnite,
-                credit_mur: 0,
-                numero_piece: pieceRef,
-              },
-              {
-                dossier_id: dossier.id,
-                societe_id: emp.societe_id,
-                date_ecriture: date_depart,
-                journal: 'SAL',
-                numero_compte: '4210', // PCM canonique : « Salaires nets à payer »
-                libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
-                debit_mur: 0,
-                credit_mur: totalNet,
-                numero_piece: pieceRef,
-              },
-            ]
-
-            // FIX-STC-IDENTIQUE — retenue manuelle créditée séparément
-            // (compte 4250 : retenues sur salaires). Cohérent avec
-            // lib/rh/reconstruct-bulletin-from-ecritures.ts qui mappe
-            // 4250 → retenues_manuelles.
-            if (retenuesManuelles > 0) {
-              entries.push({
-                dossier_id: dossier.id,
-                societe_id: emp.societe_id,
-                date_ecriture: date_depart,
-                journal: 'SAL',
-                numero_compte: '4250',
-                libelle: `Retenues manuelles STC — ${emp.prenom} ${emp.nom}`,
-                debit_mur: 0,
-                credit_mur: retenuesManuelles,
-                numero_piece: pieceRef,
-              })
-            }
-
-            // Add specific severance entry if applicable
-            if (severanceMontant > 0) {
-              entries.push({
-                dossier_id: dossier.id,
-                societe_id: emp.societe_id,
-                date_ecriture: date_depart,
-                journal: 'SAL',
-                numero_compte: '6417', // PCM canonique : « 13ème mois / Indemnités »
-                libelle: `Indemnité licenciement — ${emp.prenom} ${emp.nom}`,
-                debit_mur: severanceMontant,
-                credit_mur: 0,
-                numero_piece: pieceRef,
-              })
-            }
-
-            await supabase.from('ecritures_comptables_v2').insert(entries)
-          }
-        } catch (err) {
-          console.error('Erreur écritures comptables:', err)
-          // Non-blocking
-        }
-      }
+      // BUG MAI 2026 — Bloc INSERT direct journal SAL supprimé (était legacy).
+      // Le STC est désormais comptabilisé via le bulletin (type=solde_tout_compte)
+      // créé plus haut → /api/rh/paie/comptabiliser → journal OD-PAIE via la
+      // RPC `generer_ecritures_paie`. Garder le bloc legacy actif générait des
+      // écritures EN DOUBLE (Mélanie 113k MUR fantômes, Alicia 62k constatés
+      // en DB → masse salariale dashboard à 709k au lieu de 636k).
+      //
+      // Si jamais on a besoin de réintroduire un chemin direct (ex. STC sans
+      // bulletin), créer une nouvelle route /api/rh/depart/comptabiliser-stc
+      // qui appellera generer_ecritures_paie pour éviter le double-comptage.
 
       // 4. Cancel any future leave requests
       const { data: futureLeaves } = await supabase

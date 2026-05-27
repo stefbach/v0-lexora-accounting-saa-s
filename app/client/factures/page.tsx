@@ -40,7 +40,9 @@ import {
   Wallet,
   Printer,
   Eye,
+  Download,
 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
@@ -130,6 +132,53 @@ export default function ClientFacturesPage() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [paiementFacture, setPaiementFacture] = useState<Facture | null>(null)
   const [horsBanqueFacture, setHorsBanqueFacture] = useState<Facture | null>(null)
+  // Sélection multi-facture pour export PDF batch — Set d'IDs sélectionnés.
+  // Réinitialisé à chaque rechargement (load) pour éviter d'exporter des
+  // factures qui auraient disparu côté serveur.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [batchExporting, setBatchExporting] = useState(false)
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const handleBatchExport = useCallback(async () => {
+    if (!societeId || selectedIds.size === 0) return
+    setBatchExporting(true)
+    try {
+      const res = await fetch('/api/client/factures/export-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          societe_id: societeId,
+          facture_ids: Array.from(selectedIds),
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d?.error || 'Erreur export')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `factures_batch_${new Date().toISOString().slice(0, 10)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      showToast(e?.message || 'Erreur export PDF', 'error')
+    } finally {
+      setBatchExporting(false)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [societeId, selectedIds])
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
@@ -147,6 +196,7 @@ export default function ClientFacturesPage() {
       const d = await res.json()
       const fin = d?.financial || {}
       setFactures(fin.factures || [])
+      setSelectedIds(new Set())
     } catch {
       showToast(t('inv.fac.load_error', locale), "error")
     } finally {
@@ -293,6 +343,21 @@ export default function ClientFacturesPage() {
               <Button variant="outline" onClick={load} disabled={loading || !societeId} size="sm">
                 <RefreshCw className={`h-4 w-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
                 {t('common.refresh', locale)}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleBatchExport}
+                disabled={batchExporting || selectedIds.size === 0 || !societeId}
+                size="sm"
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                title="Exporter les factures cochées dans un seul PDF (1 page récap + 1 page par facture)"
+              >
+                {batchExporting ? (
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-1.5" />
+                )}
+                Exporter PDF sélectionnés ({selectedIds.size})
               </Button>
               <Link href="/client/nouvelle-facture">
                 <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md">
@@ -467,16 +532,16 @@ export default function ClientFacturesPage() {
                 </div>
 
                 <TabsContent value="toutes" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
                 <TabsContent value="client" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
                 <TabsContent value="fournisseur" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
                 <TabsContent value="brouillons" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
               </Tabs>
             </Card>
@@ -524,11 +589,15 @@ function FactureList({
   onEnregistrerPaiement,
   onReglerHorsBanque,
   onReload,
+  selectedIds,
+  onToggleSelect,
 }: {
   factures: Facture[]
   onEnregistrerPaiement?: (f: Facture) => void
   onReglerHorsBanque?: (f: Facture) => void
   onReload?: () => void
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
 }) {
   const locale = getLocale()
   const STATUT_LABELS = getStatutLabels(locale)
@@ -584,6 +653,15 @@ function FactureList({
             key={f.id}
             className="flex items-start justify-between gap-3 p-3 hover:bg-muted/20"
           >
+            {onToggleSelect && (
+              <div className="pt-1 flex-shrink-0">
+                <Checkbox
+                  checked={selectedIds?.has(f.id) ?? false}
+                  onCheckedChange={() => onToggleSelect(f.id)}
+                  aria-label="Sélectionner cette facture pour l'export PDF"
+                />
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="font-medium text-sm font-mono">

@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, Plus, Loader2, FileText, TrendingUp, Clock, AlertCircle, Wallet } from "lucide-react"
+import { Search, Plus, Loader2, FileText, TrendingUp, Clock, AlertCircle, Wallet, Download } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ReglerHorsBanqueDialog } from "@/components/factures/ReglerHorsBanqueDialog"
 import { t, getLocale } from "@/lib/i18n"
@@ -148,6 +148,21 @@ export default function FacturesClientsPage() {
           <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('cab.fc.title', locale)}</h1>
           <p className="text-sm text-gray-500 mt-1">{t('cab.fc.subtitle', locale)}</p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              const p = new URLSearchParams({ type_facture: 'client' })
+              if (filterSociete !== 'all') p.set('societe_id', filterSociete)
+              if (filterStatut !== 'all') p.set('statut', filterStatut)
+              window.location.href = `/api/comptable/factures/export-xlsx?${p}`
+            }}
+            disabled={loading || filtered.length === 0}
+            title="Exporter les factures clients (toutes les sociétés ou la société filtrée) au format Excel"
+            className="gap-2"
+          >
+            <Download className="w-4 h-4" /> Excel
+          </Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-[#0B0F2E] text-white hover:bg-[#2a3a5a]">
@@ -217,6 +232,7 @@ export default function FacturesClientsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* KPIs */}
