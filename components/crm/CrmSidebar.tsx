@@ -5,75 +5,45 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { t, getLocale } from "@/lib/i18n"
-import { LanguageSwitcher } from "@/components/LanguageSwitcher"
 import {
   LayoutDashboard,
   Users,
-  UserCircle,
-  Building2,
-  UserCog,
-  Briefcase,
-  FileText,
+  Download,
+  ShieldOff,
   Settings,
   LogOut,
   Menu,
   X,
-  ShieldAlert,
-  Wrench,
-  Activity,
-  Brain,
-  Receipt,
-  Target,
 } from "lucide-react"
 
 const MENU = [
   {
-    section: "Administration", sectionKey: "admin.administration",
+    section: "Pipeline",
     items: [
-      { href: "/admin", label: "Dashboard", labelKey: "admin.dashboard", icon: LayoutDashboard, exact: true },
-      { href: "/admin/demandes-inscription", label: "Demandes d'inscription", icon: UserCircle },
-      { href: "/admin/users", label: "Utilisateurs", labelKey: "admin.users", icon: Users },
-      { href: "/admin/clients", label: "Clients", labelKey: "admin.clients", icon: Briefcase },
-      { href: "/admin/comptables", label: "Comptables", labelKey: "admin.accountants", icon: UserCog },
-      { href: "/admin/societes", label: "Societes", labelKey: "admin.companies", icon: Building2 },
-      { href: "/admin/documents", label: "Documents", labelKey: "admin.documents", icon: FileText },
-      { href: "/admin/services", label: "Services & Plans", labelKey: "admin.services", icon: Settings },
-      { href: "/admin/plans", label: "Catalogue tarifaire", icon: Briefcase },
-      { href: "/admin/lexora-billing", label: "Facturation Lexora", icon: Receipt },
-      { href: "/admin/lexora-tooling", label: "Lexora Tooling (IA)", icon: Brain },
+      { href: "/crm", label: "Dashboard", icon: LayoutDashboard, exact: true },
+      { href: "/crm/prospects", label: "Prospects", icon: Users },
     ],
   },
   {
-    section: "Commercial",
+    section: "Outils",
     items: [
-      { href: "/crm", label: "CRM Prospection", icon: Target },
+      { href: "/crm/import", label: "Importer prospects", icon: Download },
+      { href: "/crm/settings/opt-outs", label: "Opt-outs", icon: ShieldOff },
     ],
   },
   {
-    section: "Maintenance", sectionKey: "admin.maintenance_section",
+    section: "Reglages",
     items: [
-      { href: "/admin/repair", label: "Réparation comptable", labelKey: "admin.repair", icon: Wrench },
-      { href: "/admin/health", label: "Santé système", labelKey: "admin.health", icon: Activity },
-    ],
-  },
-  {
-    section: "Parametres", sectionKey: "admin.settings_section",
-    items: [
-      { href: "/admin/parametres", label: "Configuration", labelKey: "admin.configuration", icon: Settings },
-      { href: "/admin/reset-societe", label: "Reset société", labelKey: "admin.reset_societe", icon: ShieldAlert, danger: true },
-      { href: "/admin/purge", label: "Purge cascade", icon: ShieldAlert, danger: true },
+      { href: "/crm/settings", label: "Parametres", icon: Settings, exact: true },
     ],
   },
 ]
 
-export function AdminSidebar() {
+export function CrmSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const locale = getLocale()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Close sidebar on navigation
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
   const isActive = (href: string, exact?: boolean) => {
@@ -91,7 +61,7 @@ export function AdminSidebar() {
     <>
       <button
         onClick={() => setMobileOpen(true)}
-        aria-label={t('comp.sidebar.open_nav', locale)}
+        aria-label="Ouvrir la navigation"
         className="fixed top-4 left-4 z-50 md:hidden inline-flex items-center gap-2 rounded-full px-3 py-2 text-white shadow-lg backdrop-blur"
         style={{
           backgroundColor: "rgba(16,24,71,0.85)",
@@ -109,7 +79,8 @@ export function AdminSidebar() {
 
       {mobileOpen && <div onClick={() => setMobileOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" />}
 
-      <aside data-lenis-prevent
+      <aside
+        data-lenis-prevent
         className={`w-64 min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-50 overflow-y-auto transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
         style={{
           background:
@@ -118,12 +89,12 @@ export function AdminSidebar() {
           fontFamily: "'Poppins', sans-serif",
         }}
       >
-        <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10" aria-label={t('comp.sidebar.close', locale)}>
+        <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 md:hidden text-white/60 hover:text-white z-10" aria-label="Fermer">
           <X className="w-5 h-5" />
         </button>
 
         <div className="p-5 flex-shrink-0" style={{ borderBottom: "1px solid rgba(232,234,252,0.06)" }}>
-          <Link href="/admin" className="flex flex-col">
+          <Link href="/crm" className="flex flex-col">
             <div className="flex items-baseline">
               <span className="text-lg font-bold" style={{ color: "#E8EAFC", letterSpacing: "0.04em" }}>LE</span>
               <span className="text-lg font-bold" style={{ color: "#D4AF37", letterSpacing: "0.04em" }}>X</span>
@@ -139,13 +110,13 @@ export function AdminSidebar() {
               style={{ background: "linear-gradient(90deg, #D4AF37 0%, transparent 100%)" }}
             />
             <span className="mt-2 inline-block text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "#A8AFC7" }}>
-              {t('admin.administration', locale)}
+              CRM Prospection
             </span>
           </Link>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-3">
-          {MENU.map(({ section, sectionKey, items }) => {
+          {MENU.map(({ section, items }) => {
             const hasActive = items.some((i: any) => isActive(i.href, i.exact))
             return (
               <div key={section}>
@@ -161,7 +132,7 @@ export function AdminSidebar() {
                       boxShadow: hasActive ? "0 0 4px #D4AF37" : "none",
                     }}
                   />
-                  <span>{sectionKey ? t(sectionKey, locale) : section}</span>
+                  <span>{section}</span>
                 </div>
                 <div className="mt-1 space-y-0.5">
                   {items.map((item: any) => {
@@ -173,7 +144,7 @@ export function AdminSidebar() {
                         href={item.href}
                         className={cn(
                           "group relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-200",
-                          active ? "text-[#0B0F2E] font-semibold" : item.danger ? "text-[#FCA5A5] hover:text-white" : "text-white/70 hover:text-white"
+                          active ? "text-[#0B0F2E] font-semibold" : "text-white/70 hover:text-white"
                         )}
                         style={
                           active
@@ -206,7 +177,7 @@ export function AdminSidebar() {
                           />
                         )}
                         <Icon className="w-4 h-4 flex-shrink-0 relative" style={{ color: active ? "#0B0F2E" : undefined }} />
-                        <span className="truncate relative">{item.labelKey ? t(item.labelKey, locale) : item.label}</span>
+                        <span className="truncate relative">{item.label}</span>
                       </Link>
                     )
                   })}
@@ -217,9 +188,6 @@ export function AdminSidebar() {
         </nav>
 
         <div className="px-3 py-4 flex-shrink-0 space-y-2" style={{ borderTop: "1px solid rgba(232,234,252,0.06)" }}>
-          <div className="flex justify-center">
-            <LanguageSwitcher />
-          </div>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all"
@@ -234,7 +202,7 @@ export function AdminSidebar() {
             }}
           >
             <LogOut className="w-4 h-4" />
-            <span>{t('common.logout', locale)}</span>
+            <span>Deconnexion</span>
           </button>
         </div>
       </aside>
