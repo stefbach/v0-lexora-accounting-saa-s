@@ -309,10 +309,22 @@ export function ClientSidebarFull() {
         },
       ]
     : MENU.filter(section => {
-        if (section.requiredModule && !activeModules[section.requiredModule]) return false
+        // Pour les régimes GBC, les modules "fondamentaux" (compta, facturation,
+        // fiscal, états financiers) sont OBLIGATOIRES (Full IFRS + PER + UBO +
+        // Pillar Two impliquent tous une compta + facturation). On les force
+        // visibles même si activeModules ne les liste pas explicitement.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- societe type from provider may not include `regime` (mig 258)
+        const currentRegime = ((societe as any)?.regime || 'domestic') as 'gbc1' | 'authorised_company' | 'holding' | 'branch_foreign_pe' | 'domestic'
+        const isGBC = ['gbc1', 'authorised_company', 'holding', 'branch_foreign_pe'].includes(currentRegime)
+        const FUNDAMENTAL_MODULES_FOR_GBC: ModuleKey[] = ['comptabilite', 'facturation', 'fiscal', 'etats_financiers']
+
+        if (section.requiredModule && !activeModules[section.requiredModule]) {
+          // Exception : GBC voit toujours les modules fondamentaux
+          if (!(isGBC && FUNDAMENTAL_MODULES_FOR_GBC.includes(section.requiredModule))) {
+            return false
+          }
+        }
         if (section.requiredRegime && section.requiredRegime.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- societe type from provider may not include `regime` champ (mig 258)
-          const currentRegime = ((societe as any)?.regime || 'domestic') as 'gbc1' | 'authorised_company' | 'holding' | 'branch_foreign_pe' | 'domestic'
           if (!section.requiredRegime.includes(currentRegime)) return false
         }
         return true
