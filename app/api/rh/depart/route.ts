@@ -725,6 +725,55 @@ export async function POST(request: Request) {
         }, null, 2))
       } catch { /* noop */ }
 
+      // INVARIANT-STC-VL (mig 440 fortification) — Sentinelle anti-régression
+      // pour toute société présente et future. Vérifie que les composants
+      // critiques du STC remontent bien dans le bulletin :
+      //
+      //   1) Le VL doit être inclus si le breakdown en mentionne un > 0.
+      //      Sans ça, on retombe sur le bug Mélanie (24 871 MUR perdus).
+      //   2) Le total du bulletin (brut) doit matcher le total du breakdown
+      //      moins les retenues manuelles (écart < 1 MUR). Détecte tout
+      //      futur composant ajouté au breakdown qui ne serait pas câblé
+      //      dans le bulletin.
+      //
+      // On log un warning explicite (visible Vercel) plutôt que throw —
+      // on ne veut pas BLOQUER un départ légitime parce qu'un breakdown
+      // arrive avec un composant inattendu. Mais l'écart sera visible et
+      // pourra être corrigé via /rh/depart UI ou un fix code.
+      {
+        const breakdownVL = Number(breakdown?.conges_vl?.montant) || 0
+        const bulletinIncludesVL = congesPayoutTotal >= breakdownVL - 0.5
+        if (breakdownVL > 0 && !bulletinIncludesVL) {
+          console.error(
+            `[confirmer_depart] WARN INVARIANT VL : employé ${employe_id} `
+            + `breakdown VL=${breakdownVL} mais bulletin special_allowance_1=${congesPayoutTotal}. `
+            + `Le VL semble manquer du bulletin. Vérifier que conges_vl est bien lu (cf. fix 02373797).`
+          )
+        }
+        const breakdownTotal = Number(breakdown?.total) || 0
+        // Le total breakdown peut être inférieur au brut bulletin à cause des
+        // retenues manuelles soustraites de specialAlw2Adjusted. On compare
+        // donc brut+retenues vs breakdown.total (ils doivent être égaux).
+        const brutBulletin =
+          (Number(salaireBaseBulletin) || 0) +
+          (Number(transportBulletin) || 0) +
+          (Number(congesPayoutTotal) || 0) +
+          (Number(specialAlw2Adjusted) || 0) +
+          (Number(preavisBulletin) || 0) +
+          (Number(severanceBulletin) || 0) +
+          (Number(retenuesManuelles) || 0)
+        const ecartTotal = Math.abs(breakdownTotal - brutBulletin)
+        if (breakdownTotal > 0 && ecartTotal > 1) {
+          console.error(
+            `[confirmer_depart] WARN INVARIANT TOTAL : employé ${employe_id} `
+            + `breakdown.total=${breakdownTotal} mais bulletin brut+retenues=${brutBulletin} `
+            + `(écart=${ecartTotal} MUR). Un composant breakdown n'est pas câblé dans le bulletin. `
+            + `Composants câblés : salaire_prorata, allocations_prorata, AL+SL+VL, 13e, préavis, indemnité.`
+          )
+        }
+      }
+
+
       // FIX-SOLDE-STC — Bug Alicia : le bulletin de solde tout compte doit
       //   (a) refuser de remplacer un bulletin comptabilisé (mig 427 — l'UI
       //       admin doit décomptabiliser via /rh/audit-decomptabilisation
