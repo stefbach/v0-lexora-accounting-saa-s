@@ -70,7 +70,7 @@ async function lexoraFetch(path: string, init: RequestInit = {}) {
 }
 
 const server = new Server(
-  { name: 'lexora-mcp', version: '0.6.0' },
+  { name: 'lexora-mcp', version: '0.6.1' },
   { capabilities: { tools: {} } },
 )
 
@@ -154,6 +154,31 @@ const TOOLS = [
     description:
       'Taux de change actuels MUR vers devises étrangères (USD, EUR, GBP, JPY, AUD, CAD, CNY, INR, ZAR...). Source : Bank of Mauritius officielle, fallback ExchangeRate-API.',
     inputSchema: { type: 'object' as const, properties: {} },
+  },
+  {
+    name: 'list_transactions_bancaires',
+    description:
+      'Liste les MOUVEMENTS bancaires (transactions à plat) d\'une société pour une période. Plus pratique que list_releves_bancaires quand on veut juste les transactions individuelles. Filtres puissants : compte, période, statut rapprochement (rapproche/non_identifie/a_verifier/propose/tous), plage de montant, ilike libellé. Idéal pour répondre à "Donne-moi les mouvements bancaires de DDS pour mai 2026 supérieurs à 100k MUR".',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        societe_id: { type: 'string', description: 'UUID société (requis)' },
+        compte_id: { type: 'string', description: 'UUID compte bancaire (optionnel)' },
+        periode: { type: 'string', description: 'YYYY-MM (alternative à date_debut/date_fin)' },
+        date_debut: { type: 'string', description: 'YYYY-MM-DD' },
+        date_fin: { type: 'string', description: 'YYYY-MM-DD' },
+        statut: {
+          type: 'string',
+          enum: ['tous', 'rapproche', 'non_identifie', 'a_verifier', 'propose'],
+          description: 'Filtre statut rapprochement. Défaut: tous.',
+        },
+        min_montant: { type: 'number', description: 'Filtre |max(debit,credit)| >=' },
+        max_montant: { type: 'number', description: 'Filtre |max(debit,credit)| <=' },
+        libelle: { type: 'string', description: 'Filtre ilike sur libellé (insensitive contains)' },
+        limit: { type: 'number', description: 'Max résultats. Défaut 200, max 1000.' },
+      },
+      required: ['societe_id'],
+    },
   },
   // ============================================================
   // v0.5.0 — Couverture complète comptable + RH + banque (14 nouveaux outils)
@@ -630,6 +655,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'get_taux_change': {
         const data = await lexoraFetch('/api/taux-change')
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+      }
+
+      case 'list_transactions_bancaires': {
+        const params = new URLSearchParams()
+        if (a.societe_id) params.set('societe_id', String(a.societe_id))
+        if (a.compte_id) params.set('compte_id', String(a.compte_id))
+        if (a.periode) params.set('periode', String(a.periode))
+        if (a.date_debut) params.set('date_debut', String(a.date_debut))
+        if (a.date_fin) params.set('date_fin', String(a.date_fin))
+        if (a.statut) params.set('statut', String(a.statut))
+        if (a.min_montant !== undefined) params.set('min_montant', String(a.min_montant))
+        if (a.max_montant !== undefined) params.set('max_montant', String(a.max_montant))
+        if (a.libelle) params.set('libelle', String(a.libelle))
+        if (a.limit !== undefined) params.set('limit', String(a.limit))
+        const data = await lexoraFetch(`/api/mcp/transactions-bancaires?${params}`)
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
       }
 
