@@ -107,7 +107,7 @@ export async function GET(request: Request) {
     if (!societe_id) {
       accessibleSocieteIds = await getUserSocieteIds(user.id)
       if (accessibleSocieteIds.length === 0) {
-        return NextResponse.json({ rule: null, frais: [], tarif_km: 7, entries: [], total: 0 })
+        return NextResponse.json({ rule: null, frais: [], tarif_km: 16, entries: [], total: 0 })
       }
     }
 
@@ -171,7 +171,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
           rule,
           frais: [],
-          tarif_km: Number(rule?.tarif_par_km) || 7,
+          tarif_km: Number(rule?.tarif_par_km) || 16,
           entries: [],
           total: 0,
         })
@@ -206,7 +206,7 @@ export async function GET(request: Request) {
         employe_poste: emp.poste || '',
         periode: e.periode,
         km: Number(e.km_parcourus) || 0,
-        tarif: Number(e.tarif_applique || e.tarif_par_km) || Number(rule?.tarif_par_km) || 7,
+        tarif: Number(e.tarif_applique || e.tarif_par_km) || Number(rule?.tarif_par_km) || 16,
         montant: Number(e.montant) || 0,
         statut: statutDerive,
         approuve: e.approuve === true,
@@ -217,7 +217,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       rule,
       frais,
-      tarif_km: Number(rule?.tarif_par_km) || 7,
+      tarif_km: Number(rule?.tarif_par_km) || 16,
       entries: entries || [],
       total: (entries || []).length,
     })
@@ -427,7 +427,7 @@ export async function POST(request: Request) {
                 .maybeSingle()
               fbTarif = Number(r2?.tarif_par_km) || null
             }
-            const tarifFb = fbTarif || 7
+            const tarifFb = fbTarif || 16
             const kmFb = aller_retour ? kmNum * 2 : kmNum
 
             // Lire l'existant pour additionner les km du mois
@@ -587,9 +587,9 @@ export async function POST(request: Request) {
         saisieRule = sr2
       }
 
-      // Priorité : body.tarif_applique > règle société > défaut 7
+      // Priorité : body.tarif_applique > règle société > défaut 16 Rs/km
       // (défaut aligné sur parametres_km.taux_voiture / coût réel Maurice).
-      const tarif = (tarifBody && tarifBody > 0) ? tarifBody : (Number(saisieRule?.tarif_par_km) || 7)
+      const tarif = (tarifBody && tarifBody > 0) ? tarifBody : (Number(saisieRule?.tarif_par_km) || 16)
       let kmEffectifs = Number(km_parcourus)
       // Apply monthly cap on km (puisque montant est GENERATED)
       const plafond = Number(saisieRule?.plafond_mensuel) || 0
