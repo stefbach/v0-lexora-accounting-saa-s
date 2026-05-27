@@ -59,7 +59,7 @@ async function lexoraFetch(path, init = {}) {
     }
     return body;
 }
-const server = new Server({ name: 'lexora-mcp', version: '0.5.0' }, { capabilities: { tools: {} } });
+const server = new Server({ name: 'lexora-mcp', version: '0.6.0' }, { capabilities: { tools: {} } });
 // ============================================================
 // Liste des outils exposés à Claude
 // ============================================================
@@ -324,6 +324,212 @@ const TOOLS = [
             required: ['societe_id'],
         },
     },
+    // ============================================================
+    // v0.6.0 — Outils ciblés workflows fréquents + query générique
+    // ============================================================
+    {
+        name: 'get_balance_comptes',
+        description: 'Balance des comptes d\'une société pour une période ou un exercice. Retourne pour chaque compte : débit cumulé, crédit cumulé, solde.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                exercice: { type: 'string', description: 'Ex: "2025-2026"' },
+                date_debut: { type: 'string', description: 'YYYY-MM-DD' },
+                date_fin: { type: 'string', description: 'YYYY-MM-DD' },
+                compte_debut: { type: 'string', description: 'Plage compte début' },
+                compte_fin: { type: 'string', description: 'Plage compte fin' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'get_bilan',
+        description: 'Bilan comptable d\'une société pour un exercice donné. Actif (immobilisations, créances, trésorerie) vs Passif (capitaux propres, dettes).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                exercice: { type: 'string' },
+                date_arrete: { type: 'string', description: 'YYYY-MM-DD (alternative à exercice)' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'get_compte_resultat',
+        description: 'Compte de résultat (P&L) détaillé d\'une société : produits classes 7, charges classes 6, résultat net.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                exercice: { type: 'string' },
+                date_debut: { type: 'string' },
+                date_fin: { type: 'string' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_exercices',
+        description: 'Liste les exercices fiscaux (Jul-Jun) d\'une société : ouverts, clôturés, dates.',
+        inputSchema: {
+            type: 'object',
+            properties: { societe_id: { type: 'string' } },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_conges',
+        description: 'Liste les demandes/soldes de congés. Filtres par employé, statut, type, période.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                employe_id: { type: 'string' },
+                statut: { type: 'string', enum: ['en_attente', 'valide', 'refuse', 'annule'] },
+                type: { type: 'string', description: 'Code du type de congé (annuel, maladie, maternite...)' },
+                date_debut: { type: 'string', description: 'YYYY-MM-DD' },
+                date_fin: { type: 'string' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_pointages',
+        description: 'Pointages quotidiens (présence, heures, absences) sur une période.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                employe_id: { type: 'string' },
+                date_debut: { type: 'string', description: 'YYYY-MM-DD' },
+                date_fin: { type: 'string' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_heures_sup',
+        description: 'Heures supplémentaires saisies/validées par employé et période.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                employe_id: { type: 'string' },
+                periode: { type: 'string', description: 'YYYY-MM' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_contrats',
+        description: 'Contrats employés actifs (CDI, CDD, freelance...) avec dates, salaires.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                employe_id: { type: 'string' },
+                actif_seulement: { type: 'boolean', description: 'Si true, ne retourne que les contrats actuellement actifs.' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_paiements',
+        description: 'Paiements (partiels ou complets) enregistrés sur les factures d\'une société.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                facture_id: { type: 'string', description: 'Filtre sur une facture précise.' },
+                date_debut: { type: 'string' },
+                date_fin: { type: 'string' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_comptes_courants_associes',
+        description: 'Comptes courants d\'associés (CCA) d\'une société : associés, soldes courants, dernier mouvement.',
+        inputSchema: {
+            type: 'object',
+            properties: { societe_id: { type: 'string' } },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_comptes_paiement_tiers',
+        description: 'Whitelist des comptes de paiement tiers (associés, sociétés liées, exploitant) utilisés pour les règlements hors banque.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                actif: { type: 'boolean', description: 'Filtre actif/inactif.' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_declarations_mra',
+        description: 'Déclarations MRA mensuelles (PAYE, NSF, CSG, Training Levy, PRGF, TDS) d\'une société.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                type_declaration: { type: 'string', enum: ['paye', 'nsf_csg', 'training_levy', 'prgf', 'tds', 'tva'] },
+                date_debut: { type: 'string' },
+                date_fin: { type: 'string' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_audit_log',
+        description: 'Audit trail des actions sur le rapprochement bancaire (lettrer, classer, regler_hors_banque, déletrer).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                action: { type: 'string', description: 'Filtre par type d\'action.' },
+                user_id: { type: 'string' },
+                date_debut: { type: 'string' },
+                date_fin: { type: 'string' },
+                limit: { type: 'number' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    // ─── Outil générique : query SELECT sur whitelist de tables ────────
+    {
+        name: 'query_lexora',
+        description: 'Outil GÉNÉRIQUE pour interroger n\'importe quelle table Lexora whitelistée en SELECT. Utiliser après avoir consulté get_mcp_tables pour la liste des tables disponibles et leur structure. Filtres : eq, in, gte, lte, ilike. Toujours SELECT-only, sécurisé. Idéal pour les requêtes ad-hoc que les outils dédiés ne couvrent pas.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                table: {
+                    type: 'string',
+                    description: 'Nom de la table à interroger (cf. get_mcp_tables pour la liste complète : ecritures_comptables_v2, factures, bulletins_paie, conges, pointages, etc.)',
+                },
+                societe_id: { type: 'string', description: 'OBLIGATOIRE pour la plupart des tables (sauf référentiels globaux comme plan_comptable_pcm, taux_change).' },
+                filters: { type: 'object', additionalProperties: true, description: 'Filtres d\'égalité, ex: {"statut": "paye", "type_facture": "fournisseur"}' },
+                filters_in: { type: 'object', additionalProperties: true, description: 'Filtres IN, ex: {"statut": ["paye", "retard"]}' },
+                filters_gte: { type: 'object', additionalProperties: true, description: 'Filtres >=, ex: {"date_facture": "2026-01-01"}' },
+                filters_lte: { type: 'object', additionalProperties: true, description: 'Filtres <=' },
+                filters_ilike: { type: 'object', additionalProperties: true, description: 'Filtres ILIKE (insensitive), ex: {"tiers": "%apple%"}' },
+                columns: { type: 'array', items: { type: 'string' }, description: 'Colonnes à retourner. Par défaut, colonnes pré-sélectionnées par la whitelist.' },
+                order_by: { type: 'string', description: 'Colonne d\'ordre.' },
+                order_dir: { type: 'string', enum: ['asc', 'desc'], description: 'Direction. Défaut desc.' },
+                limit: { type: 'number', description: 'Nombre max de lignes (1-500). Défaut 100.' },
+            },
+            required: ['table'],
+        },
+    },
+    {
+        name: 'get_mcp_tables',
+        description: 'Retourne la liste des tables Lexora interrogeables via query_lexora, avec leur domaine (compta/paie/banque/tiers/docs/fiscal/gbc/system), description, et colonnes par défaut. À appeler en premier pour découvrir ce qui est disponible.',
+        inputSchema: { type: 'object', properties: {} },
+    },
 ];
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -555,6 +761,204 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 if (a.societe_id)
                     params.set('societe_id', String(a.societe_id));
                 const data = await lexoraFetch(`/api/comptable/lettrage?${params}`);
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            // ─── v0.6.0 — outils ciblés via query générique ──────────────────
+            case 'get_balance_comptes': {
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        table: 'ecritures_comptables_v2',
+                        societe_id: a.societe_id,
+                        filters_gte: a.date_debut ? { date_ecriture: a.date_debut } : undefined,
+                        filters_lte: a.date_fin ? { date_ecriture: a.date_fin } : undefined,
+                        columns: ['numero_compte', 'nom_compte', 'debit_mur', 'credit_mur', 'date_ecriture'],
+                        limit: 500,
+                    }),
+                });
+                // Agrégation simple côté client : group by numero_compte
+                const rows = data.rows || [];
+                const acc = new Map();
+                for (const r of rows) {
+                    const k = r.numero_compte;
+                    if (!acc.has(k))
+                        acc.set(k, { numero_compte: k, nom_compte: r.nom_compte, debit: 0, credit: 0 });
+                    acc.get(k).debit += +r.debit_mur || 0;
+                    acc.get(k).credit += +r.credit_mur || 0;
+                }
+                const balance = [...acc.values()]
+                    .map(b => ({ ...b, solde: +(b.debit - b.credit).toFixed(2) }))
+                    .sort((a, b) => a.numero_compte.localeCompare(b.numero_compte));
+                return { content: [{ type: 'text', text: JSON.stringify({ balance, truncated: data.truncated }, null, 2) }] };
+            }
+            case 'get_bilan': {
+                const params = new URLSearchParams();
+                if (a.societe_id)
+                    params.set('societe_id', String(a.societe_id));
+                if (a.exercice)
+                    params.set('exercice', String(a.exercice));
+                if (a.date_arrete)
+                    params.set('date_arrete', String(a.date_arrete));
+                const data = await lexoraFetch(`/api/comptable/etats-financiers?type=bilan&${params}`);
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'get_compte_resultat': {
+                const params = new URLSearchParams();
+                if (a.societe_id)
+                    params.set('societe_id', String(a.societe_id));
+                if (a.exercice)
+                    params.set('exercice', String(a.exercice));
+                if (a.date_debut)
+                    params.set('date_debut', String(a.date_debut));
+                if (a.date_fin)
+                    params.set('date_fin', String(a.date_fin));
+                const data = await lexoraFetch(`/api/comptable/etats-financiers?type=compte_resultat&${params}`);
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_exercices': {
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({ table: 'exercices', societe_id: a.societe_id, limit: 50 }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_conges': {
+                const filters = {};
+                if (a.employe_id)
+                    filters.employe_id = a.employe_id;
+                if (a.statut)
+                    filters.statut = a.statut;
+                if (a.type)
+                    filters.type = a.type;
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        table: 'conges', societe_id: a.societe_id,
+                        filters,
+                        filters_gte: a.date_debut ? { date_debut: a.date_debut } : undefined,
+                        filters_lte: a.date_fin ? { date_fin: a.date_fin } : undefined,
+                        limit: 200,
+                    }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_pointages': {
+                const filters = {};
+                if (a.employe_id)
+                    filters.employe_id = a.employe_id;
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        table: 'pointages', societe_id: a.societe_id,
+                        filters,
+                        filters_gte: a.date_debut ? { date_pointage: a.date_debut } : undefined,
+                        filters_lte: a.date_fin ? { date_pointage: a.date_fin } : undefined,
+                        limit: 500,
+                    }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_heures_sup': {
+                const filters = {};
+                if (a.employe_id)
+                    filters.employe_id = a.employe_id;
+                if (a.periode)
+                    filters.periode = a.periode;
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({ table: 'heures_sup', societe_id: a.societe_id, filters, limit: 300 }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_contrats': {
+                const filters = {};
+                if (a.employe_id)
+                    filters.employe_id = a.employe_id;
+                if (a.actif_seulement)
+                    filters.actif = true;
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({ table: 'contrats', societe_id: a.societe_id, filters, limit: 200 }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_paiements': {
+                const filters = {};
+                if (a.facture_id)
+                    filters.facture_id = a.facture_id;
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        table: 'factures_paiements', societe_id: a.societe_id,
+                        filters,
+                        filters_gte: a.date_debut ? { date_paiement: a.date_debut } : undefined,
+                        filters_lte: a.date_fin ? { date_paiement: a.date_fin } : undefined,
+                        limit: 300,
+                    }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_comptes_courants_associes': {
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({ table: 'comptes_courants_associes', societe_id: a.societe_id, limit: 100 }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_comptes_paiement_tiers': {
+                const filters = {};
+                if (typeof a.actif === 'boolean')
+                    filters.actif = a.actif;
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({ table: 'comptes_paiement_tiers', societe_id: a.societe_id, filters, limit: 100 }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_declarations_mra': {
+                const filters = {};
+                if (a.type_declaration)
+                    filters.type_declaration = a.type_declaration;
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        table: 'declarations_mra', societe_id: a.societe_id,
+                        filters,
+                        filters_gte: a.date_debut ? { periode: a.date_debut } : undefined,
+                        filters_lte: a.date_fin ? { periode: a.date_fin } : undefined,
+                        limit: 100,
+                    }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_audit_log': {
+                const filters = {};
+                if (a.action)
+                    filters.action = a.action;
+                if (a.user_id)
+                    filters.user_id = a.user_id;
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        table: 'rapprochement_audit_log', societe_id: a.societe_id,
+                        filters,
+                        filters_gte: a.date_debut ? { created_at: a.date_debut } : undefined,
+                        filters_lte: a.date_fin ? { created_at: a.date_fin } : undefined,
+                        limit: Number(a.limit) || 100,
+                    }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            // ─── Outil générique ─────────────────────────────────────────────
+            case 'query_lexora': {
+                const data = await lexoraFetch('/api/mcp/query', {
+                    method: 'POST',
+                    body: JSON.stringify(a),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'get_mcp_tables': {
+                const data = await lexoraFetch('/api/mcp/query', { method: 'GET' });
                 return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
             }
             default:
