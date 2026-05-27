@@ -1964,8 +1964,185 @@ export async function POST(request: Request) {
 
     // === LETTRAGE MANUEL ===
     if (action === 'lettrer_manuel') {
-      const { transaction_id, releve_id, facture_id, ecriture_id, societe_id, classification } = body
+      const { transaction_id, releve_id, facture_id, facture_ids, ecriture_id, societe_id, classification } = body
       if (!releve_id) return NextResponse.json({ error: 'releve_id requis' }, { status: 400 })
+
+      // ─────────────────────────────────────────────────────────────────
+      // BRANCHE MULTI-FACTURES — un seul virement solde N factures.
+      // Active si body.facture_ids est un array de longueur >= 2.
+      // ─────────────────────────────────────────────────────────────────
+      if (Array.isArray(facture_ids) && facture_ids.length >= 2) {
+        const fIds: string[] = facture_ids.filter((x: any) => typeof x === 'string' && x.length > 0)
+        if (fIds.length < 2) {
+          return NextResponse.json({ error: 'facture_ids invalide (au moins 2 factures requises)' }, { status: 400 })
+        }
+
+        const { data: releveMulti } = await supabase
+          .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id')
+          .eq('id', releve_id).single()
+        if (!releveMulti) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+
+        const txIdxM = parseInt(String(transaction_id).split('-').pop() || '0')
+        const txsM = [...(releveMulti.transactions_json || [])]
+        if (txIdxM >= txsM.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+
+        const prevTxM = { ...txsM[txIdxM] }
+        const txAmount = Math.max(Number(prevTxM.debit) || 0, Number(prevTxM.credit) || 0)
+        if (txAmount <= 0) {
+          return NextResponse.json({ error: 'Montant de la transaction nul — impossible de lettrer' }, { status: 400 })
+        }
+
+        // Période verrouillée ?
+        if (prevTxM.date && societe_id) {
+          const lockStatus = await checkPeriodLock(supabase, societe_id, prevTxM.date)
+          if (lockStatus.locked) {
+            return NextResponse.json({
+              error: `Période verrouillée — ${lockStatus.reason}. Modification interdite sur transaction du ${prevTxM.date}.`,
+              period_end: lockStatus.period_end,
+            }, { status: 403 })
+          }
+        }
+
+        // Charger toutes les factures
+        const { data: facturesMulti, error: fLoadErr } = await supabase
+          .from('factures')
+          .select('id, numero_facture, tiers, type_facture, montant_ttc, montant_mur, solde_non_paye, devise, statut, rapproche_releve_id, rapproche_transaction_idx, rapproche_date, rapproche_source')
+          .in('id', fIds)
+        if (fLoadErr || !facturesMulti || facturesMulti.length !== fIds.length) {
+          return NextResponse.json({
+            error: `Factures introuvables (attendu ${fIds.length}, trouvé ${facturesMulti?.length || 0})`,
+          }, { status: 404 })
+        }
+        if (facturesMulti.some(f => f.statut === 'paye' || f.statut === 'annule')) {
+          return NextResponse.json({
+            error: 'Une ou plusieurs factures sont déjà payées ou annulées — déletrer d\'abord',
+          }, { status: 400 })
+        }
+
+        // Validation : somme des soldes restants ≈ montant tx (tolérance 1 MUR)
+        const TOL_MULTI = 1
+        const sommeSoldes = facturesMulti.reduce((s, f) => {
+          const solde = f.solde_non_paye != null ? Number(f.solde_non_paye) : Number(f.montant_ttc) || 0
+          return s + solde
+        }, 0)
+        if (Math.abs(sommeSoldes - txAmount) > TOL_MULTI) {
+          return NextResponse.json({
+            error: `Total factures (${sommeSoldes.toFixed(2)} MUR) ≠ montant tx (${txAmount.toFixed(2)} MUR). Écart > ${TOL_MULTI} MUR.`,
+          }, { status: 400 })
+        }
+
+        // Compte bancaire pour les écritures BNQ
+        let compteBanqueM = '512'
+        if (releveMulti.compte_bancaire_id) {
+          const { data: cbM } = await supabase
+            .from('comptes_bancaires').select('compte_comptable')
+            .eq('id', releveMulti.compte_bancaire_id).maybeSingle()
+          if (cbM?.compte_comptable) compteBanqueM = String(cbM.compte_comptable)
+        }
+
+        const lettreCodeM = `MM${String(Date.now()).slice(-5)}`
+        const reconcileDateM = new Date().toISOString()
+        const datePayM = (prevTxM as any).date || new Date().toISOString().split('T')[0]
+
+        const rollbackM: Array<() => Promise<any>> = []
+        const processedFactures: string[] = []
+
+        try {
+          // Step 1 : flagger la transaction (statut rapproche + facture_ids)
+          txsM[txIdxM] = {
+            ...prevTxM,
+            facture_ids: fIds,
+            nb_factures: fIds.length,
+            rapprochement_multi: true,
+            lettre: lettreCodeM,
+            statut: 'rapproche',
+            rapproche_at: reconcileDateM,
+          }
+          const { error: updRelM } = await supabase
+            .from('releves_bancaires').update({ transactions_json: txsM }).eq('id', releve_id)
+          if (updRelM) throw new Error(`Releve update failed: ${updRelM.message}`)
+          rollbackM.unshift(async () => {
+            const revert = [...txsM]; revert[txIdxM] = prevTxM
+            await supabase.from('releves_bancaires').update({ transactions_json: revert }).eq('id', releve_id)
+          })
+
+          // Step 2 : pour chaque facture, marquer paye et créer la BNQ
+          for (const f of facturesMulti) {
+            const soldeAvant = f.solde_non_paye != null ? Number(f.solde_non_paye) : Number(f.montant_ttc) || 0
+            const amount_mur = Number((f as any).montant_mur) || Number(f.montant_ttc) || 0
+            const prevState = {
+              statut: f.statut, solde_non_paye: f.solde_non_paye,
+              rapproche_releve_id: f.rapproche_releve_id, rapproche_transaction_idx: f.rapproche_transaction_idx,
+              rapproche_date: f.rapproche_date, rapproche_source: f.rapproche_source,
+            }
+            const { error: updFErr } = await supabase.from('factures').update({
+              statut: 'paye', solde_non_paye: 0,
+              rapproche_releve_id: releve_id, rapproche_transaction_idx: txIdxM,
+              rapproche_date: reconcileDateM, rapproche_source: 'manual_multi',
+            }).eq('id', f.id)
+            if (updFErr) throw new Error(`Facture ${f.numero_facture || f.id} update failed: ${updFErr.message}`)
+            rollbackM.unshift(async () => {
+              await supabase.from('factures').update(prevState).eq('id', f.id)
+            })
+
+            // Créer l'écriture BNQ pour cette facture (D 401/411 / C banque)
+            if (amount_mur > 0) {
+              const payType: 'supplier' | 'client' = f.type_facture === 'fournisseur' ? 'supplier' : 'client'
+              const { error: bnqErr } = await createEcrituresForPayment(supabase, {
+                societe_id: societe_id as string,
+                date_payment: datePayM,
+                amount_mur: soldeAvant > 0 ? soldeAvant : amount_mur,
+                type: payType,
+                tiers: String(f.tiers || '').trim(),
+                ref_folio: `BANK-${releve_id}-${txIdxM}-${f.id}`,
+                description: `Règlement groupé ${f.numero_facture || ''} — ${f.tiers || ''} (lot ${lettreCodeM})`.trim(),
+                compte_banque: compteBanqueM,
+                facture_id: f.id,
+                lettre_code: lettreCodeM,
+                numero_piece: (prevTxM as any).libelle || '',
+                devise_origine: (prevTxM as any).devise || f.devise || null,
+              })
+              if (bnqErr) {
+                console.warn(`[lettrer_manuel multi] BNQ insert failed for facture ${f.id}:`, bnqErr)
+              }
+            }
+            processedFactures.push(f.id)
+          }
+
+          // Step 3 : audit log
+          try {
+            await supabase.from('rapprochement_audit_log').insert({
+              societe_id: societe_id || null,
+              action: 'lettrer_manuel_multi',
+              releve_id, transaction_idx: txIdxM,
+              facture_ids: fIds, ecriture_id: null,
+              lettre_code: lettreCodeM, montant: txAmount,
+              devise: (prevTxM as any).devise || null,
+              reason: `Lettrage multi-factures (${fIds.length} factures)`,
+              before_state: prevTxM, after_state: txsM[txIdxM],
+              user_id: user.id, user_email: user.email || null,
+            })
+          } catch (auditErr) {
+            console.warn('[audit] lettrer_manuel_multi log failed:', auditErr)
+          }
+
+          return NextResponse.json({
+            success: true, lettre: lettreCodeM,
+            nb_factures: fIds.length, montant_total: txAmount,
+          })
+        } catch (err: any) {
+          console.error('[lettrer_manuel multi] failure, rolling back:', err.message)
+          for (const undo of rollbackM) {
+            try { await undo() } catch (e) { console.error('[multi] rollback step failed:', e) }
+          }
+          return NextResponse.json({
+            error: `Lettrage multi échoué (rollback ${processedFactures.length} factures): ${err.message}`,
+          }, { status: 500 })
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────
+      // Fin branche multi — la suite traite le cas single-facture legacy.
+      // ─────────────────────────────────────────────────────────────────
 
       // Classification manuelle sans facture (MRA, frais, associé, etc.)
       if (classification && !facture_id && !ecriture_id) {
