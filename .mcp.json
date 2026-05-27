@@ -21,6 +21,18 @@
       "env": {
         "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
       }
+    },
+    "coresignal_data_api": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.coresignal.com/mcp",
+        "--header",
+        "apikey:${CORESIGNAL_API_KEY}"
+      ],
+      "env": {
+        "CORESIGNAL_API_KEY": "${CORESIGNAL_API_KEY}"
+      }
     }
   }
 }
