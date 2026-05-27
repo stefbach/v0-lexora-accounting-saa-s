@@ -20,15 +20,16 @@ const panelStyle: React.CSSProperties = {
 }
 
 const CONNECTORS = [
-  { value: "cbrd", label: "CBRD (Registre Maurice)" },
-  { value: "yellowpages_mu", label: "Yellow Pages Maurice" },
-  { value: "apollo", label: "Apollo (international)" },
+  { value: "coresignal", label: "Coresignal — LinkedIn B2B (recommandé)" },
+  { value: "apollo", label: "Apollo.io — Base B2B internationale" },
+  { value: "cbrd", label: "CBRD — Registre Maurice (indisponible server-side)" },
+  { value: "yellowpages_mu", label: "Yellow Pages MU (indisponible server-side)" },
 ]
 
 export default function ImportPage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [connector, setConnector] = useState("cbrd")
+  const [connector, setConnector] = useState("coresignal")
   const [query, setQuery] = useState("")
   const [industrie, setIndustrie] = useState("")
   const [region, setRegion] = useState("")

@@ -140,10 +140,20 @@ export const cbrdConnector: Connector = {
     const errors: string[] = []
 
     if (!query) {
-      errors.push('cbrd: query ou industrie requis (CBRD ne supporte pas la recherche vide)')
+      errors.push('cbrd: query ou industrie requis')
       return { source: 'cbrd', total: 0, payloads: [], errors }
     }
 
+    // L'API onlinesearch.mns.mu exige un token Cloudflare Turnstile généré
+    // côté navigateur — impossible à contourner server-side.
+    errors.push(
+      'CBRD indisponible : onlinesearch.mns.mu exige une validation Cloudflare Turnstile ' +
+      '(CAPTCHA navigateur). Ce connecteur ne peut pas fonctionner server-side. ' +
+      'Utilisez Coresignal ou l\'import CSV à la place.',
+    )
+    return { source: 'cbrd', total: 0, payloads: [], errors }
+
+    // eslint-disable-next-line no-unreachable
     const hits = await searchCbrd(query, limit)
     await sleep(RATE_LIMIT_MS)
 

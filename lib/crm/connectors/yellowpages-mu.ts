@@ -106,6 +106,14 @@ export const yellowPagesMuConnector: Connector = {
       return { source: 'yellowpages_mu', total: 0, payloads: [], errors }
     }
 
+    // yellowpages.mu est inaccessible depuis un serveur Vercel (réseau bloqué).
+    errors.push(
+      'Yellow Pages MU indisponible : yellowpages.mu est inaccessible depuis les serveurs Vercel. ' +
+      'Utilisez Coresignal ou l\'import CSV à la place.',
+    )
+    return { source: 'yellowpages_mu', total: 0, payloads: [], errors }
+
+    // eslint-disable-next-line no-unreachable
     const hits = await searchYellowPages(query, limit)
     await sleep(RATE_LIMIT_MS)
 
