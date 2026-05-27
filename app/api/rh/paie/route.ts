@@ -1246,6 +1246,14 @@ export async function POST(request: Request) {
             archErr.message)
           // Fallback non-bloquant : on continue avec un upsert legacy
           // si la migration 425 n'a pas encore tourné en prod.
+        } else {
+          // Cleanup compta : si l'ancien bulletin avait des écritures
+          // OD-PAIE (BP-<id>), on les supprime. Sans ça, le nouveau bulletin
+          // créera BP-<nouveau_id> en plus → doublon dans les comptes 64xx.
+          const refOld = `BP-${existingActive.id}`
+          await supabase.from('ecritures_comptables_v2').delete()
+            .eq('societe_id', societe_id)
+            .or(`ref_folio.eq.${refOld},numero_piece.eq.${refOld}`)
         }
       }
 
@@ -2243,6 +2251,16 @@ export async function POST(request: Request) {
               archive_reason: archiveReasonBatch,
             })
             .eq('id', existing.id)
+
+          if (!archErrBatch) {
+            // Cleanup compta : si l'ancien bulletin avait des écritures
+            // OD-PAIE (BP-<id>), on les supprime. Sans ça, le nouveau bulletin
+            // créera BP-<nouveau_id> en plus → doublon dans les comptes 64xx.
+            const refOldBatch = `BP-${existing.id}`
+            await supabase.from('ecritures_comptables_v2').delete()
+              .eq('societe_id', societe_id)
+              .or(`ref_folio.eq.${refOldBatch},numero_piece.eq.${refOldBatch}`)
+          }
 
           if (archErrBatch) {
             // Fallback legacy : si la mig 425 n'a pas tourné, on fait
