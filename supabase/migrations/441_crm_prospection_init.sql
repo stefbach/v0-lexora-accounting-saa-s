@@ -17,6 +17,12 @@
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
+-- Extension trgm pour la recherche fuzzy sur le nom de société
+-- (doit être créée AVANT les index qui utilisent gin_trgm_ops)
+-- -----------------------------------------------------------------------------
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- -----------------------------------------------------------------------------
 -- Types ENUM
 -- -----------------------------------------------------------------------------
 DO $$ BEGIN
@@ -325,11 +331,6 @@ CREATE POLICY crm_opt_outs_lexora ON crm_opt_outs
   FOR ALL TO authenticated
   USING (user_is_lexora_commercial())
   WITH CHECK (user_is_lexora_commercial());
-
--- -----------------------------------------------------------------------------
--- Extension trgm pour la recherche fuzzy sur le nom de société
--- -----------------------------------------------------------------------------
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- -----------------------------------------------------------------------------
 -- Commentaires de table (auto-documentation)
