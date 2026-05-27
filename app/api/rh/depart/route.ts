@@ -877,90 +877,16 @@ export async function POST(request: Request) {
       // (retenues manuelles à conserver) séparément. Garantit que les
       // écritures sont équilibrées et reflètent fidèlement le STC.
       const grossStc = totalNet + retenuesManuelles
-      if (bulletin && grossStc > 0) {
-        try {
-          // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on insère direct dans V2.
-          // V2 exige societe_id (NOT NULL) et expose dossier_id ; on garde dossier_id pour la traçabilité.
-          // Renommage des clés : compte → numero_compte, debit → debit_mur, credit → credit_mur.
-          const { data: dossier } = await supabase
-            .from('dossiers')
-            .select('id')
-            .eq('societe_id', emp.societe_id)
-            .limit(1)
-            .maybeSingle()
-
-          if (dossier) {
-            const pieceRef = `STC-${emp.code || employe_id.slice(0, 8)}`
-            const severanceMontant = breakdown?.indemnite_licenciement?.montant || 0
-            const salaireSansIndemnite = severanceMontant > 0
-              ? grossStc - severanceMontant
-              : grossStc
-
-            const entries: any[] = [
-              {
-                dossier_id: dossier.id,
-                societe_id: emp.societe_id,
-                date_ecriture: date_depart,
-                journal: 'SAL',
-                numero_compte: '641', // PCM canonique : parent « Rémunérations du personnel »
-                libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
-                debit_mur: salaireSansIndemnite,
-                credit_mur: 0,
-                numero_piece: pieceRef,
-              },
-              {
-                dossier_id: dossier.id,
-                societe_id: emp.societe_id,
-                date_ecriture: date_depart,
-                journal: 'SAL',
-                numero_compte: '4210', // PCM canonique : « Salaires nets à payer »
-                libelle: `Solde tout compte — ${emp.prenom} ${emp.nom}`,
-                debit_mur: 0,
-                credit_mur: totalNet,
-                numero_piece: pieceRef,
-              },
-            ]
-
-            // FIX-STC-IDENTIQUE — retenue manuelle créditée séparément
-            // (compte 4250 : retenues sur salaires). Cohérent avec
-            // lib/rh/reconstruct-bulletin-from-ecritures.ts qui mappe
-            // 4250 → retenues_manuelles.
-            if (retenuesManuelles > 0) {
-              entries.push({
-                dossier_id: dossier.id,
-                societe_id: emp.societe_id,
-                date_ecriture: date_depart,
-                journal: 'SAL',
-                numero_compte: '4250',
-                libelle: `Retenues manuelles STC — ${emp.prenom} ${emp.nom}`,
-                debit_mur: 0,
-                credit_mur: retenuesManuelles,
-                numero_piece: pieceRef,
-              })
-            }
-
-            // Add specific severance entry if applicable
-            if (severanceMontant > 0) {
-              entries.push({
-                dossier_id: dossier.id,
-                societe_id: emp.societe_id,
-                date_ecriture: date_depart,
-                journal: 'SAL',
-                numero_compte: '6417', // PCM canonique : « 13ème mois / Indemnités »
-                libelle: `Indemnité licenciement — ${emp.prenom} ${emp.nom}`,
-                debit_mur: severanceMontant,
-                credit_mur: 0,
-                numero_piece: pieceRef,
-              })
-            }
-
-            await supabase.from('ecritures_comptables_v2').insert(entries)
-          }
-        } catch (err) {
-          console.error('Erreur écritures comptables:', err)
-          // Non-blocking
-        }
-      }
+      // BUG MAI 2026 — Bloc INSERT direct journal SAL supprimé (était legacy).
+      // Le STC est désormais comptabilisé via le bulletin (type=solde_tout_compte)
+      // créé plus haut → /api/rh/paie/comptabiliser → journal OD-PAIE via la
+      // RPC `generer_ecritures_paie`. Garder le bloc legacy actif générait des
+      // écritures EN DOUBLE (Mélanie 113k MUR fantômes, Alicia 62k constatés
+      // en DB → masse salariale dashboard à 709k au lieu de 636k).
+      //
+      // Si jamais on a besoin de réintroduire un chemin direct (ex. STC sans
+      // bulletin), créer une nouvelle route /api/rh/depart/comptabiliser-stc
+      // qui appellera generer_ecritures_paie pour éviter le double-comptage.
 
       // 4. Cancel any future leave requests
       const { data: futureLeaves } = await supabase
