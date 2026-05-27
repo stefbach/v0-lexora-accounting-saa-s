@@ -1,0 +1,85 @@
+-- =====================================================================
+-- Migration 441 — Audit trail : reventilation paie DDS+OCC mai 2026
+-- =====================================================================
+--
+-- Ce fichier ne contient AUCUNE modification de schéma. Il documente les
+-- corrections de données appliquées en production le 2026-05-27 via le
+-- SERVICE_ROLE_KEY pour réparer le grand livre comptes 64*/42*/4330
+-- après les imports Excel juillet 2025 → mars 2026.
+--
+-- ---------------------------------------------------------------------
+-- CONTEXTE
+-- ---------------------------------------------------------------------
+-- Les bulletins import_excel (juillet 2025 → mars 2026, 246 bulletins
+-- DDS+OCC) avaient été ventilés via la RPC `generer_ecritures_paie` qui,
+-- depuis la migration 298, skip les bulletins source='import_excel'.
+-- Conséquences observées :
+--   1. Les comptes 6453 PRGF et 6454 Training Levy patronaux étaient
+--      manquants pour DDS (~239k MUR).
+--   2. Le compte 4210 (net à payer) était écrasé à 0 par un trigger
+--      après le passage `comptabilise=true` sur les bulletins
+--      source='import_excel' (~6M MUR manquants en crédit).
+--   3. La colonne special_allowance_1 dupliquait `transport_allowance +
+--      petrol_allowance` dans 67 bulletins DDS (artefact de l'import
+--      Excel — colonne "prime totale" qui recopiait carburant+transport).
+--
+-- ---------------------------------------------------------------------
+-- ACTIONS APPLIQUÉES (production, projet dqepdoimpqhmuhkklxva)
+-- ---------------------------------------------------------------------
+-- Étape A : reventil-v3.mjs (293 bulletins DDS+OCC, sources calcul +
+--           import_excel) — DELETE complet des écritures ref_folio=BP-*
+--           puis INSERT propre avec ventilation 13 comptes (6411-6415,
+--           6451-6454, 4210, 4311, 4312, 4321-4324, 4330).
+--           Workflow par bulletin : decompta → DELETE → INSERT → recompta.
+--
+-- Étape B : fix-4210.mjs (143 bulletins import_excel) — UPDATE direct du
+--           crédit 4210 = salaire_net dans ecritures_comptables_v2, sans
+--           toucher bulletins_paie.comptabilise (le trigger qui écrasait
+--           ne se déclenche pas sur UPDATE d'une seule ligne).
+--
+-- Étape C : fix-primes-doublon.mjs (67 bulletins DDS import_excel où
+--           special_allowance_1 = transport_allowance + petrol_allowance
+--           à 1 MUR près) — UPDATE bulletins_paie : special_allowance_1=0,
+--           salaire_brut/net recalculés, puis reventilation propre.
+--
+-- ---------------------------------------------------------------------
+-- RÉSULTAT FINAL (2026-05-27)
+-- ---------------------------------------------------------------------
+-- DDS — Société 1826dde7-7b41-4d14-bc75-d8d22dfc75fb :
+--   Σ comptes 64* (charges) : 7 702 259 MUR
+--   Σ comptes 42*/4330 (à payer) : 7 717 376 MUR
+--   Écart D-C : -15 117 MUR (équilibre quasi parfait, dû aux arrondis
+--   et bulletins source='calcul' avec montants UL/absence)
+--
+-- OCC — Société b010d75c-62a2-4aae-a52b-8c18261047f7 :
+--   Σ comptes 64* : 4 593 814 MUR
+--   Σ comptes 42*/4330 : 4 608 150 MUR
+--   Écart D-C : -14 336 MUR
+--
+-- ---------------------------------------------------------------------
+-- PROBLÈME RÉSIDUEL (à investiguer côté métier)
+-- ---------------------------------------------------------------------
+-- 74 bulletins import_excel DDS ont special_allowance_1 ≈ transport +
+-- petrol à un écart de 85/170/255 MUR (multiples de 85, probablement une
+-- indemnité jour de présence). Le pattern suggère une duplication
+-- partielle dans l'import Excel mais nécessite validation métier avant
+-- correction (montant total potentiel : 680k MUR de doublon partiel,
+-- 178k MUR de "vraie prime" résiduelle).
+--
+-- Cible utilisateur communiquée : 7 489 045 MUR pour DDS total 64*.
+-- État actuel : 7 702 259 → écart +213 214 MUR. Décomposition cible non
+-- encore fournie.
+--
+-- ---------------------------------------------------------------------
+-- ACTIONS DE FOND À CONSIDÉRER
+-- ---------------------------------------------------------------------
+-- 1. Étendre `generer_ecritures_paie` aux bulletins source='import_excel'
+--    pour éviter cette divergence à l'avenir (au lieu d'utiliser un
+--    script externe avec SERVICE_ROLE_KEY).
+-- 2. Identifier et patcher le trigger qui écrase le 4210 à 0 lors de la
+--    transition comptabilise=true sur les bulletins import_excel.
+-- 3. Ajouter une validation côté import Excel pour rejeter les fichiers
+--    où special_allowance_1 ≈ transport + petrol (doublon évident).
+--
+-- =====================================================================
+SELECT 'Migration 441 : audit trail only — pas de modification de schéma' AS info;
