@@ -22,7 +22,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -1102,29 +1104,101 @@ function SourceBadge({ source }: { source: string | null | undefined }) {
 }
 
 // Options de reclassification manuelle proposées dans le Select.
-// Couvre les cas les plus fréquents en compta mauricienne ; l'utilisateur
-// peut sélectionner pour override la proposition automatique de l'agent.
+// Couvre les scénarios PCM (Plan Comptable Mauricien) les plus fréquents,
+// regroupées par catégorie pour faciliter la navigation. L'utilisateur peut
+// sélectionner pour override la proposition automatique de l'agent.
 const RECLASS_OPTIONS: Array<{
   value: string // classification key (envoyée à l'API)
   compte: string // numero_compte PCG correspondant
   label: string // libellé affiché
+  group: string // catégorie pour regroupement UI
 }> = [
-  { value: "fournisseur", compte: "401", label: "401 — Fournisseur" },
-  { value: "client", compte: "411", label: "411 — Client" },
-  { value: "salaire_bulk", compte: "4210", label: "4210 — Salaires nets" },
-  { value: "charges_sociales", compte: "4421", label: "4421 — PAYE / MRA" },
-  { value: "nsf_csg", compte: "4431", label: "4431 — NSF / CSG" },
-  { value: "tva", compte: "4471", label: "4471 — TVA" },
-  { value: "inter_societe", compte: "451", label: "451 — Inter-sociétés (DDS ↔ OCC, groupe)" },
-  { value: "compte_courant_associe", compte: "455", label: "455 — CCA (Associé personne physique)" },
-  { value: "virement_interne", compte: "5800", label: "5800 — Intercompte (même société, 2 banques)" },
-  { value: "frais_bancaires", compte: "6271", label: "6271 — Services bancaires" },
-  { value: "interets", compte: "6611", label: "6611 — Intérêts" },
-  { value: "loyer", compte: "613", label: "613 — Locations / Loyer" },
-  { value: "electricite", compte: "6061", label: "6061 — Électricité / Eau" },
-  { value: "telecom", compte: "626", label: "626 — Télécommunications" },
-  { value: "assurance", compte: "616", label: "616 — Assurances" },
-  { value: "autre", compte: "658", label: "658 — Charges diverses" },
+  // ── Tiers commerciaux ──────────────────────────────────────────────
+  { group: "Tiers", value: "fournisseur", compte: "401", label: "401 — Fournisseurs" },
+  { group: "Tiers", value: "client", compte: "411", label: "411 — Clients" },
+
+  // ── Associés / Inter-sociétés ──────────────────────────────────────
+  { group: "Associés / Groupe", value: "compte_courant_associe", compte: "455", label: "455 — CCA (Associé personne physique)" },
+  { group: "Associés / Groupe", value: "remboursement_associe", compte: "108", label: "108 — Compte exploitant / personnel" },
+  { group: "Associés / Groupe", value: "inter_societe", compte: "451", label: "451 — Comptes Groupe (DDS ↔ OCC)" },
+  { group: "Associés / Groupe", value: "virement_inter_societe", compte: "467", label: "467 — Virements inter-sociétés en transit" },
+  { group: "Associés / Groupe", value: "virement_interne", compte: "5800", label: "5800 — Intercompte (même société, 2 banques)" },
+
+  // ── Personnel & Paie ───────────────────────────────────────────────
+  { group: "Paie & Personnel", value: "salaire_bulk", compte: "4210", label: "4210 — Salaires nets à payer" },
+  { group: "Paie & Personnel", value: "avance_personnel", compte: "425", label: "425 — Avances au personnel" },
+  { group: "Paie & Personnel", value: "csg_salarie", compte: "4311", label: "4311 — CSG salarié à verser" },
+  { group: "Paie & Personnel", value: "nsf_salarie", compte: "4312", label: "4312 — NSF salarié à verser" },
+  { group: "Paie & Personnel", value: "csg_patronal", compte: "4321", label: "4321 — CSG patronal à verser" },
+  { group: "Paie & Personnel", value: "nsf_patronal", compte: "4322", label: "4322 — NSF patronal à verser" },
+  { group: "Paie & Personnel", value: "prgf", compte: "4323", label: "4323 — PRGF à verser" },
+  { group: "Paie & Personnel", value: "training_levy_verser", compte: "4324", label: "4324 — Training Levy à verser" },
+  { group: "Paie & Personnel", value: "paye_mra", compte: "4330", label: "4330 — PAYE à verser MRA" },
+
+  // ── Fiscal / MRA ───────────────────────────────────────────────────
+  { group: "Fiscal / MRA", value: "tva_deductible", compte: "44566", label: "44566 — TVA déductible" },
+  { group: "Fiscal / MRA", value: "tva_collectee", compte: "44571", label: "44571 — TVA collectée" },
+  { group: "Fiscal / MRA", value: "impot_societe", compte: "4444", label: "4444 — Impôt sur les sociétés (CIT)" },
+  { group: "Fiscal / MRA", value: "patente", compte: "6354", label: "6354 — Patente / licence" },
+  { group: "Fiscal / MRA", value: "training_levy", compte: "633", label: "633 — Training Levy HRDC" },
+  { group: "Fiscal / MRA", value: "impot_taxe", compte: "635", label: "635 — Autres impôts & taxes" },
+
+  // ── Achats & Marchandises ──────────────────────────────────────────
+  { group: "Achats", value: "achats_matieres", compte: "601", label: "601 — Achats matières premières" },
+  { group: "Achats", value: "achats_fournitures", compte: "602", label: "602 — Achats fournitures stockées" },
+  { group: "Achats", value: "materiel", compte: "606", label: "606 — Achats non stockés divers" },
+  { group: "Achats", value: "electricite", compte: "6061", label: "6061 — Électricité / Eau / Gaz" },
+  { group: "Achats", value: "fournitures_bureau", compte: "6064", label: "6064 — Fournitures de bureau" },
+  { group: "Achats", value: "consommables", compte: "6068", label: "6068 — Petit outillage / consommables" },
+
+  // ── Services extérieurs ────────────────────────────────────────────
+  { group: "Services extérieurs", value: "sous_traitance", compte: "611", label: "611 — Sous-traitance" },
+  { group: "Services extérieurs", value: "leasing", compte: "612", label: "612 — Crédit-bail / Leasing" },
+  { group: "Services extérieurs", value: "loyer", compte: "613", label: "613 — Locations / Loyer" },
+  { group: "Services extérieurs", value: "entretien", compte: "615", label: "615 — Entretien & réparations" },
+  { group: "Services extérieurs", value: "assurance", compte: "616", label: "616 — Assurances" },
+  { group: "Services extérieurs", value: "documentation", compte: "618", label: "618 — Documentation / abonnements" },
+
+  // ── Autres services extérieurs ─────────────────────────────────────
+  { group: "Honoraires & comm.", value: "honoraires_juridiques", compte: "6225", label: "6225 — Honoraires juridiques / avocats" },
+  { group: "Honoraires & comm.", value: "honoraires_comptables", compte: "6226", label: "6226 — Honoraires comptables / audit" },
+  { group: "Honoraires & comm.", value: "honoraires", compte: "622", label: "622 — Honoraires divers" },
+  { group: "Honoraires & comm.", value: "publicite", compte: "623", label: "623 — Publicité / marketing" },
+  { group: "Honoraires & comm.", value: "cadeaux", compte: "6234", label: "6234 — Cadeaux / réceptions" },
+
+  // ── Déplacements & logistique ──────────────────────────────────────
+  { group: "Déplacements", value: "transport_achats", compte: "6241", label: "6241 — Transports sur achats" },
+  { group: "Déplacements", value: "transport_ventes", compte: "6242", label: "6242 — Transports sur ventes" },
+  { group: "Déplacements", value: "deplacement", compte: "6251", label: "6251 — Frais de déplacement personnel" },
+  { group: "Déplacements", value: "missions", compte: "6256", label: "6256 — Missions / restauration" },
+
+  // ── Télécom & frais bancaires ──────────────────────────────────────
+  { group: "Télécom / Banque", value: "postaux", compte: "6261", label: "6261 — Frais postaux" },
+  { group: "Télécom / Banque", value: "telecom", compte: "626", label: "626 — Télécom / Internet" },
+  { group: "Télécom / Banque", value: "frais_bancaires", compte: "6271", label: "6271 — Services bancaires / commissions" },
+  { group: "Télécom / Banque", value: "cotisations_pro", compte: "628", label: "628 — Cotisations professionnelles" },
+
+  // ── Financier ──────────────────────────────────────────────────────
+  { group: "Financier", value: "interets", compte: "6611", label: "6611 — Intérêts emprunts" },
+  { group: "Financier", value: "interets_cca", compte: "6615", label: "6615 — Intérêts sur CCA" },
+  { group: "Financier", value: "frais_financiers", compte: "6617", label: "6617 — Frais financiers divers" },
+  { group: "Financier", value: "perte_change", compte: "666", label: "666 — Perte de change" },
+  { group: "Financier", value: "gain_change", compte: "766", label: "766 — Gain de change" },
+
+  // ── Produits ───────────────────────────────────────────────────────
+  { group: "Produits", value: "prestation", compte: "706", label: "706 — Prestations de services" },
+  { group: "Produits", value: "vente_marchandises", compte: "707", label: "707 — Ventes de marchandises" },
+  { group: "Produits", value: "produit_divers", compte: "758", label: "758 — Produits divers" },
+  { group: "Produits", value: "produit_exceptionnel", compte: "771", label: "771 — Produits exceptionnels" },
+
+  // ── Immobilisations (acquisitions ponctuelles) ─────────────────────
+  { group: "Immobilisations", value: "immo_informatique", compte: "2154", label: "2154 — Matériel informatique" },
+  { group: "Immobilisations", value: "immo_bureau", compte: "2183", label: "2183 — Matériel & mobilier bureau" },
+
+  // ── Divers / attente ───────────────────────────────────────────────
+  { group: "Divers", value: "charge_diverse", compte: "658", label: "658 — Charges diverses de gestion" },
+  { group: "Divers", value: "charge_exceptionnelle", compte: "671", label: "671 — Charges exceptionnelles" },
+  { group: "Divers", value: "autre", compte: "471", label: "471 — Compte d'attente (à requalifier)" },
 ]
 
 function SuggestionRow({
@@ -1217,12 +1291,26 @@ function SuggestionRow({
                     </span>
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
-                  {RECLASS_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono">
-                      {opt.label}
-                    </SelectItem>
-                  ))}
+                <SelectContent className="max-h-[400px]">
+                  {(() => {
+                    const grouped = new Map<string, typeof RECLASS_OPTIONS>()
+                    for (const o of RECLASS_OPTIONS) {
+                      if (!grouped.has(o.group)) grouped.set(o.group, [])
+                      grouped.get(o.group)!.push(o)
+                    }
+                    return Array.from(grouped.entries()).map(([groupName, opts]) => (
+                      <SelectGroup key={groupName}>
+                        <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                          {groupName}
+                        </SelectLabel>
+                        {opts.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))
+                  })()}
                 </SelectContent>
               </Select>
             ) : (
