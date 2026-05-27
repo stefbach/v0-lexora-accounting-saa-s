@@ -4,6 +4,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { buildCompanyEnrichmentPrompt, buildContactEnrichmentPrompt } from './prompts'
+import { apolloMatchPerson } from './connectors/apollo'
 import type { CrmCompany, CrmContact, CrmEnrichmentResult } from './types'
 
 const MODEL = process.env.CRM_ENRICHMENT_MODEL || 'claude-sonnet-4-6'
@@ -54,6 +55,28 @@ export async function enrichContact(
   contact: CrmContact,
   company?: CrmCompany | null,
 ): Promise<CrmEnrichmentResult> {
+  // Pré-enrichissement Apollo people/match si on a assez d'identifiants
+  const hasIdentifier = contact.email || contact.linkedin_url || (contact.prenom && contact.nom)
+  if (hasIdentifier) {
+    const apolloData = await apolloMatchPerson({
+      first_name: contact.prenom ?? undefined,
+      last_name: contact.nom ?? undefined,
+      email: contact.email ?? undefined,
+      linkedin_url: contact.linkedin_url ?? undefined,
+      organization_name: company?.nom ?? undefined,
+      domain: company?.site_web
+        ? new URL(company.site_web.startsWith('http') ? company.site_web : `https://${company.site_web}`).hostname
+        : undefined,
+    }).catch(() => null)
+
+    if (apolloData?.matched) {
+      if (apolloData.email && !contact.email) contact = { ...contact, email: apolloData.email }
+      if (apolloData.telephone && !contact.telephone) contact = { ...contact, telephone: apolloData.telephone }
+      if (apolloData.titre && !contact.titre) contact = { ...contact, titre: apolloData.titre }
+      if (apolloData.linkedin_url && !contact.linkedin_url) contact = { ...contact, linkedin_url: apolloData.linkedin_url }
+    }
+  }
+
   return runClaude(buildContactEnrichmentPrompt(contact, company))
 }
 

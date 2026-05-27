@@ -14,7 +14,7 @@
 import type { Connector, ConnectorSearchOptions, ConnectorSearchResult } from './types'
 import type { CrmIngestPayload } from '../types'
 
-const APOLLO_BASE = 'https://api.apollo.io/v1'
+const APOLLO_BASE = 'https://api.apollo.io/api/v1'
 
 interface ApolloOrganization {
   id?: string
@@ -49,14 +49,47 @@ interface ApolloSearchResponse {
   pagination?: { total_entries?: number }
 }
 
-async function apolloPost(path: string, body: Record<string, unknown>): Promise<ApolloSearchResponse> {
+interface ApolloMatchResponse {
+  person?: ApolloPerson
+  match_status?: string
+}
+
+export interface ApolloMatchInput extends Record<string, unknown> {
+  first_name?: string
+  last_name?: string
+  email?: string
+  linkedin_url?: string
+  organization_name?: string
+  domain?: string
+}
+
+export interface ApolloMatchResult {
+  matched: boolean
+  email?: string
+  telephone?: string
+  titre?: string
+  linkedin_url?: string
+  raw?: Record<string, unknown>
+}
+
+async function apolloPost<T = ApolloSearchResponse>(
+  path: string,
+  body: Record<string, unknown>,
+  queryParams?: Record<string, string>,
+): Promise<T> {
   const apiKey = process.env.APOLLO_API_KEY
   if (!apiKey) throw new Error('APOLLO_API_KEY manquante')
 
-  const res = await fetch(`${APOLLO_BASE}${path}`, {
+  const url = new URL(`${APOLLO_BASE}${path}`)
+  if (queryParams) {
+    for (const [k, v] of Object.entries(queryParams)) url.searchParams.set(k, v)
+  }
+
+  const res = await fetch(url.toString(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      accept: 'application/json',
       'X-Api-Key': apiKey,
       'Cache-Control': 'no-cache',
     },
@@ -67,7 +100,37 @@ async function apolloPost(path: string, body: Record<string, unknown>): Promise<
     const text = await res.text()
     throw new Error(`Apollo ${res.status}: ${text.slice(0, 200)}`)
   }
-  return res.json()
+  return res.json() as Promise<T>
+}
+
+/**
+ * Enrichit un contact individuel via POST /api/v1/people/match.
+ * Waterfall email/téléphone désactivé pour contrôler la consommation de crédits.
+ */
+export async function apolloMatchPerson(input: ApolloMatchInput): Promise<ApolloMatchResult> {
+  if (!process.env.APOLLO_API_KEY) {
+    return { matched: false }
+  }
+  const data = await apolloPost<ApolloMatchResponse>(
+    '/people/match',
+    input,
+    {
+      run_waterfall_email: 'false',
+      run_waterfall_phone: 'false',
+      reveal_personal_emails: 'false',
+      reveal_phone_number: 'false',
+    },
+  )
+  const person = data.person
+  if (!person) return { matched: false }
+  return {
+    matched: true,
+    email: person.email ?? undefined,
+    telephone: person.phone_numbers?.[0]?.raw_number ?? undefined,
+    titre: person.title ?? undefined,
+    linkedin_url: person.linkedin_url ?? undefined,
+    raw: person as unknown as Record<string, unknown>,
+  }
 }
 
 function employeeRange(n?: number): string | undefined {
