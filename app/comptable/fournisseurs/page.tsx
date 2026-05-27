@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Plus, Loader2, ShoppingCart, TrendingDown, Clock, AlertCircle, Download } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Search, Plus, Loader2, ShoppingCart, TrendingDown, Clock, AlertCircle, Wallet, Download } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { ReglerHorsBanqueDialog } from "@/components/factures/ReglerHorsBanqueDialog"
 import { t, getLocale } from "@/lib/i18n"
 
 interface Facture {
@@ -25,6 +27,8 @@ interface Facture {
   montant_tva: number
   montant_ttc: number
   montant_mur: number
+  solde_non_paye: number | null
+  societe_id: string
   statut: string
 }
 
@@ -54,6 +58,9 @@ export default function FournisseursPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Sélection multi-factures pour règlement hors banque
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [reglementOpen, setReglementOpen] = useState(false)
   const [formSociete, setFormSociete] = useState("")
   const [formTiers, setFormTiers] = useState("")
   const [formDate, setFormDate] = useState("")
@@ -249,6 +256,7 @@ export default function FournisseursPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8"></TableHead>
                   <TableHead>{t('cab.fournisseurs.col_supplier', locale)}</TableHead>
                   <TableHead>{t('cab.fournisseurs.col_description', locale)}</TableHead>
                   <TableHead>{t('cab.fournisseurs.col_date', locale)}</TableHead>
@@ -260,8 +268,24 @@ export default function FournisseursPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(f => (
+                {filtered.map(f => {
+                  const reglable = f.statut !== "paye" && f.statut !== "annule"
+                  return (
                   <TableRow key={f.id}>
+                    <TableCell>
+                      {reglable && (
+                        <Checkbox
+                          checked={selectedIds.has(f.id)}
+                          onCheckedChange={(v) => {
+                            setSelectedIds(prev => {
+                              const n = new Set(prev)
+                              if (v) n.add(f.id); else n.delete(f.id)
+                              return n
+                            })
+                          }}
+                        />
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium">{f.tiers || "—"}</TableCell>
                     <TableCell className="text-sm text-gray-600 max-w-48 truncate">{f.description || "—"}</TableCell>
                     <TableCell className="text-sm">{f.date_facture ? new Date(f.date_facture).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR') : "—"}</TableCell>
@@ -285,12 +309,62 @@ export default function FournisseursPage() {
                       </Select>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
+
+      {selectedIds.size > 0 && (() => {
+        const selFactures = factures.filter(f => selectedIds.has(f.id))
+        const societeIds = new Set(selFactures.map(f => f.societe_id))
+        const sameSociete = societeIds.size === 1
+        const totalSel = selFactures.reduce((s, f) => s + (Number(f.solde_non_paye ?? f.montant_ttc) || 0), 0)
+        return (
+          <div className="fixed bottom-4 right-4 z-40 rounded-xl border bg-white shadow-2xl p-4 flex items-center gap-3 min-w-[420px]">
+            <div className="flex-1">
+              <div className="text-sm font-medium text-[#0B0F2E]">
+                {selectedIds.size} facture{selectedIds.size > 1 ? "s" : ""} sélectionnée{selectedIds.size > 1 ? "s" : ""}
+              </div>
+              <div className="text-xs text-gray-600">
+                Total restant : {totalSel.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MUR
+                {!sameSociete && <span className="text-red-600 ml-2">⚠ sociétés multiples</span>}
+              </div>
+            </div>
+            <Button variant="outline" onClick={() => setSelectedIds(new Set())}>Désélectionner</Button>
+            <Button
+              onClick={() => setReglementOpen(true)}
+              disabled={!sameSociete}
+              className="bg-[#0B0F2E] text-white hover:bg-[#2a3a5a]"
+              title={sameSociete ? "Régler hors banque" : "Toutes les factures doivent être de la même société"}
+            >
+              <Wallet className="w-4 h-4 mr-2" />
+              Régler hors banque
+            </Button>
+          </div>
+        )
+      })()}
+
+      <ReglerHorsBanqueDialog
+        open={reglementOpen}
+        onClose={() => setReglementOpen(false)}
+        societeId={factures.filter(f => selectedIds.has(f.id))[0]?.societe_id || ""}
+        factures={factures.filter(f => selectedIds.has(f.id)).map(f => ({
+          id: f.id,
+          numero_facture: f.numero_facture,
+          tiers: f.tiers,
+          montant_ttc: f.montant_ttc,
+          solde_non_paye: f.solde_non_paye,
+          devise: f.devise,
+        }))}
+        onSuccess={(info) => {
+          setSelectedIds(new Set())
+          fetchData()
+          alert(`✓ ${info.nbFactures} facture(s) réglée(s) — Lettre ${info.lettre} — ${info.montantTotal.toLocaleString("fr-FR")} MUR`)
+        }}
+      />
     </div>
     </ClientPageShell>
   )
