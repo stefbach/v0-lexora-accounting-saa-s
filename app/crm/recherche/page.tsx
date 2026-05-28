@@ -36,6 +36,13 @@ interface PersonPreview {
   societe_linkedin?: string
 }
 
+interface SearchData {
+  interpretation?: string
+  people?: PersonPreview[]
+  total?: number
+  page?: number
+}
+
 const EXAMPLES = [
   "Dirigeants d'hôtels à Grand Baie",
   "DAF / CFO de cabinets comptables à Port Louis",
@@ -50,13 +57,17 @@ const SENIORITY_GROUPS: Record<string, string[]> = {
   Directeur: ["director"],
 }
 
+const PER_PAGE = 50
+
 export default function RechercheIntelligentePage() {
   const { toast } = useToast()
   const [prompt, setPrompt] = useState("")
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [saving, setSaving] = useState(false)
   const [interpretation, setInterpretation] = useState("")
   const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [people, setPeople] = useState<PersonPreview[]>([])
   const [selected, setSelected] = useState<Record<string, boolean>>({})
 
@@ -79,6 +90,17 @@ export default function RechercheIntelligentePage() {
 
   const selectedCount = Object.values(selected).filter(Boolean).length
 
+  const fetchPage = async (pageToFetch: number): Promise<SearchData> => {
+    const res = await fetch("/api/crm/internal/smart-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, page: pageToFetch, per_page: PER_PAGE }),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json?.error || "Erreur recherche")
+    return json.data as SearchData
+  }
+
   const search = async () => {
     if (!prompt.trim()) {
       toast({ title: "Saisissez une requête", variant: "destructive" })
@@ -89,25 +111,46 @@ export default function RechercheIntelligentePage() {
     setSelected({})
     setInterpretation("")
     setTotal(0)
+    setPage(1)
     try {
-      const res = await fetch("/api/crm/internal/smart-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, per_page: 50 }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || "Erreur recherche")
-      setInterpretation(json.data.interpretation || "")
-      setPeople(json.data.people || [])
-      setTotal(json.data.total || 0)
+      const data = await fetchPage(1)
+      setInterpretation(data.interpretation || "")
+      setPeople(data.people || [])
+      setTotal(data.total || 0)
+      setPage(1)
       toast({
         title: "Consultation gratuite",
-        description: `${json.data.people?.length || 0} dirigeants affichés sur ${json.data.total || 0} trouvés (aucun crédit consommé)`,
+        description: `${data.people?.length || 0} dirigeants affichés sur ${data.total || 0} trouvés (aucun crédit consommé)`,
       })
     } catch (err: any) {
       toast({ title: "Erreur", description: err.message, variant: "destructive" })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadMore = async () => {
+    setLoadingMore(true)
+    try {
+      const next = page + 1
+      const data = await fetchPage(next)
+      const incoming = data.people || []
+      // Dédup sur apollo_person_id pour éviter les doublons entre pages
+      setPeople((prev) => {
+        const seen = new Set(prev.map((p) => p.apollo_person_id).filter(Boolean))
+        const merged = [...prev]
+        for (const p of incoming) {
+          if (p.apollo_person_id && seen.has(p.apollo_person_id)) continue
+          merged.push(p)
+        }
+        return merged
+      })
+      setPage(next)
+      if (typeof data.total === "number") setTotal(data.total)
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" })
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -271,6 +314,15 @@ export default function RechercheIntelligentePage() {
                 )
               })}
             </div>
+
+            {people.length < total && (
+              <div className="flex justify-center mt-4">
+                <Button variant="outline" onClick={loadMore} disabled={loadingMore} size="sm">
+                  {loadingMore ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+                  Voir plus ({people.length}/{total.toLocaleString("fr-FR")})
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
