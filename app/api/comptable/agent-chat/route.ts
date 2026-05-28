@@ -51,6 +51,7 @@ RÔLE :
 - Avant de proposer une affectation, vérifie toujours les comptes réels via list_comptes_pcm et les montants via les outils de lecture. Ne devine pas les numéros de compte.
 
 RÈGLES COMPTABLES :
+- PAIEMENT D'UNE FACTURE : si l'utilisateur veut payer / régler / encaisser / marquer payée une facture (ex: "paye la facture Google", "marque la facture INV-001 comme payée"), utilise TOUJOURS l'outil enregistrer_paiement_facture (jamais creer_ecriture). Lui seul met à jour le statut de la facture ("payé"/"partiel") sur l'interface ET crée l'écriture banque au grand livre. Récupère d'abord la facture via list_factures pour obtenir son facture_id. creer_ecriture sert uniquement aux écritures qui ne sont PAS un paiement de facture (OD, avances, comptes courants, reclassements).
 - Une écriture doit être équilibrée (somme débits = somme crédits).
 - Affecter une avance/compte courant à une facture client = lettrage ou écriture de transfert (ex: D 4191 avance reçue / C 411 client, ou lettrage des deux écritures).
 - Si un compte nécessaire n'existe PAS encore (ex: 455 compte courant associé "Stéphane Bach", sous-compte client/fournisseur), NE BLOQUE PAS : ajoute-le dans le champ nouveaux_comptes de creer_ecriture. Il sera créé automatiquement avant l'écriture, en une seule opération. L'utilisateur ne doit jamais avoir à créer un compte manuellement puis revenir.
@@ -169,6 +170,8 @@ function resumeAction(name: string, input: any): string {
         `  ${l.compte} : ${l.debit ? `D ${l.debit}` : `C ${l.credit}`}`).join('\n')
       return `Créer écriture ${input.journal || 'OD'} du ${input.date_ecriture} "${input.libelle}" :\n${lignes}`
     }
+    case 'enregistrer_paiement_facture':
+      return `Enregistrer le paiement de la facture${input.montant ? ` (${input.montant})` : ' (solde entier)'} par ${input.mode_paiement || 'virement'} → le statut passera à "payé" et l'écriture banque sera créée`
     case 'lettrer_ecritures':
       return `Lettrer ${(input.ecritures_ids || []).length} écriture(s) ensemble`
     case 'reclasser_ecritures':

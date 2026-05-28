@@ -13,13 +13,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { reclassEcritures } from '@/lib/pcm/reclass'
 import { createEcrituresReglementTiers } from '@/lib/accounting/reglement-tiers'
+import { enregistrerPaiement } from '@/lib/accounting/paiements-factures'
 
 export const READ_TOOLS = new Set([
   'list_factures', 'get_balance', 'list_grand_livre', 'list_comptes_pcm', 'list_transactions_bancaires',
   'lancer_rapprochement_auto', 'analyser_cloture',
 ])
 export const WRITE_TOOLS = new Set([
-  'creer_ecriture', 'lettrer_ecritures', 'reclasser_ecritures',
+  'creer_ecriture', 'lettrer_ecritures', 'reclasser_ecritures', 'enregistrer_paiement_facture',
 ])
 
 export const AGENT_TOOLS = [
@@ -128,6 +129,22 @@ export const AGENT_TOOLS = [
         },
       },
       required: ['date_ecriture', 'libelle', 'lignes'],
+    },
+  },
+  {
+    name: 'enregistrer_paiement_facture',
+    description: 'Enregistre le PAIEMENT d\'une facture (client ou fournisseur) et met automatiquement à jour son statut à "payé" (ou "partiel" si paiement incomplet) sur l\'interface factures. À UTILISER dès que l\'utilisateur veut payer / régler / encaisser / marquer payée une facture — N\'UTILISE PAS creer_ecriture pour ça. Cet outil crée la ligne de paiement, génère l\'écriture comptable banque (512 ↔ 401/411) liée à la facture (visible au grand livre) ET synchronise le statut de la facture. Récupère d\'abord facture_id via list_factures.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        facture_id: { type: 'string', description: 'UUID de la facture (obtenu via list_factures)' },
+        montant: { type: 'number', description: 'Montant payé dans la devise d\'origine de la facture. OMETTRE pour solder entièrement le restant dû.' },
+        date_paiement: { type: 'string', description: 'YYYY-MM-DD. Défaut: aujourd\'hui.' },
+        mode_paiement: { type: 'string', enum: ['virement', 'cheque', 'espece', 'carte', 'prelevement', 'autre'], description: 'Défaut: virement.' },
+        compte_banque: { type: 'string', description: 'Compte trésorerie (ex: 512100). Défaut: 512.' },
+        reference: { type: 'string', description: 'Référence du paiement (n° virement, chèque…).' },
+      },
+      required: ['facture_id'],
     },
   },
   {
@@ -464,6 +481,51 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
         reason: `Agent conversationnel: ${input.libelle}`,
       })
       return { ok: true, ref_folio: refFolio, nb_lignes: rows.length }
+    }
+    case 'enregistrer_paiement_facture': {
+      const factureId = input.facture_id
+      if (!factureId) return { ok: false, error: 'facture_id requis' }
+
+      // Charger la facture pour vérifier la société et, si le montant n'est pas
+      // fourni, solder entièrement le restant dû (converti en devise d'origine).
+      const { data: facture, error: fErr } = await supabase
+        .from('factures')
+        .select('id, societe_id, numero_facture, devise, taux_change, montant_ttc, montant_mur, solde_non_paye, statut')
+        .eq('id', factureId)
+        .maybeSingle()
+      if (fErr || !facture) return { ok: false, error: 'Facture introuvable' }
+      if (facture.societe_id !== societeId) return { ok: false, error: 'Facture hors société' }
+      if (facture.statut === 'annule') return { ok: false, error: 'Facture annulée — paiement impossible' }
+      if (facture.statut === 'paye') return { ok: false, error: 'Facture déjà soldée' }
+
+      const taux = Number(facture.taux_change) > 0 ? Number(facture.taux_change) : 1
+      let montant = Number(input.montant)
+      if (!Number.isFinite(montant) || montant <= 0) {
+        const resteMur = facture.solde_non_paye !== null && facture.solde_non_paye !== undefined
+          ? Number(facture.solde_non_paye)
+          : (Number(facture.montant_mur) || Number(facture.montant_ttc) * taux || 0)
+        montant = Math.round((resteMur / taux) * 100) / 100
+      }
+      if (montant <= 0) return { ok: false, error: 'Aucun montant à payer (facture déjà soldée)' }
+
+      const res = await enregistrerPaiement(supabase, {
+        facture_id: factureId,
+        montant,
+        date_paiement: input.date_paiement || new Date().toISOString().slice(0, 10),
+        mode_paiement: input.mode_paiement || 'virement',
+        reference: input.reference || null,
+        compte_banque: input.compte_banque || null,
+        source: 'manuel',
+      }, userId)
+      if (!res.ok) return { ok: false, error: res.error }
+      return {
+        ok: true,
+        facture: facture.numero_facture,
+        montant,
+        paiement_id: res.paiement_id,
+        ecriture_id: res.ecriture_id,
+        note: 'Statut de la facture mis à jour automatiquement (payé/partiel) et écriture banque créée au grand livre.',
+      }
     }
     case 'lettrer_ecritures': {
       const ids = input.ecritures_ids || []
