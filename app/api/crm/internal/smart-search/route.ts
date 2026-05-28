@@ -3,13 +3,15 @@
 // Recherche intelligente en langage naturel — CONSULTATION GRATUITE.
 //
 // 1. Claude Haiku traduit la requête NL en filtres Apollo (coût minime).
-// 2. Apollo recherche les ENTREPRISES (la recherche d'organisations ne
-//    consomme pas de crédit email/téléphone) — verrouillé sur Maurice.
+// 2. Apollo recherche les ENTREPRISES (organizations/search) : la recherche
+//    d'organisations ne consomme pas de crédit et reste accessible sur tous
+//    les plans API (contrairement à mixed_people/search, réservé aux paliers
+//    supérieurs). Verrouillé sur Maurice.
 // 3. On renvoie un aperçu : RIEN n'est inséré en base à ce stade.
 //
 // Auth : session web (rôle CRM). Pas de HMAC (déclenché depuis l'UI).
-// Body : { prompt?: string, q_keywords?: string,
-//          employee_ranges?: string[], page?: number }
+// Body : { prompt?: string, q_keywords?: string, employee_ranges?: string[],
+//          city?: string, page?: number, per_page?: number }
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -25,6 +27,7 @@ export async function POST(req: NextRequest) {
   if (!body) return NextResponse.json({ error: 'body invalide' }, { status: 400 })
 
   const page = Number.isFinite(body.page) ? Math.max(1, Math.trunc(body.page)) : 1
+  const perPage = Number.isFinite(body.per_page) ? Math.min(100, Math.max(1, Math.trunc(body.per_page))) : 25
 
   let interpretation = ''
   let filters: ApolloCompanyFilters = {}
@@ -43,15 +46,35 @@ export async function POST(req: NextRequest) {
     }
   } else {
     // Filtres manuels directs (sans appel Claude)
-    if (typeof body.q_keywords === 'string' && body.q_keywords.trim()) {
-      filters.q_keywords = body.q_keywords.trim()
+    if (typeof body.city === 'string' && body.city.trim()) {
+      filters.city = body.city.trim()
+    }
+    const rawTags = body.keyword_tags ?? body.q_keywords
+    if (Array.isArray(rawTags) && rawTags.length) {
+      filters.keyword_tags = rawTags.map(String).map((s: string) => s.trim()).filter(Boolean)
+    } else if (typeof rawTags === 'string' && rawTags.trim()) {
+      filters.keyword_tags = [rawTags.trim()]
     }
     if (Array.isArray(body.employee_ranges) && body.employee_ranges.length) {
       filters.organization_num_employees_ranges = body.employee_ranges.map(String)
     }
+    if (Array.isArray(body.person_seniorities) && body.person_seniorities.length) {
+      filters.person_seniorities = body.person_seniorities.map(String)
+    }
+    if (Array.isArray(body.person_titles) && body.person_titles.length) {
+      filters.person_titles = body.person_titles.map(String)
+    }
   }
 
-  const result = await apolloSearchCompaniesPreview(filters, page)
+  const result = await apolloSearchCompaniesPreview(
+    {
+      city: filters.city,
+      keyword_tags: filters.keyword_tags,
+      organization_num_employees_ranges: filters.organization_num_employees_ranges,
+    },
+    page,
+    perPage,
+  )
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 502 })
   }

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Sparkles, Phone, Globe, Linkedin, Save, Search, MapPin } from "lucide-react"
+import { Loader2, Sparkles, Linkedin, Save, Search, MapPin, Phone, Globe } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 const NAVY = "#0B0F2E"
@@ -32,21 +32,34 @@ interface CompanyPreview {
   description?: string
 }
 
+interface SearchData {
+  interpretation?: string
+  companies?: CompanyPreview[]
+  total?: number
+  page?: number
+}
+
 const EXAMPLES = [
-  "Hôtels et restaurants à Grand Baie",
-  "Cabinets comptables à Port Louis de plus de 50 employés",
+  "Hôtels à Grand Baie",
+  "Cabinets comptables à Port Louis",
   "Sociétés IT / fintech à Ebène",
   "Entreprises de construction à Maurice",
 ]
+
+const PER_PAGE = 50
 
 export default function RechercheIntelligentePage() {
   const { toast } = useToast()
   const [prompt, setPrompt] = useState("")
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [saving, setSaving] = useState(false)
   const [interpretation, setInterpretation] = useState("")
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [companies, setCompanies] = useState<CompanyPreview[]>([])
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [errorMsg, setErrorMsg] = useState("")
 
   // Filtres locaux (gratuits, côté client)
   const [onlyPhone, setOnlyPhone] = useState(false)
@@ -66,6 +79,17 @@ export default function RechercheIntelligentePage() {
 
   const selectedCount = Object.values(selected).filter(Boolean).length
 
+  const fetchPage = async (pageToFetch: number): Promise<SearchData> => {
+    const res = await fetch("/api/crm/internal/smart-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, page: pageToFetch, per_page: PER_PAGE }),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json?.error || "Erreur recherche")
+    return json.data as SearchData
+  }
+
   const search = async () => {
     if (!prompt.trim()) {
       toast({ title: "Saisissez une requête", variant: "destructive" })
@@ -75,24 +99,49 @@ export default function RechercheIntelligentePage() {
     setCompanies([])
     setSelected({})
     setInterpretation("")
+    setTotal(0)
+    setPage(1)
+    setErrorMsg("")
     try {
-      const res = await fetch("/api/crm/internal/smart-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || "Erreur recherche")
-      setInterpretation(json.data.interpretation || "")
-      setCompanies(json.data.companies || [])
+      const data = await fetchPage(1)
+      setInterpretation(data.interpretation || "")
+      setCompanies(data.companies || [])
+      setTotal(data.total || 0)
+      setPage(1)
       toast({
         title: "Consultation gratuite",
-        description: `${json.data.companies?.length || 0} sociétés trouvées (aucun crédit consommé)`,
+        description: `${data.companies?.length || 0} sociétés affichées sur ${data.total || 0} trouvées (aucun crédit consommé)`,
       })
     } catch (err: any) {
+      setErrorMsg(err.message || "Erreur inconnue")
       toast({ title: "Erreur", description: err.message, variant: "destructive" })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadMore = async () => {
+    setLoadingMore(true)
+    try {
+      const next = page + 1
+      const data = await fetchPage(next)
+      const incoming = data.companies || []
+      // Dédup sur apollo_id pour éviter les doublons entre pages
+      setCompanies((prev) => {
+        const seen = new Set(prev.map((c) => c.apollo_id).filter(Boolean))
+        const merged = [...prev]
+        for (const c of incoming) {
+          if (c.apollo_id && seen.has(c.apollo_id)) continue
+          merged.push(c)
+        }
+        return merged
+      })
+      setPage(next)
+      if (typeof data.total === "number") setTotal(data.total)
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" })
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -104,17 +153,27 @@ export default function RechercheIntelligentePage() {
     }
     setSaving(true)
     try {
+      // keep-selection attend des lignes au format { societe, societe_* }.
+      // On mappe chaque société sélectionnée (sans contact rattaché).
+      const payload = toKeep.map((c) => ({
+        societe: c.nom,
+        societe_site_web: c.site_web,
+        societe_telephone: c.telephone,
+        societe_industrie: c.industrie,
+        societe_ville: c.ville,
+        societe_linkedin: c.linkedin_url,
+      }))
       const res = await fetch("/api/crm/internal/keep-selection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companies: toKeep }),
+        body: JSON.stringify({ people: payload }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || "Erreur enregistrement")
       const r = json.data
       toast({
         title: "Sélection enregistrée",
-        description: `${r.companies_created} créées, ${r.companies_updated} mises à jour`,
+        description: `${r.companies_created} sociétés créées, ${r.companies_updated} mises à jour`,
       })
       setSelected({})
     } catch (err: any) {
@@ -137,7 +196,7 @@ export default function RechercheIntelligentePage() {
           <Sparkles className="h-7 w-7" style={{ color: GOLD }} /> Recherche intelligente
         </h1>
         <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
-          <MapPin className="h-3.5 w-3.5" /> Maurice uniquement — décrivez votre cible, consultez gratuitement, gardez ce qui vous intéresse.
+          <MapPin className="h-3.5 w-3.5" /> Maurice uniquement — décrivez votre cible, consultez gratuitement, gardez les sociétés qui vous intéressent.
         </p>
       </div>
 
@@ -147,7 +206,7 @@ export default function RechercheIntelligentePage() {
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="ex : hôtels 4-5 étoiles à Grand Baie de plus de 50 employés"
+            placeholder="ex : hôtels à Grand Baie de plus de 50 employés"
             rows={3}
             onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) search() }}
           />
@@ -163,7 +222,7 @@ export default function RechercheIntelligentePage() {
               </button>
             ))}
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">
               La consultation ne consomme aucun crédit Apollo. Les crédits ne sont utilisés que lors de l&apos;enrichissement d&apos;un contact.
             </span>
@@ -181,11 +240,18 @@ export default function RechercheIntelligentePage() {
         </div>
       )}
 
+      {errorMsg && (
+        <div className="text-sm rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-900 break-words">
+          <span className="font-semibold">Erreur de recherche :</span>
+          <pre className="mt-1 whitespace-pre-wrap font-mono text-xs">{errorMsg}</pre>
+        </div>
+      )}
+
       {companies.length > 0 && (
         <Card style={panelStyle}>
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardHeader className="flex flex-row items-center justify-between gap-3 flex-wrap">
             <CardTitle className="text-base">
-              Résultats ({filtered.length}/{companies.length})
+              Sociétés ({filtered.length} affichées / {total.toLocaleString("fr-FR")} trouvées)
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <FilterChip active={onlyPhone} onClick={() => setOnlyPhone((v) => !v)} icon={Phone} label="Téléphone" />
@@ -246,6 +312,15 @@ export default function RechercheIntelligentePage() {
                 )
               })}
             </div>
+
+            {companies.length < total && (
+              <div className="flex justify-center mt-4">
+                <Button variant="outline" onClick={loadMore} disabled={loadingMore} size="sm">
+                  {loadingMore ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+                  Voir plus ({companies.length}/{total.toLocaleString("fr-FR")})
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -261,7 +336,7 @@ function FilterChip({
 }: {
   active: boolean
   onClick: () => void
-  icon: React.ComponentType<{ className?: string }>
+  icon?: React.ComponentType<{ className?: string }>
   label: string
 }) {
   return (
@@ -275,7 +350,7 @@ function FilterChip({
           : { backgroundColor: "white", color: "#64748b" }
       }
     >
-      <Icon className="h-3 w-3" />
+      {Icon && <Icon className="h-3 w-3" />}
       {label}
     </button>
   )
