@@ -70,6 +70,7 @@ export default function RechercheIntelligentePage() {
   const [page, setPage] = useState(1)
   const [people, setPeople] = useState<PersonPreview[]>([])
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [errorMsg, setErrorMsg] = useState("")
 
   // Filtres locaux (gratuits, côté client)
   const [onlyLinkedin, setOnlyLinkedin] = useState(false)
@@ -112,6 +113,7 @@ export default function RechercheIntelligentePage() {
     setInterpretation("")
     setTotal(0)
     setPage(1)
+    setErrorMsg("")
     try {
       const data = await fetchPage(1)
       setInterpretation(data.interpretation || "")
@@ -123,6 +125,7 @@ export default function RechercheIntelligentePage() {
         description: `${data.people?.length || 0} dirigeants affichés sur ${data.total || 0} trouvés (aucun crédit consommé)`,
       })
     } catch (err: any) {
+      setErrorMsg(err.message || "Erreur inconnue")
       toast({ title: "Erreur", description: err.message, variant: "destructive" })
     } finally {
       setLoading(false)
@@ -236,6 +239,13 @@ export default function RechercheIntelligentePage() {
       {interpretation && (
         <div className="text-sm rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-amber-900">
           <span className="font-semibold">Compris :</span> {interpretation}
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="text-sm rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-900 break-words">
+          <span className="font-semibold">Erreur de recherche :</span>
+          <pre className="mt-1 whitespace-pre-wrap font-mono text-xs">{errorMsg}</pre>
         </div>
       )}
 
