@@ -193,7 +193,7 @@ export async function apolloSearchCompaniesPreview(
       body.organization_num_employees_ranges = filters.organization_num_employees_ranges
     }
 
-    const res = await apolloPost('/mixed_companies/search', body)
+    const res = await apolloPost('/organizations/search', body)
     const orgs = res.organizations ?? []
     const companies: ApolloCompanyPreview[] = orgs
       .filter((o) => o.name)
@@ -302,7 +302,6 @@ export async function apolloSearchPeoplePreview(
       body.organization_num_employees_ranges = filters.organization_num_employees_ranges
     }
 
-    console.error('[crm/apollo] people_search request', JSON.stringify(body))
     const res = await apolloPost('/mixed_people/search', body)
     const rows = res.people ?? []
     const people: ApolloPersonPreview[] = rows.map((p) => {
@@ -335,7 +334,6 @@ export async function apolloSearchPeoplePreview(
       page: Math.max(1, page),
     }
   } catch (err) {
-    console.error('[crm/apollo] people_search error', (err as Error).message)
     return { people: [], total: 0, page, error: (err as Error).message }
   }
 }
@@ -364,7 +362,7 @@ export const apolloConnector: Connector = {
       const keywordTags = [opts.query, opts.industrie]
         .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
         .map((v) => v.trim())
-      const orgRes = await apolloPost('/mixed_companies/search', {
+      const orgRes = await apolloPost('/organizations/search', {
         organization_locations: opts.region
           ? [`${opts.region}, Mauritius`]
           : ['Mauritius'],

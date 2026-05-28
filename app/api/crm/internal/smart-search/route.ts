@@ -3,21 +3,21 @@
 // Recherche intelligente en langage naturel — CONSULTATION GRATUITE.
 //
 // 1. Claude Haiku traduit la requête NL en filtres Apollo (coût minime).
-// 2. Apollo recherche les DIRIGEANTS (mixed_people/search) : noms + titres +
-//    société renvoyés SANS consommer de crédit ; emails/téléphones masqués
-//    (reveal = payant, fait plus tard à la demande). Verrouillé sur Maurice.
+// 2. Apollo recherche les ENTREPRISES (organizations/search) : la recherche
+//    d'organisations ne consomme pas de crédit et reste accessible sur tous
+//    les plans API (contrairement à mixed_people/search, réservé aux paliers
+//    supérieurs). Verrouillé sur Maurice.
 // 3. On renvoie un aperçu : RIEN n'est inséré en base à ce stade.
 //
 // Auth : session web (rôle CRM). Pas de HMAC (déclenché depuis l'UI).
 // Body : { prompt?: string, q_keywords?: string, employee_ranges?: string[],
-//          person_titles?: string[], person_seniorities?: string[],
-//          page?: number, per_page?: number }
+//          city?: string, page?: number, per_page?: number }
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCrmPermission } from '@/lib/crm/permissions'
 import { parseNaturalQuery, type ApolloCompanyFilters } from '@/lib/crm/nl-query'
-import { apolloSearchPeoplePreview } from '@/lib/crm/connectors/apollo'
+import { apolloSearchCompaniesPreview } from '@/lib/crm/connectors/apollo'
 
 export async function POST(req: NextRequest) {
   const auth = await requireCrmPermission('view')
@@ -39,7 +39,6 @@ export async function POST(req: NextRequest) {
       interpretation = parsed.interpretation
       filters = parsed.filters
     } catch (err) {
-      console.error('[crm/SS] NLFAIL', (err as Error).message)
       return NextResponse.json(
         { error: `nl_parse_failed: ${(err as Error).message}` },
         { status: 502 },
@@ -67,18 +66,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const result = await apolloSearchPeoplePreview(
+  const result = await apolloSearchCompaniesPreview(
     {
       city: filters.city,
       keyword_tags: filters.keyword_tags,
-      person_titles: filters.person_titles,
-      person_seniorities: filters.person_seniorities,
       organization_num_employees_ranges: filters.organization_num_employees_ranges,
     },
     page,
     perPage,
   )
-  console.error('[crm/SS] OK filters', JSON.stringify(filters), 'people', result.people?.length, 'err', result.error ?? 'none')
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 502 })
   }
@@ -89,7 +85,7 @@ export async function POST(req: NextRequest) {
       filters,
       page: result.page,
       total: result.total,
-      people: result.people,
+      companies: result.companies,
     },
   })
 }
