@@ -140,8 +140,7 @@ export async function POST(
       numero_piece: b.numero_piece || refFolio, ref_folio: refFolio,
       numero_compte: l.compte, nom_compte: compteMap.get(l.compte)!.intitule,
       libelle: l.libelle || b.libelle, description: l.libelle || b.libelle,
-      debit_mur: l.debit, credit_mur: l.credit,
-      debit: l.debit, credit: l.credit, devise: b.devise, exercice,
+      debit_mur: l.debit, credit_mur: l.credit, devise: b.devise, exercice,
     }))
 
     const { data: inserted, error } = await admin

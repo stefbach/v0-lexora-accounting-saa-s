@@ -441,7 +441,7 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
         societe_id: societeId, date_ecriture: input.date_ecriture, journal: input.journal || 'OD',
         numero_piece: refFolio, ref_folio: refFolio, numero_compte: l.compte, nom_compte: nomCompte.get(l.compte) || `Compte ${l.compte}`,
         libelle: l.libelle || input.libelle, description: l.libelle || input.libelle,
-        debit_mur: +l.debit || 0, credit_mur: +l.credit || 0, debit: +l.debit || 0, credit: +l.credit || 0,
+        debit_mur: +l.debit || 0, credit_mur: +l.credit || 0,
         devise: 'MUR', exercice,
       }))
       const { error } = await supabase.from('ecritures_comptables_v2').insert(rows)
