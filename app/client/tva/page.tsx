@@ -39,6 +39,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import * as XLSX from "xlsx"
 import { MonthPicker } from "@/components/ui/MonthPicker"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { RattrapageTab } from "@/components/tva/RattrapageTab"
 import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
@@ -430,6 +432,13 @@ export default function TVAPage() {
         </div>
       </div>
 
+      <Tabs defaultValue="declaration">
+        <TabsList className="no-print">
+          <TabsTrigger value="declaration">{t('cab.tva.tab_declarations', locale)}</TabsTrigger>
+          <TabsTrigger value="rattrapage">{t('cab.tva.tab_rattrapage', locale)}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="declaration" className="space-y-6 mt-4">
       {/* Period selector */}
       <Card>
         <CardContent className="p-3">
@@ -898,6 +907,16 @@ export default function TVAPage() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="rattrapage" className="mt-4">
+          <RattrapageTab
+            societes={societeId ? [{ id: societeId, nom: (societe as any)?.nom || '' }] : []}
+            selectedSociete={societeId || "all"}
+            locale={locale}
+          />
+        </TabsContent>
+      </Tabs>
       </div>
     </ClientPageShell>
   )
