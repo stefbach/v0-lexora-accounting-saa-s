@@ -37,6 +37,7 @@ import {
   Sparkles,
   TrendingUp,
   TrendingDown,
+  Wallet,
   Printer,
   Eye,
   Download,
@@ -47,6 +48,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 import { PaiementFactureDialog } from "@/components/client/PaiementFactureDialog"
+import { ReglerHorsBanqueDialog } from "@/components/factures/ReglerHorsBanqueDialog"
 
 interface Facture {
   id: string
@@ -129,6 +131,7 @@ export default function ClientFacturesPage() {
   const [search, setSearch] = useState("")
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [paiementFacture, setPaiementFacture] = useState<Facture | null>(null)
+  const [horsBanqueFacture, setHorsBanqueFacture] = useState<Facture | null>(null)
   // Sélection multi-facture pour export PDF batch — Set d'IDs sélectionnés.
   // Réinitialisé à chaque rechargement (load) pour éviter d'exporter des
   // factures qui auraient disparu côté serveur.
@@ -529,16 +532,16 @@ export default function ClientFacturesPage() {
                 </div>
 
                 <TabsContent value="toutes" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
                 <TabsContent value="client" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
                 <TabsContent value="fournisseur" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
                 <TabsContent value="brouillons" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
               </Tabs>
             </Card>
@@ -558,6 +561,25 @@ export default function ClientFacturesPage() {
           load()
         }}
       />
+
+      <ReglerHorsBanqueDialog
+        open={!!horsBanqueFacture}
+        onClose={() => setHorsBanqueFacture(null)}
+        societeId={societeId || ""}
+        factures={horsBanqueFacture ? [{
+          id: horsBanqueFacture.id,
+          numero_facture: horsBanqueFacture.numero_facture,
+          tiers: horsBanqueFacture.tiers,
+          montant_ttc: horsBanqueFacture.montant_ttc,
+          solde_non_paye: horsBanqueFacture.solde_non_paye,
+          devise: horsBanqueFacture.devise,
+        }] : []}
+        onSuccess={(info) => {
+          showToast(`✓ Facture réglée (lettre ${info.lettre}) — ${info.montantTotal.toLocaleString("fr-FR")} MUR`, "success")
+          setHorsBanqueFacture(null)
+          load()
+        }}
+      />
     </ClientPageShell>
   )
 }
@@ -565,12 +587,14 @@ export default function ClientFacturesPage() {
 function FactureList({
   factures,
   onEnregistrerPaiement,
+  onReglerHorsBanque,
   onReload,
   selectedIds,
   onToggleSelect,
 }: {
   factures: Facture[]
   onEnregistrerPaiement?: (f: Facture) => void
+  onReglerHorsBanque?: (f: Facture) => void
   onReload?: () => void
   selectedIds?: Set<string>
   onToggleSelect?: (id: string) => void
@@ -821,6 +845,18 @@ function FactureList({
                   onClick={() => onEnregistrerPaiement(f)}
                 >
                   {t('inv.fac.record_payment', locale)}
+                </Button>
+              )}
+              {canPay && onReglerHorsBanque && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px] mt-1 border-purple-300 text-purple-700 hover:bg-purple-50"
+                  onClick={() => onReglerHorsBanque(f)}
+                  title="Régler via compte tiers (associé, société liée…)"
+                >
+                  <Wallet className="h-3 w-3 mr-1" />
+                  Hors banque
                 </Button>
               )}
               {/* Bouton MRA Fiscaliser — uniquement factures clients non

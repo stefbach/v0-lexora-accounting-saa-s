@@ -428,11 +428,14 @@ export async function POST(request: Request) {
             salaire_base: emp.salaire_base || 0,
             // salaire_brut: GENERATED — do not set
             heures_sup_montant: ot_total,
+            // FIX 2026-05-27 : electricity et prime_production ne sont PAS du transport/carburant.
+            // Ce sont des primes/indemnités mal nommées. On les agrège dans les special_allowance.
+            // transport_allowance/petrol_allowance restent à 0 (DDS/OCC n'ont pas de transport/carburant réels).
             special_allowance_1: all_primes,
-            special_allowance_2: emp.internet_allowance || 0,
-            special_allowance_3: emp.meal_allowance || 0,
-            transport_allowance: emp.electricity || 0,
-            petrol_allowance: emp.prime_production || 0,
+            special_allowance_2: (emp.internet_allowance || 0) + (emp.electricity || 0),
+            special_allowance_3: (emp.meal_allowance || 0) + (emp.prime_production || 0),
+            transport_allowance: 0,
+            petrol_allowance: 0,
             salaire_net: computedNet,
             csg_salarie: emp.csg || 0,
             csg_patronal: emp.er_csg || 0,
@@ -517,7 +520,7 @@ export async function POST(request: Request) {
         const entries = [
           // DÉBIT — Charges (classe 6)
           mkEntry('6411', `Salaires de base ${moisLabel}`, Math.round(t.basic), 0),
-          t.ot > 0 ? mkEntry('6414', `Heures supplémentaires ${moisLabel}`, Math.round(t.ot), 0) : null,
+          t.ot > 0 ? mkEntry('6413', `Heures supplémentaires ${moisLabel}`, Math.round(t.ot), 0) : null,
           t.allowances > 0 ? mkEntry('6415', `Primes et indemnités ${moisLabel}`, Math.round(t.allowances), 0) : null,
           t.csg_pat > 0 ? mkEntry('6451', `CSG patronale ${moisLabel}`, Math.round(t.csg_pat), 0) : null,
           t.nsf_pat > 0 ? mkEntry('6452', `NSF patronal ${moisLabel}`, Math.round(t.nsf_pat), 0) : null,

@@ -1,0 +1,99 @@
+{
+  "code": "module_b2b_tech",
+  "nom": "Module B2B Tech / SaaS",
+  "description": "Comptes spécifiques aux activités SaaS et tech B2B : revenus récurrents, setup fees, services professionnels, revenus différés (deferred revenue IFRS 15), R&D capitalisée (IAS 38).",
+  "type": "module",
+  "juridiction_code": "MU",
+  "version": "1.0.0",
+  "prerequisites": ["core_maurice"],
+  "comptes": [
+    {
+      "numero": "2055",
+      "intitule": "Frais de R&D capitalisés (IAS 38)",
+      "classe": 2,
+      "type": "actif",
+      "nature": "immobilisation_incorporelle",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["tech", "rd", "ias38"]
+    },
+    {
+      "numero": "4871",
+      "intitule": "Revenus différés (deferred revenue)",
+      "classe": 4,
+      "type": "passif",
+      "nature": "revenu_differe",
+      "sens_normal": "credit",
+      "lettrable": true,
+      "obligatoire": false,
+      "tags": ["tech", "saas", "ifrs15"]
+    },
+    {
+      "numero": "70601",
+      "intitule": "Abonnements SaaS - Récurrent mensuel (MRR)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "abonnement_recurrent",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["tech", "saas", "mrr"]
+    },
+    {
+      "numero": "70602",
+      "intitule": "Setup fees ponctuels",
+      "classe": 7,
+      "type": "produit",
+      "nature": "setup_fee",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["tech", "saas"]
+    },
+    {
+      "numero": "70603",
+      "intitule": "Services professionnels (intégration, dev custom)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "service_pro",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["tech"]
+    },
+    {
+      "numero": "70604",
+      "intitule": "Revenus API / usage (consommation)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "usage_based",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["tech", "saas", "usage"]
+    },
+    {
+      "numero": "6661",
+      "intitule": "Pertes sur créances clients (churn)",
+      "classe": 6,
+      "type": "charge",
+      "nature": "perte_creance",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["tech", "saas", "churn"]
+    },
+    {
+      "numero": "6267",
+      "intitule": "Infrastructure cloud & hébergement (COGS SaaS)",
+      "classe": 6,
+      "type": "charge",
+      "nature": "cogs_saas",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["tech", "saas", "cogs"]
+    }
+  ]
+}

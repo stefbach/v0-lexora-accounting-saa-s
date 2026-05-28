@@ -25,29 +25,92 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // rapprochement Part 2.
 // ─────────────────────────────────────────────────────────────────────────
 export const CLASSE_COMPTES: Record<string, string> = {
+  // ── Tiers commerciaux ──────────────────────────────────────────────
   fournisseur: '401',
   client: '411',
+
+  // ── Associés / Inter-sociétés ──────────────────────────────────────
   compte_courant_associe: '455',
   cca: '455',
   remboursement_associe: '108',
-  avance_personnel: '425',
-  charge_diverse: '658',
-  paiement_mra: '444',
-  frais_bancaires: '627',
+  remboursement_personnel: '108',
+  inter_societe: '451',
+  virement_inter_societe: '467',
+  virement_interne: '5800',
+
+  // ── Personnel ──────────────────────────────────────────────────────
   salaire: '4210',
   salaire_bulk: '421',
-  virement_interne: '5800',
-  remboursement_personnel: '108',
+  avance_personnel: '425',
+  csg_salarie: '4311',
+  nsf_salarie: '4312',
+  csg_patronal: '4321',
+  nsf_patronal: '4322',
+  prgf: '4323',
+  training_levy_verser: '4324',
+  paye_mra: '4330',
+  charge_sociale: '431',
+
+  // ── TVA / Impôts MRA ───────────────────────────────────────────────
+  paiement_mra: '444',
+  impot_societe: '4444',
+  tva_deductible: '44566',
+  tva_collectee: '44571',
+  patente: '6354',
+  training_levy: '633',
+  impot_taxe: '635',
+
+  // ── Achats / Marchandises ──────────────────────────────────────────
+  achats_matieres: '601',
+  achats_fournitures: '602',
+  materiel: '606',
+  electricite: '6061',
+  fournitures_bureau: '6064',
+  consommables: '6068',
+
+  // ── Services extérieurs ────────────────────────────────────────────
+  sous_traitance: '611',
+  leasing: '612',
   loyer: '613',
   entretien: '615',
   assurance: '616',
+  documentation: '618',
+
+  // ── Autres services extérieurs ─────────────────────────────────────
+  honoraires_juridiques: '6225',
+  honoraires_comptables: '6226',
   honoraires: '622',
-  deplacement: '625',
+  publicite: '623',
+  cadeaux: '6234',
+  transport_achats: '6241',
+  transport_ventes: '6242',
+  deplacement: '6251',
+  missions: '6256',
+  postaux: '6261',
   telecom: '626',
-  impot_taxe: '635',
-  materiel: '606',
-  produit_divers: '706',
-  charge_sociale: '431',
+  frais_bancaires: '6271',
+  cotisations_pro: '628',
+
+  // ── Financier ──────────────────────────────────────────────────────
+  interets: '6611',
+  interets_cca: '6615',
+  frais_financiers: '6617',
+  perte_change: '666',
+  gain_change: '766',
+
+  // ── Produits ───────────────────────────────────────────────────────
+  prestation: '706',
+  vente_marchandises: '707',
+  produit_divers: '758',
+  produit_exceptionnel: '771',
+
+  // ── Immobilisations (acquisitions ponctuelles) ─────────────────────
+  immo_informatique: '2154',
+  immo_bureau: '2183',
+
+  // ── Charges diverses / attente ─────────────────────────────────────
+  charge_diverse: '658',
+  charge_exceptionnelle: '671',
   autre: '471',
 }
 
