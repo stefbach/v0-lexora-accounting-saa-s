@@ -123,12 +123,12 @@ export async function POST(req: NextRequest) {
       hits.transactions = data || []
     }
 
-    // écritures comptables (rôle comptable+) — passe par la VUE
-    // ecritures_comptables (mig 120) qui expose les colonnes v1
-    // (compte, debit, credit, libelle, journal, numero_piece).
+    // écritures comptables (rôle comptable+) — via la VUE ecritures_comptables
+    // (mig 120) qui expose les colonnes v1 (compte, debit, credit, libelle,
+    // journal, numero_piece) au-dessus de la table physique v2.
     if (scopes.includes('ecritures') && hasRole(ctx, 'comptable')) {
       const { data } = await admin
-        // FIX table : 'ecritures' (sans suffixe) n'existe pas → vue 'ecritures_comptables'.
+        // FIX table : 'ecritures' (sans suffixe) n'existe pas → 'ecritures_comptables' (vue).
         // FIX colonnes : 'code_journal', 'montant_debit', 'montant_credit',
         // 'compte_comptable' n'existent pas → journal, debit, credit, compte.
         .from('ecritures_comptables')
