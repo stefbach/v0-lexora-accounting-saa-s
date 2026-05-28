@@ -8,10 +8,12 @@
 // ---------------------------------------------------------------------------
 export type Role =
   | 'admin'
+  | 'super_admin'
   | 'client_admin'
   | 'client_user'
   | 'comptable'
   | 'comptable_dedie'
+  | 'commercial'
 
 // ---------------------------------------------------------------------------
 // Types de documents
