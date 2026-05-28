@@ -32,6 +32,7 @@ interface ApolloOrganization {
 
 interface ApolloPerson {
   id?: string
+  name?: string
   first_name?: string
   last_name?: string
   title?: string
@@ -207,6 +208,114 @@ export async function apolloSearchCompaniesPreview(
     }
   } catch (err) {
     return { companies: [], total: 0, page, error: (err as Error).message }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Aperçu DIRIGEANTS (consultation gratuite). La recherche de personnes Apollo
+// renvoie nom + titre + société SANS consommer de crédit ; seuls les
+// emails/téléphones restent masqués (reveal = payant, fait plus tard à la
+// demande). C'est ce qui permet d'afficher les noms des dirigeants.
+// -----------------------------------------------------------------------------
+export interface ApolloPersonPreview {
+  apollo_person_id?: string
+  prenom?: string
+  nom?: string
+  nom_complet?: string
+  titre?: string
+  seniorite?: string
+  linkedin_url?: string
+  email_locked: boolean
+  // société rattachée
+  societe?: string
+  societe_site_web?: string
+  societe_telephone?: string
+  societe_industrie?: string
+  societe_ville?: string
+  societe_linkedin?: string
+}
+
+export interface ApolloPeopleFilters {
+  q_keywords?: string
+  person_titles?: string[]
+  person_seniorities?: string[]
+  organization_num_employees_ranges?: string[]
+}
+
+export interface ApolloPeoplePreviewResult {
+  people: ApolloPersonPreview[]
+  total: number
+  page: number
+  error?: string
+}
+
+// Séniorités "dirigeants" par défaut (valeurs acceptées par Apollo).
+const DEFAULT_SENIORITIES = ['owner', 'founder', 'c_suite', 'partner', 'vp', 'head', 'director']
+
+function isEmailLocked(email?: string, status?: string): boolean {
+  if (!email) return true
+  if (email.includes('not_unlocked') || email.includes('domain.com')) return true
+  return status !== 'verified' && status !== 'likely_to_engage'
+}
+
+export async function apolloSearchPeoplePreview(
+  filters: ApolloPeopleFilters,
+  page = 1,
+  perPage = 25,
+): Promise<ApolloPeoplePreviewResult> {
+  if (!process.env.APOLLO_API_KEY) {
+    return { people: [], total: 0, page, error: 'APOLLO_API_KEY non configurée' }
+  }
+
+  try {
+    const body: Record<string, unknown> = {
+      person_locations: ['Mauritius'], // verrou Maurice, non négociable
+      organization_locations: ['Mauritius'],
+      page: Math.max(1, page),
+      per_page: Math.min(Math.max(1, perPage), 100),
+    }
+    if (filters.q_keywords) body.q_keywords = filters.q_keywords
+    if (filters.person_titles?.length) body.person_titles = filters.person_titles
+    body.person_seniorities = filters.person_seniorities?.length
+      ? filters.person_seniorities
+      : DEFAULT_SENIORITIES
+    if (filters.organization_num_employees_ranges?.length) {
+      body.organization_num_employees_ranges = filters.organization_num_employees_ranges
+    }
+
+    const res = await apolloPost('/mixed_people/search', body)
+    const rows = res.people ?? []
+    const people: ApolloPersonPreview[] = rows.map((p) => {
+      const org = p.organization
+      const nom_complet =
+        p.name?.trim() ||
+        [p.first_name, p.last_name].filter(Boolean).join(' ').trim() ||
+        undefined
+      return {
+        apollo_person_id: p.id,
+        prenom: p.first_name ?? undefined,
+        nom: p.last_name ?? undefined,
+        nom_complet,
+        titre: p.title ?? undefined,
+        seniorite: p.seniority ?? undefined,
+        linkedin_url: p.linkedin_url ?? undefined,
+        email_locked: isEmailLocked(p.email, p.email_status),
+        societe: org?.name ?? undefined,
+        societe_site_web: org?.website_url ?? undefined,
+        societe_telephone: org?.primary_phone?.number,
+        societe_industrie: org?.industry ?? undefined,
+        societe_ville: org?.city ?? undefined,
+        societe_linkedin: org?.linkedin_url ?? undefined,
+      }
+    })
+
+    return {
+      people,
+      total: res.pagination?.total_entries ?? people.length,
+      page: Math.max(1, page),
+    }
+  } catch (err) {
+    return { people: [], total: 0, page, error: (err as Error).message }
   }
 }
 

@@ -28,6 +28,8 @@ const ALLOWED_EMPLOYEE_RANGES = [
 export interface ApolloCompanyFilters {
   q_keywords?: string
   organization_num_employees_ranges?: string[]
+  person_titles?: string[]
+  person_seniorities?: string[]
 }
 
 export interface ParsedNlQuery {
@@ -35,20 +37,39 @@ export interface ParsedNlQuery {
   filters: ApolloCompanyFilters
 }
 
+// Séniorités acceptées par Apollo (person_seniorities).
+const ALLOWED_SENIORITIES = [
+  'owner',
+  'founder',
+  'c_suite',
+  'partner',
+  'vp',
+  'head',
+  'director',
+  'manager',
+  'senior',
+  'entry',
+  'intern',
+] as const
+
 const SYSTEM_PROMPT = `Tu convertis une requête de prospection B2B en filtres de recherche Apollo.io.
 Le marché est EXCLUSIVEMENT l'île Maurice — n'ajoute jamais d'autre pays.
+On recherche des PERSONNES (dirigeants/décideurs) dans des entreprises mauriciennes.
 
 Réponds UNIQUEMENT avec un objet JSON (aucun texte autour) de cette forme :
 {
   "interpretation": "<reformulation courte en français de ce que tu as compris>",
   "q_keywords": "<mots-clés secteur/activité/ville à Maurice, séparés par espaces, ou \\"\\">",
-  "employee_ranges": ["<une ou plusieurs valeurs parmi: 1,10 | 11,50 | 51,200 | 201,500 | 501,1000 | 1001,5000 | 5001,10000 | 10001,1000000>"]
+  "employee_ranges": ["<valeurs parmi: 1,10 | 11,50 | 51,200 | 201,500 | 501,1000 | 1001,5000 | 5001,10000 | 10001,1000000>"],
+  "person_titles": ["<intitulés de poste précis si mentionnés, ex: \\"CEO\\", \\"Directeur Financier\\", \\"CFO\\">"],
+  "person_seniorities": ["<valeurs parmi: owner | founder | c_suite | partner | vp | head | director | manager>"]
 }
 
 Règles :
 - q_keywords : garde l'activité et la localité mauricienne (ex: "hotel Grand Baie", "comptable Port Louis"). N'inclus PAS le mot "Maurice"/"Mauritius" (déjà filtré).
-- employee_ranges : déduis la taille si l'utilisateur la mentionne ("PME", "grandes entreprises", "+50 salariés"...). Sinon tableau vide [].
-- Si la requête est vague, fais au mieux avec q_keywords.`
+- employee_ranges : déduis la taille si mentionnée ("PME", "grandes entreprises", "+50 salariés"). Sinon [].
+- person_titles : seulement si l'utilisateur cite un poste précis. Sinon [].
+- person_seniorities : déduis le niveau visé ("dirigeants", "patrons" -> owner/founder/c_suite ; "DAF/CFO" -> c_suite ; "managers" -> manager). Si non précisé, laisse [] (le défaut serveur ciblera les dirigeants).`
 
 function getClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -102,6 +123,20 @@ export async function parseNaturalQuery(prompt: string): Promise<ParsedNlQuery> 
         (ALLOWED_EMPLOYEE_RANGES as readonly string[]).includes(r),
       )
     if (ranges.length > 0) filters.organization_num_employees_ranges = ranges
+  }
+
+  if (Array.isArray(raw.person_titles)) {
+    const titles = raw.person_titles.map((t) => String(t).trim()).filter(Boolean)
+    if (titles.length > 0) filters.person_titles = titles
+  }
+
+  if (Array.isArray(raw.person_seniorities)) {
+    const sen = raw.person_seniorities
+      .map((s) => String(s).trim().toLowerCase())
+      .filter((s): s is (typeof ALLOWED_SENIORITIES)[number] =>
+        (ALLOWED_SENIORITIES as readonly string[]).includes(s),
+      )
+    if (sen.length > 0) filters.person_seniorities = sen
   }
 
   return {
