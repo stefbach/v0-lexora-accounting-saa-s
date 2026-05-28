@@ -192,6 +192,35 @@ export default function RapprochementPage() {
       .catch(() => {})
   }, [])
 
+  // ── Chargement du PCM éditable de la société (menu de classification) ──
+  // Les comptes du PCM société (comptes_societes) alimentent dynamiquement
+  // le menu "Compte PCM". Fallback sur RECLASS_OPTIONS statique si vide.
+  const [pcmOptions, setPcmOptions] = useState<typeof RECLASS_OPTIONS | null>(null)
+  useEffect(() => {
+    if (selectedSociete === "all" || !selectedSociete) { setPcmOptions(null); return }
+    fetch(`/api/societes/${selectedSociete}/pcm/comptes`)
+      .then((r) => r.json())
+      .then((d) => {
+        const comptes = (d?.comptes || []) as Array<{ numero: string; intitule: string; classe: number }>
+        if (comptes.length === 0) { setPcmOptions(null); return }
+        const CLASSE_GROUPS: Record<number, string> = {
+          1: "Capitaux", 2: "Immobilisations", 3: "Stocks", 4: "Tiers",
+          5: "Trésorerie", 6: "Charges", 7: "Produits", 8: "Spéciaux",
+        }
+        const opts = comptes.map((c) => ({
+          value: c.numero,            // classification key = numéro de compte
+          compte: c.numero,           // envoyé en compte_charge (prime backend)
+          label: `${c.numero} — ${c.intitule}`,
+          group: `Classe ${c.classe} — ${CLASSE_GROUPS[c.classe] || ""}`.trim(),
+        }))
+        setPcmOptions(opts)
+      })
+      .catch(() => setPcmOptions(null))
+  }, [selectedSociete])
+
+  // Options effectives : PCM société si dispo, sinon liste standard
+  const reclassOptions = pcmOptions && pcmOptions.length > 0 ? pcmOptions : RECLASS_OPTIONS
+
   // ── Chargement données rapprochement ──────────────────────────────
   const load = useCallback(async () => {
     if (selectedSociete === "all") {
@@ -757,6 +786,7 @@ export default function RapprochementPage() {
                                 facturesById={facturesById}
                                 override={classificationOverrides.get(tx.id)}
                                 onReclassify={g.type === "classification" ? setOverride : undefined}
+                                reclassOptions={reclassOptions}
                               />
                             ))}
                           </div>
@@ -1211,6 +1241,7 @@ function SuggestionRow({
   facturesById,
   override,
   onReclassify,
+  reclassOptions = RECLASS_OPTIONS,
 }: {
   tx: BankTx
   type: "match" | "classification"
@@ -1221,6 +1252,7 @@ function SuggestionRow({
   facturesById: Map<string, Facture>
   override?: { classification: string; compte: string }
   onReclassify?: (txId: string, classification: string, compte: string) => void
+  reclassOptions?: typeof RECLASS_OPTIONS
 }) {
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
   const fids =
@@ -1278,7 +1310,7 @@ function SuggestionRow({
               <Select
                 value={override?.classification ?? (tx.classification || "")}
                 onValueChange={(v) => {
-                  const opt = RECLASS_OPTIONS.find((o) => o.value === v)
+                  const opt = reclassOptions.find((o) => o.value === v)
                   if (opt) onReclassify(tx.id, opt.value, opt.compte)
                 }}
               >
@@ -1294,7 +1326,7 @@ function SuggestionRow({
                 <SelectContent className="max-h-[400px]">
                   {(() => {
                     const grouped = new Map<string, typeof RECLASS_OPTIONS>()
-                    for (const o of RECLASS_OPTIONS) {
+                    for (const o of reclassOptions) {
                       if (!grouped.has(o.group)) grouped.set(o.group, [])
                       grouped.get(o.group)!.push(o)
                     }
