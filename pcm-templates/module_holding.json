@@ -1,0 +1,145 @@
+{
+  "code": "module_holding",
+  "nom": "Module Holding & Sociétés liées",
+  "description": "Comptes spécifiques aux structures de holding et groupes : titres de participation, comptes courants inter-sociétés, refacturation interco, management fees. Conforme IFRS 10 (consolidation) + MRA Transfer Pricing.",
+  "type": "module",
+  "juridiction_code": "MU",
+  "version": "1.0.0",
+  "prerequisites": ["core_maurice"],
+  "comptes": [
+    {
+      "numero": "261",
+      "intitule": "Titres de participation",
+      "classe": 2,
+      "type": "actif",
+      "nature": "participation",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["holding", "participation"]
+    },
+    {
+      "numero": "2671",
+      "intitule": "Créances rattachées à des participations",
+      "classe": 2,
+      "type": "actif",
+      "nature": "creance_participation",
+      "sens_normal": "debit",
+      "lettrable": true,
+      "obligatoire": false,
+      "tags": ["holding", "participation"]
+    },
+    {
+      "numero": "451",
+      "intitule": "Comptes courants - Sociétés liées (parent)",
+      "classe": 4,
+      "type": "mixte",
+      "nature": "compte_courant_groupe",
+      "sens_normal": "mixte",
+      "lettrable": true,
+      "obligatoire": false,
+      "tags": ["holding", "interco", "related_party"],
+      "sous_comptes_pattern": "451.{counterparty}"
+    },
+    {
+      "numero": "4511",
+      "intitule": "Compte courant société liée (sous-comptes par société)",
+      "classe": 4,
+      "type": "mixte",
+      "nature": "compte_courant_groupe",
+      "sens_normal": "mixte",
+      "lettrable": true,
+      "obligatoire": false,
+      "tags": ["holding", "interco", "related_party"],
+      "sous_comptes_pattern": "4511.{counterparty}"
+    },
+    {
+      "numero": "706",
+      "intitule": "Refacturation interco - Prestations (parent)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "refacturation_interco",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["holding", "interco"]
+    },
+    {
+      "numero": "70610",
+      "intitule": "Refacturation interco - Loyer",
+      "classe": 7,
+      "type": "produit",
+      "nature": "refacturation_interco",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["holding", "interco"]
+    },
+    {
+      "numero": "70620",
+      "intitule": "Refacturation interco - Matériel",
+      "classe": 7,
+      "type": "produit",
+      "nature": "refacturation_interco",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["holding", "interco"]
+    },
+    {
+      "numero": "70630",
+      "intitule": "Refacturation interco - Télécommunications",
+      "classe": 7,
+      "type": "produit",
+      "nature": "refacturation_interco",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["holding", "interco"]
+    },
+    {
+      "numero": "70640",
+      "intitule": "Refacturation interco - Personnel mutualisé",
+      "classe": 7,
+      "type": "produit",
+      "nature": "refacturation_interco",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["holding", "interco"]
+    },
+    {
+      "numero": "70650",
+      "intitule": "Management fees holding",
+      "classe": 7,
+      "type": "produit",
+      "nature": "management_fees",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["holding", "interco", "transfer_pricing"]
+    },
+    {
+      "numero": "7551",
+      "intitule": "Quote-part de résultat dans filiales",
+      "classe": 7,
+      "type": "produit",
+      "nature": "quote_part_resultat",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["holding", "consolidation"]
+    },
+    {
+      "numero": "7615",
+      "intitule": "Intérêts sur comptes courants d'associés/liées",
+      "classe": 7,
+      "type": "produit",
+      "nature": "interet_cca",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["holding", "interco"]
+    }
+  ]
+}
