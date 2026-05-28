@@ -133,6 +133,83 @@ export async function apolloMatchPerson(input: ApolloMatchInput): Promise<Apollo
   }
 }
 
+// -----------------------------------------------------------------------------
+// Aperçu société (consultation gratuite : la recherche d'organisations Apollo
+// ne consomme PAS de crédit d'email/téléphone — seul le reveal/match en
+// consomme). On retourne des lignes légères affichables sans rien insérer.
+// -----------------------------------------------------------------------------
+export interface ApolloCompanyPreview {
+  apollo_id?: string
+  nom: string
+  telephone?: string
+  site_web?: string
+  linkedin_url?: string
+  industrie?: string
+  taille_effectif?: string
+  ville?: string
+  annee_creation?: number
+  description?: string
+}
+
+export interface ApolloPreviewFilters {
+  q_keywords?: string
+  organization_num_employees_ranges?: string[]
+}
+
+export interface ApolloPreviewResult {
+  companies: ApolloCompanyPreview[]
+  total: number
+  page: number
+  error?: string
+}
+
+export async function apolloSearchCompaniesPreview(
+  filters: ApolloPreviewFilters,
+  page = 1,
+  perPage = 25,
+): Promise<ApolloPreviewResult> {
+  if (!process.env.APOLLO_API_KEY) {
+    return { companies: [], total: 0, page, error: 'APOLLO_API_KEY non configurée' }
+  }
+
+  try {
+    const body: Record<string, unknown> = {
+      organization_locations: ['Mauritius'], // verrou Maurice, non négociable
+      page: Math.max(1, page),
+      per_page: Math.min(Math.max(1, perPage), 25),
+    }
+    if (filters.q_keywords) body.q_keywords = filters.q_keywords
+    if (filters.organization_num_employees_ranges?.length) {
+      body.organization_num_employees_ranges = filters.organization_num_employees_ranges
+    }
+
+    const res = await apolloPost('/mixed_companies/search', body)
+    const orgs = res.organizations ?? []
+    const companies: ApolloCompanyPreview[] = orgs
+      .filter((o) => o.name)
+      .map((o) => ({
+        apollo_id: o.id,
+        nom: o.name as string,
+        telephone: o.primary_phone?.number,
+        site_web: o.website_url ?? undefined,
+        linkedin_url: o.linkedin_url ?? undefined,
+        industrie: o.industry ?? undefined,
+        taille_effectif: employeeRange(o.estimated_num_employees),
+        ville: o.city ?? undefined,
+        annee_creation: o.founded_year ?? undefined,
+        description: o.short_description ?? undefined,
+      }))
+
+    return {
+      companies,
+      total: res.pagination?.total_entries ?? companies.length,
+      page: Math.max(1, page),
+    }
+  } catch (err) {
+    return { companies: [], total: 0, page, error: (err as Error).message }
+  }
+}
+
 function employeeRange(n?: number): string | undefined {
   if (!n) return undefined
   if (n <= 10) return '1-10'

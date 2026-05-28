@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   X,
+  Sparkles,
 } from "lucide-react"
 
 const MENU = [
@@ -27,6 +28,7 @@ const MENU = [
   {
     section: "Outils",
     items: [
+      { href: "/crm/recherche", label: "Recherche intelligente", icon: Sparkles },
       { href: "/crm/import", label: "Importer prospects", icon: Download },
       { href: "/crm/settings/opt-outs", label: "Opt-outs", icon: ShieldOff },
     ],
