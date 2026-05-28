@@ -2182,7 +2182,14 @@ export async function POST(request: Request) {
         // V3-22 : CLASSE_COMPTES extrait dans
         // lib/accounting/rapprochement/lettrage.ts (réutilisé par d'autres
         // handlers — éviter de dupliquer la même table).
-        let compteCharge = CLASSE_COMPTES[classification] || '471'
+        // PCM dynamique : si l'UI fournit un compte explicite (issu du PCM
+        // éditable de la société, ex 4511.OCC, 70601…), il prime sur le
+        // mapping statique CLASSE_COMPTES. Garde-fou : doit commencer par un
+        // chiffre (numéro de compte valide).
+        const compteChargeBody = typeof body.compte_charge === 'string' ? body.compte_charge.trim() : ''
+        let compteCharge = /^[0-9]/.test(compteChargeBody)
+          ? compteChargeBody
+          : (CLASSE_COMPTES[classification] || '471')
         console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
 
         // ── DÉTECTION INTER-SOCIÉTÉS (migration 302 / fix bug 291-293) ─────
