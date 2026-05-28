@@ -330,19 +330,46 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
       const totalD = lignes.reduce((s: number, l: any) => s + (+l.debit || 0), 0)
       const totalC = lignes.reduce((s: number, l: any) => s + (+l.credit || 0), 0)
       if (Math.abs(totalD - totalC) > 0.01) return { ok: false, error: `Écriture déséquilibrée: D ${totalD} ≠ C ${totalC}` }
-      const numeros = [...new Set(lignes.map((l: any) => l.compte))]
-      const { data: comptes } = await supabase.from('comptes_societes').select('numero, intitule, archive').eq('societe_id', societeId).in('numero', numeros as string[])
-      const cmap = new Map((comptes || []).map((c: any) => [c.numero, c]))
+      const numeros = [...new Set(lignes.map((l: any) => l.compte))] as string[]
+
+      // Résolution du libellé de compte avec FALLBACK multi-sources (le PCM
+      // éditable comptes_societes peut ne pas être initialisé pour la société) :
+      //   1. comptes_societes (PCM éditable) — refuse si archivé
+      //   2. plan_comptable_pcm (référentiel global mauricien)
+      //   3. ecritures_comptables_v2 (compte déjà utilisé dans le grand livre)
+      const nomCompte = new Map<string, string>()
+      const archivedSet = new Set<string>()
+
+      const { data: cs } = await supabase.from('comptes_societes')
+        .select('numero, intitule, archive').eq('societe_id', societeId).in('numero', numeros)
+      for (const c of cs || []) {
+        if (c.archive) archivedSet.add(c.numero)
+        else nomCompte.set(c.numero, c.intitule)
+      }
+
+      const manquants1 = numeros.filter(n => !nomCompte.has(n) && !archivedSet.has(n))
+      if (manquants1.length > 0) {
+        const { data: pcm } = await supabase.from('plan_comptable_pcm')
+          .select('compte, libelle').in('compte', manquants1)
+        for (const p of pcm || []) if (!nomCompte.has(p.compte)) nomCompte.set(p.compte, p.libelle || `Compte ${p.compte}`)
+      }
+
+      const manquants2 = numeros.filter(n => !nomCompte.has(n) && !archivedSet.has(n))
+      if (manquants2.length > 0) {
+        const { data: usedEcr } = await supabase.from('ecritures_comptables_v2')
+          .select('numero_compte, nom_compte').eq('societe_id', societeId).in('numero_compte', manquants2).limit(manquants2.length * 3)
+        for (const e of usedEcr || []) if (!nomCompte.has(e.numero_compte)) nomCompte.set(e.numero_compte, e.nom_compte || `Compte ${e.numero_compte}`)
+      }
+
       for (const num of numeros) {
-        const c = cmap.get(num as string)
-        if (!c) return { ok: false, error: `Compte ${num} absent du PCM` }
-        if (c.archive) return { ok: false, error: `Compte ${num} archivé` }
+        if (archivedSet.has(num)) return { ok: false, error: `Compte ${num} archivé` }
+        if (!nomCompte.has(num)) return { ok: false, error: `Compte ${num} introuvable (ni dans le PCM société, ni dans le référentiel, ni dans le grand livre)` }
       }
       const refFolio = `OD-AGENT-${Date.now()}`
       const exercice = String(new Date(input.date_ecriture).getFullYear())
       const rows = lignes.map((l: any) => ({
         societe_id: societeId, date_ecriture: input.date_ecriture, journal: input.journal || 'OD',
-        numero_piece: refFolio, ref_folio: refFolio, numero_compte: l.compte, nom_compte: cmap.get(l.compte)!.intitule,
+        numero_piece: refFolio, ref_folio: refFolio, numero_compte: l.compte, nom_compte: nomCompte.get(l.compte) || `Compte ${l.compte}`,
         libelle: l.libelle || input.libelle, description: l.libelle || input.libelle,
         debit_mur: +l.debit || 0, credit_mur: +l.credit || 0, debit: +l.debit || 0, credit: +l.credit || 0,
         devise: 'MUR', exercice,
