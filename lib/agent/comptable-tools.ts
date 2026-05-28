@@ -16,6 +16,7 @@ import { createEcrituresReglementTiers } from '@/lib/accounting/reglement-tiers'
 
 export const READ_TOOLS = new Set([
   'list_factures', 'get_balance', 'list_grand_livre', 'list_comptes_pcm', 'list_transactions_bancaires',
+  'lancer_rapprochement_auto', 'analyser_cloture',
 ])
 export const WRITE_TOOLS = new Set([
   'creer_ecriture', 'lettrer_ecritures', 'reclasser_ecritures',
@@ -70,6 +71,28 @@ export const AGENT_TOOLS = [
       properties: { periode: { type: 'string' }, statut: { type: 'string' }, min_montant: { type: 'number' } },
     },
   },
+  {
+    name: 'lancer_rapprochement_auto',
+    description: 'Lance le moteur de rapprochement bancaire automatique (mode analyse, ne valide rien). Retourne le nombre de transactions traitables, les matchs factures proposés et les classifications PCM suggérées. Utile pour "rapproche automatiquement" ou "que peux-tu rapprocher ?".',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        date_debut: { type: 'string', description: 'YYYY-MM-DD (optionnel)' },
+        date_fin: { type: 'string', description: 'YYYY-MM-DD (optionnel)' },
+      },
+    },
+  },
+  {
+    name: 'analyser_cloture',
+    description: 'Diagnostique ce qui manque pour clôturer le bilan : transactions bancaires non rapprochées, comptes tiers (401/411) non lettrés, solde du compte de transit 580 non nul, mois sans relevé bancaire, équilibre de la balance. Utile pour "qu\'est-ce qui manque pour clôturer ?" ou "le bilan est-il prêt ?".',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        date_debut: { type: 'string', description: 'YYYY-MM-DD (optionnel, défaut: exercice courant)' },
+        date_fin: { type: 'string', description: 'YYYY-MM-DD (optionnel)' },
+      },
+    },
+  },
 
   // ── ÉCRITURE (confirmation requise) ─────────────────────────────────
   {
@@ -122,6 +145,7 @@ interface ExecCtx {
   supabase: SupabaseClient
   societeId: string
   userId: string
+  origin?: string   // base URL pour les appels server-to-server (rapprochement auto)
 }
 
 const SELECT_GL = 'id, date_ecriture, journal, numero_compte, nom_compte, libelle, debit_mur, credit_mur, lettre'
@@ -189,6 +213,109 @@ export async function execReadTool(name: string, input: any, ctx: ExecCtx): Prom
       }
       return { transactions: txs.slice(0, 100), total: txs.length }
     }
+    case 'lancer_rapprochement_auto': {
+      const secret = process.env.LEXORA_AGENT_SECRET
+      if (!ctx.origin || !secret) {
+        return { error: 'Rapprochement auto indisponible (config server-to-server manquante)' }
+      }
+      try {
+        const res = await fetch(`${ctx.origin}/api/agent/rapprochement`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+          body: JSON.stringify({
+            societe_id: societeId, dry_run: true,
+            date_debut: input.date_debut || null, date_fin: input.date_fin || null,
+          }),
+        })
+        const d = await res.json()
+        if (!res.ok) return { error: d?.error || `HTTP ${res.status}` }
+        return {
+          transactions_a_traiter: d?.inputs?.transactions_a_traiter ?? null,
+          factures_impayees: d?.inputs?.factures_impayees ?? null,
+          stats: d?.stats ?? null,
+          matchs_proposes: (d?.semantic?.matches || []).length + (d?.stats?.matched ?? 0),
+          classifications_pcm: d?.semantic?.classifications || [],
+          note: 'Mode analyse — aucune écriture validée. Pour appliquer, l\'utilisateur valide depuis la page Rapprochement.',
+        }
+      } catch (e: any) {
+        return { error: e?.message || 'Erreur rapprochement auto' }
+      }
+    }
+
+    case 'analyser_cloture': {
+      const findings: { bloquant: string[]; avertissements: string[]; ok: string[] } = { bloquant: [], avertissements: [], ok: [] }
+
+      // 1. Transactions bancaires non rapprochées
+      const { data: releves } = await supabase.from('releves_bancaires')
+        .select('periode, transactions_json').eq('societe_id', societeId).is('superseded_by_id', null)
+      let nonRapprochees = 0, totalTx = 0
+      const moisAvecReleve = new Set<string>()
+      for (const r of releves || []) {
+        if (r.periode) moisAvecReleve.add(String(r.periode).slice(0, 7))
+        for (const tx of r.transactions_json || []) {
+          totalTx++
+          if ((tx.statut || 'non_identifie') !== 'rapproche') nonRapprochees++
+        }
+      }
+      if (nonRapprochees > 0) findings.bloquant.push(`${nonRapprochees} transaction(s) bancaire(s) non rapprochée(s) sur ${totalTx}`)
+      else if (totalTx > 0) findings.ok.push(`Toutes les transactions bancaires (${totalTx}) sont rapprochées`)
+
+      // 2. Comptes tiers 401/411 non lettrés (solde non nul + écritures sans lettre)
+      const agg = new Map<string, { debit: number; credit: number; nonLettre: number }>()
+      let from = 0
+      while (true) {
+        let q = supabase.from('ecritures_comptables_v2')
+          .select('numero_compte, debit_mur, credit_mur, lettre').eq('societe_id', societeId).range(from, from + 999)
+        if (input.date_debut) q = q.gte('date_ecriture', input.date_debut)
+        if (input.date_fin) q = q.lte('date_ecriture', input.date_fin)
+        const { data } = await q
+        if (!data || data.length === 0) break
+        for (const e of data) {
+          const num = String(e.numero_compte || '')
+          const k = num.startsWith('401') ? '401' : num.startsWith('411') ? '411' : num.startsWith('580') ? '580' : null
+          if (!k) continue
+          if (!agg.has(k)) agg.set(k, { debit: 0, credit: 0, nonLettre: 0 })
+          const a = agg.get(k)!
+          a.debit += +e.debit_mur || 0; a.credit += +e.credit_mur || 0
+          if (!e.lettre) a.nonLettre++
+        }
+        if (data.length < 1000) break
+        from += 1000
+      }
+      for (const tiers of ['401', '411']) {
+        const a = agg.get(tiers)
+        if (a && a.nonLettre > 0) findings.avertissements.push(`${a.nonLettre} écriture(s) ${tiers} (${tiers === '401' ? 'fournisseurs' : 'clients'}) non lettrée(s) — solde ${(a.debit - a.credit).toFixed(2)} MUR`)
+      }
+      // 3. Compte 580 transit doit être soldé
+      const t580 = agg.get('580')
+      if (t580) {
+        const solde580 = Math.round((t580.debit - t580.credit) * 100) / 100
+        if (Math.abs(solde580) > 0.01) findings.bloquant.push(`Compte 580 (virements en transit) non soldé : ${solde580} MUR — doit être à 0 pour clôturer`)
+        else findings.ok.push('Compte 580 transit soldé à 0')
+      }
+
+      // 4. Mois sans relevé bancaire (sur les 12 derniers mois)
+      const moisManquants: string[] = []
+      const now = new Date()
+      for (let i = 1; i <= 6; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        if (!moisAvecReleve.has(ym)) moisManquants.push(ym)
+      }
+      if (moisManquants.length > 0) findings.avertissements.push(`Relevé bancaire manquant pour : ${moisManquants.join(', ')}`)
+
+      const pret = findings.bloquant.length === 0
+      return {
+        pret_a_cloturer: pret,
+        resume: pret
+          ? 'Aucun blocage majeur détecté pour la clôture.'
+          : `${findings.bloquant.length} blocage(s) à résoudre avant clôture.`,
+        bloquant: findings.bloquant,
+        avertissements: findings.avertissements,
+        ok: findings.ok,
+      }
+    }
+
     default:
       return { error: `Outil lecture inconnu: ${name}` }
   }
