@@ -104,7 +104,7 @@ async function lexoraFetch(path: string, init: RequestInit = {}) {
 }
 
 const server = new Server(
-  { name: 'lexora-mcp', version: '0.8.1' },
+  { name: 'lexora-mcp', version: '0.9.0' },
   { capabilities: { tools: {} } },
 )
 
@@ -865,6 +865,32 @@ const TOOLS = [
       required: ['societe_id', 'date_debut', 'date_fin'],
     },
   },
+  {
+    name: 'list_clotures',
+    description:
+      'Liste les périodes mensuelles clôturées/ouvertes d\'une société (statut, date clôture, motif déclôture).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: { societe_id: { type: 'string' } },
+      required: ['societe_id'],
+    },
+  },
+  {
+    name: 'cloturer_periode',
+    description:
+      'Clôture ou déclôture une période mensuelle comptable. Une période clôturée bloque toute écriture (trigger DB). Déclôture nécessite un motif. MODIFICATION — confirmation 2-step.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        societe_id: { type: 'string' },
+        periode: { type: 'string', description: 'YYYY-MM' },
+        action: { type: 'string', enum: ['cloturer', 'decloturer'] },
+        motif: { type: 'string', description: 'Requis pour decloturer' },
+        confirmation_token: { type: 'string' },
+      },
+      required: ['societe_id', 'periode', 'action'],
+    },
+  },
 ]
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
@@ -1443,6 +1469,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         params.set('date_fin', String(a.date_fin))
         const data = await lexoraFetch(
           `/api/societes/${encodeURIComponent(String(a.societe_id))}/mra/vat-return?${params}`,
+        )
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+      }
+
+      case 'list_clotures': {
+        const data = await lexoraFetch(
+          `/api/societes/${encodeURIComponent(String(a.societe_id))}/cloture`,
+        )
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+      }
+
+      case 'cloturer_periode': {
+        const guard = confirmGuard('cloturer_periode', a,
+          `${a.action === 'decloturer' ? 'Déclôturer' : 'Clôturer'} période ${a.periode} société ${a.societe_id}`)
+        if (!guard.confirmed) return guard.response
+        const data = await lexoraFetch(
+          `/api/societes/${encodeURIComponent(String(a.societe_id))}/cloture`,
+          { method: 'POST', body: JSON.stringify({ periode: a.periode, action: a.action, motif: a.motif }) },
         )
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
       }
