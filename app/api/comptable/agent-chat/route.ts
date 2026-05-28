@@ -84,6 +84,23 @@ export async function POST(request: Request) {
     if (confirmed_action && WRITE_TOOLS.has(confirmed_action.name)) {
       const result = await execWriteTool(confirmed_action.name, confirmed_action.input, ctx)
       confirmedResultText = `[Action "${confirmed_action.name}" exécutée] Résultat: ${JSON.stringify(result)}`
+
+      // Action déjà exécutée : on répond DIRECTEMENT sans réoutiller Claude.
+      // Sinon il revoit la demande initiale, re-propose le write tool et
+      // redemande confirmation en boucle (bug observé).
+      const confirmResp = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 400,
+        system: 'Tu es l\'agent comptable Lexora. Une action vient d\'être exécutée avec succès (ou en erreur). Confirme-le à l\'utilisateur en français, brièvement et clairement. Ne propose aucune autre action.',
+        messages: [
+          ...messages.map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: String(m.content || '') })),
+          { role: 'user' as const, content: confirmedResultText },
+        ],
+      })
+      const confirmText = confirmResp.content
+        .filter((c): c is Anthropic.TextBlock => c.type === 'text')
+        .map(t => t.text).join('\n').trim()
+      return NextResponse.json({ type: 'message', message: confirmText || 'Action effectuée.' })
     }
 
     // Construire l'historique pour Claude (messages texte simples)
@@ -91,9 +108,6 @@ export async function POST(request: Request) {
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: String(m.content || ''),
     }))
-    if (confirmedResultText) {
-      convo.push({ role: 'user', content: confirmedResultText + '\n\nConfirme à l\'utilisateur que l\'action est faite, en français, brièvement.' })
-    }
 
     // Boucle de tool-calling
     for (let turn = 0; turn < MAX_TURNS; turn++) {
