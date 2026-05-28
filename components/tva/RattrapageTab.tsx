@@ -38,6 +38,8 @@ interface Ligne {
   date_declaration: string | null
   reference_mra: string | null
   tva_nette: number
+  nb_factures?: number
+  source_data?: string
   montant_declare_mra: number | null
   estimation: boolean
   is_rattrapage: boolean
@@ -48,12 +50,14 @@ interface Synthese {
   nb_declarees: number
   nb_non_declarees: number
   nb_en_retard: number
+  nb_avec_donnees?: number
   total_a_regulariser: number
   penalites_estimees: number
 }
 interface Data {
   societe: { id: string; nom: string; frequence_tva: string; assujetti_tva: boolean }
   plage: { debut: string; fin: string }
+  migration_446?: boolean
   lignes: Ligne[]
   synthese: Synthese
 }
@@ -84,6 +88,7 @@ export function RattrapageTab({
 }) {
   const [debut, setDebut] = useState(defaultDebut())
   const [fin, setFin] = useState(currentMonth())
+  const [allHistory, setAllHistory] = useState(true)
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -103,7 +108,10 @@ export function RattrapageTab({
     if (!sid) { setData(null); return }
     setLoading(true); setError(""); setSelected(new Set())
     try {
-      const res = await fetch(`/api/comptable/tva/rattrapage?societe_id=${sid}&date_debut=${debut}&date_fin=${fin}`)
+      const params = new URLSearchParams({ societe_id: sid, date_fin: fin })
+      if (allHistory) params.set("tout", "1")
+      else params.set("date_debut", debut)
+      const res = await fetch(`/api/comptable/tva/rattrapage?${params.toString()}`)
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || "Erreur")
       setData(d)
@@ -113,7 +121,7 @@ export function RattrapageTab({
     } finally {
       setLoading(false)
     }
-  }, [sid, debut, fin])
+  }, [sid, debut, fin, allHistory])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -217,13 +225,23 @@ export function RattrapageTab({
         <CardContent className="space-y-4">
           <p className="text-sm text-gray-500">{t('cab.tva.rat.help', locale)}</p>
           <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex rounded-lg border overflow-hidden self-end h-8">
+              <button
+                onClick={() => setAllHistory(true)}
+                className={`px-3 text-xs font-medium ${allHistory ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+              >{t('cab.tva.rat.all_history', locale)}</button>
+              <button
+                onClick={() => setAllHistory(false)}
+                className={`px-3 text-xs font-medium ${!allHistory ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+              >{t('cab.tva.rat.custom_range', locale)}</button>
+            </div>
             <div>
               <Label className="text-xs">{t('cab.tva.rat.from', locale)}</Label>
-              <Input type="month" value={debut} max={fin} onChange={e => setDebut(e.target.value)} className="w-40 h-8 text-sm" />
+              <Input type="month" value={debut} max={fin} disabled={allHistory} onChange={e => setDebut(e.target.value)} className="w-40 h-8 text-sm" />
             </div>
             <div>
               <Label className="text-xs">{t('cab.tva.rat.to', locale)}</Label>
-              <Input type="month" value={fin} min={debut} onChange={e => setFin(e.target.value)} className="w-40 h-8 text-sm" />
+              <Input type="month" value={fin} min={allHistory ? undefined : debut} onChange={e => setFin(e.target.value)} className="w-40 h-8 text-sm" />
             </div>
             <Button variant="outline" className="h-8 gap-2" onClick={fetchData} disabled={loading}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -250,6 +268,18 @@ export function RattrapageTab({
               {t('cab.tva.rat.mark_declared', locale)} {selected.size > 0 ? `(${selected.size})` : ''}
             </Button>
           </div>
+          {data && (
+            <p className="text-xs text-gray-500">
+              {t('cab.tva.rat.range_label', locale)} <span className="font-mono font-medium">{data.plage.debut} → {data.plage.fin}</span>
+              {" · "}{data.societe.frequence_tva === 'trimestrielle' ? t('cab.tva.rat.freq_quarterly', locale) : t('cab.tva.rat.freq_monthly', locale)}
+            </p>
+          )}
+          {data && data.migration_446 === false && (
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription className="text-xs">{t('cab.tva.rat.migration_warning', locale)}</AlertDescription>
+            </Alert>
+          )}
           {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         </CardContent>
       </Card>
@@ -331,7 +361,13 @@ export function RattrapageTab({
                     <TableCell className="text-xs text-gray-500">
                       {l.declaree && l.date_declaration
                         ? `${t('cab.tva.rat.declared_on', locale)} ${new Date(l.date_declaration).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}${l.reference_mra ? ` · ${l.reference_mra}` : ''}`
-                        : l.source_saisie === 'manuel' ? t('cab.tva.rat.manual', locale) : ''}
+                        : l.source_data === 'factures'
+                          ? `${l.nb_factures} ${t('cab.tva.rat.src_factures', locale)}`
+                          : l.source_data === 'ecritures'
+                            ? t('cab.tva.rat.src_ecritures', locale)
+                            : l.source_data === 'calcul'
+                              ? t('cab.tva.rat.src_calcul', locale)
+                              : <span className="text-gray-400">{t('cab.tva.rat.src_none', locale)}</span>}
                     </TableCell>
                   </TableRow>
                 ))}

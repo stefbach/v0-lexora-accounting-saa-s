@@ -78,14 +78,29 @@ export async function POST(request: Request) {
 
     if (rows.length === 0) return NextResponse.json({ error: 'Périodes invalides (format YYYY-MM attendu)' }, { status: 400 })
 
-    const { data, error } = await supabase
+    // Upsert résilient : si la migration 446 n'est pas appliquée, on retire les
+    // colonnes qu'elle introduit (source_saisie, is_rattrapage, montant_declare_mra)
+    // et on réessaie. Le marquage de statut reste fonctionnel sans elle.
+    let { data, error } = await supabase
       .from('tva_mensuelle')
       .upsert(rows, { onConflict: 'client_id,societe_id,periode' })
       .select('id, periode, statut_declaration')
 
+    let migration446 = true
+    if (error) {
+      migration446 = false
+      const fallbackRows = rows.map(({ source_saisie, is_rattrapage, montant_declare_mra, ...rest }) => rest)
+      const retry = await supabase
+        .from('tva_mensuelle')
+        .upsert(fallbackRows, { onConflict: 'client_id,societe_id,periode' })
+        .select('id, periode, statut_declaration')
+      data = retry.data
+      error = retry.error
+    }
+
     if (error) throw error
 
-    return NextResponse.json({ success: true, nb: data?.length || 0, records: data })
+    return NextResponse.json({ success: true, nb: data?.length || 0, records: data, migration_446: migration446 })
   } catch (e: any) {
     console.error('[tva/rattrapage/marquer]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur serveur' }, { status: 500 })

@@ -45,8 +45,6 @@ function genererPeriodes(
       m++; if (m > 12) { m = 1; y++ }
     }
   } else {
-    // Trimestriel : on parcourt par trimestre calendaire
-    // Q1=jan-mar, Q2=avr-juin, Q3=juil-sep, Q4=oct-déc
     let y = startY
     let q = Math.floor((startM - 1) / 3) + 1
     const endQ = Math.floor((endM - 1) / 3) + 1
@@ -77,13 +75,14 @@ export async function GET(request: Request) {
     const societe_id = searchParams.get('societe_id')
     const dateDebutParam = searchParams.get('date_debut') // YYYY-MM (optionnel)
     const dateFinParam = searchParams.get('date_fin')     // YYYY-MM (optionnel)
+    const tout = searchParams.get('tout') === '1'         // toute la période (auto-détection)
 
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
-    // ── Société : fréquence TVA, date de début, nom ──────────
+    // ── Société : fréquence TVA, nom ─────────────────────────
     const { data: societe, error: socErr } = await supabase
       .from('societes')
-      .select('id, nom, frequence_tva, tva_date_debut, assujetti_tva')
+      .select('id, nom, frequence_tva, assujetti_tva')
       .eq('id', societe_id)
       .single()
     if (socErr || !societe) {
@@ -93,21 +92,41 @@ export async function GET(request: Request) {
     const frequence: 'mensuelle' | 'trimestrielle' =
       societe.frequence_tva === 'trimestrielle' ? 'trimestrielle' : 'mensuelle'
 
-    // ── Bornes de la timeline ────────────────────────────────
     const now = new Date()
     const fin = dateFinParam && /^\d{4}-\d{2}$/.test(dateFinParam)
       ? dateFinParam
       : ym(now.getFullYear(), now.getMonth() + 1)
 
-    // Début : param > tva_date_debut société > 12 mois en arrière
+    // ── Début de la timeline ─────────────────────────────────
+    // Priorité : param explicite > (si "tout" ou pas de param) auto-détection
+    // de la 1re donnée en base (facture la plus ancienne, sinon écriture) >
+    // fallback 12 mois en arrière.
     let debut: string
-    if (dateDebutParam && /^\d{4}-\d{2}$/.test(dateDebutParam)) {
+    if (!tout && dateDebutParam && /^\d{4}-\d{2}$/.test(dateDebutParam)) {
       debut = dateDebutParam
-    } else if (societe.tva_date_debut) {
-      debut = String(societe.tva_date_debut).slice(0, 7)
     } else {
-      const d = new Date(now.getFullYear(), now.getMonth() - 11, 1)
-      debut = ym(d.getFullYear(), d.getMonth() + 1)
+      // Auto-détection de la plus ancienne donnée
+      const [{ data: f1 }, { data: e1 }] = await Promise.all([
+        supabase.from('factures')
+          .select('date_facture')
+          .eq('societe_id', societe_id)
+          .order('date_facture', { ascending: true })
+          .limit(1),
+        supabase.from('ecritures_comptables_v2')
+          .select('date_ecriture')
+          .eq('societe_id', societe_id)
+          .order('date_ecriture', { ascending: true })
+          .limit(1),
+      ])
+      const candidates: string[] = []
+      if (f1?.[0]?.date_facture) candidates.push(String(f1[0].date_facture).slice(0, 7))
+      if (e1?.[0]?.date_ecriture) candidates.push(String(e1[0].date_ecriture).slice(0, 7))
+      if (candidates.length > 0) {
+        debut = candidates.sort()[0]
+      } else {
+        const d = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+        debut = ym(d.getFullYear(), d.getMonth() + 1)
+      }
     }
 
     const [startY, startM] = debut.split('-').map(Number)
@@ -118,27 +137,69 @@ export async function GET(request: Request) {
 
     const periodes = genererPeriodes(startY, startM, endY, endM, frequence)
 
-    // ── Enregistrements TVA existants sur la plage ───────────
-    const { data: records } = await supabase
-      .from('tva_mensuelle')
-      .select('id, periode, trimestre, statut_declaration, tva_nette, montant_declare_mra, date_soumission, date_declaration, reference_mra, reference_declaration_mra, penalites_retard, interets_retard, is_rattrapage, source_saisie')
-      .eq('societe_id', societe_id)
+    const dateDebutSql = `${debut}-01`
+    const [fy, fm] = fin.split('-').map(Number)
+    const lastDay = new Date(fy, fm, 0).getDate()
+    const dateFinSql = `${fin}-${String(lastDay).padStart(2, '0')}`
+
+    // ── Enregistrements TVA persistés (source de vérité) ─────
+    // Sélection résiliente : on tente avec les colonnes de la migration 446,
+    // et on retombe sur les colonnes de base si elle n'est pas encore appliquée.
+    const baseCols = 'id, periode, trimestre, statut_declaration, tva_collectee, tva_deductible, tva_nette, date_soumission, date_declaration, reference_mra, reference_declaration_mra, penalites_retard, interets_retard'
+    let records: any[] | null = null
+    let migration446 = true
+    {
+      const r = await supabase
+        .from('tva_mensuelle')
+        .select(`${baseCols}, montant_declare_mra, is_rattrapage, source_saisie`)
+        .eq('societe_id', societe_id)
+      if (r.error) {
+        migration446 = false
+        const r2 = await supabase
+          .from('tva_mensuelle')
+          .select(baseCols)
+          .eq('societe_id', societe_id)
+        records = r2.data || []
+      } else {
+        records = r.data || []
+      }
+    }
     const recByPeriode = new Map<string, any>()
     for (const r of records || []) {
       recByPeriode.set(r.periode, r)
       if (r.trimestre) recByPeriode.set(r.trimestre, r)
     }
 
-    // ── Estimation rapide de la TVA nette par mois (écritures) ─
-    // Pour les périodes SANS enregistrement persistant, on calcule
-    // une estimation depuis les comptes de TVA afin d'afficher un
-    // montant approximatif à régulariser. Source de vérité réelle =
-    // le calcul complet via /api/comptable/tva/calculer.
-    const dateDebutSql = `${debut}-01`
-    const [fy, fm] = fin.split('-').map(Number)
-    const lastDay = new Date(fy, fm, 0).getDate()
-    const dateFinSql = `${fin}-${String(lastDay).padStart(2, '0')}`
+    // ── Estimation par mois depuis les FACTURES (source réelle de la page) ─
+    // La page /client/tva calcule la TVA depuis `factures`. On reproduit cette
+    // logique pour estimer, mois par mois, la TVA nette des périodes non encore
+    // déclarées/calculées.
+    const { data: factures } = await supabase
+      .from('factures')
+      .select('type_facture, montant_tva, date_facture, devise, client_offshore, statut')
+      .eq('societe_id', societe_id)
+      .gte('date_facture', dateDebutSql)
+      .lte('date_facture', dateFinSql)
+      .neq('statut', 'brouillon')
 
+    const parMoisFactures = new Map<string, { collectee: number; deductible: number; nb: number }>()
+    for (const f of factures || []) {
+      const mois = String(f.date_facture).slice(0, 7)
+      let b = parMoisFactures.get(mois)
+      if (!b) { b = { collectee: 0, deductible: 0, nb: 0 }; parMoisFactures.set(mois, b) }
+      const tva = Number(f.montant_tva) || 0
+      const isForeign = f.devise && f.devise !== 'MUR'
+      if (f.type_facture === 'client') {
+        // TVA collectée : ventes locales taxables (pas offshore, MUR)
+        if (!f.client_offshore && !isForeign) b.collectee += tva
+      } else if (f.type_facture === 'fournisseur') {
+        // TVA déductible : fournisseurs locaux (MUR)
+        if (!isForeign) b.deductible += tva
+      }
+      b.nb++
+    }
+
+    // ── Estimation de secours depuis les ÉCRITURES (clients en compta directe) ─
     const { data: ecritures } = await supabase
       .from('ecritures_comptables_v2')
       .select('numero_compte, debit_mur, credit_mur, date_ecriture')
@@ -146,23 +207,30 @@ export async function GET(request: Request) {
       .gte('date_ecriture', dateDebutSql)
       .lte('date_ecriture', dateFinSql)
 
-    // Bucket par mois : { collectee, deductible }
-    const parMois = new Map<string, { collectee: number; deductible: number }>()
+    const parMoisEcr = new Map<string, { collectee: number; deductible: number }>()
     for (const e of ecritures || []) {
       const c: string = e.numero_compte || ''
       const mois = String(e.date_ecriture).slice(0, 7)
       const debit = e.debit_mur || 0
       const credit = e.credit_mur || 0
-      let b = parMois.get(mois)
-      if (!b) { b = { collectee: 0, deductible: 0 }; parMois.set(mois, b) }
-      // TVA collectée (output) : 4457 + reverse charge output 44520/44521
+      let b = parMoisEcr.get(mois)
+      if (!b) { b = { collectee: 0, deductible: 0 }; parMoisEcr.set(mois, b) }
       if (c.startsWith('4457') || c.startsWith('44520') || c.startsWith('44521')) {
         b.collectee += credit - debit
-      }
-      // TVA déductible (input) : 4456 + reverse charge input 44522/44523
-      else if (c.startsWith('4456') || c.startsWith('44522') || c.startsWith('44523')) {
+      } else if (c.startsWith('4456') || c.startsWith('44522') || c.startsWith('44523')) {
         b.deductible += debit - credit
       }
+    }
+
+    // Net estimé pour un ensemble de mois : factures en priorité, sinon écritures
+    function netteEstimee(mois: string[]): { net: number; nbFactures: number; source: 'factures' | 'ecritures' | 'aucune' } {
+      let coll = 0, ded = 0, nbF = 0
+      for (const m of mois) { const b = parMoisFactures.get(m); if (b) { coll += b.collectee; ded += b.deductible; nbF += b.nb } }
+      if (nbF > 0) return { net: Math.round((coll - ded) * 100) / 100, nbFactures: nbF, source: 'factures' }
+      let cE = 0, dE = 0, hasE = false
+      for (const m of mois) { const b = parMoisEcr.get(m); if (b) { cE += b.collectee; dE += b.deductible; hasE = true } }
+      if (hasE && (cE !== 0 || dE !== 0)) return { net: Math.round((cE - dE) * 100) / 100, nbFactures: 0, source: 'ecritures' }
+      return { net: 0, nbFactures: 0, source: 'aucune' }
     }
 
     // ── Construire les lignes du suivi ───────────────────────
@@ -172,25 +240,31 @@ export async function GET(request: Request) {
     let nbDeclarees = 0
     let nbNonDeclarees = 0
     let nbEnRetard = 0
+    let nbAvecDonnees = 0
 
     const lignes = periodes.map(p => {
       const rec = recByPeriode.get(p.trimestre || p.periode) || recByPeriode.get(p.periode)
       const declaree = !!rec && (rec.statut_declaration === 'declare' || rec.statut_declaration === 'paye')
 
-      // Montant net : enregistré si présent, sinon estimation écritures
       let tvaNette: number
       let estimation = false
-      if (rec && rec.tva_nette != null) {
+      let sourceData: string
+      let nbFactures = 0
+      if (rec && rec.tva_nette != null && rec.statut_declaration !== 'a_faire') {
         tvaNette = Number(rec.tva_nette) || 0
+        sourceData = 'calcul'
+      } else if (rec && rec.tva_nette != null) {
+        // calculé mais pas encore déclaré
+        tvaNette = Number(rec.tva_nette) || 0
+        sourceData = 'calcul'
       } else {
-        let collectee = 0, deductible = 0
-        for (const m of p.mois) {
-          const b = parMois.get(m)
-          if (b) { collectee += b.collectee; deductible += b.deductible }
-        }
-        tvaNette = Math.round((collectee - deductible) * 100) / 100
+        const est = netteEstimee(p.mois)
+        tvaNette = est.net
+        nbFactures = est.nbFactures
+        sourceData = est.source
         estimation = true
       }
+      if (sourceData !== 'aucune' || (rec && rec.tva_nette != null)) nbAvecDonnees++
 
       const limite = new Date(p.date_limite)
       const enRetard = !declaree && aujourdhui > limite
@@ -200,16 +274,15 @@ export async function GET(request: Request) {
       } else {
         nbNonDeclarees++
         if (tvaNette > 0) totalARegulariser += tvaNette
-        if (enRetard) {
+        if (enRetard && tvaNette > 0) {
           nbEnRetard++
-          // Pénalité MRA estimée : 5% one-shot + 0,5%/mois (VAT Act §24)
-          if (tvaNette > 0) {
-            const moisRetard = Math.max(
-              1,
-              Math.ceil((aujourdhui.getTime() - limite.getTime()) / (1000 * 60 * 60 * 24 * 30)),
-            )
-            totalPenalites += Math.round((tvaNette * 0.05 + tvaNette * 0.005 * moisRetard) * 100) / 100
-          }
+          const moisRetard = Math.max(
+            1,
+            Math.ceil((aujourdhui.getTime() - limite.getTime()) / (1000 * 60 * 60 * 24 * 30)),
+          )
+          totalPenalites += Math.round((tvaNette * 0.05 + tvaNette * 0.005 * moisRetard) * 100) / 100
+        } else if (enRetard) {
+          nbEnRetard++
         }
       }
 
@@ -226,8 +299,10 @@ export async function GET(request: Request) {
         date_declaration: rec?.date_declaration || rec?.date_soumission || null,
         reference_mra: rec?.reference_declaration_mra || rec?.reference_mra || null,
         tva_nette: tvaNette,
+        nb_factures: nbFactures,
         montant_declare_mra: rec?.montant_declare_mra ?? null,
         estimation,
+        source_data: sourceData,
         is_rattrapage: rec?.is_rattrapage || false,
         source_saisie: rec?.source_saisie || null,
       }
@@ -236,12 +311,14 @@ export async function GET(request: Request) {
     return NextResponse.json({
       societe: { id: societe.id, nom: societe.nom, frequence_tva: frequence, assujetti_tva: societe.assujetti_tva },
       plage: { debut, fin },
+      migration_446: migration446,
       lignes,
       synthese: {
         nb_periodes: periodes.length,
         nb_declarees: nbDeclarees,
         nb_non_declarees: nbNonDeclarees,
         nb_en_retard: nbEnRetard,
+        nb_avec_donnees: nbAvecDonnees,
         total_a_regulariser: Math.round(totalARegulariser * 100) / 100,
         penalites_estimees: Math.round(totalPenalites * 100) / 100,
       },

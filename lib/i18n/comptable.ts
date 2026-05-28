@@ -921,6 +921,16 @@ export const comptableChunk = {
     'cab.tva.rat.dialog_ref': 'Référence MRA (optionnel)',
     'cab.tva.rat.cancel': 'Annuler',
     'cab.tva.rat.confirm': 'Confirmer',
+    'cab.tva.rat.all_history': 'Tout l\'historique',
+    'cab.tva.rat.custom_range': 'Période choisie',
+    'cab.tva.rat.range_label': 'Plage analysée :',
+    'cab.tva.rat.freq_monthly': 'TVA mensuelle',
+    'cab.tva.rat.freq_quarterly': 'TVA trimestrielle',
+    'cab.tva.rat.migration_warning': 'Migration 446 non appliquée : le marquage des déclarations fonctionne, mais le montant déclaré (détection d\'écart) ne sera pas mémorisé tant que la migration n\'est pas appliquée en base.',
+    'cab.tva.rat.src_factures': 'factures',
+    'cab.tva.rat.src_ecritures': 'depuis écritures',
+    'cab.tva.rat.src_calcul': 'calculé',
+    'cab.tva.rat.src_none': 'aucune donnée',
 
     // Factures clients
     'cab.fc.title': 'Factures Clients',
@@ -2359,6 +2369,16 @@ export const comptableChunk = {
     'cab.tva.rat.dialog_ref': 'MRA reference (optional)',
     'cab.tva.rat.cancel': 'Cancel',
     'cab.tva.rat.confirm': 'Confirm',
+    'cab.tva.rat.all_history': 'Full history',
+    'cab.tva.rat.custom_range': 'Custom range',
+    'cab.tva.rat.range_label': 'Range analysed:',
+    'cab.tva.rat.freq_monthly': 'Monthly VAT',
+    'cab.tva.rat.freq_quarterly': 'Quarterly VAT',
+    'cab.tva.rat.migration_warning': 'Migration 446 not applied: marking returns as declared works, but the declared amount (gap detection) will not be stored until the migration is applied to the database.',
+    'cab.tva.rat.src_factures': 'invoices',
+    'cab.tva.rat.src_ecritures': 'from entries',
+    'cab.tva.rat.src_calcul': 'computed',
+    'cab.tva.rat.src_none': 'no data',
 
     // Factures clients
     'cab.fc.title': 'Customer Invoices',
