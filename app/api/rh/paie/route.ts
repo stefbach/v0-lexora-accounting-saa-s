@@ -1265,12 +1265,35 @@ export async function POST(request: Request) {
         : `Remplacé suite à recalcul le ${new Date().toLocaleDateString('fr-FR')}`
 
       if (existingActive) {
+        // BUG MAI 2026 — Si l'ancien bulletin était comptabilisé, ses écritures
+        // OD-PAIE existent toujours. Archiver SANS les supprimer = doublons
+        // cumulatifs à chaque recalcul. Sur DDS mai 2026, ça avait gonflé la
+        // masse salariale de 636k → 2.7M (8 versions × 17 employés).
+        // FIX : avant d'archiver, on supprime les écritures liées et on
+        // remet comptabilise=false sur l'ancien bulletin.
+        const { data: oldBul } = await supabase
+          .from('bulletins_paie')
+          .select('comptabilise')
+          .eq('id', existingActive.id)
+          .maybeSingle()
+        if (oldBul?.comptabilise === true) {
+          const { error: ecrDelErr, count } = await supabase
+            .from('ecritures_comptables_v2')
+            .delete({ count: 'exact' })
+            .eq('ref_folio', `BP-${existingActive.id}`)
+          if (ecrDelErr) {
+            console.warn('[paie calculer] DELETE ecritures ancien bulletin failed:', ecrDelErr.message)
+          } else if (count && count > 0) {
+            console.log(`[paie calculer] ${count} écritures OD-PAIE supprimées avant archivage du bulletin ${existingActive.id}`)
+          }
+        }
         const { error: archErr } = await supabase
           .from('bulletins_paie')
           .update({
             is_archived: true,
             archived_at: nowIso,
             archive_reason: archiveReasonSingle,
+            comptabilise: false,  // l'archivé ne doit plus être considéré comme comptabilisé
           })
           .eq('id', existingActive.id)
         if (archErr) {
@@ -2296,11 +2319,27 @@ export async function POST(request: Request) {
             ? `Remplacé par bulletin solde tout compte (sortie ${dateSortieBatch}) le ${new Date().toLocaleDateString('fr-FR')}`
             : `Remplacé suite à recalcul le ${new Date().toLocaleDateString('fr-FR')}`
 
+          // BUG MAI 2026 (cf. ligne ~1267 single) — supprimer les écritures
+          // comptables liées avant d'archiver, sinon elles s'accumulent à
+          // chaque recalcul et gonflent la masse salariale comptabilisée.
+          if (existing.comptabilise === true) {
+            const { error: ecrDelErr, count } = await supabase
+              .from('ecritures_comptables_v2')
+              .delete({ count: 'exact' })
+              .eq('ref_folio', `BP-${existing.id}`)
+            if (ecrDelErr) {
+              console.warn('[paie batch] DELETE ecritures ancien bulletin failed:', ecrDelErr.message)
+            } else if (count && count > 0) {
+              console.log(`[paie batch] ${count} écritures OD-PAIE supprimées avant archivage du bulletin ${existing.id}`)
+            }
+          }
+
           const { error: archErrBatch } = await supabase.from('bulletins_paie')
             .update({
               is_archived: true,
               archived_at: nowIsoBatch,
               archive_reason: archiveReasonBatch,
+              comptabilise: false,
             })
             .eq('id', existing.id)
 

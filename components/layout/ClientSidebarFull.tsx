@@ -16,7 +16,8 @@ import {
   Settings, LogOut, ChevronDown, ChevronRight, FileSpreadsheet,
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
-  Sparkles, Package, Send, Repeat, MessageCircle, Mail, KeyRound
+  Sparkles, Package, Send, Repeat, MessageCircle, Mail, KeyRound, ArrowRightLeft,
+  TrendingUp
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -122,6 +123,8 @@ const MENU: MenuSection[] = [
     items: [
       { href: "/client/banque", label: "Banque", labelKey: "acc.bank", icon: Banknote },
       { href: "/client/rapprochement", label: "Rapprochement & Lettrage", labelKey: "acc.reconciliation", icon: CreditCard },
+      { href: "/client/rapprochement-mensuel", label: "Rapprochement mensuel", icon: Calendar },
+      { href: "/client/virements", label: "Virements", icon: ArrowRightLeft },
       { href: "/client/grand-livre", label: "Grand Livre", labelKey: "comp.client_sidebar.general_ledger", icon: BookOpen },
       { href: "/client/ecritures", label: "Écritures (édition)", labelKey: "comp.client_sidebar.entries_edit", icon: BookOpen },
       { href: "/client/plan-comptable", label: "Plan Comptable", labelKey: "comp.client_sidebar.chart_accounts", icon: BookOpen },
@@ -152,6 +155,13 @@ const MENU: MenuSection[] = [
       { href: "/client/gbc-consolidation", label: "Consolidation IFRS 10", icon: Building2 },
       { href: "/client/gbc-crs-fatca", label: "CRS / FATCA", icon: FileText },
       { href: "/client/gbc-pillar-two", label: "BEPS Pillar Two", icon: Globe },
+      // Pages Full IFRS connexes — accessibles aussi via leurs sections d'origine
+      // mais dupliquées ici pour qu'un user GBC trouve TOUT au même endroit.
+      { href: "/client/ifrs9-ecl", label: "Provision IFRS 9 (ECL)", icon: Scale },
+      { href: "/client/leases", label: "Contrats IFRS 16", icon: FilePen },
+      { href: "/client/tiers-consolidation", label: "Tiers consolidation", icon: Building2 },
+      { href: "/client/taux-change", label: "Taux de change (IAS 21)", icon: TrendingUp },
+      { href: "/client/annual-return", label: "Annual Return FSC", icon: ClipboardList },
     ]
   },
   {
@@ -299,10 +309,22 @@ export function ClientSidebarFull() {
         },
       ]
     : MENU.filter(section => {
-        if (section.requiredModule && !activeModules[section.requiredModule]) return false
+        // Pour les régimes GBC, les modules "fondamentaux" (compta, facturation,
+        // fiscal, états financiers) sont OBLIGATOIRES (Full IFRS + PER + UBO +
+        // Pillar Two impliquent tous une compta + facturation). On les force
+        // visibles même si activeModules ne les liste pas explicitement.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- societe type from provider may not include `regime` (mig 258)
+        const currentRegime = ((societe as any)?.regime || 'domestic') as 'gbc1' | 'authorised_company' | 'holding' | 'branch_foreign_pe' | 'domestic'
+        const isGBC = ['gbc1', 'authorised_company', 'holding', 'branch_foreign_pe'].includes(currentRegime)
+        const FUNDAMENTAL_MODULES_FOR_GBC: ModuleKey[] = ['comptabilite', 'facturation', 'fiscal', 'etats_financiers']
+
+        if (section.requiredModule && !activeModules[section.requiredModule]) {
+          // Exception : GBC voit toujours les modules fondamentaux
+          if (!(isGBC && FUNDAMENTAL_MODULES_FOR_GBC.includes(section.requiredModule))) {
+            return false
+          }
+        }
         if (section.requiredRegime && section.requiredRegime.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- societe type from provider may not include `regime` champ (mig 258)
-          const currentRegime = ((societe as any)?.regime || 'domestic') as 'gbc1' | 'authorised_company' | 'holding' | 'branch_foreign_pe' | 'domestic'
           if (!section.requiredRegime.includes(currentRegime)) return false
         }
         return true

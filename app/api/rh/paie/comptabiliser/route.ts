@@ -13,6 +13,27 @@ export async function POST(request: Request) {
     const { bulletin_id, all_periode, societe_id, periode } = body
 
     if (bulletin_id) {
+      // BUG MAI 2026 — guard défensif : refuser de comptabiliser un bulletin
+      // archivé. Sinon on cumule des écritures fantômes (ce bulletin a été
+      // remplacé par une version plus récente).
+      const { data: bul } = await supabase
+        .from('bulletins_paie')
+        .select('id, is_archived, comptabilise')
+        .eq('id', bulletin_id)
+        .maybeSingle()
+      if (!bul) return NextResponse.json({ error: 'Bulletin non trouvé' }, { status: 404 })
+      if (bul.is_archived === true) {
+        return NextResponse.json({
+          error: 'Bulletin archivé — ne peut pas être comptabilisé (utiliser la version active)',
+          code: 'BULLETIN_ARCHIVE',
+        }, { status: 409 })
+      }
+      if (bul.comptabilise === true) {
+        return NextResponse.json({
+          error: 'Bulletin déjà comptabilisé',
+          code: 'DEJA_COMPTABILISE',
+        }, { status: 409 })
+      }
       const { data, error } = await supabase.rpc('generer_ecritures_paie', { p_bulletin_id: bulletin_id })
       if (error) throw error
       return NextResponse.json({ nb_ecritures: data, message: `${data} écritures générées` })
@@ -20,10 +41,14 @@ export async function POST(request: Request) {
 
     if (all_periode && societe_id && periode) {
       const periodeDate = `${periode}-01`
+      // BUG MAI 2026 — filtre is_archived=false ajouté. Sans ça, les
+      // bulletins archivés non comptabilisés (cas après décomptabilisation
+      // d'un bulletin qui a été archivé entre temps) seraient embarqués.
       const { data: bulletins } = await supabase
         .from('bulletins_paie').select('id')
         .eq('societe_id', societe_id).eq('periode', periodeDate)
         .eq('statut', 'valide').eq('comptabilise', false)
+        .or('is_archived.is.null,is_archived.eq.false')
 
       let total = 0
       for (const b of bulletins || []) {

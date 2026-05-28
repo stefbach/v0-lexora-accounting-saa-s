@@ -33,8 +33,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'periode et societe_id requis' }, { status: 400 })
     }
 
-    // Normaliser : on accepte YYYY-MM ou YYYY-MM-01 (le composant OT envoie
-    // déjà avec -01, contrairement à l'onglet primes qui envoie YYYY-MM).
+    // Normaliser : accepter YYYY-MM ou YYYY-MM-01. Le composant
+    // SectionOvertime envoie YYYY-MM-01 via periodeCourante().
     const periodeDate = periode.length === 7 ? `${periode}-01` : periode
 
     // Mig 439 — Postgres function avec JOIN. Même pattern que primes.

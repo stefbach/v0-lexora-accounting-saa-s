@@ -408,6 +408,20 @@ export default function ClientGrandLivrePage() {
                 {t('acc.gl.export_excel', locale)}
               </Button>
               <Button
+                onClick={() => {
+                  if (!societeId) return
+                  window.location.href = `/api/comptable/grand-livre/export-pdf?societe_id=${societeId}`
+                }}
+                disabled={!societeId}
+                variant="outline"
+                size="sm"
+                className="border-rose-300 text-rose-700 hover:bg-rose-50"
+                title="Exporter le grand-livre au format PDF (A4 paysage, groupé par compte)"
+              >
+                <Download className="h-4 w-4 mr-1.5" />
+                PDF
+              </Button>
+              <Button
                 onClick={() => handleAudit()}
                 disabled={auditing || !societeId}
                 className="bg-purple-600 hover:bg-purple-700 text-white shadow-md"

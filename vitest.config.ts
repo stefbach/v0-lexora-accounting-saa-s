@@ -180,6 +180,13 @@ export default defineConfig({
         'lib/jurisdictions/ohada/statements/notes-annexes.ts',
         'lib/jurisdictions/ohada/statements/systeme-minimal-tresorerie.ts',
         'lib/jurisdictions/mauritius/jurisdiction.ts',
+
+        // ─── 5. CRM Prospection (infra + AI + DB-coupled) ──────────
+        // connectors: network scraping (CBRD, Yellow Pages, Apollo API)
+        // enrichment: Anthropic SDK calls
+        // ingest: Supabase admin upserts
+        // auth: Supabase session check
+        'lib/crm/**',
       ],
       // Fail the test run if coverage falls below 80% on the focused
       // scope defined above. Enforced in CI by code-quality.yml.
