@@ -92,7 +92,7 @@ async function lexoraFetch(path, init = {}) {
     }
     return body;
 }
-const server = new Server({ name: 'lexora-mcp', version: '0.8.0' }, { capabilities: { tools: {} } });
+const server = new Server({ name: 'lexora-mcp', version: '0.8.1' }, { capabilities: { tools: {} } });
 // ============================================================
 // Liste des outils exposés à Claude
 // ============================================================
@@ -788,6 +788,19 @@ const TOOLS = [
             required: ['societe_id', 'ecritures_ids'],
         },
     },
+    {
+        name: 'get_mra_vat_return',
+        description: 'Génère la déclaration TVA MRA (format EBS) pour une période : Output Tax (TVA collectée), Input Tax (TVA déductible), Net VAT à payer ou crédit. Basé sur les comptes tagués mra_ebs_output/input du PCM.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                date_debut: { type: 'string', description: 'YYYY-MM-DD' },
+                date_fin: { type: 'string', description: 'YYYY-MM-DD' },
+            },
+            required: ['societe_id', 'date_debut', 'date_fin'],
+        },
+    },
 ];
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -1381,6 +1394,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         force_desequilibre: a.force_desequilibre,
                     }),
                 });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'get_mra_vat_return': {
+                const params = new URLSearchParams();
+                params.set('date_debut', String(a.date_debut));
+                params.set('date_fin', String(a.date_fin));
+                const data = await lexoraFetch(`/api/societes/${encodeURIComponent(String(a.societe_id))}/mra/vat-return?${params}`);
                 return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
             }
             default:

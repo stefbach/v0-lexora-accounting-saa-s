@@ -28,11 +28,11 @@ const templateCompteSchema = z.object({
 const templateSchema = z.object({
   code: z.string().min(1),
   nom: z.string().min(1),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   type: z.enum(['core', 'module']),
-  juridiction_code: z.string().default('MU'),
+  juridiction_code: z.string().nullable().optional().transform(v => v ?? 'MU'),
   version: z.string().min(1),
-  prerequisites: z.array(z.string()).default([]),
+  prerequisites: z.array(z.string()).nullable().optional().transform(v => v ?? []),
   comptes: z.array(templateCompteSchema).min(1),
 })
 
