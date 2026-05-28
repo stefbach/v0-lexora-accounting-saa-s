@@ -4,6 +4,7 @@ import { ComptableSidebarNew } from "@/components/layout/ComptableSidebarNew"
 import { SocieteActiveProvider } from "@/components/client/SocieteActiveProvider"
 import { CabinetBanner } from "@/components/client/CabinetBanner"
 import { FloatingPageHelp } from "@/components/help/FloatingPageHelp"
+import { FloatingAgentChat } from "@/components/agent/FloatingAgentChat"
 import { useProfile } from "@/hooks/use-profile"
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
@@ -54,6 +55,7 @@ export function ClientLayoutShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
         <FloatingPageHelp />
+        <FloatingAgentChat />
       </div>
     </SocieteActiveProvider>
   )
