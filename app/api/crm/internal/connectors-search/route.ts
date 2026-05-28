@@ -12,12 +12,12 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCrmAccess } from '@/lib/crm/auth'
+import { requireCrmPermission } from '@/lib/crm/permissions'
 import { getConnector, listConnectorNames } from '@/lib/crm/connectors'
 import { ingestPayloads } from '@/lib/crm/ingest'
 
 export async function POST(req: NextRequest) {
-  const auth = await requireCrmAccess()
+  const auth = await requireCrmPermission('import')
   if (!auth.ok) return NextResponse.json({ error: auth.reason }, { status: auth.status })
 
   const body = await req.json().catch(() => null)

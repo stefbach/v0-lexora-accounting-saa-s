@@ -4,13 +4,13 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCrmAccess } from '@/lib/crm/auth'
+import { requireCrmPermission } from '@/lib/crm/permissions'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { enrichContact, formatStrategy } from '@/lib/crm/enrichment'
 import type { CrmContact, CrmCompany } from '@/lib/crm/types'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireCrmAccess()
+  const auth = await requireCrmPermission('enrich')
   if (!auth.ok) return NextResponse.json({ error: auth.reason }, { status: auth.status })
   const { id } = await params
 

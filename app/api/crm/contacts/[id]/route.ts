@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireCrmAccess } from '@/lib/crm/auth'
+import { requireCrmPermission } from '@/lib/crm/permissions'
 import { getAdminClient } from '@/lib/supabase/admin'
 
 const ALLOWED_FIELDS = new Set([
@@ -75,9 +76,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireCrmAccess()
+  const auth = await requireCrmPermission('delete')
   if (!auth.ok) return NextResponse.json({ error: auth.reason }, { status: auth.status })
-  if (auth.role === 'commercial') return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   const { id } = await params
 
   const admin = getAdminClient()

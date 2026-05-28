@@ -13,12 +13,12 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCrmAccess } from '@/lib/crm/auth'
+import { requireCrmPermission } from '@/lib/crm/permissions'
 import { parseNaturalQuery, type ApolloCompanyFilters } from '@/lib/crm/nl-query'
 import { apolloSearchCompaniesPreview } from '@/lib/crm/connectors/apollo'
 
 export async function POST(req: NextRequest) {
-  const auth = await requireCrmAccess()
+  const auth = await requireCrmPermission('view')
   if (!auth.ok) return NextResponse.json({ error: auth.reason }, { status: auth.status })
 
   const body = await req.json().catch(() => null)

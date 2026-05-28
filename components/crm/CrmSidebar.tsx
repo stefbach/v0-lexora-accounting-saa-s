@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   Sparkles,
+  ShieldCheck,
 } from "lucide-react"
 
 const MENU = [
@@ -36,6 +37,7 @@ const MENU = [
   {
     section: "Reglages",
     items: [
+      { href: "/crm/settings/access", label: "Acces & permissions", icon: ShieldCheck },
       { href: "/crm/settings", label: "Parametres", icon: Settings, exact: true },
     ],
   },
