@@ -36,6 +36,40 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
+import { createHash } from 'node:crypto'
+
+/**
+ * Confirmation 2-step pour les outils modificateurs.
+ * Token déterministe = hash des arguments (hors token). Le LLM doit renvoyer
+ * exactement ce token pour confirmer l'exécution — stateless, pas de stockage.
+ */
+function makeConfirmToken(toolName: string, args: Record<string, unknown>): string {
+  const { confirmation_token: _omit, ...rest } = args
+  const payload = JSON.stringify({ tool: toolName, args: rest })
+  return createHash('sha256').update(payload).digest('hex').slice(0, 16)
+}
+
+function confirmGuard(toolName: string, a: Record<string, unknown>, previewLabel: string) {
+  const expected = makeConfirmToken(toolName, a)
+  const provided = a.confirmation_token
+  if (provided === expected) return { confirmed: true as const, token: expected }
+  return {
+    confirmed: false as const,
+    token: expected,
+    response: {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          requires_confirmation: true,
+          action: toolName,
+          preview: previewLabel,
+          confirmation_token: expected,
+          instructions: `Pour exécuter, rappelle ${toolName} avec confirmation_token: "${expected}"`,
+        }, null, 2),
+      }],
+    },
+  }
+}
 
 const LEXORA_API_URL = (process.env.LEXORA_API_URL || 'http://localhost:3000').replace(/\/$/, '')
 const LEXORA_API_KEY = process.env.LEXORA_API_KEY ?? ''
@@ -70,7 +104,7 @@ async function lexoraFetch(path: string, init: RequestInit = {}) {
 }
 
 const server = new Server(
-  { name: 'lexora-mcp', version: '0.6.1' },
+  { name: 'lexora-mcp', version: '0.7.0' },
   { capabilities: { tools: {} } },
 )
 
@@ -602,6 +636,78 @@ const TOOLS = [
       'Retourne la liste des tables Lexora interrogeables via query_lexora, avec leur domaine (compta/paie/banque/tiers/docs/fiscal/gbc/system), description, et colonnes par défaut. À appeler en premier pour découvrir ce qui est disponible.',
     inputSchema: { type: 'object' as const, properties: {} },
   },
+
+  // ============================================================
+  // v0.7.0 — PCM (Plan Comptable Mauricien) éditable
+  // ============================================================
+  {
+    name: 'list_comptes_pcm',
+    description:
+      'Liste les comptes du Plan Comptable (PCM) éditable d\'une société. Filtres : classe (1-8), recherche (numéro/intitulé), include_archived, parent (sous-comptes). Différent de get_plan_comptable qui retourne le référentiel global figé.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        societe_id: { type: 'string' },
+        classe: { type: 'number', description: 'Classe comptable 1-8' },
+        search: { type: 'string', description: 'Recherche numéro ou intitulé' },
+        include_archived: { type: 'boolean', description: 'Inclure comptes archivés. Défaut false.' },
+        parent: { type: 'string', description: 'Numéro parent pour lister les sous-comptes (ex: 4511)' },
+      },
+      required: ['societe_id'],
+    },
+  },
+  {
+    name: 'initialize_pcm',
+    description:
+      'Initialise le PCM d\'une société en appliquant le template CORE Maurice + modules optionnels (module_gbc1, module_holding, module_b2b_tech, module_health_clinic). Idempotent : ré-appel ne crée pas de doublon. MODIFICATION — retourne requires_confirmation au 1er appel, exécute avec confirmation_token.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        societe_id: { type: 'string' },
+        template_code: { type: 'string', description: 'Template CORE. Défaut core_maurice.' },
+        modules: { type: 'array', items: { type: 'string' }, description: 'Modules à activer.' },
+        confirmation_token: { type: 'string', description: 'Token retourné au 1er appel pour confirmer.' },
+      },
+      required: ['societe_id'],
+    },
+  },
+  {
+    name: 'create_compte_pcm',
+    description:
+      'Crée un compte dans le PCM d\'une société. MODIFICATION — retourne requires_confirmation au 1er appel, exécute avec confirmation_token. Sous-comptes via pattern 4511.OCC (le parent 4511 doit exister).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        societe_id: { type: 'string' },
+        numero: { type: 'string', description: 'Numéro (ex: 4511.OCC). Doit commencer par le chiffre de sa classe.' },
+        intitule: { type: 'string' },
+        classe: { type: 'number', description: '1-8' },
+        type: { type: 'string', enum: ['actif', 'passif', 'charge', 'produit', 'mixte', 'tresorerie'] },
+        nature: { type: 'string' },
+        sens_normal: { type: 'string', enum: ['debit', 'credit', 'mixte'] },
+        lettrable: { type: 'boolean' },
+        tags: { type: 'array', items: { type: 'string' } },
+        confirmation_token: { type: 'string' },
+      },
+      required: ['societe_id', 'numero', 'intitule', 'classe', 'type'],
+    },
+  },
+  {
+    name: 'archive_compte_pcm',
+    description:
+      'Archive un compte PCM (jamais de suppression). Si le compte a des écritures, fournir target_compte pour reclasser automatiquement les écritures vers le compte cible avant archivage. MODIFICATION — retourne requires_confirmation au 1er appel.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        societe_id: { type: 'string' },
+        numero: { type: 'string', description: 'Numéro du compte à archiver' },
+        reason: { type: 'string', description: 'Justification métier' },
+        target_compte: { type: 'string', description: 'Compte de reclassement si écritures présentes' },
+        confirmation_token: { type: 'string' },
+      },
+      required: ['societe_id', 'numero', 'reason'],
+    },
+  },
 ]
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
@@ -1002,6 +1108,67 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'get_mcp_tables': {
         const data = await lexoraFetch('/api/mcp/query', { method: 'GET' })
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+      }
+
+      // ─── v0.7.0 — PCM éditable ───────────────────────────────────────
+      case 'list_comptes_pcm': {
+        const params = new URLSearchParams()
+        if (a.classe !== undefined) params.set('classe', String(a.classe))
+        if (a.search) params.set('search', String(a.search))
+        if (a.include_archived) params.set('include_archived', 'true')
+        if (a.parent) params.set('parent', String(a.parent))
+        const data = await lexoraFetch(
+          `/api/societes/${encodeURIComponent(String(a.societe_id))}/pcm/comptes?${params}`,
+        )
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+      }
+
+      case 'initialize_pcm': {
+        const guard = confirmGuard('initialize_pcm', a,
+          `Initialiser PCM société ${a.societe_id} : template ${a.template_code || 'core_maurice'} + modules [${(a.modules as string[] | undefined)?.join(', ') || 'aucun'}]`)
+        if (!guard.confirmed) return guard.response
+        const data = await lexoraFetch(
+          `/api/societes/${encodeURIComponent(String(a.societe_id))}/pcm/initialize`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              template_code: a.template_code || 'core_maurice',
+              modules: a.modules || [],
+            }),
+          },
+        )
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+      }
+
+      case 'create_compte_pcm': {
+        const guard = confirmGuard('create_compte_pcm', a,
+          `Créer compte ${a.numero} "${a.intitule}" (classe ${a.classe}, ${a.type}) pour société ${a.societe_id}`)
+        if (!guard.confirmed) return guard.response
+        const data = await lexoraFetch(
+          `/api/societes/${encodeURIComponent(String(a.societe_id))}/pcm/comptes`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              numero: a.numero, intitule: a.intitule, classe: a.classe, type: a.type,
+              nature: a.nature, sens_normal: a.sens_normal, lettrable: a.lettrable, tags: a.tags,
+            }),
+          },
+        )
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+      }
+
+      case 'archive_compte_pcm': {
+        const guard = confirmGuard('archive_compte_pcm', a,
+          `Archiver compte ${a.numero} société ${a.societe_id}${a.target_compte ? ` + reclasser écritures vers ${a.target_compte}` : ''}`)
+        if (!guard.confirmed) return guard.response
+        const data = await lexoraFetch(
+          `/api/societes/${encodeURIComponent(String(a.societe_id))}/pcm/comptes/${encodeURIComponent(String(a.numero))}/archive`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ reason: a.reason, target_compte: a.target_compte }),
+          },
+        )
         return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
       }
 
