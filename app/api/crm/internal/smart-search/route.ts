@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
       interpretation = parsed.interpretation
       filters = parsed.filters
     } catch (err) {
+      console.error('[crm/SS] NLFAIL', (err as Error).message)
       return NextResponse.json(
         { error: `nl_parse_failed: ${(err as Error).message}` },
         { status: 502 },
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
     page,
     perPage,
   )
+  console.error('[crm/SS] OK filters', JSON.stringify(filters), 'people', result.people?.length, 'err', result.error ?? 'none')
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 502 })
   }
