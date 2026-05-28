@@ -97,7 +97,7 @@ export const AGENT_TOOLS = [
   // ── ÉCRITURE (confirmation requise) ─────────────────────────────────
   {
     name: 'creer_ecriture',
-    description: 'Crée une écriture comptable équilibrée (débit = crédit). Ex: affecter une avance/compte courant à une facture. Lignes [{compte, debit, credit, libelle?}].',
+    description: 'Crée une écriture comptable équilibrée (débit = crédit). Ex: affecter une avance/compte courant à une facture. Lignes [{compte, debit, credit, libelle?}]. Si un compte n\'existe pas encore (ex: 455 compte courant associé "Stéphane Bach"), AJOUTE-LE dans nouveaux_comptes — il sera créé automatiquement avant l\'écriture, pas besoin de revenir. Ne bloque jamais sur un compte manquant : crée-le.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -112,6 +112,18 @@ export const AGENT_TOOLS = [
               compte: { type: 'string' }, debit: { type: 'number' }, credit: { type: 'number' }, libelle: { type: 'string' },
             },
             required: ['compte'],
+          },
+        },
+        nouveaux_comptes: {
+          type: 'array',
+          description: 'Comptes à créer à la volée avant l\'écriture (s\'ils n\'existent pas). Chaque compte: {numero, intitule, classe?, type?}. Ex: {numero:"455.STEPHANE", intitule:"CCA Stéphane Bach", classe:4, type:"mixte"}.',
+          items: {
+            type: 'object',
+            properties: {
+              numero: { type: 'string' }, intitule: { type: 'string' },
+              classe: { type: 'number' }, type: { type: 'string' },
+            },
+            required: ['numero', 'intitule'],
           },
         },
       },
@@ -165,12 +177,45 @@ export async function execReadTool(name: string, input: any, ctx: ExecCtx): Prom
       return { factures: data || [] }
     }
     case 'list_comptes_pcm': {
-      let q = supabase.from('comptes_societes')
-        .select('numero, intitule, classe, type, sens_normal').eq('societe_id', societeId).eq('archive', false)
-      if (input.classe) q = q.eq('classe', input.classe)
-      if (input.search) q = q.or(`numero.ilike.%${input.search}%,intitule.ilike.%${input.search}%`)
-      const { data } = await q.order('numero').limit(100)
-      return { comptes: data || [] }
+      // Vue EXHAUSTIVE des comptes disponibles, fusion de 3 sources pour que
+      // l'agent voie un maximum de comptes (le PCM éditable peut être vide) :
+      //   1. comptes_societes (PCM éditable, prioritaire — intitulé custom)
+      //   2. plan_comptable_pcm (référentiel global mauricien)
+      //   3. ecritures_comptables_v2 (comptes réellement utilisés)
+      const merged = new Map<string, { numero: string; intitule: string; classe: number; source: string }>()
+
+      const { data: cs } = await supabase.from('comptes_societes')
+        .select('numero, intitule, classe').eq('societe_id', societeId).eq('archive', false)
+      for (const c of cs || []) merged.set(c.numero, { numero: c.numero, intitule: c.intitule, classe: c.classe, source: 'societe' })
+
+      const { data: ref } = await supabase.from('plan_comptable_pcm')
+        .select('compte, libelle, classe').eq('actif', true).limit(500)
+      for (const p of ref || []) if (!merged.has(p.compte)) merged.set(p.compte, { numero: p.compte, intitule: p.libelle || `Compte ${p.compte}`, classe: p.classe ?? Number(String(p.compte)[0]), source: 'referentiel' })
+
+      // Comptes utilisés en écritures mais absents des deux sources ci-dessus
+      let from = 0
+      const seenEcr = new Set<string>()
+      while (from < 3000) {
+        const { data: ecr } = await supabase.from('ecritures_comptables_v2')
+          .select('numero_compte, nom_compte').eq('societe_id', societeId).range(from, from + 999)
+        if (!ecr || ecr.length === 0) break
+        for (const e of ecr) {
+          if (!e.numero_compte || seenEcr.has(e.numero_compte)) continue
+          seenEcr.add(e.numero_compte)
+          if (!merged.has(e.numero_compte)) merged.set(e.numero_compte, { numero: e.numero_compte, intitule: e.nom_compte || `Compte ${e.numero_compte}`, classe: Number(String(e.numero_compte)[0]) || 0, source: 'grand_livre' })
+        }
+        if (ecr.length < 1000) break
+        from += 1000
+      }
+
+      let list = [...merged.values()]
+      if (input.classe) list = list.filter(c => c.classe === Number(input.classe))
+      if (input.search) {
+        const s = String(input.search).toLowerCase()
+        list = list.filter(c => c.numero.toLowerCase().includes(s) || (c.intitule || '').toLowerCase().includes(s))
+      }
+      list.sort((a, b) => a.numero.localeCompare(b.numero, undefined, { numeric: true }))
+      return { comptes: list.slice(0, 200), total: list.length }
     }
     case 'list_grand_livre': {
       let q = supabase.from('ecritures_comptables_v2').select(SELECT_GL).eq('societe_id', societeId)
@@ -332,19 +377,44 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
       if (Math.abs(totalD - totalC) > 0.01) return { ok: false, error: `Écriture déséquilibrée: D ${totalD} ≠ C ${totalC}` }
       const numeros = [...new Set(lignes.map((l: any) => l.compte))] as string[]
 
-      // Résolution du libellé de compte avec FALLBACK multi-sources (le PCM
-      // éditable comptes_societes peut ne pas être initialisé pour la société) :
+      // Comptes à créer à la volée (fournis par l'agent) — best-effort dans
+      // comptes_societes, et toujours pris en compte pour le nom de compte.
+      const nouveaux: Array<{ numero: string; intitule: string; classe?: number; type?: string }> =
+        Array.isArray(input.nouveaux_comptes) ? input.nouveaux_comptes : []
+      const nouveauxMap = new Map<string, { intitule: string; classe?: number; type?: string }>()
+      for (const nc of nouveaux) {
+        if (nc?.numero && nc?.intitule) nouveauxMap.set(String(nc.numero), { intitule: String(nc.intitule), classe: nc.classe, type: nc.type })
+      }
+      // Créer les nouveaux comptes dans le PCM éditable (best-effort : si la
+      // table/migration n'existe pas encore, on continue — le compte sera quand
+      // même porté par l'écriture via nom_compte).
+      for (const [numero, meta] of nouveauxMap) {
+        const classe = meta.classe && meta.classe >= 1 && meta.classe <= 8 ? meta.classe : Number(numero[0])
+        if (!Number.isInteger(classe) || classe < 1 || classe > 8) continue
+        await supabase.from('comptes_societes').upsert({
+          societe_id: societeId, numero,
+          numero_parent: numero.includes('.') ? numero.split('.')[0] : null,
+          intitule: meta.intitule, intitule_custom: true,
+          classe, type: meta.type || (classe === 4 ? 'mixte' : classe === 6 ? 'charge' : classe === 7 ? 'produit' : classe === 5 ? 'tresorerie' : classe <= 2 ? 'actif' : 'mixte'),
+          sens_normal: 'mixte', lettrable: classe === 4, obligatoire: false,
+          template_source: 'agent', created_by: userId, updated_by: userId,
+        }, { onConflict: 'societe_id,numero' }).then(() => {}, () => {})
+      }
+
+      // Résolution du libellé de compte avec FALLBACK multi-sources :
+      //   0. nouveaux_comptes fournis par l'agent (priorité)
       //   1. comptes_societes (PCM éditable) — refuse si archivé
       //   2. plan_comptable_pcm (référentiel global mauricien)
       //   3. ecritures_comptables_v2 (compte déjà utilisé dans le grand livre)
       const nomCompte = new Map<string, string>()
       const archivedSet = new Set<string>()
+      for (const [numero, meta] of nouveauxMap) nomCompte.set(numero, meta.intitule)
 
       const { data: cs } = await supabase.from('comptes_societes')
         .select('numero, intitule, archive').eq('societe_id', societeId).in('numero', numeros)
       for (const c of cs || []) {
         if (c.archive) archivedSet.add(c.numero)
-        else nomCompte.set(c.numero, c.intitule)
+        else if (!nomCompte.has(c.numero)) nomCompte.set(c.numero, c.intitule)
       }
 
       const manquants1 = numeros.filter(n => !nomCompte.has(n) && !archivedSet.has(n))
@@ -363,7 +433,7 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
 
       for (const num of numeros) {
         if (archivedSet.has(num)) return { ok: false, error: `Compte ${num} archivé` }
-        if (!nomCompte.has(num)) return { ok: false, error: `Compte ${num} introuvable (ni dans le PCM société, ni dans le référentiel, ni dans le grand livre)` }
+        if (!nomCompte.has(num)) return { ok: false, error: `Compte ${num} introuvable — fournis-le dans nouveaux_comptes pour le créer automatiquement` }
       }
       const refFolio = `OD-AGENT-${Date.now()}`
       const exercice = String(new Date(input.date_ecriture).getFullYear())
