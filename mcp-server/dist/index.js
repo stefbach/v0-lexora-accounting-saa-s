@@ -92,7 +92,7 @@ async function lexoraFetch(path, init = {}) {
     }
     return body;
 }
-const server = new Server({ name: 'lexora-mcp', version: '0.7.1' }, { capabilities: { tools: {} } });
+const server = new Server({ name: 'lexora-mcp', version: '0.8.0' }, { capabilities: { tools: {} } });
 // ============================================================
 // Liste des outils exposés à Claude
 // ============================================================
@@ -685,6 +685,109 @@ const TOOLS = [
             required: ['societe_id', 'module_code'],
         },
     },
+    // ============================================================
+    // v0.8.0 — Grand Livre éditable
+    // ============================================================
+    {
+        name: 'list_grand_livre',
+        description: 'Liste les écritures du grand livre d\'une société. Filtres : compte, date_debut, date_fin, journal, lettre, unlettered_only. Retourne aussi les totaux débit/crédit.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                compte: { type: 'string', description: 'Numéro de compte PCM' },
+                date_debut: { type: 'string', description: 'YYYY-MM-DD' },
+                date_fin: { type: 'string', description: 'YYYY-MM-DD' },
+                journal: { type: 'string', description: 'Code journal (OD, BNQ, VTE, ACH, OD-PAIE...)' },
+                lettre: { type: 'string', description: 'Code de lettrage' },
+                unlettered_only: { type: 'boolean', description: 'Seulement les écritures non lettrées' },
+                limit: { type: 'number', description: 'Max 1000. Défaut 200.' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'get_balance_grand_livre',
+        description: 'Balance des comptes du grand livre (débit/crédit/solde par compte) sur une période, optionnellement filtrée par classe. Vérifie l\'équilibre global.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                date_debut: { type: 'string' },
+                date_fin: { type: 'string' },
+                classe: { type: 'string', description: 'Classe 1-8' },
+            },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'create_journal_entry',
+        description: 'Crée une écriture comptable équilibrée (somme débits = somme crédits). MODIFICATION — confirmation 2-step. Les comptes doivent exister dans le PCM de la société.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                date_ecriture: { type: 'string', description: 'YYYY-MM-DD' },
+                journal: { type: 'string', description: 'Code journal. Défaut OD.' },
+                numero_piece: { type: 'string' },
+                libelle: { type: 'string' },
+                lignes: {
+                    type: 'array',
+                    description: 'Lignes [{compte, debit, credit, libelle?}]. Au moins 2, équilibrées.',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            compte: { type: 'string' },
+                            debit: { type: 'number' },
+                            credit: { type: 'number' },
+                            libelle: { type: 'string' },
+                        },
+                    },
+                },
+                confirmation_token: { type: 'string' },
+            },
+            required: ['societe_id', 'date_ecriture', 'libelle', 'lignes'],
+        },
+    },
+    {
+        name: 'reclass_ecritures',
+        description: 'Reclasse les écritures d\'un compte vers un autre. TOUJOURS faire un dry_run=true d\'abord pour prévisualiser (nb écritures, totaux, échantillon), puis dry_run=false pour exécuter. Filtre optionnel par dates, journal, libellé.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                from_compte: { type: 'string' },
+                to_compte: { type: 'string' },
+                filter: {
+                    type: 'object',
+                    properties: {
+                        date_debut: { type: 'string' },
+                        date_fin: { type: 'string' },
+                        libelle_contains: { type: 'string' },
+                        journal: { type: 'string' },
+                    },
+                },
+                dry_run: { type: 'boolean', description: 'true = preview (défaut), false = exécute' },
+                reason: { type: 'string', description: 'Justification métier (requis)' },
+            },
+            required: ['societe_id', 'from_compte', 'to_compte', 'reason'],
+        },
+    },
+    {
+        name: 'lettrer_ecritures',
+        description: 'Lettre un ensemble d\'écritures avec un code commun. Vérifie l\'équilibre (débit=crédit) sauf si force_desequilibre. MODIFICATION — confirmation 2-step.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                ecritures_ids: { type: 'array', items: { type: 'string' }, description: 'UUIDs des écritures (≥2)' },
+                code_lettre: { type: 'string', description: 'Code lettrage. Auto-généré si absent.' },
+                force_desequilibre: { type: 'boolean' },
+                confirmation_token: { type: 'string' },
+            },
+            required: ['societe_id', 'ecritures_ids'],
+        },
+    },
 ];
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -1204,6 +1307,80 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 if (!guard.confirmed)
                     return guard.response;
                 const data = await lexoraFetch(`/api/societes/${encodeURIComponent(String(a.societe_id))}/pcm/modules/activate`, { method: 'POST', body: JSON.stringify({ module_code: a.module_code }) });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            // ─── v0.8.0 — Grand Livre éditable ───────────────────────────────
+            case 'list_grand_livre': {
+                const params = new URLSearchParams();
+                if (a.compte)
+                    params.set('compte', String(a.compte));
+                if (a.date_debut)
+                    params.set('date_debut', String(a.date_debut));
+                if (a.date_fin)
+                    params.set('date_fin', String(a.date_fin));
+                if (a.journal)
+                    params.set('journal', String(a.journal));
+                if (a.lettre)
+                    params.set('lettre', String(a.lettre));
+                if (a.unlettered_only)
+                    params.set('unlettered_only', 'true');
+                if (a.limit !== undefined)
+                    params.set('limit', String(a.limit));
+                const data = await lexoraFetch(`/api/societes/${encodeURIComponent(String(a.societe_id))}/grand-livre?${params}`);
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'get_balance_grand_livre': {
+                const params = new URLSearchParams();
+                if (a.date_debut)
+                    params.set('date_debut', String(a.date_debut));
+                if (a.date_fin)
+                    params.set('date_fin', String(a.date_fin));
+                if (a.classe)
+                    params.set('classe', String(a.classe));
+                const data = await lexoraFetch(`/api/societes/${encodeURIComponent(String(a.societe_id))}/grand-livre/balance?${params}`);
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'create_journal_entry': {
+                const guard = confirmGuard('create_journal_entry', a, `Créer écriture ${a.journal || 'OD'} "${a.libelle}" (${a.lignes?.length || 0} lignes) société ${a.societe_id}`);
+                if (!guard.confirmed)
+                    return guard.response;
+                const data = await lexoraFetch(`/api/societes/${encodeURIComponent(String(a.societe_id))}/grand-livre`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        date_ecriture: a.date_ecriture, journal: a.journal, numero_piece: a.numero_piece,
+                        libelle: a.libelle, lignes: a.lignes,
+                    }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'reclass_ecritures': {
+                // dry_run par défaut true. Si dry_run explicitement false → confirmation.
+                const isExecute = a.dry_run === false;
+                if (isExecute) {
+                    const guard = confirmGuard('reclass_ecritures', a, `EXÉCUTER reclassement ${a.from_compte} → ${a.to_compte} société ${a.societe_id}`);
+                    if (!guard.confirmed)
+                        return guard.response;
+                }
+                const data = await lexoraFetch(`/api/societes/${encodeURIComponent(String(a.societe_id))}/grand-livre/reclass`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        from_compte: a.from_compte, to_compte: a.to_compte,
+                        filter: a.filter, dry_run: a.dry_run !== false, reason: a.reason,
+                    }),
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'lettrer_ecritures': {
+                const guard = confirmGuard('lettrer_ecritures', a, `Lettrer ${a.ecritures_ids?.length || 0} écritures société ${a.societe_id}`);
+                if (!guard.confirmed)
+                    return guard.response;
+                const data = await lexoraFetch(`/api/societes/${encodeURIComponent(String(a.societe_id))}/grand-livre/lettrage`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        ecritures_ids: a.ecritures_ids, code_lettre: a.code_lettre,
+                        force_desequilibre: a.force_desequilibre,
+                    }),
+                });
                 return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
             }
             default:
