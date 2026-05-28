@@ -43,8 +43,14 @@ export async function POST(req: NextRequest) {
     }
   } else {
     // Filtres manuels directs (sans appel Claude)
-    if (typeof body.q_keywords === 'string' && body.q_keywords.trim()) {
-      filters.q_keywords = body.q_keywords.trim()
+    if (typeof body.city === 'string' && body.city.trim()) {
+      filters.city = body.city.trim()
+    }
+    const rawTags = body.keyword_tags ?? body.q_keywords
+    if (Array.isArray(rawTags) && rawTags.length) {
+      filters.keyword_tags = rawTags.map(String).map((s: string) => s.trim()).filter(Boolean)
+    } else if (typeof rawTags === 'string' && rawTags.trim()) {
+      filters.keyword_tags = [rawTags.trim()]
     }
     if (Array.isArray(body.employee_ranges) && body.employee_ranges.length) {
       filters.organization_num_employees_ranges = body.employee_ranges.map(String)

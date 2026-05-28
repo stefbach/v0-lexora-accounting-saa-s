@@ -47,6 +47,9 @@ export default function RechercheIntelligentePage() {
   const [interpretation, setInterpretation] = useState("")
   const [companies, setCompanies] = useState<CompanyPreview[]>([])
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   // Filtres locaux (gratuits, côté client)
   const [onlyPhone, setOnlyPhone] = useState(false)
@@ -66,6 +69,22 @@ export default function RechercheIntelligentePage() {
 
   const selectedCount = Object.values(selected).filter(Boolean).length
 
+  const fetchPage = async (pageToFetch: number) => {
+    const res = await fetch("/api/crm/internal/smart-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, page: pageToFetch }),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json?.error || "Erreur recherche")
+    return json.data as {
+      interpretation?: string
+      companies?: CompanyPreview[]
+      total?: number
+      page?: number
+    }
+  }
+
   const search = async () => {
     if (!prompt.trim()) {
       toast({ title: "Saisissez une requête", variant: "destructive" })
@@ -75,24 +94,47 @@ export default function RechercheIntelligentePage() {
     setCompanies([])
     setSelected({})
     setInterpretation("")
+    setPage(1)
+    setTotal(0)
     try {
-      const res = await fetch("/api/crm/internal/smart-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || "Erreur recherche")
-      setInterpretation(json.data.interpretation || "")
-      setCompanies(json.data.companies || [])
+      const data = await fetchPage(1)
+      setInterpretation(data.interpretation || "")
+      setCompanies(data.companies || [])
+      setTotal(data.total || 0)
+      setPage(1)
       toast({
         title: "Consultation gratuite",
-        description: `${json.data.companies?.length || 0} sociétés trouvées (aucun crédit consommé)`,
+        description: `${data.total || data.companies?.length || 0} sociétés trouvées (aucun crédit consommé)`,
       })
     } catch (err: any) {
       toast({ title: "Erreur", description: err.message, variant: "destructive" })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadMore = async () => {
+    setLoadingMore(true)
+    try {
+      const next = page + 1
+      const data = await fetchPage(next)
+      const incoming = data.companies || []
+      // Dédup sur apollo_id pour éviter les doublons entre pages
+      setCompanies((prev) => {
+        const seen = new Set(prev.map((c) => c.apollo_id).filter(Boolean))
+        const merged = [...prev]
+        for (const c of incoming) {
+          if (c.apollo_id && seen.has(c.apollo_id)) continue
+          merged.push(c)
+        }
+        return merged
+      })
+      setPage(next)
+      if (typeof data.total === "number") setTotal(data.total)
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" })
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -185,7 +227,8 @@ export default function RechercheIntelligentePage() {
         <Card style={panelStyle}>
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle className="text-base">
-              Résultats ({filtered.length}/{companies.length})
+              Résultats ({filtered.length}/{companies.length}
+              {total > companies.length ? ` sur ${total}` : ""})
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <FilterChip active={onlyPhone} onClick={() => setOnlyPhone((v) => !v)} icon={Phone} label="Téléphone" />
@@ -246,6 +289,24 @@ export default function RechercheIntelligentePage() {
                 )
               })}
             </div>
+
+            {companies.length < total && (
+              <div className="flex justify-center mt-4">
+                <Button
+                  variant="outline"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  size="sm"
+                >
+                  {loadingMore ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4 mr-2" />
+                  )}
+                  Voir plus ({companies.length}/{total})
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
