@@ -11,8 +11,6 @@ import { Loader2, Download } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 const CONNECTORS = [
-  { value: "cbrd", label: "CBRD (Registre Maurice)" },
-  { value: "yellowpages_mu", label: "Yellow Pages Maurice" },
   { value: "apollo", label: "Apollo (international)" },
 ] as const
 
@@ -25,7 +23,7 @@ export function ConnectorSearchDialog({ onSuccess, trigger }: Props) {
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [connector, setConnector] = useState<string>("cbrd")
+  const [connector, setConnector] = useState<string>("apollo")
   const [query, setQuery] = useState("")
   const [industrie, setIndustrie] = useState("")
   const [region, setRegion] = useState("")
