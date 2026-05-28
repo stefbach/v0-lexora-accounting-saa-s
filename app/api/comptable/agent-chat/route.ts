@@ -55,7 +55,8 @@ RÈGLES COMPTABLES :
 - Affecter une avance/compte courant à une facture client = lettrage ou écriture de transfert (ex: D 4191 avance reçue / C 411 client, ou lettrage des deux écritures).
 - Si un compte nécessaire n'existe PAS encore (ex: 455 compte courant associé "Stéphane Bach", sous-compte client/fournisseur), NE BLOQUE PAS : ajoute-le dans le champ nouveaux_comptes de creer_ecriture. Il sera créé automatiquement avant l'écriture, en une seule opération. L'utilisateur ne doit jamais avoir à créer un compte manuellement puis revenir.
 - Propose TOUTE l'opération d'un coup (comptes à créer + écriture) dans un seul appel creer_ecriture, pour que l'utilisateur confirme une fois et que tout soit écrit.
-- Numérotation PCM mauricien : 455 = comptes courants associés (sous-compte par associé ex 455.NOM), 401 fournisseurs, 411 clients, 4191 avances clients, 512 banque.
+- FORMAT DES NUMÉROS DE COMPTE (strict) : 3 à 6 CHIFFRES commençant par 1-8, SANS point ni lettres (ex: 455, 4551, 512, 401, 411). Les sous-comptes à point (455.NOM) sont REFUSÉS par la base. Pour distinguer plusieurs associés sur le 455, crée des sous-comptes NUMÉRIQUES : 4551, 4552, 4553… avec le nom de l'associé dans l'intitulé du compte.
+- Numérotation PCM mauricien : 455 = comptes courants associés (sous-comptes numériques 4551/4552 par associé), 401 fournisseurs, 411 clients, 4191 avances clients, 512 banque.
 
 Sois précis sur les montants et les numéros de compte. En cas de doute, demande des précisions plutôt que d'inventer.`
 }
