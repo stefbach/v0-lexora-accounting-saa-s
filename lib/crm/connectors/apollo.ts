@@ -302,6 +302,7 @@ export async function apolloSearchPeoplePreview(
       body.organization_num_employees_ranges = filters.organization_num_employees_ranges
     }
 
+    console.error('[crm/apollo] people_search request', JSON.stringify(body))
     const res = await apolloPost('/mixed_people/search', body)
     const rows = res.people ?? []
     const people: ApolloPersonPreview[] = rows.map((p) => {
@@ -334,6 +335,7 @@ export async function apolloSearchPeoplePreview(
       page: Math.max(1, page),
     }
   } catch (err) {
+    console.error('[crm/apollo] people_search error', (err as Error).message)
     return { people: [], total: 0, page, error: (err as Error).message }
   }
 }
