@@ -377,6 +377,18 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
       if (Math.abs(totalD - totalC) > 0.01) return { ok: false, error: `Écriture déséquilibrée: D ${totalD} ≠ C ${totalC}` }
       const numeros = [...new Set(lignes.map((l: any) => l.compte))] as string[]
 
+      // Contrainte DB ecritures_comptables_v2 : numero_compte ~ ^[1-8][0-9]{2,5}$
+      // (3 à 6 chiffres, commençant par 1-8, PAS de point ni lettres).
+      // Les sous-comptes type "455.OCC" sont refusés par la base. On valide
+      // ici pour renvoyer un message clair à l'agent plutôt qu'une erreur SQL.
+      const FORMAT = /^[1-8][0-9]{2,5}$/
+      const invalides = numeros.filter(n => !FORMAT.test(n))
+      if (invalides.length > 0) {
+        return {
+          ok: false,
+          error: `Numéro(s) de compte invalide(s) pour les écritures : ${invalides.join(', ')}. Les comptes doivent être 3 à 6 CHIFFRES (ex: 455, 4551, 512), sans point ni lettres. Pour distinguer un associé, utilise un sous-compte numérique (4551, 4552…) avec son nom dans l'intitulé.`,
+        }
+      }
       // Comptes à créer à la volée (fournis par l'agent) — best-effort dans
       // comptes_societes, et toujours pris en compte pour le nom de compte.
       const nouveaux: Array<{ numero: string; intitule: string; classe?: number; type?: string }> =
