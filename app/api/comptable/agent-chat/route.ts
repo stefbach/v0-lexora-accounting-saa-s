@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     const admin = getAdminClient()
     await assertSocieteAccess(admin, user.id, societe_id)
 
-    const ctx = { supabase: admin, societeId: societe_id, userId: user.id }
+    const ctx = { supabase: admin, societeId: societe_id, userId: user.id, origin: new URL(request.url).origin }
     const anthropic = new Anthropic({ apiKey })
     const today = new Date().toISOString().slice(0, 10)
 
