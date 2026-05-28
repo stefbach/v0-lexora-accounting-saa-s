@@ -16,7 +16,9 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { RattrapageTab } from "@/components/tva/RattrapageTab"
 import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
@@ -214,6 +216,13 @@ export default function TVAPage() {
         </DropdownMenu>
       </div>
 
+      <Tabs defaultValue="declarations">
+        <TabsList>
+          <TabsTrigger value="declarations">{t('cab.tva.tab_declarations', locale)}</TabsTrigger>
+          <TabsTrigger value="rattrapage">{t('cab.tva.tab_rattrapage', locale)}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="declarations" className="space-y-6 mt-4">
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
@@ -484,6 +493,12 @@ export default function TVAPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="rattrapage" className="mt-4">
+          <RattrapageTab societes={societes} selectedSociete={selectedSociete} locale={locale} />
+        </TabsContent>
+      </Tabs>
     </div>
     </ClientPageShell>
   )
