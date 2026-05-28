@@ -1,0 +1,121 @@
+{
+  "code": "module_gbc1",
+  "nom": "Module GBC1 (Global Business Company)",
+  "description": "Comptes spécifiques aux Global Business Companies mauriciennes : Partial Exemption Regime, frais FSC, Registered Agent, audit obligatoire, produits export zero-rated. Conforme Income Tax Act 1995 + FSC Rules + Full IFRS.",
+  "type": "module",
+  "juridiction_code": "MU",
+  "version": "1.0.0",
+  "prerequisites": ["core_maurice"],
+  "comptes": [
+    {
+      "numero": "4448",
+      "intitule": "Impôt minimum / CIT GBC (après Partial Exemption 80%)",
+      "classe": 4,
+      "type": "passif",
+      "nature": "impot_gbc",
+      "sens_normal": "credit",
+      "lettrable": true,
+      "obligatoire": false,
+      "tags": ["gbc", "mra", "per"]
+    },
+    {
+      "numero": "4452",
+      "intitule": "Tax Deducted at Source (TDS) à récupérer",
+      "classe": 4,
+      "type": "actif",
+      "nature": "tds",
+      "sens_normal": "debit",
+      "lettrable": true,
+      "obligatoire": false,
+      "tags": ["gbc", "mra", "tds"]
+    },
+    {
+      "numero": "6695",
+      "intitule": "Frais FSC (Financial Services Commission)",
+      "classe": 6,
+      "type": "charge",
+      "nature": "frais_reglementaires",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["gbc", "fsc"]
+    },
+    {
+      "numero": "6696",
+      "intitule": "Frais de Registered Agent / Management Company",
+      "classe": 6,
+      "type": "charge",
+      "nature": "frais_reglementaires",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["gbc"]
+    },
+    {
+      "numero": "6697",
+      "intitule": "Audit obligatoire GBC1",
+      "classe": 6,
+      "type": "charge",
+      "nature": "honoraires_audit",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["gbc", "audit"]
+    },
+    {
+      "numero": "6698",
+      "intitule": "Frais de substance (CIGA - Core Income Generating Activities)",
+      "classe": 6,
+      "type": "charge",
+      "nature": "substance",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["gbc", "substance", "ciga"]
+    },
+    {
+      "numero": "6699",
+      "intitule": "Frais de conformité (CRS / FATCA / BO declaration)",
+      "classe": 6,
+      "type": "charge",
+      "nature": "conformite",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["gbc", "crs", "fatca"]
+    },
+    {
+      "numero": "7068",
+      "intitule": "Produits export (zero-rated TVA)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "vente_export",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["gbc", "tva_zero_rated", "export"]
+    },
+    {
+      "numero": "7069",
+      "intitule": "Produits de source étrangère (foreign-sourced income)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "foreign_income",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["gbc", "per", "foreign_income"]
+    },
+    {
+      "numero": "7616",
+      "intitule": "Dividendes de source étrangère (Partial Exemption 80%)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "dividende_etranger",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["gbc", "per", "dividende"]
+    }
+  ]
+}

@@ -92,7 +92,7 @@ async function lexoraFetch(path, init = {}) {
     }
     return body;
 }
-const server = new Server({ name: 'lexora-mcp', version: '0.7.0' }, { capabilities: { tools: {} } });
+const server = new Server({ name: 'lexora-mcp', version: '0.7.1' }, { capabilities: { tools: {} } });
 // ============================================================
 // Liste des outils exposés à Claude
 // ============================================================
@@ -654,6 +654,37 @@ const TOOLS = [
             required: ['societe_id', 'numero', 'reason'],
         },
     },
+    {
+        name: 'audit_pcm',
+        description: 'Audite la conformité du PCM d\'une société. Retourne errors (comptes obligatoires manquants, écritures sur comptes archivés ou hors PCM), warnings (sous-comptes orphelins), suggestions (comptes inutilisés), et stats. Lecture seule.',
+        inputSchema: {
+            type: 'object',
+            properties: { societe_id: { type: 'string' } },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'list_modules_actifs',
+        description: 'Liste les modules PCM actuellement activés sur une société (template_code, version, date activation).',
+        inputSchema: {
+            type: 'object',
+            properties: { societe_id: { type: 'string' } },
+            required: ['societe_id'],
+        },
+    },
+    {
+        name: 'activate_module',
+        description: 'Active un module PCM sur une société (module_gbc1, module_holding, module_b2b_tech, module_health_clinic). Vérifie les prérequis (core_maurice requis). Idempotent. MODIFICATION — confirmation 2-step.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                societe_id: { type: 'string' },
+                module_code: { type: 'string', description: 'module_gbc1 | module_holding | module_b2b_tech | module_health_clinic' },
+                confirmation_token: { type: 'string' },
+            },
+            required: ['societe_id', 'module_code'],
+        },
+    },
 ];
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -1158,6 +1189,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     method: 'POST',
                     body: JSON.stringify({ reason: a.reason, target_compte: a.target_compte }),
                 });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'audit_pcm': {
+                const data = await lexoraFetch(`/api/societes/${encodeURIComponent(String(a.societe_id))}/pcm/audit`, { method: 'POST', body: JSON.stringify({}) });
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'list_modules_actifs': {
+                const data = await lexoraFetch(`/api/societes/${encodeURIComponent(String(a.societe_id))}/pcm/modules/activate`);
+                return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+            }
+            case 'activate_module': {
+                const guard = confirmGuard('activate_module', a, `Activer module ${a.module_code} sur société ${a.societe_id}`);
+                if (!guard.confirmed)
+                    return guard.response;
+                const data = await lexoraFetch(`/api/societes/${encodeURIComponent(String(a.societe_id))}/pcm/modules/activate`, { method: 'POST', body: JSON.stringify({ module_code: a.module_code }) });
                 return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
             }
             default:
