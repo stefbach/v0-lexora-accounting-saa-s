@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createSbAdmin } from '@supabase/supabase-js'
+import { ym, genererPeriodes, isMraPayment, penaliteRetard } from '@/lib/accounting/tva-rattrapage'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,67 +27,9 @@ async function checkSocieteAccess(authClient: any, admin: any, societe_id: strin
   return { ok: true as const, user }
 }
 
-// ── Helpers période ──────────────────────────────────────────
-function ym(year: number, month: number) {
-  return `${year}-${String(month).padStart(2, '0')}`
-}
-
-// Date limite MRA : 20 du mois qui suit la fin de la période
-function dateLimite(year: number, endMonth: number): string {
-  const m = endMonth === 12 ? 1 : endMonth + 1
-  const y = endMonth === 12 ? year + 1 : year
-  return `${y}-${String(m).padStart(2, '0')}-20`
-}
-
-interface PeriodeAttendue {
-  periode: string          // YYYY-MM (mois, ou mois de fin du trimestre)
-  trimestre: string | null // YYYY-Qn pour le trimestriel
-  label: string            // libellé lisible
-  type: 'mensuel' | 'trimestriel'
-  mois: string[]           // mois YYYY-MM couverts (1 ou 3)
-  date_limite: string
-}
-
-// Génère la liste des périodes attendues entre deux mois inclus
-function genererPeriodes(
-  startY: number, startM: number,
-  endY: number, endM: number,
-  frequence: 'mensuelle' | 'trimestrielle',
-): PeriodeAttendue[] {
-  const out: PeriodeAttendue[] = []
-  if (frequence === 'mensuelle') {
-    let y = startY, m = startM
-    while (y < endY || (y === endY && m <= endM)) {
-      out.push({
-        periode: ym(y, m),
-        trimestre: null,
-        label: ym(y, m),
-        type: 'mensuel',
-        mois: [ym(y, m)],
-        date_limite: dateLimite(y, m),
-      })
-      m++; if (m > 12) { m = 1; y++ }
-    }
-  } else {
-    let y = startY
-    let q = Math.floor((startM - 1) / 3) + 1
-    const endQ = Math.floor((endM - 1) / 3) + 1
-    while (y < endY || (y === endY && q <= endQ)) {
-      const endMonthQ = q * 3
-      const mois = [endMonthQ - 2, endMonthQ - 1, endMonthQ].map(mm => ym(y, mm))
-      out.push({
-        periode: ym(y, endMonthQ),
-        trimestre: `${y}-Q${q}`,
-        label: `${y}-Q${q}`,
-        type: 'trimestriel',
-        mois,
-        date_limite: dateLimite(y, endMonthQ),
-      })
-      q++; if (q > 4) { q = 1; y++ }
-    }
-  }
-  return out
-}
+// Helpers période (ym, dateLimite, genererPeriodes), détection paiement MRA
+// (isMraPayment) et pénalité de retard (penaliteRetard) : importés depuis
+// lib/accounting/tva-rattrapage (logique pure, testée unitairement).
 
 export async function GET(request: Request) {
   try {
@@ -253,7 +196,6 @@ export async function GET(request: Request) {
     // MRA / la TVA. Détection volontairement simple ; le vrai rapprochement
     // automatique est géré ailleurs (module rapprochement). On rattache chaque
     // paiement au mois de sa date de transaction.
-    const MRA_REGEX = /\b(m\.?r\.?a|mauritius revenue|vat|t\.?v\.?a)\b/i
     interface PaiementBanque { date: string; libelle: string; montant: number }
     const paiementsParMois = new Map<string, PaiementBanque[]>()
     {
@@ -266,7 +208,7 @@ export async function GET(request: Request) {
         .gt('debit', 0)
       for (const tx of txs || []) {
         const lib = String(tx.libelle_banque || '')
-        if (!MRA_REGEX.test(lib)) continue
+        if (!isMraPayment(lib)) continue
         const mois = String(tx.date_transaction).slice(0, 7)
         const arr = paiementsParMois.get(mois) ?? []
         arr.push({ date: String(tx.date_transaction).slice(0, 10), libelle: lib, montant: Number(tx.debit) || 0 })
@@ -332,11 +274,8 @@ export async function GET(request: Request) {
         if (tvaNette > 0) totalARegulariser += tvaNette
         if (enRetard && tvaNette > 0) {
           nbEnRetard++
-          const moisRetard = Math.max(
-            1,
-            Math.ceil((aujourdhui.getTime() - limite.getTime()) / (1000 * 60 * 60 * 24 * 30)),
-          )
-          totalPenalites += Math.round((tvaNette * 0.05 + tvaNette * 0.005 * moisRetard) * 100) / 100
+          const moisRetard = Math.ceil((aujourdhui.getTime() - limite.getTime()) / (1000 * 60 * 60 * 24 * 30))
+          totalPenalites += penaliteRetard(tvaNette, moisRetard)
         } else if (enRetard) {
           nbEnRetard++
         }
