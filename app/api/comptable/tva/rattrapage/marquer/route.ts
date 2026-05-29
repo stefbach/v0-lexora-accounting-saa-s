@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSbAdmin } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
+
+function getAdmin() {
+  return createSbAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
+}
 
 function dateLimiteFromPeriode(periode: string): string {
   const [y, m] = periode.split('-').map(Number)
@@ -24,8 +33,8 @@ interface PeriodeInput {
 // déclaratif, y compris années antérieures sans écritures).
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const body = await request.json()
@@ -37,11 +46,20 @@ export async function POST(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     if (periodes.length === 0) return NextResponse.json({ error: 'Aucune période fournie' }, { status: 400 })
 
+    // Contrôle d'accès (client OU comptable) puis lectures/écritures via admin
+    // — sinon la RLS client renvoie 0 ligne sur `societes` (« Société introuvable »).
+    const supabase = getAdmin()
+    const [{ data: lien }, { data: dossier }] = await Promise.all([
+      supabase.from('user_societes').select('societe_id').eq('user_id', user.id).eq('societe_id', societe_id).maybeSingle(),
+      supabase.from('dossiers').select('id').eq('societe_id', societe_id).maybeSingle(),
+    ])
+    if (!lien && !dossier) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+
     const { data: societe, error: socErr } = await supabase
       .from('societes')
       .select('client_id, nom')
       .eq('id', societe_id)
-      .single()
+      .maybeSingle()
     if (socErr || !societe) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
 
     const today = new Date().toISOString().slice(0, 10)
