@@ -248,6 +248,32 @@ export async function GET(request: Request) {
       }
     }
 
+    // ── Paiements MRA détectés en banque (par libellé, au plus simple) ───────
+    // Un paiement TVA = un DÉBIT (sortie) dont le libellé bancaire évoque la
+    // MRA / la TVA. Détection volontairement simple ; le vrai rapprochement
+    // automatique est géré ailleurs (module rapprochement). On rattache chaque
+    // paiement au mois de sa date de transaction.
+    const MRA_REGEX = /\b(m\.?r\.?a|mauritius revenue|vat|t\.?v\.?a)\b/i
+    interface PaiementBanque { date: string; libelle: string; montant: number }
+    const paiementsParMois = new Map<string, PaiementBanque[]>()
+    {
+      const { data: txs } = await supabase
+        .from('transactions_bancaires')
+        .select('date_transaction, libelle_banque, debit')
+        .eq('societe_id', societe_id)
+        .gte('date_transaction', dateDebutSql)
+        .lte('date_transaction', dateFinSql)
+        .gt('debit', 0)
+      for (const tx of txs || []) {
+        const lib = String(tx.libelle_banque || '')
+        if (!MRA_REGEX.test(lib)) continue
+        const mois = String(tx.date_transaction).slice(0, 7)
+        const arr = paiementsParMois.get(mois) ?? []
+        arr.push({ date: String(tx.date_transaction).slice(0, 10), libelle: lib, montant: Number(tx.debit) || 0 })
+        paiementsParMois.set(mois, arr)
+      }
+    }
+
     // Net estimé pour un ensemble de mois : factures en priorité, sinon écritures
     function netteEstimee(mois: string[]): { net: number; nbFactures: number; source: 'factures' | 'ecritures' | 'aucune' } {
       let coll = 0, ded = 0, nbF = 0

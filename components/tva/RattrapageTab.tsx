@@ -44,6 +44,8 @@ interface Ligne {
   estimation: boolean
   is_rattrapage: boolean
   source_saisie: string | null
+  paiements_banque?: Array<{ date: string; libelle: string; montant: number }>
+  total_paye_banque?: number
 }
 interface Synthese {
   nb_periodes: number
