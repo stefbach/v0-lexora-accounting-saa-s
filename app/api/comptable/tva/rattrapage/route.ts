@@ -318,6 +318,10 @@ export async function GET(request: Request) {
       }
       if (sourceData !== 'aucune' || (rec && rec.tva_nette != null)) nbAvecDonnees++
 
+      // Paiements MRA détectés en banque sur les mois couverts par la période.
+      const paiementsBanque = p.mois.flatMap(m => paiementsParMois.get(m) ?? [])
+      const totalPayeBanque = Math.round(paiementsBanque.reduce((s, x) => s + x.montant, 0) * 100) / 100
+
       const limite = new Date(p.date_limite)
       const enRetard = !declaree && aujourdhui > limite
 
@@ -357,6 +361,8 @@ export async function GET(request: Request) {
         source_data: sourceData,
         is_rattrapage: rec?.is_rattrapage || false,
         source_saisie: rec?.source_saisie || null,
+        paiements_banque: paiementsBanque,
+        total_paye_banque: totalPayeBanque,
       }
     })
 

@@ -907,6 +907,7 @@ export const comptableChunk = {
     'cab.tva.rat.col_period': 'Période',
     'cab.tva.rat.col_deadline': 'Échéance',
     'cab.tva.rat.col_net': 'TVA nette',
+    'cab.tva.rat.col_paye_banque': 'Payé (banque)',
     'cab.tva.rat.col_status': 'Statut',
     'cab.tva.rat.col_info': 'Info',
     'cab.tva.rat.est': '(est.)',
