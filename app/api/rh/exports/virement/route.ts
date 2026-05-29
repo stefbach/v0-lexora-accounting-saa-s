@@ -138,12 +138,16 @@ export async function POST(request: Request) {
 
     try {
       // Try validated first
+      // FIX — filtrer is_archived=false : sinon les anciennes versions
+      // archivées (recalculs successifs) sont ramassées → doublons +
+      // employés partis sans banque → faux "SANS_BANQUE".
       const { data: validated } = await supabase
         .from('bulletins_paie')
         .select('*')
         .eq('societe_id', societe_id)
         .gte('periode', `${periode}-01`)
         .lte('periode', lastDayOfMonth(periode))
+        .eq('is_archived', false)
         .in('statut', ['valide', 'paye'])
 
       if (validated && validated.length > 0) {
@@ -156,6 +160,7 @@ export async function POST(request: Request) {
           .eq('societe_id', societe_id)
           .gte('periode', `${periode}-01`)
           .lte('periode', lastDayOfMonth(periode))
+          .eq('is_archived', false)
         allBulletins = anyStatus || []
       }
     } catch (dbErr: any) {

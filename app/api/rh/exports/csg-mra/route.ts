@@ -91,6 +91,7 @@ export async function POST(request: Request) {
       .eq('societe_id', societe_id)
       .gte('periode', `${periode}-01`)
       .lte('periode', lastDayOfMonth(periode))
+      .eq('is_archived', false)
 
     if (error) {
       console.error('[csg-mra] DB error bulletins:', error.message, error.details)

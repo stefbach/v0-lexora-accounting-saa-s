@@ -1422,9 +1422,12 @@ export async function POST(request: Request) {
       if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
 
       // LOCK GUARD: check if period is locked
+      // FIX — is_archived=false : les anciennes versions archivées gardent
+      // verrouille=true et bloquaient le recalcul à tort.
       const { data: existingLocked } = await supabase.from('bulletins_paie')
         .select('id').eq('societe_id', societe_id)
         .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
+        .eq('is_archived', false)
         .eq('verrouille', true).limit(1)
       if (existingLocked && existingLocked.length > 0) {
         return NextResponse.json({ error: 'Période verrouillée — impossible de recalculer. Déverrouillez d\'abord.', bulletins: [], nb: 0 }, { status: 403 })

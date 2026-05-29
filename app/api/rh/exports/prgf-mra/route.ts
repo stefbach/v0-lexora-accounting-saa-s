@@ -126,6 +126,7 @@ export async function POST(request: Request) {
       .eq('societe_id', societe_id)
       .gte('periode', `${periode}-01`)
       .lte('periode', lastDayOfMonth(periode))
+      .eq('is_archived', false)
     if (bulErr) {
       console.error('[prgf-mra] DB error bulletins:', bulErr.message)
       return NextResponse.json({ error: `Erreur DB bulletins: ${bulErr.message}` }, { status: 500 })
