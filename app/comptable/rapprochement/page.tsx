@@ -384,7 +384,7 @@ export default function RapprochementPage() {
   const validateOne = useCallback(
     async (
       tx: BankTx,
-      opts?: { partiel?: boolean }
+      opts?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[] }
     ): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
       const body: any = {
         societe_id: selectedSociete,
@@ -397,10 +397,11 @@ export default function RapprochementPage() {
           ? [tx.facture_id]
           : []
       ).filter(Boolean)
-      if (opts?.partiel && fids.length === 1) {
-        // Paiement partiel : la ligne banque règle une partie de la facture.
+      if (opts?.partiel && opts.allocations && opts.allocations.length > 0) {
+        // Répartition d'un prélèvement sur 1..N factures (montant MUR par
+        // facture, au moins une partielle) → action lettrer_partiel.
         body.action = "lettrer_partiel"
-        body.facture_id = fids[0]
+        body.allocations = opts.allocations
       } else if (fids.length > 0) {
         if (fids.length > 1) {
           body.action = "lettrer_multi"
@@ -460,22 +461,22 @@ export default function RapprochementPage() {
   }, [])
 
   // ── Confirmer la liaison : appelle lettrer_multi/lettrer_manuel ──────
-  const handleLinkConfirm = useCallback(async (partiel = false) => {
+  const handleLinkConfirm = useCallback(async (
+    payload?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[] }
+  ) => {
     if (!linkingTx) return
     const fids = Array.from(linkSelectedFids)
     if (fids.length === 0) {
       return showToast("Sélectionnez au moins une facture", "error")
     }
-    if (partiel && fids.length !== 1) {
-      return showToast("Le paiement partiel ne s'applique qu'à une seule facture", "error")
-    }
+    const partiel = payload?.partiel === true
     setLinking(true)
     const txWithFids = { ...linkingTx, facture_ids: fids, facture_id: fids[0] }
-    const r = await validateOne(txWithFids, { partiel })
+    const r = await validateOne(txWithFids, { partiel, allocations: payload?.allocations })
     setLinking(false)
     if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
     if (partiel) {
-      showToast(`Versement partiel enregistré — écriture BNQ créée (${r.lettre || "—"})`)
+      showToast(`Répartition enregistrée sur ${fids.length} facture${fids.length > 1 ? "s" : ""} — écritures BNQ créées (${r.lettre || "—"})`)
     } else {
       showToast(
         `${fids.length} facture${fids.length > 1 ? "s" : ""} liée${fids.length > 1 ? "s" : ""} — écriture BNQ créée (${r.lettre || "—"})`
@@ -888,28 +889,30 @@ function LinkFacturesDialog({
   filter: string
   setFilter: (s: string) => void
   onClose: () => void
-  onConfirm: (partiel?: boolean) => void
+  onConfirm: (payload?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[] }) => void
   loading: boolean
 }) {
   const open = tx !== null
   const txAmount = tx ? (tx.debit > 0 ? tx.debit : tx.credit) : 0
   const txDevise = (tx?.devise || "MUR").toUpperCase()
 
-  // Filtre par date de facture (plage) + mode paiement partiel — état local,
-  // réinitialisé à chaque ouverture sur une nouvelle transaction.
+  // Solde restant (MUR) d'une facture.
+  const remainingOf = (f: Facture) =>
+    f.solde_non_paye != null
+      ? Number(f.solde_non_paye)
+      : Number(f.montant_mur) || Number(f.montant_ttc) || 0
+
+  // Filtre par date de facture (plage) + montants affectés par facture
+  // (répartition d'un prélèvement) — état local, réinitialisé à chaque
+  // ouverture sur une nouvelle transaction.
   const [dateDebut, setDateDebut] = useState("")
   const [dateFin, setDateFin] = useState("")
-  const [partielMode, setPartielMode] = useState(false)
+  const [amounts, setAmounts] = useState<Record<string, string>>({})
   useEffect(() => {
     setDateDebut("")
     setDateFin("")
-    setPartielMode(false)
+    setAmounts({})
   }, [tx?.id])
-
-  // Le paiement partiel ne vaut que pour UNE facture sélectionnée.
-  useEffect(() => {
-    if (selectedFids.size !== 1 && partielMode) setPartielMode(false)
-  }, [selectedFids, partielMode])
 
   // Pré-filtre par tiers détecté + texte saisi + plage de dates
   const filtered = useMemo(() => {
@@ -930,27 +933,56 @@ function LinkFacturesDialog({
     })
   }, [tx, factures, filter, dateDebut, dateFin])
 
-  // Somme des factures cochées (en MUR si dispo, sinon montant_ttc)
-  const sumSelected = useMemo(() => {
-    let s = 0
-    for (const id of selectedFids) {
-      const f = factures.find((x) => x.id === id)
-      if (!f) continue
-      s += Number(f.montant_mur) || Number(f.montant_ttc) || 0
-    }
-    return s
-  }, [selectedFids, factures])
-
   if (!tx) return null
 
   const toggle = (fid: string) => {
     const n = new Set(selectedFids)
-    if (n.has(fid)) n.delete(fid); else n.add(fid)
+    if (n.has(fid)) {
+      n.delete(fid)
+      setAmounts((prev) => {
+        const cp = { ...prev }; delete cp[fid]; return cp
+      })
+    } else {
+      n.add(fid)
+      // Montant affecté par défaut = solde restant de la facture.
+      const f = factures.find((x) => x.id === fid)
+      if (f) setAmounts((prev) => ({ ...prev, [fid]: String(Math.round(remainingOf(f) * 100) / 100) }))
+    }
     setSelectedFids(n)
   }
 
-  const diff = txAmount - sumSelected
-  const diffPct = txAmount > 0 ? (Math.abs(diff) / txAmount) * 100 : 0
+  // ── Répartition (montant affecté par facture) ──────────────────────────
+  const selectedFactures = Array.from(selectedFids)
+    .map((id) => factures.find((f) => f.id === id))
+    .filter(Boolean) as Facture[]
+  const allocAmount = (f: Facture) => {
+    const raw = amounts[f.id]
+    const n = raw == null || raw === "" ? remainingOf(f) : Number(raw)
+    return Number.isFinite(n) ? n : 0
+  }
+  const sumAlloc = Math.round(selectedFactures.reduce((s, f) => s + allocAmount(f), 0) * 100) / 100
+  const diffAlloc = Math.round((txAmount - sumAlloc) * 100) / 100
+  // Au moins une facture réglée partiellement (montant < solde) → répartition
+  // via lettrer_partiel ; sinon lettrage complet classique.
+  const hasPartial = selectedFactures.some((f) => allocAmount(f) < remainingOf(f) - 0.01)
+  const anyOverSolde = selectedFactures.some((f) => allocAmount(f) > remainingOf(f) + 1)
+  const anyNonPositive = selectedFactures.some((f) => allocAmount(f) <= 0)
+  // En mode répartition (partiel), le total affecté doit ≈ le prélèvement.
+  const allocValid = !anyOverSolde && !anyNonPositive && Math.abs(diffAlloc) <= 1
+
+  const handleConfirmClick = () => {
+    if (hasPartial) {
+      onConfirm({
+        partiel: true,
+        allocations: selectedFactures.map((f) => ({
+          facture_id: f.id,
+          montant: Math.round(allocAmount(f) * 100) / 100,
+        })),
+      })
+    } else {
+      onConfirm({ partiel: false })
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -1084,100 +1116,110 @@ function LinkFacturesDialog({
           )}
         </div>
 
-        {/* Comparaison montants (mode lettrage complet) */}
-        {selectedFids.size > 0 && !partielMode && (
+        {/* Répartition : montant affecté à chaque facture sélectionnée.
+            Par défaut = solde restant (lettrage complet). Réduire un montant
+            sous le solde ⇒ paiement partiel (la facture reste « partiel »). */}
+        {selectedFactures.length > 0 && (
+          <div className="rounded border divide-y text-sm">
+            <div className="px-2.5 py-1.5 bg-muted/30 text-xs font-medium flex items-center justify-between">
+              <span>Montant affecté par facture (MUR)</span>
+              <span className="text-muted-foreground">Solde restant</span>
+            </div>
+            {selectedFactures.map((f) => {
+              const reste = remainingOf(f)
+              const val = amounts[f.id] ?? String(Math.round(reste * 100) / 100)
+              const cur = allocAmount(f)
+              const over = cur > reste + 1
+              const partial = cur < reste - 0.01
+              return (
+                <div key={f.id} className="flex items-center gap-2 px-2.5 py-1.5">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-mono text-xs">
+                      {f.numero_facture || f.id.slice(0, 8)}
+                    </span>
+                    {f.tiers && (
+                      <span className="text-xs text-muted-foreground"> · {f.tiers}</span>
+                    )}
+                    {partial && !over && (
+                      <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                        partiel
+                      </Badge>
+                    )}
+                  </div>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={val}
+                    onChange={(e) =>
+                      setAmounts((prev) => ({ ...prev, [f.id]: e.target.value }))
+                    }
+                    className={`h-8 w-32 text-right font-mono ${over ? "border-rose-400" : ""}`}
+                  />
+                  <span className="w-28 text-right font-mono text-xs text-muted-foreground">
+                    {fmt(reste)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Total affecté vs prélèvement */}
+        {selectedFactures.length > 0 && (
           <div
             className={`rounded border p-2.5 text-sm flex items-center justify-between ${
-              diffPct < 2
+              Math.abs(diffAlloc) <= 1
                 ? "bg-green-50 border-green-200"
-                : diffPct < 5
-                  ? "bg-amber-50 border-amber-200"
-                  : "bg-rose-50 border-rose-200"
+                : "bg-amber-50 border-amber-200"
             }`}
           >
             <span>
-              {selectedFids.size} facture{selectedFids.size > 1 ? "s" : ""} ·{" "}
-              <span className="font-mono">{fmt(sumSelected)} MUR</span>
+              {selectedFactures.length} facture{selectedFactures.length > 1 ? "s" : ""} · affecté{" "}
+              <span className="font-mono">{fmt(sumAlloc)} MUR</span>
+              {hasPartial && (
+                <span className="text-amber-700"> · répartition partielle</span>
+              )}
             </span>
             <span className="font-mono text-xs">
-              Tx ≈ {fmt(txAmount)} {txDevise} · écart{" "}
-              <span className={diff >= 0 ? "" : "text-rose-700"}>
-                {diff >= 0 ? "+" : ""}
-                {fmt(diff)} ({diffPct.toFixed(1)}%)
+              Prélèvement {fmt(txAmount)} {txDevise} · écart{" "}
+              <span className={Math.abs(diffAlloc) <= 1 ? "" : "text-amber-700"}>
+                {diffAlloc >= 0 ? "+" : ""}
+                {fmt(diffAlloc)}
               </span>
             </span>
           </div>
         )}
 
-        {/* Toggle paiement partiel — uniquement si 1 facture sélectionnée */}
-        {selectedFids.size === 1 && (
-          <label className="flex items-start gap-2 rounded border p-2.5 text-sm cursor-pointer bg-muted/20">
-            <Checkbox
-              checked={partielMode}
-              onCheckedChange={() => setPartielMode((v) => !v)}
-              className="mt-0.5"
-            />
-            <span>
-              <span className="font-medium">Paiement partiel</span>
-              <span className="text-xs text-muted-foreground block">
-                Ce prélèvement ne règle qu&apos;une partie de la facture. La
-                facture restera « partiel » et pourra être rapprochée d&apos;un
-                autre prélèvement.
-              </span>
-            </span>
-          </label>
+        {hasPartial && !allocValid && (
+          <p className="text-xs text-rose-700">
+            {anyOverSolde
+              ? "Un montant dépasse le solde restant de sa facture."
+              : anyNonPositive
+                ? "Chaque montant affecté doit être strictement positif."
+                : "Le total affecté doit être égal au montant du prélèvement (± 1 MUR)."}
+          </p>
         )}
-
-        {/* Détail paiement partiel */}
-        {partielMode && selectedFids.size === 1 && (() => {
-          const f = factures.find((x) => selectedFids.has(x.id))
-          if (!f) return null
-          const monMur = Number(f.montant_mur) || Number(f.montant_ttc) || 0
-          const reste = f.solde_non_paye != null ? Number(f.solde_non_paye) : monMur
-          const apres = Math.round((reste - txAmount) * 100) / 100
-          const trop = txAmount > reste + 1
-          return (
-            <div className={`rounded border p-2.5 text-sm ${trop ? "bg-rose-50 border-rose-200" : "bg-blue-50 border-blue-200"}`}>
-              <div className="flex items-center justify-between">
-                <span>Solde restant facture</span>
-                <span className="font-mono">{fmt(reste)} MUR</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Versement (ce prélèvement)</span>
-                <span className="font-mono">− {fmt(txAmount)} {txDevise}</span>
-              </div>
-              <div className="flex items-center justify-between border-t mt-1 pt-1 font-medium">
-                <span>Nouveau solde</span>
-                <span className="font-mono">{fmt(Math.max(apres, 0))} MUR</span>
-              </div>
-              {trop && (
-                <p className="text-xs text-rose-700 mt-1">
-                  Le versement dépasse le solde restant — décochez « paiement
-                  partiel » pour un lettrage complet.
-                </p>
-              )}
-            </div>
-          )
-        })()}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Annuler
           </Button>
           <Button
-            onClick={() => onConfirm(partielMode)}
-            disabled={loading || selectedFids.size === 0}
+            onClick={handleConfirmClick}
+            disabled={loading || selectedFids.size === 0 || (hasPartial && !allocValid)}
             className="bg-green-600 hover:bg-green-700 text-white"
           >
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                {partielMode ? "Enregistrement…" : "Liaison…"}
+                {hasPartial ? "Enregistrement…" : "Liaison…"}
               </>
-            ) : partielMode ? (
+            ) : hasPartial ? (
               <>
                 <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                Enregistrer le paiement partiel
+                Enregistrer la répartition ({selectedFactures.length})
               </>
             ) : (
               <>
