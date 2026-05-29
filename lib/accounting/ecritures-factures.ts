@@ -380,6 +380,17 @@ export async function createEcrituresForPayment(
     devise_origine?: string | null
     montant_origine?: number | null
     taux_change_applique?: number | null
+    // ── Paiement partiel (action `lettrer_partiel`) ───────────────────────
+    // Quand une facture est réglée en PLUSIEURS prélèvements, chaque versement
+    // crée sa propre paire BNQ (montant partiel). Dans ce cas on désactive :
+    //   • le garde-fou anti-doublon par facture_id (sinon le 2e versement est
+    //     refusé car une BNQ existe déjà pour la facture) ;
+    //   • la dédup BNQ par (facture_id + montant) dans safeInsertBnq ;
+    //   • l'écart de change auto (qui compare amount_mur au montant TTC ENTIER
+    //     de la facture → faux pour un versement partiel).
+    // L'idempotence reste assurée par le delete sur ref_folio (unique par
+    // couple relevé/transaction/facture).
+    allow_multiple_payments?: boolean
   }
 ): Promise<{ ok: boolean; error?: string; bnq_ids?: string[] }> {
   try {
@@ -404,7 +415,7 @@ export async function createEcrituresForPayment(
     // On garde l'opportunité de POSER LA LETTRE manquante sur les BNQ et
     // ACH/VTE existants, pour que le lettrage soit complet même en mode
     // skip. Idempotent : même appel = même état final.
-    if (payment.facture_id) {
+    if (payment.facture_id && !payment.allow_multiple_payments) {
       const { data: existingBnq } = await supabase
         .from('ecritures_comptables_v2')
         .select('id, lettre')
@@ -514,7 +525,12 @@ export async function createEcrituresForPayment(
     // journal='BNQ' donc dedupBnqEntries le filtre. Le tierSide a
     // aussi journal='BNQ' (cf. base.journal = 'BNQ' ci-dessus) donc
     // les deux sont vérifiés.
-    const insRes = await safeInsertBnq(supabase, [tierSide, bankSide])
+    const insRes = await safeInsertBnq(
+      supabase,
+      [tierSide, bankSide],
+      'ecritures_comptables_v2',
+      payment.allow_multiple_payments ? { skipDedup: true } : undefined,
+    )
     if (insRes.error) return { ok: false, error: insRes.error.message }
     if (insRes.skipped > 0) {
       console.log(`[createEcrituresForPayment] skipped ${insRes.skipped} doublon(s) BNQ:`, insRes.skipReasons)
@@ -527,7 +543,7 @@ export async function createEcrituresForPayment(
     // Différence = écart de change RÉALISÉ → 666 (perte) ou 766 (gain).
     // Sans cette logique, le compte 411/401 reste avec un solde non-zéro
     // après paiement complet → lettrage incomplet, balance déséquilibrée.
-    if (payment.facture_id && tauxFinal !== null && deviseFinale && deviseFinale !== 'MUR') {
+    if (payment.facture_id && !payment.allow_multiple_payments && tauxFinal !== null && deviseFinale && deviseFinale !== 'MUR') {
       try {
         const { data: facture } = await supabase
           .from('factures')

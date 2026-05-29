@@ -126,6 +126,7 @@ interface Facture {
   statut: string | null
   date_facture: string | null
   date_echeance: string | null
+  solde_non_paye?: number | null
 }
 
 export default function RapprochementPage() {
@@ -381,7 +382,10 @@ export default function RapprochementPage() {
 
   // ── Valider une tx (crée écriture BNQ) ────────────────────────────
   const validateOne = useCallback(
-    async (tx: BankTx): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
+    async (
+      tx: BankTx,
+      opts?: { partiel?: boolean }
+    ): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
       const body: any = {
         societe_id: selectedSociete,
         transaction_id: tx.id,
@@ -393,7 +397,11 @@ export default function RapprochementPage() {
           ? [tx.facture_id]
           : []
       ).filter(Boolean)
-      if (fids.length > 0) {
+      if (opts?.partiel && fids.length === 1) {
+        // Paiement partiel : la ligne banque règle une partie de la facture.
+        body.action = "lettrer_partiel"
+        body.facture_id = fids[0]
+      } else if (fids.length > 0) {
         if (fids.length > 1) {
           body.action = "lettrer_multi"
           body.facture_ids = fids
@@ -452,20 +460,27 @@ export default function RapprochementPage() {
   }, [])
 
   // ── Confirmer la liaison : appelle lettrer_multi/lettrer_manuel ──────
-  const handleLinkConfirm = useCallback(async () => {
+  const handleLinkConfirm = useCallback(async (partiel = false) => {
     if (!linkingTx) return
     const fids = Array.from(linkSelectedFids)
     if (fids.length === 0) {
       return showToast("Sélectionnez au moins une facture", "error")
     }
+    if (partiel && fids.length !== 1) {
+      return showToast("Le paiement partiel ne s'applique qu'à une seule facture", "error")
+    }
     setLinking(true)
     const txWithFids = { ...linkingTx, facture_ids: fids, facture_id: fids[0] }
-    const r = await validateOne(txWithFids)
+    const r = await validateOne(txWithFids, { partiel })
     setLinking(false)
     if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
-    showToast(
-      `${fids.length} facture${fids.length > 1 ? "s" : ""} liée${fids.length > 1 ? "s" : ""} — écriture BNQ créée (${r.lettre || "—"})`
-    )
+    if (partiel) {
+      showToast(`Versement partiel enregistré — écriture BNQ créée (${r.lettre || "—"})`)
+    } else {
+      showToast(
+        `${fids.length} facture${fids.length > 1 ? "s" : ""} liée${fids.length > 1 ? "s" : ""} — écriture BNQ créée (${r.lettre || "—"})`
+      )
+    }
     setLinkingTx(null)
     setLinkSelectedFids(new Set())
     load()
@@ -873,14 +888,30 @@ function LinkFacturesDialog({
   filter: string
   setFilter: (s: string) => void
   onClose: () => void
-  onConfirm: () => void
+  onConfirm: (partiel?: boolean) => void
   loading: boolean
 }) {
   const open = tx !== null
   const txAmount = tx ? (tx.debit > 0 ? tx.debit : tx.credit) : 0
   const txDevise = (tx?.devise || "MUR").toUpperCase()
 
-  // Pré-filtre par tiers détecté + texte saisi par l'utilisateur
+  // Filtre par date de facture (plage) + mode paiement partiel — état local,
+  // réinitialisé à chaque ouverture sur une nouvelle transaction.
+  const [dateDebut, setDateDebut] = useState("")
+  const [dateFin, setDateFin] = useState("")
+  const [partielMode, setPartielMode] = useState(false)
+  useEffect(() => {
+    setDateDebut("")
+    setDateFin("")
+    setPartielMode(false)
+  }, [tx?.id])
+
+  // Le paiement partiel ne vaut que pour UNE facture sélectionnée.
+  useEffect(() => {
+    if (selectedFids.size !== 1 && partielMode) setPartielMode(false)
+  }, [selectedFids, partielMode])
+
+  // Pré-filtre par tiers détecté + texte saisi + plage de dates
   const filtered = useMemo(() => {
     if (!tx) return []
     const q = filter.trim().toLowerCase()
@@ -888,11 +919,16 @@ function LinkFacturesDialog({
       (f) => f.statut !== "paye" && f.statut !== "annule"
     )
     return unpaid.filter((f) => {
-      if (!q) return true
-      const hay = `${f.numero_facture || ""} ${f.tiers || ""}`.toLowerCase()
-      return hay.includes(q)
+      if (q) {
+        const hay = `${f.numero_facture || ""} ${f.tiers || ""}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      const d = f.date_facture ? f.date_facture.slice(0, 10) : ""
+      if (dateDebut && (!d || d < dateDebut)) return false
+      if (dateFin && (!d || d > dateFin)) return false
+      return true
     })
-  }, [tx, factures, filter])
+  }, [tx, factures, filter, dateDebut, dateFin])
 
   // Somme des factures cochées (en MUR si dispo, sinon montant_ttc)
   const sumSelected = useMemo(() => {
@@ -941,13 +977,48 @@ function LinkFacturesDialog({
           )}
         </div>
 
-        {/* Filtre */}
+        {/* Filtre texte */}
         <Input
           placeholder="Filtrer par numéro de facture ou tiers…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="h-9"
         />
+
+        {/* Filtre par date de facture (plage) */}
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="text-[11px] text-muted-foreground">Date facture — du</label>
+            <Input
+              type="date"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+              className="h-9"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="text-[11px] text-muted-foreground">au</label>
+            <Input
+              type="date"
+              value={dateFin}
+              onChange={(e) => setDateFin(e.target.value)}
+              className="h-9"
+            />
+          </div>
+          {(dateDebut || dateFin) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9"
+              onClick={() => {
+                setDateDebut("")
+                setDateFin("")
+              }}
+            >
+              Effacer
+            </Button>
+          )}
+        </div>
 
         {/* Liste des factures avec checkbox */}
         <div className="flex-1 overflow-y-auto rounded border divide-y">
@@ -984,6 +1055,11 @@ function LinkFacturesDialog({
                           {f.type_facture}
                         </Badge>
                       )}
+                      {f.statut === "partiel" && (
+                        <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                          partiel
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {formatDate(f.date_facture || "")} ·{" "}
@@ -995,6 +1071,11 @@ function LinkFacturesDialog({
                           {" "}≈ {fmt(monMur)} MUR
                         </span>
                       )}
+                      {f.solde_non_paye != null && Number(f.solde_non_paye) > 0 && Number(f.solde_non_paye) < monMur - 1 && (
+                        <span className="font-mono text-amber-700">
+                          {" "}· reste {fmt(Number(f.solde_non_paye))} MUR
+                        </span>
+                      )}
                     </p>
                   </div>
                 </label>
@@ -1003,8 +1084,8 @@ function LinkFacturesDialog({
           )}
         </div>
 
-        {/* Comparaison montants */}
-        {selectedFids.size > 0 && (
+        {/* Comparaison montants (mode lettrage complet) */}
+        {selectedFids.size > 0 && !partielMode && (
           <div
             className={`rounded border p-2.5 text-sm flex items-center justify-between ${
               diffPct < 2
@@ -1028,19 +1109,75 @@ function LinkFacturesDialog({
           </div>
         )}
 
+        {/* Toggle paiement partiel — uniquement si 1 facture sélectionnée */}
+        {selectedFids.size === 1 && (
+          <label className="flex items-start gap-2 rounded border p-2.5 text-sm cursor-pointer bg-muted/20">
+            <Checkbox
+              checked={partielMode}
+              onCheckedChange={() => setPartielMode((v) => !v)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium">Paiement partiel</span>
+              <span className="text-xs text-muted-foreground block">
+                Ce prélèvement ne règle qu&apos;une partie de la facture. La
+                facture restera « partiel » et pourra être rapprochée d&apos;un
+                autre prélèvement.
+              </span>
+            </span>
+          </label>
+        )}
+
+        {/* Détail paiement partiel */}
+        {partielMode && selectedFids.size === 1 && (() => {
+          const f = factures.find((x) => selectedFids.has(x.id))
+          if (!f) return null
+          const monMur = Number(f.montant_mur) || Number(f.montant_ttc) || 0
+          const reste = f.solde_non_paye != null ? Number(f.solde_non_paye) : monMur
+          const apres = Math.round((reste - txAmount) * 100) / 100
+          const trop = txAmount > reste + 1
+          return (
+            <div className={`rounded border p-2.5 text-sm ${trop ? "bg-rose-50 border-rose-200" : "bg-blue-50 border-blue-200"}`}>
+              <div className="flex items-center justify-between">
+                <span>Solde restant facture</span>
+                <span className="font-mono">{fmt(reste)} MUR</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Versement (ce prélèvement)</span>
+                <span className="font-mono">− {fmt(txAmount)} {txDevise}</span>
+              </div>
+              <div className="flex items-center justify-between border-t mt-1 pt-1 font-medium">
+                <span>Nouveau solde</span>
+                <span className="font-mono">{fmt(Math.max(apres, 0))} MUR</span>
+              </div>
+              {trop && (
+                <p className="text-xs text-rose-700 mt-1">
+                  Le versement dépasse le solde restant — décochez « paiement
+                  partiel » pour un lettrage complet.
+                </p>
+              )}
+            </div>
+          )
+        })()}
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={loading}>
             Annuler
           </Button>
           <Button
-            onClick={onConfirm}
+            onClick={() => onConfirm(partielMode)}
             disabled={loading || selectedFids.size === 0}
             className="bg-green-600 hover:bg-green-700 text-white"
           >
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                Liaison…
+                {partielMode ? "Enregistrement…" : "Liaison…"}
+              </>
+            ) : partielMode ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                Enregistrer le paiement partiel
               </>
             ) : (
               <>
