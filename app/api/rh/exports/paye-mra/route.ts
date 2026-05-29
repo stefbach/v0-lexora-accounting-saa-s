@@ -85,6 +85,7 @@ export async function POST(request: Request) {
       .eq('societe_id', societe_id)
       .gte('periode', `${periode}-01`)
       .lte('periode', lastDayOfMonth(periode))
+      .eq('is_archived', false)
 
     if (error) throw error
     if (!bulletins || bulletins.length === 0) return NextResponse.json({ error: 'Aucun bulletin pour cette période' }, { status: 404 })
