@@ -1,7 +1,30 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSbAdmin } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
+
+function getAdmin() {
+  return createSbAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
+}
+
+// Accès société : lien direct (user_societes, côté client/équipe) OU dossier
+// comptable (côté cabinet). Couvre /client/tva ET /comptable/tva. Lectures
+// ensuite faites via le client admin (RLS contournée APRÈS ce contrôle).
+async function checkSocieteAccess(authClient: any, admin: any, societe_id: string) {
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) return { ok: false as const, status: 401, error: 'Non autorisé' }
+  const [{ data: lien }, { data: dossier }] = await Promise.all([
+    admin.from('user_societes').select('societe_id').eq('user_id', user.id).eq('societe_id', societe_id).maybeSingle(),
+    admin.from('dossiers').select('id').eq('societe_id', societe_id).maybeSingle(),
+  ])
+  if (!lien && !dossier) return { ok: false as const, status: 403, error: 'Accès refusé' }
+  return { ok: true as const, user }
+}
 
 // ── Helpers période ──────────────────────────────────────────
 function ym(year: number, month: number) {
@@ -67,9 +90,7 @@ function genererPeriodes(
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    const authClient = await createClient()
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
@@ -79,12 +100,17 @@ export async function GET(request: Request) {
 
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
+    // ── Contrôle d'accès (client OU comptable) puis lectures via admin ──
+    const supabase = getAdmin()
+    const access = await checkSocieteAccess(authClient, supabase, societe_id)
+    if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status })
+
     // ── Société : fréquence TVA, nom ─────────────────────────
     const { data: societe, error: socErr } = await supabase
       .from('societes')
       .select('id, nom, frequence_tva, assujetti_tva')
       .eq('id', societe_id)
-      .single()
+      .maybeSingle()
     if (socErr || !societe) {
       return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
     }
