@@ -338,15 +338,30 @@ export async function POST(request: Request) {
     // ─────────────────────────────────────────────────────────────────────
     const { data: existante } = await supabase
       .from('tva_mensuelle')
-      .select('id, declaration_figee, montant_declare_mra, tva_nette, regularisation_anterieure')
+      .select('id, declaration_figee, montant_declare_mra, tva_nette')
       .eq('societe_id', societe_id)
       .eq('periode', periode)
       .maybeSingle()
 
     // Régularisations de période antérieure portées sur CETTE période (mig 452).
-    // S'ajoutent à la TVA nette pour le total à payer (la colonne peut être
-    // absente si la migration n'est pas encore appliquée → 0).
-    const regularisation_anterieure = Math.round((Number(existante?.regularisation_anterieure ?? 0)) * 100) / 100
+    // SOURCE DE VÉRITÉ = somme directe des lignes incluses de tva_regularisations.
+    // (On ne lit plus tva_mensuelle.regularisation_anterieure : son écriture par la
+    //  RPC échouait quand client_id est NULL / societe NOT NULL legacy → total perdu.)
+    let regularisation_anterieure = 0
+    {
+      const { data: regul } = await supabase
+        .from('tva_regularisations')
+        .select('montant, statut')
+        .eq('societe_id', societe_id)
+        .eq('periode_courante', periode)
+      if (regul) {
+        regularisation_anterieure = Math.round(
+          regul
+            .filter((r: any) => r.statut === 'incluse')
+            .reduce((s: number, r: any) => s + (Number(r.montant) || 0), 0) * 100,
+        ) / 100
+      }
+    }
 
     const tvaNetteRecalc = tvaData.tva_nette
     let upserted: any = null
