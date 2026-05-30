@@ -41,6 +41,7 @@ import { MonthPicker } from "@/components/ui/MonthPicker"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { RattrapageTab } from "@/components/tva/RattrapageTab"
+import { RegularisationsTab } from "@/components/tva/RegularisationsTab"
 import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
@@ -436,6 +437,7 @@ export default function TVAPage() {
         <TabsList className="no-print">
           <TabsTrigger value="declaration">{t('cab.tva.tab_declarations', locale)}</TabsTrigger>
           <TabsTrigger value="rattrapage">{t('cab.tva.tab_rattrapage', locale)}</TabsTrigger>
+          <TabsTrigger value="regularisations">{t('cab.tva.tab_regul', locale)}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="declaration" className="space-y-6 mt-4">
@@ -907,6 +909,14 @@ export default function TVAPage() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="regularisations" className="mt-4">
+          <RegularisationsTab
+            societes={societeId ? [{ id: societeId, nom: (societe as any)?.nom || '' }] : []}
+            selectedSociete={societeId || "all"}
+            locale={locale}
+          />
         </TabsContent>
 
         <TabsContent value="rattrapage" className="mt-4">

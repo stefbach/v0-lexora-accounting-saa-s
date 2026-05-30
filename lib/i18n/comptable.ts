@@ -968,6 +968,15 @@ export const comptableChunk = {
     'cab.tva.regul.save': 'Enregistrer les régularisations',
     'cab.tva.regul.saving': 'Enregistrement...',
     'cab.tva.regul.saved': 'Régularisations enregistrées.',
+    'cab.tva.regul.factures_title': 'Factures de périodes antérieures (sélectionner pour régulariser)',
+    'cab.tva.regul.factures_filter': 'Filtrer (ex. Mediasys, E-Payroll, 2026-03)…',
+    'cab.tva.regul.factures_add': 'Ajouter la sélection',
+    'cab.tva.regul.factures_empty': 'Aucune facture antérieure avec TVA.',
+    'cab.tva.regul.f_numero': 'N° facture',
+    'cab.tva.regul.f_tiers': 'Tiers',
+    'cab.tva.regul.f_tva': 'TVA (signée)',
+    'cab.tva.regul.f_client': 'client',
+    'cab.tva.regul.f_supplier': 'fourn.',
     'cab.tva.regul.migration_warning': 'Migration 452 non appliquée : la détection fonctionne, mais l\'enregistrement des régularisations nécessite la migration en base.',
 
     // Factures clients
@@ -2454,6 +2463,15 @@ export const comptableChunk = {
     'cab.tva.regul.save': 'Save adjustments',
     'cab.tva.regul.saving': 'Saving...',
     'cab.tva.regul.saved': 'Adjustments saved.',
+    'cab.tva.regul.factures_title': 'Prior-period invoices (select to adjust)',
+    'cab.tva.regul.factures_filter': 'Filter (e.g. Mediasys, E-Payroll, 2026-03)…',
+    'cab.tva.regul.factures_add': 'Add selection',
+    'cab.tva.regul.factures_empty': 'No prior invoice with VAT.',
+    'cab.tva.regul.f_numero': 'Invoice no.',
+    'cab.tva.regul.f_tiers': 'Party',
+    'cab.tva.regul.f_tva': 'VAT (signed)',
+    'cab.tva.regul.f_client': 'client',
+    'cab.tva.regul.f_supplier': 'supplier',
     'cab.tva.regul.migration_warning': 'Migration 452 not applied: detection works, but saving adjustments requires the migration in the database.',
 
     // Factures clients
