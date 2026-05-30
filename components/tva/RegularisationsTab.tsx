@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-  Loader2, RefreshCw, Plus, Trash2, Save, CheckCircle, AlertTriangle, Sparkles, History,
+  Loader2, RefreshCw, Plus, Trash2, Save, CheckCircle, AlertTriangle, Sparkles, History, Calculator,
 } from "lucide-react"
 import { t } from "@/lib/i18n"
 
@@ -34,6 +34,7 @@ interface Detectee {
   tva_recalculee: number
   montant_declare_mra: number
   ecart: number
+  source: 'recalcul' | 'estimation'
   libelle: string
   factures_oubliees: FactureOubliee[]
 }
@@ -53,6 +54,7 @@ interface Data {
   periode: string
   migration_452: boolean
   nb_periodes_figees: number
+  periodes_figees: string[]
   detectees: Detectee[]
   lignes: Array<Omit<Ligne, 'key'>>
   total_inclus: number
@@ -75,6 +77,8 @@ export function RegularisationsTab({
   const [lignes, setLignes] = useState<Ligne[]>([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [recalcing, setRecalcing] = useState(false)
+  const [recalcProgress, setRecalcProgress] = useState("")
 
   const sid = selectedSociete && selectedSociete !== "all" ? selectedSociete : ""
 
@@ -138,6 +142,31 @@ export function RegularisationsTab({
     .filter(l => l.statut === 'incluse')
     .reduce((s, l) => s + (Number(l.montant) || 0), 0)
 
+  // Recalcule les périodes figées depuis les écritures (peuple tva_nette_recalculee)
+  // pour obtenir des écarts basés sur le vrai recalcul plutôt qu'une estimation.
+  const handleRecalc = async () => {
+    if (!sid || !data || data.periodes_figees.length === 0) return
+    setRecalcing(true); setError("")
+    try {
+      let done = 0
+      for (const m of data.periodes_figees) {
+        setRecalcProgress(`${done + 1}/${data.periodes_figees.length} — ${m}`)
+        const res = await fetch("/api/comptable/tva/calculer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ societe_id: sid, periode: m }),
+        })
+        if (!res.ok) { const e = await res.json(); throw new Error(`${m}: ${e.error || "échec"}`) }
+        done++
+      }
+      await fetchData()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setRecalcing(false); setRecalcProgress("")
+    }
+  }
+
   const handleSave = async () => {
     if (!sid) return
     setSaving(true); setError(""); setSaved(false)
@@ -190,9 +219,19 @@ export function RegularisationsTab({
               <Label className="text-xs">{t('cab.tva.regul.period_label', locale)}</Label>
               <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-40 h-8 text-sm" />
             </div>
-            <Button variant="outline" className="h-8 gap-2" onClick={fetchData} disabled={loading}>
+            <Button variant="outline" className="h-8 gap-2" onClick={fetchData} disabled={loading || recalcing}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               {t('cab.tva.regul.refresh', locale)}
+            </Button>
+            <Button
+              variant="outline" className="h-8 gap-2"
+              onClick={handleRecalc}
+              disabled={recalcing || loading || !data || data.periodes_figees.length === 0}
+            >
+              {recalcing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
+              {recalcing
+                ? `${t('cab.tva.regul.recalc_running', locale)} ${recalcProgress}`
+                : t('cab.tva.regul.recalc', locale)}
             </Button>
           </div>
           <Alert>
@@ -242,7 +281,15 @@ export function RegularisationsTab({
               <TableBody>
                 {data.detectees.map(d => (
                   <TableRow key={d.periode_origine}>
-                    <TableCell className="font-mono text-sm font-medium">{d.periode_origine}</TableCell>
+                    <TableCell className="font-mono text-sm font-medium">
+                      {d.periode_origine}
+                      <Badge
+                        variant="outline"
+                        className={`ml-2 text-[9px] ${d.source === 'recalcul' ? 'border-green-300 text-green-700' : 'border-amber-300 text-amber-700'}`}
+                      >
+                        {d.source === 'recalcul' ? t('cab.tva.regul.source_recalcul', locale) : t('cab.tva.regul.source_estimation', locale)}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-right text-sm font-mono">{fmt(d.montant_declare_mra)}</TableCell>
                     <TableCell className="text-right text-sm font-mono">{fmt(d.tva_recalculee)}</TableCell>
                     <TableCell className={`text-right text-sm font-mono font-bold ${d.ecart >= 0 ? "text-red-600" : "text-green-600"}`}>

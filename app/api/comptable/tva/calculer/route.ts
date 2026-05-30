@@ -338,10 +338,15 @@ export async function POST(request: Request) {
     // ─────────────────────────────────────────────────────────────────────
     const { data: existante } = await supabase
       .from('tva_mensuelle')
-      .select('id, declaration_figee, montant_declare_mra, tva_nette')
+      .select('id, declaration_figee, montant_declare_mra, tva_nette, regularisation_anterieure')
       .eq('societe_id', societe_id)
       .eq('periode', periode)
       .maybeSingle()
+
+    // Régularisations de période antérieure portées sur CETTE période (mig 452).
+    // S'ajoutent à la TVA nette pour le total à payer (la colonne peut être
+    // absente si la migration n'est pas encore appliquée → 0).
+    const regularisation_anterieure = Math.round((Number(existante?.regularisation_anterieure ?? 0)) * 100) / 100
 
     const tvaNetteRecalc = tvaData.tva_nette
     let upserted: any = null
@@ -404,11 +409,12 @@ export async function POST(request: Request) {
         tva_input:      tvaData.tva_deductible,
         credit_reporte,
         tva_nette:      tvaData.tva_nette,
+        regularisation_anterieure,
         statut:         tvaData.statut,
         date_limite,
         penalites,
         interets,
-        total_a_payer:  Math.round((tvaData.tva_nette + penalites + interets) * 100) / 100,
+        total_a_payer:  Math.round((tvaData.tva_nette + regularisation_anterieure + penalites + interets) * 100) / 100,
       },
       bases_ht: {
         taxable_standard_15pct: base_taxable_standard,

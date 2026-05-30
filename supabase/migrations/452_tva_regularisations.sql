@@ -83,3 +83,77 @@ BEGIN
     $pol$;
   END IF;
 END $$;
+
+-- ── Câblage : total de régularisation porté sur la période courante ──────────
+-- Colonne sur tva_mensuelle : le total signé des régularisations incluses est
+-- ajouté à la TVA nette de la période courante pour obtenir le total à payer.
+ALTER TABLE public.tva_mensuelle
+  ADD COLUMN IF NOT EXISTS regularisation_anterieure NUMERIC(15,2) NOT NULL DEFAULT 0;
+
+COMMENT ON COLUMN public.tva_mensuelle.regularisation_anterieure IS
+  'Total signé des régularisations de période antérieure portées sur CETTE période (mig 452). total_a_payer = tva_nette + regularisation_anterieure.';
+
+-- ── RPC transactionnelle : remplace le jeu de lignes + recâble le total ──────
+-- Atomique (delete + insert + maj tva_mensuelle dans une seule transaction) :
+-- évite la perte de lignes si l'insert échoue après le delete. SECURITY INVOKER
+-- → la RLS s'applique (l'appelant doit avoir accès à la société).
+CREATE OR REPLACE FUNCTION public.replace_tva_regularisations(
+  p_societe uuid,
+  p_client  uuid,
+  p_periode text,
+  p_user    uuid,
+  p_lignes  jsonb
+) RETURNS numeric
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $fn$
+DECLARE
+  v_total numeric := 0;
+  v_date_limite date;
+BEGIN
+  IF p_periode !~ '^\d{4}-\d{2}$' THEN
+    RAISE EXCEPTION 'periode invalide (attendu YYYY-MM): %', p_periode;
+  END IF;
+
+  -- 1) Remplace l'intégralité du jeu pour (société, période courante)
+  DELETE FROM public.tva_regularisations
+   WHERE societe_id = p_societe AND periode_courante = p_periode;
+
+  INSERT INTO public.tva_regularisations
+    (societe_id, client_id, periode_courante, periode_origine, libelle,
+     montant, sens, type, facture_id, motif, statut, created_by)
+  SELECT
+    p_societe, p_client, p_periode,
+    NULLIF(l->>'periode_origine', ''),
+    l->>'libelle',
+    COALESCE((l->>'montant')::numeric, 0),
+    COALESCE(NULLIF(l->>'sens', ''), 'net'),
+    COALESCE(NULLIF(l->>'type', ''), 'manuel'),
+    NULLIF(l->>'facture_id', '')::uuid,
+    NULLIF(l->>'motif', ''),
+    COALESCE(NULLIF(l->>'statut', ''), 'incluse'),
+    p_user
+  FROM jsonb_array_elements(COALESCE(p_lignes, '[]'::jsonb)) AS l
+  WHERE COALESCE(btrim(l->>'libelle'), '') <> '';
+
+  -- 2) Total signé des lignes incluses
+  SELECT COALESCE(SUM(montant), 0) INTO v_total
+  FROM public.tva_regularisations
+  WHERE societe_id = p_societe AND periode_courante = p_periode AND statut = 'incluse';
+
+  -- 3) Recâble le total sur la période courante de tva_mensuelle
+  v_date_limite := (to_date(p_periode || '-01', 'YYYY-MM-DD')
+                    + interval '1 month' + interval '19 days')::date;
+
+  INSERT INTO public.tva_mensuelle
+    (client_id, societe_id, periode, date_limite, regularisation_anterieure)
+  VALUES (p_client, p_societe, p_periode, v_date_limite, v_total)
+  ON CONFLICT (societe_id, periode)
+  DO UPDATE SET regularisation_anterieure = EXCLUDED.regularisation_anterieure,
+                updated_at = now();
+
+  RETURN round(v_total, 2);
+END $fn$;
+
+GRANT EXECUTE ON FUNCTION public.replace_tva_regularisations(uuid, uuid, text, uuid, jsonb) TO authenticated;
