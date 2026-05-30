@@ -59,6 +59,11 @@ export async function POST(request: Request) {
           date_soumission: p.date_declaration || today,
           source_saisie: 'manuel',
           is_rattrapage: isRattrapage,
+          // GEL (mig 451) : marquer une période comme déclarée la VERROUILLE —
+          // un recalcul ultérieur ne réécrira plus les montants déclarés.
+          declaration_figee: true,
+          declare_at: new Date().toISOString(),
+          declare_par: user.id,
           updated_at: new Date().toISOString(),
         }
         if (p.trimestre) {
@@ -78,21 +83,24 @@ export async function POST(request: Request) {
 
     if (rows.length === 0) return NextResponse.json({ error: 'Périodes invalides (format YYYY-MM attendu)' }, { status: 400 })
 
-    // Upsert résilient : si la migration 446 n'est pas appliquée, on retire les
-    // colonnes qu'elle introduit (source_saisie, is_rattrapage, montant_declare_mra)
-    // et on réessaie. Le marquage de statut reste fonctionnel sans elle.
+    // Upsert résilient : onConflict (societe_id, periode) — robuste au
+    // client_id NULL (mig 451). Si les migrations 446/451 ne sont pas
+    // appliquées, on retire les colonnes qu'elles introduisent et on réessaie.
     let { data, error } = await supabase
       .from('tva_mensuelle')
-      .upsert(rows, { onConflict: 'client_id,societe_id,periode' })
+      .upsert(rows, { onConflict: 'societe_id,periode' })
       .select('id, periode, statut_declaration')
 
     let migration446 = true
     if (error) {
       migration446 = false
-      const fallbackRows = rows.map(({ source_saisie, is_rattrapage, montant_declare_mra, ...rest }) => rest)
+      const fallbackRows = rows.map(({
+        source_saisie, is_rattrapage, montant_declare_mra,
+        declaration_figee, declare_at, declare_par, ...rest
+      }) => rest)
       const retry = await supabase
         .from('tva_mensuelle')
-        .upsert(fallbackRows, { onConflict: 'client_id,societe_id,periode' })
+        .upsert(fallbackRows, { onConflict: 'societe_id,periode' })
         .select('id, periode, statut_declaration')
       data = retry.data
       error = retry.error
