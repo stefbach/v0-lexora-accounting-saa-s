@@ -12,8 +12,19 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { reclassEcritures } from '@/lib/pcm/reclass'
-import { createEcrituresReglementTiers } from '@/lib/accounting/reglement-tiers'
 import { enregistrerPaiement } from '@/lib/accounting/paiements-factures'
+import { checkPeriodLock } from '@/lib/accounting/period-lock'
+
+/**
+ * Clé déterministe courte pour l'idempotence de creer_ecriture : un même
+ * contenu (date + journal + libellé + lignes) produit le même ref_folio, ce
+ * qui permet de détecter et ignorer un appel rejoué (double-clic / retry).
+ */
+function ecritureContentKey(payload: string): string {
+  let h = 0
+  for (let i = 0; i < payload.length; i++) h = (Math.imul(31, h) + payload.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
 
 export const READ_TOOLS = new Set([
   'list_factures', 'get_balance', 'list_grand_livre', 'list_comptes_pcm', 'list_transactions_bancaires',
@@ -392,6 +403,11 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
       const totalD = lignes.reduce((s: number, l: any) => s + (+l.debit || 0), 0)
       const totalC = lignes.reduce((s: number, l: any) => s + (+l.credit || 0), 0)
       if (Math.abs(totalD - totalC) > 0.01) return { ok: false, error: `Écriture déséquilibrée: D ${totalD} ≠ C ${totalC}` }
+      // Garde-fou période verrouillée
+      {
+        const lock = await checkPeriodLock(supabase, societeId, input.date_ecriture)
+        if (lock.locked) return { ok: false, error: `Période verrouillée — ${lock.reason}. Écriture refusée.` }
+      }
       const numeros = [...new Set(lignes.map((l: any) => l.compte))] as string[]
 
       // Contrainte DB ecritures_comptables_v2 : numero_compte ~ ^[1-8][0-9]{2,5}$
@@ -464,7 +480,20 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
         if (archivedSet.has(num)) return { ok: false, error: `Compte ${num} archivé` }
         if (!nomCompte.has(num)) return { ok: false, error: `Compte ${num} introuvable — fournis-le dans nouveaux_comptes pour le créer automatiquement` }
       }
-      const refFolio = `OD-AGENT-${Date.now()}`
+      // ref_folio DÉTERMINISTE (idempotence) : même contenu → même ref → on
+      // détecte un appel rejoué et on évite le doublon (cf. doublons OD-AGENT
+      // observés en prod avant ce garde-fou).
+      const contentKey = ecritureContentKey(JSON.stringify({
+        d: input.date_ecriture, j: input.journal || 'OD', lib: input.libelle || '',
+        l: lignes.map((l: any) => ({ c: l.compte, d: +l.debit || 0, cr: +l.credit || 0 })),
+      }))
+      const refFolio = `OD-AGENT-${contentKey}`
+      const { data: dupExist } = await supabase
+        .from('ecritures_comptables_v2')
+        .select('id').eq('societe_id', societeId).eq('ref_folio', refFolio).limit(1)
+      if (dupExist && dupExist.length > 0) {
+        return { ok: true, ref_folio: refFolio, nb_lignes: 0, note: 'Écriture déjà existante (idempotent) — aucun doublon créé.' }
+      }
       const exercice = String(new Date(input.date_ecriture).getFullYear())
       const rows = lignes.map((l: any) => ({
         societe_id: societeId, date_ecriture: input.date_ecriture, journal: input.journal || 'OD',
@@ -508,10 +537,16 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
       }
       if (montant <= 0) return { ok: false, error: 'Aucun montant à payer (facture déjà soldée)' }
 
+      const datePaiement = input.date_paiement || new Date().toISOString().slice(0, 10)
+      {
+        const lock = await checkPeriodLock(supabase, societeId, datePaiement)
+        if (lock.locked) return { ok: false, error: `Période verrouillée — ${lock.reason}. Paiement refusé.` }
+      }
+
       const res = await enregistrerPaiement(supabase, {
         facture_id: factureId,
         montant,
-        date_paiement: input.date_paiement || new Date().toISOString().slice(0, 10),
+        date_paiement: datePaiement,
         mode_paiement: input.mode_paiement || 'virement',
         reference: input.reference || null,
         compte_banque: input.compte_banque || null,
@@ -529,16 +564,45 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
     }
     case 'lettrer_ecritures': {
       const ids = input.ecritures_ids || []
-      const { data: ecr } = await supabase.from('ecritures_comptables_v2').select('id, societe_id, debit_mur, credit_mur, lettre').in('id', ids)
+      const { data: ecr } = await supabase.from('ecritures_comptables_v2').select('id, societe_id, debit_mur, credit_mur, lettre, date_ecriture').in('id', ids)
       if (!ecr || ecr.length !== ids.length) return { ok: false, error: 'Écritures introuvables' }
       if (ecr.some(e => e.societe_id !== societeId)) return { ok: false, error: 'Écriture hors société' }
       if (ecr.some(e => e.lettre)) return { ok: false, error: 'Écritures déjà lettrées' }
+      // Le groupe à lettrer DOIT être équilibré (sinon faux rapprochement /
+      // solde fantôme). Tolérance 1 MUR pour les arrondis.
+      const lettD = ecr.reduce((s, e) => s + (Number(e.debit_mur) || 0), 0)
+      const lettC = ecr.reduce((s, e) => s + (Number(e.credit_mur) || 0), 0)
+      if (Math.abs(lettD - lettC) > 1) {
+        return { ok: false, error: `Lettrage refusé : groupe non équilibré (D ${lettD.toFixed(2)} ≠ C ${lettC.toFixed(2)}).` }
+      }
+      // Garde-fou période verrouillée (sur toute date concernée).
+      for (const d of new Set(ecr.map(e => (e as any).date_ecriture).filter(Boolean))) {
+        const lock = await checkPeriodLock(supabase, societeId, d as string)
+        if (lock.locked) return { ok: false, error: `Période verrouillée — ${lock.reason}. Lettrage refusé.` }
+      }
       const code = `LA${String(Date.now()).slice(-5)}`
-      const { error } = await supabase.from('ecritures_comptables_v2').update({ lettre: code, date_lettrage: new Date().toISOString().slice(0, 10) }).in('id', ids)
+      const { error } = await supabase.from('ecritures_comptables_v2')
+        .update({ lettre: code, date_lettrage: new Date().toISOString().slice(0, 10) })
+        .eq('societe_id', societeId)
+        .in('id', ids)
       if (error) return { ok: false, error: error.message }
       return { ok: true, code_lettre: code, nb: ids.length }
     }
     case 'reclasser_ecritures': {
+      // Garde-fou période verrouillée : on refuse si une écriture du compte
+      // source (avec le filtre éventuel) tombe dans une période verrouillée.
+      {
+        let q = supabase.from('ecritures_comptables_v2')
+          .select('date_ecriture')
+          .eq('societe_id', societeId)
+          .eq('numero_compte', input.from_compte)
+        if (input.libelle_contains) q = q.ilike('libelle', `%${input.libelle_contains}%`)
+        const { data: affected } = await q
+        for (const d of new Set((affected || []).map((e: any) => e.date_ecriture).filter(Boolean))) {
+          const lock = await checkPeriodLock(supabase, societeId, d as string)
+          if (lock.locked) return { ok: false, error: `Période verrouillée — ${lock.reason}. Reclassement refusé.` }
+        }
+      }
       const res = await reclassEcritures(supabase as any, {
         societeId, fromCompte: input.from_compte, toCompte: input.to_compte,
         filter: input.libelle_contains ? { libelle_contains: input.libelle_contains } : undefined,
