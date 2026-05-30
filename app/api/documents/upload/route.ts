@@ -1699,6 +1699,29 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           }
         }
 
+        // Anti-doublon par NUMÉRO + montant — plus robuste que tiers+date :
+        // attrape le doublon même si l'OCR varie le tiers ou la date (cas où le
+        // contrôle ci-dessus rate). Le montant (±1) distingue le VRAI doublon du
+        // cas SKYCALL (même n° OCR mais montants différents = factures distinctes,
+        // qui restent autorisées via le suffixe -2/-3 plus bas). Sans ce contrôle,
+        // un doublon au tiers/date légèrement différent était recréé (suffixé).
+        if (!factureCreateError && factureData.societe_id && factureData.numero_facture
+            && String(factureData.numero_facture).trim() && fTTC > 0) {
+          const { data: dupByNum } = await supabase
+            .from('factures')
+            .select('id, numero_facture, montant_ttc, date_facture')
+            .eq('societe_id', factureData.societe_id as string)
+            .eq('numero_facture', String(factureData.numero_facture).trim())
+            .gte('montant_ttc', fTTC - 1)
+            .lte('montant_ttc', fTTC + 1)
+            .limit(1)
+          if (dupByNum && dupByNum.length > 0) {
+            const dupN = dupByNum[0] as any
+            console.warn(`[upload] DOUBLON FACTURE (numéro+montant) détecté: ${dupN.numero_facture} = ${dupN.montant_ttc} TTC`)
+            factureCreateError = `Doublon détecté : facture n° ${dupN.numero_facture} (${dupN.montant_ttc}) existe déjà pour cette société.`
+          }
+        }
+
         // Garde-fou conversion devise — bloque l'insertion si devise≠MUR mais
         // taux_change ≤ 1 (= taux indisponible). Sans ce check, montant_mur
         // est égal au TTC en EUR/USD/GBP, créant des écritures avec valeurs
