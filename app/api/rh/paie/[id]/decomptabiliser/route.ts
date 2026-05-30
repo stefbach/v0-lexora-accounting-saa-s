@@ -173,16 +173,37 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       }, { status: 500 })
     }
 
+    // 6. Supprimer les écritures de paie liées (BP-<id>) pour ne pas laisser
+    //    d'écritures ORPHELINES au grand livre. C'est la cause des
+    //    déséquilibres "valider/dévalider sans aller au bout" constatés :
+    //    avant ce fix, décomptabiliser laissait les écritures BP-* en place.
+    //    La piste d'audit est préservée par bulletin_decomptabilisation_log
+    //    (étape 4) + le log applicatif ci-dessous. La re-comptabilisation
+    //    régénère des écritures propres (RPC mig 449, équilibre garanti).
+    const piece = `BP-${bulletin_id}`
+    const { error: ecrDelErr, count: ecrDeleted } = await supabase
+      .from('ecritures_comptables_v2')
+      .delete({ count: 'exact' })
+      .eq('journal', 'OD-PAIE')
+      .or(`ref_folio.eq.${piece},numero_piece.eq.${piece}`)
+    if (ecrDelErr) {
+      // Non bloquant : le bulletin est déjà décomptabilisé. On signale pour
+      // que le comptable puisse nettoyer manuellement si besoin.
+      console.error('[decomptabiliser] suppression écritures BP échouée:', ecrDelErr.message)
+    }
+
     console.log(
       `[decomptabiliser] OK bulletin=${bulletin_id} ` +
       `ecriture_avant=${(bulletin as any).ecriture_id || 'n/a'} ` +
+      `ecritures_supprimees=${ecrDeleted ?? '?'} ` +
       `par=${user.email || user.id} raison="${raison.slice(0, 80)}"`,
     )
 
     return NextResponse.json({
       success: true,
       bulletin: updated,
-      message: 'Bulletin décomptabilisé — modifiable à nouveau. Penser à contre-passer ou supprimer les écritures comptables liées.',
+      ecritures_supprimees: ecrDeleted ?? null,
+      message: 'Bulletin décomptabilisé et écritures de paie liées supprimées. Re-comptabiliser après correction pour régénérer le grand livre.',
       ecriture_id_avant: (bulletin as any).ecriture_id,
       role_acteur: role,
       requires_admin_approval: !isAdmin,

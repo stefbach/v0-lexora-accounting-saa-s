@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const body = await request.json().catch(() => ({}))
-    const { bulletin_id, all_periode, societe_id, periode } = body
+    const { bulletin_id, all_periode, societe_id, periode, confirm } = body
 
     if (bulletin_id) {
       // BUG MAI 2026 — guard défensif : refuser de comptabiliser un bulletin
@@ -50,12 +50,24 @@ export async function POST(request: Request) {
         .eq('statut', 'valide').eq('comptabilise', false)
         .or('is_archived.is.null,is_archived.eq.false')
 
+      // CONFIRMATION EXPLICITE (anti "valider/dévalider à la légère") :
+      // une comptabilisation de masse remonte N bulletins au grand livre. On
+      // exige confirm:true ; sinon on renvoie un RÉCAP (dry-run) à confirmer.
+      if (confirm !== true) {
+        return NextResponse.json({
+          requires_confirmation: true,
+          nb_bulletins: bulletins?.length || 0,
+          periode: periodeDate,
+          message: `${bulletins?.length || 0} bulletin(s) seront comptabilisé(s) au grand livre pour ${periode}. Renvoyer avec confirm:true pour valider.`,
+        })
+      }
+
       let total = 0
       for (const b of bulletins || []) {
         const { data: nb } = await supabase.rpc('generer_ecritures_paie', { p_bulletin_id: b.id })
         total += Number(nb) || 0
       }
-      return NextResponse.json({ nb_ecritures: total, nb_bulletins: bulletins?.length })
+      return NextResponse.json({ nb_ecritures: total, nb_bulletins: bulletins?.length, confirmed: true })
     }
 
     return NextResponse.json({ error: 'bulletin_id requis' }, { status: 400 })
