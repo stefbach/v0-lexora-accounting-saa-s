@@ -504,10 +504,43 @@ export async function createEcrituresForPayment(
       taux_change_applique: tauxFinal,
     }
 
+    // FIX (ventilation tiers) — la ligne tiers du PAIEMENT doit pointer le
+    // MÊME sous-compte que la FACTURE (écriture ACH/VTE). Sans ça, le règlement
+    // débitait toujours « 401 Fournisseurs » / « 411 Clients » génériques alors
+    // que la facture crédite « 401 Fournisseur <nom> » (ou un sous-compte
+    // auxiliaire) : le compte tiers réel ne se soldait jamais et le lettrage
+    // était impossible. On reprend numero_compte + nom_compte posés par
+    // createEcrituresForFacture. Fallback générique si la facture n'a pas
+    // (encore) d'écriture ACH/VTE.
+    let tierCompte = isSupplier ? '401' : '411'
+    let tierNom = isSupplier ? 'Fournisseurs' : 'Clients'
+    if (payment.facture_id) {
+      // Best-effort : si la lookup échoue (droits, mock, table absente…), on
+      // garde le compte tiers générique plutôt que de bloquer le règlement.
+      try {
+        const tierPrefix = isSupplier ? '401' : '411'
+        const { data: tierLine } = await supabase
+          .from('ecritures_comptables_v2')
+          .select('numero_compte, nom_compte')
+          .eq('societe_id', payment.societe_id)
+          .eq('facture_id', payment.facture_id)
+          .in('journal', ['ACH', 'VTE'])
+          .like('numero_compte', `${tierPrefix}%`)
+          .limit(1)
+          .maybeSingle()
+        if (tierLine?.numero_compte) {
+          tierCompte = String(tierLine.numero_compte)
+          if (tierLine.nom_compte) tierNom = String(tierLine.nom_compte)
+        }
+      } catch {
+        /* fallback générique */
+      }
+    }
+
     const tierSide = {
       ...base,
-      numero_compte: isSupplier ? '401' : '411',
-      nom_compte: isSupplier ? 'Fournisseurs' : 'Clients',
+      numero_compte: tierCompte,
+      nom_compte: tierNom,
       debit_mur: isSupplier ? payment.amount_mur : 0,
       credit_mur: isSupplier ? 0 : payment.amount_mur,
     }
@@ -610,7 +643,8 @@ export async function createEcrituresForPayment(
     // la facture au même groupe de lettrage. Tentative par facture_id
     // (le plus fiable), fallback par ref_folio FAC-<id>.
     if (payment.lettre_code && payment.facture_id) {
-      const tierAccount = isSupplier ? '401' : '411'
+      // Même sous-compte que la ligne tiers du paiement (cf. fix ventilation).
+      const tierAccount = tierCompte
       const tierFilter = isSupplier
         ? { credit_gt: 0 } // ACH credit 401 → lettrer
         : { debit_gt: 0 }  // VTE debit 411 → lettrer
