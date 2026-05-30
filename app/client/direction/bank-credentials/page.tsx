@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Building2, Eye, EyeOff, AlertCircle, CheckCircle2, Save, Play, Plus } from "lucide-react"
+import { Loader2, Building2, Eye, EyeOff, AlertCircle, CheckCircle2, Save, Play, Plus, KeyRound } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { PageHelp } from "@/components/help/PageHelp"
 
@@ -104,10 +104,15 @@ export default function BankCredentialsPage() {
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Erreur')
-      setSuccess('Compte bancaire créé.')
+      // Récupère l'id du compte créé pour ouvrir directement le formulaire d'accès
+      const newId: string | undefined =
+        j?.compte?.id || j?.compte_bancaire?.id || j?.id || j?.data?.id
+      setSuccess('Compte bancaire créé — saisis maintenant le login et le mot de passe ci-dessous.')
       setCreating(false)
       setNewAccount({ banque: 'MCB', nom_compte: '', numero_compte: '', iban: '', swift: '', devise: 'MUR', compte_principal: false })
       await load()
+      // Ouvre d'emblée la saisie login/mot de passe du nouveau compte
+      if (newId) setEditing(newId)
     } catch (e: any) { setError(e?.message || 'Erreur') }
   }
 
@@ -142,6 +147,14 @@ export default function BankCredentialsPage() {
             Configure les identifiants Internet Banking pour scrape quotidien automatique
             des soldes et transactions. Secrets stockés chiffrés <b>AES-256-GCM</b>.
             Banques supportées : MCB, SBM, ABC, MauBank, MyT Money, AfrAsia, Bank One.
+          </p>
+          <p className="mt-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2 flex items-start gap-2">
+            <KeyRound className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              <b>Où saisir le login et le mot de passe ?</b> Ajoute un compte bancaire ci-dessus,
+              puis sur sa carte clique <b>« Configurer l'accès (login / mot de passe) »</b> pour
+              saisir l'identifiant et le mot de passe Internet Banking.
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -255,7 +268,8 @@ export default function BankCredentialsPage() {
 
       {comptes.length === 0 && !creating ? (
         <Card><CardContent className="py-8 text-center text-slate-500">
-          Aucun compte bancaire configuré pour cette société. Clique sur <b>Ajouter un compte bancaire</b> ci-dessus pour en créer un.
+          Aucun compte bancaire configuré pour cette société. Clique sur <b>Ajouter un compte bancaire</b> ci-dessus pour en créer un,
+          puis sur sa carte clique <b>« Configurer l'accès »</b> pour saisir le login et le mot de passe Internet Banking.
         </CardContent></Card>
       ) : comptes.map(cb => (
         <Card key={cb.id}>
@@ -369,17 +383,31 @@ export default function BankCredentialsPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <Button
-                  onClick={() => scrapeNow(cb.id)}
-                  disabled={!cb.scraping?.configured || scrapingNow === cb.id}
-                  variant="outline" size="sm">
-                  {scrapingNow === cb.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Play className="h-3 w-3 mr-1" />}
-                  Scraper maintenant
-                </Button>
-                <Button onClick={() => setEditing(cb.id)} variant="outline" size="sm">
-                  Configurer
-                </Button>
+              <div className="space-y-2 pt-2 border-t">
+                {!cb.scraping?.configured && (
+                  <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5 flex items-center gap-1.5">
+                    <KeyRound className="h-3 w-3 shrink-0" />
+                    Accès non configuré — cliquez <b>« Configurer l'accès »</b> pour saisir le login et le mot de passe Internet Banking.
+                  </div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button
+                    onClick={() => scrapeNow(cb.id)}
+                    disabled={!cb.scraping?.configured || scrapingNow === cb.id}
+                    variant="outline" size="sm">
+                    {scrapingNow === cb.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Play className="h-3 w-3 mr-1" />}
+                    Scraper maintenant
+                  </Button>
+                  <Button
+                    onClick={() => setEditing(cb.id)}
+                    size="sm"
+                    className={cb.scraping?.configured
+                      ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"}>
+                    <KeyRound className="h-3 w-3 mr-1" />
+                    {cb.scraping?.configured ? "Modifier l'accès" : "Configurer l'accès (login / mot de passe)"}
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
