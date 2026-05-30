@@ -20,6 +20,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { authenticateAgentRequest } from "@/lib/agent-auth"
 import { getAdminClient } from "@/lib/supabase/admin"
 import { runLettrage } from "@/lib/accounting/lettrage"
+import { fetchAllPaginated } from "@/lib/supabase/paginate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -77,7 +78,7 @@ async function handleAudit(societe_id: string, body: any) {
   const [
     { data: societe },
     { data: pcm },
-    { data: ecritures },
+    ecritures,
   ] = await Promise.all([
     sb
       .from("societes")
@@ -89,13 +90,19 @@ async function handleAudit(societe_id: string, body: any) {
       .select("compte, libelle, classe, type_compte, sens_normal")
       .or(`societe_id.eq.${societe_id},societe_id.is.null`)
       .eq("actif", true),
-    sb
-      .from("ecritures_comptables_v2")
-      .select(
-        "id, date_ecriture, journal, numero_compte, libelle, debit_mur, credit_mur, lettre, ref_folio, exercice"
-      )
-      .eq("societe_id", societe_id)
-      .limit(20000),
+    // FIX pagination : .limit(20000) était silencieusement plafonné à 1000
+    // par PostgREST (max_rows) → grand livre TRONQUÉ pour toute société
+    // > 1000 écritures (faux déséquilibre + faux "bulletins sans écritures").
+    // fetchAllPaginated récupère toutes les pages. Cf. lib/supabase/paginate.ts.
+    fetchAllPaginated(() =>
+      sb
+        .from("ecritures_comptables_v2")
+        .select(
+          "id, date_ecriture, journal, numero_compte, libelle, debit_mur, credit_mur, lettre, ref_folio, exercice"
+        )
+        .eq("societe_id", societe_id)
+        .order("date_ecriture", { ascending: false })
+    ),
   ])
   if (!societe) return NextResponse.json({ error: "société introuvable" }, { status: 404 })
 
@@ -299,11 +306,14 @@ async function handleAudit(societe_id: string, body: any) {
   }).length
 
   // ── C19 : Bulletins comptabilisés sans écritures correspondantes ──
-  const { data: bulletinsComptabilises } = await sb
-    .from('bulletins_paie')
-    .select('id, periode')
-    .eq('societe_id', societe_id)
-    .eq('comptabilise', true)
+  const bulletinsComptabilises = await fetchAllPaginated(() =>
+    sb
+      .from('bulletins_paie')
+      .select('id, periode')
+      .eq('societe_id', societe_id)
+      .eq('comptabilise', true)
+      .eq('is_archived', false)
+  )
   const bulletinsRefFolios = new Set(allEcritures.map((e: any) => e.ref_folio).filter(Boolean))
   const bulletinsOrphelins = (bulletinsComptabilises || []).filter((b: any) => !bulletinsRefFolios.has(`BP-${b.id}`)).length
 
