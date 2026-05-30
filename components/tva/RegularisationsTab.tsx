@@ -49,6 +49,18 @@ interface Ligne {
   motif: string | null
   statut: 'proposee' | 'incluse' | 'ignoree'
 }
+interface FactureCandidate {
+  id: string
+  numero: string
+  tiers: string
+  type: string
+  date_facture: string
+  periode_origine: string
+  montant_tva: number
+  sens: 'collectee' | 'deductible' | 'net'
+  montant: number
+  deja_ajoutee: boolean
+}
 interface Data {
   societe: { id: string; nom: string }
   periode: string
@@ -56,6 +68,7 @@ interface Data {
   nb_periodes_figees: number
   periodes_figees: string[]
   detectees: Detectee[]
+  factures_candidates: FactureCandidate[]
   lignes: Array<Omit<Ligne, 'key'>>
   total_inclus: number
 }
@@ -79,6 +92,8 @@ export function RegularisationsTab({
   const [saved, setSaved] = useState(false)
   const [recalcing, setRecalcing] = useState(false)
   const [recalcProgress, setRecalcProgress] = useState("")
+  const [factureFilter, setFactureFilter] = useState("")
+  const [selectedFacts, setSelectedFacts] = useState<Set<string>>(new Set())
 
   const sid = selectedSociete && selectedSociete !== "all" ? selectedSociete : ""
 
@@ -127,6 +142,31 @@ export function RegularisationsTab({
       motif: null,
       statut: 'incluse',
     }])
+  }
+  const lineHasFacture = (id: string) => lignes.some(l => l.facture_id === id)
+  const toggleFact = (id: string) => {
+    setSelectedFacts(prev => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+  }
+  const addSelectedFactures = () => {
+    if (!data) return
+    setSaved(false)
+    const toAdd = data.factures_candidates.filter(f => selectedFacts.has(f.id) && !lineHasFacture(f.id))
+    setLignes(prev => [...prev, ...toAdd.map(f => ({
+      key: nextKey(),
+      periode_origine: f.periode_origine,
+      libelle: `${f.numero} — ${f.tiers} (${f.periode_origine})`,
+      montant: f.montant,
+      sens: f.sens,
+      type: 'manuel' as const,
+      facture_id: f.id,
+      motif: null,
+      statut: 'incluse' as const,
+    }))])
+    setSelectedFacts(new Set())
   }
   const update = (key: string, patch: Partial<Ligne>) => {
     setSaved(false)
@@ -313,6 +353,87 @@ export function RegularisationsTab({
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Factures de périodes antérieures (sélection) */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm" style={{ color: NAVY }}>
+            {t('cab.tva.regul.factures_title', locale)}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={factureFilter}
+              onChange={e => setFactureFilter(e.target.value)}
+              placeholder={t('cab.tva.regul.factures_filter', locale)}
+              className="h-8 text-sm max-w-xs"
+            />
+            <Button
+              size="sm" className="h-8 gap-1" style={{ backgroundColor: NAVY }}
+              onClick={addSelectedFactures}
+              disabled={selectedFacts.size === 0}
+            >
+              <Plus className="w-3 h-3" />
+              {t('cab.tva.regul.factures_add', locale)} {selectedFacts.size > 0 ? `(${selectedFacts.size})` : ''}
+            </Button>
+          </div>
+          {!data || data.factures_candidates.length === 0 ? (
+            <p className="text-sm text-gray-500">{t('cab.tva.regul.factures_empty', locale)}</p>
+          ) : (
+            <div className="max-h-72 overflow-auto border rounded">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 text-xs sticky top-0">
+                    <TableHead className="w-8"></TableHead>
+                    <TableHead>{t('cab.tva.regul.col_origin', locale)}</TableHead>
+                    <TableHead>{t('cab.tva.regul.f_numero', locale)}</TableHead>
+                    <TableHead>{t('cab.tva.regul.f_tiers', locale)}</TableHead>
+                    <TableHead className="text-right">{t('cab.tva.regul.f_tva', locale)}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.factures_candidates
+                    .filter(f => {
+                      const q = factureFilter.trim().toLowerCase()
+                      if (!q) return true
+                      return (f.tiers || '').toLowerCase().includes(q)
+                        || (f.numero || '').toLowerCase().includes(q)
+                        || f.periode_origine.includes(q)
+                    })
+                    .map(f => {
+                      const added = lineHasFacture(f.id)
+                      return (
+                        <TableRow key={f.id} className={added ? "bg-green-50/50" : ""}>
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              checked={selectedFacts.has(f.id)}
+                              disabled={added}
+                              onChange={() => toggleFact(f.id)}
+                            />
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">{f.periode_origine}</TableCell>
+                          <TableCell className="text-xs">{f.numero}</TableCell>
+                          <TableCell className="text-xs">
+                            {f.tiers}
+                            <Badge variant="outline" className="ml-1 text-[9px]">
+                              {f.type === 'client' ? t('cab.tva.regul.f_client', locale) : t('cab.tva.regul.f_supplier', locale)}
+                            </Badge>
+                            {added && <span className="ml-1 text-[9px] text-green-700">✓ {t('cab.tva.regul.added', locale)}</span>}
+                          </TableCell>
+                          <TableCell className={`text-right text-xs font-mono ${f.montant >= 0 ? "text-red-600" : "text-green-600"}`}>
+                            {f.montant >= 0 ? "+" : ""}{fmt(f.montant)}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

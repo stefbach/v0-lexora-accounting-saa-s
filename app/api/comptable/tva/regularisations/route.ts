@@ -38,12 +38,15 @@ export async function GET(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     if (!isYM(periode)) return NextResponse.json({ error: 'periode (YYYY-MM) requise' }, { status: 400 })
 
-    const { data: societe, error: socErr } = await supabase
+    // Lecture best-effort : sur l'espace CLIENT, la RLS peut bloquer la lecture
+    // directe de `societes` (la page passe par d'autres endpoints). On NE bloque
+    // PAS dessus — l'accès aux lignes est de toute façon gouverné par la RLS de
+    // tva_regularisations (user_has_societe_access). On l'utilise juste pour le nom.
+    const { data: societe } = await supabase
       .from('societes')
       .select('id, nom, client_id')
       .eq('id', societe_id)
-      .single()
-    if (socErr || !societe) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+      .maybeSingle()
 
     // ── Périodes figées antérieures à la période courante ────────────────────
     let figees: any[] = []
@@ -136,13 +139,54 @@ export async function GET(request: Request) {
       else lignes = r.data || []
     }
 
+    // ── Factures candidates : toutes les factures avec TVA des périodes
+    // ANTÉRIEURES à la période courante (Mediasys, E-Payroll, etc.). L'utilisateur
+    // les sélectionne pour les porter en régularisation sur la période courante.
+    // (Indépendant du figeage — c'est le chemin qui marche quand rien n'est figé.)
+    const finAnterieur = moisBornes(periode!).debut // 1er jour de la période courante (exclu)
+    let factures_candidates: any[] = []
+    {
+      const { data: facts } = await supabase
+        .from('factures')
+        .select('id, numero_facture, tiers, type_facture, montant_tva, date_facture, devise, client_offshore, statut')
+        .eq('societe_id', societe_id)
+        .lt('date_facture', finAnterieur)
+        .neq('statut', 'brouillon')
+        .order('date_facture', { ascending: false })
+        .limit(500)
+      const dejaLiees = new Set(lignes.map(l => l.facture_id).filter(Boolean))
+      factures_candidates = (facts || [])
+        .map(f => {
+          const tva = tvaFacture(f)
+          const montant_tva_total = Number(f.montant_tva) || 0
+          // Signe : client (collectée) = +à payer ; fournisseur (déductible) = −
+          const sens: 'collectee' | 'deductible' | 'net' =
+            tva.collectee > 0 ? 'collectee' : tva.deductible > 0 ? 'deductible' : 'net'
+          const montant = tva.collectee > 0 ? tva.collectee : tva.deductible > 0 ? -tva.deductible : 0
+          return {
+            id: f.id,
+            numero: f.numero_facture,
+            tiers: f.tiers,
+            type: f.type_facture,
+            date_facture: f.date_facture,
+            periode_origine: String(f.date_facture).slice(0, 7),
+            montant_tva: montant_tva_total,
+            sens,
+            montant: Math.round(montant * 100) / 100,
+            deja_ajoutee: dejaLiees.has(f.id),
+          }
+        })
+        .filter(f => Math.abs(f.montant) >= 0.01) // uniquement les factures avec TVA
+    }
+
     return NextResponse.json({
-      societe: { id: societe.id, nom: societe.nom },
+      societe: { id: societe_id, nom: societe?.nom ?? null },
       periode,
       migration_452,
       nb_periodes_figees: figees.length,
       periodes_figees: periodesFigees,
       detectees,
+      factures_candidates,
       lignes,
       total_inclus: totalInclus(lignes),
     })
@@ -169,12 +213,14 @@ export async function PUT(request: Request) {
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     if (!isYM(periode)) return NextResponse.json({ error: 'periode (YYYY-MM) requise' }, { status: 400 })
 
-    const { data: societe, error: socErr } = await supabase
+    // Lecture best-effort (cf. GET) : ne pas bloquer si la RLS client masque
+    // `societes`. L'écriture des lignes est gouvernée par la RLS de
+    // tva_regularisations ; client_id est optionnel (colonne nullable).
+    const { data: societe } = await supabase
       .from('societes')
       .select('client_id')
       .eq('id', societe_id)
-      .single()
-    if (socErr || !societe) return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
+      .maybeSingle()
 
     // Normalisation/validation côté serveur (logique pure testée)
     const lignes = lignesIn
@@ -184,7 +230,7 @@ export async function PUT(request: Request) {
     // ── Voie nominale : RPC atomique (delete + insert + recâblage total) ─────
     const rpc = await supabase.rpc('replace_tva_regularisations', {
       p_societe: societe_id,
-      p_client: societe.client_id ?? null,
+      p_client: societe?.client_id ?? null,
       p_periode: periode,
       p_user: user.id,
       p_lignes: lignes,
@@ -212,7 +258,7 @@ export async function PUT(request: Request) {
       const ins = await supabase
         .from('tva_regularisations')
         .insert(lignes.map(l => ({
-          societe_id, client_id: societe.client_id ?? null,
+          societe_id, client_id: societe?.client_id ?? null,
           periode_courante: periode, ...l, created_by: user.id,
         })))
         .select('id, montant, statut')
