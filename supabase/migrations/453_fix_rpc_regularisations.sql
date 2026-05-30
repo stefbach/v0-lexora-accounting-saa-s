@@ -1,5 +1,6 @@
 -- =============================================================================
 -- Migration 453 — Fix RPC régularisations TVA (point mort sur sociétés client_id NULL)
+-- Réf : corrige un bug introduit par #341 (mig 452).
 -- =============================================================================
 -- BUG (mig 452) : replace_tva_regularisations() écrivait le total dans
 --   tva_mensuelle (colonne regularisation_anterieure) via un INSERT ... ON CONFLICT.
