@@ -380,6 +380,17 @@ export async function createEcrituresForPayment(
     devise_origine?: string | null
     montant_origine?: number | null
     taux_change_applique?: number | null
+    // ── Paiement partiel (action `lettrer_partiel`) ───────────────────────
+    // Quand une facture est réglée en PLUSIEURS prélèvements, chaque versement
+    // crée sa propre paire BNQ (montant partiel). Dans ce cas on désactive :
+    //   • le garde-fou anti-doublon par facture_id (sinon le 2e versement est
+    //     refusé car une BNQ existe déjà pour la facture) ;
+    //   • la dédup BNQ par (facture_id + montant) dans safeInsertBnq ;
+    //   • l'écart de change auto (qui compare amount_mur au montant TTC ENTIER
+    //     de la facture → faux pour un versement partiel).
+    // L'idempotence reste assurée par le delete sur ref_folio (unique par
+    // couple relevé/transaction/facture).
+    allow_multiple_payments?: boolean
   }
 ): Promise<{ ok: boolean; error?: string; bnq_ids?: string[] }> {
   try {
@@ -404,7 +415,7 @@ export async function createEcrituresForPayment(
     // On garde l'opportunité de POSER LA LETTRE manquante sur les BNQ et
     // ACH/VTE existants, pour que le lettrage soit complet même en mode
     // skip. Idempotent : même appel = même état final.
-    if (payment.facture_id) {
+    if (payment.facture_id && !payment.allow_multiple_payments) {
       const { data: existingBnq } = await supabase
         .from('ecritures_comptables_v2')
         .select('id, lettre')
@@ -493,10 +504,43 @@ export async function createEcrituresForPayment(
       taux_change_applique: tauxFinal,
     }
 
+    // FIX (ventilation tiers) — la ligne tiers du PAIEMENT doit pointer le
+    // MÊME sous-compte que la FACTURE (écriture ACH/VTE). Sans ça, le règlement
+    // débitait toujours « 401 Fournisseurs » / « 411 Clients » génériques alors
+    // que la facture crédite « 401 Fournisseur <nom> » (ou un sous-compte
+    // auxiliaire) : le compte tiers réel ne se soldait jamais et le lettrage
+    // était impossible. On reprend numero_compte + nom_compte posés par
+    // createEcrituresForFacture. Fallback générique si la facture n'a pas
+    // (encore) d'écriture ACH/VTE.
+    let tierCompte = isSupplier ? '401' : '411'
+    let tierNom = isSupplier ? 'Fournisseurs' : 'Clients'
+    if (payment.facture_id) {
+      // Best-effort : si la lookup échoue (droits, mock, table absente…), on
+      // garde le compte tiers générique plutôt que de bloquer le règlement.
+      try {
+        const tierPrefix = isSupplier ? '401' : '411'
+        const { data: tierLine } = await supabase
+          .from('ecritures_comptables_v2')
+          .select('numero_compte, nom_compte')
+          .eq('societe_id', payment.societe_id)
+          .eq('facture_id', payment.facture_id)
+          .in('journal', ['ACH', 'VTE'])
+          .like('numero_compte', `${tierPrefix}%`)
+          .limit(1)
+          .maybeSingle()
+        if (tierLine?.numero_compte) {
+          tierCompte = String(tierLine.numero_compte)
+          if (tierLine.nom_compte) tierNom = String(tierLine.nom_compte)
+        }
+      } catch {
+        /* fallback générique */
+      }
+    }
+
     const tierSide = {
       ...base,
-      numero_compte: isSupplier ? '401' : '411',
-      nom_compte: isSupplier ? 'Fournisseurs' : 'Clients',
+      numero_compte: tierCompte,
+      nom_compte: tierNom,
       debit_mur: isSupplier ? payment.amount_mur : 0,
       credit_mur: isSupplier ? 0 : payment.amount_mur,
     }
@@ -514,7 +558,12 @@ export async function createEcrituresForPayment(
     // journal='BNQ' donc dedupBnqEntries le filtre. Le tierSide a
     // aussi journal='BNQ' (cf. base.journal = 'BNQ' ci-dessus) donc
     // les deux sont vérifiés.
-    const insRes = await safeInsertBnq(supabase, [tierSide, bankSide])
+    const insRes = await safeInsertBnq(
+      supabase,
+      [tierSide, bankSide],
+      'ecritures_comptables_v2',
+      payment.allow_multiple_payments ? { skipDedup: true } : undefined,
+    )
     if (insRes.error) return { ok: false, error: insRes.error.message }
     if (insRes.skipped > 0) {
       console.log(`[createEcrituresForPayment] skipped ${insRes.skipped} doublon(s) BNQ:`, insRes.skipReasons)
@@ -527,7 +576,7 @@ export async function createEcrituresForPayment(
     // Différence = écart de change RÉALISÉ → 666 (perte) ou 766 (gain).
     // Sans cette logique, le compte 411/401 reste avec un solde non-zéro
     // après paiement complet → lettrage incomplet, balance déséquilibrée.
-    if (payment.facture_id && tauxFinal !== null && deviseFinale && deviseFinale !== 'MUR') {
+    if (payment.facture_id && !payment.allow_multiple_payments && tauxFinal !== null && deviseFinale && deviseFinale !== 'MUR') {
       try {
         const { data: facture } = await supabase
           .from('factures')
@@ -594,7 +643,8 @@ export async function createEcrituresForPayment(
     // la facture au même groupe de lettrage. Tentative par facture_id
     // (le plus fiable), fallback par ref_folio FAC-<id>.
     if (payment.lettre_code && payment.facture_id) {
-      const tierAccount = isSupplier ? '401' : '411'
+      // Même sous-compte que la ligne tiers du paiement (cf. fix ventilation).
+      const tierAccount = tierCompte
       const tierFilter = isSupplier
         ? { credit_gt: 0 } // ACH credit 401 → lettrer
         : { debit_gt: 0 }  // VTE debit 411 → lettrer

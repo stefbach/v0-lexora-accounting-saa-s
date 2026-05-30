@@ -148,4 +148,43 @@ describe('safeInsertBnq', () => {
     expect(res.skipped).toBe(1)
     expect(res.skipReasons[0]).toContain('facture_id=fac-42')
   })
+
+  it('skipDedup=true : insere meme une 2e BNQ sur la meme facture (paiement partiel)', async () => {
+    const supabase = createMockSupabase()
+    // Un 1er versement partiel existe déjà sur fac-99 (même compte/direction).
+    supabase._seed('ecritures_comptables_v2', [
+      {
+        id: 'partiel-1',
+        societe_id: 'soc-1',
+        dossier_id: 'doss-1',
+        journal: 'BNQ',
+        facture_id: 'fac-99',
+        numero_compte: '411',
+        libelle: 'Règlement partiel FT-1',
+        debit_mur: 0,
+        credit_mur: 500,
+        date_ecriture: '2026-04-10',
+      },
+    ])
+    // Sans skipDedup, la règle facture_id écraserait ce 2e versement de même
+    // montant. Avec skipDedup, on l'insère (idempotence gérée par ref_folio).
+    const res = await safeInsertBnq(
+      supabase,
+      [
+        makeCandidate({
+          facture_id: 'fac-99',
+          numero_compte: '411',
+          libelle: 'Règlement partiel FT-1 (2)',
+          debit_mur: 0,
+          credit_mur: 500,
+          date_ecriture: '2026-04-20',
+        }),
+      ],
+      'ecritures_comptables_v2',
+      { skipDedup: true },
+    )
+    expect(res.skipped).toBe(0)
+    expect(supabase._state.inserts).toHaveLength(1)
+    expect(supabase._state.inserts[0].rows).toHaveLength(1)
+  })
 })

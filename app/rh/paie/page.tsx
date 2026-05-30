@@ -410,9 +410,22 @@ export default function PaiePage() {
     setComptabilisationLoading(true)
     setComptabilisationResult(null)
     try {
-      const data = await fetch("/api/rh/paie/comptabiliser", {
+      // 1) Récap (dry-run) — combien de bulletins vont être remontés au GL
+      const preview = await fetch("/api/rh/paie/comptabiliser", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ all_periode: true, societe_id: societe, periode })
+      }).then(r => r.json())
+      if (preview.error) throw new Error(preview.error)
+      if (preview.requires_confirmation) {
+        const ok = window.confirm(
+          `${preview.nb_bulletins} bulletin(s) seront comptabilisé(s) au grand livre pour ${periode}.\n\nConfirmer la remontée comptable ?`
+        )
+        if (!ok) { setComptabilisationLoading(false); return }
+      }
+      // 2) Exécution confirmée
+      const data = await fetch("/api/rh/paie/comptabiliser", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all_periode: true, societe_id: societe, periode, confirm: true })
       }).then(r => r.json())
       if (data.error) throw new Error(data.error)
       setComptabilisationResult(
