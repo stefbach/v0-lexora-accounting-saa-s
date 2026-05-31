@@ -15,8 +15,9 @@ import { computeTds, TDS_RATES, autoClassifyTds } from '@/lib/accounting/tds'
 
 describe('IFRS 9 — classification des stages', () => {
   const base = {
-    counterpartyId: 'c1', exposureAtDefault: 100000, currency: 'MUR',
+    counterpartyId: 'c1', exposureAtDefault: 100000, carryingAmount: 100000,
     daysPastDue: 0, creditRating: 'BB', collateralType: 'NONE' as const,
+    originationDate: new Date('2025-01-01'),
     isCreditImpaired: false, hasSICR: false,
   }
   it('Stage 1 quand performant (DPD < 30, pas de SICR)', () => {
@@ -33,13 +34,13 @@ describe('IFRS 9 — classification des stages', () => {
 })
 
 describe('IFRS 9 — formule ECL = PD × LGD × EAD', () => {
-  const noMacro = [{ name: 'BASE', weight: 1, gdpGrowth: 0.03, unemploymentRate: 0.07, inflationRate: 0.02 }]
+  const noMacro = [{ name: 'BASE' as const, weight: 1, gdpGrowth: 0.03, unemploymentRate: 0.07, inflationRate: 0.02 }]
 
   it('Stage 1 : ECL = basePD × LGD × EAD (macro neutre = 1)', () => {
     const r = calculateECL({
-      counterpartyId: 'c', exposureAtDefault: 100000, currency: 'MUR',
+      counterpartyId: 'c', exposureAtDefault: 100000, carryingAmount: 100000,
       daysPastDue: 0, creditRating: 'BB', collateralType: 'NONE',
-      isCreditImpaired: false, hasSICR: false,
+      originationDate: new Date('2025-01-01'), isCreditImpaired: false, hasSICR: false,
     }, noMacro)
     // basePD BB = 0.009, LGD NONE = 0.65, EAD = 100000
     expect(r.stage).toBe('STAGE_1')
@@ -50,9 +51,9 @@ describe('IFRS 9 — formule ECL = PD × LGD × EAD', () => {
 
   it('Stage 3 : PD = 100% → ECL = LGD × EAD', () => {
     const r = calculateECL({
-      counterpartyId: 'c', exposureAtDefault: 50000, currency: 'MUR',
+      counterpartyId: 'c', exposureAtDefault: 50000, carryingAmount: 50000,
       daysPastDue: 100, creditRating: 'B', collateralType: 'NONE',
-      isCreditImpaired: false, hasSICR: false,
+      originationDate: new Date('2025-01-01'), isCreditImpaired: false, hasSICR: false,
     }, noMacro)
     expect(r.stage).toBe('STAGE_3')
     expect(r.pd).toBeCloseTo(1, 5)
@@ -61,9 +62,9 @@ describe('IFRS 9 — formule ECL = PD × LGD × EAD', () => {
 
   it('Collatéral réduit la LGD', () => {
     const r = calculateECL({
-      counterpartyId: 'c', exposureAtDefault: 100000, currency: 'MUR',
+      counterpartyId: 'c', exposureAtDefault: 100000, carryingAmount: 100000,
       daysPastDue: 0, creditRating: 'BB', collateralType: 'PROPERTY',
-      collateralValue: 100000, isCreditImpaired: false, hasSICR: false,
+      collateralValue: 100000, originationDate: new Date('2025-01-01'), isCreditImpaired: false, hasSICR: false,
     }, noMacro)
     // LGD PROPERTY 0.25, couverture 100% → 0.25 × (1 - 1×0.5) = 0.125
     expect(r.lgd).toBeCloseTo(0.125, 5)
@@ -107,10 +108,10 @@ describe('TDS Maurice — taux + calcul retenue à la source', () => {
   })
 
   it('Auto-classification : compte 6132 → loyer', () => {
-    expect(autoClassifyTds({ compte: '6132100', description: 'Loyer bureau janvier' })).toBe('rent')
+    expect(autoClassifyTds({ numero_compte: '6132100', description: 'Loyer bureau janvier' })).toBe('rent')
   })
 
   it('Auto-classification : avocat → honoraires professionnels', () => {
-    expect(autoClassifyTds({ compte: '6226', description: 'Honoraires avocat' })).toBe('professional_fees')
+    expect(autoClassifyTds({ numero_compte: '6226', description: 'Honoraires avocat' })).toBe('professional_fees')
   })
 })

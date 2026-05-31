@@ -1955,6 +1955,68 @@ const TOOLS: ToolDef[] = [
     },
     kind: 'read', method: 'DELETE', endpoint: (p) => `/api/rh/provisions/eoy/${p.id}`, isAction: true,
   },
+
+  // ── 🏛️ MRA COMPLIANCE HUB (échéances, montants dus, bordereaux) ──────
+  {
+    name: 'get_mra_dashboard',
+    description: 'Tableau de bord MRA : toutes les déclarations fiscales (PAYE, CSG, NSF, TDS, TVA) avec statut, échéance, montant dû, retards et prochaine échéance. Pour "où en est ma conformité MRA", "qu\'est-ce que je dois à la MRA", "mes échéances fiscales".',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/mra/dashboard`,
+  },
+  {
+    name: 'download_mra_bordereau',
+    description: 'Télécharge le bordereau de remise MRA (Excel) pour une obligation. Fournir type (PAYE/CSG/NSF/TDS) + periode (YYYY-MM). Pour "le bordereau PAYE de mai", "exporte ma TDS de janvier".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['PAYE', 'CSG', 'NSF', 'TDS'] },
+        periode: { type: 'string', description: 'YYYY-MM' },
+      },
+      required: ['type', 'periode'],
+    },
+    kind: 'download', method: 'GET',
+    endpoint: (p) => `/api/client/mra/bordereau?type=${p.type}&periode=${p.periode}&format=xlsx`,
+    downloadFilename: (p) => `bordereau-${p.type}-${p.periode}.xlsx`,
+    downloadContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    downloadCaption: (p) => `🏛️ Bordereau ${p.type} ${p.periode}`,
+  },
+  {
+    name: 'mark_mra_declared',
+    description: 'Marque une déclaration MRA comme DÉCLARÉE (soumise au portail). Fournir declaration_id (UUID depuis get_mra_dashboard) + reference_mra optionnelle. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        declaration_id: { type: 'string' },
+        reference_mra: { type: 'string', description: 'N° accusé MRA (optionnel)' },
+      },
+      required: ['declaration_id'],
+    },
+    kind: 'read', method: 'POST',
+    endpoint: (p) => `/api/client/mra/declaration/${p.declaration_id}?action=declarer`,
+    isAction: true,
+  },
+  {
+    name: 'mark_mra_paid',
+    description: 'Marque une déclaration MRA comme PAYÉE. Fournir declaration_id (UUID). Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { declaration_id: { type: 'string' } },
+      required: ['declaration_id'],
+    },
+    kind: 'read', method: 'POST',
+    endpoint: (p) => `/api/client/mra/declaration/${p.declaration_id}?action=payer`,
+    isAction: true,
+  },
+  {
+    name: 'suggest_mra_match',
+    description: 'À partir d\'un montant d\'un débit bancaire "MRA", propose la/les déclaration(s) MRA en attente qui correspondent (par montant). Pour "j\'ai payé 87500 à la MRA, c\'était quoi ?". Fournir montant.',
+    input_schema: {
+      type: 'object',
+      properties: { montant: { type: 'number' }, libelle: { type: 'string' } },
+      required: ['montant'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/mra/suggest-match`,
+  },
 ]
 
 const TOOL_MAP = new Map(TOOLS.map(t => [t.name, t]))
@@ -1990,7 +2052,7 @@ Date du jour : ${today}.
 RÔLE :
 - Tu réponds ${lang}, de façon claire, concise et directe — c'est du chat Telegram, pas un rapport. Va à l'essentiel.
 - Tu pilotes Lexora comme depuis le web : CONSULTER, CRÉER, MODIFIER, SUPPRIMER, TÉLÉCHARGER. Tu peux enchaîner plusieurs outils dans une même réponse (ex: chercher un contact → créer une facture → la télécharger en PDF → l'envoyer par mail).
-- Domaines couverts : factures (CRUD + paiements + PDF + génération IA + fiscalisation MRA), tiers/contacts (CRUD) + tiers offshore, écritures comptables, banque & relevés (+ scrape auto), grand livre, balance, KPIs & rapports, prévisionnel, échéances, paie & bulletins (+ STC + recompute accrual), EOY bonus 13e mois Maurice (preview/calculer/bulletins 75-25/annuler) + provisions IAS19, employés, congés, présences, cash in lieu, alertes retour maternité, échéances MRA, exports MRA (PAYE/CSG/PRGF/virement bancaire), recurrences, relances clients, virements, investissements/immobilisations, documents (+ documents RH + bulk delete), catalogue, email (CRUD comptes + envoi + test), agenda/RDV, GBC compliance (PER 80%, Substance/CIGA, UBO, Transfer Pricing, Pillar Two, CRS/FATCA, consolidation IFRS 10), administration (users, dossiers, demandes inscription, plans, paramètres, comptables assignations & profil, Lexora billing + relances + emit + PDF, cascade delete société, permissions Telegram + alertes config, API keys utilisateur).
+- Domaines couverts : factures (CRUD + paiements + PDF + génération IA + fiscalisation MRA), tiers/contacts (CRUD) + tiers offshore, écritures comptables, banque & relevés (+ scrape auto), grand livre, balance, KPIs & rapports, prévisionnel, échéances, paie & bulletins (+ STC + recompute accrual), EOY bonus 13e mois Maurice (preview/calculer/bulletins 75-25/annuler) + provisions IAS19, employés, congés, présences, cash in lieu, alertes retour maternité, échéances MRA, conformité MRA (dashboard PAYE/CSG/NSF/TDS/TVA : montants dus, échéances, statuts, bordereaux Excel, marquer déclaré/payé, retrouver une déclaration par montant payé), exports MRA (PAYE/CSG/PRGF/virement bancaire), recurrences, relances clients, virements, investissements/immobilisations, documents (+ documents RH + bulk delete), catalogue, email (CRUD comptes + envoi + test), agenda/RDV, GBC compliance (PER 80%, Substance/CIGA, UBO, Transfer Pricing, Pillar Two, CRS/FATCA, consolidation IFRS 10), administration (users, dossiers, demandes inscription, plans, paramètres, comptables assignations & profil, Lexora billing + relances + emit + PDF, cascade delete société, permissions Telegram + alertes config, API keys utilisateur).
 - TÉLÉCHARGEMENTS : utilise les outils download_* pour envoyer un PDF/Excel/CSV en pièce jointe Telegram. Confirme en 1 phrase ("voici le PDF…") quand un fichier part — pas besoin de répéter le contenu.
 - Ne devine JAMAIS un chiffre : récupère-le via les outils. Formate les montants avec séparateur de milliers et la devise (ex: 1 250 000 MUR).
 - COMPARAISON ENTRE MOIS : utilise get_kpis (period=YYYY-MM) UNE FOIS PAR MOIS — c'est le seul outil qui isole correctement un mois. N'utilise pas get_financial_summary pour comparer des mois (il renvoie l'exercice ou des agrégats non mensuels). Ex pour "mai vs avril" : get_kpis(2026-05) puis get_kpis(2026-04), puis présente l'écart.

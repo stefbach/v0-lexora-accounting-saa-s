@@ -53,7 +53,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     const { id } = await ctx.params
     const body = await request.json().catch(() => ({}))
-    const action = String(body?.action || '')
+    // action depuis le body OU la query string (?action=) — ce dernier permet
+    // aux outils Telegram d'encoder l'action dans l'URL sans body dédié.
+    const urlAction = new URL(request.url).searchParams.get('action') || ''
+    const action = String(body?.action || urlAction || '')
 
     const admin = getAdminClient()
     const decl = await loadAndAssert(admin, user.id, id)
