@@ -144,6 +144,10 @@ export async function GET(request: Request) {
         // Inclut les imports mensuels ET les imports EOY (13ème mois) pour
         // qu'ils apparaissent ENSEMBLE dans l'historique.
         .in('source', ['import_excel', 'eoy_bonus_import'])
+        // Exclut les bulletins archivés (réimports) — sinon ils s'affichent
+        // en double (bug "importé deux fois"). is_archived NOT NULL DEFAULT
+        // false (mig 425), donc le filtre est sûr.
+        .eq('is_archived', false)
       if (filterSocieteHist && accessibleIds.includes(filterSocieteHist)) {
         queryHist = queryHist.eq('societe_id', filterSocieteHist)
       } else {
@@ -175,6 +179,7 @@ export async function GET(request: Request) {
       const filterSocieteDetail = searchParams.get('societe_id')
       let queryDetail = supabase.from('bulletins_paie')
         .select('*').in('source', ['import_excel', 'eoy_bonus_import']).eq('periode', periode)
+        .eq('is_archived', false)
       if (filterSocieteDetail && accessibleIdsDetail.includes(filterSocieteDetail)) {
         queryDetail = queryDetail.eq('societe_id', filterSocieteDetail)
       } else {
