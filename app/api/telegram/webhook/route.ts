@@ -4,6 +4,7 @@ import {
   resolveChatContext,
   sendTelegramMessage,
   sendTelegramInlineButtons,
+  sendTelegramDocumentBuffer,
   logAction,
   answerCallbackQuery,
   editMessageText,
@@ -227,10 +228,30 @@ async function forwardToN8nAgent(
       })
       if (result.ok) {
         await sendTelegramMessage(chatId, result.text)
+        // Expédie les pièces jointes produites par les outils download.
+        // Best-effort : on log l'échec sans bloquer le message texte déjà envoyé.
+        if (result.artifacts && result.artifacts.length > 0) {
+          for (const art of result.artifacts) {
+            try {
+              await sendTelegramDocumentBuffer(
+                chatId, art.buffer, art.filename, art.contentType, art.caption,
+              )
+            } catch (e: any) {
+              console.warn('[webhook] sendDocument artifact failed:', art.filename, e?.message)
+              await sendTelegramMessage(
+                chatId,
+                `⚠️ Impossible d'envoyer le fichier <code>${art.filename}</code>.`,
+              ).catch(() => {})
+            }
+          }
+        }
         await logAction({
           chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
           intent: 'agent.lexora', status: 'success',
-          payload: { turns: result.turns, tools_used: result.tools_used },
+          payload: {
+            turns: result.turns, tools_used: result.tools_used,
+            artifacts_count: result.artifacts?.length || 0,
+          },
           duration_ms: Date.now() - tAgent,
         }).catch(() => {})
       } else {
