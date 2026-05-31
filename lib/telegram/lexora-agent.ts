@@ -990,6 +990,303 @@ const TOOLS: ToolDef[] = [
     input_schema: { type: 'object', properties: {} },
     kind: 'read', method: 'GET', endpoint: () => `/api/client/catalogue`,
   },
+
+  // ══════════════════════════════════════════════════════════════════════
+  // PHASE 2 — GBC compliance + Admin + Documents + Banque scrape
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── 🌐 GBC COMPLIANCE (Global Business Companies Maurice) ────────────
+  {
+    name: 'get_gbc_per_computation',
+    description: 'Calcul du PER (Partial Exemption Regime 80%) pour GBC : impôt préférentiel sur revenus étrangers. Filtre : periode (annuelle).',
+    input_schema: { type: 'object', properties: { periode: { type: 'string', description: 'Année YYYY' } } },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/comptable/gbc/per-computation?${qs(p)}`,
+  },
+  {
+    name: 'download_gbc_per_pdf',
+    description: 'Télécharge le PDF du calcul PER 80% (en pièce jointe Telegram).',
+    input_schema: { type: 'object', properties: { periode: { type: 'string' } } },
+    kind: 'download', method: 'GET',
+    endpoint: (p) => `/api/comptable/gbc/per-computation/export-pdf?${qs(p)}`,
+    downloadFilename: (p) => `gbc-per-${p.periode || new Date().getFullYear()}.pdf`,
+    downloadContentType: 'application/pdf',
+    downloadCaption: (p) => `📑 PER 80% ${p.periode || ''}`,
+  },
+  {
+    name: 'save_gbc_per_computation',
+    description: 'Enregistre/met à jour le calcul PER 80% (après validation des chiffres). Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        periode: { type: 'string' },
+        foreign_income: { type: 'number' }, total_income: { type: 'number' },
+        notes: { type: 'string' },
+      },
+      required: ['periode'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/comptable/gbc/per-computation`, isAction: true,
+  },
+  {
+    name: 'get_gbc_substance',
+    description: 'État de conformité Substance (CIGA — Core Income Generating Activities) pour le GBC : exigences FSC (employés, dépenses, locaux à Maurice).',
+    input_schema: { type: 'object', properties: { periode: { type: 'string' } } },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/comptable/gbc/substance?${qs(p)}`,
+  },
+  {
+    name: 'download_gbc_substance_pdf',
+    description: 'Télécharge le rapport de conformité Substance (PDF).',
+    input_schema: { type: 'object', properties: { periode: { type: 'string' } } },
+    kind: 'download', method: 'GET',
+    endpoint: (p) => `/api/comptable/gbc/substance/export-pdf?${qs(p)}`,
+    downloadFilename: (p) => `gbc-substance-${p.periode || new Date().getFullYear()}.pdf`,
+    downloadContentType: 'application/pdf',
+    downloadCaption: () => '📑 Substance compliance',
+  },
+  {
+    name: 'save_gbc_substance',
+    description: 'Met à jour la déclaration Substance (CIGA, employés MUR, dépenses locales, locaux). Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        periode: { type: 'string' },
+        ciga_activities: { type: 'array', items: { type: 'string' } },
+        nb_employes_mauritius: { type: 'number' },
+        local_expenses_mur: { type: 'number' },
+        office_address: { type: 'string' },
+        notes: { type: 'string' },
+      },
+      required: ['periode'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/comptable/gbc/substance`, isAction: true,
+  },
+  {
+    name: 'list_gbc_beneficial_owners',
+    description: 'Registre UBO (Ultimate Beneficial Owners) du GBC. Liste les bénéficiaires effectifs (>25% détention) déclarés au FSC.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/comptable/gbc/beneficial-owners`,
+  },
+  {
+    name: 'download_gbc_ubo_pdf',
+    description: 'Télécharge le registre UBO en PDF.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'download', method: 'GET',
+    endpoint: () => `/api/comptable/gbc/beneficial-owners/export-pdf`,
+    downloadFilename: () => `gbc-ubo-${new Date().toISOString().slice(0, 10)}.pdf`,
+    downloadContentType: 'application/pdf',
+    downloadCaption: () => '📑 Registre UBO',
+  },
+  {
+    name: 'add_gbc_beneficial_owner',
+    description: 'Ajoute un UBO. Fournir nom, prenom, date_naissance, nationalite, pct_ownership (>25%), pays_residence, passport_number optionnel.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nom: { type: 'string' }, prenom: { type: 'string' },
+        date_naissance: { type: 'string' }, nationalite: { type: 'string' },
+        pct_ownership: { type: 'number' }, pays_residence: { type: 'string' },
+        passport_number: { type: 'string' },
+      },
+      required: ['nom', 'prenom', 'pct_ownership'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/comptable/gbc/beneficial-owners`, isAction: true,
+  },
+  {
+    name: 'get_gbc_transfer_pricing',
+    description: 'État Transfer Pricing du GBC : conformité OCDE pour transactions intra-groupe (master file, local file, CbC report).',
+    input_schema: { type: 'object', properties: { periode: { type: 'string' } } },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/comptable/gbc/transfer-pricing?${qs(p)}`,
+  },
+  {
+    name: 'save_gbc_transfer_pricing',
+    description: 'Enregistre une déclaration Transfer Pricing. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        periode: { type: 'string' },
+        intra_group_revenue_mur: { type: 'number' },
+        intra_group_expenses_mur: { type: 'number' },
+        related_parties: { type: 'array', items: { type: 'string' } },
+        notes: { type: 'string' },
+      },
+      required: ['periode'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/comptable/gbc/transfer-pricing`, isAction: true,
+  },
+  {
+    name: 'get_gbc_pillar_two',
+    description: 'Statut BEPS Pillar Two (GloBE — taux d\'imposition minimum 15%) pour le GBC : ETR calculé, top-up tax éventuel.',
+    input_schema: { type: 'object', properties: { periode: { type: 'string' } } },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/comptable/gbc/pillar-two?${qs(p)}`,
+  },
+  {
+    name: 'save_gbc_pillar_two',
+    description: 'Met à jour les paramètres Pillar Two (ETR, jurisdictional adjustments). Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        periode: { type: 'string' },
+        gloBE_income_mur: { type: 'number' },
+        covered_taxes_mur: { type: 'number' },
+        etr_pct: { type: 'number' },
+        notes: { type: 'string' },
+      },
+      required: ['periode'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/comptable/gbc/pillar-two`, isAction: true,
+  },
+  {
+    name: 'get_gbc_crs_fatca',
+    description: 'État CRS / FATCA du GBC (déclarations automatiques OCDE + IRS).',
+    input_schema: { type: 'object', properties: { periode: { type: 'string' } } },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/comptable/gbc/crs-fatca?${qs(p)}`,
+  },
+  {
+    name: 'save_gbc_crs_fatca',
+    description: 'Met à jour la déclaration CRS/FATCA. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        periode: { type: 'string' },
+        nb_account_holders_reportable: { type: 'number' },
+        total_balance_mur: { type: 'number' },
+        notes: { type: 'string' },
+      },
+      required: ['periode'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/comptable/gbc/crs-fatca`, isAction: true,
+  },
+  {
+    name: 'get_gbc_consolidation',
+    description: 'Consolidation IFRS 10 (états financiers consolidés holding + filiales). Filtres : periode, entity_ids.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        periode: { type: 'string' },
+        entity_ids: { type: 'array', items: { type: 'string' } },
+      },
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/comptable/gbc/consolidate?${qs(p)}`,
+  },
+  {
+    name: 'run_gbc_consolidation',
+    description: 'Lance la consolidation IFRS 10 pour la période. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        periode: { type: 'string' },
+        entity_ids: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['periode'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/comptable/gbc/consolidate`, isAction: true,
+  },
+
+  // ── 📑 DOCUMENTS étendus (RH + bulk delete + OCR) ────────────────────
+  {
+    name: 'list_documents_rh',
+    description: 'Liste les documents RH (contrats, fiches employés, attestations…). Filtre : type, employe_id.',
+    input_schema: {
+      type: 'object',
+      properties: { type: { type: 'string' }, employe_id: { type: 'string' } },
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/documents-rh?${qs(p)}`,
+  },
+  {
+    name: 'delete_document_rh',
+    description: 'Supprime un document RH (par id). Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'read', method: 'DELETE', endpoint: (p) => `/api/documents-rh/${p.id}`, isAction: true,
+  },
+  {
+    name: 'bulk_delete_documents',
+    description: 'Supprime PLUSIEURS documents d\'un coup (cascade sur factures/écritures/relevés). ATTENTION : irréversible — toujours reformuler la liste et demander confirmation explicite avant.',
+    input_schema: {
+      type: 'object',
+      properties: { ids: { type: 'array', items: { type: 'string' } } },
+      required: ['ids'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/documents/bulk-delete`, isAction: true,
+  },
+
+  // ── ⚙️ ADMINISTRATION : utilisateurs / accès ─────────────────────────
+  {
+    name: 'list_admin_clients',
+    description: 'Liste les clients/utilisateurs Lexora gérés (admin uniquement). Pour vue d\'ensemble des sociétés et leurs comptables assignés.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/admin/clients`,
+  },
+  {
+    name: 'create_user_for_employee',
+    description: 'Crée un compte Lexora pour un employé existant (rôle "employe"). Fournir employe_id + email + mot de passe initial. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        employe_id: { type: 'string' },
+        email: { type: 'string' },
+        password: { type: 'string' },
+      },
+      required: ['employe_id', 'email', 'password'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/admin/create-user-employee`, isAction: true,
+  },
+  {
+    name: 'list_admin_dossiers',
+    description: 'Liste les dossiers comptables Lexora (admin / comptable).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/admin/dossiers`,
+  },
+  {
+    name: 'admin_health_check',
+    description: 'État système Lexora : DB, RLS, env vars critiques. Pour le debug. Admin uniquement.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/admin/health`,
+  },
+
+  // ── 🏦 BANQUE — scrape automatique ───────────────────────────────────
+  {
+    name: 'list_bank_credentials',
+    description: 'Liste les credentials bancaires configurés (direction/admin uniquement). N\'expose pas les mots de passe, juste les comptes liés et leur statut.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/direction/bank-credentials`,
+  },
+  {
+    name: 'trigger_bank_scrape',
+    description: 'Déclenche un scrape bancaire manuel pour récupérer les nouvelles transactions. Fournir compte_id. Direction/admin uniquement. Asynchrone : le résultat arrive ensuite dans les relevés.',
+    input_schema: {
+      type: 'object',
+      properties: { compte_id: { type: 'string' } },
+      required: ['compte_id'],
+    },
+    kind: 'read', method: 'POST',
+    endpoint: (p) => `/api/client/direction/bank-credentials/scrape?compte_id=${encodeURIComponent(p.compte_id)}`,
+    isAction: true,
+  },
+  {
+    name: 'list_mra_credentials',
+    description: 'Credentials MRA configurés (direction/admin). Pour vérifier que la connexion MRA est OK.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/direction/mra-credentials`,
+  },
+
+  // ── 📅 TAX CALENDAR détaillé + alertes config ────────────────────────
+  {
+    name: 'get_telegram_alerts_config',
+    description: 'Configuration des alertes Telegram pour la société (échéances MRA, factures en retard, etc.).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/telegram-alerts-config`,
+  },
+
+  // ── 📞 PERMISSIONS TELEGRAM (qui a accès au bot) ─────────────────────
+  {
+    name: 'list_telegram_permissions',
+    description: 'Liste les utilisateurs ayant accès au bot Telegram pour la société, leurs rôles et capabilities.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/telegram-permissions`,
+  },
 ]
 
 const TOOL_MAP = new Map(TOOLS.map(t => [t.name, t]))
@@ -1025,7 +1322,7 @@ Date du jour : ${today}.
 RÔLE :
 - Tu réponds ${lang}, de façon claire, concise et directe — c'est du chat Telegram, pas un rapport. Va à l'essentiel.
 - Tu pilotes Lexora comme depuis le web : CONSULTER, CRÉER, MODIFIER, SUPPRIMER, TÉLÉCHARGER. Tu peux enchaîner plusieurs outils dans une même réponse (ex: chercher un contact → créer une facture → la télécharger en PDF → l'envoyer par mail).
-- Domaines couverts : factures (CRUD + paiements + PDF), tiers/contacts (CRUD), écritures comptables, banque & relevés, grand livre, balance, KPIs & rapports, prévisionnel, échéances, paie & bulletins, employés, congés, présences, échéances MRA, exports MRA (PAYE/CSG/PRGF/virement bancaire), recurrences, relances clients, virements, documents, catalogue, email, agenda/RDV.
+- Domaines couverts : factures (CRUD + paiements + PDF), tiers/contacts (CRUD), écritures comptables, banque & relevés (+ scrape auto), grand livre, balance, KPIs & rapports, prévisionnel, échéances, paie & bulletins (+ STC), employés, congés, présences, échéances MRA, exports MRA (PAYE/CSG/PRGF/virement bancaire), recurrences, relances clients, virements, documents (+ documents RH + bulk delete), catalogue, email, agenda/RDV, GBC compliance (PER 80%, Substance/CIGA, UBO, Transfer Pricing, Pillar Two, CRS/FATCA, consolidation IFRS 10), administration (users, dossiers, health, permissions Telegram, alertes).
 - TÉLÉCHARGEMENTS : utilise les outils download_* pour envoyer un PDF/Excel/CSV en pièce jointe Telegram. Confirme en 1 phrase ("voici le PDF…") quand un fichier part — pas besoin de répéter le contenu.
 - Ne devine JAMAIS un chiffre : récupère-le via les outils. Formate les montants avec séparateur de milliers et la devise (ex: 1 250 000 MUR).
 - Pour les listes longues, résume les points clés (totaux, top 5) plutôt que de tout dérouler.
