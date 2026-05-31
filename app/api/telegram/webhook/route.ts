@@ -18,6 +18,7 @@ import { memoryRecall, formatMemoriesForPrompt } from '@/lib/telegram/memory'
 import { transcribeTelegramVoice } from '@/lib/telegram/voice-transcribe'
 import { detectPointageIntent, isExpensesListCommand } from '@/lib/telegram/pointage-nlp'
 import { captionLooksLikeExpense } from '@/lib/telegram/expense-ocr'
+import { runLexoraAgent } from '@/lib/telegram/lexora-agent'
 
 /**
  * POST /api/telegram/webhook
@@ -177,12 +178,7 @@ async function forwardToN8nAgent(
   const societeName = socRow?.nom || 'votre société'
   const roleLabel = ROLE_LABELS[role] || role
 
-  const N8N_AGENT_WEBHOOK = process.env.N8N_TELEGRAM_AGENT_WEBHOOK
-  if (!N8N_AGENT_WEBHOOK) {
-    await sendTelegramMessage(chatId, '⚠️ Agent IA non configuré côté serveur.')
-    return
-  }
-
+  // Contexte mémoire (rappels société/user) — partagé par les deux modes.
   let memoryContext: string | null = null
   try {
     const memories = await memoryRecall({
@@ -198,14 +194,73 @@ async function forwardToN8nAgent(
 
   const { overrideMessage, ...extraFields } = extras
 
-  // Typing indicator : montre "typing…" à l'utilisateur pendant que n8n bosse.
-  // Sans ça, en cas de souci n8n l'utilisateur voit un silence total après /start
-  // (cf. bug "connecté puis plus rien"). Best-effort, non bloquant.
+  // Typing indicator immédiat : l'utilisateur voit "typing…" et sait que le bot
+  // a reçu et travaille. Best-effort, non bloquant.
   fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendChatAction`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
   }).catch(() => { /* noop */ })
+
+  // ── MODE AGENT ──────────────────────────────────────────────────────
+  // TELEGRAM_AGENT_MODE : 'lexora' (défaut) = LLM natif Lexora (bypass n8n),
+  // 'n8n' = legacy (forward vers le workflow n8n). Le mode lexora ne dépend
+  // plus du tout de n8n : Claude tourne dans Lexora et appelle directement les
+  // endpoints /api/telegram/internal/* (parité totale avec ce que n8n faisait).
+  const AGENT_MODE = (process.env.TELEGRAM_AGENT_MODE || 'lexora').toLowerCase()
+
+  if (AGENT_MODE !== 'n8n') {
+    const tAgent = Date.now()
+    // Le texte effectif (vocal transcrit → overrideMessage.text, sinon texte brut)
+    const userText = String(overrideMessage?.text || originalMessage?.text || textForMemoryQuery || '').trim()
+    try {
+      const result = await runLexoraAgent(userText, {
+        chat_id: chatId,
+        user_id: ctx.user_id,
+        societe_id: ctx.current_societe_id!,
+        societe_name: societeName,
+        role,
+        role_label: roleLabel,
+        first_name: ctx.telegram_firstname,
+        locale: ctx.language_code,
+        memory_context: memoryContext,
+      })
+      if (result.ok) {
+        await sendTelegramMessage(chatId, result.text)
+        await logAction({
+          chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+          intent: 'agent.lexora', status: 'success',
+          payload: { turns: result.turns, tools_used: result.tools_used },
+          duration_ms: Date.now() - tAgent,
+        }).catch(() => {})
+      } else {
+        await logAction({
+          chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+          intent: 'agent.lexora', status: 'error', error_msg: result.error,
+          duration_ms: Date.now() - tAgent,
+        }).catch(() => {})
+        await sendTelegramMessage(
+          chatId,
+          '⚠️ Petit souci pour traiter ta demande. Réessaie, ou utilise <code>/help</code> pour les commandes directes.',
+        )
+      }
+    } catch (e: any) {
+      await logAction({
+        chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+        intent: 'agent.lexora', status: 'error', error_msg: e?.message,
+        duration_ms: Date.now() - tAgent,
+      }).catch(() => {})
+      await sendTelegramMessage(chatId, '⚠️ Erreur interne de l\'assistant. Réessaie dans un instant.')
+    }
+    return
+  }
+
+  // ── MODE LEGACY n8n ─────────────────────────────────────────────────
+  const N8N_AGENT_WEBHOOK = process.env.N8N_TELEGRAM_AGENT_WEBHOOK
+  if (!N8N_AGENT_WEBHOOK) {
+    await sendTelegramMessage(chatId, '⚠️ Agent IA non configuré côté serveur.')
+    return
+  }
 
   // Timeout 25s : si n8n hang, on prévient l'utilisateur au lieu de laisser
   // le webhook timeout (60s) silencieusement.
