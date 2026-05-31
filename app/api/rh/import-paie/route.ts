@@ -664,8 +664,24 @@ export async function POST(request: Request) {
             console.warn(`[import-paie] EOY net_pay incohérent pour ${nom}: Excel=${importedNet}, recalculé=${computedNet}`)
           }
 
-          // Idempotence : archive un éventuel bulletin EOY import précédent
-          // pour cette période (évite les doublons en cas de réimport).
+          // Idempotence : avant d'archiver l'ancien bulletin EOY, on doit aussi
+          // SUPPRIMER ses écritures comptables (ref_folio='BP-<old_id>') —
+          // sinon elles restent en base et la compta est doublée sur le 6416,
+          // CSG bonus, PAYE bonus, etc. (la fonction generer_ecritures_paie ne
+          // nettoie QUE les écritures du bulletin courant, pas des précédents).
+          const { data: oldBulletins } = await supabase
+            .from('bulletins_paie')
+            .select('id')
+            .eq('employe_id', employeId).eq('periode', eoyPeriode)
+            .eq('source', 'eoy_bonus_import').eq('is_archived', false)
+          if (oldBulletins && oldBulletins.length > 0) {
+            const oldRefs = oldBulletins.map(b => `BP-${b.id}`)
+            await supabase.from('ecritures_comptables_v2')
+              .delete()
+              .eq('societe_id', societe_id)
+              .eq('journal', 'OD-PAIE')
+              .in('ref_folio', oldRefs)
+          }
           await supabase.from('bulletins_paie')
             .update({ is_archived: true, archived_at: new Date().toISOString(), archive_reason: 'reimport_eoy' })
             .eq('employe_id', employeId).eq('periode', eoyPeriode)
