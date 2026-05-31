@@ -54,6 +54,16 @@ const COL_PATTERNS: Record<string, string[]> = {
   prime_tl: ['prime tl', '3230', 'team leader', 'tl bonus'],
   electricity: ['electricity allowance', 'electricity', 'electricite', '3250 elec', '3250'],
   meal_allowance: ['meal allowance', 'meal', 'repas', '3510 meal', '3510'],
+  // EOY bonus = 13e mois mauricien (versé en décembre). DOIT être détecté AVANT
+  // other_primes (motif générique 'bonus'/'prime') sinon il y serait absorbé et
+  // perdrait son identité. Labels usuels FR + EN + codes.
+  eoy_bonus: [
+    'end of year bonus', 'end-of-year bonus', 'eoy bonus', 'eoy', '13th month',
+    '13th-month', '13 month', 'thirteenth month', 'thirteenth', 'annual bonus',
+    'bonus annuel', '13e mois', '13eme mois', '13ème mois', 'treizieme mois',
+    'treizième mois', 'prime fin annee', 'prime fin d\'annee', 'prime de fin d\'année',
+    'prime fin d\'année', 'gratification', '3600 eoy', '3600 bonus', '3600',
+  ],
   other_primes: ['primes', 'bonus', 'prime', 'other allowance', 'other'],
   total_payments: ['total payments', 'total pay', 'gross', 'brut total', 'total earning', 'gross pay'],
   absence_deductions: ['absence deductions', 'absence', '3900 absence', '3900'],
@@ -79,7 +89,9 @@ function detectColumns(headers: string[]): Record<string, number> {
     'nom', 'prenom', 'code', 'poste', 'departement', 'date_arrivee', 'date_depart',
     'salaire_base', 'overtime_1_5x', 'overtime_2x',
     'special_allowance', 'internet_allowance', 'prime_production', 'on_call', 'prime_tl',
-    'electricity', 'meal_allowance', 'total_payments', 'absence_deductions',
+    'electricity', 'meal_allowance',
+    'eoy_bonus', // 13e mois : motif spécifique capté avant les primes génériques
+    'total_payments', 'absence_deductions',
     'csg', 'nsf', 'paye', 'total_deductions',
     'er_csg', 'er_nsf', 'er_levy', 'er_prgf', 'total_er',
     'net_pay', // last — avoids matching "internet" as "net"
@@ -298,6 +310,7 @@ export async function POST(request: Request) {
           salaire_base: getVal(r, 'salaire_base'), overtime_1_5x: getVal(r, 'overtime_1_5x'), overtime_2x: getVal(r, 'overtime_2x'),
           special_allowance: getVal(r, 'special_allowance'), internet_allowance: getVal(r, 'internet_allowance'),
           prime_production: getVal(r, 'prime_production'), electricity: getVal(r, 'electricity'), meal_allowance: getVal(r, 'meal_allowance'), other_primes: getVal(r, 'other_primes'),
+          eoy_bonus: getVal(r, 'eoy_bonus'),
           total_payments: getVal(r, 'total_payments'), absence_deductions: getVal(r, 'absence_deductions'),
           csg: getVal(r, 'csg'), nsf: getVal(r, 'nsf'), paye: getVal(r, 'paye'), total_deductions: getVal(r, 'total_deductions'),
           er_csg: getVal(r, 'er_csg'), er_nsf: getVal(r, 'er_nsf'), er_levy: getVal(r, 'er_levy'), er_prgf: getVal(r, 'er_prgf'),
@@ -408,7 +421,8 @@ export async function POST(request: Request) {
           const computedBrut =
             (emp.salaire_base || 0) + ot_total + (emp.electricity || 0) +
             (emp.prime_production || 0) + all_primes +
-            (emp.internet_allowance || 0) + (emp.meal_allowance || 0)
+            (emp.internet_allowance || 0) + (emp.meal_allowance || 0) +
+            (emp.eoy_bonus || 0) // 13e mois : composant du brut (colonne dédiée + compte 6416)
           const retenuesSalariales =
             (emp.csg || 0) + (emp.nsf || 0) + (emp.paye || 0) + (emp.absence_deductions || 0)
           const computedNet = Math.max(0, Math.round((computedBrut - retenuesSalariales) * 100) / 100)
@@ -436,6 +450,9 @@ export async function POST(request: Request) {
             special_allowance_3: (emp.meal_allowance || 0) + (emp.prime_production || 0),
             transport_allowance: 0,
             petrol_allowance: 0,
+            // 13e mois importé d'un autre système : colonne dédiée (incluse dans
+            // salaire_brut GENERATED + comptabilisée au 6416 par le trigger paie).
+            eoy_bonus: emp.eoy_bonus || 0,
             salaire_net: computedNet,
             csg_salarie: emp.csg || 0,
             csg_patronal: emp.er_csg || 0,
@@ -456,6 +473,7 @@ export async function POST(request: Request) {
               emp.prime_tl ? `Prime TL: ${emp.prime_tl}` : '',
               emp.electricity ? `Electricity: ${emp.electricity}` : '',
               emp.meal_allowance ? `Meal: ${emp.meal_allowance}` : '',
+              emp.eoy_bonus ? `EOY/13e mois: ${emp.eoy_bonus}` : '',
               emp.net_pay && Math.abs((emp.net_pay || 0) - computedNet) > 1
                 ? `Excel net=${emp.net_pay} ignoré (recalculé=${computedNet})`
                 : '',
@@ -464,7 +482,7 @@ export async function POST(request: Request) {
           if (bulErr) {
             console.warn(`[import-paie] bulletin upsert failed for ${nom}, trying insert:`, bulErr.message)
             // Fallback: try simple insert without upsert
-            const { error: insErr } = await supabase.from('bulletins_paie').insert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, heures_sup_montant: ot_total, special_allowance_1: all_primes, salaire_net: computedNet, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: total_ded, total_charges_patronales: total_charges, montant_absence: emp.absence_deductions || 0, statut: 'valide', source: 'import_excel' })
+            const { error: insErr } = await supabase.from('bulletins_paie').insert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, heures_sup_montant: ot_total, special_allowance_1: all_primes, eoy_bonus: emp.eoy_bonus || 0, salaire_net: computedNet, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: total_ded, total_charges_patronales: total_charges, montant_absence: emp.absence_deductions || 0, statut: 'valide', source: 'import_excel' })
             if (insErr) {
               console.error(`[import-paie] bulletin insert also failed:`, insErr.message)
               errors.push(`${nom}: bulletin - ${insErr.message}`)
