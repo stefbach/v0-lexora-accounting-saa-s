@@ -594,6 +594,74 @@ export async function POST(request: Request) {
       return NextResponse.json({ created, updated, errors, total: employes.length, compta: comptaOk, dossier_found: !!dossier })
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // IMPORT EOY — fichier SUPPLÉMENTAIRE 13ème mois (bulletin séparé déc.)
+    // ─────────────────────────────────────────────────────────────────
+    // Crée un bulletin EOY distinct (source='eoy_bonus_import') sur une
+    // période à jour spécifique (YYYY-12-25) pour ne PAS entrer en collision
+    // avec le bulletin mensuel (YYYY-12-01) ni les bulletins EOY natifs
+    // (YYYY-12-18 / YYYY-12-31). salaire_brut est GENERATED → on alimente
+    // uniquement eoy_bonus (le brut s'auto-calcule + se comptabilise au 6416).
+    if (body.action === 'import_eoy') {
+      const { societe_id, periode, employes } = body
+      if (!societe_id || !periode || !employes?.length) return NextResponse.json({ error: 'Données manquantes' }, { status: 400 })
+      const hasAccessEoy = await userHasAccessToSociete(user.id, societe_id)
+      if (!hasAccessEoy) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+
+      const year = String(periode).slice(0, 4)
+      const eoyPeriode = `${year}-12-25` // jour distinct → pas de collision
+      let created = 0
+      const errors: string[] = []
+
+      for (const emp of employes) {
+        try {
+          const nom = (emp.nom || '').toUpperCase().trim()
+          if (!nom) continue
+          // Montant EOY : colonne EOY détectée en priorité, sinon total/net.
+          const montantEoy = Number(emp.eoy_bonus || emp.total_payments || emp.net_pay || emp.other_primes || 0)
+          if (!montantEoy || montantEoy <= 0) { errors.push(`${nom}: aucun montant EOY détecté`); continue }
+
+          // L'employé DOIT exister (EOY = complément à une paie déjà en place).
+          const { data: ex } = await supabase.from('employes').select('id').eq('societe_id', societe_id).ilike('nom', `%${nom}%`).limit(1).maybeSingle()
+          if (!ex) { errors.push(`${nom}: employé introuvable (créez-le d'abord via l'import mensuel)`); continue }
+          const employeId = ex.id
+
+          const csg = Number(emp.csg || 0)
+          const paye = Number(emp.paye || 0)
+          const totalDed = Math.round((csg + paye) * 100) / 100
+          const net = Math.max(0, Math.round((montantEoy - totalDed) * 100) / 100)
+
+          // Idempotence : archive un éventuel bulletin EOY import précédent
+          // pour cette période (évite les doublons en cas de réimport).
+          await supabase.from('bulletins_paie')
+            .update({ is_archived: true, archived_at: new Date().toISOString(), archive_reason: 'reimport_eoy' })
+            .eq('employe_id', employeId).eq('periode', eoyPeriode)
+            .eq('source', 'eoy_bonus_import').eq('is_archived', false)
+
+          const { error: insErr } = await supabase.from('bulletins_paie').insert({
+            employe_id: employeId, societe_id, periode: eoyPeriode,
+            salaire_base: 0,
+            // salaire_brut: GENERATED — ne pas écrire, eoy_bonus l'alimente
+            eoy_bonus: montantEoy,
+            csg_bonus: csg, paye_bonus: paye,
+            csg_salarie: 0, nsf_salarie: 0, paye: 0,
+            total_deductions: totalDed,
+            salaire_net: net,
+            statut: 'valide',
+            source: 'eoy_bonus_import',
+            notes: `Import 13ème mois (EOY) — brut ${montantEoy}${totalDed ? `, retenues ${totalDed}` : ''}`,
+          })
+          if (insErr) { errors.push(`${nom}: ${insErr.message}`); continue }
+          created++
+        } catch (e: any) { errors.push(`${emp.nom}: ${e.message}`) }
+      }
+
+      return NextResponse.json({
+        created, updated: 0, errors, total: employes.length,
+        mode: 'eoy', periode_eoy: eoyPeriode,
+      })
+    }
+
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
