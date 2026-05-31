@@ -301,6 +301,7 @@ export default function ImportPaiePage() {
                       <th className="px-2 py-2 text-right font-medium border-b bg-green-50">Prime</th>
                       <th className="px-2 py-2 text-right font-medium border-b bg-green-50">Elec</th>
                       <th className="px-2 py-2 text-right font-medium border-b bg-green-50">Meal</th>
+                      <th className="px-2 py-2 text-right font-medium border-b bg-purple-50 font-semibold">EOY 13e</th>
                       <th className="px-2 py-2 text-right font-medium border-b font-bold">Total Brut</th>
                       <th className="px-2 py-2 text-right font-medium border-b bg-red-50">Absence</th>
                       <th className="px-2 py-2 text-right font-medium border-b bg-red-50">CSG</th>
@@ -331,6 +332,7 @@ export default function ImportPaiePage() {
                         <td className="px-2 py-1 text-right font-mono">{fmt(e.prime_production)}</td>
                         <td className="px-2 py-1 text-right font-mono">{fmt(e.electricity)}</td>
                         <td className="px-2 py-1 text-right font-mono">{fmt(e.meal_allowance)}</td>
+                        <td className="px-2 py-1 text-right font-mono text-purple-700 font-medium">{fmt(e.eoy_bonus)}</td>
                         <td className="px-2 py-1 text-right font-mono font-medium">{fmt(e.total_payments || e.salaire_base)}</td>
                         <td className="px-2 py-1 text-right font-mono text-red-500">{fmt(e.absence_deductions)}</td>
                         <td className="px-2 py-1 text-right font-mono text-red-600">{fmt(e.csg)}</td>
