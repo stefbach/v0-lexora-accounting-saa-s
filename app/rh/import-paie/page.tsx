@@ -22,6 +22,9 @@ export default function ImportPaiePage() {
   const [societe, setSociete] = useState("")
   const [periode, setPeriode] = useState("")
   const [step, setStep] = useState<Step>("upload")
+  // Mode d'import : 'mensuel' (paie normale) ou 'eoy' (13ème mois — fichier
+  // supplémentaire qui crée un bulletin EOY séparé sur décembre).
+  const [importMode, setImportMode] = useState<'mensuel' | 'eoy'>('mensuel')
 
   // Parse results
   const [parsing, setParsing] = useState(false)
@@ -111,7 +114,10 @@ export default function ImportPaiePage() {
     try {
       const res = await fetch("/api/rh/import-paie", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "import", societe_id: societe, periode, employes }),
+        body: JSON.stringify({
+          action: importMode === 'eoy' ? "import_eoy" : "import",
+          societe_id: societe, periode, employes,
+        }),
       })
       const data = await res.json()
       if (data.error) { alert("Erreur: " + data.error); return }
@@ -161,6 +167,28 @@ export default function ImportPaiePage() {
       {step === "upload" && (
         <Card>
           <CardContent className="p-8 space-y-4">
+            {/* Sélecteur de mode : paie mensuelle vs 13ème mois (EOY) */}
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => setImportMode('mensuel')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${importMode === 'mensuel' ? 'bg-[#0B0F2E] text-white border-[#0B0F2E]' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'}`}
+              >
+                📋 Paie mensuelle
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportMode('eoy')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${importMode === 'eoy' ? 'bg-purple-700 text-white border-purple-700' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'}`}
+              >
+                🎁 13ème mois (EOY)
+              </button>
+            </div>
+            {importMode === 'eoy' && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm text-purple-800">
+                <strong>Mode 13ème mois.</strong> Importe un fichier <strong>supplémentaire</strong> (employé + montant EOY). Chaque ligne crée un <strong>bulletin EOY séparé</strong> sur décembre (en plus de la paie mensuelle), comptabilisé au compte 6416. Colonnes reconnues : nom, prénom, code + un montant « EOY / 13th month / 13e mois / prime fin d'année / gratification ».
+              </div>
+            )}
             <div
               className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center hover:border-[#D4AF37] transition-colors"
               onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-[#D4AF37]', 'bg-[#D4AF37]/5') }}
