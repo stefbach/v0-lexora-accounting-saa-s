@@ -39,6 +39,33 @@ function getAdminClient() {
 const MODEL = 'claude-sonnet-4-6'
 const MAX_TURNS = 6
 
+/**
+ * Persiste un tour Expert web dans web_chat_history (mig 458) — best-effort.
+ * Permet à l'agent Telegram de "voir" ce qui s'est dit sur le web via
+ * vw_agent_history_unified + outil recall_other_channel.
+ */
+async function persistWebChatTurn(args: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- admin client local
+  admin: any
+  user_id: string
+  societe_id: string
+  user_text: string
+  assistant_text: string
+  meta?: Record<string, unknown>
+}): Promise<void> {
+  try {
+    await args.admin.from('web_chat_history').insert([
+      { user_id: args.user_id, societe_id: args.societe_id, role: 'user',
+        content: String(args.user_text || '').slice(0, 8_000) },
+      { user_id: args.user_id, societe_id: args.societe_id, role: 'assistant',
+        content: String(args.assistant_text || '').slice(0, 8_000),
+        meta: args.meta || {} },
+    ])
+  } catch {
+    /* mig 458 pas encore appliquée → no-op */
+  }
+}
+
 function systemPrompt(societeId: string, today: string): string {
   return `Tu es l'EXPERT LEXORA — expert-comptable, RH et fiscaliste mauricien senior. Tu combines :
   • la maîtrise comptable (IFRS for SMEs, Plan Comptable Mauricien 4 chiffres, multi-devises MUR/EUR/USD/GBP/ZAR)
@@ -111,7 +138,14 @@ export async function POST(request: Request) {
       const confirmText = confirmResp.content
         .filter((c): c is Anthropic.TextBlock => c.type === 'text')
         .map(t => t.text).join('\n').trim()
-      return NextResponse.json({ type: 'message', message: confirmText || 'Action effectuée.' })
+      const finalText = confirmText || 'Action effectuée.'
+      await persistWebChatTurn({
+        admin, user_id: user.id, societe_id,
+        user_text: String(messages[messages.length - 1]?.content || ''),
+        assistant_text: finalText,
+        meta: { action_executed: confirmed_action?.name },
+      })
+      return NextResponse.json({ type: 'message', message: finalText })
     }
 
     // Construire l'historique pour Claude (messages texte simples)
@@ -135,16 +169,29 @@ export async function POST(request: Request) {
       const agentText = textBlocks.map(t => t.text).join('\n').trim()
 
       if (toolUses.length === 0) {
-        // Réponse finale en langage naturel
-        return NextResponse.json({ type: 'message', message: agentText || '(pas de réponse)' })
+        const finalText = agentText || '(pas de réponse)'
+        await persistWebChatTurn({
+          admin, user_id: user.id, societe_id,
+          user_text: String(messages[messages.length - 1]?.content || ''),
+          assistant_text: finalText,
+          meta: { turns: turn + 1 },
+        })
+        return NextResponse.json({ type: 'message', message: finalText })
       }
 
       // Vérifier s'il y a un outil WRITE → demander confirmation
       const writeUse = toolUses.find(t => WRITE_TOOLS.has(t.name))
       if (writeUse) {
+        const proposalMsg = agentText || `Je vais exécuter : ${writeUse.name}`
+        await persistWebChatTurn({
+          admin, user_id: user.id, societe_id,
+          user_text: String(messages[messages.length - 1]?.content || ''),
+          assistant_text: proposalMsg + ` [proposition: ${writeUse.name}]`,
+          meta: { proposed_action: writeUse.name },
+        })
         return NextResponse.json({
           type: 'confirmation',
-          message: agentText || `Je vais exécuter : ${writeUse.name}`,
+          message: proposalMsg,
           action: { name: writeUse.name, input: writeUse.input, resume: resumeAction(writeUse.name, writeUse.input) },
         })
       }

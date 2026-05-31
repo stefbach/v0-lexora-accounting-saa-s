@@ -2065,6 +2065,32 @@ const TOOLS: ToolDef[] = [
     endpoint: () => `/api/client/mra/it-form3`,
     isAction: true,
   },
+
+  // ── 🔁 CROSS-CHANNEL avec l'Expert web (mig 458) ─────────────────────
+  {
+    name: 'web_handoff_link',
+    description: 'Crée un lien magique 24h pour finir une action sur l\'Expert web Lexora (validation visuelle, signature, upload). Renvoie une URL à transmettre à l\'utilisateur. Demander confirmation avant.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', description: 'Message à pré-charger dans l\'Expert web' },
+        context: { type: 'object', description: 'Meta optionnelle (facture_id, action…)' },
+      },
+      required: ['message'],
+    },
+    kind: 'internal_post', internalPath: '/api/telegram/internal/web-handoff', isAction: true,
+  },
+  {
+    name: 'recall_other_channel',
+    description: 'Récupère les derniers échanges de l\'utilisateur sur l\'Expert WEB (l\'autre canal). Pour "qu\'est-ce qu\'on s\'est dit sur le web ?", "rappelle-toi la conversation web". Défaut 15 tours / 72h.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number' }, hours_back: { type: 'number' },
+      },
+    },
+    kind: 'internal_post', internalPath: '/api/telegram/internal/recall-web',
+  },
 ]
 
 const TOOL_MAP = new Map(TOOLS.map(t => [t.name, t]))
