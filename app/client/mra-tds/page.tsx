@@ -1,134 +1,198 @@
 "use client"
-import { useEffect, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useEffect, useState, useCallback } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Loader2, Download, RefreshCw, AlertCircle, Banknote } from 'lucide-react'
+import { Loader2, RefreshCw, Download, AlertTriangle, CheckCircle2, Clock, FileSpreadsheet } from 'lucide-react'
 import { useSocieteActive } from '@/components/client/SocieteActiveProvider'
-import { t, getLocale, type Locale } from '@/lib/i18n'
 
-const fmt = (n: number | null | undefined) => n == null ? '—' : new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2 }).format(Number(n))
-const STATUS_COLOR: Record<string, string> = { paye: 'bg-emerald-100 text-emerald-800', declare: 'bg-blue-100 text-blue-800', a_faire: 'bg-amber-100 text-amber-800', retard: 'bg-red-100 text-red-800' }
+const NAVY = '#0B0F2E'
+const fmt = (n: number | null | undefined) =>
+  n == null ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Number(n)) + ' MUR'
+
+const TYPE_LABEL: Record<string, string> = {
+  PAYE: 'PAYE', CSG: 'CSG', NSF: 'NSF', TDS: 'TDS (retenue source)', TVA: 'TVA',
+  CIT: 'Impôt société', APS: 'Acompte APS', IT_FORM3: 'IT Form 3',
+}
+const PRIO_STYLE: Record<string, { bg: string; label: string }> = {
+  retard:  { bg: 'bg-red-100 text-red-800 border-red-300',          label: 'En retard' },
+  urgent:  { bg: 'bg-orange-100 text-orange-800 border-orange-300', label: 'Urgent' },
+  bientot: { bg: 'bg-amber-100 text-amber-800 border-amber-300',    label: 'Bientôt' },
+  futur:   { bg: 'bg-slate-100 text-slate-700 border-slate-300',    label: 'À venir' },
+  declare: { bg: 'bg-blue-100 text-blue-800 border-blue-300',       label: 'Déclaré' },
+  paye:    { bg: 'bg-emerald-100 text-emerald-800 border-emerald-300', label: 'Payé' },
+  sans_objet: { bg: 'bg-gray-50 text-gray-400 border-gray-200',     label: '—' },
+}
 
 export default function MraTdsPage() {
-  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [data, setData] = useState<any>(null)
-  const [annual, setAnnual] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [periode, setPeriode] = useState(() => new Date().toISOString().slice(0, 7))
-  const [year, setYear] = useState(new Date().getFullYear() - 1)
+  const [busy, setBusy] = useState<string>('')
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!societeId) { setLoading(false); return }
     setError(null); setLoading(true)
     try {
-      const [r1, r2] = await Promise.all([
-        fetch(`/api/comptable/mra/tds?societe_id=${societeId}&periode=${periode}`).then(r => r.json()),
-        fetch(`/api/comptable/mra/tds?societe_id=${societeId}&year=${year}&action=annual`).then(r => r.json()),
-      ])
-      setData(r1); setAnnual(r2)
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [societeId, periode, year])
+      const r = await fetch(`/api/client/mra/dashboard?societe_id=${societeId}`)
+      const j = await r.json()
+      if (!r.ok) { setError(j.error || 'Erreur'); setData(null) }
+      else setData(j)
+    } catch (e: any) { setError(e?.message || 'Erreur') }
+    finally { setLoading(false) }
+  }, [societeId])
 
-  const exportCsv = () => { if (societeId) window.location.href = `/api/comptable/mra/tds?societe_id=${societeId}&periode=${periode}&action=export_csv` }
-  const markAction = async (action: string) => {
+  useEffect(() => { load() }, [load])
+
+  async function action(decl: any, act: 'declarer' | 'payer' | 'reset') {
+    if (act === 'reset' && !confirm('Réinitialiser cette déclaration ?')) return
+    setBusy(decl.id)
+    try {
+      const r = await fetch(`/api/client/mra/declaration/${decl.id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: act }),
+      })
+      const j = await r.json()
+      if (!r.ok) alert('Erreur : ' + (j.error || r.status))
+      await load()
+    } catch (e: any) { alert('Erreur réseau : ' + (e?.message || '')) }
+    finally { setBusy('') }
+  }
+
+  function bordereau(decl: any, format: 'csv' | 'xlsx') {
     if (!societeId) return
-    await fetch('/api/comptable/mra/tds', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ societe_id: societeId, periode, action }) })
-    load()
+    if (!['PAYE', 'CSG', 'NSF', 'TDS'].includes(decl.type)) { alert('Bordereau non disponible pour ce type.'); return }
+    window.location.href = `/api/client/mra/bordereau?societe_id=${societeId}&type=${decl.type}&periode=${decl.periode}&format=${format}`
   }
 
-  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t('mra.tds.no_societe', locale)}</div></div>
-  if (loading) return <div className="p-8 flex items-center gap-2"><Loader2 className="animate-spin h-5 w-5" /> {t('mra.tds.loading', locale)}</div>
+  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Sélectionne une société.</div></div>
+  if (loading) return <div className="p-8 flex items-center gap-2"><Loader2 className="animate-spin h-5 w-5" /> Chargement…</div>
 
-  const s = data?.summary || {}
-  const d = data?.declaration
+  const k = data?.kpis || {}
+  const groups = data?.groups || {}
+  const prochaine = data?.prochaine_echeance
+  const ordered = ['retard', 'urgent', 'bientot', 'futur', 'done']
+  const titleMap: Record<string, string> = {
+    retard: '🔴 En retard', urgent: '🟠 Urgent (≤ 3j)', bientot: '🟡 Bientôt (≤ 15j)',
+    futur: '⚪ À venir', done: '✅ Déclarées / Payées',
+  }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Banknote className="h-6 w-6 text-amber-600" /> {t('mra.tds.title', locale)}</h1>
-          <p className="text-sm text-slate-500">{t('mra.tds.subtitle', locale)}</p>
+          <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Conformité MRA</h1>
+          <p className="text-sm text-slate-500">PAYE · CSG · NSF · TDS · TVA — échéances, montants dus, rappels automatiques</p>
         </div>
-        <div className="flex gap-2 items-center">
-          <input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="border rounded px-2 py-1 text-sm" />
-          <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />{t('mra.tds.refresh', locale)}</Button>
-        </div>
+        <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />Actualiser</Button>
       </div>
 
-      {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex gap-2"><AlertCircle className="h-4 w-4" />{error}</div>}
+      {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('mra.tds.kpi.payments', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{s.nb_paiements || 0}</div><div className="text-xs text-slate-500">{t('mra.tds.kpi.payments_hint', locale)} {periode}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('mra.tds.kpi.gross', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{fmt(s.total_paiements_mur)}</div><div className="text-xs text-slate-500">MUR</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('mra.tds.kpi.tds', locale)}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-amber-700">{fmt(s.total_tds_mur)}</div><div className="text-xs text-slate-500">{t('mra.tds.kpi.tds_hint', locale)}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-xs text-slate-500">{t('mra.tds.kpi.deadline', locale)}</CardTitle></CardHeader><CardContent><div className="text-lg font-bold">{s.date_limite || '—'}</div><Badge className={STATUS_COLOR[d?.statut || 'a_faire']}>{d?.statut || t('mra.tds.status.todo', locale)}</Badge></CardContent></Card>
-      </div>
-
-      <div className="flex gap-2">
-        <Button onClick={exportCsv} variant="outline"><Download className="h-4 w-4 mr-2" />{t('mra.tds.export_csv', locale)}</Button>
-        {d?.statut !== 'declare' && d?.statut !== 'paye' && <Button onClick={() => markAction('mark_declared')} variant="outline">{t('mra.tds.mark_declared', locale)}</Button>}
-        {d?.statut === 'declare' && <Button onClick={() => markAction('mark_paid')} variant="outline" className="bg-emerald-50 text-emerald-700">{t('mra.tds.mark_paid', locale)}</Button>}
-      </div>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">{t('mra.tds.detail.title', locale)}{periode}</CardTitle></CardHeader>
-        <CardContent>
-          {(data?.factures?.length || 0) === 0 ? (
-            <div className="text-sm text-slate-500 p-4 text-center">{t('mra.tds.detail.empty', locale)}</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="border-b"><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 px-2">{t('mra.tds.col.date', locale)}</th><th className="py-2 px-2">{t('mra.tds.col.party', locale)}</th><th className="py-2 px-2">{t('mra.tds.col.category', locale)}</th><th className="py-2 px-2 text-right">{t('mra.tds.col.gross', locale)}</th><th className="py-2 px-2 text-right">{t('mra.tds.col.rate', locale)}</th><th className="py-2 px-2 text-right">{t('mra.tds.col.tds', locale)}</th></tr></thead>
-              <tbody>
-                {data.factures.map((f: any) => (
-                  <tr key={f.id} className="border-b">
-                    <td className="py-2 px-2 text-xs">{f.date_facture}</td>
-                    <td className="py-2 px-2 font-medium">{f.tiers}</td>
-                    <td className="py-2 px-2 text-xs"><Badge variant="outline">{f.tds_category}</Badge></td>
-                    <td className="py-2 px-2 text-right">{fmt(f.montant_mur)}</td>
-                    <td className="py-2 px-2 text-right">{f.tds_rate_pct}%</td>
-                    <td className="py-2 px-2 text-right font-semibold text-amber-700">{fmt(f.tds_amount_mur)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Annual statement */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">{t('mra.tds.annual.title', locale)}{year}</CardTitle>
-          <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value))} className="border rounded px-2 py-1 text-sm w-24" />
-        </CardHeader>
-        <CardContent>
-          {(annual?.records?.length || 0) === 0 ? (
-            <div className="text-sm text-slate-500 p-4 text-center">{t('mra.tds.annual.empty_prefix', locale)}{year}.</div>
-          ) : (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="border-l-4 border-l-amber-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">À traiter</p>
+          <p className="text-2xl font-bold text-amber-600">{k.total_a_traiter ?? 0}</p>
+          <p className="text-xs text-gray-400 mt-1">déclarations en cours</p>
+        </CardContent></Card>
+        <Card className="border-l-4 border-l-red-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">En retard</p>
+          <p className="text-2xl font-bold text-red-600">{k.nb_retard ?? 0}</p>
+          <p className="text-xs text-gray-400 mt-1">{fmt(k.montant_retard)}</p>
+        </CardContent></Card>
+        <Card className="border-l-4 border-l-blue-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">Montant dû total</p>
+          <p className="text-2xl font-bold text-blue-600">{fmt(k.montant_du)}</p>
+          <p className="text-xs text-gray-400 mt-1">à reverser à la MRA</p>
+        </CardContent></Card>
+        <Card className="border-l-4 border-l-violet-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">Prochaine échéance</p>
+          {prochaine ? (
             <>
-              <div className="mb-2 text-sm">{t('mra.tds.annual.total_prefix', locale)}{year} : <span className="font-bold">{fmt(annual.total_tds_mur)} MUR</span></div>
+              <p className="text-lg font-bold text-violet-700">{TYPE_LABEL[prochaine.type] || prochaine.type} {prochaine.periode}</p>
+              <p className="text-xs text-gray-400 mt-1">{prochaine.date_echeance} · {prochaine.jours_restants}j · {fmt(prochaine.montant_du)}</p>
+            </>
+          ) : <p className="text-sm text-gray-400 mt-2">Rien à venir 🎉</p>}
+        </CardContent></Card>
+      </div>
+
+      {ordered.map(g => {
+        const rows = (groups[g] || []) as any[]
+        if (!rows.length) return null
+        return (
+          <div key={g} className="space-y-2">
+            <h2 className="text-sm font-semibold text-slate-600">{titleMap[g]} <span className="text-gray-400">({rows.length})</span></h2>
+            <Card><CardContent className="p-0 overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b"><tr className="text-left text-xs uppercase text-slate-500"><th className="py-2 px-2">{t('mra.tds.col.party', locale)}</th><th className="py-2 px-2">{t('mra.tds.col.category', locale)}</th><th className="py-2 px-2 text-right">{t('mra.tds.col.gross_total', locale)}</th><th className="py-2 px-2 text-right">{t('mra.tds.col.tds_total', locale)}</th><th className="py-2 px-2 text-right">{t('mra.tds.col.nb_invoices', locale)}</th></tr></thead>
-                <tbody>
-                  {annual.records.map((r: any, i: number) => (
-                    <tr key={i} className="border-b">
-                      <td className="py-2 px-2 font-medium">{r.tiers}</td>
-                      <td className="py-2 px-2 text-xs">{r.category_libelle}</td>
-                      <td className="py-2 px-2 text-right">{fmt(r.total_paiements_mur)}</td>
-                      <td className="py-2 px-2 text-right font-semibold">{fmt(r.total_tds_mur)}</td>
-                      <td className="py-2 px-2 text-right">{r.nb_factures}</td>
-                    </tr>
-                  ))}
+                <thead className="bg-gray-50 text-xs text-gray-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Obligation</th>
+                    <th className="px-3 py-2 text-left">Période</th>
+                    <th className="px-3 py-2 text-left">Échéance</th>
+                    <th className="px-3 py-2 text-right">Montant dû</th>
+                    <th className="px-3 py-2 text-center">Statut</th>
+                    <th className="px-3 py-2 text-center">Bordereau</th>
+                    <th className="px-3 py-2 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {rows.map(d => {
+                    const st = PRIO_STYLE[d.priorite] || PRIO_STYLE[d.statut] || PRIO_STYLE.futur
+                    return (
+                      <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 font-medium">{TYPE_LABEL[d.type] || d.type}</td>
+                        <td className="px-3 py-2 text-gray-600">{d.periode}</td>
+                        <td className="px-3 py-2 text-gray-600">
+                          {d.date_echeance}
+                          {typeof d.jours_restants === 'number' && d.statut !== 'paye' && (
+                            <span className="text-xs text-gray-400 ml-1">({d.jours_restants}j)</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">{fmt(d.montant_du)}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={`text-[11px] px-2 py-0.5 rounded border ${st.bg}`}>{st.label}</span>
+                        </td>
+                        <td className="px-3 py-2 text-center whitespace-nowrap">
+                          {['PAYE', 'CSG', 'NSF', 'TDS'].includes(d.type) && Number(d.montant_du) > 0 ? (
+                            <span className="inline-flex gap-1">
+                              <button onClick={() => bordereau(d, 'xlsx')} title="Excel" className="text-emerald-600 hover:text-emerald-800"><FileSpreadsheet className="h-4 w-4" /></button>
+                              <button onClick={() => bordereau(d, 'csv')} title="CSV MRA" className="text-blue-600 hover:text-blue-800"><Download className="h-4 w-4" /></button>
+                            </span>
+                          ) : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-center whitespace-nowrap">
+                          {d.statut === 'paye' ? (
+                            <button onClick={() => action(d, 'reset')} disabled={busy === d.id} className="text-[11px] text-gray-400 hover:text-gray-600">annuler</button>
+                          ) : d.statut === 'sans_objet' ? (
+                            <span className="text-gray-300">—</span>
+                          ) : (
+                            <span className="inline-flex gap-1">
+                              {d.statut !== 'declare' && (
+                                <button onClick={() => action(d, 'declarer')} disabled={busy === d.id}
+                                  className="text-[11px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                                  {busy === d.id ? '…' : 'Déclaré'}
+                                </button>
+                              )}
+                              <button onClick={() => action(d, 'payer')} disabled={busy === d.id}
+                                className="text-[11px] px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
+                                {busy === d.id ? '…' : 'Payé'}
+                              </button>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            </CardContent></Card>
+          </div>
+        )
+      })}
+
+      {data && (data.declarations || []).length === 0 && (
+        <p className="text-center text-gray-400 py-8">Aucune déclaration à afficher. Vérifie que la migration 457 est appliquée et que la paie est comptabilisée.</p>
+      )}
     </div>
   )
 }
