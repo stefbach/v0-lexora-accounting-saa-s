@@ -197,8 +197,24 @@ async function forwardToN8nAgent(
   }
 
   const { overrideMessage, ...extraFields } = extras
+
+  // Typing indicator : montre "typing…" à l'utilisateur pendant que n8n bosse.
+  // Sans ça, en cas de souci n8n l'utilisateur voit un silence total après /start
+  // (cf. bug "connecté puis plus rien"). Best-effort, non bloquant.
+  fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendChatAction`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
+  }).catch(() => { /* noop */ })
+
+  // Timeout 25s : si n8n hang, on prévient l'utilisateur au lieu de laisser
+  // le webhook timeout (60s) silencieusement.
+  const ctrl = new AbortController()
+  const t0 = Date.now()
+  const timeoutId = setTimeout(() => ctrl.abort(), 25_000)
+
   try {
-    await fetch(N8N_AGENT_WEBHOOK, {
+    const res = await fetch(N8N_AGENT_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -215,13 +231,47 @@ async function forwardToN8nAgent(
         memory_context: memoryContext,
         ...extraFields,
       }),
+      signal: ctrl.signal,
     })
-  } catch (e: any) {
+    clearTimeout(timeoutId)
+
+    if (!res.ok) {
+      const bodyExcerpt = await res.text().catch(() => '').then(s => s.slice(0, 200))
+      await logAction({
+        chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+        intent: 'agent.forward', status: 'error',
+        error_msg: `n8n HTTP ${res.status}: ${bodyExcerpt}`,
+        duration_ms: Date.now() - t0,
+      })
+      await sendTelegramMessage(
+        chatId,
+        `⚠️ L'agent IA a renvoyé une erreur (HTTP ${res.status}).\n` +
+        `Réessaie dans un instant, ou tape <code>/help</code> pour les commandes directes.`,
+      )
+      return
+    }
+
+    // Succès du dispatch — la vraie réponse arrivera via /api/telegram/send
+    // appelé depuis n8n. On log juste l'envoi côté Lexora.
     await logAction({
       chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
-      intent: 'agent.forward', status: 'error', error_msg: e.message,
+      intent: 'agent.forward', status: 'success', duration_ms: Date.now() - t0,
+    }).catch(() => { /* log non bloquant */ })
+  } catch (e: any) {
+    clearTimeout(timeoutId)
+    const isTimeout = e?.name === 'AbortError'
+    await logAction({
+      chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+      intent: 'agent.forward', status: 'error',
+      error_msg: isTimeout ? 'n8n timeout 25s' : e.message,
+      duration_ms: Date.now() - t0,
     })
-    await sendTelegramMessage(chatId, '⚠️ Erreur de communication avec l\'agent IA. Réessaie dans un instant.')
+    await sendTelegramMessage(
+      chatId,
+      isTimeout
+        ? '⏱ L\'agent IA met trop de temps à répondre (>25s). Réessaie dans un instant ou utilise <code>/help</code>.'
+        : '⚠️ Erreur de communication avec l\'agent IA. Tape <code>/help</code> pour voir les commandes directes (<code>/in</code>, <code>/out</code>, <code>/notes_de_frais</code>…).',
+    )
   }
 }
 
