@@ -31,9 +31,18 @@ export const READ_TOOLS = new Set([
   'lancer_rapprochement_auto', 'analyser_cloture',
   // RH / paie / MRA (fusion Cerveau → Expert Lexora)
   'list_bulletins', 'list_employes_rh', 'get_leave_balance_rh', 'get_mra_compliance', 'calc_paye_net',
+  // Cross-channel (Expert ↔ Telegram) — mig 458
+  'recall_other_channel',
+])
+export const NOTIFY_TOOLS = new Set([
+  // Actions externes mais SANS impact comptable → bypass confirmation classique.
+  // Toujours marquées isAction côté UI pour transparence.
+  'notify_telegram', 'web_handoff_link',
 ])
 export const WRITE_TOOLS = new Set([
   'creer_ecriture', 'lettrer_ecritures', 'reclasser_ecritures', 'enregistrer_paiement_facture',
+  // Effets de bord externes (push Telegram, lien magique) — passent aussi par confirmation
+  'notify_telegram', 'web_handoff_link',
 ])
 
 export const AGENT_TOOLS = [
@@ -228,6 +237,47 @@ export const AGENT_TOOLS = [
         salaire_brut_mensuel: { type: 'number' },
       },
       required: ['salaire_brut_mensuel'],
+    },
+  },
+
+  // ── Cross-canal (Expert ↔ Telegram) — mig 458 ────────────────────────
+  {
+    name: 'notify_telegram',
+    description: 'Envoie un message Telegram à l\'utilisateur (et aux dirigeants direction/admin de la société). Pour "envoie-moi le résumé sur Telegram", "préviens-moi sur Telegram quand X". Fournir message (texte clair, peut contenir <b>HTML</b> léger).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        message: { type: 'string', description: 'Texte du message Telegram' },
+        roles: {
+          type: 'array', items: { type: 'string' },
+          description: 'Rôles destinataires (défaut: l\'utilisateur courant). Ex: ["direction","admin"]',
+        },
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'web_handoff_link',
+    description: 'Crée un lien magique (24h, à usage unique) qui ouvre l\'agent web Lexora avec un message pré-chargé. Pour finir une action sur le web depuis Telegram (ex: validation visuelle, signature, upload de pièce). Fournir message à pré-charger + canal cible (web par défaut).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        message: { type: 'string', description: 'Message à pré-charger dans l\'agent cible' },
+        target_canal: { type: 'string', enum: ['web', 'telegram'], description: 'Défaut: web (handoff Telegram→web)' },
+        context: { type: 'object', description: 'Meta libre (ex: facture_id, action proposée)' },
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'recall_other_channel',
+    description: 'Récupère les derniers échanges de l\'utilisateur sur L\'AUTRE canal (si tu es l\'Expert web → récupère les tours Telegram récents, et inversement). Pour "qu\'est-ce qu\'on s\'était dit sur Telegram ?", "rappelle-toi notre conversation web". Défaut: 15 derniers tours.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        limit: { type: 'number', description: 'Nombre de tours à charger (défaut 15, max 30)' },
+        hours_back: { type: 'number', description: 'Fenêtre en heures (défaut 72)' },
+      },
     },
   },
 ]
@@ -592,6 +642,28 @@ export async function execReadTool(name: string, input: any, ctx: ExecCtx): Prom
       }
     }
 
+    case 'recall_other_channel': {
+      // Lit la timeline Telegram (l'autre canal pour l'Expert web) sur la
+      // fenêtre récente. vw_agent_history_unified (mig 458) agrège web+telegram.
+      const limit = Math.min(30, Math.max(1, Number(input?.limit) || 15))
+      const hoursBack = Math.min(720, Math.max(1, Number(input?.hours_back) || 72))
+      const sinceIso = new Date(Date.now() - hoursBack * 3600_000).toISOString()
+      const { data, error } = await supabase
+        .from('vw_agent_history_unified')
+        .select('canal, role, content, created_at')
+        .eq('societe_id', societeId)
+        .eq('user_id', ctx.userId)
+        .eq('canal', 'telegram')           // depuis l'Expert web → l'autre = Telegram
+        .gte('created_at', sinceIso)
+        .order('created_at', { ascending: false }).limit(limit)
+      if (error) return { error: error.message, hint: 'Vérifier que la migration 458 est appliquée.' }
+      return {
+        other_canal: 'telegram',
+        nb_tours: (data || []).length,
+        tours: [...(data || [])].reverse(), // ordre chronologique pour le LLM
+      }
+    }
+
     default:
       return { error: `Outil lecture inconnu: ${name}` }
   }
@@ -813,6 +885,66 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
       })
       return { ok: true, ...res }
     }
+
+    // ── Cross-canal — mig 458 ────────────────────────────────────────────
+    case 'notify_telegram': {
+      // Push Telegram via pushTo. Destinataires = l'utilisateur courant
+      // (s'il a un chat_id) + les rôles demandés sur la société.
+      try {
+        const message = String(input?.message || '').trim()
+        if (!message) return { ok: false, error: 'message requis' }
+        const { chatIdsForRole, pushTo } = await import('@/lib/telegram/notify')
+        const roles = Array.isArray(input?.roles) && input.roles.length > 0
+          ? input.roles.map((r: any) => String(r))
+          : ['direction', 'client_admin', 'admin', 'super_admin']
+        const recipients = await chatIdsForRole(societeId, roles)
+        // + chat_id de l'utilisateur courant s'il est lié à Telegram
+        const { data: myTg } = await supabase
+          .from('telegram_users').select('chat_id')
+          .eq('user_id', ctx.userId).eq('verified', true).maybeSingle()
+        const chatIds = new Set<number>(recipients.map((r: any) => Number(r.chat_id)))
+        if (myTg?.chat_id) chatIds.add(Number(myTg.chat_id))
+        if (chatIds.size === 0) {
+          return { ok: false, error: 'Aucun destinataire Telegram (l\'utilisateur et la direction ne sont pas reliés au bot).' }
+        }
+        let sent = 0
+        for (const cid of chatIds) {
+          const ok = await pushTo(cid, message, societeId, 'expert.notify_telegram')
+          if (ok) sent++
+        }
+        return { ok: true, sent, nb_recipients: chatIds.size }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || 'Erreur notify_telegram' }
+      }
+    }
+
+    case 'web_handoff_link': {
+      // Crée un token 24h single-use qui pré-charge un message dans l'autre canal.
+      try {
+        const message = String(input?.message || '').trim()
+        if (!message) return { ok: false, error: 'message requis' }
+        const target = String(input?.target_canal || 'web') as 'web' | 'telegram'
+        const source: 'web' | 'telegram' = target === 'web' ? 'telegram' : 'web'
+        const tokenBytes = await import('crypto').then(c => c.randomBytes(18))
+        const token = tokenBytes.toString('base64url')
+        const expires = new Date(Date.now() + 24 * 3600_000).toISOString()
+        const { error } = await supabase.from('agent_handoff_tokens').insert({
+          token, societe_id: societeId, user_id: ctx.userId,
+          source_canal: source, target_canal: target,
+          message, context: input?.context || {},
+          expires_at: expires, created_by: ctx.userId,
+        })
+        if (error) return { ok: false, error: error.message, hint: 'Vérifier mig 458 appliquée.' }
+        const base = process.env.NEXT_PUBLIC_APP_URL || process.env.LEXORA_BASE_URL || ''
+        const url = target === 'web'
+          ? `${base}/client/agent-comptable?handoff=${token}`
+          : `${base}/api/agent/handoff/${token}` // côté Telegram, le bot lit le token et reprend
+        return { ok: true, token, url, target_canal: target, expires_at: expires }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || 'Erreur web_handoff_link' }
+      }
+    }
+
     default:
       return { ok: false, error: `Outil écriture inconnu: ${name}` }
   }

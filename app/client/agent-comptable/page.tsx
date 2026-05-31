@@ -23,11 +23,36 @@ interface PendingAction { name: string; input: any; resume: string }
 export default function AgentComptablePage() {
   const { societeId } = useSocieteActive()
   const [messages, setMessages] = useState<Msg[]>([
-    { role: "assistant", content: "Bonjour 👋 Je suis votre agent comptable. Demandez-moi par exemple : « affecte l'avance de 50 000 du client Dupont à sa facture FA-2026-012 », « quelles transactions bancaires de mai ne sont pas rapprochées ? », ou « reclasse les écritures OCC du 471 vers le 4511.OCC »." },
+    { role: "assistant", content: "Bonjour 👋 Je suis votre **Expert Lexora** (compta, RH, paie, MRA + droit Maurice). Demandez-moi par exemple : « affecte l'avance de 50 000 du client Dupont à sa facture FA-2026-012 », « solde de congés de Mélanie ? », « où en est ma conformité MRA ? », ou « calcule le net pour 50 000 brut »." },
   ])
   const [input, setInput] = useState("")
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<PendingAction | null>(null)
+
+  // Handoff Telegram → web : si l'URL contient ?handoff=<token>, on consomme
+  // le token et pré-charge le message dans le chat (mig 458).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    const token = sp.get('handoff')
+    if (!token) return
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/agent/handoff/${token}?consume=1`)
+        const j = await r.json()
+        if (!r.ok || !j?.message) return
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: `🔗 Lien Telegram reçu : *${j.message}*` },
+        ])
+        setInput(j.message)
+        // Nettoie l'URL
+        const url = new URL(window.location.href)
+        url.searchParams.delete('handoff')
+        window.history.replaceState({}, '', url.toString())
+      } catch { /* noop */ }
+    })()
+  }, [])
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight) }, [messages, pending])
