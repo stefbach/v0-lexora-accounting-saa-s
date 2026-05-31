@@ -1367,6 +1367,447 @@ const TOOLS: ToolDef[] = [
     input_schema: { type: 'object', properties: {} },
     kind: 'read', method: 'GET', endpoint: () => `/api/client/telegram-permissions`,
   },
+
+  // ══════════════════════════════════════════════════════════════════════
+  // PHASE 3 — Pilote complet : billing, investissements, comptables,
+  // factures-IA, paramètres, plans, cash-in-lieu, demandes inscription
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── 💼 INVESTISSEMENTS (immobilisations) ─────────────────────────────
+  {
+    name: 'list_investissements',
+    description: 'Liste les investissements / immobilisations de la société (amortissements en cours).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/investissements`,
+  },
+  {
+    name: 'create_investissement',
+    description: 'Enregistre un investissement / immobilisation. Fournir libelle, montant, date_acquisition (YYYY-MM-DD), duree_amortissement_mois, categorie (informatique/mobilier/vehicule/batiment/autre).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        libelle: { type: 'string' },
+        montant: { type: 'number' },
+        date_acquisition: { type: 'string' },
+        duree_amortissement_mois: { type: 'number' },
+        categorie: { type: 'string' },
+        compte_immo: { type: 'string', description: 'N° compte 21x (optionnel — déduit de la catégorie)' },
+      },
+      required: ['libelle', 'montant', 'date_acquisition'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/investissements`, isAction: true,
+  },
+  {
+    name: 'delete_investissement',
+    description: 'Supprime un investissement / immobilisation. Demander confirmation explicite (impact comptable).',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'read', method: 'DELETE', endpoint: (p) => `/api/client/investissements?id=${p.id}`, isAction: true,
+  },
+
+  // ── 🤖 FACTURES-IA (génération assistée par IA) ──────────────────────
+  {
+    name: 'generate_facture_ai',
+    description: 'Génère une facture via l\'IA Lexora à partir d\'une description libre (ex: "facture ACME 50000 MUR services janvier"). L\'IA construit les lignes + TVA + tiers. Demander confirmation des montants avant.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Description libre de la facture' },
+        client_id: { type: 'string', description: 'UUID client (optionnel — sinon déduit du prompt)' },
+        devise: { type: 'string' },
+      },
+      required: ['prompt'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/factures-ia/generer`, isAction: true,
+  },
+  {
+    name: 'get_factures_ia_contexte',
+    description: 'Contexte facturation pour l\'IA (clients récents, produits, taux TVA usuels…). Pour debug.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/factures-ia/contexte`,
+  },
+  {
+    name: 'fiscalise_facture',
+    description: 'Soumet une facture à la MRA pour fiscalisation (e-invoicing Maurice). Fournir facture_id. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { facture_id: { type: 'string' } },
+      required: ['facture_id'],
+    },
+    kind: 'read', method: 'POST', endpoint: (p) => `/api/client/factures/${p.facture_id}/fiscalise`, isAction: true,
+  },
+  {
+    name: 'get_facture_fiscalisation_status',
+    description: 'Statut de fiscalisation MRA d\'une facture (IRN, QR code, etc.). Fournir facture_id.',
+    input_schema: {
+      type: 'object',
+      properties: { facture_id: { type: 'string' } },
+      required: ['facture_id'],
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/client/factures/${p.facture_id}/fiscalise`,
+  },
+  {
+    name: 'list_mra_fiscalisation',
+    description: 'État global de la fiscalisation MRA pour la société (factures fiscalisées / en attente / en erreur).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/mra-fiscalisation`,
+  },
+
+  // ── 🌍 TIERS OFFSHORE ─────────────────────────────────────────────────
+  {
+    name: 'create_tiers_offshore',
+    description: 'Enregistre un tiers offshore (lié à un GBC). Fournir nom, type (client/fournisseur), pays, registration_number, contact.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nom: { type: 'string' },
+        type: { type: 'string', enum: ['client', 'fournisseur'] },
+        pays: { type: 'string' },
+        registration_number: { type: 'string' },
+        contact_email: { type: 'string' },
+      },
+      required: ['nom', 'pays'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/tiers-offshore`, isAction: true,
+  },
+
+  // ── 📧 EMAIL ACCOUNTS (CRUD) ─────────────────────────────────────────
+  {
+    name: 'list_email_accounts_full',
+    description: 'Liste détaillée des comptes email connectés (provider, addresse, statut, dernière synchro).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/email-accounts`,
+  },
+  {
+    name: 'create_email_account',
+    description: 'Ajoute un compte email (SMTP/IMAP ou OAuth). Fournir email, provider (gmail/outlook/smtp), credentials selon provider.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string' },
+        provider: { type: 'string' },
+        smtp_host: { type: 'string' }, smtp_port: { type: 'number' },
+        username: { type: 'string' }, password: { type: 'string' },
+      },
+      required: ['email', 'provider'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/email-accounts`, isAction: true,
+  },
+  {
+    name: 'update_email_account',
+    description: 'Modifie un compte email (champ par champ). Fournir id + champs à changer.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' }, email: { type: 'string' },
+        smtp_host: { type: 'string' }, smtp_port: { type: 'number' },
+        username: { type: 'string' }, password: { type: 'string' },
+        actif: { type: 'boolean' },
+      },
+      required: ['id'],
+    },
+    kind: 'read', method: 'PATCH', endpoint: () => `/api/client/email-accounts`, isAction: true,
+  },
+  {
+    name: 'delete_email_account',
+    description: 'Supprime un compte email connecté. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'read', method: 'DELETE', endpoint: (p) => `/api/client/email-accounts?id=${p.id}`, isAction: true,
+  },
+  {
+    name: 'test_email_account',
+    description: 'Teste un compte email (envoi d\'un mail de test). Fournir id ou email.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' }, email: { type: 'string' } },
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/email-accounts/test`, isAction: true,
+  },
+
+  // ── 🔑 API KEYS UTILISATEUR ──────────────────────────────────────────
+  {
+    name: 'list_user_api_keys',
+    description: 'Liste les clés API personnelles de l\'utilisateur (pour intégrations externes).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/user-api-keys`,
+  },
+  {
+    name: 'create_user_api_key',
+    description: 'Crée une nouvelle clé API. Fournir nom (libellé). Demander confirmation (la clé n\'est affichée qu\'une fois).',
+    input_schema: {
+      type: 'object',
+      properties: { nom: { type: 'string' }, expires_in_days: { type: 'number' } },
+      required: ['nom'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/user-api-keys`, isAction: true,
+  },
+
+  // ── ⚙️ CONFIG : alertes Telegram + permissions Telegram (PATCH) ──────
+  {
+    name: 'update_telegram_alerts_config',
+    description: 'Modifie la config des alertes Telegram (échéances MRA, factures retard, présences…). Fournir les flags à activer/désactiver.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        echeances_mra: { type: 'boolean' },
+        factures_retard: { type: 'boolean' },
+        presences_anomalies: { type: 'boolean' },
+        bulletins_pretes: { type: 'boolean' },
+        days_before_mra: { type: 'number' },
+      },
+    },
+    kind: 'read', method: 'PATCH', endpoint: () => `/api/client/telegram-alerts-config`, isAction: true,
+  },
+  {
+    name: 'update_telegram_permissions',
+    description: 'Met à jour les permissions Telegram d\'un utilisateur (rôle + capabilities). Fournir user_id + role et/ou capabilities.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        user_id: { type: 'string' },
+        role: { type: 'string' },
+        capabilities: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['user_id'],
+    },
+    kind: 'read', method: 'PATCH', endpoint: () => `/api/client/telegram-permissions`, isAction: true,
+  },
+
+  // ── 🧮 COMPTABLES — assignations & profil (admin Lexora) ─────────────
+  {
+    name: 'list_comptable_assignations',
+    description: 'Liste les assignations comptables (quel comptable suit quel dossier client). Admin Lexora.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/admin/comptables/assignations`,
+  },
+  {
+    name: 'assign_comptable',
+    description: 'Assigne un comptable à un dossier/société. Fournir comptable_id + societe_id (ou dossier_id). Admin Lexora.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        comptable_id: { type: 'string' },
+        societe_id: { type: 'string' },
+        dossier_id: { type: 'string' },
+      },
+      required: ['comptable_id'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/admin/comptables/assignations`, isAction: true,
+  },
+  {
+    name: 'unassign_comptable',
+    description: 'Retire l\'assignation d\'un comptable. Fournir assignation_id ou (comptable_id + societe_id).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        assignation_id: { type: 'string' },
+        comptable_id: { type: 'string' },
+        societe_id: { type: 'string' },
+      },
+    },
+    kind: 'read', method: 'DELETE', endpoint: (p) => `/api/admin/comptables/assignations?${qs(p)}`, isAction: true,
+  },
+  {
+    name: 'get_comptable_profil',
+    description: 'Profil d\'un comptable (charge, dossiers gérés, dispo).',
+    input_schema: {
+      type: 'object',
+      properties: { comptable_id: { type: 'string' } },
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/admin/comptables/profil?${qs(p)}`,
+  },
+  {
+    name: 'update_comptable_profil',
+    description: 'Met à jour le profil d\'un comptable (capacité, disponibilité…). Admin Lexora.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        comptable_id: { type: 'string' },
+        capacity: { type: 'number' },
+        actif: { type: 'boolean' },
+        specialites: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['comptable_id'],
+    },
+    kind: 'read', method: 'PATCH', endpoint: () => `/api/admin/comptables/profil`, isAction: true,
+  },
+
+  // ── 💳 LEXORA BILLING (facturation Lexora SaaS) — Admin ──────────────
+  {
+    name: 'list_lexora_billing',
+    description: 'Liste les factures Lexora (SaaS) émises aux clients. Admin Lexora.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/admin/lexora-billing`,
+  },
+  {
+    name: 'get_lexora_billing_detail',
+    description: 'Détail d\'une facture Lexora. Fournir id.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/admin/lexora-billing/${p.id}`,
+  },
+  {
+    name: 'download_lexora_billing_pdf',
+    description: 'Télécharge le PDF d\'une facture Lexora. Fournir id.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'download', method: 'GET',
+    endpoint: (p) => `/api/admin/lexora-billing/${p.id}/pdf`,
+    downloadFilename: (p) => `lexora-facture-${String(p.id).slice(0, 8)}.pdf`,
+    downloadContentType: 'application/pdf',
+    downloadCaption: () => '💳 Facture Lexora',
+  },
+  {
+    name: 'send_lexora_billing_dunning',
+    description: 'Envoie une relance sur une facture Lexora impayée. Fournir id. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'read', method: 'POST', endpoint: (p) => `/api/admin/lexora-billing/${p.id}/dunning`, isAction: true,
+  },
+  {
+    name: 'emit_lexora_billing',
+    description: 'Émet les factures Lexora du mois (run mensuel). Demander confirmation explicite.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        periode: { type: 'string' },
+        dry_run: { type: 'boolean', description: 'Défaut true (simulation)' },
+      },
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/admin/lexora-billing/emit`, isAction: true,
+  },
+
+  // ── 📋 PLANS / OFFRES (catalogue Lexora) ─────────────────────────────
+  {
+    name: 'list_plans',
+    description: 'Liste les plans/offres tarifaires Lexora.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/admin/plans`,
+  },
+  {
+    name: 'get_plan_detail',
+    description: 'Détail d\'un plan (modules inclus, prix). Fournir id.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/admin/plans/${p.id}`,
+  },
+
+  // ── ⚙️ PARAMÈTRES GLOBAUX (Admin) ────────────────────────────────────
+  {
+    name: 'get_parametres',
+    description: 'Paramètres globaux Lexora (config tenant, defaults).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/admin/parametres`,
+  },
+  {
+    name: 'update_parametres',
+    description: 'Met à jour les paramètres globaux. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        key: { type: 'string' },
+        value: { type: 'string' },
+      },
+      required: ['key', 'value'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/admin/parametres`, isAction: true,
+  },
+
+  // ── 💵 CASH IN LIEU (paiement congés non pris — Admin) ───────────────
+  {
+    name: 'list_cash_in_lieu',
+    description: 'Liste les soldes de congés cashés (cash in lieu of leave). Admin Lexora.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/admin/cash-in-lieu`,
+  },
+  {
+    name: 'create_cash_in_lieu',
+    description: 'Enregistre un cash in lieu (paiement de congés non pris à un employé). Fournir employe_id, jours, montant. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        employe_id: { type: 'string' },
+        jours: { type: 'number' },
+        montant: { type: 'number' },
+        periode: { type: 'string' },
+        motif: { type: 'string' },
+      },
+      required: ['employe_id', 'jours', 'montant'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/admin/cash-in-lieu`, isAction: true,
+  },
+  {
+    name: 'delete_cash_in_lieu',
+    description: 'Supprime un cash in lieu (annulation). Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'read', method: 'DELETE', endpoint: (p) => `/api/admin/cash-in-lieu?id=${p.id}`, isAction: true,
+  },
+
+  // ── 🔄 RECOMPUTE ACCRUAL MENSUEL (recalcul provisions paie) ──────────
+  {
+    name: 'recompute_accrual_mensuel',
+    description: 'Recalcule les provisions paie mensuelles (accruals) pour une période. Admin / direction. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { periode: { type: 'string', description: 'YYYY-MM' } },
+      required: ['periode'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/admin/recompute-accrual-mensuel`, isAction: true,
+  },
+
+  // ── 🤰 ALERTES RETOUR MATERNITÉ ──────────────────────────────────────
+  {
+    name: 'list_alertes_retour_maternite',
+    description: 'Liste les alertes de retour de congé maternité à venir (employées en congé qui reviennent bientôt).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/admin/alertes-retour-maternite`,
+  },
+
+  // ── 📝 DEMANDES D'INSCRIPTION (signups Lexora) ───────────────────────
+  {
+    name: 'list_demandes_inscription',
+    description: 'Liste les demandes d\'inscription Lexora en attente d\'approbation. Admin.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/admin/demandes-inscription`,
+  },
+
+  // ── 💥 CASCADE DELETE SOCIÉTÉ (DANGEREUX — admin) ────────────────────
+  {
+    name: 'cascade_delete_societe',
+    description: 'DESTRUCTIF : supprime une société et TOUTES ses données (factures, écritures, employés, bulletins…). Admin uniquement. TOUJOURS reformuler le nom de la société et demander une confirmation explicite type "oui supprime DDS" avant d\'appeler.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        societe_id: { type: 'string' },
+        confirm: { type: 'string', description: 'Doit valoir exactement "DELETE" pour exécuter' },
+      },
+      required: ['societe_id', 'confirm'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/admin/cascade-delete`, isAction: true,
+  },
 ]
 
 const TOOL_MAP = new Map(TOOLS.map(t => [t.name, t]))
@@ -1402,7 +1843,7 @@ Date du jour : ${today}.
 RÔLE :
 - Tu réponds ${lang}, de façon claire, concise et directe — c'est du chat Telegram, pas un rapport. Va à l'essentiel.
 - Tu pilotes Lexora comme depuis le web : CONSULTER, CRÉER, MODIFIER, SUPPRIMER, TÉLÉCHARGER. Tu peux enchaîner plusieurs outils dans une même réponse (ex: chercher un contact → créer une facture → la télécharger en PDF → l'envoyer par mail).
-- Domaines couverts : factures (CRUD + paiements + PDF), tiers/contacts (CRUD), écritures comptables, banque & relevés (+ scrape auto), grand livre, balance, KPIs & rapports, prévisionnel, échéances, paie & bulletins (+ STC), employés, congés, présences, échéances MRA, exports MRA (PAYE/CSG/PRGF/virement bancaire), recurrences, relances clients, virements, documents (+ documents RH + bulk delete), catalogue, email, agenda/RDV, GBC compliance (PER 80%, Substance/CIGA, UBO, Transfer Pricing, Pillar Two, CRS/FATCA, consolidation IFRS 10), administration (users, dossiers, health, permissions Telegram, alertes).
+- Domaines couverts : factures (CRUD + paiements + PDF + génération IA + fiscalisation MRA), tiers/contacts (CRUD) + tiers offshore, écritures comptables, banque & relevés (+ scrape auto), grand livre, balance, KPIs & rapports, prévisionnel, échéances, paie & bulletins (+ STC + recompute accrual), employés, congés, présences, cash in lieu, alertes retour maternité, échéances MRA, exports MRA (PAYE/CSG/PRGF/virement bancaire), recurrences, relances clients, virements, investissements/immobilisations, documents (+ documents RH + bulk delete), catalogue, email (CRUD comptes + envoi + test), agenda/RDV, GBC compliance (PER 80%, Substance/CIGA, UBO, Transfer Pricing, Pillar Two, CRS/FATCA, consolidation IFRS 10), administration (users, dossiers, demandes inscription, plans, paramètres, comptables assignations & profil, Lexora billing + relances + emit + PDF, cascade delete société, permissions Telegram + alertes config, API keys utilisateur).
 - TÉLÉCHARGEMENTS : utilise les outils download_* pour envoyer un PDF/Excel/CSV en pièce jointe Telegram. Confirme en 1 phrase ("voici le PDF…") quand un fichier part — pas besoin de répéter le contenu.
 - Ne devine JAMAIS un chiffre : récupère-le via les outils. Formate les montants avec séparateur de milliers et la devise (ex: 1 250 000 MUR).
 - Pour les listes longues, résume les points clés (totaux, top 5) plutôt que de tout dérouler.
