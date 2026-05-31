@@ -29,6 +29,8 @@ function ecritureContentKey(payload: string): string {
 export const READ_TOOLS = new Set([
   'list_factures', 'get_balance', 'list_grand_livre', 'list_comptes_pcm', 'list_transactions_bancaires',
   'lancer_rapprochement_auto', 'analyser_cloture',
+  // RH / paie / MRA (fusion Cerveau → Expert Lexora)
+  'list_bulletins', 'list_employes_rh', 'get_leave_balance_rh', 'get_mra_compliance', 'calc_paye_net',
 ])
 export const WRITE_TOOLS = new Set([
   'creer_ecriture', 'lettrer_ecritures', 'reclasser_ecritures', 'enregistrer_paiement_facture',
@@ -177,6 +179,55 @@ export const AGENT_TOOLS = [
         libelle_contains: { type: 'string' }, reason: { type: 'string' },
       },
       required: ['from_compte', 'to_compte', 'reason'],
+    },
+  },
+
+  // ── RH / PAIE / MRA (Expert Lexora — fusion Cerveau) ────────────────
+  {
+    name: 'list_bulletins',
+    description: 'Liste les bulletins de paie de la société. Filtres : periode (YYYY-MM), employe_nom (recherche), statut. Utile pour "regarde le bulletin de Jean en mai", "quels bulletins j\'ai pour décembre ?".',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        periode: { type: 'string', description: 'YYYY-MM' },
+        employe_nom: { type: 'string' },
+        statut: { type: 'string', enum: ['brouillon', 'valide', 'paye', 'declare_mra'] },
+      },
+    },
+  },
+  {
+    name: 'list_employes_rh',
+    description: 'Liste les employés actifs de la société (nom, prénom, poste, salaire de base, date d\'embauche, statut). Pour "donne-moi l\'équipe", "qui est dans la société ?".',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        search: { type: 'string' },
+        actif_only: { type: 'boolean', description: 'défaut true' },
+      },
+    },
+  },
+  {
+    name: 'get_leave_balance_rh',
+    description: 'Soldes de congés d\'un employé (Annual Leave, Sick, Vacation Leave WRA s.47, Maternity, Paternity). Fournir employe_nom ou employe_id. Pour "combien de congés pour Mélanie ?".',
+    input_schema: {
+      type: 'object' as const,
+      properties: { employe_nom: { type: 'string' }, employe_id: { type: 'string' } },
+    },
+  },
+  {
+    name: 'get_mra_compliance',
+    description: 'État de conformité MRA (PAYE/CSG/NSF/TDS/TVA) : déclarations en cours, échéances, montants dus, retards. Pour "où en est ma conformité MRA ?", "qu\'est-ce que je dois à la MRA ?".',
+    input_schema: { type: 'object' as const, properties: {} },
+  },
+  {
+    name: 'calc_paye_net',
+    description: 'Calcule le PAYE et le net à payer pour un salaire brut mensuel donné, selon les bandes Maurice : 0-32500 MUR exo, 32500-75000 10%, 75000+ 15%. Inclut CSG salarié (1.5%/3% selon seuil 50k) et NSF salarié 1%. Pour "calcule le net pour 50000 brut".',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        salaire_brut_mensuel: { type: 'number' },
+      },
+      required: ['salaire_brut_mensuel'],
     },
   },
 ]
@@ -386,6 +437,158 @@ export async function execReadTool(name: string, input: any, ctx: ExecCtx): Prom
         bloquant: findings.bloquant,
         avertissements: findings.avertissements,
         ok: findings.ok,
+      }
+    }
+
+    // ── RH / PAIE / MRA — Expert Lexora ─────────────────────────────────
+    case 'list_bulletins': {
+      let q = supabase.from('bulletins_paie')
+        .select('id, employe_id, periode, salaire_base, salaire_brut, salaire_net, eoy_bonus, csg_salarie, csg_patronal, nsf_salarie, nsf_patronal, paye, training_levy, prgf, statut, comptabilise, is_archived, source')
+        .eq('societe_id', societeId)
+        .or('is_archived.is.null,is_archived.eq.false')
+        .order('periode', { ascending: false })
+        .limit(50)
+      if (input?.periode && /^\d{4}-\d{2}$/.test(String(input.periode))) {
+        const start = `${input.periode}-01`
+        const [y, m] = String(input.periode).split('-').map(Number)
+        const end = `${input.periode}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+        q = q.gte('periode', start).lte('periode', end)
+      }
+      if (input?.statut) q = q.eq('statut', String(input.statut))
+      const { data: buls, error } = await q
+      if (error) return { error: error.message }
+      // Si filtre par nom, on filtre côté JS après lookup employés.
+      let result = buls || []
+      if (input?.employe_nom) {
+        const ids = result.map((b: any) => b.employe_id).filter(Boolean)
+        const { data: emps } = await supabase
+          .from('employes').select('id, nom, prenom').in('id', ids)
+        const byId = new Map((emps || []).map((e: any) => [e.id, e]))
+        const needle = String(input.employe_nom).toLowerCase()
+        result = result.filter((b: any) => {
+          const e = byId.get(b.employe_id) as any
+          return e && (`${e.prenom || ''} ${e.nom || ''}`.toLowerCase().includes(needle))
+        }).map((b: any) => {
+          const e = byId.get(b.employe_id) as any
+          return { ...b, employe: e ? `${e.prenom} ${e.nom}` : null }
+        })
+      }
+      return { bulletins: result, total: result.length }
+    }
+
+    case 'list_employes_rh': {
+      let q = supabase.from('employes')
+        .select('id, nom, prenom, code, poste, departement, salaire_base, date_arrivee, date_depart, telephone, email')
+        .eq('societe_id', societeId).order('nom').limit(200)
+      if (input?.actif_only !== false) {
+        q = q.is('date_depart', null)
+      }
+      const { data: emps, error } = await q
+      if (error) return { error: error.message }
+      let result = emps || []
+      if (input?.search) {
+        const s = String(input.search).toLowerCase()
+        result = result.filter((e: any) =>
+          (`${e.prenom || ''} ${e.nom || ''} ${e.code || ''} ${e.poste || ''}`).toLowerCase().includes(s))
+      }
+      return { employes: result, total: result.length }
+    }
+
+    case 'get_leave_balance_rh': {
+      // Résout l'employé (par id direct ou par nom dans la société)
+      let employeId = input?.employe_id ? String(input.employe_id) : ''
+      let employeLabel = ''
+      if (!employeId && input?.employe_nom) {
+        const needle = String(input.employe_nom).toLowerCase()
+        const { data: emps } = await supabase
+          .from('employes').select('id, nom, prenom')
+          .eq('societe_id', societeId).is('date_depart', null)
+        const match = (emps || []).find((e: any) =>
+          (`${e.prenom || ''} ${e.nom || ''}`).toLowerCase().includes(needle))
+        if (match) {
+          employeId = (match as any).id
+          employeLabel = `${(match as any).prenom} ${(match as any).nom}`
+        }
+      }
+      if (!employeId) return { error: 'Employé introuvable (fournir employe_id ou employe_nom)' }
+      // Soldes : table soldes_conges (snapshot mensuel)
+      const { data: soldes } = await supabase
+        .from('soldes_conges')
+        .select('type_conge, jours_acquis, jours_pris, jours_solde, periode')
+        .eq('employe_id', employeId)
+        .order('periode', { ascending: false }).limit(20)
+      // Garde le dernier solde par type
+      const dernierParType = new Map<string, any>()
+      for (const s of (soldes || []) as any[]) {
+        if (!dernierParType.has(s.type_conge)) dernierParType.set(s.type_conge, s)
+      }
+      return {
+        employe_id: employeId,
+        employe: employeLabel || undefined,
+        soldes: Array.from(dernierParType.values()),
+      }
+    }
+
+    case 'get_mra_compliance': {
+      // Lit la matrice de conformité MRA (vw_mra_compliance_status, mig 457)
+      const { data, error } = await supabase
+        .from('vw_mra_compliance_status')
+        .select('type, periode, date_echeance, montant_du, statut, priorite, jours_restants')
+        .eq('societe_id', societeId)
+        .order('date_echeance', { ascending: false }).limit(60)
+      if (error) return { error: error.message, hint: 'Vérifier que la migration 457 (MRA hub) est appliquée.' }
+      const list = (data || []) as any[]
+      const groups: Record<string, any[]> = { retard: [], urgent: [], bientot: [], futur: [], done: [] }
+      let total_du = 0, total_retard = 0
+      for (const r of list) {
+        const p = r.priorite
+        if (p === 'paye' || p === 'sans_objet' || p === 'declare') groups.done.push(r)
+        else if (groups[p]) groups[p].push(r)
+        if (['retard', 'urgent', 'bientot', 'futur'].includes(p)) total_du += Number(r.montant_du) || 0
+        if (p === 'retard') total_retard += Number(r.montant_du) || 0
+      }
+      const prochaine = list
+        .filter(r => ['retard', 'urgent', 'bientot', 'futur'].includes(r.priorite))
+        .sort((a, b) => String(a.date_echeance).localeCompare(String(b.date_echeance)))[0] || null
+      return {
+        groups,
+        kpis: {
+          total_a_traiter: list.filter(r => ['retard', 'urgent', 'bientot', 'futur'].includes(r.priorite)).length,
+          nb_retard: groups.retard.length,
+          montant_du: Math.round(total_du * 100) / 100,
+          montant_retard: Math.round(total_retard * 100) / 100,
+        },
+        prochaine_echeance: prochaine,
+      }
+    }
+
+    case 'calc_paye_net': {
+      // Calcul net Maurice à partir d'un brut mensuel.
+      // Bandes PAYE (annualisées) :
+      //   0–390 000 : 0%   ; 390 001–700 000 : 10% ; 700 001+ : 15%
+      // CSG salarié : 1.5% si brut < 50 000 ; 3% si ≥ 50 000.
+      // NSF salarié : 1% (capé sur base réglementaire — on garde 1% simple ici).
+      const brutM = Math.max(0, Number(input?.salaire_brut_mensuel) || 0)
+      const brutAnnuel = brutM * 12
+      let payeAnnuel = 0
+      if (brutAnnuel > 700_000) {
+        payeAnnuel = (brutAnnuel - 700_000) * 0.15 + (700_000 - 390_000) * 0.10
+      } else if (brutAnnuel > 390_000) {
+        payeAnnuel = (brutAnnuel - 390_000) * 0.10
+      }
+      const paye = Math.round((payeAnnuel / 12) * 100) / 100
+      const csgRate = brutM >= 50_000 ? 0.03 : 0.015
+      const csg = Math.round(brutM * csgRate * 100) / 100
+      const nsf = Math.round(brutM * 0.01 * 100) / 100
+      const net = Math.round((brutM - paye - csg - nsf) * 100) / 100
+      return {
+        salaire_brut_mensuel: brutM,
+        retenues: {
+          paye, csg, nsf,
+          total_retenues: Math.round((paye + csg + nsf) * 100) / 100,
+        },
+        salaire_net_mensuel: net,
+        explication: `PAYE bandes 0-390k/10%/15% sur base annuelle ; CSG ${csgRate * 100}% (seuil 50k MUR mensuel) ; NSF 1%.`,
       }
     }
 
