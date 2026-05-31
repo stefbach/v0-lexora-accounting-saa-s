@@ -1826,6 +1826,36 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               })
               if (!r.ok) console.warn('[upload] Écritures v2 non générées:', r.error)
 
+              // Phase 4 MRA — Détection TDS à la saisie (best-effort).
+              // Pour les factures fournisseurs Maurice (loyer/honoraires/travaux…),
+              // calcule la retenue à la source automatiquement et l'écrit sur
+              // la facture (tds_category/rate/amount/period). Non bloquant.
+              if (factureData.type_facture === 'fournisseur' && insertedFacture?.id) {
+                try {
+                  const { detectTds } = await import('@/lib/accounting/tds-detect')
+                  const lignesOcr = (extraction as any)?.lignes || []
+                  const compteCharge = (lignesOcr[0]?.compte_comptable || lignesOcr[0]?.compte || null) as string | null
+                  const tdsResult = detectTds({
+                    montant_ht: Number(factureData.montant_ht) || 0,
+                    montant_ttc: Number(factureData.montant_ttc) || 0,
+                    description: (factureData.libelle as string) || (factureData.tiers as string) || '',
+                    numero_compte: compteCharge,
+                  })
+                  if (tdsResult.applies && tdsResult.tds_amount_mur > 0) {
+                    const periodeTds = String(factureData.date_facture || '').slice(0, 7)
+                    await supabase.from('factures').update({
+                      tds_category: tdsResult.category,
+                      tds_rate_pct: tdsResult.rate_pct,
+                      tds_amount_mur: tdsResult.tds_amount_mur,
+                      tds_period: periodeTds || null,
+                    }).eq('id', insertedFacture.id)
+                    console.log(`[upload] TDS détectée : ${tdsResult.category} ${tdsResult.rate_pct}% → ${tdsResult.tds_amount_mur} MUR (facture ${insertedFacture.id})`)
+                  }
+                } catch (tdsErr: any) {
+                  console.warn('[upload] détection TDS best-effort échouée:', tdsErr?.message)
+                }
+              }
+
               // Phase J — Auto-tagging GBC (PER + related_party + IAS 21).
               // No-op pour une société MUR-only. Pour une GBC (devise_fonctionnelle ≠ MUR
               // ou tiers étranger), enrichit la facture et les écritures.

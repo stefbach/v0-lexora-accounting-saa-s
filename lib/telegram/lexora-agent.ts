@@ -2017,6 +2017,54 @@ const TOOLS: ToolDef[] = [
     },
     kind: 'read', method: 'POST', endpoint: () => `/api/client/mra/suggest-match`,
   },
+  {
+    name: 'detect_tds',
+    description: 'Détecte si une facture fournisseur est soumise à TDS Maurice et calcule la retenue à la source (loyer 5%, honoraires 3%, travaux 0,75%, royalties 15%, etc. — seuil 500 MUR). Fournir montant_ht ou montant_ttc + description (libellé/objet) + numero_compte optionnel. Renvoie {category, rate, tds_amount_mur, net_to_supplier_mur}.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        montant_ht: { type: 'number' },
+        montant_ttc: { type: 'number' },
+        description: { type: 'string' },
+        numero_compte: { type: 'string' },
+        tiers_country: { type: 'string', description: 'ISO ex: MU, FR, GB' },
+      },
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/mra/tds-detect`,
+  },
+  {
+    name: 'apply_tds_on_facture',
+    description: 'Détecte ET applique la TDS sur une facture fournisseur existante (écrit tds_category/rate/amount/period). Fournir facture_id ET apply=true (toujours). Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { facture_id: { type: 'string' }, apply: { type: 'boolean', description: 'doit valoir true' } },
+      required: ['facture_id', 'apply'],
+    },
+    kind: 'read', method: 'POST',
+    endpoint: () => `/api/client/mra/tds-detect`,
+    isAction: true,
+  },
+  {
+    name: 'get_it_form3_annual',
+    description: 'IT Form 3 annuel : agrégat TDS par fournisseur pour l\'année (échéance MRA 15 août). Pour "combien de TDS j\'ai retenu en 2025", "détail IT Form 3 par fournisseur". Fournir annee (YYYY, défaut année précédente).',
+    input_schema: {
+      type: 'object',
+      properties: { annee: { type: 'number', description: 'YYYY' } },
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/client/mra/it-form3?annee=${p.annee || new Date().getFullYear() - 1}`,
+  },
+  {
+    name: 'sync_it_form3',
+    description: 'Recalcule et synchronise la déclaration IT Form 3 dans le dashboard MRA (créé/met à jour mra_declarations type=IT_FORM3 avec montant total TDS de l\'année). Fournir annee + action="sync".',
+    input_schema: {
+      type: 'object',
+      properties: { annee: { type: 'number' }, action: { type: 'string', enum: ['sync'] } },
+      required: ['annee', 'action'],
+    },
+    kind: 'read', method: 'POST',
+    endpoint: () => `/api/client/mra/it-form3`,
+    isAction: true,
+  },
 ]
 
 const TOOL_MAP = new Map(TOOLS.map(t => [t.name, t]))
