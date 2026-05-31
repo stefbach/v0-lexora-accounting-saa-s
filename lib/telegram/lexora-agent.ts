@@ -57,7 +57,11 @@ type ToolDef = {
   description: string
   input_schema: Anthropic.Tool.InputSchema
   /**
-   * 'read'           → GET /api/client|comptable|rh/* via auth interne (token)
+   * 'read'      → appel REST direct sur /api/client|comptable|rh/* (auth token interne).
+   *               Supporte GET/POST/PATCH/DELETE selon `method`.
+   * 'download'  → comme 'read' mais la réponse est BINAIRE (PDF/Excel/CSV) :
+   *               on bufferize et on renvoie un artifact que le webhook expédie
+   *               en pièce jointe Telegram.
    * 'internal_get'   → GET /api/telegram/internal/* via HMAC + chat_id (query)
    * 'internal_post'  → POST /api/telegram/internal/* via HMAC + chat_id (body)
    *
@@ -65,11 +69,18 @@ type ToolDef = {
    * parité fonctionnelle garantie, rôles + isolation tenant déjà gérés côté
    * endpoint (hasRole + withTelegramAuth + RLS).
    */
-  kind?: 'read' | 'internal_get' | 'internal_post'
-  /** Pour kind='read' : construit le path GET (query string, auth token). */
+  kind?: 'read' | 'download' | 'internal_get' | 'internal_post'
+  /** Verbe HTTP pour 'read'/'download' (défaut: GET). */
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  /** Pour kind='read'/'download' : construit le path (query string si GET, sinon ignore). */
   endpoint?: (p: Record<string, any>) => string
   /** Pour kind='internal_*' : path de l'endpoint /api/telegram/internal/*. */
   internalPath?: string
+  /** Pour 'download' : nom de fichier + caption + type MIME — résolus à partir
+   * de l'input et de la réponse. Si non fournis, on déduit du Content-Type/URL. */
+  downloadFilename?: (p: Record<string, any>) => string
+  downloadCaption?: (p: Record<string, any>) => string
+  downloadContentType?: string
   /** true = action sensible (écriture / envoi externe). Confirmation requise. */
   isAction?: boolean
 }
@@ -514,6 +525,471 @@ const TOOLS: ToolDef[] = [
     },
     kind: 'internal_post', internalPath: '/api/telegram/internal/calendar-delete-event', isAction: true,
   },
+
+  // ══════════════════════════════════════════════════════════════════════
+  // PHASE 1 — PILOTAGE COMPLET (téléchargements + édition + workflows)
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── 📥 TÉLÉCHARGEMENTS (PDF / Excel envoyés en pièce jointe) ─────────
+  {
+    name: 'download_facture_pdf',
+    description: 'Télécharge le PDF d\'une facture (envoyée en pièce jointe dans Telegram). Fournir facture_id (UUID).',
+    input_schema: {
+      type: 'object',
+      properties: { facture_id: { type: 'string', description: 'UUID de la facture' } },
+      required: ['facture_id'],
+    },
+    kind: 'download',
+    method: 'GET',
+    endpoint: (p) => `/api/client/factures/${p.facture_id}/pdf`,
+    downloadFilename: (p) => `facture-${String(p.facture_id || 'document').slice(0, 8)}.pdf`,
+    downloadContentType: 'application/pdf',
+    downloadCaption: () => '🧾 Facture PDF',
+  },
+  {
+    name: 'download_factures_batch_pdf',
+    description: 'Génère un ZIP contenant plusieurs factures en PDF. Fournir factures_ids (liste d\'UUIDs).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        factures_ids: { type: 'array', items: { type: 'string' }, description: 'Liste d\'UUIDs' },
+      },
+      required: ['factures_ids'],
+    },
+    kind: 'download',
+    method: 'POST',
+    endpoint: () => `/api/client/factures/export-batch`,
+    downloadFilename: () => `factures-batch-${new Date().toISOString().slice(0, 10)}.zip`,
+    downloadContentType: 'application/zip',
+    downloadCaption: () => '📦 Factures (batch ZIP)',
+  },
+  {
+    name: 'download_factures_xlsx',
+    description: 'Exporte les factures de la société en Excel. Filtres optionnels : type (client/fournisseur), periode (YYYY-MM), statut.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['client', 'fournisseur'] },
+        periode: { type: 'string' }, statut: { type: 'string' },
+      },
+    },
+    kind: 'download',
+    method: 'GET',
+    endpoint: (p) => `/api/comptable/factures/export-xlsx?${qs(p)}`,
+    downloadFilename: () => `factures-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    downloadContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    downloadCaption: () => '📊 Factures (Excel)',
+  },
+  {
+    name: 'download_releves_bancaires_xlsx',
+    description: 'Exporte les relevés bancaires en Excel. Filtres : periode (YYYY-MM), compte_id.',
+    input_schema: {
+      type: 'object',
+      properties: { periode: { type: 'string' }, compte_id: { type: 'string' } },
+    },
+    kind: 'download',
+    method: 'GET',
+    endpoint: (p) => `/api/client/releves-bancaires/export-xlsx?${qs(p)}`,
+    downloadFilename: (p) => `releves-${p.periode || new Date().toISOString().slice(0, 10)}.xlsx`,
+    downloadContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    downloadCaption: () => '🏦 Relevés bancaires (Excel)',
+  },
+  {
+    name: 'download_financial_pdf',
+    description: 'Télécharge la synthèse financière (P&L / situation) en PDF. Filtre : periode (YYYY-MM optionnel).',
+    input_schema: {
+      type: 'object',
+      properties: { periode: { type: 'string' } },
+    },
+    kind: 'download',
+    method: 'GET',
+    endpoint: (p) => `/api/client/financial/export-pdf?${qs(p)}`,
+    downloadFilename: (p) => `synthese-financiere-${p.periode || new Date().toISOString().slice(0, 10)}.pdf`,
+    downloadContentType: 'application/pdf',
+    downloadCaption: () => '📈 Synthèse financière (PDF)',
+  },
+  {
+    name: 'download_financial_xlsx',
+    description: 'Exporte la synthèse financière (P&L) en Excel.',
+    input_schema: { type: 'object', properties: { periode: { type: 'string' } } },
+    kind: 'download',
+    method: 'GET',
+    endpoint: (p) => `/api/client/financial/export-xlsx?${qs(p)}`,
+    downloadFilename: (p) => `synthese-financiere-${p.periode || new Date().toISOString().slice(0, 10)}.xlsx`,
+    downloadContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    downloadCaption: () => '📈 Synthèse financière (Excel)',
+  },
+  {
+    name: 'download_grand_livre_pdf',
+    description: 'Télécharge le grand livre comptable en PDF. Filtres : compte, date_debut, date_fin (YYYY-MM-DD).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        compte: { type: 'string' }, date_debut: { type: 'string' }, date_fin: { type: 'string' },
+      },
+    },
+    kind: 'download',
+    method: 'GET',
+    endpoint: (p) => `/api/comptable/grand-livre/export-pdf?${qs(p)}`,
+    downloadFilename: () => `grand-livre-${new Date().toISOString().slice(0, 10)}.pdf`,
+    downloadContentType: 'application/pdf',
+    downloadCaption: () => '📚 Grand livre (PDF)',
+  },
+  {
+    name: 'download_payroll_mra_paye',
+    description: 'Génère et envoie l\'export MRA PAYE (CSV/XML) pour une période. Fournir periode YYYY-MM.',
+    input_schema: {
+      type: 'object',
+      properties: { periode: { type: 'string' } },
+      required: ['periode'],
+    },
+    kind: 'download',
+    method: 'POST',
+    endpoint: () => `/api/rh/exports/paye-mra`,
+    downloadFilename: (p) => `paye-mra-${p.periode}.csv`,
+    downloadContentType: 'text/csv',
+    downloadCaption: (p) => `📤 PAYE MRA ${p.periode}`,
+    isAction: true,
+  },
+  {
+    name: 'download_payroll_mra_csg',
+    description: 'Génère et envoie l\'export MRA CSG pour une période. Fournir periode YYYY-MM.',
+    input_schema: {
+      type: 'object',
+      properties: { periode: { type: 'string' } },
+      required: ['periode'],
+    },
+    kind: 'download',
+    method: 'POST',
+    endpoint: () => `/api/rh/exports/csg-mra`,
+    downloadFilename: (p) => `csg-mra-${p.periode}.csv`,
+    downloadContentType: 'text/csv',
+    downloadCaption: (p) => `📤 CSG MRA ${p.periode}`,
+    isAction: true,
+  },
+  {
+    name: 'download_payroll_mra_prgf',
+    description: 'Génère et envoie l\'export MRA PRGF pour une période. Fournir periode YYYY-MM.',
+    input_schema: {
+      type: 'object',
+      properties: { periode: { type: 'string' } },
+      required: ['periode'],
+    },
+    kind: 'download',
+    method: 'POST',
+    endpoint: () => `/api/rh/exports/prgf-mra`,
+    downloadFilename: (p) => `prgf-mra-${p.periode}.csv`,
+    downloadContentType: 'text/csv',
+    downloadCaption: (p) => `📤 PRGF MRA ${p.periode}`,
+    isAction: true,
+  },
+  {
+    name: 'download_payroll_virement_file',
+    description: 'Génère le fichier de virement bancaire de la paie (format banque MUR) pour une période. Fournir periode YYYY-MM.',
+    input_schema: {
+      type: 'object',
+      properties: { periode: { type: 'string' } },
+      required: ['periode'],
+    },
+    kind: 'download',
+    method: 'GET',
+    endpoint: (p) => `/api/rh/exports/virement?${qs(p)}`,
+    downloadFilename: (p) => `virement-paie-${p.periode}.csv`,
+    downloadContentType: 'text/csv',
+    downloadCaption: (p) => `🏦 Virement paie ${p.periode}`,
+  },
+
+  // ── 🧾 FACTURES — édition / suppression / paiements ──────────────────
+  {
+    name: 'update_facture',
+    description: 'Modifie une facture existante. Fournir facture_id + champs à changer (date_facture, date_echeance, libelle, montant_ht, montant_ttc, tva, statut, devise, taux_change…). Avant un changement de montant, demande confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        facture_id: { type: 'string' },
+        date_facture: { type: 'string' }, date_echeance: { type: 'string' },
+        libelle: { type: 'string' },
+        montant_ht: { type: 'number' }, montant_ttc: { type: 'number' }, tva: { type: 'number' },
+        statut: { type: 'string' }, devise: { type: 'string' }, taux_change: { type: 'number' },
+      },
+      required: ['facture_id'],
+    },
+    kind: 'read', method: 'PATCH', endpoint: () => `/api/client/factures`, isAction: true,
+  },
+  {
+    name: 'delete_facture',
+    description: 'Supprime une facture (uniquement si elle n\'est pas comptabilisée). Demande toujours confirmation explicite avant d\'appeler.',
+    input_schema: {
+      type: 'object',
+      properties: { facture_id: { type: 'string' } },
+      required: ['facture_id'],
+    },
+    kind: 'read', method: 'DELETE', endpoint: (p) => `/api/client/factures?id=${p.facture_id}`, isAction: true,
+  },
+  {
+    name: 'list_facture_payments',
+    description: 'Liste les paiements enregistrés sur une facture. Fournir facture_id.',
+    input_schema: {
+      type: 'object',
+      properties: { facture_id: { type: 'string' } },
+      required: ['facture_id'],
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/client/factures/${p.facture_id}/paiements`,
+  },
+  {
+    name: 'add_facture_payment',
+    description: 'Enregistre un paiement reçu sur une facture (marque la facture payée/partielle + écriture banque). Fournir facture_id, montant, mode (virement/cheque/cash/cb), date (YYYY-MM-DD), compte_bancaire_id optionnel, reference optionnelle.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        facture_id: { type: 'string' },
+        montant: { type: 'number' },
+        mode: { type: 'string', enum: ['virement', 'cheque', 'cash', 'cb', 'autre'] },
+        date: { type: 'string' },
+        compte_bancaire_id: { type: 'string' },
+        reference: { type: 'string' },
+      },
+      required: ['facture_id', 'montant', 'mode'],
+    },
+    kind: 'read', method: 'POST', endpoint: (p) => `/api/client/factures/${p.facture_id}/paiements`, isAction: true,
+  },
+
+  // ── 👥 TIERS / CONTACTS — CRUD ───────────────────────────────────────
+  {
+    name: 'create_tiers',
+    description: 'Crée un tiers (client ou fournisseur). Fournir nom, type (client/fournisseur), email optionnel, telephone, adresse, brn (BRN Maurice), tva_number.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nom: { type: 'string' },
+        type: { type: 'string', enum: ['client', 'fournisseur', 'both'] },
+        email: { type: 'string' }, telephone: { type: 'string' },
+        adresse: { type: 'string' }, brn: { type: 'string' }, tva_number: { type: 'string' },
+      },
+      required: ['nom'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/factures-contacts`, isAction: true,
+  },
+  {
+    name: 'update_tiers',
+    description: 'Modifie un tiers existant. Fournir id + champs à changer (nom, email, telephone, adresse, actif, brn, tva_number).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        nom: { type: 'string' }, email: { type: 'string' }, telephone: { type: 'string' },
+        adresse: { type: 'string' }, actif: { type: 'boolean' },
+        brn: { type: 'string' }, tva_number: { type: 'string' },
+      },
+      required: ['id'],
+    },
+    kind: 'read', method: 'PATCH', endpoint: (p) => `/api/client/factures-contacts/${p.id}`, isAction: true,
+  },
+  {
+    name: 'delete_tiers',
+    description: 'Supprime un tiers. ATTENTION : préférer "update_tiers actif=false" si le tiers a des factures historiques. Demande confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'read', method: 'DELETE', endpoint: (p) => `/api/client/factures-contacts/${p.id}`, isAction: true,
+  },
+
+  // ── 📒 ÉCRITURES COMPTABLES ──────────────────────────────────────────
+  {
+    name: 'update_ecriture',
+    description: 'Modifie une écriture comptable existante (libellé, date, montants débit/crédit). Fournir id + champs.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        libelle: { type: 'string' }, date_ecriture: { type: 'string' },
+        debit: { type: 'number' }, credit: { type: 'number' },
+      },
+      required: ['id'],
+    },
+    kind: 'read', method: 'PATCH', endpoint: () => `/api/client/ecritures`, isAction: true,
+  },
+  {
+    name: 'delete_ecriture',
+    description: 'Supprime une écriture (par id) OU tout un batch (par ref_folio). Demande confirmation. Fournir id OU folio.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' }, folio: { type: 'string' },
+      },
+    },
+    kind: 'read', method: 'DELETE',
+    endpoint: (p) => p.folio ? `/api/client/ecritures?folio=${encodeURIComponent(p.folio)}` : `/api/client/ecritures?id=${p.id}`,
+    isAction: true,
+  },
+
+  // ── 🔁 RECURRENCES (factures auto) ───────────────────────────────────
+  {
+    name: 'preview_recurrences',
+    description: 'Liste les factures récurrentes dues à générer pour la société (preview, ne génère rien).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/recurrences`,
+  },
+  {
+    name: 'run_recurrences',
+    description: 'Génère les factures récurrentes dues. Par défaut dry_run=true (simulation). Pour exécuter pour de vrai, passer dry_run=false explicitement après confirmation utilisateur.',
+    input_schema: {
+      type: 'object',
+      properties: { dry_run: { type: 'boolean', description: 'Défaut true' } },
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/recurrences`, isAction: true,
+  },
+
+  // ── 📨 RELANCES CLIENTS ──────────────────────────────────────────────
+  {
+    name: 'preview_relances',
+    description: 'Liste les factures à relancer (échues non payées) pour la société.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/relances`,
+  },
+  {
+    name: 'send_relances',
+    description: 'Envoie les relances clients. dry_run=true par défaut (simulation). dry_run=false pour vraiment envoyer les emails (demander confirmation avant).',
+    input_schema: {
+      type: 'object',
+      properties: { dry_run: { type: 'boolean' } },
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/relances`, isAction: true,
+  },
+  {
+    name: 'list_relances_history',
+    description: 'Historique des relances envoyées.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/relances/historique`,
+  },
+
+  // ── 💸 VIREMENTS ──────────────────────────────────────────────────────
+  {
+    name: 'list_virements',
+    description: 'Liste les virements préparés / effectués pour la société.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/virements`,
+  },
+  {
+    name: 'create_virement',
+    description: 'Prépare un virement (interne ou externe). Fournir beneficiaire_nom, iban OU compte, montant, devise, motif. Demander confirmation avant d\'appeler.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        beneficiaire_nom: { type: 'string' },
+        iban: { type: 'string' }, compte: { type: 'string' },
+        montant: { type: 'number' }, devise: { type: 'string' },
+        motif: { type: 'string' },
+        date_virement: { type: 'string', description: 'YYYY-MM-DD' },
+      },
+      required: ['beneficiaire_nom', 'montant'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/virements`, isAction: true,
+  },
+
+  // ── 📄 DOCUMENTS ──────────────────────────────────────────────────────
+  {
+    name: 'list_documents_v2',
+    description: 'Liste les documents de la société (factures scannées, relevés, contrats, etc.). Filtres : type, search.',
+    input_schema: {
+      type: 'object',
+      properties: { type: { type: 'string' }, search: { type: 'string' } },
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/client/documents?${qs(p)}`,
+  },
+
+  // ── 👨‍💼 RH — création employé / départ ──────────────────────────────
+  {
+    name: 'create_employe',
+    description: 'Crée un employé. Fournir prenom, nom, email, telephone, date_embauche (YYYY-MM-DD), salaire_base, contrat_type (CDI/CDD/STAGE), poste.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        prenom: { type: 'string' }, nom: { type: 'string' },
+        email: { type: 'string' }, telephone: { type: 'string' },
+        date_embauche: { type: 'string' },
+        salaire_base: { type: 'number' },
+        contrat_type: { type: 'string' }, poste: { type: 'string' },
+      },
+      required: ['prenom', 'nom', 'date_embauche'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/rh/employes`, isAction: true,
+  },
+  {
+    name: 'compute_departure_stc',
+    description: 'Calcule le Solde de Tout Compte (STC) pour un départ employé (WRA Maurice). Fournir employe_id, date_depart (YYYY-MM-DD), motif (demission/licenciement/fin_cdd/retraite).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        employe_id: { type: 'string' },
+        date_depart: { type: 'string' },
+        motif: { type: 'string' },
+      },
+      required: ['employe_id', 'date_depart'],
+    },
+    kind: 'read', method: 'POST',
+    endpoint: () => `/api/rh/depart`,
+    isAction: true,
+  },
+
+  // ── 💰 PAIE — calcul individuel + reset ──────────────────────────────
+  {
+    name: 'compute_employee_payroll',
+    description: 'Calcule le bulletin d\'UN employé pour une période. Fournir action="calculer", employe_id, periode (YYYY-MM).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        employe_id: { type: 'string' },
+        periode: { type: 'string' },
+      },
+      required: ['employe_id', 'periode'],
+    },
+    kind: 'read', method: 'POST',
+    endpoint: () => `/api/rh/paie`,
+    isAction: true,
+  },
+
+  // ── 🏦 COMPTES BANCAIRES (lecture détaillée) ─────────────────────────
+  {
+    name: 'list_bank_accounts',
+    description: 'Liste les comptes bancaires de la société avec leurs derniers soldes.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/comptes-bancaires`,
+  },
+
+  // ── 📊 PRÉVISIONNEL / TRÉSORERIE ─────────────────────────────────────
+  {
+    name: 'get_previsionnel',
+    description: 'Prévisionnel de trésorerie / cash-flow forecast.',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/previsionnel`,
+  },
+
+  // ── 📈 ÉCHÉANCES (factures à venir) ──────────────────────────────────
+  {
+    name: 'list_echeances',
+    description: 'Échéances de factures à venir (clients à encaisser / fournisseurs à payer).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/echeances`,
+  },
+
+  // ── 🎯 CONSEILS / RECOMMANDATIONS ────────────────────────────────────
+  {
+    name: 'get_conseils',
+    description: 'Conseils & recommandations Lexora pour la société (optimisations fiscales, alertes business…).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/conseils`,
+  },
+
+  // ── 🏷️ CATALOGUE PRODUITS/SERVICES ──────────────────────────────────
+  {
+    name: 'list_catalogue',
+    description: 'Catalogue produits/services de la société (utile pour créer une facture).',
+    input_schema: { type: 'object', properties: {} },
+    kind: 'read', method: 'GET', endpoint: () => `/api/client/catalogue`,
+  },
 ]
 
 const TOOL_MAP = new Map(TOOLS.map(t => [t.name, t]))
@@ -548,16 +1024,18 @@ Date du jour : ${today}.
 
 RÔLE :
 - Tu réponds ${lang}, de façon claire, concise et directe — c'est du chat Telegram, pas un rapport. Va à l'essentiel.
-- Tu peux CONSULTER (factures, banque, grand livre, balance, KPIs, paie, employés, congés, présences, tiers, documents, alertes, échéances MRA) ET AGIR (créer/envoyer une facture, demander/approuver un congé, saisir heures sup & primes, calculer/valider la paie, exporter MRA, envoyer un email, gérer l'agenda/RDV).
+- Tu pilotes Lexora comme depuis le web : CONSULTER, CRÉER, MODIFIER, SUPPRIMER, TÉLÉCHARGER. Tu peux enchaîner plusieurs outils dans une même réponse (ex: chercher un contact → créer une facture → la télécharger en PDF → l'envoyer par mail).
+- Domaines couverts : factures (CRUD + paiements + PDF), tiers/contacts (CRUD), écritures comptables, banque & relevés, grand livre, balance, KPIs & rapports, prévisionnel, échéances, paie & bulletins, employés, congés, présences, échéances MRA, exports MRA (PAYE/CSG/PRGF/virement bancaire), recurrences, relances clients, virements, documents, catalogue, email, agenda/RDV.
+- TÉLÉCHARGEMENTS : utilise les outils download_* pour envoyer un PDF/Excel/CSV en pièce jointe Telegram. Confirme en 1 phrase ("voici le PDF…") quand un fichier part — pas besoin de répéter le contenu.
 - Ne devine JAMAIS un chiffre : récupère-le via les outils. Formate les montants avec séparateur de milliers et la devise (ex: 1 250 000 MUR).
 - Pour les listes longues, résume les points clés (totaux, top 5) plutôt que de tout dérouler.
-- Tu peux enchaîner plusieurs outils (ex: chercher un contact → trouver un créneau → créer le RDV).
 
-ACTIONS SENSIBLES (création/envoi/validation : facture, email, RDV, paie, congé, prime, heures sup) :
+ACTIONS SENSIBLES (création / modification / suppression / envoi : facture, écriture, tiers, employé, paie, congé, virement, email, RDV, MRA, relances…) :
 - N'exécute l'action QUE si l'utilisateur l'a demandée clairement et que tu as TOUTES les infos nécessaires.
-- S'il manque une info (destinataire, montant, date, créneau…), DEMANDE-la d'abord — n'invente pas.
-- Avant une action irréversible ou à impact externe (envoyer un email, créer/supprimer un RDV, valider la paie), reformule brièvement ce que tu vas faire ; si l'utilisateur vient de te le confirmer dans le message, exécute directement.
-- Les rôles sont contrôlés côté serveur : si une action t'est refusée (rôle insuffisant), explique-le simplement à l'utilisateur.
+- S'il manque une info (destinataire, montant, date, créneau, employe_id…), DEMANDE-la d'abord — n'invente pas.
+- Avant toute action IRRÉVERSIBLE (delete_*, send_relances dry_run=false, run_recurrences dry_run=false, supprimer/annuler facture/écriture/RDV, valider la paie, envoyer email/MRA) : reformule en 1 phrase ce que tu vas faire et demande confirmation explicite. Si l'utilisateur vient de te confirmer dans son dernier message, exécute directement.
+- Pour les delete_* : préfère toujours désactiver/marquer inactif si possible. Avertir l'utilisateur quand un hard delete a un historique attaché.
+- Les rôles sont contrôlés côté serveur : si une action est refusée (rôle insuffisant), explique-le simplement à l'utilisateur.
 - Si une donnée ou un connecteur n'est pas accessible, dis-le franchement plutôt que d'inventer.
 
 Note : le pointage (/in, /out), l'envoi de documents (OCR) et les notes de frais photo se font aussi directement dans Telegram (commandes dédiées).
@@ -568,35 +1046,74 @@ Utilise le format HTML Telegram léger si utile : <b>gras</b>, <code>code</code>
 /* -------------------------------------------------------------------------- */
 /*  Exécution d'un tool                                                        */
 /* -------------------------------------------------------------------------- */
+type ExecToolResult = {
+  /** Donnée à renvoyer à Claude (string ou JSON sérialisable). */
+  toolContent: unknown
+  /** Pièce jointe produite (mode download uniquement). */
+  artifact?: LexoraAgentArtifact
+}
+
 async function execTool(
   tool: ToolDef,
   input: Record<string, any>,
   ctx: LexoraAgentContext,
-): Promise<unknown> {
+): Promise<ExecToolResult> {
   const params = { ...(input || {}) }
   const base = getLexoraBaseUrl()
   const kind = tool.kind || 'read'
 
   try {
-    // ── Mode 'read' : GET /api/client|comptable|rh/* via token interne ──
-    if (kind === 'read') {
+    // ── Modes 'read' / 'download' : appel REST direct (token interne) ──
+    if (kind === 'read' || kind === 'download') {
       if (!params.societe_id) params.societe_id = ctx.societe_id
-      const url = `${base}${tool.endpoint!(params)}`
-      const res = await fetch(url, {
-        method: 'GET',
+      const method = tool.method || 'GET'
+      const path = tool.endpoint!(params)
+      const url = `${base}${path}`
+      const init: RequestInit = {
+        method,
         headers: callLexoraHeaders(ctx.user_id),
         cache: 'no-store',
-      })
+      }
+      if (method !== 'GET' && method !== 'DELETE') {
+        init.body = JSON.stringify(params)
+      }
+      const res = await fetch(url, init)
       if (!res.ok) {
         const details = await res.text().catch(() => '')
-        return { error: `tool_failed_http_${res.status}`, details: details.slice(0, 400) }
+        return {
+          toolContent: { error: `tool_failed_http_${res.status}`, details: details.slice(0, 400) },
+        }
       }
-      return await res.json()
+
+      // Mode download : on bufferize et on remonte un artifact + un résumé pour Claude.
+      if (kind === 'download') {
+        const ct = (res.headers.get('content-type') || tool.downloadContentType || 'application/octet-stream').split(';')[0].trim()
+        const buf = await res.arrayBuffer()
+        const filename = tool.downloadFilename ? tool.downloadFilename(params) : 'lexora-export'
+        const caption = tool.downloadCaption?.(params)
+        return {
+          toolContent: {
+            artifact_sent: true,
+            filename,
+            size_bytes: buf.byteLength,
+            content_type: ct,
+            note: 'Le fichier est envoyé en pièce jointe Telegram juste après ta réponse. Confirme simplement à l\'utilisateur que c\'est envoyé (1 phrase).',
+          },
+          artifact: { buffer: buf, filename, contentType: ct, caption },
+        }
+      }
+
+      // 'read' classique → JSON ou texte
+      const ct = res.headers.get('content-type') || ''
+      if (ct.includes('application/json')) {
+        return { toolContent: await res.json() }
+      }
+      return { toolContent: await res.text() }
     }
 
     // ── Modes 'internal_*' : endpoints /api/telegram/internal/* (HMAC) ──
     const secret = hmacSecret()
-    if (!secret) return { error: 'hmac_secret_missing' }
+    if (!secret) return { toolContent: { error: 'hmac_secret_missing' } }
 
     if (kind === 'internal_get') {
       // chat_id en query ; corps vide → on signe ''.
@@ -605,8 +1122,8 @@ async function execTool(
       const { headers } = buildSignedHeaders('', secret)
       const res = await fetch(url, { method: 'GET', headers, cache: 'no-store' })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) return { error: `tool_failed_http_${res.status}`, data }
-      return data
+      if (!res.ok) return { toolContent: { error: `tool_failed_http_${res.status}`, data } }
+      return { toolContent: data }
     }
 
     // internal_post : chat_id + params dans le body signé.
@@ -620,18 +1137,30 @@ async function execTool(
       cache: 'no-store',
     })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) return { error: `tool_failed_http_${res.status}`, data }
-    return data
+    if (!res.ok) return { toolContent: { error: `tool_failed_http_${res.status}`, data } }
+    return { toolContent: data }
   } catch (e) {
-    return { error: 'tool_network_error', message: e instanceof Error ? e.message : 'unknown' }
+    return { toolContent: { error: 'tool_network_error', message: e instanceof Error ? e.message : 'unknown' } }
   }
 }
 
 /* -------------------------------------------------------------------------- */
 /*  Boucle agent                                                               */
 /* -------------------------------------------------------------------------- */
+/** Pièce jointe produite par un outil download (PDF/Excel/CSV). */
+export type LexoraAgentArtifact = {
+  /** Données brutes — envoyées au webhook qui appelle sendTelegramDocumentBuffer. */
+  buffer: ArrayBuffer
+  /** Nom de fichier proposé (ex: 'facture-INV-001.pdf'). */
+  filename: string
+  /** MIME (ex: 'application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'). */
+  contentType: string
+  /** Légende courte affichée sous le doc Telegram. */
+  caption?: string
+}
+
 export type LexoraAgentResult =
-  | { ok: true; text: string; turns: number; tools_used: string[] }
+  | { ok: true; text: string; turns: number; tools_used: string[]; artifacts?: LexoraAgentArtifact[] }
   | { ok: false; error: string }
 
 /**
@@ -697,6 +1226,7 @@ export async function runLexoraAgent(
     { role: 'user', content: firstUserContent },
   ]
   const toolsUsed: string[] = []
+  const artifacts: LexoraAgentArtifact[] = []
 
   const anthropicTools: Anthropic.Tool[] = TOOLS.map(t => ({
     name: t.name,
@@ -722,6 +1252,7 @@ export async function runLexoraAgent(
           text: agentText || '(pas de réponse)',
           turns: turn + 1,
           tools_used: toolsUsed,
+          artifacts: artifacts.length > 0 ? artifacts : undefined,
         }
       }
 
@@ -741,10 +1272,11 @@ export async function runLexoraAgent(
         }
         toolsUsed.push(tu.name)
         const result = await execTool(tool, tu.input as Record<string, any>, ctx)
+        if (result.artifact) artifacts.push(result.artifact)
         toolResults.push({
           type: 'tool_result',
           tool_use_id: tu.id,
-          content: JSON.stringify(result).slice(0, 12_000),
+          content: JSON.stringify(result.toolContent).slice(0, 12_000),
         })
       }
       convo.push({ role: 'user', content: toolResults })
@@ -755,6 +1287,7 @@ export async function runLexoraAgent(
       text: 'Je n\'ai pas pu finaliser ta demande en quelques étapes. Reformule ou découpe-la.',
       turns: MAX_TURNS,
       tools_used: toolsUsed,
+      artifacts: artifacts.length > 0 ? artifacts : undefined,
     }
   } catch (e: any) {
     // Détail riche pour diagnostic (status + message Anthropic + modèles tentés).
