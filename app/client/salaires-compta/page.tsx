@@ -97,7 +97,7 @@ export default function SalairesComptaPage() {
     >
       <div className="space-y-6">
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card><CardContent className="p-4 text-center">
           <Users className="h-5 w-5 mx-auto mb-1" style={{ color: NAVY }} />
           <p className="text-2xl font-bold" style={{ color: NAVY }}>{periodes.length}</p>
@@ -117,6 +117,18 @@ export default function SalairesComptaPage() {
           <p className="text-xs text-gray-400">{t('hr.salaires_compta.kpi_retentions', locale)}</p>
           <p className="text-2xl font-bold text-red-600">{fmt(totalCSGSal + totalNSFSal + totalPaye)} MUR</p>
           <p className="text-xs text-gray-400 mt-1">CSG {fmt(totalCSGSal)} • NSF {fmt(totalNSFSal)} • PAYE {fmt(totalPaye)}</p>
+        </CardContent></Card>
+        {/* NOUVEAU : charges patronales — manquaient dans le récap du haut */}
+        <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">{locale === 'fr' ? '645 — Charges patronales' : '645 — Employer charges'}</p>
+          <p className="text-2xl font-bold text-orange-600">{fmt(totalCharges)} MUR</p>
+          <p className="text-xs text-gray-400 mt-1">CSG {fmt(totalCSGPat)} • NSF {fmt(totalNSFPat)} • Levy {fmt(totalLevy)} • PRGF {fmt(totalPrgf)}</p>
+        </CardContent></Card>
+        {/* NOUVEAU : coût total employeur = brut + charges patronales */}
+        <Card className="border-l-4 border-l-violet-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">{locale === 'fr' ? 'Coût total employeur' : 'Total employer cost'}</p>
+          <p className="text-2xl font-bold text-violet-700">{fmt(totalBrut + totalCharges)} MUR</p>
+          <p className="text-xs text-gray-400 mt-1">{locale === 'fr' ? 'brut + charges patronales' : 'gross + employer charges'}</p>
         </CardContent></Card>
       </div>
 
