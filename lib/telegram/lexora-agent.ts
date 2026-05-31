@@ -1833,6 +1833,128 @@ const TOOLS: ToolDef[] = [
     },
     kind: 'read', method: 'POST', endpoint: () => `/api/admin/cascade-delete`, isAction: true,
   },
+
+  // ══════════════════════════════════════════════════════════════════════
+  // EOY BONUS — End-of-Year (13e mois Maurice, payé en décembre)
+  // Workflow Lexora : preview → calculer → générer bulletin 75% (décembre)
+  // → générer bulletin 25% (janvier N+1). Provisions IAS19 séparées.
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    name: 'list_eoy_bonus',
+    description: 'Liste les calculs EOY bonus (13e mois Maurice) déjà enregistrés pour une année. Récap : totaux, splits 75% (décembre)/25% (janvier), dates de paiement. Fournir annee YYYY (défaut = année courante).',
+    input_schema: {
+      type: 'object',
+      properties: { annee: { type: 'number', description: 'YYYY (ex: 2026)' } },
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/rh/eoy-bonus?${qs(p)}`,
+  },
+  {
+    name: 'preview_eoy_bonus',
+    description: 'Simule le calcul EOY bonus (13e mois) sans rien enregistrer. Affiche par employé le montant brut, l\'éligibilité (12 mois consécutifs requis WRA), le split 75/25. Idéal pour valider avant de calculer pour de vrai. Fournir annee YYYY.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        annee: { type: 'number' },
+        employe_ids: { type: 'array', items: { type: 'string' }, description: 'Filtre optionnel sur certains employés' },
+      },
+      required: ['annee'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/rh/eoy-bonus/preview`, isAction: true,
+  },
+  {
+    name: 'compute_eoy_bonus',
+    description: 'Calcule et ENREGISTRE le EOY bonus de l\'année dans eoy_bonus_calculs. Demander confirmation explicite : "calculer le EOY 2026 pour tous les employés éligibles, ok ?" — ensuite il faudra générer les bulletins (75% décembre + 25% janvier) séparément.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        annee: { type: 'number' },
+        employe_ids: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['annee'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/rh/eoy-bonus/calculer`, isAction: true,
+  },
+  {
+    name: 'generate_eoy_bulletin_75',
+    description: 'Génère le BULLETIN 75% (versement décembre) pour un EOY bonus calculé. Fournir eoy_id (UUID du calcul). Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { eoy_id: { type: 'string' } },
+      required: ['eoy_id'],
+    },
+    kind: 'read', method: 'POST', endpoint: (p) => `/api/rh/eoy-bonus/${p.eoy_id}/generer-bulletin-75`, isAction: true,
+  },
+  {
+    name: 'generate_eoy_bulletin_25',
+    description: 'Génère le BULLETIN 25% (versement janvier N+1 — solde) pour un EOY bonus calculé. Fournir eoy_id.',
+    input_schema: {
+      type: 'object',
+      properties: { eoy_id: { type: 'string' } },
+      required: ['eoy_id'],
+    },
+    kind: 'read', method: 'POST', endpoint: (p) => `/api/rh/eoy-bonus/${p.eoy_id}/generer-bulletin-25`, isAction: true,
+  },
+  {
+    name: 'cancel_eoy_bulletin',
+    description: 'Annule un bulletin EOY déjà généré (75% ou 25%). Fournir eoy_id. Demander confirmation (impact compta).',
+    input_schema: {
+      type: 'object',
+      properties: { eoy_id: { type: 'string' } },
+      required: ['eoy_id'],
+    },
+    kind: 'read', method: 'POST', endpoint: (p) => `/api/rh/eoy-bonus/${p.eoy_id}/annuler-bulletin`, isAction: true,
+  },
+  {
+    name: 'delete_eoy_bonus',
+    description: 'Supprime un calcul EOY bonus (ATTENTION : irréversible). Fournir id. Demander confirmation explicite.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'read', method: 'DELETE', endpoint: (p) => `/api/rh/eoy-bonus/${p.id}`, isAction: true,
+  },
+
+  // ── 📊 PROVISIONS EOY (IAS 19) ───────────────────────────────────────
+  {
+    name: 'list_eoy_provisions',
+    description: 'Liste les provisions EOY bonus IAS19 enregistrées (constatation mensuelle de la charge avant paiement). Fournir annee YYYY.',
+    input_schema: {
+      type: 'object',
+      properties: { annee: { type: 'number' } },
+    },
+    kind: 'read', method: 'GET', endpoint: (p) => `/api/rh/provisions/eoy?${qs(p)}`,
+  },
+  {
+    name: 'compute_eoy_provisions',
+    description: 'Calcule les provisions EOY bonus IAS19 pour une année (constatation 1/12e par mois). Fournir annee. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { annee: { type: 'number' } },
+      required: ['annee'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/rh/provisions/eoy/calculer`, isAction: true,
+  },
+  {
+    name: 'comptabilise_eoy_provisions',
+    description: 'Comptabilise les provisions EOY IAS19 (génère les écritures débit charges / crédit provisions). Demander confirmation explicite (impact bilan).',
+    input_schema: {
+      type: 'object',
+      properties: { annee: { type: 'number' }, periode: { type: 'string', description: 'YYYY-MM (mois à comptabiliser)' } },
+      required: ['annee'],
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/rh/provisions/eoy/comptabiliser`, isAction: true,
+  },
+  {
+    name: 'delete_eoy_provision',
+    description: 'Supprime une provision EOY (annulation). Fournir id. Demander confirmation.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+    kind: 'read', method: 'DELETE', endpoint: (p) => `/api/rh/provisions/eoy/${p.id}`, isAction: true,
+  },
 ]
 
 const TOOL_MAP = new Map(TOOLS.map(t => [t.name, t]))
@@ -1868,7 +1990,7 @@ Date du jour : ${today}.
 RÔLE :
 - Tu réponds ${lang}, de façon claire, concise et directe — c'est du chat Telegram, pas un rapport. Va à l'essentiel.
 - Tu pilotes Lexora comme depuis le web : CONSULTER, CRÉER, MODIFIER, SUPPRIMER, TÉLÉCHARGER. Tu peux enchaîner plusieurs outils dans une même réponse (ex: chercher un contact → créer une facture → la télécharger en PDF → l'envoyer par mail).
-- Domaines couverts : factures (CRUD + paiements + PDF + génération IA + fiscalisation MRA), tiers/contacts (CRUD) + tiers offshore, écritures comptables, banque & relevés (+ scrape auto), grand livre, balance, KPIs & rapports, prévisionnel, échéances, paie & bulletins (+ STC + recompute accrual), employés, congés, présences, cash in lieu, alertes retour maternité, échéances MRA, exports MRA (PAYE/CSG/PRGF/virement bancaire), recurrences, relances clients, virements, investissements/immobilisations, documents (+ documents RH + bulk delete), catalogue, email (CRUD comptes + envoi + test), agenda/RDV, GBC compliance (PER 80%, Substance/CIGA, UBO, Transfer Pricing, Pillar Two, CRS/FATCA, consolidation IFRS 10), administration (users, dossiers, demandes inscription, plans, paramètres, comptables assignations & profil, Lexora billing + relances + emit + PDF, cascade delete société, permissions Telegram + alertes config, API keys utilisateur).
+- Domaines couverts : factures (CRUD + paiements + PDF + génération IA + fiscalisation MRA), tiers/contacts (CRUD) + tiers offshore, écritures comptables, banque & relevés (+ scrape auto), grand livre, balance, KPIs & rapports, prévisionnel, échéances, paie & bulletins (+ STC + recompute accrual), EOY bonus 13e mois Maurice (preview/calculer/bulletins 75-25/annuler) + provisions IAS19, employés, congés, présences, cash in lieu, alertes retour maternité, échéances MRA, exports MRA (PAYE/CSG/PRGF/virement bancaire), recurrences, relances clients, virements, investissements/immobilisations, documents (+ documents RH + bulk delete), catalogue, email (CRUD comptes + envoi + test), agenda/RDV, GBC compliance (PER 80%, Substance/CIGA, UBO, Transfer Pricing, Pillar Two, CRS/FATCA, consolidation IFRS 10), administration (users, dossiers, demandes inscription, plans, paramètres, comptables assignations & profil, Lexora billing + relances + emit + PDF, cascade delete société, permissions Telegram + alertes config, API keys utilisateur).
 - TÉLÉCHARGEMENTS : utilise les outils download_* pour envoyer un PDF/Excel/CSV en pièce jointe Telegram. Confirme en 1 phrase ("voici le PDF…") quand un fichier part — pas besoin de répéter le contenu.
 - Ne devine JAMAIS un chiffre : récupère-le via les outils. Formate les montants avec séparateur de milliers et la devise (ex: 1 250 000 MUR).
 - COMPARAISON ENTRE MOIS : utilise get_kpis (period=YYYY-MM) UNE FOIS PAR MOIS — c'est le seul outil qui isole correctement un mois. N'utilise pas get_financial_summary pour comparer des mois (il renvoie l'exercice ou des agrégats non mensuels). Ex pour "mai vs avril" : get_kpis(2026-05) puis get_kpis(2026-04), puis présente l'écart.
