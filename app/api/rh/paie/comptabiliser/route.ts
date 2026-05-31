@@ -41,12 +41,19 @@ export async function POST(request: Request) {
 
     if (all_periode && societe_id && periode) {
       const periodeDate = `${periode}-01`
+      // FIX : matcher TOUT le mois, pas seulement le 1er. Les bulletins EOY
+      // (13ème mois) ont une période à jour spécifique (YYYY-12-25) et les
+      // STC une date de départ quelconque — un .eq('periode', '-01') les
+      // excluait de la comptabilisation groupée. On borne sur le mois entier.
+      const [yy, mm] = periode.split('-').map(Number)
+      const lastDay = `${periode}-${String(new Date(yy, mm, 0).getDate()).padStart(2, '0')}`
       // BUG MAI 2026 — filtre is_archived=false ajouté. Sans ça, les
       // bulletins archivés non comptabilisés (cas après décomptabilisation
       // d'un bulletin qui a été archivé entre temps) seraient embarqués.
       const { data: bulletins } = await supabase
         .from('bulletins_paie').select('id')
-        .eq('societe_id', societe_id).eq('periode', periodeDate)
+        .eq('societe_id', societe_id)
+        .gte('periode', periodeDate).lte('periode', lastDay)
         .eq('statut', 'valide').eq('comptabilise', false)
         .or('is_archived.is.null,is_archived.eq.false')
 
