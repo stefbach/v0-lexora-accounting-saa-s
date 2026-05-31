@@ -182,9 +182,34 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'get_financial_summary',
-    description: 'Synthèse financière de la société : chiffre d\'affaires, trésorerie, créances, dettes, résultat. Pour "kpis du mois", "trésorerie", "où on en est".',
-    input_schema: { type: 'object', properties: { periode: { type: 'string', description: 'YYYY-MM (optionnel)' } } },
-    endpoint: (p) => `/api/client/financial?${qs(p)}`,
+    description: 'Synthèse financière de la société sur une PÉRIODE ou un EXERCICE : chiffre d\'affaires, créances, dettes, résultat, trésorerie. Pour une compa entre deux mois, fournis `periode` (YYYY-MM) — il est traduit en plage de dates. Tu peux aussi donner `exercice` (YYYY-YYYY) ou `date_debut`/`date_fin` (YYYY-MM-DD). Sans filtre = exercice courant. NB : pour des KPIs strictement mensuels (CA/dépenses/résultat d\'un mois précis), get_kpis est plus direct.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        periode: { type: 'string', description: 'YYYY-MM — traduit en date_debut/date_fin du mois' },
+        exercice: { type: 'string', description: 'YYYY-YYYY (ex: 2025-2026)' },
+        date_debut: { type: 'string', description: 'YYYY-MM-DD' },
+        date_fin: { type: 'string', description: 'YYYY-MM-DD' },
+      },
+    },
+    endpoint: (p) => {
+      // L'endpoint /api/client/financial supporte exercice / date_debut+date_fin,
+      // mais PAS `periode`. On traduit donc periode YYYY-MM → plage de dates.
+      const out: Record<string, any> = {}
+      if (p.societe_id) out.societe_id = p.societe_id
+      if (p.client_id) out.client_id = p.client_id
+      if (p.periode && /^\d{4}-\d{2}$/.test(String(p.periode))) {
+        const [y, m] = String(p.periode).split('-').map(Number)
+        const lastDay = new Date(y, m, 0).getDate()
+        out.date_debut = `${y}-${String(m).padStart(2, '0')}-01`
+        out.date_fin = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      } else {
+        if (p.exercice) out.exercice = p.exercice
+        if (p.date_debut) out.date_debut = p.date_debut
+        if (p.date_fin) out.date_fin = p.date_fin
+      }
+      return `/api/client/financial?${qs(out)}`
+    },
   },
   {
     name: 'list_alertes',
@@ -274,7 +299,7 @@ const TOOLS: ToolDef[] = [
   // ── KPIs / RAPPORTS / RECHERCHE (via endpoints internes HMAC) ────────
   {
     name: 'get_kpis',
-    description: 'KPIs financiers du mois : CA, dépenses, résultat, trésorerie. period = YYYY-MM (optionnel).',
+    description: 'KPIs financiers d\'UN MOIS précis : CA, dépenses, résultat, trésorerie — calculés sur les factures du mois (date_facture entre le 1er et le dernier jour). C\'EST L\'OUTIL FIABLE pour comparer deux mois : appelle-le une fois par mois (ex: period=2026-05 puis period=2026-04). period = YYYY-MM.',
     input_schema: { type: 'object', properties: { period: { type: 'string', description: 'YYYY-MM' } } },
     kind: 'internal_get', internalPath: '/api/telegram/internal/kpis',
   },
@@ -1846,6 +1871,7 @@ RÔLE :
 - Domaines couverts : factures (CRUD + paiements + PDF + génération IA + fiscalisation MRA), tiers/contacts (CRUD) + tiers offshore, écritures comptables, banque & relevés (+ scrape auto), grand livre, balance, KPIs & rapports, prévisionnel, échéances, paie & bulletins (+ STC + recompute accrual), employés, congés, présences, cash in lieu, alertes retour maternité, échéances MRA, exports MRA (PAYE/CSG/PRGF/virement bancaire), recurrences, relances clients, virements, investissements/immobilisations, documents (+ documents RH + bulk delete), catalogue, email (CRUD comptes + envoi + test), agenda/RDV, GBC compliance (PER 80%, Substance/CIGA, UBO, Transfer Pricing, Pillar Two, CRS/FATCA, consolidation IFRS 10), administration (users, dossiers, demandes inscription, plans, paramètres, comptables assignations & profil, Lexora billing + relances + emit + PDF, cascade delete société, permissions Telegram + alertes config, API keys utilisateur).
 - TÉLÉCHARGEMENTS : utilise les outils download_* pour envoyer un PDF/Excel/CSV en pièce jointe Telegram. Confirme en 1 phrase ("voici le PDF…") quand un fichier part — pas besoin de répéter le contenu.
 - Ne devine JAMAIS un chiffre : récupère-le via les outils. Formate les montants avec séparateur de milliers et la devise (ex: 1 250 000 MUR).
+- COMPARAISON ENTRE MOIS : utilise get_kpis (period=YYYY-MM) UNE FOIS PAR MOIS — c'est le seul outil qui isole correctement un mois. N'utilise pas get_financial_summary pour comparer des mois (il renvoie l'exercice ou des agrégats non mensuels). Ex pour "mai vs avril" : get_kpis(2026-05) puis get_kpis(2026-04), puis présente l'écart.
 - Pour les listes longues, résume les points clés (totaux, top 5) plutôt que de tout dérouler.
 
 ACTIONS SENSIBLES (création / modification / suppression / envoi : facture, écriture, tiers, employé, paie, congé, virement, email, RDV, MRA, relances…) :
