@@ -631,10 +631,33 @@ export async function POST(request: Request) {
           if (!ex) { errors.push(`${nom}: employé introuvable (créez-le d'abord via l'import mensuel)`); continue }
           const employeId = ex.id
 
-          const csg = Number(emp.csg || 0)
-          const paye = Number(emp.paye || 0)
-          const totalDed = Math.round((csg + paye) * 100) / 100
-          const net = Math.max(0, Math.round((montantEoy - totalDed) * 100) / 100)
+          // ── Charges SALARIÉ sur EOY ──
+          // À Maurice, le 13ème mois est soumis à CSG salarié + PAYE (colonnes
+          // dédiées csg_bonus / paye_bonus mig 016+183) et généralement PAS à
+          // NSF. On stocke ce que le fichier importé contient (resilient si
+          // d'autres juridictions ajoutent NSF/training levy sur bonus).
+          const csg_sal = Number(emp.csg || 0)           // → csg_bonus
+          const nsf_sal = Number(emp.nsf || 0)           // → nsf_salarie (pas de colonne bonus dédiée)
+          const paye_sal = Number(emp.paye || 0)         // → paye_bonus
+          const absence = Number(emp.absence_deductions || 0)
+          const total_ded = Number(emp.total_deductions || 0) || (csg_sal + nsf_sal + paye_sal + absence)
+
+          // ── Charges PATRONALES sur EOY ──
+          // csg_patronal_bonus est dédié (mig 016). Pour le reste (NSF, levy,
+          // PRGF), on alimente les colonnes standard avec les valeurs du fichier.
+          const er_csg = Number(emp.er_csg || 0)         // → csg_patronal_bonus
+          const er_nsf = Number(emp.er_nsf || 0)         // → nsf_patronal
+          const er_levy = Number(emp.er_levy || 0)       // → training_levy
+          const er_prgf = Number(emp.er_prgf || 0)       // → prgf
+          const total_er = Number(emp.total_er || 0) || (er_csg + er_nsf + er_levy + er_prgf)
+
+          // Net : préférer brut - retenues (cohérence) plutôt que la valeur
+          // du fichier (cf. fix 2026-05-07 sur l'import mensuel).
+          const computedNet = Math.max(0, Math.round((montantEoy - total_ded) * 100) / 100)
+          const importedNet = Number(emp.net_pay || 0)
+          if (importedNet && Math.abs(importedNet - computedNet) > 1) {
+            console.warn(`[import-paie] EOY net_pay incohérent pour ${nom}: Excel=${importedNet}, recalculé=${computedNet}`)
+          }
 
           // Idempotence : archive un éventuel bulletin EOY import précédent
           // pour cette période (évite les doublons en cas de réimport).
@@ -648,13 +671,30 @@ export async function POST(request: Request) {
             salaire_base: 0,
             // salaire_brut: GENERATED — ne pas écrire, eoy_bonus l'alimente
             eoy_bonus: montantEoy,
-            csg_bonus: csg, paye_bonus: paye,
-            csg_salarie: 0, nsf_salarie: 0, paye: 0,
-            total_deductions: totalDed,
-            salaire_net: net,
+            // Salarié : CSG/PAYE → colonnes bonus dédiées ; NSF/absence → colonnes standard
+            csg_bonus: csg_sal,
+            paye_bonus: paye_sal,
+            csg_salarie: 0, // évite double comptage (csg_bonus est utilisé)
+            nsf_salarie: nsf_sal,
+            paye: 0, // idem (paye_bonus utilisé)
+            montant_absence: absence,
+            total_deductions: total_ded,
+            // Patronal : CSG → colonne bonus dédiée ; NSF/levy/PRGF → standard
+            csg_patronal_bonus: er_csg,
+            csg_patronal: 0, // évite double comptage
+            nsf_patronal: er_nsf,
+            training_levy: er_levy,
+            prgf: er_prgf,
+            total_charges_patronales: total_er,
+            salaire_net: computedNet,
             statut: 'valide',
             source: 'eoy_bonus_import',
-            notes: `Import 13ème mois (EOY) — brut ${montantEoy}${totalDed ? `, retenues ${totalDed}` : ''}`,
+            notes: [
+              `Import 13ème mois (EOY) — brut ${montantEoy}`,
+              total_ded ? `retenues ${total_ded}` : '',
+              total_er ? `charges employeur ${total_er}` : '',
+              importedNet && Math.abs(importedNet - computedNet) > 1 ? `Excel net=${importedNet} ignoré (recalculé=${computedNet})` : '',
+            ].filter(Boolean).join(' | '),
           })
           if (insErr) { errors.push(`${nom}: ${insErr.message}`); continue }
           created++
