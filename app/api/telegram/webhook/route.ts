@@ -239,9 +239,12 @@ async function forwardToN8nAgent(
           intent: 'agent.lexora', status: 'error', error_msg: result.error,
           duration_ms: Date.now() - tAgent,
         }).catch(() => {})
+        // Diagnostic : on remonte l'erreur réelle (tronquée, sans secret) pour
+        // identifier la cause (modèle inaccessible, clé invalide, HMAC…).
+        const errDetail = String(result.error || '').slice(0, 300)
         await sendTelegramMessage(
           chatId,
-          '⚠️ Petit souci pour traiter ta demande. Réessaie, ou utilise <code>/help</code> pour les commandes directes.',
+          `⚠️ Petit souci pour traiter ta demande.\n<code>${errDetail}</code>\n\nRéessaie, ou utilise <code>/help</code> pour les commandes directes.`,
         )
       }
     } catch (e: any) {

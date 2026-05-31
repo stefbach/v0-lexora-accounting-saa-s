@@ -31,6 +31,12 @@ import { buildSignedHeaders } from '@/lib/security/hmac-auth'
 
 /** Modèle par défaut. Surchargeable via TELEGRAM_AGENT_MODEL. */
 const DEFAULT_MODEL = 'claude-opus-4-8'
+/**
+ * Modèle de repli si le modèle principal est inaccessible (clé API sans accès
+ * Opus, ID inconnu…). Sonnet 4.6 est largement disponible. Surchargeable via
+ * TELEGRAM_AGENT_MODEL_FALLBACK.
+ */
+const FALLBACK_MODEL = 'claude-sonnet-4-6'
 const MAX_TURNS = 6
 
 /** Filtre les params vides puis encode en query string. */
@@ -640,9 +646,47 @@ export async function runLexoraAgent(
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return { ok: false, error: 'ANTHROPIC_API_KEY manquant' }
 
-  const model = process.env.TELEGRAM_AGENT_MODEL || DEFAULT_MODEL
+  const primaryModel = process.env.TELEGRAM_AGENT_MODEL || DEFAULT_MODEL
+  const fallbackModel = process.env.TELEGRAM_AGENT_MODEL_FALLBACK || FALLBACK_MODEL
+  // Modèle effectif : bascule sur le fallback si le principal est rejeté
+  // (clé sans accès Opus, ID inconnu…). Persiste pour les tours suivants.
+  let model = primaryModel
+  let triedFallback = false
   const anthropic = new Anthropic({ apiKey })
   const today = new Date().toISOString().slice(0, 10)
+
+  /** True si l'erreur Anthropic concerne le modèle (404/not_found/invalid model). */
+  const isModelError = (e: any): boolean => {
+    const status = e?.status || e?.statusCode
+    const msg = String(e?.message || e?.error?.message || '').toLowerCase()
+    return status === 404 || /model|not_found|not found/.test(msg)
+  }
+
+  /** Appel Claude avec bascule auto vers le fallback en cas d'erreur modèle. */
+  const createMessage = async (): Promise<Anthropic.Message> => {
+    try {
+      return await anthropic.messages.create({
+        model,
+        max_tokens: 1500,
+        system: systemPrompt(ctx, today),
+        tools: anthropicTools,
+        messages: convo,
+      })
+    } catch (e: any) {
+      if (!triedFallback && model !== fallbackModel && isModelError(e)) {
+        triedFallback = true
+        model = fallbackModel
+        return await anthropic.messages.create({
+          model,
+          max_tokens: 1500,
+          system: systemPrompt(ctx, today),
+          tools: anthropicTools,
+          messages: convo,
+        })
+      }
+      throw e
+    }
+  }
 
   // Injecte le contexte mémoire (rappels société/user) en préambule si présent.
   const firstUserContent = ctx.memory_context
@@ -662,13 +706,7 @@ export async function runLexoraAgent(
 
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const response = await anthropic.messages.create({
-        model,
-        max_tokens: 1500,
-        system: systemPrompt(ctx, today),
-        tools: anthropicTools,
-        messages: convo,
-      })
+      const response = await createMessage()
 
       const toolUses = response.content.filter(
         (c): c is Anthropic.ToolUseBlock => c.type === 'tool_use',
@@ -719,7 +757,11 @@ export async function runLexoraAgent(
       tools_used: toolsUsed,
     }
   } catch (e: any) {
-    return { ok: false, error: e?.message || 'Erreur agent LLM' }
+    // Détail riche pour diagnostic (status + message Anthropic + modèles tentés).
+    const status = e?.status || e?.statusCode || ''
+    const msg = e?.message || e?.error?.message || 'Erreur agent LLM'
+    const detail = `${status ? `[${status}] ` : ''}${msg} (modèle=${model}${triedFallback ? `, fallback depuis ${primaryModel}` : ''})`
+    return { ok: false, error: detail }
   }
 }
 
