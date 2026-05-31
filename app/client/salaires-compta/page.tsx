@@ -16,6 +16,7 @@ export default function SalairesComptaPage() {
   const { societeId } = useSocieteActive()
   const [loading, setLoading] = useState(false)
   const [periodes, setPeriodes] = useState<any[]>([])
+  const [busy, setBusy] = useState<string>('') // periode en cours de comptabilisation
 
   const load = useCallback(async () => {
     if (!societeId) return
@@ -29,17 +30,19 @@ export default function SalairesComptaPage() {
       for (const b of allBulletins) {
         const p = (b.periode || '').slice(0, 7)
         if (!p) continue
-        if (!groups[p]) groups[p] = { periode: p, nb: 0, basic: 0, ot: 0, primes: 0, brut: 0, net: 0, csg_sal: 0, nsf_sal: 0, paye: 0, csg_pat: 0, nsf_pat: 0, levy: 0, prgf: 0, charges: 0 }
+        if (!groups[p]) groups[p] = { periode: p, nb: 0, nb_comptabilise: 0, nb_valide_a_comptabiliser: 0, basic: 0, ot: 0, primes: 0, brut: 0, net: 0, csg_sal: 0, nsf_sal: 0, paye: 0, csg_pat: 0, nsf_pat: 0, levy: 0, prgf: 0, charges: 0 }
         groups[p].nb++
+        if (b.comptabilise === true) groups[p].nb_comptabilise++
+        if (b.statut === 'valide' && b.comptabilise !== true) groups[p].nb_valide_a_comptabiliser++
         groups[p].basic += Number(b.salaire_base) || 0
         groups[p].ot += Number(b.heures_sup_montant) || 0
-        groups[p].primes += (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0)
-        groups[p].brut += (Number(b.salaire_base) || 0) + (Number(b.heures_sup_montant) || 0) + (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0)
+        groups[p].primes += (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0) + (Number(b.eoy_bonus) || 0)
+        groups[p].brut += (Number(b.salaire_base) || 0) + (Number(b.heures_sup_montant) || 0) + (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0) + (Number(b.eoy_bonus) || 0)
         groups[p].net += Number(b.salaire_net) || 0
-        groups[p].csg_sal += Number(b.csg_salarie) || 0
+        groups[p].csg_sal += (Number(b.csg_salarie) || 0) + (Number(b.csg_bonus) || 0)
         groups[p].nsf_sal += Number(b.nsf_salarie) || 0
-        groups[p].paye += Number(b.paye) || 0
-        groups[p].csg_pat += Number(b.csg_patronal) || 0
+        groups[p].paye += (Number(b.paye) || 0) + (Number(b.paye_bonus) || 0)
+        groups[p].csg_pat += (Number(b.csg_patronal) || 0) + (Number(b.csg_patronal_bonus) || 0)
         groups[p].nsf_pat += Number(b.nsf_patronal) || 0
         groups[p].levy += Number(b.training_levy) || 0
         groups[p].prgf += Number(b.prgf) || 0
@@ -51,6 +54,28 @@ export default function SalairesComptaPage() {
   }, [societeId])
 
   useEffect(() => { load() }, [load])
+
+  async function handleComptabiliser(periodeYM: string, nbACompta: number) {
+    if (!societeId) return
+    if (nbACompta === 0) { alert("Aucun bulletin à comptabiliser pour ce mois (tous déjà comptabilisés ou non validés)."); return }
+    if (!confirm(`Comptabiliser ${nbACompta} bulletin(s) de ${periodeYM} ? Les écritures OD-PAIE seront générées au grand livre.`)) return
+    setBusy(periodeYM)
+    try {
+      const res = await fetch("/api/rh/paie/comptabiliser", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all_periode: true, societe_id: societeId, periode: periodeYM, confirm: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert("Erreur : " + (data.error || res.status)); return }
+      alert(`✅ ${data.nb_bulletins} bulletin(s) comptabilisé(s) — ${data.nb_ecritures} écriture(s) générée(s)`)
+      await load()
+    } catch (e: any) {
+      alert("Erreur réseau : " + (e?.message || ''))
+    } finally {
+      setBusy('')
+    }
+  }
 
   const totalBrut = periodes.reduce((s, p) => s + (p.brut || 0), 0)
   const totalNet = periodes.reduce((s, p) => s + (p.net || 0), 0)
@@ -119,6 +144,7 @@ export default function SalairesComptaPage() {
                     <th className="px-2 py-2 text-right font-medium bg-orange-50">Levy</th>
                     <th className="px-2 py-2 text-right font-medium bg-orange-50">PRGF</th>
                     <th className="px-2 py-2 text-right font-medium bg-orange-50">{t('hr.salaires_compta.th_645_total', locale)}</th>
+                    <th className="px-2 py-2 text-center font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -140,6 +166,23 @@ export default function SalairesComptaPage() {
                         <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(p.levy)}</td>
                         <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(p.prgf)}</td>
                         <td className="px-2 py-2 text-right font-mono text-orange-700 font-bold">{fmt(p.charges)}</td>
+                        <td className="px-2 py-2 text-center">
+                          {p.nb_valide_a_comptabiliser > 0 ? (
+                            <button
+                              type="button"
+                              disabled={busy === p.periode}
+                              onClick={() => handleComptabiliser(p.periode, p.nb_valide_a_comptabiliser)}
+                              className="px-2 py-1 text-[11px] rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                              title={`${p.nb_valide_a_comptabiliser} bulletin(s) à comptabiliser`}
+                            >
+                              {busy === p.periode ? '…' : `Comptabiliser (${p.nb_valide_a_comptabiliser})`}
+                            </button>
+                          ) : p.nb_comptabilise === p.nb ? (
+                            <span className="text-[11px] text-emerald-700">✅ comptabilisé</span>
+                          ) : (
+                            <span className="text-[11px] text-gray-400">—</span>
+                          )}
+                        </td>
                       </tr>
                     )
                   })}
@@ -159,6 +202,7 @@ export default function SalairesComptaPage() {
                       <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(totalLevy)}</td>
                       <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(totalPrgf)}</td>
                       <td className="px-2 py-2 text-right font-mono text-orange-700 font-bold">{fmt(totalCharges)}</td>
+                      <td className="px-2 py-2"></td>
                     </tr>
                   )}
                 </tbody>
