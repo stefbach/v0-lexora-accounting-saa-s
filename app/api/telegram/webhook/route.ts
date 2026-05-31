@@ -82,8 +82,20 @@ export async function POST(req: NextRequest) {
   // --- Commande /logout --------------------------------------------------------
   if (text === '/logout') {
     const admin = getAdminClient()
+    // Purge aussi l'historique conversationnel — on repart à zéro la prochaine
+    // fois (best-effort, ne bloque pas la déconnexion si la table n'existe pas).
+    await admin.from('telegram_conversation_history').delete().eq('chat_id', chatId).then(() => {})
     await admin.from('telegram_users').delete().eq('chat_id', chatId)
     await sendTelegramMessage(chatId, '✅ Déconnecté. Tape /start CODE pour te reconnecter.')
+    return NextResponse.json({ ok: true })
+  }
+
+  // --- Commande /clear : efface l'historique conversationnel sans déco --------
+  // Utile pour démarrer un nouveau sujet sans que l'agent traîne l'ancien.
+  if (text === '/clear' || text === '/reset') {
+    const admin = getAdminClient()
+    await admin.from('telegram_conversation_history').delete().eq('chat_id', chatId).then(() => {})
+    await sendTelegramMessage(chatId, '🧹 Conversation effacée. On repart sur un nouveau sujet.')
     return NextResponse.json({ ok: true })
   }
 
@@ -1208,6 +1220,7 @@ function buildHelp() {
     '<b>⚙️ Commandes système</b>',
     '<code>/societe</code> — changer de société',
     '<code>/societe NOM</code> — choisir directement',
+    '<code>/clear</code> — effacer la conversation (nouveau sujet)',
     '<code>/logout</code> — me déconnecter',
     '<code>/help</code> — ce message',
   ].join('\n')

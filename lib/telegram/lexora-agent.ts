@@ -28,6 +28,86 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { callLexoraHeaders, getLexoraBaseUrl } from '@/lib/lexora-internal-auth'
 import { buildSignedHeaders } from '@/lib/security/hmac-auth'
+import { getAdminClient } from '@/lib/supabase/admin'
+
+/* -------------------------------------------------------------------------- */
+/*  Mémoire de session Telegram (historique conversationnel par chat_id)      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Nombre max de tours user/assistant à recharger d'un coup. Pair pour garder
+ * l'équilibre des rôles. Au-delà : on perd les anciens tours (oldest first).
+ */
+const SESSION_MAX_TURNS = 20 // → 10 paires user/assistant
+const SESSION_MAX_AGE_MIN = 60 * 24 // 24h : au-delà, on considère que c'est un nouveau sujet
+
+type ConvHistoryRow = {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/**
+ * Charge les N derniers tours de conversation pour ce chat_id. Best-effort :
+ * en cas de souci DB (table absente, RLS…), retourne [] et continue. Filtre
+ * sur SESSION_MAX_AGE_MIN pour ne pas réinjecter des contextes périmés.
+ */
+async function loadConversationHistory(chatId: number): Promise<ConvHistoryRow[]> {
+  try {
+    const admin = getAdminClient()
+    const sinceIso = new Date(Date.now() - SESSION_MAX_AGE_MIN * 60_000).toISOString()
+    const { data, error } = await admin
+      .from('telegram_conversation_history')
+      .select('role, content, created_at')
+      .eq('chat_id', chatId)
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(SESSION_MAX_TURNS)
+    if (error || !data) return []
+    // On a récupéré en DESC : on remet dans l'ordre chronologique (oldest first).
+    return [...data].reverse().map(r => ({
+      role: (r.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
+      content: String(r.content || ''),
+    }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Persiste un tour (user message + agent text response) dans l'historique.
+ * Best-effort : ne bloque jamais sur erreur.
+ */
+async function persistConversationTurn(args: {
+  chat_id: number
+  user_id: string
+  societe_id: string
+  user_text: string
+  assistant_text: string
+  meta?: Record<string, unknown>
+}): Promise<void> {
+  try {
+    const admin = getAdminClient()
+    await admin.from('telegram_conversation_history').insert([
+      {
+        chat_id: args.chat_id,
+        user_id: args.user_id,
+        societe_id: args.societe_id,
+        role: 'user',
+        content: args.user_text.slice(0, 8_000),
+      },
+      {
+        chat_id: args.chat_id,
+        user_id: args.user_id,
+        societe_id: args.societe_id,
+        role: 'assistant',
+        content: args.assistant_text.slice(0, 8_000),
+        meta: args.meta || {},
+      },
+    ])
+  } catch {
+    // ignore — la mémoire n'est pas critique pour la réponse en cours
+  }
+}
 
 /** Modèle par défaut. Surchargeable via TELEGRAM_AGENT_MODEL. */
 const DEFAULT_MODEL = 'claude-opus-4-8'
@@ -1514,13 +1594,22 @@ export async function runLexoraAgent(
     }
   }
 
-  // Injecte le contexte mémoire (rappels société/user) en préambule si présent.
-  const firstUserContent = ctx.memory_context
+  // ── MÉMOIRE DE SESSION ─────────────────────────────────────────────
+  // Recharge les N derniers tours user/assistant de la conversation
+  // courante (par chat_id) pour que l'agent ait le CONTEXTE des échanges
+  // précédents — sans ça, il oublie tout entre deux messages.
+  const history = await loadConversationHistory(ctx.chat_id)
+
+  // Le contexte mémoire long-terme (rappels société/user) reste injecté
+  // en préambule du tout premier message s'il n'y a pas encore d'historique.
+  // S'il y a déjà de l'historique, on ne le ré-injecte pas (déjà vu).
+  const firstUserContent = ctx.memory_context && history.length === 0
     ? `${ctx.memory_context}\n\n---\nMessage de l'utilisateur :\n${userText}`
     : userText
 
   const convo: Anthropic.MessageParam[] = [
-    { role: 'user', content: firstUserContent },
+    ...history.map(h => ({ role: h.role, content: h.content })),
+    { role: 'user' as const, content: firstUserContent },
   ]
   const toolsUsed: string[] = []
   const artifacts: LexoraAgentArtifact[] = []
@@ -1544,9 +1633,19 @@ export async function runLexoraAgent(
       const agentText = textBlocks.map(t => t.text).join('\n').trim()
 
       if (toolUses.length === 0) {
+        const finalText = agentText || '(pas de réponse)'
+        // Persiste le tour pour la prochaine fois.
+        await persistConversationTurn({
+          chat_id: ctx.chat_id,
+          user_id: ctx.user_id,
+          societe_id: ctx.societe_id,
+          user_text: userText,
+          assistant_text: finalText,
+          meta: { model, turns: turn + 1, tools_used: toolsUsed, has_artifacts: artifacts.length > 0 },
+        })
         return {
           ok: true,
-          text: agentText || '(pas de réponse)',
+          text: finalText,
           turns: turn + 1,
           tools_used: toolsUsed,
           artifacts: artifacts.length > 0 ? artifacts : undefined,
@@ -1579,9 +1678,18 @@ export async function runLexoraAgent(
       convo.push({ role: 'user', content: toolResults })
     }
 
+    const exhaustedText = 'Je n\'ai pas pu finaliser ta demande en quelques étapes. Reformule ou découpe-la.'
+    await persistConversationTurn({
+      chat_id: ctx.chat_id,
+      user_id: ctx.user_id,
+      societe_id: ctx.societe_id,
+      user_text: userText,
+      assistant_text: exhaustedText,
+      meta: { model, turns: MAX_TURNS, tools_used: toolsUsed, exhausted: true },
+    })
     return {
       ok: true,
-      text: 'Je n\'ai pas pu finaliser ta demande en quelques étapes. Reformule ou découpe-la.',
+      text: exhaustedText,
       turns: MAX_TURNS,
       tools_used: toolsUsed,
       artifacts: artifacts.length > 0 ? artifacts : undefined,
