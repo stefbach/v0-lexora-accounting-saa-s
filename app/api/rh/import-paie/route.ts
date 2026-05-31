@@ -140,8 +140,10 @@ export async function GET(request: Request) {
       // les bulletins de toutes les sociétés étaient retournés.
       const filterSocieteHist = searchParams.get('societe_id')
       let queryHist = supabase.from('bulletins_paie')
-        .select('periode, salaire_base, salaire_net, total_charges_patronales')
-        .eq('source', 'import_excel')
+        .select('periode, salaire_base, salaire_net, total_charges_patronales, eoy_bonus, source')
+        // Inclut les imports mensuels ET les imports EOY (13ème mois) pour
+        // qu'ils apparaissent ENSEMBLE dans l'historique.
+        .in('source', ['import_excel', 'eoy_bonus_import'])
       if (filterSocieteHist && accessibleIds.includes(filterSocieteHist)) {
         queryHist = queryHist.eq('societe_id', filterSocieteHist)
       } else {
@@ -151,11 +153,14 @@ export async function GET(request: Request) {
       const groups: Record<string, any> = {}
       for (const b of data || []) {
         const p = b.periode
-        if (!groups[p]) groups[p] = { periode: p, nb: 0, total_brut: 0, total_net: 0, total_charges: 0 }
+        const isEoy = b.source === 'eoy_bonus_import'
+        if (!groups[p]) groups[p] = { periode: p, nb: 0, total_brut: 0, total_net: 0, total_charges: 0, is_eoy: isEoy }
         groups[p].nb++
-        groups[p].total_brut += Number(b.salaire_base) || 0
+        // brut : base mensuelle + eoy_bonus (0 pour le mensuel, le montant pour l'EOY)
+        groups[p].total_brut += (Number(b.salaire_base) || 0) + (Number(b.eoy_bonus) || 0)
         groups[p].total_net += Number(b.salaire_net) || 0
         groups[p].total_charges += Number(b.total_charges_patronales) || 0
+        if (isEoy) groups[p].is_eoy = true
       }
       return NextResponse.json({ history: Object.values(groups) })
     }
@@ -169,7 +174,7 @@ export async function GET(request: Request) {
       // Sprint 9 BUG 4 — honorer le param societe_id pour le détail.
       const filterSocieteDetail = searchParams.get('societe_id')
       let queryDetail = supabase.from('bulletins_paie')
-        .select('*').eq('source', 'import_excel').eq('periode', periode)
+        .select('*').in('source', ['import_excel', 'eoy_bonus_import']).eq('periode', periode)
       if (filterSocieteDetail && accessibleIdsDetail.includes(filterSocieteDetail)) {
         queryDetail = queryDetail.eq('societe_id', filterSocieteDetail)
       } else {

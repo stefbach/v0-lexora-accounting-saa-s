@@ -425,9 +425,10 @@ export default function ImportPaiePage() {
                   <button onClick={() => loadDetail(h.periode)}
                     className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 text-left">
                     <div className="flex items-center gap-3">
-                      <Badge style={{ backgroundColor: NAVY }} className="text-white text-xs">
+                      <Badge style={{ backgroundColor: h.is_eoy ? '#7e22ce' : NAVY }} className="text-white text-xs">
                         {new Date(h.periode + "T12:00:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}
                       </Badge>
+                      {h.is_eoy && <Badge className="bg-purple-100 text-purple-800 text-[10px] border border-purple-300">🎁 13ème mois</Badge>}
                       <span className="text-sm"><Users className="inline h-4 w-4 mr-1 text-gray-400" />{h.nb} {t('rha.a.common.employes', locale)}</span>
                     </div>
                     <div className="flex items-center gap-4 text-sm font-mono">
