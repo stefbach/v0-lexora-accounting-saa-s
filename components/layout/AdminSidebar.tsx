@@ -24,6 +24,7 @@ import {
   Activity,
   Brain,
   Receipt,
+  Target,
 } from "lucide-react"
 
 const MENU = [
@@ -41,6 +42,12 @@ const MENU = [
       { href: "/admin/plans", label: "Catalogue tarifaire", icon: Briefcase },
       { href: "/admin/lexora-billing", label: "Facturation Lexora", icon: Receipt },
       { href: "/admin/lexora-tooling", label: "Lexora Tooling (IA)", icon: Brain },
+    ],
+  },
+  {
+    section: "Commercial",
+    items: [
+      { href: "/crm", label: "CRM Prospection", icon: Target },
     ],
   },
   {

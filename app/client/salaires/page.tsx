@@ -245,7 +245,7 @@ export default function ClientSalairesPage() {
       const res = await fetch("/api/rh/paie/comptabiliser", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ all_periode: true, societe_id: societeId, periode: selectedPeriode }),
+        body: JSON.stringify({ all_periode: true, societe_id: societeId, periode: selectedPeriode, confirm: true }),
       })
       const json = await res.json()
       if (json.error) {

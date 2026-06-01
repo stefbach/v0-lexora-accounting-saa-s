@@ -22,7 +22,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -124,6 +126,7 @@ interface Facture {
   statut: string | null
   date_facture: string | null
   date_echeance: string | null
+  solde_non_paye?: number | null
 }
 
 export default function RapprochementPage() {
@@ -189,6 +192,35 @@ export default function RapprochementPage() {
       })
       .catch(() => {})
   }, [])
+
+  // ── Chargement du PCM éditable de la société (menu de classification) ──
+  // Les comptes du PCM société (comptes_societes) alimentent dynamiquement
+  // le menu "Compte PCM". Fallback sur RECLASS_OPTIONS statique si vide.
+  const [pcmOptions, setPcmOptions] = useState<typeof RECLASS_OPTIONS | null>(null)
+  useEffect(() => {
+    if (selectedSociete === "all" || !selectedSociete) { setPcmOptions(null); return }
+    fetch(`/api/societes/${selectedSociete}/pcm/comptes`)
+      .then((r) => r.json())
+      .then((d) => {
+        const comptes = (d?.comptes || []) as Array<{ numero: string; intitule: string; classe: number }>
+        if (comptes.length === 0) { setPcmOptions(null); return }
+        const CLASSE_GROUPS: Record<number, string> = {
+          1: "Capitaux", 2: "Immobilisations", 3: "Stocks", 4: "Tiers",
+          5: "Trésorerie", 6: "Charges", 7: "Produits", 8: "Spéciaux",
+        }
+        const opts = comptes.map((c) => ({
+          value: c.numero,            // classification key = numéro de compte
+          compte: c.numero,           // envoyé en compte_charge (prime backend)
+          label: `${c.numero} — ${c.intitule}`,
+          group: `Classe ${c.classe} — ${CLASSE_GROUPS[c.classe] || ""}`.trim(),
+        }))
+        setPcmOptions(opts)
+      })
+      .catch(() => setPcmOptions(null))
+  }, [selectedSociete])
+
+  // Options effectives : PCM société si dispo, sinon liste standard
+  const reclassOptions = pcmOptions && pcmOptions.length > 0 ? pcmOptions : RECLASS_OPTIONS
 
   // ── Chargement données rapprochement ──────────────────────────────
   const load = useCallback(async () => {
@@ -350,7 +382,10 @@ export default function RapprochementPage() {
 
   // ── Valider une tx (crée écriture BNQ) ────────────────────────────
   const validateOne = useCallback(
-    async (tx: BankTx): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
+    async (
+      tx: BankTx,
+      opts?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[] }
+    ): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
       const body: any = {
         societe_id: selectedSociete,
         transaction_id: tx.id,
@@ -362,7 +397,12 @@ export default function RapprochementPage() {
           ? [tx.facture_id]
           : []
       ).filter(Boolean)
-      if (fids.length > 0) {
+      if (opts?.partiel && opts.allocations && opts.allocations.length > 0) {
+        // Répartition d'un prélèvement sur 1..N factures (montant MUR par
+        // facture, au moins une partielle) → action lettrer_partiel.
+        body.action = "lettrer_partiel"
+        body.allocations = opts.allocations
+      } else if (fids.length > 0) {
         if (fids.length > 1) {
           body.action = "lettrer_multi"
           body.facture_ids = fids
@@ -421,20 +461,27 @@ export default function RapprochementPage() {
   }, [])
 
   // ── Confirmer la liaison : appelle lettrer_multi/lettrer_manuel ──────
-  const handleLinkConfirm = useCallback(async () => {
+  const handleLinkConfirm = useCallback(async (
+    payload?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[] }
+  ) => {
     if (!linkingTx) return
     const fids = Array.from(linkSelectedFids)
     if (fids.length === 0) {
       return showToast("Sélectionnez au moins une facture", "error")
     }
+    const partiel = payload?.partiel === true
     setLinking(true)
     const txWithFids = { ...linkingTx, facture_ids: fids, facture_id: fids[0] }
-    const r = await validateOne(txWithFids)
+    const r = await validateOne(txWithFids, { partiel, allocations: payload?.allocations })
     setLinking(false)
     if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
-    showToast(
-      `${fids.length} facture${fids.length > 1 ? "s" : ""} liée${fids.length > 1 ? "s" : ""} — écriture BNQ créée (${r.lettre || "—"})`
-    )
+    if (partiel) {
+      showToast(`Répartition enregistrée sur ${fids.length} facture${fids.length > 1 ? "s" : ""} — écritures BNQ créées (${r.lettre || "—"})`)
+    } else {
+      showToast(
+        `${fids.length} facture${fids.length > 1 ? "s" : ""} liée${fids.length > 1 ? "s" : ""} — écriture BNQ créée (${r.lettre || "—"})`
+      )
+    }
     setLinkingTx(null)
     setLinkSelectedFids(new Set())
     load()
@@ -755,6 +802,7 @@ export default function RapprochementPage() {
                                 facturesById={facturesById}
                                 override={classificationOverrides.get(tx.id)}
                                 onReclassify={g.type === "classification" ? setOverride : undefined}
+                                reclassOptions={reclassOptions}
                               />
                             ))}
                           </div>
@@ -841,14 +889,32 @@ function LinkFacturesDialog({
   filter: string
   setFilter: (s: string) => void
   onClose: () => void
-  onConfirm: () => void
+  onConfirm: (payload?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[] }) => void
   loading: boolean
 }) {
   const open = tx !== null
   const txAmount = tx ? (tx.debit > 0 ? tx.debit : tx.credit) : 0
   const txDevise = (tx?.devise || "MUR").toUpperCase()
 
-  // Pré-filtre par tiers détecté + texte saisi par l'utilisateur
+  // Solde restant (MUR) d'une facture.
+  const remainingOf = (f: Facture) =>
+    f.solde_non_paye != null
+      ? Number(f.solde_non_paye)
+      : Number(f.montant_mur) || Number(f.montant_ttc) || 0
+
+  // Filtre par date de facture (plage) + montants affectés par facture
+  // (répartition d'un prélèvement) — état local, réinitialisé à chaque
+  // ouverture sur une nouvelle transaction.
+  const [dateDebut, setDateDebut] = useState("")
+  const [dateFin, setDateFin] = useState("")
+  const [amounts, setAmounts] = useState<Record<string, string>>({})
+  useEffect(() => {
+    setDateDebut("")
+    setDateFin("")
+    setAmounts({})
+  }, [tx?.id])
+
+  // Pré-filtre par tiers détecté + texte saisi + plage de dates
   const filtered = useMemo(() => {
     if (!tx) return []
     const q = filter.trim().toLowerCase()
@@ -856,33 +922,67 @@ function LinkFacturesDialog({
       (f) => f.statut !== "paye" && f.statut !== "annule"
     )
     return unpaid.filter((f) => {
-      if (!q) return true
-      const hay = `${f.numero_facture || ""} ${f.tiers || ""}`.toLowerCase()
-      return hay.includes(q)
+      if (q) {
+        const hay = `${f.numero_facture || ""} ${f.tiers || ""}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      const d = f.date_facture ? f.date_facture.slice(0, 10) : ""
+      if (dateDebut && (!d || d < dateDebut)) return false
+      if (dateFin && (!d || d > dateFin)) return false
+      return true
     })
-  }, [tx, factures, filter])
-
-  // Somme des factures cochées (en MUR si dispo, sinon montant_ttc)
-  const sumSelected = useMemo(() => {
-    let s = 0
-    for (const id of selectedFids) {
-      const f = factures.find((x) => x.id === id)
-      if (!f) continue
-      s += Number(f.montant_mur) || Number(f.montant_ttc) || 0
-    }
-    return s
-  }, [selectedFids, factures])
+  }, [tx, factures, filter, dateDebut, dateFin])
 
   if (!tx) return null
 
   const toggle = (fid: string) => {
     const n = new Set(selectedFids)
-    if (n.has(fid)) n.delete(fid); else n.add(fid)
+    if (n.has(fid)) {
+      n.delete(fid)
+      setAmounts((prev) => {
+        const cp = { ...prev }; delete cp[fid]; return cp
+      })
+    } else {
+      n.add(fid)
+      // Montant affecté par défaut = solde restant de la facture.
+      const f = factures.find((x) => x.id === fid)
+      if (f) setAmounts((prev) => ({ ...prev, [fid]: String(Math.round(remainingOf(f) * 100) / 100) }))
+    }
     setSelectedFids(n)
   }
 
-  const diff = txAmount - sumSelected
-  const diffPct = txAmount > 0 ? (Math.abs(diff) / txAmount) * 100 : 0
+  // ── Répartition (montant affecté par facture) ──────────────────────────
+  const selectedFactures = Array.from(selectedFids)
+    .map((id) => factures.find((f) => f.id === id))
+    .filter(Boolean) as Facture[]
+  const allocAmount = (f: Facture) => {
+    const raw = amounts[f.id]
+    const n = raw == null || raw === "" ? remainingOf(f) : Number(raw)
+    return Number.isFinite(n) ? n : 0
+  }
+  const sumAlloc = Math.round(selectedFactures.reduce((s, f) => s + allocAmount(f), 0) * 100) / 100
+  const diffAlloc = Math.round((txAmount - sumAlloc) * 100) / 100
+  // Au moins une facture réglée partiellement (montant < solde) → répartition
+  // via lettrer_partiel ; sinon lettrage complet classique.
+  const hasPartial = selectedFactures.some((f) => allocAmount(f) < remainingOf(f) - 0.01)
+  const anyOverSolde = selectedFactures.some((f) => allocAmount(f) > remainingOf(f) + 1)
+  const anyNonPositive = selectedFactures.some((f) => allocAmount(f) <= 0)
+  // En mode répartition (partiel), le total affecté doit ≈ le prélèvement.
+  const allocValid = !anyOverSolde && !anyNonPositive && Math.abs(diffAlloc) <= 1
+
+  const handleConfirmClick = () => {
+    if (hasPartial) {
+      onConfirm({
+        partiel: true,
+        allocations: selectedFactures.map((f) => ({
+          facture_id: f.id,
+          montant: Math.round(allocAmount(f) * 100) / 100,
+        })),
+      })
+    } else {
+      onConfirm({ partiel: false })
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -909,13 +1009,48 @@ function LinkFacturesDialog({
           )}
         </div>
 
-        {/* Filtre */}
+        {/* Filtre texte */}
         <Input
           placeholder="Filtrer par numéro de facture ou tiers…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="h-9"
         />
+
+        {/* Filtre par date de facture (plage) */}
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <label className="text-[11px] text-muted-foreground">Date facture — du</label>
+            <Input
+              type="date"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+              className="h-9"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="text-[11px] text-muted-foreground">au</label>
+            <Input
+              type="date"
+              value={dateFin}
+              onChange={(e) => setDateFin(e.target.value)}
+              className="h-9"
+            />
+          </div>
+          {(dateDebut || dateFin) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9"
+              onClick={() => {
+                setDateDebut("")
+                setDateFin("")
+              }}
+            >
+              Effacer
+            </Button>
+          )}
+        </div>
 
         {/* Liste des factures avec checkbox */}
         <div className="flex-1 overflow-y-auto rounded border divide-y">
@@ -952,6 +1087,11 @@ function LinkFacturesDialog({
                           {f.type_facture}
                         </Badge>
                       )}
+                      {f.statut === "partiel" && (
+                        <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                          partiel
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {formatDate(f.date_facture || "")} ·{" "}
@@ -963,6 +1103,11 @@ function LinkFacturesDialog({
                           {" "}≈ {fmt(monMur)} MUR
                         </span>
                       )}
+                      {f.solde_non_paye != null && Number(f.solde_non_paye) > 0 && Number(f.solde_non_paye) < monMur - 1 && (
+                        <span className="font-mono text-amber-700">
+                          {" "}· reste {fmt(Number(f.solde_non_paye))} MUR
+                        </span>
+                      )}
                     </p>
                   </div>
                 </label>
@@ -971,29 +1116,90 @@ function LinkFacturesDialog({
           )}
         </div>
 
-        {/* Comparaison montants */}
-        {selectedFids.size > 0 && (
+        {/* Répartition : montant affecté à chaque facture sélectionnée.
+            Par défaut = solde restant (lettrage complet). Réduire un montant
+            sous le solde ⇒ paiement partiel (la facture reste « partiel »). */}
+        {selectedFactures.length > 0 && (
+          <div className="rounded border divide-y text-sm">
+            <div className="px-2.5 py-1.5 bg-muted/30 text-xs font-medium flex items-center justify-between">
+              <span>Montant affecté par facture (MUR)</span>
+              <span className="text-muted-foreground">Solde restant</span>
+            </div>
+            {selectedFactures.map((f) => {
+              const reste = remainingOf(f)
+              const val = amounts[f.id] ?? String(Math.round(reste * 100) / 100)
+              const cur = allocAmount(f)
+              const over = cur > reste + 1
+              const partial = cur < reste - 0.01
+              return (
+                <div key={f.id} className="flex items-center gap-2 px-2.5 py-1.5">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-mono text-xs">
+                      {f.numero_facture || f.id.slice(0, 8)}
+                    </span>
+                    {f.tiers && (
+                      <span className="text-xs text-muted-foreground"> · {f.tiers}</span>
+                    )}
+                    {partial && !over && (
+                      <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                        partiel
+                      </Badge>
+                    )}
+                  </div>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={val}
+                    onChange={(e) =>
+                      setAmounts((prev) => ({ ...prev, [f.id]: e.target.value }))
+                    }
+                    className={`h-8 w-32 text-right font-mono ${over ? "border-rose-400" : ""}`}
+                  />
+                  <span className="w-28 text-right font-mono text-xs text-muted-foreground">
+                    {fmt(reste)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Total affecté vs prélèvement */}
+        {selectedFactures.length > 0 && (
           <div
             className={`rounded border p-2.5 text-sm flex items-center justify-between ${
-              diffPct < 2
+              Math.abs(diffAlloc) <= 1
                 ? "bg-green-50 border-green-200"
-                : diffPct < 5
-                  ? "bg-amber-50 border-amber-200"
-                  : "bg-rose-50 border-rose-200"
+                : "bg-amber-50 border-amber-200"
             }`}
           >
             <span>
-              {selectedFids.size} facture{selectedFids.size > 1 ? "s" : ""} ·{" "}
-              <span className="font-mono">{fmt(sumSelected)} MUR</span>
+              {selectedFactures.length} facture{selectedFactures.length > 1 ? "s" : ""} · affecté{" "}
+              <span className="font-mono">{fmt(sumAlloc)} MUR</span>
+              {hasPartial && (
+                <span className="text-amber-700"> · répartition partielle</span>
+              )}
             </span>
             <span className="font-mono text-xs">
-              Tx ≈ {fmt(txAmount)} {txDevise} · écart{" "}
-              <span className={diff >= 0 ? "" : "text-rose-700"}>
-                {diff >= 0 ? "+" : ""}
-                {fmt(diff)} ({diffPct.toFixed(1)}%)
+              Prélèvement {fmt(txAmount)} {txDevise} · écart{" "}
+              <span className={Math.abs(diffAlloc) <= 1 ? "" : "text-amber-700"}>
+                {diffAlloc >= 0 ? "+" : ""}
+                {fmt(diffAlloc)}
               </span>
             </span>
           </div>
+        )}
+
+        {hasPartial && !allocValid && (
+          <p className="text-xs text-rose-700">
+            {anyOverSolde
+              ? "Un montant dépasse le solde restant de sa facture."
+              : anyNonPositive
+                ? "Chaque montant affecté doit être strictement positif."
+                : "Le total affecté doit être égal au montant du prélèvement (± 1 MUR)."}
+          </p>
         )}
 
         <DialogFooter>
@@ -1001,14 +1207,19 @@ function LinkFacturesDialog({
             Annuler
           </Button>
           <Button
-            onClick={onConfirm}
-            disabled={loading || selectedFids.size === 0}
+            onClick={handleConfirmClick}
+            disabled={loading || selectedFids.size === 0 || (hasPartial && !allocValid)}
             className="bg-green-600 hover:bg-green-700 text-white"
           >
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                Liaison…
+                {hasPartial ? "Enregistrement…" : "Liaison…"}
+              </>
+            ) : hasPartial ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                Enregistrer la répartition ({selectedFactures.length})
               </>
             ) : (
               <>
@@ -1102,29 +1313,101 @@ function SourceBadge({ source }: { source: string | null | undefined }) {
 }
 
 // Options de reclassification manuelle proposées dans le Select.
-// Couvre les cas les plus fréquents en compta mauricienne ; l'utilisateur
-// peut sélectionner pour override la proposition automatique de l'agent.
+// Couvre les scénarios PCM (Plan Comptable Mauricien) les plus fréquents,
+// regroupées par catégorie pour faciliter la navigation. L'utilisateur peut
+// sélectionner pour override la proposition automatique de l'agent.
 const RECLASS_OPTIONS: Array<{
   value: string // classification key (envoyée à l'API)
   compte: string // numero_compte PCG correspondant
   label: string // libellé affiché
+  group: string // catégorie pour regroupement UI
 }> = [
-  { value: "fournisseur", compte: "401", label: "401 — Fournisseur" },
-  { value: "client", compte: "411", label: "411 — Client" },
-  { value: "salaire_bulk", compte: "4210", label: "4210 — Salaires nets" },
-  { value: "charges_sociales", compte: "4421", label: "4421 — PAYE / MRA" },
-  { value: "nsf_csg", compte: "4431", label: "4431 — NSF / CSG" },
-  { value: "tva", compte: "4471", label: "4471 — TVA" },
-  { value: "inter_societe", compte: "451", label: "451 — Inter-sociétés (DDS ↔ OCC, groupe)" },
-  { value: "compte_courant_associe", compte: "455", label: "455 — CCA (Associé personne physique)" },
-  { value: "virement_interne", compte: "5800", label: "5800 — Intercompte (même société, 2 banques)" },
-  { value: "frais_bancaires", compte: "6271", label: "6271 — Services bancaires" },
-  { value: "interets", compte: "6611", label: "6611 — Intérêts" },
-  { value: "loyer", compte: "613", label: "613 — Locations / Loyer" },
-  { value: "electricite", compte: "6061", label: "6061 — Électricité / Eau" },
-  { value: "telecom", compte: "626", label: "626 — Télécommunications" },
-  { value: "assurance", compte: "616", label: "616 — Assurances" },
-  { value: "autre", compte: "658", label: "658 — Charges diverses" },
+  // ── Tiers commerciaux ──────────────────────────────────────────────
+  { group: "Tiers", value: "fournisseur", compte: "401", label: "401 — Fournisseurs" },
+  { group: "Tiers", value: "client", compte: "411", label: "411 — Clients" },
+
+  // ── Associés / Inter-sociétés ──────────────────────────────────────
+  { group: "Associés / Groupe", value: "compte_courant_associe", compte: "455", label: "455 — CCA (Associé personne physique)" },
+  { group: "Associés / Groupe", value: "remboursement_associe", compte: "108", label: "108 — Compte exploitant / personnel" },
+  { group: "Associés / Groupe", value: "inter_societe", compte: "451", label: "451 — Comptes Groupe (DDS ↔ OCC)" },
+  { group: "Associés / Groupe", value: "virement_inter_societe", compte: "467", label: "467 — Virements inter-sociétés en transit" },
+  { group: "Associés / Groupe", value: "virement_interne", compte: "5800", label: "5800 — Intercompte (même société, 2 banques)" },
+
+  // ── Personnel & Paie ───────────────────────────────────────────────
+  { group: "Paie & Personnel", value: "salaire_bulk", compte: "4210", label: "4210 — Salaires nets à payer" },
+  { group: "Paie & Personnel", value: "avance_personnel", compte: "425", label: "425 — Avances au personnel" },
+  { group: "Paie & Personnel", value: "csg_salarie", compte: "4311", label: "4311 — CSG salarié à verser" },
+  { group: "Paie & Personnel", value: "nsf_salarie", compte: "4312", label: "4312 — NSF salarié à verser" },
+  { group: "Paie & Personnel", value: "csg_patronal", compte: "4321", label: "4321 — CSG patronal à verser" },
+  { group: "Paie & Personnel", value: "nsf_patronal", compte: "4322", label: "4322 — NSF patronal à verser" },
+  { group: "Paie & Personnel", value: "prgf", compte: "4323", label: "4323 — PRGF à verser" },
+  { group: "Paie & Personnel", value: "training_levy_verser", compte: "4324", label: "4324 — Training Levy à verser" },
+  { group: "Paie & Personnel", value: "paye_mra", compte: "4330", label: "4330 — PAYE à verser MRA" },
+
+  // ── Fiscal / MRA ───────────────────────────────────────────────────
+  { group: "Fiscal / MRA", value: "tva_deductible", compte: "44566", label: "44566 — TVA déductible" },
+  { group: "Fiscal / MRA", value: "tva_collectee", compte: "44571", label: "44571 — TVA collectée" },
+  { group: "Fiscal / MRA", value: "impot_societe", compte: "4444", label: "4444 — Impôt sur les sociétés (CIT)" },
+  { group: "Fiscal / MRA", value: "patente", compte: "6354", label: "6354 — Patente / licence" },
+  { group: "Fiscal / MRA", value: "training_levy", compte: "633", label: "633 — Training Levy HRDC" },
+  { group: "Fiscal / MRA", value: "impot_taxe", compte: "635", label: "635 — Autres impôts & taxes" },
+
+  // ── Achats & Marchandises ──────────────────────────────────────────
+  { group: "Achats", value: "achats_matieres", compte: "601", label: "601 — Achats matières premières" },
+  { group: "Achats", value: "achats_fournitures", compte: "602", label: "602 — Achats fournitures stockées" },
+  { group: "Achats", value: "materiel", compte: "606", label: "606 — Achats non stockés divers" },
+  { group: "Achats", value: "electricite", compte: "6061", label: "6061 — Électricité / Eau / Gaz" },
+  { group: "Achats", value: "fournitures_bureau", compte: "6064", label: "6064 — Fournitures de bureau" },
+  { group: "Achats", value: "consommables", compte: "6068", label: "6068 — Petit outillage / consommables" },
+
+  // ── Services extérieurs ────────────────────────────────────────────
+  { group: "Services extérieurs", value: "sous_traitance", compte: "611", label: "611 — Sous-traitance" },
+  { group: "Services extérieurs", value: "leasing", compte: "612", label: "612 — Crédit-bail / Leasing" },
+  { group: "Services extérieurs", value: "loyer", compte: "613", label: "613 — Locations / Loyer" },
+  { group: "Services extérieurs", value: "entretien", compte: "615", label: "615 — Entretien & réparations" },
+  { group: "Services extérieurs", value: "assurance", compte: "616", label: "616 — Assurances" },
+  { group: "Services extérieurs", value: "documentation", compte: "618", label: "618 — Documentation / abonnements" },
+
+  // ── Autres services extérieurs ─────────────────────────────────────
+  { group: "Honoraires & comm.", value: "honoraires_juridiques", compte: "6225", label: "6225 — Honoraires juridiques / avocats" },
+  { group: "Honoraires & comm.", value: "honoraires_comptables", compte: "6226", label: "6226 — Honoraires comptables / audit" },
+  { group: "Honoraires & comm.", value: "honoraires", compte: "622", label: "622 — Honoraires divers" },
+  { group: "Honoraires & comm.", value: "publicite", compte: "623", label: "623 — Publicité / marketing" },
+  { group: "Honoraires & comm.", value: "cadeaux", compte: "6234", label: "6234 — Cadeaux / réceptions" },
+
+  // ── Déplacements & logistique ──────────────────────────────────────
+  { group: "Déplacements", value: "transport_achats", compte: "6241", label: "6241 — Transports sur achats" },
+  { group: "Déplacements", value: "transport_ventes", compte: "6242", label: "6242 — Transports sur ventes" },
+  { group: "Déplacements", value: "deplacement", compte: "6251", label: "6251 — Frais de déplacement personnel" },
+  { group: "Déplacements", value: "missions", compte: "6256", label: "6256 — Missions / restauration" },
+
+  // ── Télécom & frais bancaires ──────────────────────────────────────
+  { group: "Télécom / Banque", value: "postaux", compte: "6261", label: "6261 — Frais postaux" },
+  { group: "Télécom / Banque", value: "telecom", compte: "626", label: "626 — Télécom / Internet" },
+  { group: "Télécom / Banque", value: "frais_bancaires", compte: "6271", label: "6271 — Services bancaires / commissions" },
+  { group: "Télécom / Banque", value: "cotisations_pro", compte: "628", label: "628 — Cotisations professionnelles" },
+
+  // ── Financier ──────────────────────────────────────────────────────
+  { group: "Financier", value: "interets", compte: "6611", label: "6611 — Intérêts emprunts" },
+  { group: "Financier", value: "interets_cca", compte: "6615", label: "6615 — Intérêts sur CCA" },
+  { group: "Financier", value: "frais_financiers", compte: "6617", label: "6617 — Frais financiers divers" },
+  { group: "Financier", value: "perte_change", compte: "666", label: "666 — Perte de change" },
+  { group: "Financier", value: "gain_change", compte: "766", label: "766 — Gain de change" },
+
+  // ── Produits ───────────────────────────────────────────────────────
+  { group: "Produits", value: "prestation", compte: "706", label: "706 — Prestations de services" },
+  { group: "Produits", value: "vente_marchandises", compte: "707", label: "707 — Ventes de marchandises" },
+  { group: "Produits", value: "produit_divers", compte: "758", label: "758 — Produits divers" },
+  { group: "Produits", value: "produit_exceptionnel", compte: "771", label: "771 — Produits exceptionnels" },
+
+  // ── Immobilisations (acquisitions ponctuelles) ─────────────────────
+  { group: "Immobilisations", value: "immo_informatique", compte: "2154", label: "2154 — Matériel informatique" },
+  { group: "Immobilisations", value: "immo_bureau", compte: "2183", label: "2183 — Matériel & mobilier bureau" },
+
+  // ── Divers / attente ───────────────────────────────────────────────
+  { group: "Divers", value: "charge_diverse", compte: "658", label: "658 — Charges diverses de gestion" },
+  { group: "Divers", value: "charge_exceptionnelle", compte: "671", label: "671 — Charges exceptionnelles" },
+  { group: "Divers", value: "autre", compte: "471", label: "471 — Compte d'attente (à requalifier)" },
 ]
 
 function SuggestionRow({
@@ -1137,6 +1420,7 @@ function SuggestionRow({
   facturesById,
   override,
   onReclassify,
+  reclassOptions = RECLASS_OPTIONS,
 }: {
   tx: BankTx
   type: "match" | "classification"
@@ -1147,6 +1431,7 @@ function SuggestionRow({
   facturesById: Map<string, Facture>
   override?: { classification: string; compte: string }
   onReclassify?: (txId: string, classification: string, compte: string) => void
+  reclassOptions?: typeof RECLASS_OPTIONS
 }) {
   const montant = tx.debit > 0 ? -tx.debit : tx.credit
   const fids =
@@ -1204,7 +1489,7 @@ function SuggestionRow({
               <Select
                 value={override?.classification ?? (tx.classification || "")}
                 onValueChange={(v) => {
-                  const opt = RECLASS_OPTIONS.find((o) => o.value === v)
+                  const opt = reclassOptions.find((o) => o.value === v)
                   if (opt) onReclassify(tx.id, opt.value, opt.compte)
                 }}
               >
@@ -1217,12 +1502,26 @@ function SuggestionRow({
                     </span>
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
-                  {RECLASS_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono">
-                      {opt.label}
-                    </SelectItem>
-                  ))}
+                <SelectContent className="max-h-[400px]">
+                  {(() => {
+                    const grouped = new Map<string, typeof RECLASS_OPTIONS>()
+                    for (const o of reclassOptions) {
+                      if (!grouped.has(o.group)) grouped.set(o.group, [])
+                      grouped.get(o.group)!.push(o)
+                    }
+                    return Array.from(grouped.entries()).map(([groupName, opts]) => (
+                      <SelectGroup key={groupName}>
+                        <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                          {groupName}
+                        </SelectLabel>
+                        {opts.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))
+                  })()}
                 </SelectContent>
               </Select>
             ) : (

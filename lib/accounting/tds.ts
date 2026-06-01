@@ -30,20 +30,25 @@ export function autoClassifyTds(opts: {
   const d = (opts.description || '').toLowerCase()
   const compte = opts.numero_compte || ''
 
-  // Loyer (compte 6132 loyers immobiliers)
-  if (compte.startsWith('6132') || d.match(/loyer|rent\b|lease/)) return 'rent'
+  // Loyer (compte 6132 loyers immobiliers). Le regex couvre les libellés
+  // français et anglais courants : « loyer », « location », « bail »,
+  // « locaux », « rental », « leasing » immobilier, et accepte aussi un
+  // tiers fournisseur explicite ("XXX Properties", "XXX Real Estate",
+  // "XXX immobilier") fréquent en facturation Maurice.
+  if (compte.startsWith('6132')
+      || d.match(/loyer|rent\b|rental|\blease\b|leasing|location|bail|locaux|immobili[eè]r|real\s*estate|properties\b/)) return 'rent'
   // Redevances IP (compte 651)
   if (compte.startsWith('651') || d.match(/royalt|redevance|licen[cs]e/)) return 'royalties'
-  // Honoraires professionnels (compte 6226 avocats, 6227 comptables)
-  if (compte.match(/^622[67]/) || d.match(/avocat|lawyer|comptable|accountant|notaire|m[ée]decin|consultant juridique/)) return 'professional_fees'
+  // Honoraires professionnels (comptes 6226 avocats, 6227 comptables, 622 conseil)
+  if (compte.match(/^622[67]/) || d.match(/avocat|lawyer|comptable|accountant|notaire|m[ée]decin|consultant juridique|honoraires?|fiscaliste|expert.comptable/)) return 'professional_fees'
   // Management fees (compte 6228)
-  if (compte.startsWith('6228') || d.match(/management fee|honoraires? de gestion/)) return 'management_fees'
+  if (compte.startsWith('6228') || d.match(/management fee|honoraires? de gestion|frais de gestion/)) return 'management_fees'
   // Director fees (compte 6411 directors fees)
-  if (d.match(/jeton.*pr[ée]sence|director.*fee|board.*fee/)) return 'director_fees'
-  // Travaux BTP (compte 6135 entretien)
-  if (compte.startsWith('6135') || d.match(/travaux|btp|construction|maintenance/)) return 'contract_payments'
+  if (d.match(/jeton.*pr[ée]sence|director.*fee|board.*fee|administrateur/)) return 'director_fees'
+  // Travaux BTP (compte 6135 entretien & réparations)
+  if (compte.startsWith('6135') || d.match(/travaux|btp|construction|maintenance|r[ée]paration|chantier|plombier|[ée]lectricien/)) return 'contract_payments'
   // Commissions (compte 622)
-  if (d.match(/commission/)) return 'commission'
+  if (d.match(/commission|apporteur/)) return 'commission'
   // Intérêts non-résidents
   if (compte.startsWith('661') && opts.tiers_country && opts.tiers_country.toUpperCase() !== 'MU') return 'interest_non_resident'
 

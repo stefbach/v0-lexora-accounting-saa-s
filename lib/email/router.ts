@@ -115,7 +115,7 @@ export async function sendEmail(account: EmailAccount, msg: EmailMessage): Promi
     } else if (account.provider === 'resend') {
       result = await sendViaResend(account, msg)
     } else if (account.provider === 'gmail_oauth') {
-      return { ok: false, error: 'Gmail OAuth pas encore implémenté (Phase ultérieure)' }
+      result = await sendViaGmailOAuth(account, msg)
     } else {
       return { ok: false, error: `Provider ${account.provider} inconnu` }
     }
@@ -187,6 +187,26 @@ async function sendViaSmtp(account: EmailAccount, msg: EmailMessage): Promise<Se
     attachments: msg.attachments,
   })
   return { ok: true, message_id: info.messageId }
+}
+
+async function sendViaGmailOAuth(account: EmailAccount, msg: EmailMessage): Promise<SendResult> {
+  if (!account.user_id) {
+    return { ok: false, error: 'Compte Gmail OAuth sans user_id — reconnecte le compte Google.' }
+  }
+  const { sendGmail } = await import('@/lib/google/gmail-client')
+  const { message_id } = await sendGmail(account.user_id, {
+    from_email: account.from_email,
+    from_name: account.from_name,
+    to: msg.to,
+    cc: msg.cc,
+    bcc: msg.bcc,
+    subject: msg.subject,
+    html: msg.html,
+    text: msg.text,
+    reply_to: msg.reply_to || account.reply_to || undefined,
+    attachments: msg.attachments,
+  })
+  return { ok: true, message_id }
 }
 
 async function sendViaResend(account: EmailAccount, msg: EmailMessage): Promise<SendResult> {

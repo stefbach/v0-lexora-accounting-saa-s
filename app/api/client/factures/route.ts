@@ -9,15 +9,18 @@ import {
   ResourceNotFoundError,
 } from '@/lib/supabase/assert-societe-access'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   try {
     const supabase = getAdminClient()
-    const authClient = await createClient()
-    const { data: { user }, error: authError } = await authClient.auth.getUser()
-    if (authError || !user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
+    // FIX MCP : utiliser resolveUserAuth pour accepter aussi les clés API
+    // (header X-Lexora-Api-Key) + token interne, pas seulement session web.
+    // Sinon l'outil MCP `list_factures` exposé à Claude retourne 401.
+    const user = await resolveUserAuth(request)
+    if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
@@ -56,12 +59,28 @@ export async function GET(request: Request) {
     const date_fin = searchParams.get('date_fin')
     const limit = parseInt(searchParams.get('limit') || '200')
 
+    // FIX MCP : support de tous les types de documents (client, fournisseur,
+    // devis, avoir, note_debit). Avant ce fix la route ne retournait QUE les
+    // factures clients (.eq('type_facture', 'client')), ce qui empêchait les
+    // outils MCP `list_factures_fournisseurs`, `list_devis`, `list_avoirs`
+    // de fonctionner. Si type_facture non fourni → tout retourner (paginé).
+    // type_facture distingue client/fournisseur ; type_document distingue
+    // facture/devis/avoir/note_debit.
+    const type_facture = searchParams.get('type_facture') || searchParams.get('type')
+    const type_document = searchParams.get('type_document')
+
     let query = supabase
       .from('factures')
       .select('*')
-      .eq('type_facture', 'client')
       .order('date_facture', { ascending: false })
       .limit(limit)
+
+    if (type_facture && ['client', 'fournisseur'].includes(type_facture)) {
+      query = query.eq('type_facture', type_facture)
+    }
+    if (type_document && ['facture', 'devis', 'avoir', 'note_debit'].includes(type_document)) {
+      query = query.eq('type_document', type_document)
+    }
 
     if (societe_id) {
       query = query.eq('societe_id', societe_id)
@@ -98,7 +117,21 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ factures: data || [], totaux })
   } catch (e: any) {
-    const mapped = mapSocieteAccessError(e)
+    // Diagnostic enrichi : on injecte societe_id + user_id dans le 403 pour
+    // que le caller MCP voie immédiatement le bon couple (user, société) à
+    // corriger dans user_societes — cas typique signalé : `list_factures`
+    // marche pour OCC et échoue pour DDS, le diff étant l'absence d'entrée
+    // user_societes pour DDS côté la clé API utilisée.
+    let userIdForLog: string | null = null
+    try {
+      const u = await resolveUserAuth(request)
+      userIdForLog = u?.id ?? null
+    } catch { /* ignore */ }
+    const societeIdForLog = new URL(request.url).searchParams.get('societe_id')
+    const mapped = mapSocieteAccessError(e, {
+      societe_id: societeIdForLog,
+      user_id: userIdForLog,
+    })
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

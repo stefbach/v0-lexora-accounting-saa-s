@@ -324,21 +324,90 @@ export async function POST(request: Request) {
       interets_retard:  Math.round(interets * 100) / 100,
     }
 
-    const { data: upserted, error: upsertErr } = await supabase
+    // ─────────────────────────────────────────────────────────────────────
+    // PERSISTANCE + GEL (mig 451)
+    //
+    // 1) Robustesse : onConflict sur (societe_id, periode) — l'ancien
+    //    onConflict (client_id, societe_id, periode) échouait silencieusement
+    //    quand client_id IS NULL (sociétés seedées) → AUCUNE persistance.
+    // 2) Gel : une période déjà déclarée à la MRA (declaration_figee=true) ne
+    //    doit PLUS être écrasée. Si des factures ont été ajoutées après, on
+    //    stocke le recalcul dans tva_nette_recalculee (écart de régularisation
+    //    à reporter sur la période courante) sans toucher au déclaré.
+    // 3) On NE MASQUE PLUS l'erreur — une sauvegarde qui échoue remonte.
+    // ─────────────────────────────────────────────────────────────────────
+    const { data: existante } = await supabase
       .from('tva_mensuelle')
-      .upsert(tvaData, { onConflict: 'client_id,societe_id,periode' })
-      .select()
-      .single()
+      .select('id, declaration_figee, montant_declare_mra, tva_nette')
+      .eq('societe_id', societe_id)
+      .eq('periode', periode)
+      .maybeSingle()
 
-    if (upsertErr) {
-      console.error('[TVA upsert]', upsertErr)
-      // Continuer malgré l'erreur d'upsert (contrainte societe TEXT)
+    // Régularisations de période antérieure portées sur CETTE période (mig 452).
+    // SOURCE DE VÉRITÉ = somme directe des lignes incluses de tva_regularisations.
+    // (On ne lit plus tva_mensuelle.regularisation_anterieure : son écriture par la
+    //  RPC échouait quand client_id est NULL / societe NOT NULL legacy → total perdu.)
+    let regularisation_anterieure = 0
+    {
+      const { data: regul } = await supabase
+        .from('tva_regularisations')
+        .select('montant, statut')
+        .eq('societe_id', societe_id)
+        .eq('periode_courante', periode)
+      if (regul) {
+        regularisation_anterieure = Math.round(
+          regul
+            .filter((r: any) => r.statut === 'incluse')
+            .reduce((s: number, r: any) => s + (Number(r.montant) || 0), 0) * 100,
+        ) / 100
+      }
+    }
+
+    const tvaNetteRecalc = tvaData.tva_nette
+    let upserted: any = null
+    let figee = false
+    let ecart_regularisation = 0
+
+    if (existante?.declaration_figee) {
+      figee = true
+      const declare = Number(existante.montant_declare_mra ?? existante.tva_nette ?? 0)
+      ecart_regularisation = Math.round((tvaNetteRecalc - declare) * 100) / 100
+      const { data: upd, error: updErr } = await supabase
+        .from('tva_mensuelle')
+        .update({ tva_nette_recalculee: tvaNetteRecalc })
+        .eq('id', existante.id)
+        .select()
+        .single()
+      if (updErr) {
+        return NextResponse.json({ error: `Échec MAJ TVA (période figée): ${updErr.message}` }, { status: 500 })
+      }
+      upserted = upd
+    } else {
+      const { data: ups, error: upsertErr } = await supabase
+        .from('tva_mensuelle')
+        .upsert(
+          { ...tvaData, tva_nette_recalculee: tvaNetteRecalc },
+          { onConflict: 'societe_id,periode' },
+        )
+        .select()
+        .single()
+      if (upsertErr) {
+        console.error('[TVA upsert]', upsertErr)
+        return NextResponse.json({ error: `Échec sauvegarde TVA: ${upsertErr.message}` }, { status: 500 })
+      }
+      upserted = ups
     }
 
     return NextResponse.json({
       success: true,
       periode,
       societe_id,
+      tva_mensuelle_id: upserted?.id ?? null,
+      // Gel : si la période était déjà déclarée, on n'a pas écrasé le déclaré.
+      // ecart_regularisation = recalculé − déclaré → à reporter sur la période courante.
+      declaration_figee: figee,
+      ecart_regularisation,
+      ...(figee ? { rappel: 'Période déjà déclarée à la MRA et verrouillée — la déclaration d\'origine n\'a pas été modifiée. L\'écart est à régulariser sur la période courante.' } : {}),
       boxes: {
         box1_tva_collectee_standard:   tvaData.box1_output_standard,
         box2_exports_taxables:          tvaData.box2_exports_taxable,
@@ -355,11 +424,12 @@ export async function POST(request: Request) {
         tva_input:      tvaData.tva_deductible,
         credit_reporte,
         tva_nette:      tvaData.tva_nette,
+        regularisation_anterieure,
         statut:         tvaData.statut,
         date_limite,
         penalites,
         interets,
-        total_a_payer:  Math.round((tvaData.tva_nette + penalites + interets) * 100) / 100,
+        total_a_payer:  Math.round((tvaData.tva_nette + regularisation_anterieure + penalites + interets) * 100) / 100,
       },
       bases_ht: {
         taxable_standard_15pct: base_taxable_standard,

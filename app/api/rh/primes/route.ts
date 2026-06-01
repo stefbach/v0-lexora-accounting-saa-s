@@ -5,12 +5,20 @@ import { resolveOwnership } from '@/lib/rh/ownership'
 
 export const dynamic = 'force-dynamic'
 
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+/**
+ * Renvoie un client admin (service_role, bypasse RLS) si la clé est
+ * configurée. Sinon `null` — l'appelant doit alors retomber sur le
+ * client utilisateur (authentifié JWT) pour éviter les requêtes
+ * silencieusement bloquées par la RLS.
+ */
+function getAdminClient(): ReturnType<typeof createClient> | null {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!key || !url) {
+    console.error('[primes] SUPABASE_SERVICE_ROLE_KEY ou URL manquante — fallback sur client auth user')
+    return null
+  }
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
 export async function GET(request: Request) {
@@ -19,62 +27,75 @@ export async function GET(request: Request) {
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const supabase = getAdminClient()
+    // Fallback : si pas de service_role_key, on utilise le client auth user.
+    // L'admin/RH passe la RLS grâce à son JWT.
+    const supabase = getAdminClient() ?? supabaseAuth
+    const usingAdminClient = getAdminClient() !== null
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
     const periode = searchParams.get('periode')
     let employe_id = searchParams.get('employe_id')
     const type = searchParams.get('type')
 
-    // P0 Sécurité — ownership check
+    // Sécurité — ownership check : bloquer seulement si un employé connecté
+    // demande explicitement les primes d'un AUTRE employé. Pas de restriction
+    // silencieuse (avant : si !isRH on forçait employe_id = own, ce qui
+    // cachait toutes les primes RH/admin dont le profil n'a pas de rôle
+    // correctement configuré).
     const ownership = await resolveOwnership(supabase, user.id)
-    if (!ownership.isRH) {
-      if (employe_id && ownership.employe_id && employe_id !== ownership.employe_id) {
-        return NextResponse.json({ error: 'Accès refusé — vous ne pouvez voir que vos propres primes.' }, { status: 403 })
-      }
-      if (!employe_id && ownership.employe_id) employe_id = ownership.employe_id
+    if (!ownership.isRH && employe_id && ownership.employe_id && employe_id !== ownership.employe_id) {
+      return NextResponse.json({ error: 'Accès refusé — vous ne pouvez voir que vos propres primes.' }, { status: 403 })
     }
 
     if (type === 'saisie' || periode) {
-      let query = supabase
-        .from('primes_variables_mois')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (periode) query = query.eq('periode', `${periode}-01`)
-      if (employe_id) query = query.eq('employe_id', employe_id)
-      if (societe_id) {
-        // Sprint 5 FIX 1 — exclure employés partis (actif=false OU date_depart)
-        const { data: emps } = await supabase.from('employes').select('id')
-          .eq('societe_id', societe_id)
-          .eq('actif', true)
-          .is('date_depart', null)
-        const ids = emps?.map(e => e.id) || []
-        if (ids.length) query = query.in('employe_id', ids)
-        else return NextResponse.json({ primes: [], nb: 0 })
-      }
-      const { data, error } = await query
-      if (error) { console.error('[primes GET saisie]', error.message); throw error }
-
-      // Enrich with employee + prime names (separate queries)
-      const empIds = [...new Set((data || []).map(p => p.employe_id))]
-      const primeIds = [...new Set((data || []).map(p => p.prime_id).filter(Boolean))]
-      let empMap: Record<string, any> = {}
-      let primeMap: Record<string, any> = {}
-      if (empIds.length) {
-        const { data: emps } = await supabase.from('employes').select('id, nom, prenom, poste').in('id', empIds)
-        for (const e of emps || []) empMap[e.id] = { nom: e.nom, prenom: e.prenom, poste: e.poste }
-      }
-      if (primeIds.length) {
-        const { data: primes } = await supabase.from('catalogue_primes').select('id, code, libelle, type_prime').in('id', primeIds)
-        for (const p of primes || []) primeMap[p.id] = { code: p.code, libelle: p.libelle, type_prime: p.type_prime }
+      // Mig 438 — Postgres function qui fait le JOIN proprement.
+      // Bypasse tous les bugs supabase-js (.in(), JOIN ambigu, filtrage JS).
+      if (!societe_id || !periode) {
+        return NextResponse.json({ primes: [], nb: 0, _debug: { error: 'societe_id et periode requis' } })
       }
 
-      const enriched = (data || []).map(p => ({
-        ...p,
-        employe: empMap[p.employe_id] || null,
-        prime: primeMap[p.prime_id] || null,
+      const { data: rows, error: rpcErr } = await supabase.rpc('get_primes_societe_mois', {
+        p_periode: `${periode}-01`,
+        p_societe_id: societe_id,
+      })
+
+      if (rpcErr) {
+        return NextResponse.json({
+          primes: [], nb: 0,
+          _debug: { error: `RPC: ${rpcErr.message}`, using_admin_client: usingAdminClient },
+        })
+      }
+
+      const enriched = (rows || []).map((r: any) => ({
+        id: r.id, employe_id: r.employe_id, prime_id: r.prime_id, periode: r.periode,
+        quantite: r.quantite, tarif_unitaire_applique: r.tarif_unitaire_applique,
+        montant: r.montant, notes: r.notes, approuve: r.approuve, integre_paie: r.integre_paie,
+        created_at: r.created_at,
+        employe: { id: r.employe_id, nom: r.emp_nom, prenom: r.emp_prenom, poste: r.emp_poste },
+        prime: r.prime_id ? { id: r.prime_id, code: r.prime_code, libelle: r.prime_libelle, type_prime: r.prime_type } : null,
       }))
-      return NextResponse.json({ primes: enriched, nb: enriched.length })
+
+      const final = employe_id
+        ? enriched.filter((p: any) => p.employe_id === employe_id)
+        : enriched
+
+      return NextResponse.json({
+        primes: final,
+        nb: final.length,
+        _debug: {
+          using_admin_client: usingAdminClient,
+          user_role: ownership.role,
+          is_rh: ownership.isRH,
+          rpc_count: rows?.length || 0,
+          enriched_count: enriched.length,
+          final_count: final.length,
+          rows_is_array: Array.isArray(rows),
+          rows_type: typeof rows,
+          first_row_keys: rows && Array.isArray(rows) && rows[0] ? Object.keys(rows[0]).slice(0, 10) : null,
+          first_row_id: rows && Array.isArray(rows) && rows[0] ? rows[0].id : null,
+          first_enriched: enriched[0] ?? null,
+        },
+      })
     }
 
     // Catalogue
@@ -94,7 +115,8 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
-    const supabase = getAdminClient()
+    // Même fallback que GET : si pas de service_role, on utilise le JWT user.
+    const supabase = getAdminClient() ?? supabaseAuth
     const body = await request.json()
     const { action } = body
 

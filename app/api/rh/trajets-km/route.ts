@@ -26,7 +26,9 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 
 // Taux IK par défaut (MUR/km) si parametres_km absent pour la société.
 // Cohérent avec le coût réel à Maurice (carburant Rs ~64/L + usure).
-const DEFAULT_TAUX_KM = { voiture: 7, moto: 4, velo: 2 } as const
+// Tarif par défaut WRA Maurice voiture = 16 Rs/km (cf. parametres_km).
+// Utilisé si la société n'a pas configuré son propre tarif.
+const DEFAULT_TAUX_KM = { voiture: 16, moto: 4, velo: 2 } as const
 
 function tauxFromParams(params: any, vehicule: string | null | undefined): number {
   const v = (vehicule || 'voiture').toLowerCase()

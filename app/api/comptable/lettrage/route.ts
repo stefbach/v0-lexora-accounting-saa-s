@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,9 +22,28 @@ async function requireAllowedRole() {
   return user
 }
 
+/**
+ * Vérifie les permissions du caller en mode multi-auth :
+ *  - X-Lexora-Api-Key / X-Internal-Token → on accepte (la clé API a déjà été
+ *    validée et délivre l'identité du propriétaire). L'isolation tenant est
+ *    déjà filtrée par societe_id + assertSocieteAccess en aval si besoin.
+ *  - Session web → on vérifie le rôle comptable/admin via requireAllowedRole.
+ */
+async function requireAllowedAuth(request: Request) {
+  // Si une clé API ou un token interne est présent, on les accepte sans
+  // vérification de rôle web — l'outil MCP `list_lettrage_non_lettrees` doit
+  // pouvoir lire les écritures non lettrées via clé API personnelle.
+  const apiKey = request.headers.get('x-lexora-api-key')
+  const internalToken = request.headers.get('x-internal-token')
+  if (apiKey || internalToken) {
+    return await resolveUserAuth(request)
+  }
+  return await requireAllowedRole()
+}
+
 export async function GET(request: Request) {
   try {
-    const user = await requireAllowedRole()
+    const user = await requireAllowedAuth(request)
     if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const supabase = getAdminClient()

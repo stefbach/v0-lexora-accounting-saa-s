@@ -96,10 +96,19 @@ function pickKey(e: EcritureCandidate): {
 export async function dedupeBnqEntries(
   supabase: SupabaseClient,
   candidates: EcritureCandidate[],
+  opts?: { skipDedup?: boolean },
 ): Promise<DedupeResult> {
   const toInsert: EcritureCandidate[] = []
   const skipReasons: string[] = []
   let skipped = 0
+
+  // Paiements partiels (action `lettrer_partiel`) : une même facture peut
+  // recevoir plusieurs versements bancaires — y compris du même montant. La
+  // dédup par (facture_id + compte + montant) ci-dessous les écraserait. Quand
+  // l'appelant garantit l'idempotence par ref_folio, on désactive la dédup.
+  if (opts?.skipDedup) {
+    return { toInsert: [...candidates], skipped: 0, skipReasons: [] }
+  }
 
   for (const e of candidates) {
     if (String(e.journal || '').toUpperCase() !== 'BNQ') {
@@ -182,13 +191,14 @@ export async function safeInsertBnq(
   supabase: SupabaseClient,
   candidates: EcritureCandidate[],
   table: 'ecritures_comptables_v2' = 'ecritures_comptables_v2',
+  opts?: { skipDedup?: boolean },
 ): Promise<{
   data: any[] | null
   error: any
   skipped: number
   skipReasons: string[]
 }> {
-  const dedup = await dedupeBnqEntries(supabase, candidates)
+  const dedup = await dedupeBnqEntries(supabase, candidates, opts)
   if (dedup.toInsert.length === 0) {
     return { data: [], error: null, skipped: dedup.skipped, skipReasons: dedup.skipReasons }
   }

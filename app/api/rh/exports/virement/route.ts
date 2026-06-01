@@ -12,6 +12,7 @@ import {
 } from '@/lib/rh/banques-mauritius'
 import { loadBankCodesMap } from '@/lib/rh/banques-mauritius-db'
 import { lastDayOfMonth } from '@/lib/rh/period'
+import { todayDateMU } from '@/lib/rh/pointage-sessions'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
     const { data: unlockedBuls, error: lockErr } = await supabase.from('bulletins_paie')
       .select('id').eq('societe_id', societe_id)
       .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
+      .eq('is_archived', false)
       .or('verrouille.is.null,verrouille.eq.false')
       .limit(1)
     if (lockErr) {
@@ -138,12 +140,16 @@ export async function POST(request: Request) {
 
     try {
       // Try validated first
+      // FIX — filtrer is_archived=false : sinon les anciennes versions
+      // archivées (recalculs successifs) sont ramassées → doublons +
+      // employés partis sans banque → faux "SANS_BANQUE".
       const { data: validated } = await supabase
         .from('bulletins_paie')
         .select('*')
         .eq('societe_id', societe_id)
         .gte('periode', `${periode}-01`)
         .lte('periode', lastDayOfMonth(periode))
+        .eq('is_archived', false)
         .in('statut', ['valide', 'paye'])
 
       if (validated && validated.length > 0) {
@@ -156,6 +162,7 @@ export async function POST(request: Request) {
           .eq('societe_id', societe_id)
           .gte('periode', `${periode}-01`)
           .lte('periode', lastDayOfMonth(periode))
+          .eq('is_archived', false)
         allBulletins = anyStatus || []
       }
     } catch (dbErr: any) {
@@ -201,10 +208,11 @@ export async function POST(request: Request) {
       return mode !== 'especes' && mode !== 'individuel'
     })
 
-    // La date passée aux générateurs de fichiers bancaires DOIT être le
-    // dernier jour de la période de paie (header BP-V1 + filename),
-    // pas la date d'exécution de l'export.
-    const date = lastDayOfMonth(periode)
+    // La date de valeur du fichier bancaire (header BP-V1) doit être la
+    // date du TÉLÉCHARGEMENT (jour où on génère/soumet le virement), pas
+    // le dernier jour du mois de paie. Demande RH : un export généré le
+    // 29 doit porter 20260529, pas 20260531.
+    const date = todayDateMU()
 
     // --- 3. Construire les lignes de virement ---
     const lignes: LigneBulletin[] = allBulletins.map((b: any) => {

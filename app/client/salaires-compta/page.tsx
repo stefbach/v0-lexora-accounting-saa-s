@@ -16,6 +16,7 @@ export default function SalairesComptaPage() {
   const { societeId } = useSocieteActive()
   const [loading, setLoading] = useState(false)
   const [periodes, setPeriodes] = useState<any[]>([])
+  const [busy, setBusy] = useState<string>('') // periode en cours de comptabilisation
 
   const load = useCallback(async () => {
     if (!societeId) return
@@ -27,30 +28,69 @@ export default function SalairesComptaPage() {
 
       const groups: Record<string, any> = {}
       for (const b of allBulletins) {
-        const p = (b.periode || '').slice(0, 7)
-        if (!p) continue
-        if (!groups[p]) groups[p] = { periode: p, nb: 0, basic: 0, ot: 0, primes: 0, brut: 0, net: 0, csg_sal: 0, nsf_sal: 0, paye: 0, csg_pat: 0, nsf_pat: 0, levy: 0, prgf: 0, charges: 0 }
-        groups[p].nb++
-        groups[p].basic += Number(b.salaire_base) || 0
-        groups[p].ot += Number(b.heures_sup_montant) || 0
-        groups[p].primes += (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0)
-        groups[p].brut += (Number(b.salaire_base) || 0) + (Number(b.heures_sup_montant) || 0) + (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0)
-        groups[p].net += Number(b.salaire_net) || 0
-        groups[p].csg_sal += Number(b.csg_salarie) || 0
-        groups[p].nsf_sal += Number(b.nsf_salarie) || 0
-        groups[p].paye += Number(b.paye) || 0
-        groups[p].csg_pat += Number(b.csg_patronal) || 0
-        groups[p].nsf_pat += Number(b.nsf_patronal) || 0
-        groups[p].levy += Number(b.training_levy) || 0
-        groups[p].prgf += Number(b.prgf) || 0
-        groups[p].charges += Number(b.total_charges_patronales) || 0
+        const ym = (b.periode || '').slice(0, 7)
+        if (!ym) continue
+        // L'EOY (13ème mois) est une PAIE SÉPARÉE : on le sort sur sa propre
+        // ligne ("MMM YYYY · 13ème mois") au lieu de le mélanger dans les
+        // primes du mois mensuel (bug : décembre gonflé). Clé de groupe
+        // distincte pour les bulletins source='eoy_bonus_import'.
+        const isEoy = b.source === 'eoy_bonus_import'
+        const key = isEoy ? `${ym}·eoy` : ym
+        if (!groups[key]) groups[key] = { periode: ym, key, is_eoy: isEoy, nb: 0, nb_comptabilise: 0, nb_valide_a_comptabiliser: 0, basic: 0, ot: 0, primes: 0, eoy: 0, brut: 0, net: 0, csg_sal: 0, nsf_sal: 0, paye: 0, csg_pat: 0, nsf_pat: 0, levy: 0, prgf: 0, charges: 0 }
+        const g = groups[key]
+        g.nb++
+        if (b.comptabilise === true) g.nb_comptabilise++
+        if (b.statut === 'valide' && b.comptabilise !== true) g.nb_valide_a_comptabiliser++
+        g.basic += Number(b.salaire_base) || 0
+        g.ot += Number(b.heures_sup_montant) || 0
+        // Primes = vraies indemnités UNIQUEMENT (l'EOY n'est PAS une prime).
+        const primesLigne = (Number(b.special_allowance_1) || 0) + (Number(b.special_allowance_2) || 0) + (Number(b.special_allowance_3) || 0) + (Number(b.other_refund) || 0)
+        const eoyLigne = Number(b.eoy_bonus) || 0
+        g.primes += primesLigne
+        g.eoy += eoyLigne
+        g.brut += (Number(b.salaire_base) || 0) + (Number(b.heures_sup_montant) || 0) + primesLigne + eoyLigne
+        g.net += Number(b.salaire_net) || 0
+        g.csg_sal += (Number(b.csg_salarie) || 0) + (Number(b.csg_bonus) || 0)
+        g.nsf_sal += Number(b.nsf_salarie) || 0
+        g.paye += (Number(b.paye) || 0) + (Number(b.paye_bonus) || 0)
+        g.csg_pat += (Number(b.csg_patronal) || 0) + (Number(b.csg_patronal_bonus) || 0)
+        g.nsf_pat += Number(b.nsf_patronal) || 0
+        g.levy += Number(b.training_levy) || 0
+        g.prgf += Number(b.prgf) || 0
+        g.charges += Number(b.total_charges_patronales) || 0
       }
-      setPeriodes(Object.values(groups).sort((a: any, b: any) => b.periode.localeCompare(a.periode)))
+      // Tri : par mois desc, et la ligne EOY juste après son mois mensuel.
+      setPeriodes(Object.values(groups).sort((a: any, b: any) => {
+        if (a.periode !== b.periode) return b.periode.localeCompare(a.periode)
+        return a.is_eoy ? 1 : -1
+      }))
     } catch { /* noop */ }
     setLoading(false)
   }, [societeId])
 
   useEffect(() => { load() }, [load])
+
+  async function handleComptabiliser(periodeYM: string, nbACompta: number, key: string) {
+    if (!societeId) return
+    if (nbACompta === 0) { alert("Aucun bulletin à comptabiliser pour ce mois (tous déjà comptabilisés ou non validés)."); return }
+    if (!confirm(`Comptabiliser les bulletins validés de ${periodeYM} (paie mensuelle + 13ème mois du mois) ? Les écritures OD-PAIE seront générées au grand livre.`)) return
+    setBusy(key)
+    try {
+      const res = await fetch("/api/rh/paie/comptabiliser", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all_periode: true, societe_id: societeId, periode: periodeYM, confirm: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert("Erreur : " + (data.error || res.status)); return }
+      alert(`✅ ${data.nb_bulletins} bulletin(s) comptabilisé(s) — ${data.nb_ecritures} écriture(s) générée(s)`)
+      await load()
+    } catch (e: any) {
+      alert("Erreur réseau : " + (e?.message || ''))
+    } finally {
+      setBusy('')
+    }
+  }
 
   const totalBrut = periodes.reduce((s, p) => s + (p.brut || 0), 0)
   const totalNet = periodes.reduce((s, p) => s + (p.net || 0), 0)
@@ -72,7 +112,7 @@ export default function SalairesComptaPage() {
     >
       <div className="space-y-6">
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card><CardContent className="p-4 text-center">
           <Users className="h-5 w-5 mx-auto mb-1" style={{ color: NAVY }} />
           <p className="text-2xl font-bold" style={{ color: NAVY }}>{periodes.length}</p>
@@ -93,6 +133,18 @@ export default function SalairesComptaPage() {
           <p className="text-2xl font-bold text-red-600">{fmt(totalCSGSal + totalNSFSal + totalPaye)} MUR</p>
           <p className="text-xs text-gray-400 mt-1">CSG {fmt(totalCSGSal)} • NSF {fmt(totalNSFSal)} • PAYE {fmt(totalPaye)}</p>
         </CardContent></Card>
+        {/* NOUVEAU : charges patronales — manquaient dans le récap du haut */}
+        <Card className="border-l-4 border-l-orange-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">{locale === 'fr' ? '645 — Charges patronales' : '645 — Employer charges'}</p>
+          <p className="text-2xl font-bold text-orange-600">{fmt(totalCharges)} MUR</p>
+          <p className="text-xs text-gray-400 mt-1">CSG {fmt(totalCSGPat)} • NSF {fmt(totalNSFPat)} • Levy {fmt(totalLevy)} • PRGF {fmt(totalPrgf)}</p>
+        </CardContent></Card>
+        {/* NOUVEAU : coût total employeur = brut + charges patronales */}
+        <Card className="border-l-4 border-l-violet-500"><CardContent className="p-4">
+          <p className="text-xs text-gray-400">{locale === 'fr' ? 'Coût total employeur' : 'Total employer cost'}</p>
+          <p className="text-2xl font-bold text-violet-700">{fmt(totalBrut + totalCharges)} MUR</p>
+          <p className="text-xs text-gray-400 mt-1">{locale === 'fr' ? 'brut + charges patronales' : 'gross + employer charges'}</p>
+        </CardContent></Card>
       </div>
 
       {loading ? (
@@ -110,6 +162,7 @@ export default function SalairesComptaPage() {
                     <th className="px-2 py-2 text-right font-medium bg-blue-50">{t('hr.salaires_compta.th_641_basic', locale)}</th>
                     <th className="px-2 py-2 text-right font-medium bg-blue-50">OT</th>
                     <th className="px-2 py-2 text-right font-medium bg-blue-50">{t('hr.salaires_compta.th_bonuses', locale)}</th>
+                    <th className="px-2 py-2 text-right font-medium bg-purple-50">{locale === 'fr' ? '13e mois' : 'EOY'}</th>
                     <th className="px-2 py-2 text-right font-medium bg-red-50">{t('hr.salaires_compta.th_csg_emp', locale)}</th>
                     <th className="px-2 py-2 text-right font-medium bg-red-50">{t('hr.salaires_compta.th_nsf_emp', locale)}</th>
                     <th className="px-2 py-2 text-right font-medium bg-red-50">PAYE</th>
@@ -119,18 +172,23 @@ export default function SalairesComptaPage() {
                     <th className="px-2 py-2 text-right font-medium bg-orange-50">Levy</th>
                     <th className="px-2 py-2 text-right font-medium bg-orange-50">PRGF</th>
                     <th className="px-2 py-2 text-right font-medium bg-orange-50">{t('hr.salaires_compta.th_645_total', locale)}</th>
+                    <th className="px-2 py-2 text-center font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {periodes.map(p => {
                     const mois = new Date((p.periode || '2025-01') + "-01T12:00:00").toLocaleDateString(locale === 'fr' ? "fr-FR" : "en-US", { month: "short", year: "numeric" })
                     return (
-                      <tr key={p.periode} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 font-medium capitalize">{mois}</td>
+                      <tr key={p.key} className={`hover:bg-gray-50 ${p.is_eoy ? 'bg-purple-50/40' : ''}`}>
+                        <td className="px-3 py-2 font-medium capitalize">
+                          {mois}
+                          {p.is_eoy && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-300">🎁 13ème mois</span>}
+                        </td>
                         <td className="px-2 py-2 text-center">{p.nb}</td>
-                        <td className="px-2 py-2 text-right font-mono text-blue-600">{fmt(p.basic)}</td>
+                        <td className="px-2 py-2 text-right font-mono text-blue-600">{p.basic > 0 ? fmt(p.basic) : "—"}</td>
                         <td className="px-2 py-2 text-right font-mono text-blue-500">{p.ot > 0 ? fmt(p.ot) : "—"}</td>
                         <td className="px-2 py-2 text-right font-mono text-blue-500">{p.primes > 0 ? fmt(p.primes) : "—"}</td>
+                        <td className="px-2 py-2 text-right font-mono text-purple-700 font-medium">{p.eoy > 0 ? fmt(p.eoy) : "—"}</td>
                         <td className="px-2 py-2 text-right font-mono text-red-600">{fmt(p.csg_sal)}</td>
                         <td className="px-2 py-2 text-right font-mono text-red-500">{fmt(p.nsf_sal)}</td>
                         <td className="px-2 py-2 text-right font-mono text-red-500">{fmt(p.paye)}</td>
@@ -140,6 +198,23 @@ export default function SalairesComptaPage() {
                         <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(p.levy)}</td>
                         <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(p.prgf)}</td>
                         <td className="px-2 py-2 text-right font-mono text-orange-700 font-bold">{fmt(p.charges)}</td>
+                        <td className="px-2 py-2 text-center">
+                          {p.nb_valide_a_comptabiliser > 0 ? (
+                            <button
+                              type="button"
+                              disabled={busy === p.key}
+                              onClick={() => handleComptabiliser(p.periode, p.nb_valide_a_comptabiliser, p.key)}
+                              className="px-2 py-1 text-[11px] rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                              title={`${p.nb_valide_a_comptabiliser} bulletin(s) à comptabiliser`}
+                            >
+                              {busy === p.key ? '…' : `Comptabiliser (${p.nb_valide_a_comptabiliser})`}
+                            </button>
+                          ) : p.nb_comptabilise === p.nb ? (
+                            <span className="text-[11px] text-emerald-700">✅ comptabilisé</span>
+                          ) : (
+                            <span className="text-[11px] text-gray-400">—</span>
+                          )}
+                        </td>
                       </tr>
                     )
                   })}
@@ -150,6 +225,7 @@ export default function SalairesComptaPage() {
                       <td className="px-2 py-2 text-right font-mono text-blue-600">{fmt(periodes.reduce((s, p) => s + p.basic, 0))}</td>
                       <td className="px-2 py-2 text-right font-mono">{fmt(periodes.reduce((s, p) => s + p.ot, 0))}</td>
                       <td className="px-2 py-2 text-right font-mono">{fmt(periodes.reduce((s, p) => s + p.primes, 0))}</td>
+                      <td className="px-2 py-2 text-right font-mono text-purple-700">{fmt(periodes.reduce((s, p) => s + (p.eoy || 0), 0))}</td>
                       <td className="px-2 py-2 text-right font-mono text-red-600">{fmt(totalCSGSal)}</td>
                       <td className="px-2 py-2 text-right font-mono text-red-500">{fmt(totalNSFSal)}</td>
                       <td className="px-2 py-2 text-right font-mono text-red-500">{fmt(totalPaye)}</td>
@@ -159,6 +235,7 @@ export default function SalairesComptaPage() {
                       <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(totalLevy)}</td>
                       <td className="px-2 py-2 text-right font-mono text-orange-500">{fmt(totalPrgf)}</td>
                       <td className="px-2 py-2 text-right font-mono text-orange-700 font-bold">{fmt(totalCharges)}</td>
+                      <td className="px-2 py-2"></td>
                     </tr>
                   )}
                 </tbody>

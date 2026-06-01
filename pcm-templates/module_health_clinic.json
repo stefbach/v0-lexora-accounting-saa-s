@@ -1,0 +1,110 @@
+{
+  "code": "module_health_clinic",
+  "nom": "Module Clinique / Médical",
+  "description": "Comptes spécifiques aux activités médicales mauriciennes : consultations et actes exonérés de TVA (VAT Act Schedule 1 Part II Item 50), consommables et dispositifs médicaux, honoraires médecins, TVA non récupérable sur dépenses exonérées.",
+  "type": "module",
+  "juridiction_code": "MU",
+  "version": "1.0.0",
+  "prerequisites": ["core_maurice"],
+  "comptes": [
+    {
+      "numero": "7061",
+      "intitule": "Consultations médicales (exonérées TVA - Sch.1 Part II Item 50)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "prestation_medicale",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["health", "tva_exempt"]
+    },
+    {
+      "numero": "7062",
+      "intitule": "Actes chirurgicaux (exonérés TVA)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "prestation_medicale",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["health", "tva_exempt"]
+    },
+    {
+      "numero": "7063",
+      "intitule": "Hospitalisation et soins (exonérés TVA)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "prestation_medicale",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["health", "tva_exempt"]
+    },
+    {
+      "numero": "7064",
+      "intitule": "Ventes pharmacie / produits (taxables ou zero-rated)",
+      "classe": 7,
+      "type": "produit",
+      "nature": "vente_pharmacie",
+      "sens_normal": "credit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["health"]
+    },
+    {
+      "numero": "6041",
+      "intitule": "Consommables médicaux",
+      "classe": 6,
+      "type": "charge",
+      "nature": "consommable_medical",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["health"]
+    },
+    {
+      "numero": "6042",
+      "intitule": "Dispositifs médicaux",
+      "classe": 6,
+      "type": "charge",
+      "nature": "dispositif_medical",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["health"]
+    },
+    {
+      "numero": "6043",
+      "intitule": "Produits pharmaceutiques (achats)",
+      "classe": 6,
+      "type": "charge",
+      "nature": "achat_pharmacie",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["health"]
+    },
+    {
+      "numero": "6227",
+      "intitule": "Honoraires médecins / praticiens externes",
+      "classe": 6,
+      "type": "charge",
+      "nature": "honoraires_medicaux",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["health"]
+    },
+    {
+      "numero": "4459",
+      "intitule": "TVA non récupérable sur dépenses exonérées (prorata)",
+      "classe": 4,
+      "type": "charge",
+      "nature": "tva_non_recuperable",
+      "sens_normal": "debit",
+      "lettrable": false,
+      "obligatoire": false,
+      "tags": ["health", "tva", "mra"]
+    }
+  ]
+}

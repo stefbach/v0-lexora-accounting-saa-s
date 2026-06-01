@@ -148,27 +148,49 @@ export async function verifyHmac(req: Request): Promise<HmacVerifyResult> {
     ''
 
   if (!secret) {
+    // eslint-disable-next-line no-console
+    console.error('[SEC-005] no secret configured (INTERNAL_HMAC_SECRET / INTERNAL_API_TOKEN missing)')
     return { ok: false, reason: 'server_misconfigured_no_secret' }
   }
 
   const sig = req.headers.get(HMAC_HEADER_SIGNATURE)
   const ts = req.headers.get(HMAC_HEADER_TIMESTAMP)
   const nonce = req.headers.get(HMAC_HEADER_NONCE)
+  const bearer = req.headers.get(LEGACY_BEARER_HEADER)
 
-  // ---- Legacy bearer fallback ------------------------------------------
-  // Allows n8n / legacy callers to keep working during the migration.
-  // Only enabled if LEGACY_BEARER_ALLOWED=true is explicitly set.
-  if (!sig || !ts || !nonce) {
-    if (process.env.LEGACY_BEARER_ALLOWED === 'true') {
-      const bearer = req.headers.get(LEGACY_BEARER_HEADER)
-      const legacyToken = process.env.INTERNAL_API_TOKEN || ''
-      if (bearer && legacyToken && safeEqual(bearer, legacyToken)) {
-        const bodyText = await req.clone().text()
-        // eslint-disable-next-line no-console
-        console.warn('[SEC-005] legacy bearer used for', req.url)
-        return { ok: true, mode: 'legacy-bearer', bodyText }
-      }
+  // ---- Legacy bearer fallback (priority 1) -----------------------------
+  // Bug TELEGRAM-401-FIX (mai 2026) : n8n n'envoie pas (encore) les
+  // headers HMAC, seulement `X-Internal-Token`. On accepte le bearer
+  // legacy SAUF si explicitement désactivé via LEGACY_BEARER_ALLOWED=false.
+  // Le bearer est comparé en temps constant à INTERNAL_API_TOKEN.
+  //
+  // Inversion de polarité : avant on exigeait LEGACY_BEARER_ALLOWED=true
+  // pour activer le fallback, ce qui bloquait le bot Telegram tant que
+  // l'env var n'était pas posée sur Vercel.
+  const legacyExplicitlyDisabled = process.env.LEGACY_BEARER_ALLOWED === 'false'
+  if (bearer && !legacyExplicitlyDisabled) {
+    const legacyToken = process.env.INTERNAL_API_TOKEN || ''
+    if (legacyToken && safeEqual(bearer, legacyToken)) {
+      const bodyText = await req.clone().text()
+      // eslint-disable-next-line no-console
+      console.warn('[SEC-005] legacy bearer used for', req.url)
+      return { ok: true, mode: 'legacy-bearer', bodyText }
     }
+    // Bearer présent mais invalide → on log puis on continue vers HMAC.
+    // eslint-disable-next-line no-console
+    console.warn('[SEC-005] invalid legacy bearer for', req.url, '— falling through to HMAC')
+  }
+
+  if (!sig || !ts || !nonce) {
+    // eslint-disable-next-line no-console
+    console.warn('[SEC-005] missing HMAC headers', {
+      url: req.url,
+      hasSig: !!sig,
+      hasTs: !!ts,
+      hasNonce: !!nonce,
+      hasBearer: !!bearer,
+      legacyDisabled: legacyExplicitlyDisabled,
+    })
     return { ok: false, reason: 'missing_hmac_headers' }
   }
 

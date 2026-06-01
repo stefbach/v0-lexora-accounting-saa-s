@@ -60,6 +60,11 @@ export default function PrimesPage() {
   const [saisieDialog, setSaisieDialog] = useState(false)
   const [saisieForm, setSaisieForm] = useState({ employe_id: "", prime_id: "", quantite: "", notes: "" })
 
+  // Dialog édition prime mensuelle
+  const [editDialog, setEditDialog] = useState<any | null>(null)
+  const [editForm, setEditForm] = useState({ montant: "", quantite: "", notes: "" })
+  const [editError, setEditError] = useState<string | null>(null)
+
   // Excel import
   const [importDialog, setImportDialog] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -90,14 +95,41 @@ export default function PrimesPage() {
     } catch (e) { console.error(e) } finally { setLoading(false) }
   }, [societe])
 
+  const [saisiesDebug, setSaisiesDebug] = useState<{
+    httpStatus: number | null
+    httpOk: boolean
+    requestUrl: string
+    rawBody: any
+    errorMessage: string | null
+  } | null>(null)
+
   const loadSaisies = useCallback(async () => {
     setLoading(true)
+    const params = new URLSearchParams({ periode, type: "saisie" })
+    if (societe !== "all") params.set("societe_id", societe)
+    const requestUrl = `/api/rh/primes?${params}`
     try {
-      const params = new URLSearchParams({ periode, type: "saisie" })
-      if (societe !== "all") params.set("societe_id", societe)
-      const data = await fetch(`/api/rh/primes?${params}`).then(r => r.json())
-      setSaisies(data.primes || [])
-    } catch (e) { console.error(e) } finally { setLoading(false) }
+      const res = await fetch(requestUrl)
+      const body = await res.json().catch(() => ({ error: "Réponse non-JSON" }))
+      setSaisies(Array.isArray(body?.primes) ? body.primes : [])
+      setSaisiesDebug({
+        httpStatus: res.status,
+        httpOk: res.ok,
+        requestUrl,
+        rawBody: body,
+        errorMessage: res.ok ? null : (body?.error || `HTTP ${res.status}`),
+      })
+    } catch (e: any) {
+      console.error(e)
+      setSaisies([])
+      setSaisiesDebug({
+        httpStatus: null,
+        httpOk: false,
+        requestUrl,
+        rawBody: null,
+        errorMessage: `Erreur réseau : ${e?.message || e}`,
+      })
+    } finally { setLoading(false) }
   }, [societe, periode])
 
   const loadRegles = useCallback(async () => {
@@ -203,6 +235,47 @@ export default function PrimesPage() {
   const approuverPrime = async (id: string) => {
     await fetch("/api/rh/primes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "approuver", id }) })
     loadSaisies()
+  }
+
+  const openEditSaisie = (s: any) => {
+    setEditForm({
+      montant: String(s.montant ?? ""),
+      quantite: String(s.quantite ?? ""),
+      notes: s.notes ?? "",
+    })
+    setEditError(null)
+    setEditDialog(s)
+  }
+
+  const sauverEditSaisie = async () => {
+    if (!editDialog) return
+    setSaving(true); setEditError(null)
+    try {
+      const res = await fetch(`/api/rh/primes/${editDialog.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          montant: Number(editForm.montant) || 0,
+          quantite: Number(editForm.quantite) || 0,
+          notes: editForm.notes || null,
+        }),
+      })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Erreur") }
+      setEditDialog(null)
+      loadSaisies()
+    } catch (e: any) { setEditError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  const supprimerSaisie = async (id: string, employeName: string, primeLabel: string) => {
+    if (!confirm(`Supprimer la prime "${primeLabel}" de ${employeName} ?`)) return
+    try {
+      const res = await fetch(`/api/rh/primes/${id}`, { method: "DELETE" })
+      if (!res.ok) { const d = await res.json(); alert(d.error || "Erreur suppression"); return }
+      loadSaisies()
+    } catch (e: any) {
+      alert("Erreur réseau: " + (e?.message || ""))
+    }
   }
 
   // ─── Excel import ─────────────────────────────────────────────
@@ -423,6 +496,110 @@ export default function PrimesPage() {
 
           {societe === "all" && <p className="text-sm text-gray-500">{t('rha.a.primes.saisie_pick_societe', locale)}</p>}
 
+          {/* Bannière diagnostique — DIAGNOSTIC + FIX en un message clair. */}
+          {!loading && saisies.length === 0 && saisiesDebug && (() => {
+            const dbg = saisiesDebug.rawBody?._debug
+            // Conclusion = un seul message qui dit la cause + le fix
+            let conclusion: { titre: string; cause: string; fix: string; severity: "red" | "amber" } = {
+              titre: "Aucune prime trouvée pour cette période/société",
+              cause: "Soit il n'y en a vraiment pas, soit la requête API ne remonte rien.",
+              fix: "Si tu en as saisi récemment, vérifie qu'elles sont approuvées en BDD.",
+              severity: "amber",
+            }
+            if (!saisiesDebug.httpOk) {
+              if (saisiesDebug.httpStatus === 401) {
+                conclusion = {
+                  titre: "Session expirée",
+                  cause: "Tu n'es plus authentifié.",
+                  fix: "Reconnecte-toi (logout + login).",
+                  severity: "red",
+                }
+              } else if (saisiesDebug.httpStatus === 500) {
+                conclusion = {
+                  titre: "Erreur serveur",
+                  cause: saisiesDebug.errorMessage || "Erreur 500 sans message.",
+                  fix: "Vérifier SUPABASE_SERVICE_ROLE_KEY dans Vercel + logs serveur.",
+                  severity: "red",
+                }
+              } else {
+                conclusion = {
+                  titre: `Erreur HTTP ${saisiesDebug.httpStatus}`,
+                  cause: saisiesDebug.errorMessage || "Erreur réseau",
+                  fix: "Vérifier la connexion + l'URL de l'API.",
+                  severity: "red",
+                }
+              }
+            } else if (dbg) {
+              if (dbg.error) {
+                conclusion = {
+                  titre: "Erreur lors du chargement des primes",
+                  cause: dbg.error,
+                  fix: "Le développeur a probablement besoin de corriger la requête API. Voir les détails techniques.",
+                  severity: "red",
+                }
+              } else if (!dbg.using_admin_client) {
+                conclusion = {
+                  titre: "Variable SUPABASE_SERVICE_ROLE_KEY manquante sur Vercel",
+                  cause: "Le serveur n'a pas pu créer le client admin → la RLS bloque ton rôle.",
+                  fix: "Demander à l'admin de configurer SUPABASE_SERVICE_ROLE_KEY dans les env vars Vercel.",
+                  severity: "red",
+                }
+              } else if (dbg.probe_error) {
+                conclusion = {
+                  titre: "Le client admin ne peut pas lire primes_variables_mois",
+                  cause: `Erreur Postgres : ${dbg.probe_error}`,
+                  fix: "Vérifier que la SERVICE_ROLE_KEY est la bonne (peut-être expirée ou copiée incorrectement).",
+                  severity: "red",
+                }
+              } else if (dbg.probe_total_primes === 0) {
+                conclusion = {
+                  titre: "La table primes_variables_mois est vide (ou bloquée par RLS)",
+                  cause: "Même en mode admin, aucune prime n'est lisible dans toute la table.",
+                  fix: "Soit SERVICE_ROLE_KEY invalide, soit la table est vraiment vide. Vérifier directement en SQL.",
+                  severity: "red",
+                }
+              } else if (dbg.nb_employes_societe === 0) {
+                conclusion = {
+                  titre: "Aucun employé visible pour cette société",
+                  cause: `${dbg.probe_total_primes} primes existent au total, mais la requête sur 'employes' filtrée par cette société renvoie 0.`,
+                  fix: "Soit la société n'a vraiment aucun employé, soit la RLS sur 'employes' bloque. Si bloque : configurer le mapping user_societes pour ton compte.",
+                  severity: "red",
+                }
+              } else {
+                // Admin OK, primes existent en table, employés visibles, mais 0 prime pour ce filtre
+                const periodesDB = dbg.periodes_existantes_en_db || []
+                const periodesAffichees = periodesDB.length > 0 ? periodesDB.join(', ') : 'aucune visible'
+                const url = dbg.supabase_url_partial || '?'
+                conclusion = {
+                  titre: "L'API ne voit aucune prime pour cette période — mismatch BDD probable",
+                  cause: `Le serveur (URL: ${url}) voit ${dbg.probe_total_primes} primes au total et ${dbg.nb_employes_societe} employés DDS, MAIS aucune avec periode='${dbg.query_periode_filter}'. Périodes existantes côté API: [${periodesAffichees}]. Si '2026-05-01' n'est pas dans cette liste alors que tu sais qu'il devrait y être, c'est que Vercel hit une AUTRE base Supabase que celle que tu vois.`,
+                  fix: "1) Vérifier dans Vercel que NEXT_PUBLIC_SUPABASE_URL ET SUPABASE_SERVICE_ROLE_KEY pointent bien sur le projet 'dqepdoimpqhmuhkklxva'. 2) Sinon, regarder dans la liste 'Périodes existantes' ci-dessus quelle base Vercel utilise.",
+                  severity: "red",
+                }
+              }
+            }
+
+            return (
+              <div className={`rounded-lg border-2 px-4 py-3 ${
+                conclusion.severity === "red" ? "border-red-400 bg-red-50 text-red-950" : "border-amber-400 bg-amber-50 text-amber-950"
+              }`}>
+                <p className="font-bold text-base mb-2">
+                  {conclusion.severity === "red" ? "🔴" : "🟠"} {conclusion.titre}
+                </p>
+                <p className="text-sm mb-1"><strong>Pourquoi :</strong> {conclusion.cause}</p>
+                <p className="text-sm"><strong>Solution :</strong> {conclusion.fix}</p>
+                <details className="mt-2 text-xs">
+                  <summary className="cursor-pointer opacity-70 hover:opacity-100">Détails techniques (cliquer)</summary>
+                  <div className="mt-2 font-mono space-y-1 bg-white/60 p-2 rounded">
+                    <p>URL : {saisiesDebug.requestUrl}</p>
+                    <p>HTTP : {saisiesDebug.httpStatus ?? "Erreur réseau"}</p>
+                    <p>Réponse : {JSON.stringify(saisiesDebug.rawBody)?.slice(0, 800) || "vide"}</p>
+                  </div>
+                </details>
+              </div>
+            )
+          })()}
+
           <Card>
             <CardHeader><CardTitle className="text-[#0B0F2E]">{t('rha.a.primes.primes_de', locale)} {periode} ({saisies.length})</CardTitle></CardHeader>
             <CardContent className="p-0">
@@ -456,11 +633,20 @@ export default function PrimesPage() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            {!s.approuve && (
-                              <Button size="sm" variant="ghost" className="text-green-600 h-7" onClick={() => approuverPrime(s.id)}>
-                                <CheckCircle className="w-4 h-4 mr-1" />{t('rha.a.primes.approuver', locale)}
+                            <div className="flex items-center gap-1">
+                              {!s.approuve && (
+                                <Button size="sm" variant="ghost" className="text-green-600 h-7" onClick={() => approuverPrime(s.id)}>
+                                  <CheckCircle className="w-4 h-4 mr-1" />{t('rha.a.primes.approuver', locale)}
+                                </Button>
+                              )}
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Modifier" onClick={() => openEditSaisie(s)}>
+                                <Pencil className="w-4 h-4" />
                               </Button>
-                            )}
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" title="Supprimer"
+                                onClick={() => supprimerSaisie(s.id, `${s.employe?.prenom ?? ''} ${s.employe?.nom ?? ''}`.trim(), s.prime?.libelle ?? '—')}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -810,6 +996,47 @@ export default function PrimesPage() {
                 </Button>
               </>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog : modifier une prime saisie */}
+      <Dialog open={!!editDialog} onOpenChange={open => !open && setEditDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Modifier la prime — {editDialog?.employe?.prenom} {editDialog?.employe?.nom}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            {editError && <p className="text-sm text-red-600">{editError}</p>}
+            <div className="text-sm text-gray-600 bg-gray-50 rounded p-2">
+              <p><strong>{editDialog?.prime?.libelle || '—'}</strong> · Période {periode}</p>
+              {editDialog?.integre_paie && (
+                <p className="text-amber-700 text-xs mt-1">
+                  ⚠️ Cette prime est déjà intégrée à la paie. La modification ne mettra pas automatiquement à jour le bulletin — relance le calcul paie après.
+                </p>
+              )}
+            </div>
+            <div><Label>Quantité</Label>
+              <Input type="number" step="0.01" value={editForm.quantite}
+                onChange={e => setEditForm(f => ({ ...f, quantite: e.target.value }))} />
+            </div>
+            <div><Label>Montant (MUR) *</Label>
+              <Input type="number" step="0.01" value={editForm.montant}
+                onChange={e => setEditForm(f => ({ ...f, montant: e.target.value }))} />
+            </div>
+            <div><Label>Notes</Label>
+              <Input value={editForm.notes}
+                onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Ex: Correction commission Q1..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialog(null)}>Annuler</Button>
+            <Button onClick={sauverEditSaisie} disabled={saving} className="bg-[#0B0F2E] text-white">
+              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Sauvegarder
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

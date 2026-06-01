@@ -54,6 +54,16 @@ const COL_PATTERNS: Record<string, string[]> = {
   prime_tl: ['prime tl', '3230', 'team leader', 'tl bonus'],
   electricity: ['electricity allowance', 'electricity', 'electricite', '3250 elec', '3250'],
   meal_allowance: ['meal allowance', 'meal', 'repas', '3510 meal', '3510'],
+  // EOY bonus = 13e mois mauricien (versé en décembre). DOIT être détecté AVANT
+  // other_primes (motif générique 'bonus'/'prime') sinon il y serait absorbé et
+  // perdrait son identité. Labels usuels FR + EN + codes.
+  eoy_bonus: [
+    'end of year bonus', 'end-of-year bonus', 'eoy bonus', 'eoy', '13th month',
+    '13th-month', '13 month', 'thirteenth month', 'thirteenth', 'annual bonus',
+    'bonus annuel', '13e mois', '13eme mois', '13ème mois', 'treizieme mois',
+    'treizième mois', 'prime fin annee', 'prime fin d\'annee', 'prime de fin d\'année',
+    'prime fin d\'année', 'gratification', '3600 eoy', '3600 bonus', '3600',
+  ],
   other_primes: ['primes', 'bonus', 'prime', 'other allowance', 'other'],
   total_payments: ['total payments', 'total pay', 'gross', 'brut total', 'total earning', 'gross pay'],
   absence_deductions: ['absence deductions', 'absence', '3900 absence', '3900'],
@@ -79,7 +89,9 @@ function detectColumns(headers: string[]): Record<string, number> {
     'nom', 'prenom', 'code', 'poste', 'departement', 'date_arrivee', 'date_depart',
     'salaire_base', 'overtime_1_5x', 'overtime_2x',
     'special_allowance', 'internet_allowance', 'prime_production', 'on_call', 'prime_tl',
-    'electricity', 'meal_allowance', 'total_payments', 'absence_deductions',
+    'electricity', 'meal_allowance',
+    'eoy_bonus', // 13e mois : motif spécifique capté avant les primes génériques
+    'total_payments', 'absence_deductions',
     'csg', 'nsf', 'paye', 'total_deductions',
     'er_csg', 'er_nsf', 'er_levy', 'er_prgf', 'total_er',
     'net_pay', // last — avoids matching "internet" as "net"
@@ -128,8 +140,14 @@ export async function GET(request: Request) {
       // les bulletins de toutes les sociétés étaient retournés.
       const filterSocieteHist = searchParams.get('societe_id')
       let queryHist = supabase.from('bulletins_paie')
-        .select('periode, salaire_base, salaire_net, total_charges_patronales')
-        .eq('source', 'import_excel')
+        .select('periode, salaire_base, salaire_net, total_charges_patronales, eoy_bonus, source')
+        // Inclut les imports mensuels ET les imports EOY (13ème mois) pour
+        // qu'ils apparaissent ENSEMBLE dans l'historique.
+        .in('source', ['import_excel', 'eoy_bonus_import'])
+        // Exclut les bulletins archivés (réimports) — sinon ils s'affichent
+        // en double (bug "importé deux fois"). is_archived NOT NULL DEFAULT
+        // false (mig 425), donc le filtre est sûr.
+        .eq('is_archived', false)
       if (filterSocieteHist && accessibleIds.includes(filterSocieteHist)) {
         queryHist = queryHist.eq('societe_id', filterSocieteHist)
       } else {
@@ -139,11 +157,14 @@ export async function GET(request: Request) {
       const groups: Record<string, any> = {}
       for (const b of data || []) {
         const p = b.periode
-        if (!groups[p]) groups[p] = { periode: p, nb: 0, total_brut: 0, total_net: 0, total_charges: 0 }
+        const isEoy = b.source === 'eoy_bonus_import'
+        if (!groups[p]) groups[p] = { periode: p, nb: 0, total_brut: 0, total_net: 0, total_charges: 0, is_eoy: isEoy }
         groups[p].nb++
-        groups[p].total_brut += Number(b.salaire_base) || 0
+        // brut : base mensuelle + eoy_bonus (0 pour le mensuel, le montant pour l'EOY)
+        groups[p].total_brut += (Number(b.salaire_base) || 0) + (Number(b.eoy_bonus) || 0)
         groups[p].total_net += Number(b.salaire_net) || 0
         groups[p].total_charges += Number(b.total_charges_patronales) || 0
+        if (isEoy) groups[p].is_eoy = true
       }
       return NextResponse.json({ history: Object.values(groups) })
     }
@@ -157,7 +178,8 @@ export async function GET(request: Request) {
       // Sprint 9 BUG 4 — honorer le param societe_id pour le détail.
       const filterSocieteDetail = searchParams.get('societe_id')
       let queryDetail = supabase.from('bulletins_paie')
-        .select('*').eq('source', 'import_excel').eq('periode', periode)
+        .select('*').in('source', ['import_excel', 'eoy_bonus_import']).eq('periode', periode)
+        .eq('is_archived', false)
       if (filterSocieteDetail && accessibleIdsDetail.includes(filterSocieteDetail)) {
         queryDetail = queryDetail.eq('societe_id', filterSocieteDetail)
       } else {
@@ -298,6 +320,7 @@ export async function POST(request: Request) {
           salaire_base: getVal(r, 'salaire_base'), overtime_1_5x: getVal(r, 'overtime_1_5x'), overtime_2x: getVal(r, 'overtime_2x'),
           special_allowance: getVal(r, 'special_allowance'), internet_allowance: getVal(r, 'internet_allowance'),
           prime_production: getVal(r, 'prime_production'), electricity: getVal(r, 'electricity'), meal_allowance: getVal(r, 'meal_allowance'), other_primes: getVal(r, 'other_primes'),
+          eoy_bonus: getVal(r, 'eoy_bonus'),
           total_payments: getVal(r, 'total_payments'), absence_deductions: getVal(r, 'absence_deductions'),
           csg: getVal(r, 'csg'), nsf: getVal(r, 'nsf'), paye: getVal(r, 'paye'), total_deductions: getVal(r, 'total_deductions'),
           er_csg: getVal(r, 'er_csg'), er_nsf: getVal(r, 'er_nsf'), er_levy: getVal(r, 'er_levy'), er_prgf: getVal(r, 'er_prgf'),
@@ -408,7 +431,8 @@ export async function POST(request: Request) {
           const computedBrut =
             (emp.salaire_base || 0) + ot_total + (emp.electricity || 0) +
             (emp.prime_production || 0) + all_primes +
-            (emp.internet_allowance || 0) + (emp.meal_allowance || 0)
+            (emp.internet_allowance || 0) + (emp.meal_allowance || 0) +
+            (emp.eoy_bonus || 0) // 13e mois : composant du brut (colonne dédiée + compte 6416)
           const retenuesSalariales =
             (emp.csg || 0) + (emp.nsf || 0) + (emp.paye || 0) + (emp.absence_deductions || 0)
           const computedNet = Math.max(0, Math.round((computedBrut - retenuesSalariales) * 100) / 100)
@@ -428,11 +452,17 @@ export async function POST(request: Request) {
             salaire_base: emp.salaire_base || 0,
             // salaire_brut: GENERATED — do not set
             heures_sup_montant: ot_total,
+            // FIX 2026-05-27 : electricity et prime_production ne sont PAS du transport/carburant.
+            // Ce sont des primes/indemnités mal nommées. On les agrège dans les special_allowance.
+            // transport_allowance/petrol_allowance restent à 0 (DDS/OCC n'ont pas de transport/carburant réels).
             special_allowance_1: all_primes,
-            special_allowance_2: emp.internet_allowance || 0,
-            special_allowance_3: emp.meal_allowance || 0,
-            transport_allowance: emp.electricity || 0,
-            petrol_allowance: emp.prime_production || 0,
+            special_allowance_2: (emp.internet_allowance || 0) + (emp.electricity || 0),
+            special_allowance_3: (emp.meal_allowance || 0) + (emp.prime_production || 0),
+            transport_allowance: 0,
+            petrol_allowance: 0,
+            // 13e mois importé d'un autre système : colonne dédiée (incluse dans
+            // salaire_brut GENERATED + comptabilisée au 6416 par le trigger paie).
+            eoy_bonus: emp.eoy_bonus || 0,
             salaire_net: computedNet,
             csg_salarie: emp.csg || 0,
             csg_patronal: emp.er_csg || 0,
@@ -453,6 +483,7 @@ export async function POST(request: Request) {
               emp.prime_tl ? `Prime TL: ${emp.prime_tl}` : '',
               emp.electricity ? `Electricity: ${emp.electricity}` : '',
               emp.meal_allowance ? `Meal: ${emp.meal_allowance}` : '',
+              emp.eoy_bonus ? `EOY/13e mois: ${emp.eoy_bonus}` : '',
               emp.net_pay && Math.abs((emp.net_pay || 0) - computedNet) > 1
                 ? `Excel net=${emp.net_pay} ignoré (recalculé=${computedNet})`
                 : '',
@@ -461,7 +492,7 @@ export async function POST(request: Request) {
           if (bulErr) {
             console.warn(`[import-paie] bulletin upsert failed for ${nom}, trying insert:`, bulErr.message)
             // Fallback: try simple insert without upsert
-            const { error: insErr } = await supabase.from('bulletins_paie').insert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, heures_sup_montant: ot_total, special_allowance_1: all_primes, salaire_net: computedNet, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: total_ded, total_charges_patronales: total_charges, montant_absence: emp.absence_deductions || 0, statut: 'valide', source: 'import_excel' })
+            const { error: insErr } = await supabase.from('bulletins_paie').insert({ employe_id: employeId, societe_id, periode: periodeDate, salaire_base: emp.salaire_base || 0, heures_sup_montant: ot_total, special_allowance_1: all_primes, eoy_bonus: emp.eoy_bonus || 0, salaire_net: computedNet, csg_salarie: emp.csg || 0, csg_patronal: emp.er_csg || 0, nsf_salarie: emp.nsf || 0, nsf_patronal: emp.er_nsf || 0, paye: emp.paye || 0, training_levy: emp.er_levy || 0, prgf: emp.er_prgf || 0, total_deductions: total_ded, total_charges_patronales: total_charges, montant_absence: emp.absence_deductions || 0, statut: 'valide', source: 'import_excel' })
             if (insErr) {
               console.error(`[import-paie] bulletin insert also failed:`, insErr.message)
               errors.push(`${nom}: bulletin - ${insErr.message}`)
@@ -517,7 +548,7 @@ export async function POST(request: Request) {
         const entries = [
           // DÉBIT — Charges (classe 6)
           mkEntry('6411', `Salaires de base ${moisLabel}`, Math.round(t.basic), 0),
-          t.ot > 0 ? mkEntry('6414', `Heures supplémentaires ${moisLabel}`, Math.round(t.ot), 0) : null,
+          t.ot > 0 ? mkEntry('6413', `Heures supplémentaires ${moisLabel}`, Math.round(t.ot), 0) : null,
           t.allowances > 0 ? mkEntry('6415', `Primes et indemnités ${moisLabel}`, Math.round(t.allowances), 0) : null,
           t.csg_pat > 0 ? mkEntry('6451', `CSG patronale ${moisLabel}`, Math.round(t.csg_pat), 0) : null,
           t.nsf_pat > 0 ? mkEntry('6452', `NSF patronal ${moisLabel}`, Math.round(t.nsf_pat), 0) : null,
@@ -571,6 +602,130 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json({ created, updated, errors, total: employes.length, compta: comptaOk, dossier_found: !!dossier })
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // IMPORT EOY — fichier SUPPLÉMENTAIRE 13ème mois (bulletin séparé déc.)
+    // ─────────────────────────────────────────────────────────────────
+    // Crée un bulletin EOY distinct (source='eoy_bonus_import') sur une
+    // période à jour spécifique (YYYY-12-25) pour ne PAS entrer en collision
+    // avec le bulletin mensuel (YYYY-12-01) ni les bulletins EOY natifs
+    // (YYYY-12-18 / YYYY-12-31). salaire_brut est GENERATED → on alimente
+    // uniquement eoy_bonus (le brut s'auto-calcule + se comptabilise au 6416).
+    if (body.action === 'import_eoy') {
+      const { societe_id, periode, employes } = body
+      if (!societe_id || !periode || !employes?.length) return NextResponse.json({ error: 'Données manquantes' }, { status: 400 })
+      const hasAccessEoy = await userHasAccessToSociete(user.id, societe_id)
+      if (!hasAccessEoy) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
+
+      const year = String(periode).slice(0, 4)
+      const eoyPeriode = `${year}-12-25` // jour distinct → pas de collision
+      let created = 0
+      const errors: string[] = []
+
+      for (const emp of employes) {
+        try {
+          const nom = (emp.nom || '').toUpperCase().trim()
+          if (!nom) continue
+          // Montant EOY : colonne EOY détectée en priorité, sinon total/net.
+          const montantEoy = Number(emp.eoy_bonus || emp.total_payments || emp.net_pay || emp.other_primes || 0)
+          if (!montantEoy || montantEoy <= 0) { errors.push(`${nom}: aucun montant EOY détecté`); continue }
+
+          // L'employé DOIT exister (EOY = complément à une paie déjà en place).
+          const { data: ex } = await supabase.from('employes').select('id').eq('societe_id', societe_id).ilike('nom', `%${nom}%`).limit(1).maybeSingle()
+          if (!ex) { errors.push(`${nom}: employé introuvable (créez-le d'abord via l'import mensuel)`); continue }
+          const employeId = ex.id
+
+          // ── Charges SALARIÉ sur EOY ──
+          // À Maurice, le 13ème mois est soumis à CSG salarié + PAYE (colonnes
+          // dédiées csg_bonus / paye_bonus mig 016+183) et généralement PAS à
+          // NSF. On stocke ce que le fichier importé contient (resilient si
+          // d'autres juridictions ajoutent NSF/training levy sur bonus).
+          const csg_sal = Number(emp.csg || 0)           // → csg_bonus
+          const nsf_sal = Number(emp.nsf || 0)           // → nsf_salarie (pas de colonne bonus dédiée)
+          const paye_sal = Number(emp.paye || 0)         // → paye_bonus
+          const absence = Number(emp.absence_deductions || 0)
+          const total_ded = Number(emp.total_deductions || 0) || (csg_sal + nsf_sal + paye_sal + absence)
+
+          // ── Charges PATRONALES sur EOY ──
+          // csg_patronal_bonus est dédié (mig 016). Pour le reste (NSF, levy,
+          // PRGF), on alimente les colonnes standard avec les valeurs du fichier.
+          const er_csg = Number(emp.er_csg || 0)         // → csg_patronal_bonus
+          const er_nsf = Number(emp.er_nsf || 0)         // → nsf_patronal
+          const er_levy = Number(emp.er_levy || 0)       // → training_levy
+          const er_prgf = Number(emp.er_prgf || 0)       // → prgf
+          const total_er = Number(emp.total_er || 0) || (er_csg + er_nsf + er_levy + er_prgf)
+
+          // Net : préférer brut - retenues (cohérence) plutôt que la valeur
+          // du fichier (cf. fix 2026-05-07 sur l'import mensuel).
+          const computedNet = Math.max(0, Math.round((montantEoy - total_ded) * 100) / 100)
+          const importedNet = Number(emp.net_pay || 0)
+          if (importedNet && Math.abs(importedNet - computedNet) > 1) {
+            console.warn(`[import-paie] EOY net_pay incohérent pour ${nom}: Excel=${importedNet}, recalculé=${computedNet}`)
+          }
+
+          // Idempotence : avant d'archiver l'ancien bulletin EOY, on doit aussi
+          // SUPPRIMER ses écritures comptables (ref_folio='BP-<old_id>') —
+          // sinon elles restent en base et la compta est doublée sur le 6416,
+          // CSG bonus, PAYE bonus, etc. (la fonction generer_ecritures_paie ne
+          // nettoie QUE les écritures du bulletin courant, pas des précédents).
+          const { data: oldBulletins } = await supabase
+            .from('bulletins_paie')
+            .select('id')
+            .eq('employe_id', employeId).eq('periode', eoyPeriode)
+            .eq('source', 'eoy_bonus_import').eq('is_archived', false)
+          if (oldBulletins && oldBulletins.length > 0) {
+            const oldRefs = oldBulletins.map(b => `BP-${b.id}`)
+            await supabase.from('ecritures_comptables_v2')
+              .delete()
+              .eq('societe_id', societe_id)
+              .eq('journal', 'OD-PAIE')
+              .in('ref_folio', oldRefs)
+          }
+          await supabase.from('bulletins_paie')
+            .update({ is_archived: true, archived_at: new Date().toISOString(), archive_reason: 'reimport_eoy' })
+            .eq('employe_id', employeId).eq('periode', eoyPeriode)
+            .eq('source', 'eoy_bonus_import').eq('is_archived', false)
+
+          const { error: insErr } = await supabase.from('bulletins_paie').insert({
+            employe_id: employeId, societe_id, periode: eoyPeriode,
+            salaire_base: 0,
+            // salaire_brut: GENERATED — ne pas écrire, eoy_bonus l'alimente
+            eoy_bonus: montantEoy,
+            // Salarié : CSG/PAYE → colonnes bonus dédiées ; NSF/absence → colonnes standard
+            csg_bonus: csg_sal,
+            paye_bonus: paye_sal,
+            csg_salarie: 0, // évite double comptage (csg_bonus est utilisé)
+            nsf_salarie: nsf_sal,
+            paye: 0, // idem (paye_bonus utilisé)
+            montant_absence: absence,
+            total_deductions: total_ded,
+            // Patronal : CSG → colonne bonus dédiée ; NSF/levy/PRGF → standard
+            csg_patronal_bonus: er_csg,
+            csg_patronal: 0, // évite double comptage
+            nsf_patronal: er_nsf,
+            training_levy: er_levy,
+            prgf: er_prgf,
+            total_charges_patronales: total_er,
+            salaire_net: computedNet,
+            statut: 'valide',
+            source: 'eoy_bonus_import',
+            notes: [
+              `Import 13ème mois (EOY) — brut ${montantEoy}`,
+              total_ded ? `retenues ${total_ded}` : '',
+              total_er ? `charges employeur ${total_er}` : '',
+              importedNet && Math.abs(importedNet - computedNet) > 1 ? `Excel net=${importedNet} ignoré (recalculé=${computedNet})` : '',
+            ].filter(Boolean).join(' | '),
+          })
+          if (insErr) { errors.push(`${nom}: ${insErr.message}`); continue }
+          created++
+        } catch (e: any) { errors.push(`${emp.nom}: ${e.message}`) }
+      }
+
+      return NextResponse.json({
+        created, updated: 0, errors, total: employes.length,
+        mode: 'eoy', periode_eoy: eoyPeriode,
+      })
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })

@@ -31,6 +31,7 @@ export type TelegramRole =
   | 'rh'
   | 'comptable'
   | 'comptable_dedie'
+  | 'commercial'
   | 'direction'
   | 'client_admin'
   | 'admin'
@@ -43,6 +44,7 @@ export const ROLE_LEVEL: Record<TelegramRole, number> = {
   rh: 50,
   comptable: 50,
   comptable_dedie: 50,
+  commercial: 50,
   direction: 70,
   client_admin: 70,
   admin: 90,

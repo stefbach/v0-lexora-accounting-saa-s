@@ -665,8 +665,15 @@ export async function saveOvertimeMois(
   const dateFin = lastDayOfMonth(periode)
   const employesIds = lignes.map(l => l.employe_id)
 
-  // 1. Vérifier qu'aucun bulletin n'est verrouillé/validé sur la période
-  //    pour les employés concernés.
+  // 1. Identifier les employés dont le bulletin de la période est verrouillé
+  //    ou validé. AVANT mig 440 : on rejetait TOUTE la sauvegarde dès qu'UN
+  //    seul employé était bloqué (all-or-nothing). MAINTENANT : on sauve
+  //    TOUJOURS les données brutes dans heures_travaillees (qui ne touche
+  //    PAS les bulletins), et on n'évite que le UPDATE bulletins_paie pour
+  //    les employés bloqués. La RH peut ainsi saisir l'OT, voir le
+  //    warning sur les bloqués, et après décomptabilisation un recalcul
+  //    de paie intégrera automatiquement les heures saisies.
+  let bloques: string[] = []
   if (employesIds.length > 0) {
     const { data: bulsBloques } = await supabase
       .from('bulletins_paie')
@@ -676,30 +683,23 @@ export async function saveOvertimeMois(
       .lte('periode', dateFin)
       .in('employe_id', employesIds)
 
-    const bloques = ((bulsBloques ?? []) as Array<{
+    bloques = ((bulsBloques ?? []) as Array<{
       employe_id: string
       statut: string | null
       verrouille: boolean | null
     }>)
       .filter(b => b.statut === 'valide' || b.verrouille === true)
       .map(b => b.employe_id)
-
-    if (bloques.length > 0) {
-      return {
-        success: false,
-        nb_lignes_upsert: 0,
-        nb_bulletins_maj: 0,
-        bulletins_bloques: bloques,
-        erreurs: [`${bloques.length} bulletin(s) verrouillé(s) ou validé(s) — déverrouillez avant de modifier les OT.`],
-        warnings: [],
-      }
-    }
   }
+  const bloquesSet = new Set(bloques)
 
   // 2. Recharger les taux depuis la DB (jamais depuis le front).
   const params = await loadParametres(supabase)
 
-  // 3. UPSERT heures_travaillees — une ligne par (employe, date) avec OT > 0.
+  // 3. UPSERT heures_travaillees POUR TOUS LES EMPLOYÉS — y compris ceux
+  //    dont le bulletin est verrouillé. La saisie OT brute ne dépend pas
+  //    du bulletin ; quand la RH décomptabilisera et recalculera, le
+  //    nouveau bulletin lira ces heures automatiquement.
   let nbUpsert = 0
   for (const ligne of lignes) {
     const rows = ligne.jours

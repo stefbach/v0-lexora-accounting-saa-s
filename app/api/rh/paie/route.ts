@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { resolveInternalAuth } from '@/lib/lexora-internal-auth'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 import { calculerBulletin, PARAMS_MRA_DEFAUT } from '@/lib/rh/paie'
 import { getUserSocieteIds, userHasAccessToSociete, userHasAccessToEmploye } from '@/lib/rh/access'
 import { calculateWorkingDays, getWorkingDaysForEmploye, getMauritiusPublicHolidays } from '@/lib/rh/calculateWorkingDays'
@@ -48,12 +49,18 @@ function countLeaveDaysInPeriod(
 function listWorkingDaysInPeriod(
   periodeStart: string,
   periodeEnd: string,
-  emp: { working_days?: any } | null | undefined,
+  emp: { working_days?: any; date_arrivee?: string | null; date_depart?: string | null } | null | undefined,
   joursFeries: Set<string>,
 ): string[] {
   const dayKeys: Array<'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'> =
     ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
   const wd = getWorkingDaysForEmploye(emp)
+  // Bug régression mai 2026 — sans cette borne, un employé arrivé le 5 mai
+  // (Julie RENEVIER) se retrouvait avec les jours ouvrés du 1er au 4 mai
+  // comptés comme absences injustifiées (idem pour départ en cours de mois).
+  // On clampe la période sur [date_arrivee, date_depart] de l'employé.
+  const dateArrivee = emp?.date_arrivee ? String(emp.date_arrivee).slice(0, 10) : null
+  const dateDepart = emp?.date_depart ? String(emp.date_depart).slice(0, 10) : null
   const result: string[] = []
   const [ys, ms, ds] = periodeStart.split('-').map(n => parseInt(n, 10))
   const [ye, me, de] = periodeEnd.split('-').map(n => parseInt(n, 10))
@@ -62,7 +69,8 @@ function listWorkingDaysInPeriod(
   while (cursor <= end) {
     const iso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
     const key = dayKeys[cursor.getDay()]
-    if (wd[key] && !joursFeries.has(iso)) result.push(iso)
+    const inEmployment = (!dateArrivee || iso >= dateArrivee) && (!dateDepart || iso <= dateDepart)
+    if (wd[key] && !joursFeries.has(iso) && inEmployment) result.push(iso)
     cursor.setDate(cursor.getDate() + 1)
   }
   return result
@@ -249,8 +257,8 @@ export async function GET(request: Request) {
     console.log(`[paie GET] ${label}`, extra !== undefined ? extra : '')
   try {
     step('START')
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
+    // FIX MCP : resolveUserAuth pour outil MCP `list_bulletins_paie` (session + X-Lexora-Api-Key).
+    const user = await resolveUserAuth(request)
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
     step('step1: auth OK', { userId: user.id })
     const supabase = getAdminClient()
@@ -835,7 +843,18 @@ export async function POST(request: Request) {
       // sauf si l'opérateur a saisi body.absences ou body.jours_absence.
       const anomaliesPointage: string[] = []
       let jours_absence_injust = 0
-      if (pointageActifSingle) {
+      // Mig 440 — flag explicite `pointage_exempt` sur l'employé. Si true,
+      // on skip la boucle d'absences (cadre/dirigeant qui ne pointe pas).
+      // Remplace l'heuristique "0 pointage du mois = exempt" (cf. mig 437)
+      // qui avait un faux négatif sur les vrais absents complets. Fallback
+      // sur l'heuristique conservé en filet de sécurité tant que le backfill
+      // n'a pas tagué tous les cadres.
+      const employePointeJamais = pointageActifSingle
+        && (pointagesMois || []).filter((pt: any) => pt.heure_entree).length === 0
+      const employeExemptPointage = pointageActifSingle && (
+        emp.pointage_exempt === true || employePointeJamais
+      )
+      if (pointageActifSingle && !employeExemptPointage) {
         const pointageByDate = new Map<string, any>()
         for (const pt of pointagesMois || []) {
           pointageByDate.set(pt.date_pointage, pt)
@@ -855,6 +874,14 @@ export async function POST(request: Request) {
         // société working_days=7j/7 + planning ~21 shifts compterait
         // ~9 absences fausses/mois/employé. planMap est déjà chargé
         // ligne 618-625.
+        // Si l'employé a au moins UN planning_assignments sur le mois, c'est
+        // qu'il utilise le système de planning. Les jours sans planning sur ce
+        // mois sont alors présumés "pas encore saisis" et ne doivent PAS être
+        // comptés comme absences (faux positifs typiquement sur les derniers
+        // jours du mois : le planning de la semaine n'a pas encore été fait).
+        // Sans ce check, Eveline/Léa/Fabiola/Catty étaient flag absentes sur
+        // le 25-26 mai juste parce que le planning de la semaine traînait.
+        const employeUtilisePlanning = Object.keys(planMap).length > 0
         let nbJoursSansPlanning = 0
         const WARN_INDIVIDUAL_MAX = 5
         for (const day of workingDaysList) {
@@ -865,6 +892,11 @@ export async function POST(request: Request) {
             if (nbJoursSansPlanning <= WARN_INDIVIDUAL_MAX) {
               console.warn(`[paie] Employé ${emp.id} sans planning sur ${day}, working_days appliqué`)
             }
+            // L'employé planifie son équipe : un jour non planifié = non
+            // confirmé, on ne le compte pas en absence. (Si la société n'a
+            // jamais saisi de planning du tout pour cet employé, on bascule
+            // sur working_days comme avant — comportement legacy.)
+            if (employeUtilisePlanning) continue
           }
           const pt = pointageByDate.get(day)
           // G-leaves-fix (debug+fix) : normaliser les bornes du congé
@@ -1233,12 +1265,35 @@ export async function POST(request: Request) {
         : `Remplacé suite à recalcul le ${new Date().toLocaleDateString('fr-FR')}`
 
       if (existingActive) {
+        // BUG MAI 2026 — Si l'ancien bulletin était comptabilisé, ses écritures
+        // OD-PAIE existent toujours. Archiver SANS les supprimer = doublons
+        // cumulatifs à chaque recalcul. Sur DDS mai 2026, ça avait gonflé la
+        // masse salariale de 636k → 2.7M (8 versions × 17 employés).
+        // FIX : avant d'archiver, on supprime les écritures liées et on
+        // remet comptabilise=false sur l'ancien bulletin.
+        const { data: oldBul } = await supabase
+          .from('bulletins_paie')
+          .select('comptabilise')
+          .eq('id', existingActive.id)
+          .maybeSingle()
+        if (oldBul?.comptabilise === true) {
+          const { error: ecrDelErr, count } = await supabase
+            .from('ecritures_comptables_v2')
+            .delete({ count: 'exact' })
+            .eq('ref_folio', `BP-${existingActive.id}`)
+          if (ecrDelErr) {
+            console.warn('[paie calculer] DELETE ecritures ancien bulletin failed:', ecrDelErr.message)
+          } else if (count && count > 0) {
+            console.log(`[paie calculer] ${count} écritures OD-PAIE supprimées avant archivage du bulletin ${existingActive.id}`)
+          }
+        }
         const { error: archErr } = await supabase
           .from('bulletins_paie')
           .update({
             is_archived: true,
             archived_at: nowIso,
             archive_reason: archiveReasonSingle,
+            comptabilise: false,  // l'archivé ne doit plus être considéré comme comptabilisé
           })
           .eq('id', existingActive.id)
         if (archErr) {
@@ -1367,9 +1422,12 @@ export async function POST(request: Request) {
       if (!hasAccess) return NextResponse.json({ error: 'Accès refusé à cette société' }, { status: 403 })
 
       // LOCK GUARD: check if period is locked
+      // FIX — is_archived=false : les anciennes versions archivées gardent
+      // verrouille=true et bloquaient le recalcul à tort.
       const { data: existingLocked } = await supabase.from('bulletins_paie')
         .select('id').eq('societe_id', societe_id)
         .gte('periode', `${periodeStr}-01`).lte('periode', lastDayOfMonth(periodeStr))
+        .eq('is_archived', false)
         .eq('verrouille', true).limit(1)
       if (existingLocked && existingLocked.length > 0) {
         return NextResponse.json({ error: 'Période verrouillée — impossible de recalculer. Déverrouillez d\'abord.', bulletins: [], nb: 0 }, { status: 403 })
@@ -1389,16 +1447,30 @@ export async function POST(request: Request) {
 
       // Filter out departed employees — only include if still active during this period
       // Use both `actif` field (GENERATED from date_depart IS NULL) and date_depart comparison
+      //
+      // FIX-SOLDE-STC (cas Mélanie RAVINA, symétrique du guard SINGLE ~ligne
+      // 589) : exclure aussi les employés dont date_depart tombe DANS la
+      // période courante. Leur bulletin doit être généré via /rh/depart pour
+      // inclure le solde tout compte (préavis, AL payée, VL, 13e prorata,
+      // indemnité licenciement). Sinon le batch crée un bulletin paie
+      // mensuel ordinaire qui IGNORE ces composants — c'est exactement ce
+      // qui s'était passé sur Mélanie le 26/05 à 15:58 : breakdown_depart
+      // = 70k MUR de STC, mais le bulletin paie n'avait que les 20k MUR
+      // habituels.
+      const periodeDebut = `${periodeStr}-01`
+      const periodeFin = lastDayOfMonth(periodeStr)
       const employes = allEmps.filter(e => {
         // If no date_depart set → active
         if (!e.date_depart && e.actif !== false) return true
         // If explicitly inactive with no date
         if (e.actif === false && !e.date_depart) return false
-        // If date_depart exists, include only if they departed during or after this period
         if (e.date_depart) {
           const depart = String(e.date_depart).slice(0, 10)
-          const periodeDebut = `${periodeStr}-01`
-          return depart >= periodeDebut
+          // Départ DANS la période → exclu du batch (géré par /rh/depart)
+          if (depart >= periodeDebut && depart <= periodeFin) return false
+          // Départ APRÈS la période → encore actif sur la période, inclus
+          // Départ AVANT la période → déjà parti, exclu
+          return depart > periodeFin
         }
         return true
       })
@@ -1782,7 +1854,14 @@ export async function POST(request: Request) {
         // ON            → boucle complète sur les jours ouvrés.
         let jours_absence_injust = 0
         const anomaliesPointageBatch: string[] = []
-        if (pointageActifBatch) {
+        // Mig 440 — flag pointage_exempt par employé (cf. chemin single).
+        // Fallback heuristique conservé.
+        const employePointeJamaisBatch = pointageActifBatch
+          && (pointagesMois || []).filter((pt: any) => pt.heure_entree).length === 0
+        const employeExemptPointageBatch = pointageActifBatch && (
+          emp.pointage_exempt === true || employePointeJamaisBatch
+        )
+        if (pointageActifBatch && !employeExemptPointageBatch) {
           const pointageByDateBatch = new Map<string, any>()
           for (const pt of pointagesMois || []) {
             pointageByDateBatch.set(pt.date_pointage, pt)
@@ -1798,6 +1877,12 @@ export async function POST(request: Request) {
           // est_repos=true n'est PAS une journée travaillée attendue ; ne
           // pas le compter comme absence injustifiée. planMap est déjà
           // chargé ligne 1276-1283.
+          // Symétrique du fix single (cf. ligne ~874) : l'employé utilise
+          // le système de planning → un jour sans planning saisi est présumé
+          // "pas encore confirmé" et ne compte pas en absence. Empêche les
+          // faux positifs sur les derniers jours du mois quand le planning
+          // de la semaine n'a pas encore été fait.
+          const employeUtilisePlanningBatch = Object.keys(planMap).length > 0
           let nbJoursSansPlanningBatch = 0
           const WARN_INDIVIDUAL_MAX_BATCH = 5
           for (const day of workingDaysListBatch) {
@@ -1808,6 +1893,7 @@ export async function POST(request: Request) {
               if (nbJoursSansPlanningBatch <= WARN_INDIVIDUAL_MAX_BATCH) {
                 console.warn(`[paie batch] Employé ${emp.id} sans planning sur ${day}, working_days appliqué`)
               }
+              if (employeUtilisePlanningBatch) continue
             }
             const pt = pointageByDateBatch.get(day)
             // G-leaves-fix (debug+fix) : normalisation défensive des
@@ -2236,11 +2322,27 @@ export async function POST(request: Request) {
             ? `Remplacé par bulletin solde tout compte (sortie ${dateSortieBatch}) le ${new Date().toLocaleDateString('fr-FR')}`
             : `Remplacé suite à recalcul le ${new Date().toLocaleDateString('fr-FR')}`
 
+          // BUG MAI 2026 (cf. ligne ~1267 single) — supprimer les écritures
+          // comptables liées avant d'archiver, sinon elles s'accumulent à
+          // chaque recalcul et gonflent la masse salariale comptabilisée.
+          if (existing.comptabilise === true) {
+            const { error: ecrDelErr, count } = await supabase
+              .from('ecritures_comptables_v2')
+              .delete({ count: 'exact' })
+              .eq('ref_folio', `BP-${existing.id}`)
+            if (ecrDelErr) {
+              console.warn('[paie batch] DELETE ecritures ancien bulletin failed:', ecrDelErr.message)
+            } else if (count && count > 0) {
+              console.log(`[paie batch] ${count} écritures OD-PAIE supprimées avant archivage du bulletin ${existing.id}`)
+            }
+          }
+
           const { error: archErrBatch } = await supabase.from('bulletins_paie')
             .update({
               is_archived: true,
               archived_at: nowIsoBatch,
               archive_reason: archiveReasonBatch,
+              comptabilise: false,
             })
             .eq('id', existing.id)
 

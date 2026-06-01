@@ -1699,6 +1699,29 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           }
         }
 
+        // Anti-doublon par NUMÉRO + montant — plus robuste que tiers+date :
+        // attrape le doublon même si l'OCR varie le tiers ou la date (cas où le
+        // contrôle ci-dessus rate). Le montant (±1) distingue le VRAI doublon du
+        // cas SKYCALL (même n° OCR mais montants différents = factures distinctes,
+        // qui restent autorisées via le suffixe -2/-3 plus bas). Sans ce contrôle,
+        // un doublon au tiers/date légèrement différent était recréé (suffixé).
+        if (!factureCreateError && factureData.societe_id && factureData.numero_facture
+            && String(factureData.numero_facture).trim() && fTTC > 0) {
+          const { data: dupByNum } = await supabase
+            .from('factures')
+            .select('id, numero_facture, montant_ttc, date_facture')
+            .eq('societe_id', factureData.societe_id as string)
+            .eq('numero_facture', String(factureData.numero_facture).trim())
+            .gte('montant_ttc', fTTC - 1)
+            .lte('montant_ttc', fTTC + 1)
+            .limit(1)
+          if (dupByNum && dupByNum.length > 0) {
+            const dupN = dupByNum[0] as any
+            console.warn(`[upload] DOUBLON FACTURE (numéro+montant) détecté: ${dupN.numero_facture} = ${dupN.montant_ttc} TTC`)
+            factureCreateError = `Doublon détecté : facture n° ${dupN.numero_facture} (${dupN.montant_ttc}) existe déjà pour cette société.`
+          }
+        }
+
         // Garde-fou conversion devise — bloque l'insertion si devise≠MUR mais
         // taux_change ≤ 1 (= taux indisponible). Sans ce check, montant_mur
         // est égal au TTC en EUR/USD/GBP, créant des écritures avec valeurs
@@ -1802,6 +1825,36 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
                 montant_mur: Number(factureData.montant_mur) || undefined,
               })
               if (!r.ok) console.warn('[upload] Écritures v2 non générées:', r.error)
+
+              // Phase 4 MRA — Détection TDS à la saisie (best-effort).
+              // Pour les factures fournisseurs Maurice (loyer/honoraires/travaux…),
+              // calcule la retenue à la source automatiquement et l'écrit sur
+              // la facture (tds_category/rate/amount/period). Non bloquant.
+              if (factureData.type_facture === 'fournisseur' && insertedFacture?.id) {
+                try {
+                  const { detectTds } = await import('@/lib/accounting/tds-detect')
+                  const lignesOcr = (extraction as any)?.lignes || []
+                  const compteCharge = (lignesOcr[0]?.compte_comptable || lignesOcr[0]?.compte || null) as string | null
+                  const tdsResult = detectTds({
+                    montant_ht: Number(factureData.montant_ht) || 0,
+                    montant_ttc: Number(factureData.montant_ttc) || 0,
+                    description: (factureData.libelle as string) || (factureData.tiers as string) || '',
+                    numero_compte: compteCharge,
+                  })
+                  if (tdsResult.applies && tdsResult.tds_amount_mur > 0) {
+                    const periodeTds = String(factureData.date_facture || '').slice(0, 7)
+                    await supabase.from('factures').update({
+                      tds_category: tdsResult.category,
+                      tds_rate_pct: tdsResult.rate_pct,
+                      tds_amount_mur: tdsResult.tds_amount_mur,
+                      tds_period: periodeTds || null,
+                    }).eq('id', insertedFacture.id)
+                    console.log(`[upload] TDS détectée : ${tdsResult.category} ${tdsResult.rate_pct}% → ${tdsResult.tds_amount_mur} MUR (facture ${insertedFacture.id})`)
+                  }
+                } catch (tdsErr: any) {
+                  console.warn('[upload] détection TDS best-effort échouée:', tdsErr?.message)
+                }
+              }
 
               // Phase J — Auto-tagging GBC (PER + related_party + IAS 21).
               // No-op pour une société MUR-only. Pour une GBC (devise_fonctionnelle ≠ MUR

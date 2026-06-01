@@ -79,6 +79,7 @@ export async function POST(request: Request) {
     const { data: unlockedBuls } = await supabase
       .from('bulletins_paie').select('id').eq('societe_id', societe_id)
       .gte('periode', `${periode}-01`).lte('periode', lastDayOfMonth(periode))
+      .eq('is_archived', false)
       .or('verrouille.is.null,verrouille.eq.false')
       .limit(1)
     if (unlockedBuls && unlockedBuls.length > 0) {
@@ -127,6 +128,7 @@ export async function POST(request: Request) {
       .eq('societe_id', societe_id)
       .gte('periode', `${periode}-01`)
       .lte('periode', lastDayOfMonth(periode))
+      .eq('is_archived', false)
     if (bulErr) {
       console.error('[paco-mra] DB error bulletins:', bulErr.message)
       return NextResponse.json({ error: `Erreur DB bulletins: ${bulErr.message}` }, { status: 500 })

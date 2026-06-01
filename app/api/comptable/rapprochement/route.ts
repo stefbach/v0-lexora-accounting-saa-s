@@ -1964,8 +1964,185 @@ export async function POST(request: Request) {
 
     // === LETTRAGE MANUEL ===
     if (action === 'lettrer_manuel') {
-      const { transaction_id, releve_id, facture_id, ecriture_id, societe_id, classification } = body
+      const { transaction_id, releve_id, facture_id, facture_ids, ecriture_id, societe_id, classification } = body
       if (!releve_id) return NextResponse.json({ error: 'releve_id requis' }, { status: 400 })
+
+      // ─────────────────────────────────────────────────────────────────
+      // BRANCHE MULTI-FACTURES — un seul virement solde N factures.
+      // Active si body.facture_ids est un array de longueur >= 2.
+      // ─────────────────────────────────────────────────────────────────
+      if (Array.isArray(facture_ids) && facture_ids.length >= 2) {
+        const fIds: string[] = facture_ids.filter((x: any) => typeof x === 'string' && x.length > 0)
+        if (fIds.length < 2) {
+          return NextResponse.json({ error: 'facture_ids invalide (au moins 2 factures requises)' }, { status: 400 })
+        }
+
+        const { data: releveMulti } = await supabase
+          .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id')
+          .eq('id', releve_id).single()
+        if (!releveMulti) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+
+        const txIdxM = parseInt(String(transaction_id).split('-').pop() || '0')
+        const txsM = [...(releveMulti.transactions_json || [])]
+        if (txIdxM >= txsM.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+
+        const prevTxM = { ...txsM[txIdxM] }
+        const txAmount = Math.max(Number(prevTxM.debit) || 0, Number(prevTxM.credit) || 0)
+        if (txAmount <= 0) {
+          return NextResponse.json({ error: 'Montant de la transaction nul — impossible de lettrer' }, { status: 400 })
+        }
+
+        // Période verrouillée ?
+        if (prevTxM.date && societe_id) {
+          const lockStatus = await checkPeriodLock(supabase, societe_id, prevTxM.date)
+          if (lockStatus.locked) {
+            return NextResponse.json({
+              error: `Période verrouillée — ${lockStatus.reason}. Modification interdite sur transaction du ${prevTxM.date}.`,
+              period_end: lockStatus.period_end,
+            }, { status: 403 })
+          }
+        }
+
+        // Charger toutes les factures
+        const { data: facturesMulti, error: fLoadErr } = await supabase
+          .from('factures')
+          .select('id, numero_facture, tiers, type_facture, montant_ttc, montant_mur, solde_non_paye, devise, statut, rapproche_releve_id, rapproche_transaction_idx, rapproche_date, rapproche_source')
+          .in('id', fIds)
+        if (fLoadErr || !facturesMulti || facturesMulti.length !== fIds.length) {
+          return NextResponse.json({
+            error: `Factures introuvables (attendu ${fIds.length}, trouvé ${facturesMulti?.length || 0})`,
+          }, { status: 404 })
+        }
+        if (facturesMulti.some(f => f.statut === 'paye' || f.statut === 'annule')) {
+          return NextResponse.json({
+            error: 'Une ou plusieurs factures sont déjà payées ou annulées — déletrer d\'abord',
+          }, { status: 400 })
+        }
+
+        // Validation : somme des soldes restants ≈ montant tx (tolérance 1 MUR)
+        const TOL_MULTI = 1
+        const sommeSoldes = facturesMulti.reduce((s, f) => {
+          const solde = f.solde_non_paye != null ? Number(f.solde_non_paye) : Number(f.montant_ttc) || 0
+          return s + solde
+        }, 0)
+        if (Math.abs(sommeSoldes - txAmount) > TOL_MULTI) {
+          return NextResponse.json({
+            error: `Total factures (${sommeSoldes.toFixed(2)} MUR) ≠ montant tx (${txAmount.toFixed(2)} MUR). Écart > ${TOL_MULTI} MUR.`,
+          }, { status: 400 })
+        }
+
+        // Compte bancaire pour les écritures BNQ
+        let compteBanqueM = '512'
+        if (releveMulti.compte_bancaire_id) {
+          const { data: cbM } = await supabase
+            .from('comptes_bancaires').select('compte_comptable')
+            .eq('id', releveMulti.compte_bancaire_id).maybeSingle()
+          if (cbM?.compte_comptable) compteBanqueM = String(cbM.compte_comptable)
+        }
+
+        const lettreCodeM = `MM${String(Date.now()).slice(-5)}`
+        const reconcileDateM = new Date().toISOString()
+        const datePayM = (prevTxM as any).date || new Date().toISOString().split('T')[0]
+
+        const rollbackM: Array<() => Promise<any>> = []
+        const processedFactures: string[] = []
+
+        try {
+          // Step 1 : flagger la transaction (statut rapproche + facture_ids)
+          txsM[txIdxM] = {
+            ...prevTxM,
+            facture_ids: fIds,
+            nb_factures: fIds.length,
+            rapprochement_multi: true,
+            lettre: lettreCodeM,
+            statut: 'rapproche',
+            rapproche_at: reconcileDateM,
+          }
+          const { error: updRelM } = await supabase
+            .from('releves_bancaires').update({ transactions_json: txsM }).eq('id', releve_id)
+          if (updRelM) throw new Error(`Releve update failed: ${updRelM.message}`)
+          rollbackM.unshift(async () => {
+            const revert = [...txsM]; revert[txIdxM] = prevTxM
+            await supabase.from('releves_bancaires').update({ transactions_json: revert }).eq('id', releve_id)
+          })
+
+          // Step 2 : pour chaque facture, marquer paye et créer la BNQ
+          for (const f of facturesMulti) {
+            const soldeAvant = f.solde_non_paye != null ? Number(f.solde_non_paye) : Number(f.montant_ttc) || 0
+            const amount_mur = Number((f as any).montant_mur) || Number(f.montant_ttc) || 0
+            const prevState = {
+              statut: f.statut, solde_non_paye: f.solde_non_paye,
+              rapproche_releve_id: f.rapproche_releve_id, rapproche_transaction_idx: f.rapproche_transaction_idx,
+              rapproche_date: f.rapproche_date, rapproche_source: f.rapproche_source,
+            }
+            const { error: updFErr } = await supabase.from('factures').update({
+              statut: 'paye', solde_non_paye: 0,
+              rapproche_releve_id: releve_id, rapproche_transaction_idx: txIdxM,
+              rapproche_date: reconcileDateM, rapproche_source: 'manual_multi',
+            }).eq('id', f.id)
+            if (updFErr) throw new Error(`Facture ${f.numero_facture || f.id} update failed: ${updFErr.message}`)
+            rollbackM.unshift(async () => {
+              await supabase.from('factures').update(prevState).eq('id', f.id)
+            })
+
+            // Créer l'écriture BNQ pour cette facture (D 401/411 / C banque)
+            if (amount_mur > 0) {
+              const payType: 'supplier' | 'client' = f.type_facture === 'fournisseur' ? 'supplier' : 'client'
+              const { error: bnqErr } = await createEcrituresForPayment(supabase, {
+                societe_id: societe_id as string,
+                date_payment: datePayM,
+                amount_mur: soldeAvant > 0 ? soldeAvant : amount_mur,
+                type: payType,
+                tiers: String(f.tiers || '').trim(),
+                ref_folio: `BANK-${releve_id}-${txIdxM}-${f.id}`,
+                description: `Règlement groupé ${f.numero_facture || ''} — ${f.tiers || ''} (lot ${lettreCodeM})`.trim(),
+                compte_banque: compteBanqueM,
+                facture_id: f.id,
+                lettre_code: lettreCodeM,
+                numero_piece: (prevTxM as any).libelle || '',
+                devise_origine: (prevTxM as any).devise || f.devise || null,
+              })
+              if (bnqErr) {
+                console.warn(`[lettrer_manuel multi] BNQ insert failed for facture ${f.id}:`, bnqErr)
+              }
+            }
+            processedFactures.push(f.id)
+          }
+
+          // Step 3 : audit log
+          try {
+            await supabase.from('rapprochement_audit_log').insert({
+              societe_id: societe_id || null,
+              action: 'lettrer_manuel_multi',
+              releve_id, transaction_idx: txIdxM,
+              facture_ids: fIds, ecriture_id: null,
+              lettre_code: lettreCodeM, montant: txAmount,
+              devise: (prevTxM as any).devise || null,
+              reason: `Lettrage multi-factures (${fIds.length} factures)`,
+              before_state: prevTxM, after_state: txsM[txIdxM],
+              user_id: user.id, user_email: user.email || null,
+            })
+          } catch (auditErr) {
+            console.warn('[audit] lettrer_manuel_multi log failed:', auditErr)
+          }
+
+          return NextResponse.json({
+            success: true, lettre: lettreCodeM,
+            nb_factures: fIds.length, montant_total: txAmount,
+          })
+        } catch (err: any) {
+          console.error('[lettrer_manuel multi] failure, rolling back:', err.message)
+          for (const undo of rollbackM) {
+            try { await undo() } catch (e) { console.error('[multi] rollback step failed:', e) }
+          }
+          return NextResponse.json({
+            error: `Lettrage multi échoué (rollback ${processedFactures.length} factures): ${err.message}`,
+          }, { status: 500 })
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────
+      // Fin branche multi — la suite traite le cas single-facture legacy.
+      // ─────────────────────────────────────────────────────────────────
 
       // Classification manuelle sans facture (MRA, frais, associé, etc.)
       if (classification && !facture_id && !ecriture_id) {
@@ -2005,7 +2182,14 @@ export async function POST(request: Request) {
         // V3-22 : CLASSE_COMPTES extrait dans
         // lib/accounting/rapprochement/lettrage.ts (réutilisé par d'autres
         // handlers — éviter de dupliquer la même table).
-        let compteCharge = CLASSE_COMPTES[classification] || '471'
+        // PCM dynamique : si l'UI fournit un compte explicite (issu du PCM
+        // éditable de la société, ex 4511.OCC, 70601…), il prime sur le
+        // mapping statique CLASSE_COMPTES. Garde-fou : doit commencer par un
+        // chiffre (numéro de compte valide).
+        const compteChargeBody = typeof body.compte_charge === 'string' ? body.compte_charge.trim() : ''
+        let compteCharge = /^[0-9]/.test(compteChargeBody)
+          ? compteChargeBody
+          : (CLASSE_COMPTES[classification] || '471')
         console.log(`[lettrer_manuel] societe=${societe_id} tx=${transaction_id} classification=${classification} → compte=${compteCharge}`)
 
         // ── DÉTECTION INTER-SOCIÉTÉS (migration 302 / fix bug 291-293) ─────
@@ -2427,6 +2611,302 @@ export async function POST(request: Request) {
       }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // lettrer_partiel — Répartit UN prélèvement bancaire sur une ou
+    // plusieurs factures, chacune pour un montant (MUR) librement affecté.
+    // Couvre TROIS cas avec le même mécanisme :
+    //   1. Un prélèvement règle UNE facture partiellement (versement <
+    //      solde) → la facture reste 'partiel', re-sélectionnable pour le
+    //      prélèvement suivant (= « deux prélèvements pour une facture »).
+    //   2. Un prélèvement règle PLUSIEURS factures partiellement/mixte
+    //      (ex. virement 10 000 = facture A 7 000 soldée + facture B 3 000
+    //      sur 5 000 → B reste 'partiel').
+    //   3. Cas dégénéré : 1 facture, versement = solde → facture soldée.
+    //
+    // Chaque affectation crée un versement (factures_paiements, le trigger
+    // recalcule solde + statut) + une paire BNQ (512 ↔ 411/401) lettrée
+    // avec une lettre STABLE par facture (tous les versements + l'écriture
+    // VTE/ACH d'une facture partagent la même lettre → groupe équilibré une
+    // fois la facture soldée).
+    //
+    // Entrée : soit `allocations: [{facture_id, montant}]` (montant en MUR),
+    // soit l'ancien format `facture_id` (+ `montant_partiel` optionnel ;
+    // défaut = montant du prélèvement). La somme des montants doit ≈ le
+    // montant du prélèvement (tolérance 1 MUR).
+    //
+    // NB : les montants sont raisonnés en MUR (cas dominant : compte MUR).
+    // L'écart de change réalisé n'est pas comptabilisé sur un versement
+    // partiel (régularisable ultérieurement).
+    // ═══════════════════════════════════════════════════════════════════
+    if (action === 'lettrer_partiel') {
+      const { transaction_id, releve_id, facture_id, societe_id, montant_partiel, allocations } = body as {
+        transaction_id?: string
+        releve_id?: string
+        facture_id?: string
+        societe_id?: string
+        montant_partiel?: number
+        allocations?: Array<{ facture_id: string; montant: number }>
+      }
+      if (!releve_id || !societe_id) {
+        return NextResponse.json({ error: 'releve_id et societe_id requis' }, { status: 400 })
+      }
+
+      const { data: releveP } = await supabase
+        .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id')
+        .eq('id', releve_id).single()
+      if (!releveP) return NextResponse.json({ error: 'Relevé non trouvé' }, { status: 404 })
+
+      const txIdxP = parseInt(String(transaction_id).split('-').pop() || '0')
+      const txsP = [...(releveP.transactions_json || [])]
+      if (txIdxP >= txsP.length) return NextResponse.json({ error: 'Transaction non trouvée' }, { status: 404 })
+
+      const prevTxP = { ...txsP[txIdxP] }
+      const txAmountP = Math.max(Number(prevTxP.debit) || 0, Number(prevTxP.credit) || 0)
+      if (txAmountP <= 0) {
+        return NextResponse.json({ error: 'Montant de la transaction nul — impossible de lettrer' }, { status: 400 })
+      }
+      if (prevTxP.statut === 'rapproche' || prevTxP.statut === 'interne') {
+        return NextResponse.json({ error: 'Transaction déjà rapprochée — déletrer d\'abord' }, { status: 409 })
+      }
+
+      // Normaliser les affectations (montant en MUR). Ancien format single →
+      // une seule affectation, montant par défaut = montant du prélèvement.
+      type RawAlloc = { facture_id: string; montant: number | null }
+      let rawAllocs: RawAlloc[] = []
+      if (Array.isArray(allocations) && allocations.length > 0) {
+        rawAllocs = allocations
+          .filter((a) => a && typeof a.facture_id === 'string' && a.facture_id.length > 0)
+          .map((a) => ({ facture_id: a.facture_id, montant: Number(a.montant) }))
+      } else if (facture_id) {
+        rawAllocs = [{ facture_id, montant: montant_partiel != null ? Number(montant_partiel) : null }]
+      }
+      if (rawAllocs.length === 0) {
+        return NextResponse.json({ error: 'facture_id ou allocations[] requis' }, { status: 400 })
+      }
+      // Pas de doublon de facture dans la même répartition
+      const uniqIds = new Set(rawAllocs.map((a) => a.facture_id))
+      if (uniqIds.size !== rawAllocs.length) {
+        return NextResponse.json({ error: 'Une facture est présente en double dans la répartition' }, { status: 400 })
+      }
+
+      // Période verrouillée ?
+      if (prevTxP.date) {
+        const lockStatus = await checkPeriodLock(supabase, societe_id, prevTxP.date)
+        if (lockStatus.locked) {
+          return NextResponse.json({
+            error: `Période verrouillée — ${lockStatus.reason}. Modification interdite sur transaction du ${prevTxP.date}.`,
+            period_end: lockStatus.period_end,
+          }, { status: 403 })
+        }
+      }
+
+      // Charger toutes les factures
+      const factIdsP = rawAllocs.map((a) => a.facture_id)
+      const { data: facturesP, error: fErrP } = await supabase
+        .from('factures')
+        .select('id, numero_facture, tiers, type_facture, montant_ttc, montant_mur, solde_non_paye, devise, statut')
+        .in('id', factIdsP)
+      if (fErrP || !facturesP || facturesP.length !== factIdsP.length) {
+        return NextResponse.json({
+          error: `Factures introuvables (attendu ${factIdsP.length}, trouvé ${facturesP?.length || 0})`,
+        }, { status: 404 })
+      }
+      const factByIdP = new Map<string, any>(facturesP.map((f: any) => [f.id, f]))
+
+      // Construire les affectations finales (montant MUR + contrôles)
+      const TOL_PARTIEL = 1
+      const finalAllocs: Array<{ facture: any; montantMur: number; remaining: number }> = []
+      for (const a of rawAllocs) {
+        const f = factByIdP.get(a.facture_id)
+        if (f.statut === 'annule') {
+          return NextResponse.json({ error: `Facture ${f.numero_facture || f.id} annulée — paiement impossible` }, { status: 400 })
+        }
+        if (f.statut === 'paye') {
+          return NextResponse.json({ error: `Facture ${f.numero_facture || f.id} déjà soldée — rien à régler` }, { status: 400 })
+        }
+        const factureMur = Number(f.montant_mur) || Number(f.montant_ttc) || 0
+        const remaining = f.solde_non_paye != null ? Number(f.solde_non_paye) : factureMur
+        // montant par défaut (single legacy sans montant) = montant du prélèvement
+        const montantMur = Math.round((a.montant != null && Number.isFinite(a.montant) ? a.montant : txAmountP) * 100) / 100
+        if (montantMur <= 0) {
+          return NextResponse.json({ error: `Montant d'affectation nul pour ${f.numero_facture || f.id}` }, { status: 400 })
+        }
+        if (montantMur > remaining + TOL_PARTIEL) {
+          return NextResponse.json({
+            error: `Affectation ${montantMur.toFixed(2)} MUR > solde restant ${remaining.toFixed(2)} MUR pour ${f.numero_facture || f.id}.`,
+            facture_id: f.id,
+            solde_restant: Math.round(remaining * 100) / 100,
+          }, { status: 400 })
+        }
+        finalAllocs.push({ facture: f, montantMur, remaining })
+      }
+
+      // La somme des affectations doit ≈ le montant du prélèvement (le
+      // virement doit être entièrement réparti).
+      const sommeAllocsP = Math.round(finalAllocs.reduce((s, x) => s + x.montantMur, 0) * 100) / 100
+      if (Math.abs(sommeAllocsP - txAmountP) > TOL_PARTIEL) {
+        return NextResponse.json({
+          error: `Total des affectations (${sommeAllocsP.toFixed(2)} MUR) ≠ montant du prélèvement (${txAmountP.toFixed(2)} MUR). Écart > ${TOL_PARTIEL} MUR.`,
+          total_affecte: sommeAllocsP,
+          montant_prelevement: txAmountP,
+        }, { status: 400 })
+      }
+
+      // Compte bancaire pour les BNQ
+      let compteBanqueP = '512'
+      if (releveP.compte_bancaire_id) {
+        const { data: cbP } = await supabase
+          .from('comptes_bancaires').select('compte_comptable')
+          .eq('id', releveP.compte_bancaire_id).maybeSingle()
+        if (cbP?.compte_comptable) compteBanqueP = String(cbP.compte_comptable)
+      }
+
+      const datePayP = (prevTxP as any).date || new Date().toISOString().split('T')[0]
+      const reconcileDateP = new Date().toISOString()
+      const libellePrev = (prevTxP as any).libelle || ''
+      const rollbackP: Array<() => Promise<any>> = []
+      const lettresParFacture: string[] = []
+
+      try {
+        for (const alloc of finalAllocs) {
+          const f = alloc.facture
+          const payType: 'supplier' | 'client' = f.type_facture === 'fournisseur' ? 'supplier' : 'client'
+          const refFolio = `BANK-${releve_id}-${txIdxP}-${f.id}`
+
+          // Lettre STABLE par facture : réutiliser celle déjà posée sinon générer.
+          const { data: existingLettreRows } = await supabase
+            .from('ecritures_comptables_v2')
+            .select('lettre')
+            .eq('societe_id', societe_id)
+            .eq('facture_id', f.id)
+            .not('lettre', 'is', null)
+            .limit(1)
+          const lettreCode = existingLettreRows && existingLettreRows.length > 0 && existingLettreRows[0].lettre
+            ? String(existingLettreRows[0].lettre)
+            : `LP${String(Date.now()).slice(-5)}${lettresParFacture.length}`
+          lettresParFacture.push(lettreCode)
+
+          // 1) versement (trigger → solde + statut)
+          const { data: paiement, error: payInsErr } = await supabase
+            .from('factures_paiements')
+            .insert({
+              facture_id: f.id,
+              societe_id,
+              montant: alloc.montantMur,
+              montant_mur: alloc.montantMur,
+              devise: 'MUR',
+              taux_change: 1,
+              date_paiement: datePayP,
+              mode_paiement: 'prelevement',
+              reference: libellePrev.slice(0, 200) || null,
+              notes: `Rapprochement réparti — relevé ${releve_id} tx#${txIdxP}`,
+              source: 'rapprochement',
+              rapproche_releve_id: releve_id,
+              rapproche_transaction_idx: txIdxP,
+              created_by: user.id,
+            })
+            .select('id')
+            .single()
+          if (payInsErr || !paiement) throw new Error(`Insert paiement (${f.numero_facture || f.id}): ${payInsErr?.message || 'inconnu'}`)
+          rollbackP.unshift(async () => {
+            await supabase.from('factures_paiements').delete().eq('id', paiement.id)
+          })
+
+          // 2) paire BNQ au montant affecté, lettre stable
+          const ecrRes = await createEcrituresForPayment(supabase, {
+            societe_id,
+            date_payment: datePayP,
+            amount_mur: alloc.montantMur,
+            type: payType,
+            tiers: String(f.tiers || '').trim(),
+            ref_folio: refFolio,
+            description: `Règlement ${f.numero_facture || ''} — ${f.tiers || ''} (${lettreCode})`.trim(),
+            compte_banque: compteBanqueP,
+            facture_id: f.id,
+            lettre_code: lettreCode,
+            numero_piece: libellePrev,
+            allow_multiple_payments: true,
+          })
+          if (!ecrRes.ok) throw new Error(`Création écriture BNQ (${f.numero_facture || f.id}): ${ecrRes.error}`)
+          rollbackP.unshift(async () => {
+            await supabase.from('ecritures_comptables_v2').delete()
+              .eq('societe_id', societe_id).eq('ref_folio', refFolio)
+          })
+
+          const ecritureId = ecrRes.bnq_ids?.[0]
+          if (ecritureId) {
+            await supabase.from('factures_paiements').update({ ecriture_id: ecritureId }).eq('id', paiement.id)
+          }
+        }
+
+        // Marquer la transaction bancaire rapprochée (répartie/partielle)
+        txsP[txIdxP] = {
+          ...prevTxP,
+          facture_id: finalAllocs[0].facture.id,
+          facture_ids: finalAllocs.map((x) => x.facture.id),
+          nb_factures: finalAllocs.length,
+          lettre: lettresParFacture[0] || null,
+          statut: 'rapproche',
+          rapprochement_partiel: true,
+          rapprochement_multi: finalAllocs.length > 1,
+          montant_partiel: sommeAllocsP,
+          rapproche_at: reconcileDateP,
+        }
+        const { error: updRelP } = await supabase
+          .from('releves_bancaires').update({ transactions_json: txsP }).eq('id', releve_id)
+        if (updRelP) throw new Error(`Releve update: ${updRelP.message}`)
+        rollbackP.unshift(async () => {
+          const revert = [...txsP]; revert[txIdxP] = prevTxP
+          await supabase.from('releves_bancaires').update({ transactions_json: revert }).eq('id', releve_id)
+        })
+
+        // Soldes restants après répartition (relecture)
+        const { data: factsAfter } = await supabase
+          .from('factures').select('id, numero_facture, solde_non_paye, statut').in('id', factIdsP)
+
+        // Audit (best-effort)
+        try {
+          await supabase.from('rapprochement_audit_log').insert({
+            societe_id,
+            action: 'lettrer_partiel',
+            releve_id,
+            transaction_idx: txIdxP,
+            facture_ids: factIdsP,
+            ecriture_id: null,
+            lettre_code: lettresParFacture[0] || null,
+            montant: sommeAllocsP,
+            devise: (prevTxP as any).devise || null,
+            reason: `Répartition ${sommeAllocsP.toFixed(2)} MUR sur ${finalAllocs.length} facture(s)`,
+            before_state: prevTxP,
+            after_state: txsP[txIdxP],
+            user_id: user.id,
+            user_email: user.email || null,
+          })
+        } catch (auditErr) {
+          console.warn('[audit] lettrer_partiel log failed:', auditErr)
+        }
+
+        return NextResponse.json({
+          success: true,
+          lettre: lettresParFacture[0] || null,
+          nb_factures: finalAllocs.length,
+          montant_total: sommeAllocsP,
+          factures: (factsAfter || []).map((f: any) => ({
+            id: f.id,
+            numero_facture: f.numero_facture,
+            solde_restant: Math.round(Number(f.solde_non_paye ?? 0) * 100) / 100,
+            statut: f.statut,
+          })),
+        })
+      } catch (err: any) {
+        console.error('[lettrer_partiel] failure, rolling back:', err.message)
+        for (const undo of rollbackP) {
+          try { await undo() } catch (e) { console.error('[lettrer_partiel] rollback step failed:', e) }
+        }
+        return NextResponse.json({ error: `Lettrage partiel échoué (rollback effectué): ${err.message}` }, { status: 500 })
+      }
+    }
+
     // === DELETTRER ===
     // ─────────────────────────────────────────────────────────────────
     // rejeter_suggestion — Annule une suggestion d'agent (statut "propose"
@@ -2521,6 +3001,12 @@ export async function POST(request: Request) {
         ? [facture_id]
         : Array.isArray(prevTx?.facture_ids) ? prevTx.facture_ids : (prevTx?.facture_id ? [prevTx.facture_id] : [])
 
+      // Délettrage d'un versement PARTIEL (action lettrer_partiel) : on ne force
+      // PAS le statut de la facture — on supprime la ligne factures_paiements et
+      // le trigger recalcule solde + statut (la facture peut rester 'partiel'
+      // s'il subsiste d'autres versements).
+      const isPartialUnmatch = prevTx?.rapprochement_partiel === true
+
       const rollback: Array<() => Promise<any>> = []
 
       try {
@@ -2533,6 +3019,9 @@ export async function POST(request: Request) {
             lettre: null,
             statut: 'a_verifier',
             rapprochement_multi: undefined,
+            rapprochement_partiel: undefined,
+            montant_partiel: undefined,
+            paiement_id: undefined,
             nb_factures: undefined,
           }
           const { error: updErr } = await supabase
@@ -2545,15 +3034,26 @@ export async function POST(request: Request) {
           })
         }
 
-        for (const fId of faIds) {
-          const { error } = await supabase.from('factures').update({
-            statut: 'en_attente',
-            rapproche_releve_id: null,
-            rapproche_transaction_idx: null,
-            rapproche_date: null,
-            rapproche_source: null,
-          }).eq('id', fId)
-          if (error) throw new Error(`Facture ${fId} update failed: ${error.message}`)
+        if (isPartialUnmatch) {
+          // Supprimer le(s) versement(s) factures_paiements de CETTE transaction
+          // — le trigger recalcule solde_non_paye + statut de la facture.
+          const { error: pDelErr } = await supabase
+            .from('factures_paiements')
+            .delete()
+            .eq('rapproche_releve_id', releve_id)
+            .eq('rapproche_transaction_idx', txIdx)
+          if (pDelErr) throw new Error(`Suppression versement partiel: ${pDelErr.message}`)
+        } else {
+          for (const fId of faIds) {
+            const { error } = await supabase.from('factures').update({
+              statut: 'en_attente',
+              rapproche_releve_id: null,
+              rapproche_transaction_idx: null,
+              rapproche_date: null,
+              rapproche_source: null,
+            }).eq('id', fId)
+            if (error) throw new Error(`Facture ${fId} update failed: ${error.message}`)
+          }
         }
 
         if (ecriture_id) {
@@ -2575,8 +3075,51 @@ export async function POST(request: Request) {
             .delete()
             .eq('societe_id', societe_id)
             .in('ref_folio', refPatterns)
-          // Délettrer aussi les ACH/OD qui avaient le même code lettre
-          if (prevTx?.lettre) {
+          // BNQ par facture (lettrage multi/partiel) : ref_folio suffixé par
+          // l'id facture → `BANK-<releve>-<idx>-<facture_id>`. Le délimiteur `-`
+          // après l'index évite la collision préfixe (idx 1 vs 10).
+          await supabase.from('ecritures_comptables_v2')
+            .delete()
+            .eq('societe_id', societe_id)
+            .like('ref_folio', `BANK-${releve_id}-${txIdx}-%`)
+
+          if (isPartialUnmatch) {
+            // Cas RÉPARTI/PARTIEL : chaque facture a SA propre lettre stable.
+            // Pour chacune, on retire la lettre sur l'écriture VTE/ACH
+            // uniquement s'il NE RESTE PLUS aucune BNQ portant cette lettre
+            // (d'autres versements de la même facture peuvent subsister).
+            const faIdsPartial = Array.isArray(prevTx?.facture_ids) && prevTx.facture_ids.length > 0
+              ? prevTx.facture_ids
+              : (prevTx?.facture_id ? [prevTx.facture_id] : [])
+            for (const fId of faIdsPartial) {
+              const { data: tierRows } = await supabase
+                .from('ecritures_comptables_v2')
+                .select('lettre')
+                .eq('societe_id', societe_id)
+                .eq('facture_id', fId)
+                .neq('journal', 'BNQ')
+                .not('lettre', 'is', null)
+              const lettres = Array.from(new Set((tierRows || []).map((r: any) => r.lettre).filter(Boolean)))
+              for (const lt of lettres) {
+                const { data: remainingBnq } = await supabase
+                  .from('ecritures_comptables_v2')
+                  .select('id')
+                  .eq('societe_id', societe_id)
+                  .eq('lettre', lt)
+                  .eq('journal', 'BNQ')
+                  .limit(1)
+                if (!remainingBnq || remainingBnq.length === 0) {
+                  await supabase.from('ecritures_comptables_v2')
+                    .update({ lettre: null, date_lettrage: null })
+                    .eq('societe_id', societe_id)
+                    .eq('facture_id', fId)
+                    .eq('lettre', lt)
+                    .neq('journal', 'BNQ')
+                }
+              }
+            }
+          } else if (prevTx?.lettre) {
+            // Délettrer les ACH/VTE/OD qui partageaient le même code lettre.
             await supabase.from('ecritures_comptables_v2')
               .update({ lettre: null, date_lettrage: null })
               .eq('societe_id', societe_id)

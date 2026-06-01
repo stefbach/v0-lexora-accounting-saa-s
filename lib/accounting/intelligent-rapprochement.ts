@@ -522,6 +522,86 @@ export function matchBySupplier(
       usedTxKeys.add(txKey(tx))
     }
 
+    // ── Strategy A0 (PRIORITAIRE) : subset-sum multi-factures du MÊME
+    //    fournisseur AVANT le matching 1-à-1.
+    //
+    //    Demande métier : grouper les factures d'un même fournisseur,
+    //    calculer leur somme, puis scruter la banque pour trouver le
+    //    virement correspondant. On le fait en priorité pour éviter qu'une
+    //    facture d'un lot soit consommée par un match 1-à-1 approximatif.
+    //    Tolérance 2% (frais bancaires / TDS / arrondis de change).
+    //    profile.factures est DÉJÀ scopé au fournisseur courant.
+    for (const tx of unmatchedTxs) {
+      if (usedTxKeys.has(txKey(tx))) continue
+      const txRaw0 = Math.max(tx.debit, tx.credit)
+      if (txRaw0 === 0) continue
+      const txDevise0 = (tx.devise || 'MUR').toUpperCase()
+      const txAmtMUR0 = toMUR(txRaw0, tx.devise, rates)
+
+      const candidates = unpaidFactures.filter(f => !usedFactureIds.has(f.id))
+      if (candidates.length < 2) continue
+
+      // Ne retenir que les factures dont la date est plausible vs la tx
+      const datedFacs = candidates.filter(f => isPlausibleDateRange(f.date_facture, tx.date))
+      if (datedFacs.length < 2) continue
+
+      // Tri chronologique, limité à 12 factures pour borner le subset-sum
+      const sorted0 = [...datedFacs]
+        .sort((a, b) => (a.date_facture || '').localeCompare(b.date_facture || ''))
+        .slice(0, 12)
+      const n0 = sorted0.length
+
+      let best0: MatchingFacture[] | null = null
+      let best0Diff = Infinity
+      for (let mask = 3; mask < (1 << n0); mask++) {
+        let bits = 0
+        for (let i = 0; i < n0; i++) if (mask & (1 << i)) bits++
+        if (bits < 2 || bits > 6) continue
+        let sum = 0
+        let allSameCcy = true
+        const subset: MatchingFacture[] = []
+        for (let i = 0; i < n0; i++) {
+          if (mask & (1 << i)) {
+            const f = sorted0[i]
+            const fDevise = (f.devise || 'MUR').toUpperCase()
+            if (fDevise === txDevise0 && Number(f.montant_ttc) > 0) sum += Number(f.montant_ttc)
+            else { allSameCcy = false; sum += Number(f.montant_mur) || toMUR(Number(f.montant_ttc) || 0, f.devise, rates) }
+            subset.push(f)
+          }
+        }
+        if (sum <= 0) continue
+        const compareAmt = allSameCcy ? txRaw0 : txAmtMUR0
+        const diff = Math.abs(compareAmt - sum) / sum
+        // Préférer le sous-ensemble le plus proche ; à égalité, le moins de factures
+        if (diff < best0Diff - 1e-9 || (Math.abs(diff - best0Diff) < 1e-9 && best0 && subset.length < best0.length)) {
+          best0Diff = diff
+          best0 = subset
+        }
+      }
+
+      // Tolérance 2% pour validation auto prioritaire
+      if (best0 && best0Diff <= 0.02) {
+        const isExact0 = best0Diff < 0.005
+        let conf0 = isExact0 ? 0.95 : 0.88
+        if (best0.length > 5) conf0 -= 0.04
+        allMatches.push({
+          supplierKey: profile.key,
+          supplierName: profile.rawNames[0],
+          transactionKey: txKey(tx),
+          transaction: tx,
+          factureIds: best0.map(f => f.id),
+          factures: best0,
+          strategy: 'supplier_multi_subset_priority',
+          confidence: Math.min(0.97, conf0),
+          reasoning: `${best0.length} factures de "${profile.rawNames[0]}" regroupées → somme ${isExact0 ? 'exacte' : `écart ${(best0Diff * 100).toFixed(1)}%`} avec le virement`,
+          amountDiff: best0Diff * txRaw0,
+          phase: 'supplier_match',
+        })
+        for (const f of best0) usedFactureIds.add(f.id)
+        usedTxKeys.add(txKey(tx))
+      }
+    }
+
     // ── Strategy A: 1 paiement → 1 facture (exact ou proche, délai décalé OK) ──
     for (const tx of unmatchedTxs) {
       if (usedTxKeys.has(txKey(tx))) continue

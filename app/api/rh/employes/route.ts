@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getUserSocieteIds } from '@/lib/rh/access'
 import { recomputeSoldeCongesAll } from '@/lib/rh/soldes-conges'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,8 +17,8 @@ function getAdminClient() {
 
 export async function GET(request: Request) {
   try {
-    const supabaseAuth = await createServerClient()
-    const { data: { user } } = await supabaseAuth.auth.getUser()
+    // FIX MCP : resolveUserAuth pour outil MCP `list_employes`.
+    const user = await resolveUserAuth(request)
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
     const supabase = getAdminClient()

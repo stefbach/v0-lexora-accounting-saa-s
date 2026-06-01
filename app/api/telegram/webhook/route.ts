@@ -4,6 +4,7 @@ import {
   resolveChatContext,
   sendTelegramMessage,
   sendTelegramInlineButtons,
+  sendTelegramDocumentBuffer,
   logAction,
   answerCallbackQuery,
   editMessageText,
@@ -18,6 +19,7 @@ import { memoryRecall, formatMemoriesForPrompt } from '@/lib/telegram/memory'
 import { transcribeTelegramVoice } from '@/lib/telegram/voice-transcribe'
 import { detectPointageIntent, isExpensesListCommand } from '@/lib/telegram/pointage-nlp'
 import { captionLooksLikeExpense } from '@/lib/telegram/expense-ocr'
+import { runLexoraAgent } from '@/lib/telegram/lexora-agent'
 
 /**
  * POST /api/telegram/webhook
@@ -80,8 +82,20 @@ export async function POST(req: NextRequest) {
   // --- Commande /logout --------------------------------------------------------
   if (text === '/logout') {
     const admin = getAdminClient()
+    // Purge aussi l'historique conversationnel — on repart à zéro la prochaine
+    // fois (best-effort, ne bloque pas la déconnexion si la table n'existe pas).
+    await admin.from('telegram_conversation_history').delete().eq('chat_id', chatId).then(() => {})
     await admin.from('telegram_users').delete().eq('chat_id', chatId)
     await sendTelegramMessage(chatId, '✅ Déconnecté. Tape /start CODE pour te reconnecter.')
+    return NextResponse.json({ ok: true })
+  }
+
+  // --- Commande /clear : efface l'historique conversationnel sans déco --------
+  // Utile pour démarrer un nouveau sujet sans que l'agent traîne l'ancien.
+  if (text === '/clear' || text === '/reset') {
+    const admin = getAdminClient()
+    await admin.from('telegram_conversation_history').delete().eq('chat_id', chatId).then(() => {})
+    await sendTelegramMessage(chatId, '🧹 Conversation effacée. On repart sur un nouveau sujet.')
     return NextResponse.json({ ok: true })
   }
 
@@ -177,12 +191,7 @@ async function forwardToN8nAgent(
   const societeName = socRow?.nom || 'votre société'
   const roleLabel = ROLE_LABELS[role] || role
 
-  const N8N_AGENT_WEBHOOK = process.env.N8N_TELEGRAM_AGENT_WEBHOOK
-  if (!N8N_AGENT_WEBHOOK) {
-    await sendTelegramMessage(chatId, '⚠️ Agent IA non configuré côté serveur.')
-    return
-  }
-
+  // Contexte mémoire (rappels société/user) — partagé par les deux modes.
   let memoryContext: string | null = null
   try {
     const memories = await memoryRecall({
@@ -197,8 +206,106 @@ async function forwardToN8nAgent(
   }
 
   const { overrideMessage, ...extraFields } = extras
+
+  // Typing indicator immédiat : l'utilisateur voit "typing…" et sait que le bot
+  // a reçu et travaille. Best-effort, non bloquant.
+  fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendChatAction`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
+  }).catch(() => { /* noop */ })
+
+  // ── MODE AGENT ──────────────────────────────────────────────────────
+  // TELEGRAM_AGENT_MODE : 'lexora' (défaut) = LLM natif Lexora (bypass n8n),
+  // 'n8n' = legacy (forward vers le workflow n8n). Le mode lexora ne dépend
+  // plus du tout de n8n : Claude tourne dans Lexora et appelle directement les
+  // endpoints /api/telegram/internal/* (parité totale avec ce que n8n faisait).
+  const AGENT_MODE = (process.env.TELEGRAM_AGENT_MODE || 'lexora').toLowerCase()
+
+  if (AGENT_MODE !== 'n8n') {
+    const tAgent = Date.now()
+    // Le texte effectif (vocal transcrit → overrideMessage.text, sinon texte brut)
+    const userText = String(overrideMessage?.text || originalMessage?.text || textForMemoryQuery || '').trim()
+    try {
+      const result = await runLexoraAgent(userText, {
+        chat_id: chatId,
+        user_id: ctx.user_id,
+        societe_id: ctx.current_societe_id!,
+        societe_name: societeName,
+        role,
+        role_label: roleLabel,
+        first_name: ctx.telegram_firstname,
+        locale: ctx.language_code,
+        memory_context: memoryContext,
+      })
+      if (result.ok) {
+        await sendTelegramMessage(chatId, result.text)
+        // Expédie les pièces jointes produites par les outils download.
+        // Best-effort : on log l'échec sans bloquer le message texte déjà envoyé.
+        if (result.artifacts && result.artifacts.length > 0) {
+          for (const art of result.artifacts) {
+            try {
+              await sendTelegramDocumentBuffer(
+                chatId, art.buffer, art.filename, art.contentType, art.caption,
+              )
+            } catch (e: any) {
+              console.warn('[webhook] sendDocument artifact failed:', art.filename, e?.message)
+              await sendTelegramMessage(
+                chatId,
+                `⚠️ Impossible d'envoyer le fichier <code>${art.filename}</code>.`,
+              ).catch(() => {})
+            }
+          }
+        }
+        await logAction({
+          chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+          intent: 'agent.lexora', status: 'success',
+          payload: {
+            turns: result.turns, tools_used: result.tools_used,
+            artifacts_count: result.artifacts?.length || 0,
+          },
+          duration_ms: Date.now() - tAgent,
+        }).catch(() => {})
+      } else {
+        await logAction({
+          chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+          intent: 'agent.lexora', status: 'error', error_msg: result.error,
+          duration_ms: Date.now() - tAgent,
+        }).catch(() => {})
+        // Diagnostic : on remonte l'erreur réelle (tronquée, sans secret) pour
+        // identifier la cause (modèle inaccessible, clé invalide, HMAC…).
+        const errDetail = String(result.error || '').slice(0, 300)
+        await sendTelegramMessage(
+          chatId,
+          `⚠️ Petit souci pour traiter ta demande.\n<code>${errDetail}</code>\n\nRéessaie, ou utilise <code>/help</code> pour les commandes directes.`,
+        )
+      }
+    } catch (e: any) {
+      await logAction({
+        chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+        intent: 'agent.lexora', status: 'error', error_msg: e?.message,
+        duration_ms: Date.now() - tAgent,
+      }).catch(() => {})
+      await sendTelegramMessage(chatId, '⚠️ Erreur interne de l\'assistant. Réessaie dans un instant.')
+    }
+    return
+  }
+
+  // ── MODE LEGACY n8n ─────────────────────────────────────────────────
+  const N8N_AGENT_WEBHOOK = process.env.N8N_TELEGRAM_AGENT_WEBHOOK
+  if (!N8N_AGENT_WEBHOOK) {
+    await sendTelegramMessage(chatId, '⚠️ Agent IA non configuré côté serveur.')
+    return
+  }
+
+  // Timeout 25s : si n8n hang, on prévient l'utilisateur au lieu de laisser
+  // le webhook timeout (60s) silencieusement.
+  const ctrl = new AbortController()
+  const t0 = Date.now()
+  const timeoutId = setTimeout(() => ctrl.abort(), 25_000)
+
   try {
-    await fetch(N8N_AGENT_WEBHOOK, {
+    const res = await fetch(N8N_AGENT_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -215,13 +322,47 @@ async function forwardToN8nAgent(
         memory_context: memoryContext,
         ...extraFields,
       }),
+      signal: ctrl.signal,
     })
-  } catch (e: any) {
+    clearTimeout(timeoutId)
+
+    if (!res.ok) {
+      const bodyExcerpt = await res.text().catch(() => '').then(s => s.slice(0, 200))
+      await logAction({
+        chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+        intent: 'agent.forward', status: 'error',
+        error_msg: `n8n HTTP ${res.status}: ${bodyExcerpt}`,
+        duration_ms: Date.now() - t0,
+      })
+      await sendTelegramMessage(
+        chatId,
+        `⚠️ L'agent IA a renvoyé une erreur (HTTP ${res.status}).\n` +
+        `Réessaie dans un instant, ou tape <code>/help</code> pour les commandes directes.`,
+      )
+      return
+    }
+
+    // Succès du dispatch — la vraie réponse arrivera via /api/telegram/send
+    // appelé depuis n8n. On log juste l'envoi côté Lexora.
     await logAction({
       chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
-      intent: 'agent.forward', status: 'error', error_msg: e.message,
+      intent: 'agent.forward', status: 'success', duration_ms: Date.now() - t0,
+    }).catch(() => { /* log non bloquant */ })
+  } catch (e: any) {
+    clearTimeout(timeoutId)
+    const isTimeout = e?.name === 'AbortError'
+    await logAction({
+      chat_id: chatId, user_id: ctx.user_id, societe_id: ctx.current_societe_id,
+      intent: 'agent.forward', status: 'error',
+      error_msg: isTimeout ? 'n8n timeout 25s' : e.message,
+      duration_ms: Date.now() - t0,
     })
-    await sendTelegramMessage(chatId, '⚠️ Erreur de communication avec l\'agent IA. Réessaie dans un instant.')
+    await sendTelegramMessage(
+      chatId,
+      isTimeout
+        ? '⏱ L\'agent IA met trop de temps à répondre (>25s). Réessaie dans un instant ou utilise <code>/help</code>.'
+        : '⚠️ Erreur de communication avec l\'agent IA. Tape <code>/help</code> pour voir les commandes directes (<code>/in</code>, <code>/out</code>, <code>/notes_de_frais</code>…).',
+    )
   }
 }
 
@@ -1079,6 +1220,7 @@ function buildHelp() {
     '<b>⚙️ Commandes système</b>',
     '<code>/societe</code> — changer de société',
     '<code>/societe NOM</code> — choisir directement',
+    '<code>/clear</code> — effacer la conversation (nouveau sujet)',
     '<code>/logout</code> — me déconnecter',
     '<code>/help</code> — ce message',
   ].join('\n')
