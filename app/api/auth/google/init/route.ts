@@ -6,8 +6,9 @@ import { signOAuthState } from '@/lib/google/oauth-state'
  * GET /api/auth/google/init?return_to=...
  *
  * Redirige l'utilisateur vers le consent screen Google avec scopes Calendar
- * read/write + userinfo.email. Le state est un JWT-like signé HMAC-SHA256 pour
- * éviter CSRF + carrier le return_to.
+ * read/write + Gmail envoi + userinfo.email. Une seule connexion Google donne
+ * donc à la fois l'agenda ET l'adresse email (envoi d'emails sortants via Gmail).
+ * Le state est un JWT-like signé HMAC-SHA256 pour éviter CSRF + carrier le return_to.
  *
  * Env requises (sinon 503) :
  *   - GOOGLE_OAUTH_CLIENT_ID
@@ -17,6 +18,9 @@ import { signOAuthState } from '@/lib/google/oauth-state'
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/calendar.events',
+  // Envoi d'emails via Gmail (scope restreint « send » uniquement — pas de lecture
+  // de la boîte de réception). Permet à Lexora d'envoyer depuis l'adresse Gmail.
+  'https://www.googleapis.com/auth/gmail.send',
   'openid',
   'email',
   'profile',

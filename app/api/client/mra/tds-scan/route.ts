@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     // Factures fournisseurs candidates
     let q = admin.from('factures')
-      .select('id, tiers, montant_ht, montant_ttc, description, libelle, date_facture, tds_category, tds_amount_mur')
+      .select('id, tiers, montant_ht, montant_ttc, description, notes, date_facture, tds_category, tds_amount_mur')
       .eq('societe_id', societe_id)
       .eq('type_facture', 'fournisseur')
       .order('date_facture', { ascending: false })
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
       const res = detectTds({
         montant_ht: Number(f.montant_ht) || 0,
         montant_ttc: Number(f.montant_ttc) || 0,
-        description: String(f.description || f.libelle || f.tiers || ''),
+        description: String(f.description || f.notes || f.tiers || ''),
         numero_compte,
       })
       if (!res.applies || res.tds_amount_mur <= 0) continue

@@ -172,6 +172,51 @@ export async function GET(req: NextRequest) {
       return errorRedirect(req, `Sauvegarde compte : ${upRes.error.message}`)
     }
 
+    // ── Enregistre aussi le compte comme adresse email d'envoi (provider gmail_oauth)
+    // si le scope Gmail "send" a été accordé. Une seule connexion Google donne ainsi
+    // l'agenda ET l'email. Best-effort : on n'échoue pas la connexion agenda si la
+    // création du compte email rate (ex: pas de société liée → societe_id NOT NULL).
+    const hasGmailSend = scopes.includes('https://www.googleapis.com/auth/gmail.send')
+    if (hasGmailSend && us?.societe_id) {
+      try {
+        const { data: existingEmail } = await admin
+          .from('email_accounts')
+          .select('id')
+          .eq('societe_id', us.societe_id)
+          .eq('user_id', state.user_id)
+          .eq('provider', 'gmail_oauth')
+          .eq('from_email', userinfo.email)
+          .maybeSingle()
+
+        // Premier compte email perso de l'user dans cette société → défaut
+        const { count: emailCount } = await admin
+          .from('email_accounts')
+          .select('id', { count: 'exact', head: true })
+          .eq('societe_id', us.societe_id)
+          .eq('user_id', state.user_id)
+          .eq('active', true)
+
+        const emailPayload: any = {
+          societe_id: us.societe_id,
+          user_id: state.user_id,
+          provider: 'gmail_oauth',
+          label: userinfo.name ? `Gmail — ${userinfo.name}` : `Gmail — ${userinfo.email}`,
+          from_email: userinfo.email,
+          from_name: userinfo.name || null,
+          active: true,
+        }
+        if (existingEmail) {
+          await admin.from('email_accounts').update(emailPayload).eq('id', existingEmail.id)
+        } else {
+          if ((emailCount || 0) === 0) emailPayload.is_default_for_user = true
+          await admin.from('email_accounts').insert(emailPayload)
+        }
+      } catch (emailErr: any) {
+        // Non bloquant : l'agenda reste connecté, on logge seulement.
+        console.error('[google callback] email_accounts gmail_oauth setup:', emailErr?.message || emailErr)
+      }
+    }
+
     const return_to = state.return_to || '/client/settings/google-accounts?google=connected'
     const safeReturnTo = return_to.startsWith('/') ? return_to : '/client/settings/google-accounts?google=connected'
     return NextResponse.redirect(new URL(safeReturnTo, req.url))
