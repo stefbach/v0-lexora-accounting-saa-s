@@ -183,15 +183,22 @@ export async function POST(req: NextRequest) {
       return { result: null, status: 'error', error_msg: 'HTML interdit (script ou handler inline)' }
     }
 
-    // Whitelist destinataires (les emails déjà résolus depuis contact_id la skippent — déjà
-    // dans nos tables donc whitelistés par construction).
-    const toCheck = [...to, ...cc].filter(e => !resolvedFromContact.has(e))
-    const checks = await Promise.all(toCheck.map(e => isWhitelisted(e, ctx.societe_id)))
-    const unauthorized = toCheck.filter((_, i) => !checks[i])
-    if (unauthorized.length > 0) {
-      return {
-        result: null, status: 'denied',
-        error_msg: `Destinataires non autorisés : ${unauthorized.join(', ')}. Ajoute-les comme contact dans Lexora d'abord.`,
+    // Whitelist destinataires (anti-spam). Les emails déjà résolus depuis
+    // contact_id la skippent (déjà dans nos tables). Les rôles direction/admin
+    // (utilisateurs de confiance, propriétaires du compte) peuvent écrire à
+    // n'importe quelle adresse valide — le verrou contact ne vise que les rôles
+    // juniors (comptable/rh) pour éviter les envois de masse non maîtrisés.
+    const trusted = hasRole(ctx, 'direction')
+    if (!trusted) {
+      const toCheck = [...to, ...cc].filter(e => !resolvedFromContact.has(e))
+      const checks = await Promise.all(toCheck.map(e => isWhitelisted(e, ctx.societe_id)))
+      const unauthorized = toCheck.filter((_, i) => !checks[i])
+      if (unauthorized.length > 0) {
+        return {
+          result: null, status: 'denied',
+          error_msg: `Destinataires non autorisés : ${unauthorized.join(', ')}. ` +
+            `Ajoute-les comme contact dans Lexora d'abord, ou demande à un compte direction/admin d'envoyer.`,
+        }
       }
     }
 
