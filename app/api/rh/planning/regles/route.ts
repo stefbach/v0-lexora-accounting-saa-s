@@ -22,6 +22,7 @@ const ALLOWED_ROLES_READ = [
   'rh',
   'rh_manager',
   'manager',
+  'team_leader',
   'client_admin',
   'direction',
 ]
