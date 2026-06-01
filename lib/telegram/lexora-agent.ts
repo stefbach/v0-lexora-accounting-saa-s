@@ -1503,62 +1503,13 @@ const TOOLS: ToolDef[] = [
     kind: 'read', method: 'POST', endpoint: () => `/api/client/tiers-offshore`, isAction: true,
   },
 
-  // ── 📧 EMAIL ACCOUNTS (CRUD) ─────────────────────────────────────────
-  {
-    name: 'list_email_accounts_full',
-    description: 'Liste détaillée des comptes email connectés (provider, addresse, statut, dernière synchro).',
-    input_schema: { type: 'object', properties: {} },
-    kind: 'read', method: 'GET', endpoint: () => `/api/client/email-accounts`,
-  },
-  {
-    name: 'create_email_account',
-    description: 'Ajoute un compte email (SMTP/IMAP ou OAuth). Fournir email, provider (gmail/outlook/smtp), credentials selon provider.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        email: { type: 'string' },
-        provider: { type: 'string' },
-        smtp_host: { type: 'string' }, smtp_port: { type: 'number' },
-        username: { type: 'string' }, password: { type: 'string' },
-      },
-      required: ['email', 'provider'],
-    },
-    kind: 'read', method: 'POST', endpoint: () => `/api/client/email-accounts`, isAction: true,
-  },
-  {
-    name: 'update_email_account',
-    description: 'Modifie un compte email (champ par champ). Fournir id + champs à changer.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' }, email: { type: 'string' },
-        smtp_host: { type: 'string' }, smtp_port: { type: 'number' },
-        username: { type: 'string' }, password: { type: 'string' },
-        actif: { type: 'boolean' },
-      },
-      required: ['id'],
-    },
-    kind: 'read', method: 'PATCH', endpoint: () => `/api/client/email-accounts`, isAction: true,
-  },
-  {
-    name: 'delete_email_account',
-    description: 'Supprime un compte email connecté. Demander confirmation.',
-    input_schema: {
-      type: 'object',
-      properties: { id: { type: 'string' } },
-      required: ['id'],
-    },
-    kind: 'read', method: 'DELETE', endpoint: (p) => `/api/client/email-accounts?id=${p.id}`, isAction: true,
-  },
-  {
-    name: 'test_email_account',
-    description: 'Teste un compte email (envoi d\'un mail de test). Fournir id ou email.',
-    input_schema: {
-      type: 'object',
-      properties: { id: { type: 'string' }, email: { type: 'string' } },
-    },
-    kind: 'read', method: 'POST', endpoint: () => `/api/client/email-accounts/test`, isAction: true,
-  },
+  // ── 📧 EMAIL ACCOUNTS — utiliser list_email_accounts (HMAC) + send_email
+  // Les anciens tools list_email_accounts_full / create_email_account /
+  // update_email_account / delete_email_account / test_email_account tapaient
+  // /api/client/email-accounts (session web uniquement → 401 « Non authentifié »
+  // depuis Telegram). Retirés du catalogue pour empêcher le LLM de les choisir.
+  // La gestion CRUD des comptes email se fait via /client/email-accounts (web).
+
 
   // ── 🔑 API KEYS UTILISATEUR ──────────────────────────────────────────
   {

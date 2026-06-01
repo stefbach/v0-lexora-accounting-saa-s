@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 import { encryptSecret } from '@/lib/crypto/symmetric'
 import { ensureGmailEmailAccounts } from '@/lib/email/gmail-backfill'
+import { resolveUserAuth } from '@/lib/supabase/auth-resolver'
 
 /**
  * Comptes email multi-tenant.
@@ -20,11 +20,15 @@ import { ensureGmailEmailAccounts } from '@/lib/email/gmail-backfill'
 const ALLOWED_PROVIDERS = ['smtp', 'resend', 'gmail_oauth'] as const
 const SOCIETE_ROLES = ['direction', 'client_admin', 'admin', 'super_admin']
 
+/**
+ * Auth multi-mode : session web, X-Internal-Token (agent Telegram), ou
+ * X-Lexora-Api-Key. Renvoie l'objet user + un client admin (utilisé pour
+ * assertSocieteAccess et CRUD — bypass RLS, contrôles d'accès faits côté code).
+ */
 async function getCallerContext(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await resolveUserAuth(req)
   if (!user) return { error: NextResponse.json({ error: 'Non authentifié' }, { status: 401 }) }
-  return { user, supabase }
+  return { user, supabase: getAdminClient() }
 }
 
 function publicFields(row: any) {
