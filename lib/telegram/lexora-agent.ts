@@ -543,7 +543,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'send_email',
-    description: 'Envoie un email depuis un compte connecté (Gmail OAuth, SMTP ou Resend). UNIQUEMENT quand l\'utilisateur le demande clairement et que tu as destinataire + objet + corps. Demande les infos manquantes avant. Le destinataire doit être whitelisté (contact factures, profile Lexora ou employé) — sinon utilise contact_id pour le résoudre depuis l\'annuaire.',
+    description: 'Envoie un email depuis un compte connecté (Gmail OAuth, SMTP ou Resend). UNIQUEMENT quand l\'utilisateur le demande clairement et que tu as destinataire + objet + corps. Demande les infos manquantes avant. Les comptes direction/admin peuvent écrire à n\'importe quelle adresse ; pour les rôles comptable/rh le destinataire doit être un contact Lexora (sinon utilise contact_id pour le résoudre).',
     input_schema: {
       type: 'object',
       properties: {
