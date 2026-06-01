@@ -124,10 +124,31 @@ export async function POST(req: NextRequest) {
     let to = normalizeEmails(body?.to).filter(e => EMAIL_RE.test(e))
     const cc = normalizeEmails(body?.cc).filter(e => EMAIL_RE.test(e)).slice(0, MAX_CC)
     const subject = String(body?.subject || '').trim().slice(0, 200)
-    const html = String(body?.html || '').slice(0, MAX_HTML)
-    const text = body?.text ? String(body.text).slice(0, MAX_HTML) : undefined
+
+    // Compat agent Telegram : le LLM envoie souvent `body` (texte brut) au lieu
+    // de `html`/`text`. On accepte les deux, et on enveloppe le texte brut en
+    // HTML minimal si seul `body`/`text` est fourni.
+    const rawBody = body?.body != null ? String(body.body).slice(0, MAX_HTML) : ''
+    let html = String(body?.html || '').slice(0, MAX_HTML)
+    let text = body?.text ? String(body.text).slice(0, MAX_HTML) : undefined
+    if (!html && rawBody) {
+      // Si le `body` contient déjà du HTML, on le garde tel quel ; sinon on
+      // enveloppe en <p> + <br> sur les retours à la ligne.
+      if (/<\w+[^>]*>/.test(rawBody)) {
+        html = rawBody
+      } else {
+        const escaped = rawBody
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br>')
+        html = `<p>${escaped}</p>`
+        if (!text) text = rawBody
+      }
+    }
+
     const reply_to = body?.reply_to ? String(body.reply_to) : undefined
-    const account_id = body?.account_id ? String(body.account_id) : undefined
+    // account_id direct OU account_email (résolu plus bas après auth context).
+    let account_id = body?.account_id ? String(body.account_id) : undefined
+    const account_email = body?.account_email ? String(body.account_email).toLowerCase() : undefined
 
     // contact_id : résolution depuis factures_contacts / profiles / employes
     const contact_ids_raw = body?.contact_id
@@ -171,6 +192,23 @@ export async function POST(req: NextRequest) {
         result: null, status: 'denied',
         error_msg: `Destinataires non autorisés : ${unauthorized.join(', ')}. Ajoute-les comme contact dans Lexora d'abord.`,
       }
+    }
+
+    // Compat agent : résolution `account_email` → `account_id` (l'agent ne connaît
+    // que l'adresse, pas l'UUID). Scope société + user pour éviter les fuites.
+    if (!account_id && account_email) {
+      const admin = getAdminClient()
+      const { data: emailAcc } = await admin
+        .from('email_accounts')
+        .select('id')
+        .eq('societe_id', ctx.societe_id)
+        .ilike('from_email', account_email)
+        .eq('active', true)
+        .or(`user_id.is.null,user_id.eq.${ctx.user_id}`)
+        .order('is_default_for_user', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (emailAcc?.id) account_id = emailAcc.id
     }
 
     // Sélection compte + envoi

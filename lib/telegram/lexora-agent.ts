@@ -543,12 +543,16 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'send_email',
-    description: 'Envoie un email depuis un compte connecté. UNIQUEMENT quand l\'utilisateur le demande clairement et que tu as destinataire + objet + corps. Demande les infos manquantes avant.',
+    description: 'Envoie un email depuis un compte connecté (Gmail OAuth, SMTP ou Resend). UNIQUEMENT quand l\'utilisateur le demande clairement et que tu as destinataire + objet + corps. Demande les infos manquantes avant. Le destinataire doit être whitelisté (contact factures, profile Lexora ou employé) — sinon utilise contact_id pour le résoudre depuis l\'annuaire.',
     input_schema: {
       type: 'object',
       properties: {
-        to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' },
-        account_email: { type: 'string', description: 'Compte expéditeur (optionnel)' },
+        to: { type: 'string', description: 'Email destinataire (ou liste séparée par virgule, max 5)' },
+        cc: { type: 'string', description: 'CC (optionnel, max 3)' },
+        subject: { type: 'string', description: 'Objet du mail (max 200 char)' },
+        body: { type: 'string', description: 'Corps du mail (texte brut accepté — sera enveloppé en HTML automatiquement)' },
+        account_email: { type: 'string', description: 'Adresse expéditeur (optionnel — sinon compte par défaut). Ex: "marie@cabinet.mu"' },
+        contact_id: { type: 'string', description: 'ID d\'un contact factures/profile/employé à résoudre en email (court-circuite la whitelist)' },
       },
       required: ['to', 'subject', 'body'],
     },
