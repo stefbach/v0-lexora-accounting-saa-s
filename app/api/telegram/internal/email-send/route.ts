@@ -218,10 +218,51 @@ export async function POST(req: NextRequest) {
 
     // Sélection compte + envoi
     const account = await selectEmailAccount({ societe_id: ctx.societe_id, user_id: ctx.user_id, account_id })
+
+    // Fast-path Gmail OAuth direct : si l'utilisateur a un compte Google avec
+    // scope gmail.send mais qu'aucun compte email n'est rattaché à la société
+    // active (ligne email_accounts manquante / société différente / pas encore
+    // matérialisée), on envoie directement via sendGmail() en utilisant les
+    // tokens user_oauth_accounts. Évite le « aucun compte email » alors que
+    // Gmail est connecté.
+    const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.send'
+    let gmailFastPath: { from_email: string; from_name: string | null } | null = null
+    if (!account) {
+      const adminEarly = getAdminClient()
+      let gq = adminEarly
+        .from('user_oauth_accounts')
+        .select('account_email, label')
+        .eq('user_id', ctx.user_id)
+        .eq('provider', 'google')
+        .eq('active', true)
+        .contains('scopes', [GMAIL_SCOPE])
+      if (account_email) gq = gq.ilike('account_email', account_email)
+      const { data: gAccounts } = await gq.limit(1)
+      const g = (gAccounts || [])[0] as any
+      if (g?.account_email) gmailFastPath = { from_email: g.account_email, from_name: g.label || null }
+    }
+
     const msg = { to, cc, subject, html, text, reply_to }
-    const result = account
-      ? await sendEmail(account, msg)
-      : await sendEmailFallbackResend(msg)
+    let result: { ok: boolean; message_id?: string; account_id?: string; provider?: string; error?: string }
+    if (account) {
+      result = await sendEmail(account, msg)
+    } else if (gmailFastPath) {
+      try {
+        const { sendGmail } = await import('@/lib/google/gmail-client')
+        const { message_id } = await sendGmail(ctx.user_id, {
+          from_email: gmailFastPath.from_email,
+          from_name: gmailFastPath.from_name,
+          to, cc, bcc: undefined, subject, html, text, reply_to,
+        })
+        result = { ok: true, message_id, provider: 'gmail_oauth' }
+        // Matérialise la ligne email_accounts pour les prochains appels (best-effort)
+        await ensureGmailEmailAccounts(ctx.user_id, ctx.societe_id)
+      } catch (e: any) {
+        result = { ok: false, error: e?.message || 'Échec envoi Gmail', provider: 'gmail_oauth' }
+      }
+    } else {
+      result = await sendEmailFallbackResend(msg)
+    }
 
     if (!result.ok) {
       return { result: null, status: 'error', error_msg: result.error || 'Envoi échoué' }
@@ -241,7 +282,11 @@ export async function POST(req: NextRequest) {
         message_id: result.message_id,
         account_id: result.account_id || null,
         provider: result.provider,
-        from: account ? account.from_email : 'onboarding@resend.dev (fallback)',
+        from: account
+          ? account.from_email
+          : gmailFastPath
+            ? gmailFastPath.from_email
+            : 'onboarding@resend.dev (fallback)',
         to, cc, subject,
         contact_warnings: contactWarnings.length > 0 ? contactWarnings : undefined,
       },
