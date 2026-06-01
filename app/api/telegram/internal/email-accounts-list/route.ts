@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { withTelegramAuth } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { verifyHmac } from '@/lib/security/hmac-auth'
+import { ensureGmailEmailAccounts } from '@/lib/email/gmail-backfill'
 
 /**
  * GET /api/telegram/internal/email-accounts-list
@@ -9,6 +10,10 @@ import { verifyHmac } from '@/lib/security/hmac-auth'
  * L'agent appelle ce tool quand l'utilisateur dit "envoie depuis quel email"
  * ou pour proposer un choix avant un envoi. Liste les comptes visibles à
  * l'utilisateur (société + ses comptes perso).
+ *
+ * Auto-réparation : crée à la volée la ligne email_accounts pour tout compte
+ * Google connecté disposant du scope gmail.send mais sans boîte d'envoi encore
+ * matérialisée (cf. lib/email/gmail-backfill).
  */
 export async function GET(req: NextRequest) {
   const _hmac = await verifyHmac(req)
@@ -16,6 +21,7 @@ export async function GET(req: NextRequest) {
 
   return withTelegramAuth(req, 'email.accounts_list', async (ctx) => {
     const admin = getAdminClient()
+    await ensureGmailEmailAccounts(ctx.user_id, ctx.societe_id)
     const { data } = await admin
       .from('email_accounts')
       .select('id, label, from_email, from_name, provider, is_default_for_user, is_default_for_societe, active, user_id')

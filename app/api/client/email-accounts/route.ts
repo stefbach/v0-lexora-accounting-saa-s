@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { assertSocieteAccess } from '@/lib/supabase/assert-societe-access'
 import { encryptSecret } from '@/lib/crypto/symmetric'
+import { ensureGmailEmailAccounts } from '@/lib/email/gmail-backfill'
 
 /**
  * Comptes email multi-tenant.
@@ -64,6 +65,10 @@ export async function GET(req: NextRequest) {
   const societeId = req.nextUrl.searchParams.get('societe_id')
   if (!societeId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
   await assertSocieteAccess(supabase, user.id, societeId)
+
+  // Auto-réparation : matérialise la boîte d'envoi Gmail si un compte Google
+  // (scope gmail.send) est connecté sans ligne email_accounts encore créée.
+  await ensureGmailEmailAccounts(user.id, societeId)
 
   const admin = getAdminClient()
   const { data } = await admin

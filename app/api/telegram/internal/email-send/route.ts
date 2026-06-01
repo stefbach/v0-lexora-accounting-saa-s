@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { withTelegramAuth, hasRole } from '@/lib/telegram/internal-auth'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { selectEmailAccount, sendEmail, sendEmailFallbackResend } from '@/lib/email/router'
+import { ensureGmailEmailAccounts } from '@/lib/email/gmail-backfill'
 import { verifyHmac } from '@/lib/security/hmac-auth'
 
 /**
@@ -193,6 +194,10 @@ export async function POST(req: NextRequest) {
         error_msg: `Destinataires non autorisés : ${unauthorized.join(', ')}. Ajoute-les comme contact dans Lexora d'abord.`,
       }
     }
+
+    // Auto-réparation : matérialise la boîte d'envoi Gmail si le compte Google
+    // (scope gmail.send) est connecté mais sans ligne email_accounts encore créée.
+    await ensureGmailEmailAccounts(ctx.user_id, ctx.societe_id)
 
     // Compat agent : résolution `account_email` → `account_id` (l'agent ne connaît
     // que l'adresse, pas l'UUID). Scope société + user pour éviter les fuites.
