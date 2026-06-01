@@ -56,11 +56,20 @@ export function hasRole(ctx: TelegramContext, min: TelegramRole): boolean {
 }
 
 export async function resolveTelegramContext(req: NextRequest): Promise<TelegramContext> {
-  const internalToken = req.headers.get('x-internal-token')
-  const expectedInternalToken = process.env.INTERNAL_API_TOKEN || ''
-  // SEC-004 : comparaison en temps constant pour empêcher timing attacks
-  if (!expectedInternalToken || !safeBearer(internalToken, expectedInternalToken)) {
-    throw NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // Auth contrat :
+  //   - Routes `/api/telegram/internal/*` : verifyHmac() est TOUJOURS appelé
+  //     en début de handler (49/49 endpoints, audité). Si une requête arrive
+  //     ici avec une signature HMAC (`x-lex-signature`), c'est qu'elle a déjà
+  //     passé la vérif HMAC → on n'exige PAS en plus le legacy bearer.
+  //   - Sinon (callers historiques n8n, intégration externe) : on garde la
+  //     vérif `x-internal-token` constant-time (SEC-004).
+  const hasHmac = !!req.headers.get('x-lex-signature')
+  if (!hasHmac) {
+    const internalToken = req.headers.get('x-internal-token')
+    const expectedInternalToken = process.env.INTERNAL_API_TOKEN || ''
+    if (!expectedInternalToken || !safeBearer(internalToken, expectedInternalToken)) {
+      throw NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
   }
 
   // chat_id peut être dans : header X-Chat-Id, query string, ou body.
