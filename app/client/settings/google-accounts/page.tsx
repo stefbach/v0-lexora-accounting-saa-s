@@ -96,6 +96,24 @@ export default function GoogleAccountsPage() {
     }
   }
 
+  async function testEmail(acc: Account) {
+    setBusyId(acc.id)
+    setBanner(null)
+    try {
+      const r = await fetch('/api/auth/google/test-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_email: acc.account_email }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Échec du test')
+      setBanner({ kind: 'success', msg: j.message || `Email de test envoyé à ${acc.account_email}.` })
+    } catch (e: any) {
+      setBanner({ kind: 'error', msg: e?.message || 'Erreur lors du test d\'envoi' })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
     <div className="container mx-auto py-6 max-w-4xl">
       <div className="flex items-start justify-between gap-4 mb-6">
@@ -168,6 +186,11 @@ export default function GoogleAccountsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {hasGmail(acc) && (
+                      <Button size="sm" variant="outline" onClick={() => testEmail(acc)} disabled={busyId === acc.id}>
+                        <Mail className="h-4 w-4 mr-1" /> {busyId === acc.id ? 'Envoi…' : 'Tester l\'envoi'}
+                      </Button>
+                    )}
                     {!hasGmail(acc) && (
                       <Button size="sm" variant="outline" onClick={connect}>
                         <Mail className="h-4 w-4 mr-1" /> Reconnecter (+ Email)
