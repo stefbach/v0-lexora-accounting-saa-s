@@ -2091,6 +2091,18 @@ const TOOLS: ToolDef[] = [
     },
     kind: 'internal_post', internalPath: '/api/telegram/internal/recall-web',
   },
+  {
+    name: 'scan_tds_factures',
+    description: 'Scanne les factures fournisseurs et applique automatiquement la TDS (loyer 5%, honoraires 3%, travaux 0,75%…) sur celles qui n\'en ont pas encore. Rétroactif. Pour "détecte la TDS sur mes factures", "applique les retenues à la source". Demander confirmation. Option periode (YYYY-MM) pour limiter à un mois, only_missing=true par défaut.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        periode: { type: 'string', description: 'YYYY-MM (optionnel)' },
+        only_missing: { type: 'boolean', description: 'défaut true' },
+      },
+    },
+    kind: 'read', method: 'POST', endpoint: () => `/api/client/mra/tds-scan`, isAction: true,
+  },
 ]
 
 const TOOL_MAP = new Map(TOOLS.map(t => [t.name, t]))

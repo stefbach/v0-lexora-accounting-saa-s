@@ -65,6 +65,22 @@ export default function MraTdsPage() {
     window.location.href = `/api/client/mra/bordereau?societe_id=${societeId}&type=${decl.type}&periode=${decl.periode}&format=${format}`
   }
 
+  async function scanTds() {
+    if (!societeId) return
+    setBusy('tds-scan')
+    try {
+      const r = await fetch('/api/client/mra/tds-scan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ societe_id: societeId, only_missing: true }),
+      })
+      const j = await r.json()
+      if (!r.ok) { alert('Erreur : ' + (j.error || r.status)); return }
+      alert(`🔎 ${j.scanned} facture(s) fournisseur scannées · ${j.applied} avec TDS appliquée · TDS total ${j.total_tds} MUR.`)
+      await load()
+    } catch (e: any) { alert('Erreur réseau : ' + (e?.message || '')) }
+    finally { setBusy('') }
+  }
+
   if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Sélectionne une société.</div></div>
   if (loading) return <div className="p-8 flex items-center gap-2"><Loader2 className="animate-spin h-5 w-5" /> Chargement…</div>
 
@@ -82,9 +98,14 @@ export default function MraTdsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: NAVY }}>Conformité MRA</h1>
-          <p className="text-sm text-slate-500">PAYE · CSG · NSF · TDS · TVA — échéances, montants dus, rappels automatiques</p>
+          <p className="text-sm text-slate-500">PAYE · CSG · NSF · PRGF · Levy · TDS · TVA — échéances, montants dus, rappels automatiques</p>
         </div>
-        <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />Actualiser</Button>
+        <div className="flex gap-2">
+          <Button onClick={scanTds} variant="outline" disabled={busy === 'tds-scan'}>
+            {busy === 'tds-scan' ? '…' : '🔎 Détecter TDS'}
+          </Button>
+          <Button onClick={load} variant="outline"><RefreshCw className="h-4 w-4 mr-2" />Actualiser</Button>
+        </div>
       </div>
 
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
