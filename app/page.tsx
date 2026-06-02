@@ -456,7 +456,7 @@ export default function HomePage() {
                     </PressableWrap>
 
                     <PressableWrap>
-                      <a href="#features">
+                      <Link href="/rdv">
                         <Button
                           size="lg"
                           variant="outline"
@@ -465,7 +465,7 @@ export default function HomePage() {
                         >
                           {t('home.watch_demo', locale)}
                         </Button>
-                      </a>
+                      </Link>
                     </PressableWrap>
                   </div>
                 </FadeSlide>
@@ -1816,7 +1816,7 @@ export default function HomePage() {
                 <div className="relative mt-auto">
                   <PressableWrap className="block w-full">
                     <Link
-                      href="/inscription?role=expert"
+                      href="/rdv"
                       className="block"
                     >
                       <Button

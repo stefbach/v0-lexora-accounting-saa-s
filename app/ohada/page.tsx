@@ -128,7 +128,7 @@ export default function OhadaPublicPage() {
       <section className="py-20 px-4 text-center bg-gradient-to-br from-blue-600 to-blue-800 text-white">
         <h2 className="text-4xl font-bold mb-4">Prêt à moderniser votre comptabilité OHADA ?</h2>
         <p className="text-xl mb-8 opacity-90">Démo gratuite, déploiement en 2 semaines</p>
-        <a href="/contact" className="inline-block px-8 py-4 bg-white text-blue-600 rounded-lg font-bold hover:shadow-lg">
+        <a href="/rdv" className="inline-block px-8 py-4 bg-white text-blue-600 rounded-lg font-bold hover:shadow-lg">
           Demander une démo
         </a>
       </section>

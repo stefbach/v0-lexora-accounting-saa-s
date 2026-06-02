@@ -1,5 +1,6 @@
 "use client"
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
+import Script from 'next/script'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,6 +74,10 @@ export default function RdvPage() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', company: '', notes: '' })
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState<{ meet_url: string | null } | null>(null)
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null)
+  const [signedInWithGoogle, setSignedInWithGoogle] = useState<{ email: string; name: string | null; picture: string | null } | null>(null)
+  const googleBtnRef = useRef<HTMLDivElement | null>(null)
+  const [gisReady, setGisReady] = useState(false)
 
   useEffect(() => {
     fetch('/api/rdv/settings').then(r => r.json()).then(j => {
@@ -82,7 +87,52 @@ export default function RdvPage() {
         else if (j.settings.location_in_person_enabled) setLocationType('in_person')
       } else setError(j?.error || 'Page introuvable')
     }).catch(() => setError('Erreur de chargement')).finally(() => setLoading(false))
+
+    // Récupère le client_id Google pour Sign in with Google (auto-fill)
+    fetch('/api/rdv/google-config').then(r => r.json()).then(j => {
+      if (j?.google_client_id) setGoogleClientId(j.google_client_id)
+    }).catch(() => {})
   }, [])
+
+  // Initialise le bouton Google Sign-In quand on arrive à l'étape 3
+  useEffect(() => {
+    if (step !== 3 || !googleClientId || !gisReady || signedInWithGoogle) return
+    const g = (window as any).google
+    if (!g?.accounts?.id) return
+    try {
+      g.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async (resp: any) => {
+          if (!resp?.credential) return
+          try {
+            const r = await fetch('/api/rdv/google-signin', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ credential: resp.credential }),
+            })
+            const j = await r.json()
+            if (r.ok && j?.email) {
+              setSignedInWithGoogle({ email: j.email, name: j.name || null, picture: j.picture || null })
+              setForm(prev => ({ ...prev, name: j.name || prev.name, email: j.email }))
+            }
+          } catch { /* noop */ }
+        },
+        auto_select: false,
+        ux_mode: 'popup',
+      })
+      if (googleBtnRef.current) {
+        googleBtnRef.current.innerHTML = ''
+        g.accounts.id.renderButton(googleBtnRef.current, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          text: 'continue_with',
+          shape: 'rectangular',
+          logo_alignment: 'left',
+          width: 320,
+        })
+      }
+    } catch { /* noop */ }
+  }, [step, googleClientId, gisReady, signedInWithGoogle])
 
   // Dates disponibles : N prochains jours
   const dates = useMemo(() => {
@@ -138,6 +188,14 @@ export default function RdvPage() {
 
   return (
     <div className="min-h-screen" style={{ background: `linear-gradient(180deg, ${NAVY} 0%, #1a1f4a 100%)` }}>
+      {/* Google Identity Services (Sign in with Google) */}
+      {googleClientId && (
+        <Script
+          src="https://accounts.google.com/gsi/client"
+          strategy="afterInteractive"
+          onLoad={() => setGisReady(true)}
+        />
+      )}
       <div className="max-w-5xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="text-center mb-10">
@@ -248,6 +306,27 @@ export default function RdvPage() {
                   {locationType === 'in_person' && settings.in_person_address && (
                     <p className="text-xs text-slate-500 mt-2">📍 {settings.in_person_address}</p>
                   )}
+                </div>
+              )}
+
+              {/* Sign in with Google — pré-remplit nom + email */}
+              {googleClientId && !signedInWithGoogle && (
+                <div className="mb-5 p-4 rounded-lg border border-slate-200 bg-slate-50 flex flex-col items-center">
+                  <p className="text-xs text-slate-500 mb-2">Connecte-toi avec ton compte Google pour aller plus vite</p>
+                  <div ref={googleBtnRef} />
+                </div>
+              )}
+              {signedInWithGoogle && (
+                <div className="mb-5 p-3 rounded-lg border border-emerald-200 bg-emerald-50 flex items-center gap-3">
+                  {signedInWithGoogle.picture && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={signedInWithGoogle.picture} alt="" className="h-9 w-9 rounded-full" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-emerald-900 truncate">{signedInWithGoogle.name || signedInWithGoogle.email}</div>
+                    <div className="text-xs text-emerald-700 truncate">{signedInWithGoogle.email}</div>
+                  </div>
+                  <button onClick={() => { setSignedInWithGoogle(null); setForm(p => ({ ...p, name: '', email: '' })) }} className="text-xs text-slate-500 hover:text-slate-700">Changer</button>
                 </div>
               )}
 
