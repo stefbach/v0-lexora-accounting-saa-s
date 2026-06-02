@@ -240,18 +240,6 @@ export default function HomePage() {
           <div className="flex items-center gap-2 sm:gap-3">
             <LanguageSwitcherLight />
 
-            {/* Desktop CRM access (gated by /crm layout) */}
-            <Link href="/crm" className="hidden md:inline-flex">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37]/10"
-                style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 500 }}
-              >
-                CRM
-              </Button>
-            </Link>
-
             {/* Desktop login */}
             <Link href="/auth/login" className="hidden md:inline-flex">
               <Button
