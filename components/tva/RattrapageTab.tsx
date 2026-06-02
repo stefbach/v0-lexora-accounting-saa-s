@@ -44,6 +44,8 @@ interface Ligne {
   estimation: boolean
   is_rattrapage: boolean
   source_saisie: string | null
+  paiements_banque?: Array<{ date: string; libelle: string; montant: number }>
+  total_paye_banque?: number
 }
 interface Synthese {
   nb_periodes: number
@@ -329,6 +331,7 @@ export function RattrapageTab({
                   <TableHead>{t('cab.tva.rat.col_period', locale)}</TableHead>
                   <TableHead>{t('cab.tva.rat.col_deadline', locale)}</TableHead>
                   <TableHead className="text-right">{t('cab.tva.rat.col_net', locale)}</TableHead>
+                  <TableHead className="text-right">{t('cab.tva.rat.col_paye_banque', locale)}</TableHead>
                   <TableHead>{t('cab.tva.rat.col_status', locale)}</TableHead>
                   <TableHead>{t('cab.tva.rat.col_info', locale)}</TableHead>
                 </TableRow>
@@ -348,6 +351,18 @@ export function RattrapageTab({
                     <TableCell className={`text-right text-sm font-mono ${l.tva_nette >= 0 ? "text-red-600" : "text-green-600"}`}>
                       {fmt(Math.abs(l.tva_nette))}
                       {l.estimation && <span className="text-[10px] ml-1 text-gray-400">{t('cab.tva.rat.est', locale)}</span>}
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">
+                      {l.total_paye_banque && l.total_paye_banque > 0 ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-emerald-700"
+                          title={(l.paiements_banque || []).map(p => `${p.date} · ${fmt(p.montant)} · ${p.libelle}`).join('\n')}
+                        >
+                          <CheckCircle className="w-3 h-3" />{fmt(l.total_paye_banque)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {l.declaree ? (
