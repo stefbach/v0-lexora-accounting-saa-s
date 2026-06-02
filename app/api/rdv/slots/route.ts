@@ -55,9 +55,13 @@ export async function GET(req: NextRequest) {
     const dayStart = candidates[0].start_iso
     const dayEnd = candidates[candidates.length - 1].end_iso
 
-    // Récupère busy times Google (freebusy)
-    const busy: Array<{ start_iso: string; end_iso: string }> = []
+    // Récupère busy times Google (freeBusy). En cas d'échec, on remonte
+    // l'erreur au lieu de continuer à l'aveugle (sinon le prospect voit
+    // tous les créneaux libres alors que ton agenda est plein).
+    const busy: Array<{ start_iso: string; end_iso: string; source?: string }> = []
+    let freebusyError: string | null = null
     try {
+      const targetCal = settings.calendar_id || 'primary'
       const fb = await googleCalendarFetch(
         settings.owner_user_id,
         settings.google_account_email,
@@ -68,19 +72,31 @@ export async function GET(req: NextRequest) {
             timeMin: dayStart,
             timeMax: dayEnd,
             timeZone: settings.timezone,
-            items: [{ id: settings.calendar_id || 'primary' }],
+            items: [{ id: targetCal }],
           },
         },
       )
-      const cal = fb?.calendars?.[settings.calendar_id || 'primary']
+      const cal = fb?.calendars?.[targetCal]
+      if (cal?.errors && cal.errors.length > 0) {
+        freebusyError = `Google a refusé d'accéder au calendar « ${targetCal} » : ${JSON.stringify(cal.errors)}`
+      }
       for (const b of cal?.busy || []) {
-        if (b.start && b.end) busy.push({ start_iso: b.start, end_iso: b.end })
+        if (b.start && b.end) busy.push({ start_iso: b.start, end_iso: b.end, source: 'google' })
       }
     } catch (e: any) {
-      // En cas d'échec freeBusy, on continue avec les bookings internes seulement
-      // (pas d'exception remontée → page reste fonctionnelle).
+      freebusyError = e?.message || 'Échec freeBusy Google'
       // eslint-disable-next-line no-console
-      console.error('[rdv/slots] freeBusy fail:', e?.message || e)
+      console.error('[rdv/slots] freeBusy fail:', freebusyError)
+    }
+
+    if (freebusyError) {
+      // On refuse de servir des créneaux : préférable à un faux « tout libre ».
+      return NextResponse.json({
+        slots: [],
+        duration_minutes: sCfg.duration_minutes,
+        timezone: sCfg.timezone,
+        error: `Impossible de lire ton agenda Google : ${freebusyError}. Reconnecte le compte Google ou vérifie l'id du calendrier dans /client/settings/booking.`,
+      }, { status: 502 })
     }
 
     // Bookings confirmés sur la journée

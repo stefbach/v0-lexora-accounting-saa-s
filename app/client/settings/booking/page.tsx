@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Loader2, Save, Calendar, ExternalLink, CheckCircle2 } from 'lucide-react'
+import { Loader2, Save, Calendar, ExternalLink, CheckCircle2, Activity } from 'lucide-react'
 
 type Settings = any
 
@@ -22,6 +22,19 @@ export default function BookingSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [banner, setBanner] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null)
+  const [diag, setDiag] = useState<any>(null)
+  const [diagLoading, setDiagLoading] = useState(false)
+
+  async function runDiag() {
+    setDiagLoading(true); setDiag(null)
+    try {
+      const r = await fetch('/api/rdv/diag')
+      const j = await r.json()
+      setDiag(j)
+    } catch (e: any) {
+      setDiag({ error: e?.message || 'Erreur' })
+    } finally { setDiagLoading(false) }
+  }
 
   useEffect(() => {
     Promise.all([
@@ -132,6 +145,71 @@ export default function BookingSettingsPage() {
             <Label>Calendrier (id)</Label>
             <Input value={settings.calendar_id || 'primary'} onChange={e => update({ calendar_id: e.target.value })} placeholder="primary" />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Diagnostic agenda */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4" /> Diagnostic connexion agenda</CardTitle>
+          <Button size="sm" variant="outline" onClick={runDiag} disabled={diagLoading}>
+            {diagLoading ? (<><Loader2 className="animate-spin h-3 w-3 mr-1" /> Test…</>) : 'Tester la connexion'}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {!diag && (
+            <p className="text-xs text-muted-foreground">Vérifie en un clic que Lexora lit bien ton agenda Google (busy times des 7 prochains jours).</p>
+          )}
+          {diag && (
+            <div className="space-y-2 text-sm">
+              {diag.error && <div className="text-red-600">❌ {diag.error}</div>}
+              {diag.message && <div className="text-amber-700">⚠️ {diag.message}</div>}
+              {diag.google_account && (
+                <div>
+                  <span className="text-slate-500">Compte Google :</span> <span className="font-mono">{diag.google_account}</span>
+                  {diag.has_calendar_scope === false && <span className="ml-2 text-red-600 text-xs">⚠️ Scope calendar absent</span>}
+                </div>
+              )}
+              {diag.calendar_id_configured && (
+                <div><span className="text-slate-500">Calendar id configuré :</span> <span className="font-mono">{diag.calendar_id_configured}</span></div>
+              )}
+              {diag.available_calendars && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-blue-600">{diag.available_calendars.length} calendrier(s) Google visible(s)</summary>
+                  <ul className="mt-2 ml-4 space-y-0.5">
+                    {diag.available_calendars.map((c: any) => (
+                      <li key={c.id} className="font-mono">
+                        {c.primary ? '⭐ ' : '• '}{c.id} <span className="text-slate-500">— {c.summary} ({c.accessRole})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {diag.freebusy && (
+                <div className={`p-2 rounded ${diag.freebusy.errors ? 'bg-red-50 border border-red-200' : 'bg-emerald-50 border border-emerald-200'}`}>
+                  {diag.freebusy.errors ? (
+                    <div className="text-red-700">❌ Google refuse l'accès : <code className="text-xs">{JSON.stringify(diag.freebusy.errors)}</code></div>
+                  ) : (
+                    <div className="text-emerald-700">
+                      ✅ Lecture freeBusy OK — <strong>{diag.freebusy.busy_count}</strong> plage(s) occupée(s) trouvée(s) sur les 7 prochains jours.
+                      {diag.freebusy.busy_first_10?.length > 0 && (
+                        <details className="text-xs mt-1">
+                          <summary className="cursor-pointer">Voir les plages</summary>
+                          <ul className="mt-1 ml-4">
+                            {diag.freebusy.busy_first_10.map((b: any, i: number) => (
+                              <li key={i} className="font-mono">{new Date(b.start).toLocaleString('fr-FR')} → {new Date(b.end).toLocaleString('fr-FR')}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {diag.freebusy_error && <div className="text-red-600">❌ freeBusy : {diag.freebusy_error}</div>}
+              {diag.calendar_list_error && <div className="text-red-600">❌ Liste calendriers : {diag.calendar_list_error}</div>}
+            </div>
+          )}
         </CardContent>
       </Card>
 
