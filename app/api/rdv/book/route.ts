@@ -176,28 +176,60 @@ export async function POST(req: NextRequest) {
 
     // Notifications best-effort
     try {
-      const notifEmail = settings.notify_email || null
-      if (settings.notify_via_email && notifEmail) {
-        const { sendGmail } = await import('@/lib/google/gmail-client')
+      const { buildConfirmationEmail, buildOwnerNotificationEmail } = await import('@/lib/booking/emails')
+      const { sendGmail } = await import('@/lib/google/gmail-client')
+      const base_url = req.nextUrl.origin
+
+      // 1. Email de CONFIRMATION au prospect (HTML pro avec logo Lexora)
+      try {
+        const conf = buildConfirmationEmail({
+          prospect_name, prospect_email,
+          start_iso, end_iso, timezone: settings.timezone,
+          location_type: location_type as 'online' | 'in_person',
+          in_person_address: settings.in_person_address,
+          meet_url,
+          cancel_token: booking.cancellation_token,
+          base_url,
+        })
         await sendGmail(settings.owner_user_id, {
           from_email: settings.google_account_email,
-          to: [notifEmail],
-          subject: `📅 Nouveau RDV — ${prospect_name}`,
-          html: `<h2>Nouveau rendez-vous</h2>` +
-                `<p><strong>${prospect_name}</strong> (${prospect_email}) a réservé un créneau.</p>` +
-                `<p><b>Quand :</b> ${new Date(start_iso).toLocaleString('fr-FR', { timeZone: settings.timezone })}</p>` +
-                `<p><b>Lieu :</b> ${location_type === 'online' ? 'En ligne (Google Meet)' : settings.in_person_address || 'Présentiel'}</p>` +
-                (prospect_company ? `<p><b>Société :</b> ${prospect_company}</p>` : '') +
-                (prospect_phone ? `<p><b>Téléphone :</b> ${prospect_phone}</p>` : '') +
-                (notes ? `<p><b>Message :</b><br>${notes.replace(/\n/g, '<br>')}</p>` : ''),
-          text: `Nouveau RDV avec ${prospect_name} (${prospect_email}) le ${new Date(start_iso).toLocaleString('fr-FR', { timeZone: settings.timezone })}.`,
-        }).catch(() => {})
+          from_name: 'Lexora',
+          to: [prospect_email],
+          subject: conf.subject, html: conf.html, text: conf.text,
+        })
+      } catch (e: any) {
+        // eslint-disable-next-line no-console
+        console.error('[rdv/book] confirmation email fail:', e?.message || e)
       }
+
+      // 2. Email de NOTIFICATION au owner (toi)
+      const notifEmail = settings.notify_email || null
+      if (settings.notify_via_email && notifEmail) {
+        try {
+          const ownerMail = buildOwnerNotificationEmail({
+            prospect_name, prospect_email, prospect_company, prospect_phone, notes,
+            start_iso, end_iso, timezone: settings.timezone,
+            location_type: location_type as 'online' | 'in_person',
+            in_person_address: settings.in_person_address,
+            meet_url,
+            cancel_token: booking.cancellation_token,
+            base_url,
+          })
+          await sendGmail(settings.owner_user_id, {
+            from_email: settings.google_account_email,
+            from_name: 'Lexora',
+            to: [notifEmail],
+            subject: ownerMail.subject, html: ownerMail.html, text: ownerMail.text,
+          })
+        } catch { /* noop */ }
+      }
+
+      // 3. Notification Telegram interne (sobre, sans emoji)
       if (settings.notify_via_telegram) {
         await admin.from('notifications').insert({
           destinataire_id: settings.owner_user_id, destinataire_type: 'client',
           societe_id: null, type: 'booking_new',
-          titre: `📅 RDV — ${prospect_name}`,
+          titre: `Nouveau RDV — ${prospect_name}`,
           message: `${prospect_name} (${prospect_email}) — ${new Date(start_iso).toLocaleString('fr-FR', { timeZone: settings.timezone })} — ${location_type === 'online' ? 'En ligne' : 'Présentiel'}`,
           niveau: 'info', envoye_email: false, cron_name: null,
         }).then(() => {}, () => {})

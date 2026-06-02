@@ -199,13 +199,16 @@ export default function RdvPage() {
       <div className="max-w-5xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center mb-4">
-            <Calendar className="h-8 w-8" style={{ color: GOLD }} />
+          <div className="inline-flex items-center justify-center mb-5" style={{ fontFamily: "'Poppins','Helvetica Neue',Arial,sans-serif", letterSpacing: '4px', fontWeight: 800, fontSize: '24px' }}>
+            <span style={{ color: '#E8EAFC' }}>LE</span>
+            <span style={{ color: GOLD }}>X</span>
+            <span style={{ color: '#E8EAFC' }}>ORA</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{settings.page_title}</h1>
-          {settings.page_subtitle && <p className="text-lg text-white/70">{settings.page_subtitle}</p>}
+          <div className="mb-6 mx-auto" style={{ width: 48, height: 2, background: `linear-gradient(90deg, ${GOLD} 0%, transparent 100%)` }} />
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">{settings.page_title}</h1>
+          {settings.page_subtitle && <p className="text-base text-white/70 max-w-2xl mx-auto">{settings.page_subtitle}</p>}
           {settings.page_intro && (
-            <p className="mt-4 text-sm text-white/60 max-w-2xl mx-auto whitespace-pre-line">{settings.page_intro}</p>
+            <p className="mt-5 text-sm text-white/60 max-w-2xl mx-auto whitespace-pre-line leading-relaxed">{settings.page_intro}</p>
           )}
         </div>
 
@@ -304,7 +307,7 @@ export default function RdvPage() {
                     </button>
                   </div>
                   {locationType === 'in_person' && settings.in_person_address && (
-                    <p className="text-xs text-slate-500 mt-2">📍 {settings.in_person_address}</p>
+                    <p className="text-xs text-slate-500 mt-2">Lieu : {settings.in_person_address}</p>
                   )}
                 </div>
               )}
@@ -360,7 +363,7 @@ export default function RdvPage() {
           <Card className="bg-white/95 backdrop-blur">
             <CardContent className="p-8 text-center">
               <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-emerald-500" />
-              <h2 className="text-2xl font-bold mb-2" style={{ color: NAVY }}>Rendez-vous confirmé 🎉</h2>
+              <h2 className="text-2xl font-bold mb-2" style={{ color: NAVY }}>Votre rendez-vous est confirmé</h2>
               <p className="text-slate-600 mb-1">
                 {formatDateBadge(selectedDate!).weekday} {formatDateBadge(selectedDate!).day} {formatDateBadge(selectedDate!).month} · <strong>{selectedSlot.label}</strong>
               </p>
