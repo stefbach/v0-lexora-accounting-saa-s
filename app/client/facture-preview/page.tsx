@@ -415,7 +415,8 @@ function FacturePreviewContent() {
               {s.adresse && <p className="text-sm text-gray-600 whitespace-pre-line">{s.adresse}</p>}
               {s.telephone && <p className="text-sm text-gray-600">{s.telephone}</p>}
               {s.email && <p className="text-sm text-gray-600">{s.email}</p>}
-              {s.website && <p className="text-sm text-gray-600">{s.website}</p>}
+              {/* Website masqué intentionnellement (cohérence avec le PDF —
+                  voir app/api/client/factures/[id]/pdf/route.ts). */}
             </div>
           </div>
           <div className="text-right">

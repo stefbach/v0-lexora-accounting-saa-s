@@ -283,7 +283,10 @@ export async function GET(request: Request, { params }: Params) {
             soc?.ville && React.createElement(Text, { style: styles.companyInfo }, soc.ville),
             soc?.telephone && React.createElement(Text, { style: styles.companyInfo }, `Tél : ${soc.telephone}`),
             soc?.email && React.createElement(Text, { style: styles.companyInfo }, soc.email),
-            soc?.website && React.createElement(Text, { style: styles.companyInfo }, soc.website),
+            // Website société masqué intentionnellement (décision produit : éviter
+            // les confusions de site web croisé entre sociétés du même groupe,
+            // même logique que pour le logo. Le champ soc.website reste persisté.).
+            // soc?.website && React.createElement(Text, { style: styles.companyInfo }, soc.website),
             // Numero TVA Maurice (numero_tva_mra) ou VAT générique
             (soc?.numero_tva_mra || soc?.vat_number) && React.createElement(Text, { style: styles.companyInfo },
               `VAT : ${soc.numero_tva_mra || soc.vat_number}`),
