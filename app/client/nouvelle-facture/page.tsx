@@ -454,7 +454,11 @@ function NouvelleFactureContent() {
     // (remise_pct/remise_montant/notes) ou on les supprime.
     return {
       societe_id: societeId, numero_facture: numeroFacture,
-      tiers: clientNom || clientEntreprise,
+      // tiers = nom principal affiché sur la facture. Priorité à la SOCIÉTÉ
+      // (logique B2B : c'est la personne morale qui est facturée). Le nom du
+      // contact reste accessible via le champ `client.nom` du body et sera
+      // affiché en dessous sur le rendu PDF/preview (« À l'attention de »).
+      tiers: clientEntreprise || clientNom,
       description: descriptif || lignes.map(l => l.description).filter(Boolean).join(", "),
       date_facture: dateFacture, date_echeance: dateEcheance,
       devise, taux_change: tauxChange,
