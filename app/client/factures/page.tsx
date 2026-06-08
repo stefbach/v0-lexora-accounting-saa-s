@@ -624,6 +624,60 @@ function FactureList({
     }
   }
 
+  /** Repasse une facture finalisée en brouillon (et supprime ses écritures
+   *  comptables associées côté serveur — symétrique à la validation). */
+  const repasserBrouillon = async (f: Facture) => {
+    if (!confirm(
+      `Repasser la facture ${f.numero_facture || ''} en brouillon ?\n\n` +
+      `Cela supprimera ses écritures comptables associées (grand livre).\n` +
+      `Tu pourras ensuite la modifier puis la re-valider.`
+    )) return
+    setValidating(f.id)
+    try {
+      const res = await fetch('/api/client/factures', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: f.id, statut: 'brouillon' }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || 'Erreur')
+      }
+      onReload?.()
+    } catch (e: any) {
+      alert(`❌ ${e?.message || 'Erreur'}`)
+    } finally {
+      setValidating(null)
+    }
+  }
+
+  /** Supprime une facture. Pour les factures finalisées, demande une double
+   *  confirmation et passe ?force=1 (cascade des écritures comptables). */
+  const supprimerFacture = async (f: Facture) => {
+    const isDraft = f.statut === 'brouillon'
+    const message = isDraft
+      ? `Supprimer le brouillon ${f.numero_facture || ''} ?\nIl sera définitivement effacé.`
+      : `⚠️ Supprimer la facture ${f.numero_facture || ''} (${f.statut}) ?\n\n` +
+        `Ses écritures comptables seront aussi supprimées (cascade).\n` +
+        `Cette action est IRRÉVERSIBLE.`
+    if (!confirm(message)) return
+    if (!isDraft && !confirm('Confirmer la suppression définitive ?')) return
+    setValidating(f.id)
+    try {
+      const url = isDraft ? `/api/client/factures?id=${f.id}` : `/api/client/factures?id=${f.id}&force=1`
+      const res = await fetch(url, { method: 'DELETE' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || 'Erreur suppression')
+      }
+      onReload?.()
+    } catch (e: any) {
+      alert(`❌ ${e?.message || 'Erreur suppression'}`)
+    } finally {
+      setValidating(null)
+    }
+  }
+
   if (factures.length === 0) {
     return (
       <EmptyState
@@ -777,6 +831,43 @@ function FactureList({
                       onClick={() => validerBrouillon(f)}
                     >
                       {validating === f.id ? '…' : '✓ Valider'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px] border-red-300 text-red-700 hover:bg-red-50"
+                      title="Supprimer ce brouillon"
+                      disabled={validating === f.id}
+                      onClick={() => supprimerFacture(f)}
+                    >
+                      🗑️ Supprimer
+                    </Button>
+                  </>
+                )}
+                {/* Pour les factures finalisées (en_attente, partiel, retard,
+                    annulée), on permet de repasser en brouillon (avec cleanup
+                    des écritures comptables) et de supprimer (avec cascade). */}
+                {!isBrouillon && f.statut !== 'paye' && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px] border-amber-300 text-amber-700 hover:bg-amber-50"
+                      title="Repasser en brouillon (supprime les écritures comptables associées)"
+                      disabled={validating === f.id}
+                      onClick={() => repasserBrouillon(f)}
+                    >
+                      {validating === f.id ? '…' : '↩ Brouillon'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px] border-red-300 text-red-700 hover:bg-red-50"
+                      title="Supprimer cette facture (cascade des écritures)"
+                      disabled={validating === f.id}
+                      onClick={() => supprimerFacture(f)}
+                    >
+                      🗑️ Supprimer
                     </Button>
                   </>
                 )}
