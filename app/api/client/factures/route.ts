@@ -648,6 +648,22 @@ export async function PATCH(request: Request) {
       })
     }
 
+    // Symétrique : quand on repasse une facture en brouillon (depuis n'importe
+    // quel statut comptable), on nettoie les écritures qu'elle avait générées.
+    // Sinon le grand livre garderait des lignes orphelines et le bilan serait
+    // faussé. Idem que le DELETE cascade (filtre par facture_id, mig 133).
+    if (
+      existing &&
+      existing.statut !== 'brouillon' &&
+      updates.statut === 'brouillon'
+    ) {
+      try {
+        await supabase.from('ecritures_comptables_v2').delete().eq('facture_id', id)
+      } catch (e: any) {
+        console.warn('[factures PATCH] Failed to clean ecritures on revert-to-draft:', e.message)
+      }
+    }
+
     return NextResponse.json({ facture: data })
   } catch (e: any) {
     const mapped = mapSocieteAccessError(e)
