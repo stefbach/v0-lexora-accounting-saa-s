@@ -273,13 +273,9 @@ export async function GET(request: Request, { params }: Params) {
             ),
           ] : []),
           React.createElement(View, {},
-            // Logo société (mig 242, bucket societes-logos). On retire le query
-            // string de cache-busting éventuel — @react-pdf récupère via fetch
-            // serveur côté Vercel donc pas de cache navigateur à invalider.
-            soc?.logo_url && React.createElement(Image, {
-              src: String(soc.logo_url).split('?')[0],
-              style: styles.logo,
-            }),
+            // Logo société masqué intentionnellement (décision produit : éviter
+            // les confusions de logos croisés entre sociétés. Le champ
+            // soc.logo_url reste persisté en base, prêt à être réactivé.).
             React.createElement(Text, { style: styles.companyName }, soc?.nom || ''),
             // Adresse structurée société : rue + ligne 2 + ville
             soc?.adresse && React.createElement(Text, { style: styles.companyInfo }, soc.adresse),
