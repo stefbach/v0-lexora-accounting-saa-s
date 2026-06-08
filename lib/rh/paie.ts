@@ -16,13 +16,18 @@
  *     * 500 000 → 1 000 000    : 10%
  *     * > 1 000 000            : 20%
  *
- * F11 (Sprint bugs paie/conges) — DEUX bases de calcul distinctes :
- *   base_csg_nsf = salaire_base (basic seul) - prorata absence sur basic
- *                → utilisée pour CSG et NSF (salarié ET patronal)
- *   base_paye    = salaire_brut_base (basic + allowances) - deductionAbsence
- *                → utilisée pour PAYE
- * Les allowances (électricité, spéciale, transport, etc.) sont donc
- * EXCLUES de la base CSG/NSF mais INCLUSES dans la base PAYE.
+ * FIX juin 2026 — base_csg_nsf = base_paye (= salaire_brut_base - absences)
+ *   Les allowances (électricité, spéciale, transport, etc.) sont INCLUSES
+ *   dans la base CSG/NSF, conformément aux CSG Regulations 2020 s.150
+ *   modifiée et au MRA Joint Statement Dec 2024 : les "monthly emoluments"
+ *   soumises à CSG/NSF englobent salaire, allowances, overtime et bonus,
+ *   sauf exemptions spécifiques (EOY bonus déclaré séparément, Special
+ *   Allowance 2024 gouvernementale, travelling allowance ≤ Rs 11 500).
+ *   Le EOY bonus est exclu naturellement (il est ajouté à salaire_brut
+ *   après salaire_brut_base et déclaré en colonne séparée du PACO).
+ *
+ *   AVANT (F11) : base_csg_nsf = salaire_base seul → sous-déclaration
+ *   systématique des cotisations sur les sociétés à fortes allowances.
  *
  * F10 — La deductionAbsence (UL + absences injustifiées) réduit les bases
  * de cotisation (un employé absent paie moins de CSG/NSF/PAYE).
@@ -160,29 +165,14 @@ export function calculerBulletin(
 
   const salaire_brut = salaire_brut_base + eoy_bonus
 
-  // F11 — Règle MRA officielle (sources : MRA + Rogers Capital + bulletins
-  // payrollmauritius.com) : CSG et NSF sont calculés sur le SALAIRE_BASE
-  // UNIQUEMENT (basic salary), PAS sur le salaire_brut qui inclut les
-  // allowances (électricité, spéciale, transport, etc.).
-  // PAYE reste calculé sur les emoluments totaux (brut - absences).
-  //
-  // G1 — Le cash-in-lieu (CIL, paiement de jours de congé non pris) est
-  // assimilé à du salary normal pour CSG/NSF (les jours non pris auraient
-  // été payés comme du basic). On l'ajoute donc au numérateur de la base
-  // CSG/NSF.
-  //
-  // Quand un employé est absent, la déduction vient proportionnellement
-  // du basic ET des allowances → on prorate l'absence pour déterminer la
-  // part à retrancher du basic dans la base CSG/NSF.
-  const basicAvecCil = salaire_base + (cashInLieuMontant || 0)
-  const ratioBasicSurBrut = salaire_brut_base > 0 ? basicAvecCil / salaire_brut_base : 0
-  const prorataAbsenceBasic = (deductionAbsence || 0) * ratioBasicSurBrut
-
-  // Base CSG/NSF = (salaire_base + CIL) - prorata_absence_basic.
-  const base_csg_nsf = Math.max(0, basicAvecCil - prorataAbsenceBasic)
-
   // Base PAYE = salaire_brut_base (basic + allowances + CIL) - deductionAbsence.
   const base_paye = Math.max(0, salaire_brut_base - (deductionAbsence || 0))
+
+  // FIX juin 2026 — Base CSG/NSF alignée sur base_paye, conformément aux
+  // CSG Regulations 2020 s.150 modifiée (toutes "monthly emoluments" sont
+  // soumises sauf EOY bonus déclaré séparément et exemptions spécifiques).
+  // Les allowances (électricité, transport, special, etc.) sont incluses.
+  const base_csg_nsf = base_paye
 
   // Alias rétrocompat (certains appelants externes peuvent utiliser ce nom).
   const salaire_imposable = base_paye
