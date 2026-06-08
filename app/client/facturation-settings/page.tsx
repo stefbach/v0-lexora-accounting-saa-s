@@ -434,16 +434,27 @@ export default function FacturationSettingsPage() {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data?.error || t('inv.fs.persist_err_default', locale))
+        // Vérification anti-silencieux : si l'API a renvoyé un objet sans le
+        // nom qu'on a envoyé (ex. trigger DB qui annule, RLS qui filtre),
+        // on remonte une erreur explicite plutôt que de prétendre "saved".
+        const savedNom = data?.societe?.nom ?? data?.nom
+        if (settings.nom && savedNom !== undefined && String(savedNom).trim() !== String(settings.nom).trim()) {
+          throw new Error(`Le nom n'a pas été enregistré côté serveur (attendu : « ${settings.nom} », reçu : « ${savedNom || '∅'} »). Vérifie qu'une autre session ne réécrit pas la société, ou recharge la page.`)
+        }
         await refresh()
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2000)
       } catch (e: any) {
         setPersistError(e?.message || t('inv.fs.persist_err_db', locale))
+        // Pas de setSaved(true) en cas d'erreur — le user doit voir clair.
       } finally {
         setPersisting(false)
       }
+    } else {
+      // Pas de societeId → on ne peut rien persister, on signale.
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
     }
-
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
   }, [settings, clients, catalogue, selectedTemplate, templateColors, mraActive, mraEbsId, mraApiKey, mraEnvironment, mraApiUrl, societeId, refresh])
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -528,9 +539,9 @@ export default function FacturationSettingsPage() {
       actions={
         <div className="flex items-center gap-3">
           {persistError && (
-            <span className="text-xs text-red-600 max-w-xs truncate" title={persistError}>
-              ⚠ {persistError}
-            </span>
+            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 max-w-2xl">
+              <strong>Sauvegarde refusée par le serveur :</strong> {persistError}
+            </div>
           )}
           <Button onClick={saveAll} disabled={persisting} className="bg-[#0B0F2E] hover:bg-[#2a3d6b]">
             {persisting ? (
