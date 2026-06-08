@@ -161,10 +161,12 @@ export async function POST(request: Request) {
       lignes = [], conditions_paiement = 30, termes, template = 'standard', template_id = null,
       client_offshore = false, remise_pct = 0, remise_montant = 0,
       recurrent = false, recurrent_frequence, logo_url,
-      mode_paiement = 'banque', paye_par, contact_id,
+      mode_paiement = 'banque', paye_par, contact_id: contactIdFromBody,
       type_document = 'facture', facture_reference_id,
       recurrence_jour_du_mois, recurrence_date_debut, recurrence_date_fin,
+      client,
     } = body
+    let contact_id: string | null = contactIdFromBody || null
 
     if (!societe_id || !date_facture) {
       return NextResponse.json({ error: 'societe_id et date_facture requis' }, { status: 400 })
@@ -325,6 +327,61 @@ export async function POST(request: Request) {
             }
           }
         }
+      }
+    }
+
+    // ── Persistance des champs client saisis à la volée ────────────────────
+    // Bug remonté : sur /client/nouvelle-facture, quand l'utilisateur saisit
+    // un client sans sélectionner un contact existant (nom, entreprise,
+    // adresse, email, vat_number, téléphone), seul `tiers` était persisté.
+    // adresse/email/vat/téléphone étaient envoyés dans `body.client` mais
+    // jetés silencieusement (la table factures n'a pas ces colonnes).
+    //
+    // Fix : si body.client contient des données et qu'aucun contact_id n'a
+    // été choisi, on matérialise (ou réutilise) un factures_contacts et on
+    // lie la facture via contact_id. Le PDF et le preview lisent déjà ce
+    // contact lié et affichent tous les champs proprement.
+    if (!contact_id && client && (client.nom || client.entreprise)) {
+      try {
+        const clientPayload: Record<string, any> = {
+          societe_id,
+          nom: String(client.nom || client.entreprise || '').slice(0, 200),
+          entreprise: client.entreprise ? String(client.entreprise).slice(0, 200) : null,
+          adresse: client.adresse ? String(client.adresse).slice(0, 500) : null,
+          email: client.email ? String(client.email).toLowerCase().slice(0, 200) : null,
+          telephone: client.telephone ? String(client.telephone).slice(0, 40) : null,
+          vat_number: client.vat_number ? String(client.vat_number).slice(0, 40) : null,
+          offshore: !!client.offshore,
+        }
+        // Réutilise un contact existant si match exact sur (entreprise + email)
+        // ou (nom + email). Évite de polluer l'annuaire de doublons.
+        let existing: any = null
+        if (clientPayload.email) {
+          const matchCol = clientPayload.entreprise ? 'entreprise' : 'nom'
+          const matchVal = clientPayload.entreprise || clientPayload.nom
+          const r = await supabase
+            .from('factures_contacts')
+            .select('id')
+            .eq('societe_id', societe_id)
+            .eq('email', clientPayload.email)
+            .ilike(matchCol, matchVal)
+            .limit(1)
+            .maybeSingle()
+          existing = r.data
+        }
+        if (existing?.id) {
+          // Met à jour le contact existant avec les champs fournis (corrige
+          // une adresse, ajoute une TVA, etc.) plutôt que créer un doublon.
+          await supabase.from('factures_contacts').update(clientPayload).eq('id', existing.id)
+          contact_id = existing.id as string
+        } else {
+          const ins = await supabase.from('factures_contacts').insert(clientPayload).select('id').single()
+          if (ins.data?.id) contact_id = ins.data.id as string
+        }
+      } catch (e: any) {
+        // Best-effort : si la création de contact rate (colonne manquante,
+        // RLS, etc.), la facture est quand même créée avec son `tiers` texte.
+        console.warn('[factures POST] factures_contacts auto-create failed:', e?.message || e)
       }
     }
 
