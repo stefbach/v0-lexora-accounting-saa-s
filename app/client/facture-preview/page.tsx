@@ -441,8 +441,14 @@ function FacturePreviewContent() {
                 champs legacy si pas de contact lié. */}
             {(() => {
               const ct = data.contact
-              const nom = ct?.entreprise || ct?.nom || c.nom || c.entreprise || data.tiers || "-"
-              const sousNom = ct?.entreprise && ct?.nom && ct.nom !== ct.entreprise ? ct.nom : null
+              // Priorité société (B2B) : entreprise en gros, nom du contact en
+              // sous-titre. Cohérent avec la logique de stockage (tiers =
+              // clientEntreprise || clientNom dans nouvelle-facture).
+              const nom = ct?.entreprise || ct?.nom || c.entreprise || c.nom || data.tiers || "-"
+              const sousNom =
+                (ct?.entreprise && ct?.nom && ct.nom !== ct.entreprise) ? ct.nom
+                : (c.entreprise && c.nom && c.nom !== c.entreprise) ? c.nom
+                : null
               const adresse = ct?.adresse || c.adresse
               const villeLine = ct && (ct.code_postal || ct.ville)
                 ? [ct.code_postal, ct.ville].filter(Boolean).join(' ')
