@@ -172,7 +172,7 @@ export default defineConfig({
         'lib/accounting/semantic-rapprochement.ts',
         'lib/accounting/lettrage.ts',
         'lib/accounting/historical-rates.ts',
-        'lib/accounting/comptes-bancaires.ts',
+        // 'lib/accounting/comptes-bancaires.ts' — RÉINTÉGRÉ (pur, couvert).
         'lib/accounting/period-lock.ts',
         // classification-engine.ts & validate-bank-currency.ts — RÉINTÉGRÉS au
         // gate (purs, couverts par leurs *.test.ts).
