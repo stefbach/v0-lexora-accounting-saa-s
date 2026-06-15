@@ -174,8 +174,8 @@ export default defineConfig({
         'lib/accounting/historical-rates.ts',
         'lib/accounting/comptes-bancaires.ts',
         'lib/accounting/period-lock.ts',
-        'lib/accounting/classification-engine.ts',
-        'lib/accounting/validate-bank-currency.ts',
+        // classification-engine.ts & validate-bank-currency.ts — RÉINTÉGRÉS au
+        // gate (purs, couverts par leurs *.test.ts).
         'lib/audit/intercompany-reconciliation.ts',
         'lib/jurisdictions/ohada/payroll/**',
         'lib/jurisdictions/ohada/statements/notes-annexes.ts',
