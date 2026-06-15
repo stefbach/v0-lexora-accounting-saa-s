@@ -944,9 +944,15 @@ function LinkFacturesDialog({
       })
     } else {
       n.add(fid)
-      // Montant affecté par défaut = solde restant de la facture.
+      // Montant par défaut = reste À RÉPARTIR du prélèvement, plafonné au solde
+      // de la facture (un virement plus petit se règle partiellement en 1 clic).
       const f = factures.find((x) => x.id === fid)
-      if (f) setAmounts((prev) => ({ ...prev, [fid]: String(Math.round(remainingOf(f) * 100) / 100) }))
+      if (f) {
+        const usedByOthers = selectedFactures.reduce((s, x) => s + allocAmount(x), 0)
+        const residual = Math.round((txAmount - usedByOthers) * 100) / 100
+        const def = residual > 0 ? Math.min(remainingOf(f), residual) : remainingOf(f)
+        setAmounts((prev) => ({ ...prev, [fid]: String(Math.round(def * 100) / 100) }))
+      }
     }
     setSelectedFids(n)
   }
@@ -967,11 +973,33 @@ function LinkFacturesDialog({
   const hasPartial = selectedFactures.some((f) => allocAmount(f) < remainingOf(f) - 0.01)
   const anyOverSolde = selectedFactures.some((f) => allocAmount(f) > remainingOf(f) + 1)
   const anyNonPositive = selectedFactures.some((f) => allocAmount(f) <= 0)
-  // En mode répartition (partiel), le total affecté doit ≈ le prélèvement.
-  const allocValid = !anyOverSolde && !anyNonPositive && Math.abs(diffAlloc) <= 1
+  // L'écart (somme affectée − prélèvement) est autorisé : booké en
+  // change/frais/acompte côté serveur. On ne bloque plus que les vraies erreurs.
+  const allocValid = !anyOverSolde && !anyNonPositive
+  // Traitement d'écart (affichage) — miroir de la logique serveur.
+  const ecartTreatment = (() => {
+    if (Math.abs(diffAlloc) <= 1) return null
+    const ecartBrut = -diffAlloc // somme − prélèvement (A − P)
+    const anyDevise = selectedFactures.some((f) => (f.devise || "MUR").toUpperCase() !== "MUR")
+    const seuil = Math.max(50, 0.02 * txAmount)
+    const allClient = selectedFactures.every((f) => f.type_facture !== "fournisseur")
+    let compte: string
+    let libelle: string
+    if (ecartBrut > 0) {
+      compte = anyDevise ? "656" : "6270"
+      libelle = anyDevise ? "écart de change (perte)" : "frais bancaires"
+    } else if (Math.abs(ecartBrut) > seuil) {
+      compte = allClient ? "4191" : "409"
+      libelle = allClient ? "acompte client" : "avance fournisseur"
+    } else {
+      compte = anyDevise ? "756" : "6270"
+      libelle = anyDevise ? "écart de change (gain)" : "écart"
+    }
+    return { ecartBrut, compte, libelle }
+  })()
 
   const handleConfirmClick = () => {
-    if (hasPartial) {
+    if (hasPartial || ecartTreatment) {
       onConfirm({
         partiel: true,
         allocations: selectedFactures.map((f) => ({
@@ -1192,15 +1220,18 @@ function LinkFacturesDialog({
           </div>
         )}
 
-        {hasPartial && !allocValid && (
+        {!allocValid ? (
           <p className="text-xs text-rose-700">
             {anyOverSolde
               ? "Un montant dépasse le solde restant de sa facture."
-              : anyNonPositive
-                ? "Chaque montant affecté doit être strictement positif."
-                : "Le total affecté doit être égal au montant du prélèvement (± 1 MUR)."}
+              : "Chaque montant affecté doit être strictement positif."}
           </p>
-        )}
+        ) : ecartTreatment ? (
+          <p className="text-xs text-amber-800">
+            Écart de {fmt(Math.abs(ecartTreatment.ecartBrut))} MUR → comptabilisé en{" "}
+            <span className="font-mono">{ecartTreatment.compte}</span> ({ecartTreatment.libelle}).
+          </p>
+        ) : null}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={loading}>
@@ -1208,13 +1239,18 @@ function LinkFacturesDialog({
           </Button>
           <Button
             onClick={handleConfirmClick}
-            disabled={loading || selectedFids.size === 0 || (hasPartial && !allocValid)}
+            disabled={loading || selectedFids.size === 0 || !allocValid}
             className="bg-green-600 hover:bg-green-700 text-white"
           >
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                {hasPartial ? "Enregistrement…" : "Liaison…"}
+                {hasPartial || ecartTreatment ? "Enregistrement…" : "Liaison…"}
+              </>
+            ) : ecartTreatment ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                Solder + écart → {ecartTreatment.compte} ({selectedFactures.length})
               </>
             ) : hasPartial ? (
               <>

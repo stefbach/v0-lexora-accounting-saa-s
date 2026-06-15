@@ -2741,15 +2741,37 @@ export async function POST(request: Request) {
         finalAllocs.push({ facture: f, montantMur, remaining })
       }
 
-      // La somme des affectations doit ≈ le montant du prélèvement (le
-      // virement doit être entièrement réparti).
+      // La somme des affectations PEUT différer du montant du prélèvement :
+      // l'écart (change / frais retenus / acompte) est comptabilisé sur une
+      // 3e ligne BNQ équilibrée (cf. ecartInfo plus bas). Routage validé :
+      //   • A > P (on solde plus que reçu)            → perte : 656 (devise) / 6270 (MUR)
+      //   • A < P, petit écart (≤ max(50, 2%))        → gain : 756 (devise) / 6270 (MUR)
+      //   • A < P, surplus important (> max(50, 2%))  → acompte 4191 (client) / 409 (fournisseur)
       const sommeAllocsP = Math.round(finalAllocs.reduce((s, x) => s + x.montantMur, 0) * 100) / 100
-      if (Math.abs(sommeAllocsP - txAmountP) > TOL_PARTIEL) {
-        return NextResponse.json({
-          error: `Total des affectations (${sommeAllocsP.toFixed(2)} MUR) ≠ montant du prélèvement (${txAmountP.toFixed(2)} MUR). Écart > ${TOL_PARTIEL} MUR.`,
-          total_affecte: sommeAllocsP,
-          montant_prelevement: txAmountP,
-        }, { status: 400 })
+      const ecartBrut = Math.round((sommeAllocsP - txAmountP) * 100) / 100 // A − P (signé)
+      const TOL_ECART = 1
+      const cashIn = (Number(prevTxP.credit) || 0) >= (Number(prevTxP.debit) || 0) // crédit = encaissement client
+      let ecartInfo: { compte: string; montant: number; libelle: string } | null = null
+      if (Math.abs(ecartBrut) > TOL_ECART) {
+        const anyDevise = finalAllocs.some((a) => {
+          const d = String(a.facture.devise || 'MUR').toUpperCase()
+          return d.length > 0 && d !== 'MUR'
+        })
+        const seuilAcompte = Math.max(50, 0.02 * txAmountP)
+        const allClient = finalAllocs.every((a) => a.facture.type_facture !== 'fournisseur')
+        let compte: string
+        let libelle: string
+        if (ecartBrut > 0) {
+          compte = anyDevise ? '656' : '6270'
+          libelle = anyDevise ? 'Écart de change réalisé (perte)' : 'Frais bancaires sur règlement'
+        } else if (Math.abs(ecartBrut) > seuilAcompte) {
+          compte = allClient ? '4191' : '409'
+          libelle = allClient ? 'Acompte client reçu' : 'Avance versée fournisseur'
+        } else {
+          compte = anyDevise ? '756' : '6270'
+          libelle = anyDevise ? 'Écart de change réalisé (gain)' : 'Écart sur règlement'
+        }
+        ecartInfo = { compte, montant: Math.abs(ecartBrut), libelle }
       }
 
       // Compte bancaire pour les BNQ
@@ -2839,6 +2861,36 @@ export async function POST(request: Request) {
           }
         }
 
+        // 3) Ligne d'écart BNQ (change 656/756 · frais 6270 · acompte 4191/409)
+        // — équilibrée (512 ↔ compte d'écart), insérée seulement si la somme
+        // affectée diffère réellement du prélèvement. Garantit que le 512 net
+        // = le cash réellement mouvementé, et que le journal reste équilibré.
+        if (ecartInfo) {
+          const e = ecartInfo.montant
+          const debit512 = cashIn ? (ecartBrut < 0 ? e : 0) : (ecartBrut > 0 ? e : 0)
+          const credit512 = cashIn ? (ecartBrut > 0 ? e : 0) : (ecartBrut < 0 ? e : 0)
+          const refEcart = `BANK-${releve_id}-${txIdxP}-ECART`
+          const exerciceE = String(datePayP).slice(0, 4)
+          const descEcart = `${ecartInfo.libelle} — règlement ${libellePrev.slice(0, 60)}`.trim()
+          const { error: ecartErr } = await supabase.from('ecritures_comptables_v2').insert([
+            {
+              societe_id, journal: 'BNQ', date_ecriture: datePayP, exercice: exerciceE,
+              numero_compte: compteBanqueP, debit_mur: debit512, credit_mur: credit512,
+              libelle: descEcart, description: descEcart, ref_folio: refEcart,
+            },
+            {
+              societe_id, journal: 'BNQ', date_ecriture: datePayP, exercice: exerciceE,
+              numero_compte: ecartInfo.compte, debit_mur: credit512, credit_mur: debit512,
+              libelle: descEcart, description: descEcart, ref_folio: refEcart,
+            },
+          ])
+          if (ecartErr) throw new Error(`Écriture d'écart (${ecartInfo.compte}): ${ecartErr.message}`)
+          rollbackP.unshift(async () => {
+            await supabase.from('ecritures_comptables_v2').delete()
+              .eq('societe_id', societe_id).eq('ref_folio', refEcart)
+          })
+        }
+
         // Marquer la transaction bancaire rapprochée (répartie/partielle)
         txsP[txIdxP] = {
           ...prevTxP,
@@ -2891,6 +2943,9 @@ export async function POST(request: Request) {
           lettre: lettresParFacture[0] || null,
           nb_factures: finalAllocs.length,
           montant_total: sommeAllocsP,
+          ecart: ecartInfo
+            ? { compte: ecartInfo.compte, montant: Math.round(ecartBrut * 100) / 100, libelle: ecartInfo.libelle }
+            : null,
           factures: (factsAfter || []).map((f: any) => ({
             id: f.id,
             numero_facture: f.numero_facture,
