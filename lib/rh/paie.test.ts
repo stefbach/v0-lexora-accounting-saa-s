@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest"
 import {
   calculerBulletin,
+  calculerBulletinDevise,
+  calculerTreizMois,
   calculerPAYE,
   calculerNIT,
   calculerPRGF,
@@ -147,5 +149,40 @@ describe("calculerBulletin — invariants", () => {
     expect(r.salaire_brut).toBe(0)
     expect(r.total_deductions).toBe(0)
     expect(r.salaire_net).toBe(0)
+  })
+})
+
+describe("calculerTreizMois — 13e mois (WRA S.52)", () => {
+  it("total au prorata des mois travaillés", () => {
+    expect(calculerTreizMois(30000, 12, "total")).toBe(30000)
+    expect(calculerTreizMois(30000, 6, "total")).toBe(15000)
+  })
+  it("tranches 75% / 25% somment au total", () => {
+    const base = 30000
+    const t75 = calculerTreizMois(base, 12, "75pct")
+    const t25 = calculerTreizMois(base, 12, "25pct")
+    expect(t75).toBe(22500)
+    expect(t25).toBe(7500)
+    expect(Math.round((t75 + t25) * 100) / 100).toBe(calculerTreizMois(base, 12, "total"))
+  })
+  it("arrondi 2 décimales", () => {
+    expect(calculerTreizMois(33333, 7)).toBe(Math.round((33333 / 12) * 7 * 100) / 100)
+  })
+})
+
+describe("calculerBulletinDevise — salaire en EUR converti MUR", () => {
+  it("MUR : pas de conversion", async () => {
+    const r = await calculerBulletinDevise({ salaire_base: 40000 }, "MUR")
+    expect(r.devise_info.devise).toBe("MUR")
+    expect(r.salaire_brut).toBeCloseTo(40000, 2)
+  })
+  it("EUR : salaire converti au taux, info devise renseignée", async () => {
+    const taux = 46.5
+    const r = await calculerBulletinDevise({ salaire_base: 1000 }, "EUR", taux)
+    expect(r.devise_info.devise).toBe("EUR")
+    expect(r.devise_info.montant_eur).toBe(1000)
+    expect(r.devise_info.taux_applique).toBe(taux)
+    // salaire_brut en MUR = 1000 × 46.5
+    expect(r.salaire_brut).toBeCloseTo(46500, 0)
   })
 })

@@ -158,7 +158,8 @@ export default defineConfig({
         'lib/rh/calendarWorkingDays.ts',
         'lib/rh/contractsTemplates.ts',
         'lib/rh/overtime.ts',
-        'lib/rh/paie.ts',
+        // 'lib/rh/paie.ts' — RÉINTÉGRÉ au gate de couverture : moteur de paie
+        // critique désormais couvert à ≥ 94% par lib/rh/paie.test.ts.
         'lib/rh/accrual-mensuel.ts',
         'lib/rh/periode-paie.ts',
         'lib/rh/ownership.ts',
