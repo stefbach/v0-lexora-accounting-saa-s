@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { ParseAmountError, parseAmount, parseAmountSafe, resolveTransactionAmounts } from "./bank-amount"
+import { ParseAmountError, parseAmount, parseAmountSafe, resolveTransactionAmounts, resolveTransactionDate } from "./bank-amount"
 
 describe("parseAmount — Anglo-Saxon format (1,234.56)", () => {
   it("parses US standard '1,234.56'", () => {
@@ -305,5 +305,27 @@ describe("resolveTransactionAmounts — *_mur shape (MUR statements)", () => {
 
   it("still returns {0,0} when only montant_origine with no side info", () => {
     expect(resolveTransactionAmounts({ debit: 0, credit: 0, montant_origine: 50 })).toEqual({ debit: 0, credit: 0 })
+  })
+})
+
+describe("resolveTransactionDate — canonical date field", () => {
+  it("returns date when present", () => {
+    expect(resolveTransactionDate({ date: "2026-01-28" })).toBe("2026-01-28")
+  })
+  it("falls back to date_transaction (MUR statements)", () => {
+    expect(resolveTransactionDate({ date_transaction: "2025-07-01" })).toBe("2025-07-01")
+  })
+  it("falls back to trans_date (some EUR statements)", () => {
+    expect(resolveTransactionDate({ trans_date: "2025-09-15" })).toBe("2025-09-15")
+  })
+  it("prefers date over the fallbacks", () => {
+    expect(resolveTransactionDate({ date: "2026-01-01", date_transaction: "2025-01-01", trans_date: "2024-01-01" })).toBe("2026-01-01")
+  })
+  it("uses value/settlement date only as last resort", () => {
+    expect(resolveTransactionDate({ value_date: "2025-08-02" })).toBe("2025-08-02")
+    expect(resolveTransactionDate({ date_valeur: "2025-08-02" })).toBe("2025-08-02")
+  })
+  it("returns '' when no date field is present", () => {
+    expect(resolveTransactionDate({ libelle: "x" } as any)).toBe("")
   })
 })

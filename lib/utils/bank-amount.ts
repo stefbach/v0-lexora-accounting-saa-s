@@ -239,6 +239,31 @@ export function resolveTransactionAmounts(tx: {
 }
 
 /**
+ * Canonical transaction date from the varying field names the extractor emits.
+ *
+ * The bank-statement prompt is not consistent across runs: MUR statements use
+ * `date_transaction`, some EUR statements use `trans_date`, others use `date`.
+ * The reconciliation engine reads `tx.date` everywhere (date_ecriture, matching),
+ * so a transaction whose date sits under a different key shows up with a MISSING
+ * or wrong date once reconciled. Persist this canonical value into `date` so the
+ * downstream code has a single field to rely on. Prefers the operation date over
+ * the value/settlement date. Returns '' when nothing usable is present.
+ */
+export function resolveTransactionDate(tx: {
+  date?: unknown
+  date_transaction?: unknown
+  trans_date?: unknown
+  date_operation?: unknown
+  value_date?: unknown
+  date_valeur?: unknown
+}): string {
+  const cand =
+    tx.date ?? tx.date_transaction ?? tx.trans_date ?? tx.date_operation ?? tx.value_date ?? tx.date_valeur
+  if (cand == null) return ""
+  return typeof cand === "string" ? cand.trim() : String(cand)
+}
+
+/**
  * Safe variant: returns 0 AND logs a console.warn when parsing fails.
  * Use when degrading gracefully is preferable to blocking the caller
  * (e.g. best-effort display), but prefer `parseAmount` on ingestion paths

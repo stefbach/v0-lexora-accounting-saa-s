@@ -11,7 +11,7 @@ import {
   compareCurrency,
   type Currency,
 } from '@/lib/accounting/validate-bank-currency'
-import { parseAmount, parseAmountSafe, ParseAmountError, resolveTransactionAmounts } from '@/lib/utils/bank-amount'
+import { parseAmount, parseAmountSafe, ParseAmountError, resolveTransactionAmounts, resolveTransactionDate } from '@/lib/utils/bank-amount'
 import { getCompteComptable } from '@/lib/accounting/comptes-bancaires'
 import { upsertReleveBancaire } from '@/lib/bank/upsert-releve'
 
@@ -2364,6 +2364,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               ? rawTransactions.map((t: any) => ({
                   ...t,
                   ...resolveTransactionAmounts(t),
+                  date: resolveTransactionDate(t),
                 }))
               : lignesAsTransactions
 

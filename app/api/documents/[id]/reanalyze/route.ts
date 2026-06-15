@@ -5,7 +5,7 @@ import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTE
 import type { PromptId } from '@/lib/ai/prompts'
 import { isBankName, validateAndCleanExtraction, computeConfidence, repairBankJSON } from '@/lib/utils/bank-utils'
 import { extractBankStatement } from '@/lib/ai/bank-statement-extraction'
-import { resolveTransactionAmounts } from '@/lib/utils/bank-amount'
+import { resolveTransactionAmounts, resolveTransactionDate } from '@/lib/utils/bank-amount'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -635,7 +635,7 @@ export async function POST(
       }))
       // Fallback montant_origine/sens pour relevés en devise étrangère (sinon 0).
       const normalizedTransactions = rawTransactions.length > 0
-        ? rawTransactions.map((t: any) => ({ ...t, ...resolveTransactionAmounts(t) }))
+        ? rawTransactions.map((t: any) => ({ ...t, ...resolveTransactionAmounts(t), date: resolveTransactionDate(t) }))
         : lignesAsTransactions
 
       const totalDebits = Number(finalExtraction.total_debits) ||
