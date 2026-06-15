@@ -29,6 +29,7 @@
 
 import { getCompteComptable } from "@/lib/accounting/comptes-bancaires"
 import { isBankName } from "@/lib/utils/bank-utils"
+import { resolveTransactionDate } from "@/lib/utils/bank-amount"
 import { upsertReleveBancaire } from "@/lib/bank/upsert-releve"
 
 // -----------------------------------------------------------------------------
@@ -58,6 +59,11 @@ export interface ReleveExtraction {
   // Two possible shapes — Claude OCR is allowed to use either. We normalise both.
   transactions?: Array<{
     date?: string
+    date_transaction?: string
+    trans_date?: string
+    date_operation?: string
+    value_date?: string
+    date_valeur?: string
     libelle?: string
     debit?: number | string
     credit?: number | string
@@ -279,7 +285,7 @@ export async function processReleveBancaire(
             }
           }
           return {
-            date: t.date || "",
+            date: resolveTransactionDate(t),
             libelle: t.libelle || "",
             debit,
             credit,
