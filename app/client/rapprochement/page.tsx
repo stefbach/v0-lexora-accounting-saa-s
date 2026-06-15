@@ -2217,6 +2217,12 @@ function AffectDialog({
                   const fAmt = Number(f.montant_mur) || Number(f.montant_ttc) || 0
                   const ecart = Math.abs(fAmt - targetAmount)
                   const ecartPct = targetAmount > 0 ? (ecart / targetAmount) * 100 : 0
+                  // En multi-devises, l'écart MUR n'est PAS un impayé : le
+                  // montant_mur de la facture est figé à un taux qui diffère du
+                  // taux réel du virement. On l'étiquette « écart de change »
+                  // (neutre) au lieu d'un faux « impayé X% » rouge.
+                  const sameDevise =
+                    (f.devise || "MUR").toUpperCase() === (tx.devise || "MUR").toUpperCase()
                   const checked = selectedFids.has(f.id)
                   return (
                     <label
@@ -2255,13 +2261,22 @@ function AffectDialog({
                           {fmt(f.montant_ttc)} {f.devise || "MUR"}
                         </p>
                         {ecartPct > 0.5 && (
-                          <p
-                            className={`text-[10px] font-mono ${
-                              ecartPct > 5 ? "text-red-700" : "text-amber-700"
-                            }`}
-                          >
-                            {t('acc.rap.gap_short', locale)} {ecartPct.toFixed(1)}%
-                          </p>
+                          sameDevise ? (
+                            <p
+                              className={`text-[10px] font-mono ${
+                                ecartPct > 5 ? "text-red-700" : "text-amber-700"
+                              }`}
+                            >
+                              {t('acc.rap.gap_short', locale)} {ecartPct.toFixed(1)}%
+                            </p>
+                          ) : (
+                            <p
+                              className="text-[10px] font-mono text-amber-700"
+                              title="Devise différente du virement : cet écart est probablement un écart de change, pas un impayé."
+                            >
+                              écart de change ≈ {fmt(ecart)} MUR
+                            </p>
+                          )
                         )}
                       </div>
                       </div>
@@ -2294,6 +2309,25 @@ function AffectDialog({
                           {partial && !over && (
                             <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 border-amber-300">partiel</Badge>
                           )}
+                          {/* Devise ≠ + reste à régler : raccourci pour SOLDER la
+                              facture en imputant son solde complet. La différence
+                              avec le virement part en écart de change (656/766).
+                              Le défaut reste « partiel » — l'utilisateur choisit. */}
+                          {partial && !over &&
+                            (f.devise || "MUR").toUpperCase() !== (tx.devise || "MUR").toUpperCase() && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setAmounts((prev) => ({
+                                    ...prev,
+                                    [f.id]: String(Math.round(reste * 100) / 100),
+                                  }))
+                                }
+                                className="ml-1 text-[10px] text-blue-600 underline hover:text-blue-800"
+                              >
+                                solder (écart de change)
+                              </button>
+                            )}
                         </div>
                         <Input
                           type="number"
