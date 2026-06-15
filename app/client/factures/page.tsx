@@ -49,6 +49,7 @@ import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
 import { PaiementFactureDialog } from "@/components/client/PaiementFactureDialog"
 import { ReglerHorsBanqueDialog } from "@/components/factures/ReglerHorsBanqueDialog"
+import { AffecterReglementDialog } from "@/components/factures/AffecterReglementDialog"
 
 interface Facture {
   id: string
@@ -132,6 +133,7 @@ export default function ClientFacturesPage() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [paiementFacture, setPaiementFacture] = useState<Facture | null>(null)
   const [horsBanqueFacture, setHorsBanqueFacture] = useState<Facture | null>(null)
+  const [reglementFacture, setReglementFacture] = useState<Facture | null>(null)
   // Sélection multi-facture pour export PDF batch — Set d'IDs sélectionnés.
   // Réinitialisé à chaque rechargement (load) pour éviter d'exporter des
   // factures qui auraient disparu côté serveur.
@@ -532,16 +534,16 @@ export default function ClientFacturesPage() {
                 </div>
 
                 <TabsContent value="toutes" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onRapprocher={setReglementFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
                 <TabsContent value="client" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onRapprocher={setReglementFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
                 <TabsContent value="fournisseur" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onRapprocher={setReglementFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
                 <TabsContent value="brouillons" className="mt-0 p-0">
-                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+                  <FactureList factures={filtered} onEnregistrerPaiement={setPaiementFacture} onReglerHorsBanque={setHorsBanqueFacture} onRapprocher={setReglementFacture} onReload={load} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
                 </TabsContent>
               </Tabs>
             </Card>
@@ -580,6 +582,14 @@ export default function ClientFacturesPage() {
           load()
         }}
       />
+
+      <AffecterReglementDialog
+        facture={reglementFacture}
+        societeId={societeId || null}
+        open={!!reglementFacture}
+        onOpenChange={(open) => { if (!open) setReglementFacture(null) }}
+        onDone={load}
+      />
     </ClientPageShell>
   )
 }
@@ -588,6 +598,7 @@ function FactureList({
   factures,
   onEnregistrerPaiement,
   onReglerHorsBanque,
+  onRapprocher,
   onReload,
   selectedIds,
   onToggleSelect,
@@ -595,6 +606,7 @@ function FactureList({
   factures: Facture[]
   onEnregistrerPaiement?: (f: Facture) => void
   onReglerHorsBanque?: (f: Facture) => void
+  onRapprocher?: (f: Facture) => void
   onReload?: () => void
   selectedIds?: Set<string>
   onToggleSelect?: (id: string) => void
@@ -948,6 +960,17 @@ function FactureList({
                 >
                   <Wallet className="h-3 w-3 mr-1" />
                   Hors banque
+                </Button>
+              )}
+              {canPay && onRapprocher && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px] mt-1 border-blue-300 text-blue-700 hover:bg-blue-50"
+                  onClick={() => onRapprocher(f)}
+                  title="Affecter un virement bancaire à cette facture"
+                >
+                  💳 Rapprocher
                 </Button>
               )}
               {/* Bouton MRA Fiscaliser — uniquement factures clients non

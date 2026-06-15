@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Search, Plus, Loader2, FileText, TrendingUp, Clock, AlertCircle, Wallet, Download } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { ReglerHorsBanqueDialog } from "@/components/factures/ReglerHorsBanqueDialog"
+import { AffecterReglementDialog } from "@/components/factures/AffecterReglementDialog"
 import { t, getLocale } from "@/lib/i18n"
 
 interface Facture {
@@ -60,6 +61,7 @@ export default function FacturesClientsPage() {
   const [error, setError] = useState<string | null>(null)
   // Sélection multi-factures pour règlement hors banque
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [reglementFacture, setReglementFacture] = useState<Facture | null>(null)
   const [reglementOpen, setReglementOpen] = useState(false)
 
   // Form
@@ -342,16 +344,29 @@ export default function FacturesClientsPage() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Select value={f.statut} onValueChange={v => updateStatut(f.id, v)}>
-                        <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="en_attente">{t('cab.fc.status_pending', locale)}</SelectItem>
-                          <SelectItem value="paye">{t('cab.fc.status_paid', locale)}</SelectItem>
-                          <SelectItem value="partiel">{t('cab.fc.status_partial', locale)}</SelectItem>
-                          <SelectItem value="retard">{t('cab.fc.status_late_short', locale)}</SelectItem>
-                          <SelectItem value="annule">{t('cab.fc.status_cancelled', locale)}</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-1.5">
+                        <Select value={f.statut} onValueChange={v => updateStatut(f.id, v)}>
+                          <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="en_attente">{t('cab.fc.status_pending', locale)}</SelectItem>
+                            <SelectItem value="paye">{t('cab.fc.status_paid', locale)}</SelectItem>
+                            <SelectItem value="partiel">{t('cab.fc.status_partial', locale)}</SelectItem>
+                            <SelectItem value="retard">{t('cab.fc.status_late_short', locale)}</SelectItem>
+                            <SelectItem value="annule">{t('cab.fc.status_cancelled', locale)}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {reglable && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-[11px] border-blue-300 text-blue-700 hover:bg-blue-50"
+                            onClick={() => setReglementFacture(f)}
+                            title="Affecter un virement bancaire à cette facture"
+                          >
+                            💳
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                   )
@@ -410,6 +425,14 @@ export default function FacturesClientsPage() {
           fetchData()
           alert(`✓ ${info.nbFactures} facture(s) réglée(s) — Lettre ${info.lettre} — ${info.montantTotal.toLocaleString("fr-FR")} MUR`)
         }}
+      />
+
+      <AffecterReglementDialog
+        facture={reglementFacture ? { ...reglementFacture, type_facture: "client" } : null}
+        societeId={reglementFacture?.societe_id || null}
+        open={!!reglementFacture}
+        onOpenChange={(open) => { if (!open) setReglementFacture(null) }}
+        onDone={fetchData}
       />
     </div>
     </ClientPageShell>
