@@ -277,3 +277,33 @@ describe("resolveTransactionAmounts — multi-currency fallbacks", () => {
     })).toEqual({ debit: 0.3, credit: 0 })
   })
 })
+
+describe("resolveTransactionAmounts — *_mur shape (MUR statements)", () => {
+  it("derives side+amount from debit_mur/credit_mur when no sens (shape C)", () => {
+    // MUR statement, fee line: debit_mur filled, taux_change = 1
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, debit_mur: 115, credit_mur: 0, montant_origine: 115,
+    })).toEqual({ debit: 115, credit: 0 })
+    // client payment credit side
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, debit_mur: 0, credit_mur: 69610.23, montant_origine: 69610.23,
+    })).toEqual({ debit: 0, credit: 69610.23 })
+  })
+
+  it("uses *_mur amount when no native montant field is present", () => {
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, debit_mur: 500, credit_mur: 0,
+    })).toEqual({ debit: 500, credit: 0 })
+  })
+
+  it("prefers native montant_origine over *_mur for the amount (foreign account)", () => {
+    // EUR line: native 1000 EUR, *_mur = converted 46000 MUR, sens debit
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, sens: "debit", montant_origine: 1000, debit_mur: 46000,
+    })).toEqual({ debit: 1000, credit: 0 })
+  })
+
+  it("still returns {0,0} when only montant_origine with no side info", () => {
+    expect(resolveTransactionAmounts({ debit: 0, credit: 0, montant_origine: 50 })).toEqual({ debit: 0, credit: 0 })
+  })
+})

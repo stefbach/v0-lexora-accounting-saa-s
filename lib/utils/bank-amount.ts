@@ -173,55 +173,69 @@ export function parseAmount(raw: unknown): number {
 /**
  * Resolve a bank transaction's debit / credit in the statement's NATIVE currency.
  *
- * Why this exists (cf. Obesity Care Clinic Ltd, MCB EUR account 512101):
- * the extraction prompt (lib/ai/prompts.ts) returns `debit`/`credit` directly for
- * MUR statements, but for FOREIGN-CURRENCY statements (EUR/USD/GBP) the model
- * routinely leaves `debit`/`credit` at 0 and only fills `montant_origine` (the
- * native amount) + `sens` ("debit" | "credit"), because it has no MUR exchange
- * rate to compute `*_mur`. The import code used to read only `debit`/`credit`,
- * so every foreign statement reconciled to 0 — totals, soldes, écritures all 0.
+ * Why this exists (cf. Obesity Care Clinic Ltd): the extraction prompt
+ * (lib/ai/prompts.ts) is SUPPOSED to fill `debit`/`credit`, but in practice the
+ * model routinely leaves them at 0 and puts the amount in side-specific or
+ * single-amount fields instead. The import code used to read only `debit`/`credit`,
+ * so every affected line reconciled to 0 — totals, soldes, écritures all 0. This
+ * hit BOTH foreign-currency statements (EUR/USD/GBP) AND plain MUR statements.
  *
- * The relevé soldes (solde_ouverture / solde_cloture) are expressed in the
- * account's native currency, so debit/credit MUST be too. Hence the fallback to
- * `montant_origine` / `montant_devise` (native), NOT `*_mur` (converted): using
- * a converted amount against a native-currency solde would break reconciliation.
+ * The relevé soldes (solde_ouverture / solde_cloture) are in the account's NATIVE
+ * currency, so debit/credit must be too. We therefore prefer the native amount
+ * (`montant_origine`/`montant_devise`/`debit_devise`/`credit_devise`) over the
+ * MUR-converted `*_mur` fields, and only fall back to `*_mur` to recover the
+ * SIDE (or the amount on a MUR statement where native == MUR, taux_change ~ 1).
  *
- * The model emits two native-currency shapes when debit/credit are 0:
- *   A) `debit_devise` / `credit_devise` (already split per side), no `sens`.
- *   B) a single `montant_origine` (or `montant_devise`/`montant`) + `sens`.
- * Order: explicit debit/credit → debit_devise/credit_devise → montant + sens.
- * Returns {0,0} when none of these carry a usable amount.
+ * Shapes the model emits when debit/credit are 0:
+ *   A) `debit_devise` / `credit_devise` — native, already split per side.
+ *   B) `montant_origine` (or `montant_devise`/`montant`) + `sens`.
+ *   C) `debit_mur` / `credit_mur` populated, no `sens` (typical MUR statement,
+ *      taux_change = 1, so *_mur IS the native amount and also gives the side).
+ * Returns {0,0} when none of these carry a usable amount + side.
  */
 export function resolveTransactionAmounts(tx: {
   debit?: unknown
   credit?: unknown
   debit_devise?: unknown
   credit_devise?: unknown
+  debit_mur?: unknown
+  credit_mur?: unknown
   montant_origine?: unknown
   montant_devise?: unknown
   montant?: unknown
   sens?: unknown
 }): { debit: number; credit: number } {
-  let debit = parseAmount(tx.debit)
-  let credit = parseAmount(tx.credit)
-  if (debit === 0 && credit === 0) {
-    // Shape A — native-currency columns already split per side.
-    const debitDevise = parseAmount(tx.debit_devise)
-    const creditDevise = parseAmount(tx.credit_devise)
-    if (debitDevise !== 0 || creditDevise !== 0) {
-      debit = Math.abs(debitDevise)
-      credit = Math.abs(creditDevise)
-    } else {
-      // Shape B — single amount + sens.
-      const montant = parseAmount(tx.montant_origine ?? tx.montant_devise ?? tx.montant ?? 0)
-      if (montant !== 0) {
-        const sens = typeof tx.sens === "string" ? tx.sens.trim().toLowerCase() : ""
-        if (sens === "debit") debit = Math.abs(montant)
-        else if (sens === "credit") credit = Math.abs(montant)
-      }
+  const debit = parseAmount(tx.debit)
+  const credit = parseAmount(tx.credit)
+  if (debit !== 0 || credit !== 0) return { debit, credit }
+
+  // Shape A — native per-side columns (foreign-currency statements).
+  const debitDevise = parseAmount(tx.debit_devise)
+  const creditDevise = parseAmount(tx.credit_devise)
+  if (debitDevise !== 0 || creditDevise !== 0) {
+    return { debit: Math.abs(debitDevise), credit: Math.abs(creditDevise) }
+  }
+
+  // Native single amount (always in account currency). Prefer it over *_mur,
+  // which is the MUR-converted value on foreign statements.
+  const native = parseAmount(tx.montant_origine ?? tx.montant_devise ?? tx.montant ?? 0)
+  const debitMur = parseAmount(tx.debit_mur)
+  const creditMur = parseAmount(tx.credit_mur)
+
+  // Shape B — single amount + explicit sens.
+  const sens = typeof tx.sens === "string" ? tx.sens.trim().toLowerCase() : ""
+  if (sens === "debit") return { debit: Math.abs(native || debitMur), credit: 0 }
+  if (sens === "credit") return { debit: 0, credit: Math.abs(native || creditMur) }
+
+  // Shape C — no sens: derive the side from whichever *_mur column is populated,
+  // and the amount from the native field when present (else *_mur, MUR statement).
+  if (debitMur !== 0 || creditMur !== 0) {
+    return {
+      debit: debitMur !== 0 ? Math.abs(native || debitMur) : 0,
+      credit: creditMur !== 0 ? Math.abs(native || creditMur) : 0,
     }
   }
-  return { debit, credit }
+  return { debit: 0, credit: 0 }
 }
 
 /**

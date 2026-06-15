@@ -63,6 +63,8 @@ export interface ReleveExtraction {
     credit?: number | string
     debit_devise?: number | string | null
     credit_devise?: number | string | null
+    debit_mur?: number | string | null
+    credit_mur?: number | string | null
     montant_origine?: number | string | null
     montant_devise?: number | string | null
     montant?: number | string | null
@@ -254,8 +256,10 @@ export async function processReleveBancaire(
       ? rawTx.map((t) => {
           let debit = toNumberSoft(t.debit)
           let credit = toNumberSoft(t.credit)
-          // Relevés en devise étrangère : le modèle laisse debit/credit à 0 et
-          // remplit soit debit_devise/credit_devise, soit montant_origine + sens.
+          // Le modèle laisse souvent debit/credit à 0 et met le montant dans des
+          // champs natifs (devise étrangère ET MUR). Mêmes 3 variantes que
+          // resolveTransactionAmounts : debit_devise/credit_devise, montant+sens,
+          // ou debit_mur/credit_mur (relevé MUR, taux 1 → *_mur == natif).
           if (debit === 0 && credit === 0) {
             const dDev = toNumberSoft(t.debit_devise)
             const cDev = toNumberSoft(t.credit_devise)
@@ -263,10 +267,14 @@ export async function processReleveBancaire(
               debit = Math.abs(dDev)
               credit = Math.abs(cDev)
             } else {
-              const m = toNumberSoft(t.montant_origine ?? t.montant_devise ?? t.montant)
-              if (m !== 0) {
-                if (t.sens === "debit") debit = Math.abs(m)
-                else if (t.sens === "credit") credit = Math.abs(m)
+              const native = toNumberSoft(t.montant_origine ?? t.montant_devise ?? t.montant)
+              const dMur = toNumberSoft(t.debit_mur)
+              const cMur = toNumberSoft(t.credit_mur)
+              if (t.sens === "debit") debit = Math.abs(native || dMur)
+              else if (t.sens === "credit") credit = Math.abs(native || cMur)
+              else if (dMur !== 0 || cMur !== 0) {
+                debit = dMur !== 0 ? Math.abs(native || dMur) : 0
+                credit = cMur !== 0 ? Math.abs(native || cMur) : 0
               }
             }
           }
