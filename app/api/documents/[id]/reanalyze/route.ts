@@ -5,6 +5,7 @@ import { getSystemPrompt, injectTauxChange, injectSocietes, CLAUDE_CONFIG, SYSTE
 import type { PromptId } from '@/lib/ai/prompts'
 import { isBankName, validateAndCleanExtraction, computeConfidence, repairBankJSON } from '@/lib/utils/bank-utils'
 import { extractBankStatement } from '@/lib/ai/bank-statement-extraction'
+import { resolveTransactionAmounts } from '@/lib/utils/bank-amount'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -632,7 +633,10 @@ export async function POST(
         compte_comptable: l.sens === 'debit' ? (l.compte_debit || null) : (l.compte_credit || null),
         statut: (l.confiance || 0) >= 70 ? 'identifie' : ((l.confiance || 0) >= 40 ? 'a_verifier' : 'non_identifie'),
       }))
-      const normalizedTransactions = rawTransactions.length > 0 ? rawTransactions : lignesAsTransactions
+      // Fallback montant_origine/sens pour relevés en devise étrangère (sinon 0).
+      const normalizedTransactions = rawTransactions.length > 0
+        ? rawTransactions.map((t: any) => ({ ...t, ...resolveTransactionAmounts(t) }))
+        : lignesAsTransactions
 
       const totalDebits = Number(finalExtraction.total_debits) ||
         normalizedTransactions.reduce((s: number, t: any) => s + (Number(t.debit) || 0), 0)

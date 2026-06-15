@@ -171,6 +171,60 @@ export function parseAmount(raw: unknown): number {
 }
 
 /**
+ * Resolve a bank transaction's debit / credit in the statement's NATIVE currency.
+ *
+ * Why this exists (cf. Obesity Care Clinic Ltd, MCB EUR account 512101):
+ * the extraction prompt (lib/ai/prompts.ts) returns `debit`/`credit` directly for
+ * MUR statements, but for FOREIGN-CURRENCY statements (EUR/USD/GBP) the model
+ * routinely leaves `debit`/`credit` at 0 and only fills `montant_origine` (the
+ * native amount) + `sens` ("debit" | "credit"), because it has no MUR exchange
+ * rate to compute `*_mur`. The import code used to read only `debit`/`credit`,
+ * so every foreign statement reconciled to 0 — totals, soldes, écritures all 0.
+ *
+ * The relevé soldes (solde_ouverture / solde_cloture) are expressed in the
+ * account's native currency, so debit/credit MUST be too. Hence the fallback to
+ * `montant_origine` / `montant_devise` (native), NOT `*_mur` (converted): using
+ * a converted amount against a native-currency solde would break reconciliation.
+ *
+ * The model emits two native-currency shapes when debit/credit are 0:
+ *   A) `debit_devise` / `credit_devise` (already split per side), no `sens`.
+ *   B) a single `montant_origine` (or `montant_devise`/`montant`) + `sens`.
+ * Order: explicit debit/credit → debit_devise/credit_devise → montant + sens.
+ * Returns {0,0} when none of these carry a usable amount.
+ */
+export function resolveTransactionAmounts(tx: {
+  debit?: unknown
+  credit?: unknown
+  debit_devise?: unknown
+  credit_devise?: unknown
+  montant_origine?: unknown
+  montant_devise?: unknown
+  montant?: unknown
+  sens?: unknown
+}): { debit: number; credit: number } {
+  let debit = parseAmount(tx.debit)
+  let credit = parseAmount(tx.credit)
+  if (debit === 0 && credit === 0) {
+    // Shape A — native-currency columns already split per side.
+    const debitDevise = parseAmount(tx.debit_devise)
+    const creditDevise = parseAmount(tx.credit_devise)
+    if (debitDevise !== 0 || creditDevise !== 0) {
+      debit = Math.abs(debitDevise)
+      credit = Math.abs(creditDevise)
+    } else {
+      // Shape B — single amount + sens.
+      const montant = parseAmount(tx.montant_origine ?? tx.montant_devise ?? tx.montant ?? 0)
+      if (montant !== 0) {
+        const sens = typeof tx.sens === "string" ? tx.sens.trim().toLowerCase() : ""
+        if (sens === "debit") debit = Math.abs(montant)
+        else if (sens === "credit") credit = Math.abs(montant)
+      }
+    }
+  }
+  return { debit, credit }
+}
+
+/**
  * Safe variant: returns 0 AND logs a console.warn when parsing fails.
  * Use when degrading gracefully is preferable to blocking the caller
  * (e.g. best-effort display), but prefer `parseAmount` on ingestion paths

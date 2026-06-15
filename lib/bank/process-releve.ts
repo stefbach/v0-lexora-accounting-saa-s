@@ -61,6 +61,12 @@ export interface ReleveExtraction {
     libelle?: string
     debit?: number | string
     credit?: number | string
+    debit_devise?: number | string | null
+    credit_devise?: number | string | null
+    montant_origine?: number | string | null
+    montant_devise?: number | string | null
+    montant?: number | string | null
+    sens?: "debit" | "credit"
     reference?: string
     solde_apres?: number | string | null
     tiers_detecte?: string
@@ -245,15 +251,35 @@ export async function processReleveBancaire(
 
   const normalized =
     rawTx.length > 0
-      ? rawTx.map((t) => ({
-          date: t.date || "",
-          libelle: t.libelle || "",
-          debit: toNumberSoft(t.debit),
-          credit: toNumberSoft(t.credit),
-          reference: t.reference || null,
-          solde_apres: t.solde_apres ?? null,
-          tiers_detecte: t.tiers_detecte || null,
-        }))
+      ? rawTx.map((t) => {
+          let debit = toNumberSoft(t.debit)
+          let credit = toNumberSoft(t.credit)
+          // Relevés en devise étrangère : le modèle laisse debit/credit à 0 et
+          // remplit soit debit_devise/credit_devise, soit montant_origine + sens.
+          if (debit === 0 && credit === 0) {
+            const dDev = toNumberSoft(t.debit_devise)
+            const cDev = toNumberSoft(t.credit_devise)
+            if (dDev !== 0 || cDev !== 0) {
+              debit = Math.abs(dDev)
+              credit = Math.abs(cDev)
+            } else {
+              const m = toNumberSoft(t.montant_origine ?? t.montant_devise ?? t.montant)
+              if (m !== 0) {
+                if (t.sens === "debit") debit = Math.abs(m)
+                else if (t.sens === "credit") credit = Math.abs(m)
+              }
+            }
+          }
+          return {
+            date: t.date || "",
+            libelle: t.libelle || "",
+            debit,
+            credit,
+            reference: t.reference || null,
+            solde_apres: t.solde_apres ?? null,
+            tiers_detecte: t.tiers_detecte || null,
+          }
+        })
       : lignesAsTx
 
   if (normalized.length === 0) {
