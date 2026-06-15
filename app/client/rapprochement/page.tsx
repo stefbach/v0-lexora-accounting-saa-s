@@ -2270,11 +2270,16 @@ function AffectDialog({
                               {t('acc.rap.gap_short', locale)} {ecartPct.toFixed(1)}%
                             </p>
                           ) : (
+                            // Devise différente du virement : pas d'écart MUR
+                            // fiable (le taux du virement diffère du taux figé de
+                            // la facture). On affiche l'équivalent MUR à titre
+                            // indicatif — un éventuel reste à payer demeure une
+                            // créance client (facture « partiel »), pas une perte.
                             <p
-                              className="text-[10px] font-mono text-amber-700"
-                              title="Devise différente du virement : cet écart est probablement un écart de change, pas un impayé."
+                              className="text-[10px] font-mono text-muted-foreground"
+                              title="Montant indicatif converti au taux figé de la facture. Un éventuel reste à payer reste une créance client (facture partielle), ce n'est pas un écart de change."
                             >
-                              écart de change ≈ {fmt(ecart)} MUR
+                              ≈ {fmt(fAmt)} MUR (indic.)
                             </p>
                           )
                         )}
@@ -2309,25 +2314,6 @@ function AffectDialog({
                           {partial && !over && (
                             <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 border-amber-300">partiel</Badge>
                           )}
-                          {/* Devise ≠ + reste à régler : raccourci pour SOLDER la
-                              facture en imputant son solde complet. La différence
-                              avec le virement part en écart de change (656/766).
-                              Le défaut reste « partiel » — l'utilisateur choisit. */}
-                          {partial && !over &&
-                            (f.devise || "MUR").toUpperCase() !== (tx.devise || "MUR").toUpperCase() && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setAmounts((prev) => ({
-                                    ...prev,
-                                    [f.id]: String(Math.round(reste * 100) / 100),
-                                  }))
-                                }
-                                className="ml-1 text-[10px] text-blue-600 underline hover:text-blue-800"
-                              >
-                                solder (écart de change)
-                              </button>
-                            )}
                         </div>
                         <Input
                           type="number"
