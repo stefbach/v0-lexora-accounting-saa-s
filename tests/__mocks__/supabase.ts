@@ -106,6 +106,17 @@ interface QueryBuilder extends PromiseLike<{ data: any; error: any }> {
   single: () => Promise<{ data: any; error: any }>
 }
 
+/** Compare deux valeurs : numérique si possible, sinon native. -1/0/1. */
+function cmpOrder(a: any, b: any): number {
+  const na = Number(a), nb = Number(b)
+  const bothNum = a !== "" && b !== "" && Number.isFinite(na) && Number.isFinite(nb)
+  const av = bothNum ? na : a
+  const bv = bothNum ? nb : b
+  if (av < bv) return -1
+  if (av > bv) return 1
+  return 0
+}
+
 function applyFilters(rows: any[], filters: Filter[]): any[] {
   return rows.filter(r => {
     for (const f of filters) {
@@ -126,17 +137,20 @@ function applyFilters(rows: any[], filters: Filter[]): any[] {
             if (v !== null && v !== undefined) return false
           } else if (v !== f.val) return false
           break
+        // Comparaisons d'ordre : numériques si les deux côtés sont des nombres
+        // finis, sinon natives (chaînes) — indispensable pour les dates ISO
+        // (`date_taux <= '2025-11-10'`), que Number() transformerait en NaN.
         case 'gt':
-          if (!(Number(v) > Number(f.val))) return false
+          if (!(cmpOrder(v, f.val) > 0)) return false
           break
         case 'gte':
-          if (!(Number(v) >= Number(f.val))) return false
+          if (!(cmpOrder(v, f.val) >= 0)) return false
           break
         case 'lt':
-          if (!(Number(v) < Number(f.val))) return false
+          if (!(cmpOrder(v, f.val) < 0)) return false
           break
         case 'lte':
-          if (!(Number(v) <= Number(f.val))) return false
+          if (!(cmpOrder(v, f.val) <= 0)) return false
           break
         case 'like':
         case 'ilike': {

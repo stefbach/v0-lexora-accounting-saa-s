@@ -171,7 +171,7 @@ export default defineConfig({
         'lib/accounting/intelligent-rapprochement.ts',
         'lib/accounting/semantic-rapprochement.ts',
         'lib/accounting/lettrage.ts',
-        'lib/accounting/historical-rates.ts',
+        // 'lib/accounting/historical-rates.ts' — RÉINTÉGRÉ (couvert par test).
         // 'lib/accounting/comptes-bancaires.ts' — RÉINTÉGRÉ (pur, couvert).
         'lib/accounting/period-lock.ts',
         // classification-engine.ts & validate-bank-currency.ts — RÉINTÉGRÉS au
