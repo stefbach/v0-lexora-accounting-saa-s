@@ -57,6 +57,7 @@ import {
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
 import { t, getLocale, type Locale } from '@/lib/i18n'
+import { ECART_TYPE_OPTIONS, resolveEcartCompte, type EcartTypeChoice } from '@/lib/accounting/rapprochement/ecart-ui'
 
 const AGENT_NAME = "Lex Banque"
 
@@ -1815,55 +1816,6 @@ const PCM_PRESETS: Array<{ value: string; label: string; classification: string 
   { value: "658", label: "658 — Charges diverses gestion courante", classification: "autre_charge" },
   { value: "758", label: "758 — Produits divers gestion courante", classification: "autre_produit" },
 ]
-
-// Qualification de l'écart quand le montant soldé ≠ le virement (typiquement un
-// règlement en devise étrangère). Le compte perte/gain dépend du sens de l'écart
-// (signe = virement − somme affectée, aligné sur computeEcartCompte côté serveur).
-type EcartTypeChoice =
-  | "auto"
-  | "attente"
-  | "change"
-  | "escompte"
-  | "penalite"
-  | "exceptionnel"
-
-const ECART_TYPE_OPTIONS: { value: EcartTypeChoice; label: string }[] = [
-  { value: "auto", label: "Automatique (change / frais / acompte)" },
-  { value: "attente", label: "Compte d'attente 471 (à régulariser)" },
-  { value: "change", label: "Écart de change (666 perte / 766 gain)" },
-  { value: "escompte", label: "Escompte (665 accordé / 765 obtenu)" },
-  { value: "penalite", label: "Pénalité de retard (631)" },
-  { value: "exceptionnel", label: "Écart exceptionnel (658 / 758)" },
-]
-
-// Résout {compte, libellé} à partir du type d'écart choisi et du signe.
-// signe > 0 : on a reçu PLUS que soldé (gain) ; signe < 0 : reçu MOINS (perte).
-function resolveEcartCompte(
-  type: EcartTypeChoice,
-  signe: number,
-): { compte: string; libelle: string } | null {
-  switch (type) {
-    case "attente":
-      return { compte: "471", libelle: "Écart à régulariser (compte d'attente)" }
-    case "change":
-      return signe >= 0
-        ? { compte: "766", libelle: "Gain de change réalisé" }
-        : { compte: "666", libelle: "Perte de change réalisée" }
-    case "escompte":
-      return signe >= 0
-        ? { compte: "765", libelle: "Escompte obtenu" }
-        : { compte: "665", libelle: "Escompte accordé" }
-    case "penalite":
-      return { compte: "631", libelle: "Pénalité de retard" }
-    case "exceptionnel":
-      return signe >= 0
-        ? { compte: "758", libelle: "Écart exceptionnel (produit)" }
-        : { compte: "658", libelle: "Écart exceptionnel (charge)" }
-    case "auto":
-    default:
-      return null
-  }
-}
 
 function AffectDialog({
   tx,
