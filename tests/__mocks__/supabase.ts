@@ -85,10 +85,10 @@ export interface MockSupabaseClient {
   _reset: () => void
 }
 
-interface QueryBuilder extends PromiseLike<{ data: any; error: any }> {
-  select: (cols?: string) => QueryBuilder
+interface QueryBuilder extends PromiseLike<{ data: any; error: any; count?: number | null }> {
+  select: (cols?: string, opts?: { count?: string }) => QueryBuilder
   insert: (rows: any | any[]) => QueryBuilder
-  update: (patch: any) => QueryBuilder
+  update: (patch: any, opts?: { count?: string }) => QueryBuilder
   delete: () => QueryBuilder
   eq: (col: string, val: any) => QueryBuilder
   neq: (col: string, val: any) => QueryBuilder
@@ -101,6 +101,7 @@ interface QueryBuilder extends PromiseLike<{ data: any; error: any }> {
   like: (col: string, val: string) => QueryBuilder
   ilike: (col: string, val: string) => QueryBuilder
   order: (col: string, opts?: { ascending?: boolean }) => QueryBuilder
+  range: (from: number, to: number) => QueryBuilder
   limit: (n: number) => QueryBuilder
   maybeSingle: () => Promise<{ data: any; error: any }>
   single: () => Promise<{ data: any; error: any }>
@@ -185,6 +186,8 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
     const filters: Filter[] = []
     let limitN: number | null = null
     let orderBy: { col: string; ascending: boolean } | null = null
+    let wantCount = false
+    let rangeFromTo: { from: number; to: number } | null = null
 
     const ensureTable = () => {
       if (!state.tables[table]) state.tables[table] = []
@@ -196,13 +199,16 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
       return options.errorOn({ table, kind: opKind })
     }
 
-    const execute = async (): Promise<{ data: any; error: any }> => {
+    const execute = async (): Promise<{ data: any; error: any; count?: number | null }> => {
       const err = maybeError(kind)
       if (err) return { data: null, error: err }
 
       if (kind === 'select') {
         state.selects.push({ table, cols, filters: [...filters], limit: limitN })
         let rows = applyFilters(ensureTable(), filters)
+        // count = nombre total filtré, AVANT pagination range/limit (sémantique
+        // PostgREST `{ count: 'exact' }`).
+        const totalCount = rows.length
         if (orderBy) {
           const { col, ascending } = orderBy
           rows = [...rows].sort((a, b) => {
@@ -212,8 +218,9 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
             return ascending ? cmp : -cmp
           })
         }
-        if (limitN !== null) rows = rows.slice(0, limitN)
-        return { data: rows, error: null }
+        if (rangeFromTo) rows = rows.slice(rangeFromTo.from, rangeFromTo.to + 1)
+        else if (limitN !== null) rows = rows.slice(0, limitN)
+        return { data: rows, error: null, count: wantCount ? totalCount : null }
       }
 
       if (kind === 'insert') {
@@ -233,7 +240,7 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
         for (const m of matched) {
           Object.assign(m, updatePatch)
         }
-        return { data: matched, error: null }
+        return { data: matched, error: null, count: wantCount ? matched.length : null }
       }
 
       if (kind === 'delete') {
@@ -248,11 +255,12 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
     }
 
     const builder: QueryBuilder = {
-      select(c?: string) {
+      select(c?: string, opts?: { count?: string }) {
         // If a previous op was insert/update, `.select()` is a chainable no-op
         // that triggers returning the rows — we keep kind as-is so that insert
         // returning .select() still returns inserted rows.
         if (kind === 'select') cols = c || '*'
+        if (opts?.count) wantCount = true
         return builder
       },
       insert(rows: any | any[]) {
@@ -260,11 +268,13 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
         insertRows = Array.isArray(rows) ? rows : [rows]
         return builder
       },
-      update(patch: any) {
+      update(patch: any, opts?: { count?: string }) {
         kind = 'update'
         updatePatch = patch
+        if (opts?.count) wantCount = true
         return builder
       },
+      range(from: number, to: number) { rangeFromTo = { from, to }; return builder },
       delete() {
         kind = 'delete'
         return builder
