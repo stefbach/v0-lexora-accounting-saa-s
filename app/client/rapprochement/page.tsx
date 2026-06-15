@@ -711,7 +711,7 @@ export default function ClientRapprochementPage() {
   const handleAffectFactures = useCallback(
     async (
       tx: BankTx,
-      payload: { facture_ids?: string[]; allocations?: { facture_id: string; montant: number }[]; partiel?: boolean }
+      payload: { facture_ids?: string[]; allocations?: { facture_id: string; montant: number }[]; partiel?: boolean; ecart_compte?: string; ecart_libelle?: string }
     ): Promise<{ ok: boolean; error?: string; lettre?: string; ecart?: { compte: string; montant: number; libelle: string } | null }> => {
       if (!societeId) return { ok: false, error: t('acc.rap.company_missing', locale) }
       const body: any = {
@@ -722,6 +722,9 @@ export default function ClientRapprochementPage() {
       if (payload.partiel && payload.allocations && payload.allocations.length > 0) {
         body.action = "lettrer_partiel"
         body.allocations = payload.allocations
+        // Qualification manuelle de l'écart (compte d'attente 471 / change / …)
+        if (payload.ecart_compte) body.ecart_compte = payload.ecart_compte
+        if (payload.ecart_libelle) body.ecart_libelle = payload.ecart_libelle
       } else if (payload.facture_ids && payload.facture_ids.length > 1) {
         body.action = "lettrer_multi"
         body.facture_ids = payload.facture_ids
@@ -1813,6 +1816,55 @@ const PCM_PRESETS: Array<{ value: string; label: string; classification: string 
   { value: "758", label: "758 — Produits divers gestion courante", classification: "autre_produit" },
 ]
 
+// Qualification de l'écart quand le montant soldé ≠ le virement (typiquement un
+// règlement en devise étrangère). Le compte perte/gain dépend du sens de l'écart
+// (signe = virement − somme affectée, aligné sur computeEcartCompte côté serveur).
+type EcartTypeChoice =
+  | "auto"
+  | "attente"
+  | "change"
+  | "escompte"
+  | "penalite"
+  | "exceptionnel"
+
+const ECART_TYPE_OPTIONS: { value: EcartTypeChoice; label: string }[] = [
+  { value: "auto", label: "Automatique (change / frais / acompte)" },
+  { value: "attente", label: "Compte d'attente 471 (à régulariser)" },
+  { value: "change", label: "Écart de change (666 perte / 766 gain)" },
+  { value: "escompte", label: "Escompte (665 accordé / 765 obtenu)" },
+  { value: "penalite", label: "Pénalité de retard (631)" },
+  { value: "exceptionnel", label: "Écart exceptionnel (658 / 758)" },
+]
+
+// Résout {compte, libellé} à partir du type d'écart choisi et du signe.
+// signe > 0 : on a reçu PLUS que soldé (gain) ; signe < 0 : reçu MOINS (perte).
+function resolveEcartCompte(
+  type: EcartTypeChoice,
+  signe: number,
+): { compte: string; libelle: string } | null {
+  switch (type) {
+    case "attente":
+      return { compte: "471", libelle: "Écart à régulariser (compte d'attente)" }
+    case "change":
+      return signe >= 0
+        ? { compte: "766", libelle: "Gain de change réalisé" }
+        : { compte: "666", libelle: "Perte de change réalisée" }
+    case "escompte":
+      return signe >= 0
+        ? { compte: "765", libelle: "Escompte obtenu" }
+        : { compte: "665", libelle: "Escompte accordé" }
+    case "penalite":
+      return { compte: "631", libelle: "Pénalité de retard" }
+    case "exceptionnel":
+      return signe >= 0
+        ? { compte: "758", libelle: "Écart exceptionnel (produit)" }
+        : { compte: "658", libelle: "Écart exceptionnel (charge)" }
+    case "auto":
+    default:
+      return null
+  }
+}
+
 function AffectDialog({
   tx,
   factures,
@@ -1835,7 +1887,7 @@ function AffectDialog({
   ) => Promise<{ ok: boolean; error?: string; lettre?: string }>
   onAffectFactures: (
     tx: BankTx,
-    payload: { facture_ids?: string[]; allocations?: { facture_id: string; montant: number }[]; partiel?: boolean }
+    payload: { facture_ids?: string[]; allocations?: { facture_id: string; montant: number }[]; partiel?: boolean; ecart_compte?: string; ecart_libelle?: string }
   ) => Promise<{ ok: boolean; error?: string; lettre?: string; ecart?: { compte: string; montant: number; libelle: string } | null }>
   showToast: (msg: string, type?: "success" | "error") => void
   onReload: () => void
@@ -1850,6 +1902,10 @@ function AffectDialog({
   // grouper plusieurs factures sur un règlement et/ou régler partiellement.
   const [selectedFids, setSelectedFids] = useState<Set<string>>(new Set())
   const [amounts, setAmounts] = useState<Record<string, string>>({})
+  // Qualification de l'écart quand on solde une facture pour un montant ≠ du
+  // virement (ex. règlement en devise) : où imputer le delta ?
+  //   auto → routage automatique (change/frais/acompte) ; sinon compte explicite.
+  const [ecartType, setEcartType] = useState<EcartTypeChoice>("auto")
   const [propagationCandidates, setPropagationCandidates] = useState<BankTx[]>([])
   const [propagationCompte, setPropagationCompte] = useState<string>("")
   const [propagationClassif, setPropagationClassif] = useState<string>("")
@@ -1861,6 +1917,7 @@ function AffectDialog({
       setSearch("")
       setSelectedFids(new Set())
       setAmounts({})
+      setEcartType("auto")
       setPcmCustom("")
       setPcmPreset("")
       setPropagationCandidates([])
@@ -1975,6 +2032,10 @@ function AffectDialog({
     // Écart ou partiel → lettrer_partiel (gère l'écart). Sinon match exact →
     // facture_ids (chemin classique lettrer_multi/manuel).
     const needsPartiel = hasPartial || Math.abs(diffAlloc) > 1
+    // Qualification manuelle de l'écart (compte d'attente 471 / change / …)
+    // quand on solde pour un montant ≠ du virement. diffAlloc = virement − somme.
+    const ecartOverride =
+      Math.abs(diffAlloc) > 1 ? resolveEcartCompte(ecartType, diffAlloc) : null
     const payload = needsPartiel
       ? {
           partiel: true,
@@ -1982,6 +2043,9 @@ function AffectDialog({
             facture_id: f.id,
             montant: Math.round(allocAmount(f) * 100) / 100,
           })),
+          ...(ecartOverride
+            ? { ecart_compte: ecartOverride.compte, ecart_libelle: ecartOverride.libelle }
+            : {}),
         }
       : { facture_ids: selectedFactures.map((f) => f.id) }
     const r = await onAffectFactures(tx, payload)
@@ -2312,7 +2376,22 @@ function AffectDialog({
                           <span className="font-mono text-xs">{f.numero_facture || f.id.slice(0, 8)}</span>
                           {f.tiers && <span className="text-xs text-muted-foreground"> · {f.tiers.slice(0, 40)}</span>}
                           {partial && !over && (
-                            <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 border-amber-300">partiel</Badge>
+                            <>
+                              <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 border-amber-300">partiel</Badge>
+                              {/* Solder = imputer le solde complet → la facture
+                                  est soldée et le delta avec le virement devient
+                                  un écart à qualifier (compte d'attente, change…). */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAmounts((prev) => ({ ...prev, [f.id]: String(Math.round(reste * 100) / 100) }))
+                                  setEcartType((prev) => (prev === "auto" ? "attente" : prev))
+                                }}
+                                className="ml-1 text-[10px] text-blue-600 underline hover:text-blue-800"
+                              >
+                                solder
+                              </button>
+                            </>
                           )}
                         </div>
                         <Input
@@ -2354,10 +2433,32 @@ function AffectDialog({
                       : "Chaque montant affecté doit être strictement positif."}
                   </p>
                 ) : ecartTreatment ? (
-                  <p className="text-[11px] text-amber-800">
-                    Écart de {fmt(Math.abs(ecartTreatment.ecartBrut))} MUR → comptabilisé en{" "}
-                    <span className="font-mono">{ecartTreatment.compte}</span> ({ecartTreatment.libelle}).
-                  </p>
+                  <div className="rounded border border-amber-200 bg-amber-50 p-2 space-y-1.5">
+                    <span className="text-[11px] text-amber-800">
+                      Écart de {fmt(Math.abs(ecartTreatment.ecartBrut))} MUR — où l'imputer&nbsp;?
+                    </span>
+                    <select
+                      value={ecartType}
+                      onChange={(e) => setEcartType(e.target.value as EcartTypeChoice)}
+                      className="w-full h-8 rounded border border-amber-300 bg-white px-2 text-[11px]"
+                    >
+                      {ECART_TYPE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    {(() => {
+                      const disp =
+                        resolveEcartCompte(ecartType, diffAlloc) ?? {
+                          compte: ecartTreatment.compte,
+                          libelle: ecartTreatment.libelle,
+                        }
+                      return (
+                        <p className="text-[10px] text-amber-700 font-mono">
+                          → {disp.compte} ({disp.libelle})
+                        </p>
+                      )
+                    })()}
+                  </div>
                 ) : null}
                 <Button
                   onClick={handleApplyFactures}
@@ -2370,7 +2471,9 @@ function AffectDialog({
                     <CheckCircle2 className="h-4 w-4 mr-2" />
                   )}
                   {ecartTreatment
-                    ? `Solder + écart → ${ecartTreatment.compte} (${selectedFactures.length})`
+                    ? `Solder + écart → ${
+                        (resolveEcartCompte(ecartType, diffAlloc) ?? ecartTreatment).compte
+                      } (${selectedFactures.length})`
                     : hasPartial
                       ? `Enregistrer la répartition (${selectedFactures.length})`
                       : `Lier ${selectedFactures.length} facture${selectedFactures.length > 1 ? "s" : ""}`}
