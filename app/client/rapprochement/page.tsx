@@ -130,6 +130,7 @@ interface Facture {
   statut: string | null
   date_facture: string | null
   date_echeance: string | null
+  solde_non_paye?: number | null
 }
 
 export default function ClientRapprochementPage() {
@@ -704,6 +705,48 @@ export default function ClientRapprochementPage() {
     [societeId, locale]
   )
 
+  // Lettrage multi-factures / partiel : groupe plusieurs factures sur un
+  // règlement (facture_ids → lettrer_multi) ou répartit un règlement avec
+  // au moins une facture partielle (allocations → lettrer_partiel).
+  const handleAffectFactures = useCallback(
+    async (
+      tx: BankTx,
+      payload: { facture_ids?: string[]; allocations?: { facture_id: string; montant: number }[]; partiel?: boolean }
+    ): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
+      if (!societeId) return { ok: false, error: t('acc.rap.company_missing', locale) }
+      const body: any = {
+        societe_id: societeId,
+        transaction_id: tx.id,
+        releve_id: tx.releve_id,
+      }
+      if (payload.partiel && payload.allocations && payload.allocations.length > 0) {
+        body.action = "lettrer_partiel"
+        body.allocations = payload.allocations
+      } else if (payload.facture_ids && payload.facture_ids.length > 1) {
+        body.action = "lettrer_multi"
+        body.facture_ids = payload.facture_ids
+      } else if (payload.facture_ids && payload.facture_ids.length === 1) {
+        body.action = "lettrer_manuel"
+        body.facture_id = payload.facture_ids[0]
+      } else {
+        return { ok: false, error: t('acc.rap.params_invalid', locale) }
+      }
+      try {
+        const res = await fetch("/api/comptable/rapprochement", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        const d = await res.json()
+        if (!res.ok) return { ok: false, error: d?.error || `HTTP ${res.status}` }
+        return { ok: true, lettre: d?.lettre }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || t('acc.rap.network_error', locale) }
+      }
+    },
+    [societeId, locale]
+  )
+
   const handleRejectOne = async (tx: BankTx) => {
     if (!societeId) return
     try {
@@ -772,6 +815,7 @@ export default function ClientRapprochementPage() {
           allTransactions={transactions}
           onClose={() => setAffectTx(null)}
           onAffect={handleAffectManual}
+          onAffectFactures={handleAffectFactures}
           showToast={showToast}
           onReload={load}
           locale={locale}
@@ -1775,6 +1819,7 @@ function AffectDialog({
   allTransactions,
   onClose,
   onAffect,
+  onAffectFactures,
   showToast,
   onReload,
   locale,
@@ -1788,6 +1833,10 @@ function AffectDialog({
     mode: "facture" | "pcm",
     payload: { facture_id?: string; classification?: string; compte_charge?: string }
   ) => Promise<{ ok: boolean; error?: string; lettre?: string }>
+  onAffectFactures: (
+    tx: BankTx,
+    payload: { facture_ids?: string[]; allocations?: { facture_id: string; montant: number }[]; partiel?: boolean }
+  ) => Promise<{ ok: boolean; error?: string; lettre?: string }>
   showToast: (msg: string, type?: "success" | "error") => void
   onReload: () => void
   locale: Locale
@@ -1797,6 +1846,10 @@ function AffectDialog({
   const [pcmCustom, setPcmCustom] = useState("")
   const [pcmPreset, setPcmPreset] = useState<string>("")
   const [busy, setBusy] = useState(false)
+  // Multi-sélection de factures + montant affecté par facture (MUR) pour
+  // grouper plusieurs factures sur un règlement et/ou régler partiellement.
+  const [selectedFids, setSelectedFids] = useState<Set<string>>(new Set())
+  const [amounts, setAmounts] = useState<Record<string, string>>({})
   const [propagationCandidates, setPropagationCandidates] = useState<BankTx[]>([])
   const [propagationCompte, setPropagationCompte] = useState<string>("")
   const [propagationClassif, setPropagationClassif] = useState<string>("")
@@ -1806,6 +1859,8 @@ function AffectDialog({
     if (tx) {
       setTab("facture")
       setSearch("")
+      setSelectedFids(new Set())
+      setAmounts({})
       setPcmCustom("")
       setPcmPreset("")
       setPropagationCandidates([])
@@ -1841,9 +1896,54 @@ function AffectDialog({
       .slice(0, 30)
   })()
 
-  const handleApplyFacture = async (factureId: string) => {
+  // ── Multi-factures + répartition partielle (parité avec le comptable) ──
+  // Le total affecté (MUR) doit ≈ le montant du règlement (écart ≤ 1). Affecter
+  // moins que le solde d'une facture ⇒ paiement partiel (facture reste "partiel").
+  const txAmount = Math.abs(montant)
+  const remainingOf = (f: Facture) =>
+    typeof f.solde_non_paye === "number"
+      ? f.solde_non_paye
+      : Number(f.montant_mur) || Number(f.montant_ttc) || 0
+  const toggleFid = (fid: string) => {
+    setSelectedFids((prev) => {
+      const n = new Set(prev)
+      if (n.has(fid)) {
+        n.delete(fid)
+        setAmounts((a) => { const c = { ...a }; delete c[fid]; return c })
+      } else {
+        n.add(fid)
+        const f = factures.find((x) => x.id === fid)
+        if (f) setAmounts((a) => ({ ...a, [fid]: String(Math.round(remainingOf(f) * 100) / 100) }))
+      }
+      return n
+    })
+  }
+  const selectedFactures = factures.filter((f) => selectedFids.has(f.id))
+  const allocAmount = (f: Facture) => {
+    const raw = amounts[f.id]
+    const n = raw === undefined || raw === "" ? remainingOf(f) : Number(raw)
+    return Number.isFinite(n) ? n : 0
+  }
+  const sumAlloc = Math.round(selectedFactures.reduce((s, f) => s + allocAmount(f), 0) * 100) / 100
+  const diffAlloc = Math.round((txAmount - sumAlloc) * 100) / 100
+  const anyOver = selectedFactures.some((f) => allocAmount(f) > remainingOf(f) + 1)
+  const anyNonPositive = selectedFactures.some((f) => allocAmount(f) <= 0)
+  const hasPartial = selectedFactures.some((f) => allocAmount(f) < remainingOf(f) - 0.01)
+  const allocValid = !anyOver && !anyNonPositive && Math.abs(diffAlloc) <= 1
+
+  const handleApplyFactures = async () => {
+    if (selectedFactures.length === 0) return
     setBusy(true)
-    const r = await onAffect(tx, "facture", { facture_id: factureId })
+    const payload = hasPartial
+      ? {
+          partiel: true,
+          allocations: selectedFactures.map((f) => ({
+            facture_id: f.id,
+            montant: Math.round(allocAmount(f) * 100) / 100,
+          })),
+        }
+      : { facture_ids: selectedFactures.map((f) => f.id) }
+    const r = await onAffectFactures(tx, payload)
     setBusy(false)
     if (!r.ok) return showToast(`${t('acc.rap.fail', locale)} : ${r.error}`, "error")
     showToast(t('acc.rap.imputed_facture', locale).replace('{l}', r.lettre || "—"))
@@ -2075,13 +2175,14 @@ function AffectDialog({
                   const fAmt = Number(f.montant_mur) || Number(f.montant_ttc) || 0
                   const ecart = Math.abs(fAmt - targetAmount)
                   const ecartPct = targetAmount > 0 ? (ecart / targetAmount) * 100 : 0
+                  const checked = selectedFids.has(f.id)
                   return (
-                    <button
+                    <label
                       key={f.id}
-                      disabled={busy}
-                      onClick={() => handleApplyFacture(f.id)}
-                      className="w-full flex items-start justify-between gap-3 p-3 hover:bg-muted/30 text-left disabled:opacity-50"
+                      className="w-full flex items-start gap-3 p-3 hover:bg-muted/30 text-left cursor-pointer"
                     >
+                      <Checkbox checked={checked} onCheckedChange={() => toggleFid(f.id)} className="mt-1" />
+                      <div className="flex-1 min-w-0 flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-sm">
@@ -2121,9 +2222,92 @@ function AffectDialog({
                           </p>
                         )}
                       </div>
-                    </button>
+                      </div>
+                    </label>
                   )
                 })}
+              </div>
+            )}
+
+            {/* Répartition : montant affecté par facture + validation
+                (grouper plusieurs factures sur un règlement et/ou partiel) */}
+            {selectedFactures.length > 0 && (
+              <div className="space-y-2">
+                <div className="rounded border divide-y text-sm">
+                  <div className="px-2.5 py-1.5 bg-muted/30 text-xs font-medium flex items-center justify-between">
+                    <span>Montant affecté par facture (MUR)</span>
+                    <span className="text-muted-foreground">Solde restant</span>
+                  </div>
+                  {selectedFactures.map((f) => {
+                    const reste = remainingOf(f)
+                    const val = amounts[f.id] ?? String(Math.round(reste * 100) / 100)
+                    const cur = allocAmount(f)
+                    const over = cur > reste + 1
+                    const partial = cur < reste - 0.01
+                    return (
+                      <div key={f.id} className="flex items-center gap-2 px-2.5 py-1.5">
+                        <div className="flex-1 min-w-0">
+                          <span className="font-mono text-xs">{f.numero_facture || f.id.slice(0, 8)}</span>
+                          {f.tiers && <span className="text-xs text-muted-foreground"> · {f.tiers.slice(0, 40)}</span>}
+                          {partial && !over && (
+                            <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 border-amber-300">partiel</Badge>
+                          )}
+                        </div>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0"
+                          value={val}
+                          onChange={(e) => setAmounts((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                          className={`h-8 w-32 text-right font-mono ${over ? "border-rose-400" : ""}`}
+                        />
+                        <span className="w-24 text-right font-mono text-xs text-muted-foreground">{fmt(reste)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div
+                  className={`rounded border p-2.5 text-sm flex items-center justify-between ${
+                    Math.abs(diffAlloc) <= 1 ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"
+                  }`}
+                >
+                  <span>
+                    {selectedFactures.length} facture{selectedFactures.length > 1 ? "s" : ""} · affecté{" "}
+                    <span className="font-mono">{fmt(sumAlloc)} MUR</span>
+                    {hasPartial && <span className="text-amber-700"> · répartition partielle</span>}
+                  </span>
+                  <span className="font-mono text-xs">
+                    Règlement {fmt(txAmount)} {tx.devise || "MUR"} · écart{" "}
+                    <span className={Math.abs(diffAlloc) <= 1 ? "" : "text-amber-700"}>
+                      {diffAlloc >= 0 ? "+" : ""}
+                      {fmt(diffAlloc)}
+                    </span>
+                  </span>
+                </div>
+                {!allocValid && (
+                  <p className="text-[11px] text-rose-700">
+                    {anyOver
+                      ? "Un montant dépasse le solde restant de sa facture."
+                      : anyNonPositive
+                        ? "Chaque montant affecté doit être strictement positif."
+                        : "Le total affecté doit égaler le montant du règlement (± 1 MUR)."}
+                  </p>
+                )}
+                <Button
+                  onClick={handleApplyFactures}
+                  disabled={busy || selectedFactures.length === 0 || !allocValid}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {busy ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                  )}
+                  {hasPartial
+                    ? `Enregistrer la répartition (${selectedFactures.length})`
+                    : `Lier ${selectedFactures.length} facture${selectedFactures.length > 1 ? "s" : ""}`}
+                </Button>
               </div>
             )}
           </TabsContent>
