@@ -2639,13 +2639,19 @@ export async function POST(request: Request) {
     // partiel (régularisable ultérieurement).
     // ═══════════════════════════════════════════════════════════════════
     if (action === 'lettrer_partiel') {
-      const { transaction_id, releve_id, facture_id, societe_id, montant_partiel, allocations } = body as {
+      const { transaction_id, releve_id, facture_id, societe_id, montant_partiel, allocations, ecart_compte, ecart_libelle } = body as {
         transaction_id?: string
         releve_id?: string
         facture_id?: string
         societe_id?: string
         montant_partiel?: number
         allocations?: Array<{ facture_id: string; montant: number }>
+        // Qualification manuelle de l'écart (override du routage auto) : permet
+        // d'imputer le delta sur un compte d'attente (471) ou un autre compte
+        // plutôt que le booking automatique change/frais/acompte. Le sens
+        // débit/crédit reste imposé par l'équilibrage (opposé de la banque).
+        ecart_compte?: string
+        ecart_libelle?: string
       }
       if (!releve_id || !societe_id) {
         return NextResponse.json({ error: 'releve_id et societe_id requis' }, { status: 400 })
@@ -2772,6 +2778,20 @@ export async function POST(request: Request) {
           libelle = anyDevise ? 'Écart de change réalisé (gain)' : 'Écart sur règlement'
         }
         ecartInfo = { compte, montant: Math.abs(ecartBrut), libelle }
+
+        // Override manuel : l'opérateur a qualifié l'écart (compte d'attente
+        // 471, change 666/766, escompte, pénalité, exceptionnel…). On remplace
+        // le compte/libellé auto ; le sens reste géré par l'équilibrage BNQ.
+        const ecartCompteClean = typeof ecart_compte === 'string' ? ecart_compte.trim() : ''
+        if (/^\d{3,}$/.test(ecartCompteClean)) {
+          ecartInfo = {
+            compte: ecartCompteClean,
+            montant: ecartInfo.montant,
+            libelle: (typeof ecart_libelle === 'string' && ecart_libelle.trim())
+              ? ecart_libelle.trim()
+              : ecartInfo.libelle,
+          }
+        }
       }
 
       // Compte bancaire pour les BNQ

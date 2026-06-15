@@ -4,11 +4,11 @@
  * AffecterReglementDialog — sens inverse du rapprochement.
  *
  * Depuis une facture impayée, liste les virements bancaires NON rapprochés
- * correspondants (crédits pour une facture client, débits pour un fournisseur),
- * en laisse choisir un, et lettre via /api/comptable/rapprochement
- * (action lettrer_partiel). L'écart règlement/facture (change/frais/acompte)
- * est comptabilisé côté serveur. Réutilisé sur /client/factures et
- * /comptable/factures.
+ * correspondants (crédits pour une facture client, débits pour un fournisseur)
+ * et en laisse sélectionner UN OU PLUSIEURS pour solder la facture en une fois.
+ * Chaque virement est lettré via /api/comptable/rapprochement (action
+ * lettrer_partiel), de façon séquentielle (le solde de la facture diminue
+ * entre chaque appel). Réutilisé sur /client/factures et /comptable/factures.
  */
 
 import { useEffect, useMemo, useState } from "react"
@@ -49,6 +49,7 @@ interface BankTx {
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0)
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100
 
 export function AffecterReglementDialog({
   facture,
@@ -69,8 +70,9 @@ export function AffecterReglementDialog({
   const [error, setError] = useState<string | null>(null)
   const [okMsg, setOkMsg] = useState<string | null>(null)
   const [search, setSearch] = useState("")
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [amountStr, setAmountStr] = useState<string>("")
+  // Multi-sélection : plusieurs virements peuvent solder une même facture.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [amounts, setAmounts] = useState<Record<string, string>>({})
 
   const isClient = facture?.type_facture !== "fournisseur"
   const remaining =
@@ -86,8 +88,8 @@ export function AffecterReglementDialog({
     setLoading(true)
     setError(null)
     setOkMsg(null)
-    setSelectedId(null)
-    setAmountStr("")
+    setSelectedIds(new Set())
+    setAmounts({})
     setSearch("")
     ;(async () => {
       try {
@@ -123,67 +125,98 @@ export function AffecterReglementDialog({
     })
   }, [txs, search, isClient, remaining])
 
-  const selectedTx = txs.find((t) => t.id === selectedId) || null
-  const txAmount = selectedTx ? (isClient ? selectedTx.credit : selectedTx.debit) : 0
-  const amount = (() => {
-    if (amountStr === "") return Math.min(remaining, txAmount)
-    const n = Number(amountStr)
+  // ── Montant de chaque virement + répartition affectée ──────────────────
+  const vOf = (t: BankTx) => (isClient ? t.credit : t.debit) || 0
+  const selectedTxs = txs.filter((t) => selectedIds.has(t.id))
+  const allocOf = (t: BankTx) => {
+    const raw = amounts[t.id]
+    if (raw === undefined || raw === "") return round2(Math.min(vOf(t), remaining))
+    const n = Number(raw)
     return Number.isFinite(n) ? n : 0
-  })()
-  const overSolde = amount > remaining + 1
-  const overTx = amount > txAmount + 1
-  const positive = amount > 0
-  const allocValid = !overSolde && !overTx && positive
+  }
+  const sumAlloc = round2(selectedTxs.reduce((s, t) => s + allocOf(t), 0))
+  const resteApres = round2(remaining - sumAlloc)
 
-  // Aperçu de l'écart (miroir serveur) — É = montant affecté − virement
-  const ecartTreatment = (() => {
-    if (!selectedTx) return null
-    const ecartBrut = Math.round((amount - txAmount) * 100) / 100
-    if (Math.abs(ecartBrut) <= 1) return null
-    const devise = (facture?.devise || "MUR").toUpperCase()
-    const anyDevise = devise !== "MUR"
-    const seuil = Math.max(50, 0.02 * txAmount)
-    let compte: string
-    let libelle: string
-    if (ecartBrut > 0) {
-      compte = anyDevise ? "656" : "6270"
-      libelle = anyDevise ? "écart de change (perte)" : "frais bancaires"
-    } else if (Math.abs(ecartBrut) > seuil) {
-      compte = isClient ? "4191" : "409"
-      libelle = isClient ? "acompte client" : "avance fournisseur"
-    } else {
-      compte = anyDevise ? "756" : "6270"
-      libelle = anyDevise ? "écart de change (gain)" : "écart"
-    }
-    return { ecartBrut, compte, libelle }
-  })()
+  const toggle = (t: BankTx) => {
+    setSelectedIds((prev) => {
+      const n = new Set(prev)
+      if (n.has(t.id)) {
+        n.delete(t.id)
+        setAmounts((a) => {
+          const c = { ...a }
+          delete c[t.id]
+          return c
+        })
+      } else {
+        n.add(t.id)
+        // Défaut = min(virement, reste à payer après les déjà sélectionnés) ⇒
+        // additionner plusieurs virements solde la facture sans dépasser.
+        const usedByOthers = txs
+          .filter((x) => prev.has(x.id))
+          .reduce((s, x) => s + allocOf(x), 0)
+        const left = round2(Math.max(0, remaining - usedByOthers))
+        const def = round2(Math.min(vOf(t), left > 0 ? left : vOf(t)))
+        setAmounts((a) => ({ ...a, [t.id]: String(def) }))
+      }
+      return n
+    })
+  }
+
+  const eachPositive = selectedTxs.every((t) => allocOf(t) > 0)
+  const eachWithinTx = selectedTxs.every((t) => allocOf(t) <= vOf(t) + 1)
+  const sumWithinSolde = sumAlloc <= remaining + 1
+  const allocValid = selectedTxs.length > 0 && eachPositive && eachWithinTx && sumWithinSolde
 
   const handleConfirm = async () => {
-    if (!facture || !societeId || !selectedTx) return
+    if (!facture || !societeId || selectedTxs.length === 0) return
     setBusy(true)
     setError(null)
-    try {
-      const res = await fetch("/api/comptable/rapprochement", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "lettrer_partiel",
-          societe_id: societeId,
-          releve_id: selectedTx.releve_id,
-          transaction_id: selectedTx.id,
-          allocations: [{ facture_id: facture.id, montant: Math.round(amount * 100) / 100 }],
-        }),
+    // Plafonnement cumulatif : ne jamais affecter plus que le solde restant,
+    // appel par appel (le backend recalcule le solde après chaque versement).
+    let left = remaining
+    const calls = selectedTxs
+      .map((t) => {
+        const a = round2(Math.min(allocOf(t), vOf(t), left))
+        left = round2(left - a)
+        return { tx: t, montant: a }
       })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d?.error || `HTTP ${res.status}`)
-      const ecartMsg = d?.ecart ? ` · écart ${fmt(Math.abs(d.ecart.montant))} → ${d.ecart.compte}` : ""
-      setOkMsg(`Règlement affecté (lettre ${d?.lettre || "—"})${ecartMsg}`)
+      .filter((c) => c.montant > 0)
+    let done = 0
+    let lastLettre = ""
+    try {
+      // Séquentiel : le solde de la facture diminue entre chaque lettrage.
+      for (const c of calls) {
+        const res = await fetch("/api/comptable/rapprochement", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "lettrer_partiel",
+            societe_id: societeId,
+            releve_id: c.tx.releve_id,
+            transaction_id: c.tx.id,
+            allocations: [{ facture_id: facture.id, montant: c.montant }],
+          }),
+        })
+        const d = await res.json()
+        if (!res.ok) throw new Error(d?.error || `HTTP ${res.status}`)
+        done++
+        lastLettre = d?.lettre || lastLettre
+      }
+      setOkMsg(
+        `${done} règlement${done > 1 ? "s" : ""} affecté${done > 1 ? "s" : ""}` +
+          (lastLettre ? ` (lettre ${lastLettre})` : "")
+      )
       setBusy(false)
       onDone?.()
       setTimeout(() => onOpenChange(false), 900)
     } catch (e: any) {
       setBusy(false)
-      setError(e?.message || "Échec du lettrage")
+      // Échec en cours de série : certains virements ont pu être affectés.
+      setError(
+        (done > 0 ? `${done} règlement(s) affecté(s) puis échec : ` : "Échec du lettrage : ") +
+          (e?.message || "erreur")
+      )
+      if (done > 0) onDone?.()
     }
   }
 
@@ -193,7 +226,7 @@ export function AffecterReglementDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Affecter un règlement</DialogTitle>
+          <DialogTitle>Affecter un ou plusieurs règlements</DialogTitle>
           <DialogDescription>
             Facture <span className="font-mono">{facture.numero_facture || facture.id.slice(0, 8)}</span>
             {facture.tiers ? ` · ${facture.tiers}` : ""} · reste{" "}
@@ -224,71 +257,75 @@ export function AffecterReglementDialog({
         ) : (
           <div className="rounded border bg-card divide-y max-h-72 overflow-y-auto">
             {filtered.map((t) => {
-              const v = isClient ? t.credit : t.debit
-              const checked = selectedId === t.id
+              const v = vOf(t)
+              const checked = selectedIds.has(t.id)
+              const over = allocOf(t) > v + 1
               return (
-                <label
-                  key={t.id}
-                  className={`flex items-start gap-3 p-3 hover:bg-muted/30 cursor-pointer ${checked ? "bg-green-50" : ""}`}
-                >
-                  <input
-                    type="radio"
-                    name="tx"
-                    checked={checked}
-                    onChange={() => {
-                      setSelectedId(t.id)
-                      setAmountStr(String(Math.round(Math.min(remaining, v) * 100) / 100))
-                    }}
-                    className="mt-1"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-muted-foreground">{t.date}</p>
-                    <p className="text-sm break-words">{t.libelle}</p>
-                  </div>
-                  <p className="font-mono text-sm flex-shrink-0 text-green-700">
-                    {fmt(v)} {t.devise || "MUR"}
-                  </p>
-                </label>
+                <div key={t.id} className={`p-3 ${checked ? "bg-green-50" : ""}`}>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(t)}
+                      className="mt-1"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted-foreground">{t.date}</p>
+                      <p className="text-sm break-words">{t.libelle}</p>
+                    </div>
+                    <p className="font-mono text-sm flex-shrink-0 text-green-700">
+                      {fmt(v)} {t.devise || "MUR"}
+                    </p>
+                  </label>
+                  {checked && (
+                    <div className="mt-2 flex items-center gap-2 pl-7 text-xs">
+                      <span className="text-muted-foreground">Affecté (MUR)&nbsp;:</span>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0"
+                        value={amounts[t.id] ?? String(round2(Math.min(v, remaining)))}
+                        onChange={(e) => setAmounts((a) => ({ ...a, [t.id]: e.target.value }))}
+                        className={`h-8 w-32 text-right font-mono ${over ? "border-rose-400" : ""}`}
+                      />
+                      <span className="text-muted-foreground">/ virement {fmt(v)}</span>
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
         )}
 
-        {selectedTx && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Montant affecté (MUR) :</span>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                value={amountStr}
-                onChange={(e) => setAmountStr(e.target.value)}
-                className={`h-8 w-36 text-right font-mono ${overSolde || overTx ? "border-rose-400" : ""}`}
-              />
-              <span className="text-xs text-muted-foreground">
-                / virement {fmt(txAmount)} · solde {fmt(remaining)}
+        {selectedTxs.length > 0 && (
+          <div
+            className={`rounded border p-2.5 text-sm ${
+              allocValid ? "bg-green-50 border-green-200" : "bg-rose-50 border-rose-200"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span>
+                {selectedTxs.length} règlement{selectedTxs.length > 1 ? "s" : ""} · total affecté{" "}
+                <span className="font-mono">{fmt(sumAlloc)} MUR</span>
               </span>
+              <span className="font-mono text-xs text-muted-foreground">solde {fmt(remaining)} MUR</span>
             </div>
             {!allocValid ? (
-              <p className="text-[11px] text-rose-700">
-                {overSolde
-                  ? "Le montant dépasse le solde restant de la facture."
-                  : overTx
-                    ? "Le montant dépasse le virement sélectionné."
-                    : "Le montant doit être strictement positif."}
+              <p className="text-[11px] text-rose-700 mt-1">
+                {!sumWithinSolde
+                  ? "Le total des règlements dépasse le solde de la facture. Décoche un virement ou réduis un montant."
+                  : !eachWithinTx
+                    ? "Un montant dépasse le virement sélectionné."
+                    : "Chaque montant affecté doit être strictement positif."}
               </p>
-            ) : ecartTreatment ? (
-              <p className="text-[11px] text-amber-800">
-                Écart de {fmt(Math.abs(ecartTreatment.ecartBrut))} MUR → comptabilisé en{" "}
-                <span className="font-mono">{ecartTreatment.compte}</span> ({ecartTreatment.libelle}).
+            ) : resteApres > 0.01 ? (
+              <p className="text-[11px] text-amber-800 mt-1">
+                Paiement partiel — la facture restera « partiel » (reste {fmt(resteApres)} MUR).
               </p>
-            ) : amount < remaining - 0.01 ? (
-              <p className="text-[11px] text-amber-800">
-                Paiement partiel — la facture restera « partiel » (reste {fmt(remaining - amount)} MUR).
-              </p>
-            ) : null}
+            ) : (
+              <p className="text-[11px] text-green-700 mt-1">La facture sera soldée.</p>
+            )}
           </div>
         )}
 
@@ -301,7 +338,7 @@ export function AffecterReglementDialog({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={busy || !selectedTx || !allocValid}
+            disabled={busy || !allocValid}
             className="bg-green-600 hover:bg-green-700 text-white"
           >
             {busy ? (
@@ -309,7 +346,9 @@ export function AffecterReglementDialog({
             ) : (
               <CheckCircle2 className="h-4 w-4 mr-1.5" />
             )}
-            {ecartTreatment ? `Affecter + écart → ${ecartTreatment.compte}` : "Affecter le règlement"}
+            {selectedTxs.length > 1
+              ? `Affecter ${selectedTxs.length} règlements`
+              : "Affecter le règlement"}
           </Button>
         </DialogFooter>
       </DialogContent>

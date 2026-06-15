@@ -52,6 +52,7 @@ import {
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { t, getLocale } from "@/lib/i18n"
+import { ECART_TYPE_OPTIONS, resolveEcartCompte, type EcartTypeChoice } from "@/lib/accounting/rapprochement/ecart-ui"
 
 const AGENT_NAME = "Lex Banque"
 
@@ -384,7 +385,7 @@ export default function RapprochementPage() {
   const validateOne = useCallback(
     async (
       tx: BankTx,
-      opts?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[] }
+      opts?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[]; ecart_compte?: string; ecart_libelle?: string }
     ): Promise<{ ok: boolean; error?: string; lettre?: string }> => {
       const body: any = {
         societe_id: selectedSociete,
@@ -402,6 +403,9 @@ export default function RapprochementPage() {
         // facture, au moins une partielle) → action lettrer_partiel.
         body.action = "lettrer_partiel"
         body.allocations = opts.allocations
+        // Qualification manuelle de l'écart (compte d'attente 471 / change / …)
+        if (opts.ecart_compte) body.ecart_compte = opts.ecart_compte
+        if (opts.ecart_libelle) body.ecart_libelle = opts.ecart_libelle
       } else if (fids.length > 0) {
         if (fids.length > 1) {
           body.action = "lettrer_multi"
@@ -462,7 +466,7 @@ export default function RapprochementPage() {
 
   // ── Confirmer la liaison : appelle lettrer_multi/lettrer_manuel ──────
   const handleLinkConfirm = useCallback(async (
-    payload?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[] }
+    payload?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[]; ecart_compte?: string; ecart_libelle?: string }
   ) => {
     if (!linkingTx) return
     const fids = Array.from(linkSelectedFids)
@@ -472,7 +476,12 @@ export default function RapprochementPage() {
     const partiel = payload?.partiel === true
     setLinking(true)
     const txWithFids = { ...linkingTx, facture_ids: fids, facture_id: fids[0] }
-    const r = await validateOne(txWithFids, { partiel, allocations: payload?.allocations })
+    const r = await validateOne(txWithFids, {
+      partiel,
+      allocations: payload?.allocations,
+      ecart_compte: payload?.ecart_compte,
+      ecart_libelle: payload?.ecart_libelle,
+    })
     setLinking(false)
     if (!r.ok) return showToast(`Échec : ${r.error}`, "error")
     if (partiel) {
@@ -889,7 +898,7 @@ function LinkFacturesDialog({
   filter: string
   setFilter: (s: string) => void
   onClose: () => void
-  onConfirm: (payload?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[] }) => void
+  onConfirm: (payload?: { partiel?: boolean; allocations?: { facture_id: string; montant: number }[]; ecart_compte?: string; ecart_libelle?: string }) => void
   loading: boolean
 }) {
   const open = tx !== null
@@ -908,10 +917,14 @@ function LinkFacturesDialog({
   const [dateDebut, setDateDebut] = useState("")
   const [dateFin, setDateFin] = useState("")
   const [amounts, setAmounts] = useState<Record<string, string>>({})
+  // Qualification de l'écart (compte d'attente 471 / change / …) quand on solde
+  // une facture pour un montant ≠ du prélèvement (règlement en devise).
+  const [ecartType, setEcartType] = useState<EcartTypeChoice>("auto")
   useEffect(() => {
     setDateDebut("")
     setDateFin("")
     setAmounts({})
+    setEcartType("auto")
   }, [tx?.id])
 
   // Pré-filtre par tiers détecté + texte saisi + plage de dates
@@ -1000,12 +1013,18 @@ function LinkFacturesDialog({
 
   const handleConfirmClick = () => {
     if (hasPartial || ecartTreatment) {
+      // diffAlloc = prélèvement − somme affectée (signe attendu par resolveEcartCompte)
+      const ecartOverride =
+        Math.abs(diffAlloc) > 1 ? resolveEcartCompte(ecartType, diffAlloc) : null
       onConfirm({
         partiel: true,
         allocations: selectedFactures.map((f) => ({
           facture_id: f.id,
           montant: Math.round(allocAmount(f) * 100) / 100,
         })),
+        ...(ecartOverride
+          ? { ecart_compte: ecartOverride.compte, ecart_libelle: ecartOverride.libelle }
+          : {}),
       })
     } else {
       onConfirm({ partiel: false })
@@ -1169,9 +1188,24 @@ function LinkFacturesDialog({
                       <span className="text-xs text-muted-foreground"> · {f.tiers}</span>
                     )}
                     {partial && !over && (
-                      <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 border-amber-300">
-                        partiel
-                      </Badge>
+                      <>
+                        <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                          partiel
+                        </Badge>
+                        {/* Solder = imputer le solde complet → la facture est
+                            soldée et le delta avec le prélèvement devient un
+                            écart à qualifier (compte d'attente, change…). */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAmounts((prev) => ({ ...prev, [f.id]: String(Math.round(reste * 100) / 100) }))
+                            setEcartType((prev) => (prev === "auto" ? "attente" : prev))
+                          }}
+                          className="ml-1 text-[10px] text-blue-600 underline hover:text-blue-800"
+                        >
+                          solder
+                        </button>
+                      </>
                     )}
                   </div>
                   <Input
@@ -1227,10 +1261,32 @@ function LinkFacturesDialog({
               : "Chaque montant affecté doit être strictement positif."}
           </p>
         ) : ecartTreatment ? (
-          <p className="text-xs text-amber-800">
-            Écart de {fmt(Math.abs(ecartTreatment.ecartBrut))} MUR → comptabilisé en{" "}
-            <span className="font-mono">{ecartTreatment.compte}</span> ({ecartTreatment.libelle}).
-          </p>
+          <div className="rounded border border-amber-200 bg-amber-50 p-2 space-y-1.5">
+            <span className="text-xs text-amber-800">
+              Écart de {fmt(Math.abs(ecartTreatment.ecartBrut))} MUR — où l'imputer&nbsp;?
+            </span>
+            <select
+              value={ecartType}
+              onChange={(e) => setEcartType(e.target.value as EcartTypeChoice)}
+              className="w-full h-8 rounded border border-amber-300 bg-white px-2 text-xs"
+            >
+              {ECART_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            {(() => {
+              const disp =
+                resolveEcartCompte(ecartType, diffAlloc) ?? {
+                  compte: ecartTreatment.compte,
+                  libelle: ecartTreatment.libelle,
+                }
+              return (
+                <p className="text-[11px] text-amber-700 font-mono">
+                  → {disp.compte} ({disp.libelle})
+                </p>
+              )
+            })()}
+          </div>
         ) : null}
 
         <DialogFooter>
@@ -1250,7 +1306,7 @@ function LinkFacturesDialog({
             ) : ecartTreatment ? (
               <>
                 <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                Solder + écart → {ecartTreatment.compte} ({selectedFactures.length})
+                Solder + écart → {(resolveEcartCompte(ecartType, diffAlloc) ?? ecartTreatment).compte} ({selectedFactures.length})
               </>
             ) : hasPartial ? (
               <>
