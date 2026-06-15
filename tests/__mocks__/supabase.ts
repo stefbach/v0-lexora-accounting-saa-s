@@ -46,6 +46,8 @@ type Filter =
   | { op: 'gte'; col: string; val: any }
   | { op: 'lt'; col: string; val: any }
   | { op: 'lte'; col: string; val: any }
+  | { op: 'like'; col: string; val: string }
+  | { op: 'ilike'; col: string; val: string }
 
 interface InsertCall {
   table: string
@@ -96,6 +98,8 @@ interface QueryBuilder extends PromiseLike<{ data: any; error: any }> {
   gte: (col: string, val: any) => QueryBuilder
   lt: (col: string, val: any) => QueryBuilder
   lte: (col: string, val: any) => QueryBuilder
+  like: (col: string, val: string) => QueryBuilder
+  ilike: (col: string, val: string) => QueryBuilder
   limit: (n: number) => QueryBuilder
   maybeSingle: () => Promise<{ data: any; error: any }>
   single: () => Promise<{ data: any; error: any }>
@@ -133,6 +137,15 @@ function applyFilters(rows: any[], filters: Filter[]): any[] {
         case 'lte':
           if (!(Number(v) <= Number(f.val))) return false
           break
+        case 'like':
+        case 'ilike': {
+          // Traduit le motif SQL LIKE (% = .*, _ = .) en regex.
+          if (v == null) return false
+          const esc = String(f.val).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const re = new RegExp('^' + esc.replace(/%/g, '.*').replace(/_/g, '.') + '$', f.op === 'ilike' ? 'i' : '')
+          if (!re.test(String(v))) return false
+          break
+        }
       }
     }
     return true
@@ -239,6 +252,8 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
       gte(col, val) { filters.push({ op: 'gte', col, val }); return builder },
       lt(col, val) { filters.push({ op: 'lt', col, val }); return builder },
       lte(col, val) { filters.push({ op: 'lte', col, val }); return builder },
+      like(col: string, val: string) { filters.push({ op: 'like', col, val }); return builder },
+      ilike(col: string, val: string) { filters.push({ op: 'ilike', col, val }); return builder },
       limit(n: number) { limitN = n; return builder },
       async maybeSingle() {
         const { data, error } = await execute()
