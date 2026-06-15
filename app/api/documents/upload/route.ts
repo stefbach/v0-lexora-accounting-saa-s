@@ -11,7 +11,7 @@ import {
   compareCurrency,
   type Currency,
 } from '@/lib/accounting/validate-bank-currency'
-import { parseAmount, parseAmountSafe, ParseAmountError } from '@/lib/utils/bank-amount'
+import { parseAmount, parseAmountSafe, ParseAmountError, resolveTransactionAmounts } from '@/lib/utils/bank-amount'
 import { getCompteComptable } from '@/lib/accounting/comptes-bancaires'
 import { upsertReleveBancaire } from '@/lib/bank/upsert-releve'
 
@@ -2356,12 +2356,14 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               }
             })
 
-            // Merge: prefer explicit transactions[], fall back to converted lignes[]
+            // Merge: prefer explicit transactions[], fall back to converted lignes[].
+            // resolveTransactionAmounts gère le fallback montant_origine/sens pour
+            // les relevés en devise étrangère (EUR/USD) où le modèle laisse
+            // debit/credit à 0 — sinon tout le relevé est à zéro (cf. compte EUR).
             normalizedTransactions = rawTransactions.length > 0
               ? rawTransactions.map((t: any) => ({
                   ...t,
-                  debit: parseAmount(t.debit),
-                  credit: parseAmount(t.credit),
+                  ...resolveTransactionAmounts(t),
                 }))
               : lignesAsTransactions
 

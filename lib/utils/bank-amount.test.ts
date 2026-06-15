@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { ParseAmountError, parseAmount, parseAmountSafe } from "./bank-amount"
+import { ParseAmountError, parseAmount, parseAmountSafe, resolveTransactionAmounts } from "./bank-amount"
 
 describe("parseAmount — Anglo-Saxon format (1,234.56)", () => {
   it("parses US standard '1,234.56'", () => {
@@ -232,5 +232,78 @@ describe("parseAmountSafe", () => {
     expect(parseAmountSafe("")).toBe(0)
     expect(parseAmountSafe(null)).toBe(0)
     expect(warnSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("resolveTransactionAmounts — multi-currency fallbacks", () => {
+  it("uses explicit debit/credit when present (MUR statement)", () => {
+    expect(resolveTransactionAmounts({ debit: 1500, credit: 0 })).toEqual({ debit: 1500, credit: 0 })
+    expect(resolveTransactionAmounts({ debit: 0, credit: "2 000,50" })).toEqual({ debit: 0, credit: 2000.5 })
+  })
+
+  it("falls back to debit_devise/credit_devise when debit/credit are 0 (shape A)", () => {
+    // EUR statement, fee line: debit_devise filled, credit_devise null
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, debit_devise: 0.17, credit_devise: null, montant_origine: 0.17,
+    })).toEqual({ debit: 0.17, credit: 0 })
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, debit_devise: 0, credit_devise: 250, montant_origine: 250,
+    })).toEqual({ debit: 0, credit: 250 })
+  })
+
+  it("falls back to montant_origine + sens when no split columns (shape B)", () => {
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, sens: "credit", montant_origine: 12000,
+    })).toEqual({ debit: 0, credit: 12000 })
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, sens: "debit", montant_origine: 11500,
+    })).toEqual({ debit: 11500, credit: 0 })
+  })
+
+  it("prefers debit_devise/credit_devise over montant_origine+sens", () => {
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, debit_devise: 8.52, credit_devise: 0, sens: "credit", montant_origine: 8.52,
+    })).toEqual({ debit: 8.52, credit: 0 })
+  })
+
+  it("returns {0,0} when no amount or sens can be resolved", () => {
+    expect(resolveTransactionAmounts({ debit: 0, credit: 0 })).toEqual({ debit: 0, credit: 0 })
+    expect(resolveTransactionAmounts({ debit: 0, credit: 0, montant_origine: 50 })).toEqual({ debit: 0, credit: 0 })
+  })
+
+  it("takes the absolute value of native amounts (sign carried by side)", () => {
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, debit_devise: -0.3, credit_devise: 0, montant_origine: -0.3,
+    })).toEqual({ debit: 0.3, credit: 0 })
+  })
+})
+
+describe("resolveTransactionAmounts — *_mur shape (MUR statements)", () => {
+  it("derives side+amount from debit_mur/credit_mur when no sens (shape C)", () => {
+    // MUR statement, fee line: debit_mur filled, taux_change = 1
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, debit_mur: 115, credit_mur: 0, montant_origine: 115,
+    })).toEqual({ debit: 115, credit: 0 })
+    // client payment credit side
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, debit_mur: 0, credit_mur: 69610.23, montant_origine: 69610.23,
+    })).toEqual({ debit: 0, credit: 69610.23 })
+  })
+
+  it("uses *_mur amount when no native montant field is present", () => {
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, debit_mur: 500, credit_mur: 0,
+    })).toEqual({ debit: 500, credit: 0 })
+  })
+
+  it("prefers native montant_origine over *_mur for the amount (foreign account)", () => {
+    // EUR line: native 1000 EUR, *_mur = converted 46000 MUR, sens debit
+    expect(resolveTransactionAmounts({
+      debit: 0, credit: 0, sens: "debit", montant_origine: 1000, debit_mur: 46000,
+    })).toEqual({ debit: 1000, credit: 0 })
+  })
+
+  it("still returns {0,0} when only montant_origine with no side info", () => {
+    expect(resolveTransactionAmounts({ debit: 0, credit: 0, montant_origine: 50 })).toEqual({ debit: 0, credit: 0 })
   })
 })

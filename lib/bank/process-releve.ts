@@ -61,6 +61,14 @@ export interface ReleveExtraction {
     libelle?: string
     debit?: number | string
     credit?: number | string
+    debit_devise?: number | string | null
+    credit_devise?: number | string | null
+    debit_mur?: number | string | null
+    credit_mur?: number | string | null
+    montant_origine?: number | string | null
+    montant_devise?: number | string | null
+    montant?: number | string | null
+    sens?: "debit" | "credit"
     reference?: string
     solde_apres?: number | string | null
     tiers_detecte?: string
@@ -245,15 +253,41 @@ export async function processReleveBancaire(
 
   const normalized =
     rawTx.length > 0
-      ? rawTx.map((t) => ({
-          date: t.date || "",
-          libelle: t.libelle || "",
-          debit: toNumberSoft(t.debit),
-          credit: toNumberSoft(t.credit),
-          reference: t.reference || null,
-          solde_apres: t.solde_apres ?? null,
-          tiers_detecte: t.tiers_detecte || null,
-        }))
+      ? rawTx.map((t) => {
+          let debit = toNumberSoft(t.debit)
+          let credit = toNumberSoft(t.credit)
+          // Le modèle laisse souvent debit/credit à 0 et met le montant dans des
+          // champs natifs (devise étrangère ET MUR). Mêmes 3 variantes que
+          // resolveTransactionAmounts : debit_devise/credit_devise, montant+sens,
+          // ou debit_mur/credit_mur (relevé MUR, taux 1 → *_mur == natif).
+          if (debit === 0 && credit === 0) {
+            const dDev = toNumberSoft(t.debit_devise)
+            const cDev = toNumberSoft(t.credit_devise)
+            if (dDev !== 0 || cDev !== 0) {
+              debit = Math.abs(dDev)
+              credit = Math.abs(cDev)
+            } else {
+              const native = toNumberSoft(t.montant_origine ?? t.montant_devise ?? t.montant)
+              const dMur = toNumberSoft(t.debit_mur)
+              const cMur = toNumberSoft(t.credit_mur)
+              if (t.sens === "debit") debit = Math.abs(native || dMur)
+              else if (t.sens === "credit") credit = Math.abs(native || cMur)
+              else if (dMur !== 0 || cMur !== 0) {
+                debit = dMur !== 0 ? Math.abs(native || dMur) : 0
+                credit = cMur !== 0 ? Math.abs(native || cMur) : 0
+              }
+            }
+          }
+          return {
+            date: t.date || "",
+            libelle: t.libelle || "",
+            debit,
+            credit,
+            reference: t.reference || null,
+            solde_apres: t.solde_apres ?? null,
+            tiers_detecte: t.tiers_detecte || null,
+          }
+        })
       : lignesAsTx
 
   if (normalized.length === 0) {
