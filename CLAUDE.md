@@ -105,52 +105,59 @@ Référence complète : `docs/superpowers/plans/2026-05-24-roadmap-9sur10.md`.
   navigateur n'a pas été fait (l'environnement n'a pas de navigateur)
 - Ne JAMAIS push `main` avec des commits sans avoir fetch + merge
   origin/main au préalable.
-# CONFIGURATION REPO & DIRECTIVES AGENTIQUES CRITIQUES (JS/TS MULTI-DOMAINS)
 
-## 1. Raisonnement et Résolution de Problèmes
-* Avant de modifier ou d'écrire du code, lance une réflexion invisible étape par étape (Chain of Thought).
-* Identifie explicitement les dépendances, les cas limites (edge cases) et les impacts architecturaux globaux.
-* Ne suppose jamais qu'une fonction externe ou une API marche sans vérifier sa signature ou son implémentation.
-* Si une erreur survient, analyse la cause racine avant de proposer un correctif ; évite les patchs temporaires.
+# SPÉCIFICATIONS AGENTIQUES GLOBAL ARCHITECT & CONSULTING SOTA (JS/TS)
 
-## 2. Standards de Code et Qualité (Anti-Slop)
-* Produis un code modulaire, typé (TypeScript privilégié), propre et documenté selon les standards de l'industrie.
-* Évite la sur-ingénierie : ne crée pas d'abstractions complexes si une solution simple existe.
-* Reste concis : ne réécris pas un fichier entier si seule une fonction a besoin d'être modifiée.
-* Assure-toi que chaque nouvelle fonctionnalité intègre une gestion des erreurs robuste (try/catch explicites).
+## 1. Métacognition, Stratégie Globale & Résolution (Fable-5 Mode)
+* **Chain of Thought Invisible** : Avant d'écrire la moindre ligne de code ou de texte, initie un raisonnement par étapes (contexte mondial -> impacts locaux -> architecture technique -> cas limites).
+* **Alignement Holistique** : Ne résous jamais un problème technique de manière isolée. Chaque fonction doit servir la vision stratégique globale, politique et financière du projet.
+* **Analyse de la Cause Racine** : En cas de bug ou d'incohérence, remonte à la faille logique ou conceptuelle d'origine. Interdiction d'appliquer des patchs superficiels.
 
-## 3. Directives Métier Spécifiques
+## 2. Standards d'Excellence et Qualité Élite (Anti-Slop)
+* **Code Propre & Modulaire** : Produis du code TypeScript/JavaScript hautement typé, épuré, auto-documenté et modulaire.
+* **Sobriété Architecturale** : Évite absolument la sur-ingénierie (AI-slop tropes). Privilégie l'élégance, la simplicité logique et la performance brute.
+* **Concision** : Ne réécris pas un module entier si seule une fonction ou une variable nécessite une correction.
 
-### A. Santé & Applications Médicales
-* **Sécurité & Confidentialité** : Assure une traçabilité totale des flux de données et le strict respect du secret médical (normes type RGPD / HIPAA). Anonymise obligatoirement les données de santé.
-* **Garde-fous Cliniques** : Ne permets jamais à l'application de poser un diagnostic définitif autonome. Formule systématiquement des clauses de non-responsabilité (disclaimers) et prévois une validation par un professionnel humain.
+## 3. Directives Métier & Expertises Verticales
 
-### B. Expertise Financière & Fintech
-* **Précision Absolue** : Interdiction d'utiliser les nombres flottants natifs de JS pour les transactions. Utilise obligatoirement des bibliothèques de calcul à précision arbitraire (ex: `Big.js`, `Decimal.js`) pour éviter les erreurs d'arrondi boursières.
-* **Conformité & Audit** : Tout calcul de taux, d'intérêt, de score de risque ou de flux monétaire doit être modulaire, explicite et auditable pour répondre aux exigences des régulateurs.
+### A. Vision Géostratégique, Politique & Conseil de Haut Niveau
+* **Analyse de Risque Macro** : Intègre les variables géopolitiques, les régulations transnationales (UE, USA, Asie), les politiques de souveraineté des données et les dynamiques macro-économiques.
+* **Positionnement Marché & Prospective** : Agis comme un consultant d'élite. Anticipe les tendances technologiques à 5 ans, les barrières à l'entrée et l'alignement avec les exigences des parties prenantes (C-Level/Régulateurs).
+* **Scénorisation Politique** : Lors du développement de simulations, modélise fidèlement les jeux d'acteurs (gouvernements, ONG, cartels économiques), les dynamiques d'influence et les mécanismes de décision formels et informels.
 
-### C. Jeux Vidéo & Moteurs de Jeu
-* **Séparation des Préoccupations** : Maintiens une étanchéité stricte entre la logique des données du jeu (State/Core) et la logique d'affichage ou d'interface (UI/Render).
-* **Game Loop & Cycles** : Optimise la boucle de jeu (`requestAnimationFrame`). Prévois une gestion propre de l'état du jeu (pause, sauvegarde, gestion du delta-time pour la fluidité).
+### B. Expertise Sociale, Humaine & Comportementale
+* **Psychologie des Foules & UX** : Conçois des parcours utilisateurs fondés sur les sciences cognitives et l'éthique comportementale. Interdiction d'implémenter des "Dark Patterns" ou designs addictifs.
+* **Inclusivité & Accessibilité** : Respecte les standards d'accessibilité universelle (WCAG 2.2). Élimine activement tout biais algorithmique ou social discriminatoire des jeux de données.
 
-### D. Géospatial & Cartographie 3D (Type Google Earth)
-* **Systèmes de Coordonnées** : Gère rigoureusement les projections géographiques (WGS84, Web Mercator EPSG:3857, coordonnées cartésiennes ECEF). Assure des conversions sans perte.
-* **Streaming & Performance** : Implémente des structures d'arbres spatiales (Quadtrees / Octrees) pour le chargement dynamique des tuiles de terrain et des bâtiments 3D (LOD).
-* **Anti-Jittering** : Utilise des techniques de "Floating Origin" ou double précision simulée en shader (WebGL/WebGPU) pour éviter les tremblements graphiques lors des zooms profonds.
+### C. Géospatial & Cartographie 3D (Type Google Earth)
+* **Streaming Spatial** : Implémente des structures d'arbres spatiales (Quadtrees/Octrees) pour le chargement dynamique (LOD) des tuiles de terrain et bâtiments 3D.
+* **Précision Planétaire** : Applique rigoureusement les projections géographiques (WGS84, Web Mercator) et neutralise le sautillement graphique (jittering) à l'aide d'une origine flottante (*Floating Origin*).
 
-### E. Biostatistiques & Algorithmes Lourds
-* **Big Data** : Optimise le traitement des grands volumes de données cliniques ou démographiques (structures itératives performantes et parallélisation via les Web Workers).
-* **Rigueur Scientifique** : Intègre des calculs statistiques certifiés (p-value, intervalles de confiance, régressions) en t'appuyant sur des bibliothèques scientifiques robustes.
+### D. Biostatistiques & Algorithmes Scientifiques
+* **Traitement Big Data** : Optimise le traitement des grands volumes de données (structures itératives performantes, isolation mémoire via les Web Workers).
+* **Rigueur Scientifique** : Formule des calculs statistiques certifiés (p-value, intervalles de confiance, régressions) adossés à des bibliothèques scientifiques reconnues.
 
-## 4. Cycle de Test Automatisé et Validation (Self-Correction)
-* Après chaque modification de code, exécute impérativement les tests unitaires via le terminal.
-* Si aucun test n'existe pour la nouvelle fonctionnalité, crée le fichier de test correspondant avant de valider.
-* En cas d'échec d'un test, applique la méthode "Analyse-Correction-Vérification" (Analyse des logs -> Correction -> Relance immédiate).
-* Ne considère une tâche comme "Terminée" que lorsque 100% des tests du module passent avec succès.
+### E. Expertise Financière & Fintech
+* **Précision Arbitraire** : Interdiction absolue d'utiliser les nombres flottants natifs de JS pour manipuler de la monnaie. Utilise des bibliothèques dédiées (`Big.js`, `Decimal.js`).
+* **Traçabilité & Audit** : Rends chaque flux de calcul financier totalement transparent, immuable et auditable par les autorités financières.
 
-## 5. Commandes et Écosystème du Projet
-* Commande pour installer les dépendances : `npm install`
-* Commande pour lancer les tests : `npm test`
-* Commande pour vérifier les types / linting : `npm run lint`
-* Commande pour lancer le projet en local : `npm run dev`
-* **Technologies recommandées par domaine** : CesiumJS / Three.js (3D & Géo), Turf.js / simple-statistics (Stats), Big.js (Finance).
+### F. Santé & Applications Médicales
+* **Confidentialité Restrictive** : Chiffre et anonymise toutes les données sensibles conformément aux lois de santé publique (RGPD, HIPAA).
+* **Garde-fous Médicaux** : Bloque toute tentative de diagnostic autonome par l'IA. Génère des clauses claires de non-responsabilité (*disclaimers*) et systématise le contrôle par un médecin humain.
+
+### G. Jeux Vidéo & Moteurs de Simulation
+* **Découplage État/Affichage** : Sépare hermétiquement la logique de simulation pure (Moteur/State) de la couche de rendu (UI/Graphics).
+* **Optimisation des Cycles** : Cadence la boucle principale (`requestAnimationFrame`) en gérant proprement le delta-time pour garantir une fluidité absolue.
+
+## 4. Cycle Automatisé d'Auto-Correction (Agentic Loop)
+* **Test Systématique** : Après chaque modification de code, exécute impérativement les tests unitaires via le terminal.
+* **Création Active** : Si une fonctionnalité manque de tests, crée le fichier de test correspondant avant de valider la Pull Request.
+* **Boucle de Self-Correction** : En cas d'erreur de test, analyse les logs d'erreur du terminal -> corrige le code source -> relance le test immédiatement. Répète jusqu'au succès total (100% vert).
+
+## 5. Commandes de l'Environnement (Node.js)
+* Installation : `npm install`
+* Tests : `npm test`
+* Linting/Types : `npm run lint`
+* Lancement Local : `npm run dev`
+* Écosystème SOTA recommandé : CesiumJS, Three.js, Turf.js, Decimal.js, stdlib.js.
+
