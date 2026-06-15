@@ -100,6 +100,7 @@ interface QueryBuilder extends PromiseLike<{ data: any; error: any }> {
   lte: (col: string, val: any) => QueryBuilder
   like: (col: string, val: string) => QueryBuilder
   ilike: (col: string, val: string) => QueryBuilder
+  order: (col: string, opts?: { ascending?: boolean }) => QueryBuilder
   limit: (n: number) => QueryBuilder
   maybeSingle: () => Promise<{ data: any; error: any }>
   single: () => Promise<{ data: any; error: any }>
@@ -169,6 +170,7 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
     let updatePatch: any = null
     const filters: Filter[] = []
     let limitN: number | null = null
+    let orderBy: { col: string; ascending: boolean } | null = null
 
     const ensureTable = () => {
       if (!state.tables[table]) state.tables[table] = []
@@ -187,6 +189,15 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
       if (kind === 'select') {
         state.selects.push({ table, cols, filters: [...filters], limit: limitN })
         let rows = applyFilters(ensureTable(), filters)
+        if (orderBy) {
+          const { col, ascending } = orderBy
+          rows = [...rows].sort((a, b) => {
+            const av = a?.[col], bv = b?.[col]
+            if (av === bv) return 0
+            const cmp = av < bv ? -1 : 1
+            return ascending ? cmp : -cmp
+          })
+        }
         if (limitN !== null) rows = rows.slice(0, limitN)
         return { data: rows, error: null }
       }
@@ -254,6 +265,7 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
       lte(col, val) { filters.push({ op: 'lte', col, val }); return builder },
       like(col: string, val: string) { filters.push({ op: 'like', col, val }); return builder },
       ilike(col: string, val: string) { filters.push({ op: 'ilike', col, val }); return builder },
+      order(col: string, opts?: { ascending?: boolean }) { orderBy = { col, ascending: opts?.ascending !== false }; return builder },
       limit(n: number) { limitN = n; return builder },
       async maybeSingle() {
         const { data, error } = await execute()

@@ -166,7 +166,7 @@ export default defineConfig({
         'lib/rh/unpaid.ts',
         'lib/rh/ot-aggregate.ts',
         'lib/accounting/rapprochement/post-processing.ts',
-        'lib/accounting/rapprochement/lettrage.ts',
+        // 'lib/accounting/rapprochement/lettrage.ts' — RÉINTÉGRÉ (couvert ~100%).
         'lib/accounting/rapprochement/matching-engine.ts',
         'lib/accounting/intelligent-rapprochement.ts',
         'lib/accounting/semantic-rapprochement.ts',
