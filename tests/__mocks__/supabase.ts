@@ -46,6 +46,8 @@ type Filter =
   | { op: 'gte'; col: string; val: any }
   | { op: 'lt'; col: string; val: any }
   | { op: 'lte'; col: string; val: any }
+  | { op: 'like'; col: string; val: string }
+  | { op: 'ilike'; col: string; val: string }
 
 interface InsertCall {
   table: string
@@ -83,10 +85,10 @@ export interface MockSupabaseClient {
   _reset: () => void
 }
 
-interface QueryBuilder extends PromiseLike<{ data: any; error: any }> {
-  select: (cols?: string) => QueryBuilder
+interface QueryBuilder extends PromiseLike<{ data: any; error: any; count?: number | null }> {
+  select: (cols?: string, opts?: { count?: string }) => QueryBuilder
   insert: (rows: any | any[]) => QueryBuilder
-  update: (patch: any) => QueryBuilder
+  update: (patch: any, opts?: { count?: string }) => QueryBuilder
   delete: () => QueryBuilder
   eq: (col: string, val: any) => QueryBuilder
   neq: (col: string, val: any) => QueryBuilder
@@ -96,9 +98,24 @@ interface QueryBuilder extends PromiseLike<{ data: any; error: any }> {
   gte: (col: string, val: any) => QueryBuilder
   lt: (col: string, val: any) => QueryBuilder
   lte: (col: string, val: any) => QueryBuilder
+  like: (col: string, val: string) => QueryBuilder
+  ilike: (col: string, val: string) => QueryBuilder
+  order: (col: string, opts?: { ascending?: boolean }) => QueryBuilder
+  range: (from: number, to: number) => QueryBuilder
   limit: (n: number) => QueryBuilder
   maybeSingle: () => Promise<{ data: any; error: any }>
   single: () => Promise<{ data: any; error: any }>
+}
+
+/** Compare deux valeurs : numérique si possible, sinon native. -1/0/1. */
+function cmpOrder(a: any, b: any): number {
+  const na = Number(a), nb = Number(b)
+  const bothNum = a !== "" && b !== "" && Number.isFinite(na) && Number.isFinite(nb)
+  const av = bothNum ? na : a
+  const bv = bothNum ? nb : b
+  if (av < bv) return -1
+  if (av > bv) return 1
+  return 0
 }
 
 function applyFilters(rows: any[], filters: Filter[]): any[] {
@@ -121,18 +138,30 @@ function applyFilters(rows: any[], filters: Filter[]): any[] {
             if (v !== null && v !== undefined) return false
           } else if (v !== f.val) return false
           break
+        // Comparaisons d'ordre : numériques si les deux côtés sont des nombres
+        // finis, sinon natives (chaînes) — indispensable pour les dates ISO
+        // (`date_taux <= '2025-11-10'`), que Number() transformerait en NaN.
         case 'gt':
-          if (!(Number(v) > Number(f.val))) return false
+          if (!(cmpOrder(v, f.val) > 0)) return false
           break
         case 'gte':
-          if (!(Number(v) >= Number(f.val))) return false
+          if (!(cmpOrder(v, f.val) >= 0)) return false
           break
         case 'lt':
-          if (!(Number(v) < Number(f.val))) return false
+          if (!(cmpOrder(v, f.val) < 0)) return false
           break
         case 'lte':
-          if (!(Number(v) <= Number(f.val))) return false
+          if (!(cmpOrder(v, f.val) <= 0)) return false
           break
+        case 'like':
+        case 'ilike': {
+          // Traduit le motif SQL LIKE (% = .*, _ = .) en regex.
+          if (v == null) return false
+          const esc = String(f.val).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const re = new RegExp('^' + esc.replace(/%/g, '.*').replace(/_/g, '.') + '$', f.op === 'ilike' ? 'i' : '')
+          if (!re.test(String(v))) return false
+          break
+        }
       }
     }
     return true
@@ -156,6 +185,9 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
     let updatePatch: any = null
     const filters: Filter[] = []
     let limitN: number | null = null
+    let orderBy: { col: string; ascending: boolean } | null = null
+    let wantCount = false
+    let rangeFromTo: { from: number; to: number } | null = null
 
     const ensureTable = () => {
       if (!state.tables[table]) state.tables[table] = []
@@ -167,15 +199,28 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
       return options.errorOn({ table, kind: opKind })
     }
 
-    const execute = async (): Promise<{ data: any; error: any }> => {
+    const execute = async (): Promise<{ data: any; error: any; count?: number | null }> => {
       const err = maybeError(kind)
       if (err) return { data: null, error: err }
 
       if (kind === 'select') {
         state.selects.push({ table, cols, filters: [...filters], limit: limitN })
         let rows = applyFilters(ensureTable(), filters)
-        if (limitN !== null) rows = rows.slice(0, limitN)
-        return { data: rows, error: null }
+        // count = nombre total filtré, AVANT pagination range/limit (sémantique
+        // PostgREST `{ count: 'exact' }`).
+        const totalCount = rows.length
+        if (orderBy) {
+          const { col, ascending } = orderBy
+          rows = [...rows].sort((a, b) => {
+            const av = a?.[col], bv = b?.[col]
+            if (av === bv) return 0
+            const cmp = av < bv ? -1 : 1
+            return ascending ? cmp : -cmp
+          })
+        }
+        if (rangeFromTo) rows = rows.slice(rangeFromTo.from, rangeFromTo.to + 1)
+        else if (limitN !== null) rows = rows.slice(0, limitN)
+        return { data: rows, error: null, count: wantCount ? totalCount : null }
       }
 
       if (kind === 'insert') {
@@ -195,7 +240,7 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
         for (const m of matched) {
           Object.assign(m, updatePatch)
         }
-        return { data: matched, error: null }
+        return { data: matched, error: null, count: wantCount ? matched.length : null }
       }
 
       if (kind === 'delete') {
@@ -210,11 +255,12 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
     }
 
     const builder: QueryBuilder = {
-      select(c?: string) {
+      select(c?: string, opts?: { count?: string }) {
         // If a previous op was insert/update, `.select()` is a chainable no-op
         // that triggers returning the rows — we keep kind as-is so that insert
         // returning .select() still returns inserted rows.
         if (kind === 'select') cols = c || '*'
+        if (opts?.count) wantCount = true
         return builder
       },
       insert(rows: any | any[]) {
@@ -222,11 +268,13 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
         insertRows = Array.isArray(rows) ? rows : [rows]
         return builder
       },
-      update(patch: any) {
+      update(patch: any, opts?: { count?: string }) {
         kind = 'update'
         updatePatch = patch
+        if (opts?.count) wantCount = true
         return builder
       },
+      range(from: number, to: number) { rangeFromTo = { from, to }; return builder },
       delete() {
         kind = 'delete'
         return builder
@@ -239,6 +287,9 @@ export function createMockSupabase(options: MockSupabaseOptions = {}): MockSupab
       gte(col, val) { filters.push({ op: 'gte', col, val }); return builder },
       lt(col, val) { filters.push({ op: 'lt', col, val }); return builder },
       lte(col, val) { filters.push({ op: 'lte', col, val }); return builder },
+      like(col: string, val: string) { filters.push({ op: 'like', col, val }); return builder },
+      ilike(col: string, val: string) { filters.push({ op: 'ilike', col, val }); return builder },
+      order(col: string, opts?: { ascending?: boolean }) { orderBy = { col, ascending: opts?.ascending !== false }; return builder },
       limit(n: number) { limitN = n; return builder },
       async maybeSingle() {
         const { data, error } = await execute()

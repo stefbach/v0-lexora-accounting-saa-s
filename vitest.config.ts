@@ -158,23 +158,24 @@ export default defineConfig({
         'lib/rh/calendarWorkingDays.ts',
         'lib/rh/contractsTemplates.ts',
         'lib/rh/overtime.ts',
-        'lib/rh/paie.ts',
+        // 'lib/rh/paie.ts' — RÉINTÉGRÉ au gate de couverture : moteur de paie
+        // critique désormais couvert à ≥ 94% par lib/rh/paie.test.ts.
         'lib/rh/accrual-mensuel.ts',
         'lib/rh/periode-paie.ts',
         'lib/rh/ownership.ts',
         'lib/rh/unpaid.ts',
         'lib/rh/ot-aggregate.ts',
         'lib/accounting/rapprochement/post-processing.ts',
-        'lib/accounting/rapprochement/lettrage.ts',
+        // 'lib/accounting/rapprochement/lettrage.ts' — RÉINTÉGRÉ (couvert ~100%).
         'lib/accounting/rapprochement/matching-engine.ts',
         'lib/accounting/intelligent-rapprochement.ts',
         'lib/accounting/semantic-rapprochement.ts',
         'lib/accounting/lettrage.ts',
-        'lib/accounting/historical-rates.ts',
-        'lib/accounting/comptes-bancaires.ts',
+        // 'lib/accounting/historical-rates.ts' — RÉINTÉGRÉ (couvert par test).
+        // 'lib/accounting/comptes-bancaires.ts' — RÉINTÉGRÉ (pur, couvert).
         'lib/accounting/period-lock.ts',
-        'lib/accounting/classification-engine.ts',
-        'lib/accounting/validate-bank-currency.ts',
+        // classification-engine.ts & validate-bank-currency.ts — RÉINTÉGRÉS au
+        // gate (purs, couverts par leurs *.test.ts).
         'lib/audit/intercompany-reconciliation.ts',
         'lib/jurisdictions/ohada/payroll/**',
         'lib/jurisdictions/ohada/statements/notes-annexes.ts',

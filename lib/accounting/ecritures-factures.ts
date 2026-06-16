@@ -2,6 +2,44 @@
 type SupabaseClient = any
 
 import { safeInsertBnq } from './bnq-dedupe'
+import { round2, isBalanced } from '@/lib/money'
+
+/**
+ * Écart de change RÉALISÉ au paiement — calcule, pour la paire d'écritures
+ * (tiers 411/401 + compte de résultat 666/766), le compte de change et les
+ * SENS débit/crédit ÉQUILIBRÉS. Le tiers prend toujours le sens OPPOSÉ du
+ * compte de change, de sorte que la paire solde 411/401 et garantit
+ * Σdébit = Σcrédit.
+ *
+ * `ecart` = montant payé (MUR) − montant facture (MUR figé au taux d'origine).
+ *   - Client (isSupplier=false)     : ecart>0 ⇒ gain (766), ecart<0 ⇒ perte (666)
+ *   - Fournisseur (isSupplier=true) : ecart<0 ⇒ gain (766), ecart>0 ⇒ perte (666)
+ */
+export function computeFxRealiseEntry(
+  ecart: number,
+  isSupplier: boolean,
+): {
+  isGain: boolean
+  compteFx: '666' | '766'
+  nomFx: string
+  absEcart: number
+  tierDebit: number
+  tierCredit: number
+  fxDebit: number
+  fxCredit: number
+} {
+  const absEcart = round2(Math.abs(ecart))
+  const isGain = (isSupplier && ecart < 0) || (!isSupplier && ecart > 0)
+  const compteFx: '666' | '766' = isGain ? '766' : '666'
+  const nomFx = isGain ? 'Gains de change réalisés' : 'Pertes de change réalisés'
+  // Compte de change : perte ⇒ débit ; gain ⇒ crédit.
+  const fxDebit = isGain ? 0 : absEcart
+  const fxCredit = isGain ? absEcart : 0
+  // Tiers (411/401) : sens OPPOSÉ pour équilibrer et solder le compte de tiers.
+  const tierDebit = isGain ? absEcart : 0
+  const tierCredit = isGain ? 0 : absEcart
+  return { isGain, compteFx, nomFx, absEcart, tierDebit, tierCredit, fxDebit, fxCredit }
+}
 
 export interface FactureForEcritures {
   id: string
@@ -597,12 +635,12 @@ export async function createEcrituresForPayment(
             //     client a payé moins en MUR car taux baissé) → perte 666.
             //   • Fournisseur : 401 figé à factureMur, on paie amount_mur.
             //     Si amount_mur < factureMur (on paie moins) → gain 766.
-            const exerciceY = exercice
             const refEcart = `${payment.ref_folio}-FX`
-            const isGain = (isSupplier && ecart < 0) || (!isSupplier && ecart > 0)
-            const compteFx = isGain ? '766' : '666'
-            const nomFx = isGain ? 'Gains de change réalisés' : 'Pertes de change réalisés'
-            const absEcart = Math.abs(ecart)
+            // Sens débit/crédit ÉQUILIBRÉS : le tiers (411/401) prend le sens
+            // opposé du compte de change (666/766) → la paire solde le tiers et
+            // garantit Σdébit = Σcrédit (cf. computeFxRealiseEntry).
+            const fx = computeFxRealiseEntry(ecart, isSupplier)
+            const { isGain, compteFx, nomFx, absEcart } = fx
 
             // Régularise le 411/401 + contrepartie 666/766
             const tierFxLine = {
@@ -610,8 +648,8 @@ export async function createEcrituresForPayment(
               ref_folio: refEcart,
               numero_compte: isSupplier ? '401' : '411',
               nom_compte: isSupplier ? 'Fournisseurs (écart change)' : 'Clients (écart change)',
-              debit_mur:  (!isSupplier && ecart < 0) || (isSupplier && ecart > 0) ? absEcart : 0,
-              credit_mur: (!isSupplier && ecart > 0) || (isSupplier && ecart < 0) ? absEcart : 0,
+              debit_mur:  fx.tierDebit,
+              credit_mur: fx.tierCredit,
               libelle: `Écart de change ${facture.devise} — ${payment.tiers}`,
               description: `Écart change réalisé au paiement (taux fact ${facture.taux_change} → taux paiement ${tauxFinal})`,
             }
@@ -620,17 +658,22 @@ export async function createEcrituresForPayment(
               ref_folio: refEcart,
               numero_compte: compteFx,
               nom_compte: nomFx,
-              debit_mur:  isGain ? 0 : absEcart,
-              credit_mur: isGain ? absEcart : 0,
+              debit_mur:  fx.fxDebit,
+              credit_mur: fx.fxCredit,
               libelle: `${nomFx} — ${payment.tiers}`,
               description: `Écart de change réalisé sur paiement ${facture.devise}`,
             }
 
-            const fxRes = await safeInsertBnq(supabase, [tierFxLine, fxLine])
-            if (fxRes.error) {
-              console.warn('[createEcrituresForPayment] Écart change non comptabilisé:', fxRes.error.message)
+            // Garde-fou partie double : ne jamais poster une paire déséquilibrée.
+            if (!isBalanced([tierFxLine.debit_mur, fxLine.debit_mur], [tierFxLine.credit_mur, fxLine.credit_mur])) {
+              console.warn(`[createEcrituresForPayment] Écart change déséquilibré (${absEcart} MUR) — non comptabilisé`)
             } else {
-              console.log(`[createEcrituresForPayment] Écart change ${isGain ? 'gain' : 'perte'} ${absEcart} MUR → ${compteFx}`)
+              const fxRes = await safeInsertBnq(supabase, [tierFxLine, fxLine])
+              if (fxRes.error) {
+                console.warn('[createEcrituresForPayment] Écart change non comptabilisé:', fxRes.error.message)
+              } else {
+                console.log(`[createEcrituresForPayment] Écart change ${isGain ? 'gain' : 'perte'} ${absEcart} MUR → ${compteFx}`)
+              }
             }
           }
         }
