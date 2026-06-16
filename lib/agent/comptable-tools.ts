@@ -28,6 +28,7 @@ function ecritureContentKey(payload: string): string {
 
 export const READ_TOOLS = new Set([
   'list_factures', 'get_balance', 'list_grand_livre', 'list_comptes_pcm', 'list_transactions_bancaires',
+  'list_comptes_bancaires',
   'lancer_rapprochement_auto', 'analyser_cloture',
   // RH / paie / MRA (fusion Cerveau → Expert Lexora)
   'list_bulletins', 'list_employes_rh', 'get_leave_balance_rh', 'get_mra_compliance', 'calc_paye_net',
@@ -93,6 +94,11 @@ export const AGENT_TOOLS = [
       type: 'object' as const,
       properties: { periode: { type: 'string' }, statut: { type: 'string' }, min_montant: { type: 'number' } },
     },
+  },
+  {
+    name: 'list_comptes_bancaires',
+    description: 'Liste les comptes bancaires de la société, TOUTES devises (MUR, EUR, USD…), avec banque, devise, solde actuel DANS la devise du compte, IBAN et compte comptable (512xxx). Utiliser pour « quels sont mes comptes bancaires », « solde du compte en euros », « le compte EUR ». Le compte EUR/USD a son solde dans sa propre devise (≠ MUR).',
+    input_schema: { type: 'object' as const, properties: {} },
   },
   {
     name: 'lancer_rapprochement_auto',
@@ -386,6 +392,28 @@ export async function execReadTool(name: string, input: any, ctx: ExecCtx): Prom
         }
       }
       return { transactions: txs.slice(0, 100), total: txs.length }
+    }
+    case 'list_comptes_bancaires': {
+      const { data, error } = await supabase.from('comptes_bancaires')
+        .select('banque, nom_compte, devise, solde_actuel, iban, compte_comptable, actif, compte_principal')
+        .eq('societe_id', societeId)
+        .order('compte_principal', { ascending: false })
+      if (error) return { error: error.message }
+      const comptes = (data || []).map((c: any) => ({
+        banque: c.banque,
+        libelle: c.nom_compte,
+        devise: c.devise || 'MUR',
+        solde: Number(c.solde_actuel || 0),
+        iban: c.iban || null,
+        compte_comptable: c.compte_comptable,
+        principal: !!c.compte_principal,
+        actif: c.actif !== false,
+      }))
+      // Total uniquement en MUR (on ne somme pas des devises différentes).
+      const total_mur = comptes
+        .filter(c => c.devise === 'MUR')
+        .reduce((s, c) => s + c.solde, 0)
+      return { comptes, total: comptes.length, total_mur: Math.round(total_mur * 100) / 100 }
     }
     case 'lancer_rapprochement_auto': {
       const secret = process.env.LEXORA_AGENT_SECRET
