@@ -79,9 +79,24 @@ export async function POST(request: Request) {
     }
 
     // 3. Build query
-    const selectCols = Array.isArray(columns) && columns.length > 0
-      ? columns.join(',')
-      : (tableConfig.default_columns || '*')
+    // Colonnes JSONB volumineuses interdites via MCP : leur renvoi en masse
+    // dépasse la taille max d'un résultat d'outil (« result too large »).
+    // Les mouvements détaillés passent par /api/mcp/transactions-bancaires.
+    const HEAVY_COLUMNS = new Set(['transactions_json', 'raw_extraction', 'raw_json'])
+    let selectCols: string
+    if (Array.isArray(columns) && columns.length > 0) {
+      const safe = columns.filter((c) => typeof c === 'string' && !HEAVY_COLUMNS.has(c.trim()))
+      selectCols = safe.length > 0 ? safe.join(',') : (tableConfig.default_columns || '*')
+    } else if (tableConfig.default_columns) {
+      // Le default_columns whitelisté exclut déjà les colonnes lourdes.
+      selectCols = tableConfig.default_columns
+    } else {
+      // Pas de default → '*' SAUF pour les tables connues à colonne lourde,
+      // où on impose une projection sûre.
+      selectCols = table === 'releves_bancaires'
+        ? 'id, compte_bancaire_id, periode, date_debut, date_fin, solde_ouverture, solde_cloture, nb_transactions, superseded_by_id, created_at'
+        : '*'
+    }
 
     let q = supabase.from(table).select(selectCols, { count: 'exact' })
 
