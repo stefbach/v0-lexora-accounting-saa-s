@@ -41,8 +41,8 @@ function getAdminClient() {
   )
 }
 
-const MAX_LIMIT = 1000
-const DEFAULT_LIMIT = 200
+const MAX_LIMIT = 300
+const DEFAULT_LIMIT = 100
 
 export async function GET(request: Request) {
   try {
@@ -65,6 +65,9 @@ export async function GET(request: Request) {
     const maxMontant = Number(searchParams.get('max_montant')) || Infinity
     const libelleFilter = (searchParams.get('libelle') || '').toLowerCase().trim()
     const limit = Math.min(Number(searchParams.get('limit')) || DEFAULT_LIMIT, MAX_LIMIT)
+    // Réponse compacte par défaut (évite « result too large » côté MCP) ; les
+    // champs détaillés de rapprochement ne sont inclus que sur verbose=true.
+    const verbose = searchParams.get('verbose') === 'true'
 
     if (periode && /^\d{4}-\d{2}$/.test(periode)) {
       date_debut = `${periode}-01`
@@ -109,39 +112,45 @@ export async function GET(request: Request) {
         const txStatut = tx.statut || 'non_identifie'
         if (statut !== 'tous' && txStatut !== statut) continue
 
-        transactions.push({
+        // Objet COMPACT par défaut (10 champs essentiels) — suffisant pour
+        // « montre-moi les mouvements ». Les ~15 champs de rapprochement
+        // détaillés gonflaient le payload (→ « result too large » côté MCP).
+        const compact: Record<string, any> = {
           id: `${r.id}-${idx}`,
-          releve_id: r.id,
-          transaction_idx: idx,
           date: tx.date || null,
           libelle: lib,
-          reference: tx.reference || null,
           debit,
           credit,
           montant_abs: montantAbs,
           sens: debit > 0 ? 'sortie' : 'entree',
-          solde_apres: tx.solde_apres ?? null,
           devise: tx.devise || cb?.devise || 'MUR',
-          // Compte bancaire
-          compte_bancaire_id: r.compte_bancaire_id,
           banque: cb?.banque || null,
-          numero_compte_bancaire: cb?.numero_compte || null,
-          compte_comptable: cb?.compte_comptable || null,
-          // Rapprochement
           statut: txStatut,
           tiers_detecte: tx.tiers_detecte || tx.tiers || null,
-          facture_id: tx.facture_id || null,
-          facture_ids: Array.isArray(tx.facture_ids) ? tx.facture_ids : (tx.facture_id ? [tx.facture_id] : []),
-          nb_factures: typeof tx.nb_factures === 'number' ? tx.nb_factures : (Array.isArray(tx.facture_ids) ? tx.facture_ids.length : (tx.facture_id ? 1 : 0)),
-          rapprochement_multi: !!tx.rapprochement_multi,
-          ecriture_id: tx.ecriture_id || null,
-          lettre: tx.lettre || null,
-          matched_type: tx.matched_type || tx.classification || null,
-          matched_strategy: tx.matched_strategy || null,
-          matched_confidence: tx.matched_confidence ?? tx.match_confidence ?? null,
-          note: tx.note || null,
-          rapproche_at: tx.rapproche_at || null,
-        })
+        }
+        if (verbose) {
+          Object.assign(compact, {
+            releve_id: r.id,
+            transaction_idx: idx,
+            reference: tx.reference || null,
+            solde_apres: tx.solde_apres ?? null,
+            compte_bancaire_id: r.compte_bancaire_id,
+            numero_compte_bancaire: cb?.numero_compte || null,
+            compte_comptable: cb?.compte_comptable || null,
+            facture_id: tx.facture_id || null,
+            facture_ids: Array.isArray(tx.facture_ids) ? tx.facture_ids : (tx.facture_id ? [tx.facture_id] : []),
+            nb_factures: typeof tx.nb_factures === 'number' ? tx.nb_factures : (Array.isArray(tx.facture_ids) ? tx.facture_ids.length : (tx.facture_id ? 1 : 0)),
+            rapprochement_multi: !!tx.rapprochement_multi,
+            ecriture_id: tx.ecriture_id || null,
+            lettre: tx.lettre || null,
+            matched_type: tx.matched_type || tx.classification || null,
+            matched_strategy: tx.matched_strategy || null,
+            matched_confidence: tx.matched_confidence ?? tx.match_confidence ?? null,
+            note: tx.note || null,
+            rapproche_at: tx.rapproche_at || null,
+          })
+        }
+        transactions.push(compact)
       }
     }
 
