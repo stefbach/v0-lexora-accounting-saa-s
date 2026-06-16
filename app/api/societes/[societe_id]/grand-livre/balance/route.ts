@@ -38,27 +38,38 @@ export async function GET(
     const dateFin = searchParams.get('date_fin')
     const classe = searchParams.get('classe')
 
-    // Agrégation côté SQL (RPC gl_balance_par_compte, mig 462) — un seul
-    // GROUP BY couvert par idx_ecritures_v2_composite, au lieu de charger
-    // toutes les écritures dans Node. Scalable à fort volume.
-    const { data: rows, error } = await admin.rpc('gl_balance_par_compte', {
-      p_societe_id: societe_id,
-      p_date_debut: dateDebut || null,
-      p_date_fin: dateFin || null,
-      p_classe: classe || null,
-    })
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    // Agrégation manuelle par compte (paginé sur les écritures)
+    const acc = new Map<string, { numero: string; nom: string; debit: number; credit: number }>()
+    let from = 0
+    while (true) {
+      let q = admin.from('ecritures_comptables_v2')
+        .select('numero_compte, nom_compte, debit_mur, credit_mur')
+        .eq('societe_id', societe_id)
+      if (dateDebut) q = q.gte('date_ecriture', dateDebut)
+      if (dateFin) q = q.lte('date_ecriture', dateFin)
+      q = q.range(from, from + 999)
+      const { data, error } = await q
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (!data || data.length === 0) break
+      for (const e of data) {
+        const num = e.numero_compte
+        if (!num) continue
+        if (classe && num[0] !== classe) continue
+        if (!acc.has(num)) acc.set(num, { numero: num, nom: e.nom_compte || '', debit: 0, credit: 0 })
+        const a = acc.get(num)!
+        a.debit += +e.debit_mur || 0
+        a.credit += +e.credit_mur || 0
+      }
+      if (data.length < 1000) break
+      from += 1000
+    }
 
-    const balance = ((rows || []) as Array<{
-      numero_compte: string; nom_compte: string | null
-      debit: number; credit: number; solde: number
-    }>)
+    const balance = [...acc.values()]
       .map(b => ({
-        numero: b.numero_compte,
-        nom: b.nom_compte || '',
-        debit: +b.debit || 0,
-        credit: +b.credit || 0,
-        solde: +b.solde || 0,
+        numero: b.numero, nom: b.nom,
+        debit: Math.round(b.debit * 100) / 100,
+        credit: Math.round(b.credit * 100) / 100,
+        solde: Math.round((b.debit - b.credit) * 100) / 100,
       }))
       .sort((a, b) => a.numero.localeCompare(b.numero, undefined, { numeric: true }))
 
