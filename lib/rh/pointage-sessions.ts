@@ -100,12 +100,20 @@ export async function fermerSession(
   sessionId: string,
   heureFin: string = nowTimeMU(),
 ): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await supabase
+  // count: 'exact' permet de vérifier que l'UPDATE a réellement modifié une
+  // ligne — sans ça, un .is('heure_fin', null) qui ne matche rien renvoie
+  // { error: null, count: 0 } et la session reste ouverte sans signaler
+  // d'erreur (bug observé : clic « fin de pause » qui semble réussir mais
+  // la pause reste ouverte).
+  const { error, count } = await supabase
     .from('pointages_sessions')
-    .update({ heure_fin: heureFin })
+    .update({ heure_fin: heureFin }, { count: 'exact' })
     .eq('id', sessionId)
     .is('heure_fin', null) // évite de re-fermer une session déjà close
   if (error) return { ok: false, error: error.message }
+  if (!count || count === 0) {
+    return { ok: false, error: 'Session déjà fermée ou introuvable — réessayer après rafraîchissement.' }
+  }
   return { ok: true }
 }
 

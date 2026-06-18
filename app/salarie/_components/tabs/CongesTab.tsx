@@ -211,7 +211,13 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
   // B.2 — Statut d'éligibilité (API B.1)
   const eligibilityStatus: EligibilityStatus = (balances?.eligibility_status as EligibilityStatus) || "eligible"
   const periodeLabel = formatPeriodeFR(balances?.periode_debut, balances?.periode_fin)
-  const canRequestConges = !soldesMissing && eligibilityStatus !== "not_eligible"
+  // Seuls AL (Local Leave) et VL (Vacation Leave) requièrent l'ancienneté WRA
+  //   (AL : 6 mois pour s'accumuler, plein droit 12 mois ; VL : 5 ans).
+  // SL (Sick Leave, WRA s.45), SANS_SOLDE (UL, absence non payée), MAT et
+  //   PAT n'ont pas de carence d'ancienneté → on autorise le formulaire dès
+  //   que les soldes sont chargés.
+  const requiresAnciennete = typeConge === "AL" || typeConge === "VL"
+  const canFillForm = !soldesMissing && (!requiresAnciennete || eligibilityStatus !== "not_eligible")
 
   const statutBadge = (s: string) => {
     if (s === "approuve" || s === "approved") return <Badge style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>Approuvé</Badge>
@@ -294,7 +300,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
       </div>
       )}
 
-      <Card className={`rounded-xl shadow-sm ${!canRequestConges ? "opacity-60" : ""}`}>
+      <Card className={`rounded-xl shadow-sm ${!canFillForm ? "opacity-60" : ""}`}>
         <CardHeader><CardTitle className="text-xl md:text-base" style={{ color: NAVY }}>Nouvelle demande</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {success && <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700"><CheckCircle className="h-4 w-4" />{success}</div>}
@@ -315,7 +321,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                 { value: "SANS_SOLDE", label: "Sans solde", color: "#6b7280" },
               ]).map(opt => (
                 <button key={opt.value} onClick={() => setTypeConge(opt.value)}
-                  disabled={!canRequestConges}
+                  disabled={soldesMissing}
                   className="px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed"
                   style={typeConge === opt.value
                     ? { backgroundColor: opt.color, color: "white" }
@@ -333,7 +339,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                 <input
                   type="checkbox"
                   checked={demiJournee}
-                  disabled={!canRequestConges}
+                  disabled={!canFillForm}
                   onChange={e => {
                     setDemiJournee(e.target.checked)
                     if (e.target.checked && dateDebut) setDateFin(dateDebut)
@@ -349,7 +355,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                       type="radio"
                       name="demi-moment"
                       value="matin"
-                      disabled={!canRequestConges}
+                      disabled={!canFillForm}
                       checked={matinOuApresMidi === 'matin'}
                       onChange={() => setMatinOuApresMidi('matin')}
                     />
@@ -360,7 +366,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                       type="radio"
                       name="demi-moment"
                       value="apres_midi"
-                      disabled={!canRequestConges}
+                      disabled={!canFillForm}
                       checked={matinOuApresMidi === 'apres_midi'}
                       onChange={() => setMatinOuApresMidi('apres_midi')}
                     />
@@ -377,7 +383,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
               <Input
                 type="date"
                 value={dateDebut}
-                disabled={!canRequestConges}
+                disabled={!canFillForm}
                 onChange={e => {
                   setDateDebut(e.target.value)
                   if (demiJournee) setDateFin(e.target.value)
@@ -390,7 +396,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
               <Input
                 type="date"
                 value={demiJournee ? dateDebut : dateFin}
-                disabled={!canRequestConges || demiJournee}
+                disabled={!canFillForm || demiJournee}
                 onChange={e => setDateFin(e.target.value)}
                 className="h-12 md:h-10 rounded-xl"
               />
@@ -399,7 +405,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
 
           <div>
             <Label>Motif (optionnel)</Label>
-            <Textarea value={motif} onChange={e => setMotif(e.target.value)} disabled={!canRequestConges} placeholder="Raison de la demande..." rows={3} className="rounded-xl" />
+            <Textarea value={motif} onChange={e => setMotif(e.target.value)} disabled={!canFillForm} placeholder="Raison de la demande..." rows={3} className="rounded-xl" />
           </div>
 
           {needsCertificat && (
@@ -429,8 +435,8 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
 
           <Button
             onClick={handleSubmit}
-            disabled={submitting || !canRequestConges}
-            title={!canRequestConges ? "Vous n'êtes pas encore éligible aux congés (6 mois minimum)" : undefined}
+            disabled={submitting || !canFillForm}
+            title={!canFillForm ? `Vous n'êtes pas encore éligible à ce type de congé (${requiresAnciennete ? '6 mois d\'ancienneté minimum requis pour Local Leave / Vacation Leave' : 'soldes non chargés'})` : undefined}
             style={{ backgroundColor: NAVY }}
             className="w-full md:w-auto h-12 md:h-10 rounded-xl text-white text-base md:text-sm transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed"
           >
