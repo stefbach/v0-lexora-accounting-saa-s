@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Scale, Gavel, FileSignature, FolderOpen, ShieldCheck, MessageSquareText, ArrowRight, BookOpen, Users, FolderKanban } from "lucide-react"
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
 import { RagAdminPanel } from "@/components/juridique/RagAdminPanel"
-import { LOIS_MAURICIENNES, JURIDICTIONS_MAURICIENNES, TYPES_CONTENTIEUX } from "@/lib/juridique/referentielMauricien"
+import { RagStats } from "@/components/juridique/RagStats"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -60,15 +60,6 @@ const MODULES = [
   },
 ]
 
-function StatCard({ value, label }: { value: string | number; label: string }) {
-  return (
-    <div className="rounded-xl bg-white border border-gray-100 px-4 py-3 shadow-sm">
-      <p className="text-2xl font-bold" style={{ color: NAVY }}>{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-    </div>
-  )
-}
-
 export default function JuridiqueDashboard() {
   return (
     <div className="space-y-6">
@@ -78,13 +69,8 @@ export default function JuridiqueDashboard() {
         subtitle="Votre cabinet juridique mauricien augmenté par l'IA — conseil, contentieux, contrats et conformité. Chaque production est un projet à valider par un homme de loi."
       />
 
-      {/* Stats référentiel */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard value={LOIS_MAURICIENNES.length} label="Lois & codes référencés" />
-        <StatCard value={JURIDICTIONS_MAURICIENNES.length} label="Juridictions couvertes" />
-        <StatCard value={TYPES_CONTENTIEUX.length} label="Types de contentieux" />
-        <StatCard value="🇲🇺" label="Droit mauricien (système mixte)" />
-      </div>
+      {/* Base de connaissances réelle (corpus RAG live) */}
+      <RagStats />
 
       {/* Modules */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
