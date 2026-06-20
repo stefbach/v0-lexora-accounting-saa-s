@@ -47,6 +47,7 @@ export default function ConseilPage() {
         domaines={dep?.domaines}
         contextLabel={dep ? `Département : ${dep.nom} (${dep.lois.join(", ")})` : undefined}
         placeholder="Décrivez votre question juridique, ou joignez des documents à analyser…"
+        reportTitle={dep ? `Rapport de consultation — ${dep.nom}` : "Rapport de consultation juridique"}
       />
     </div>
   )

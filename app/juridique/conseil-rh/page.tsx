@@ -30,6 +30,7 @@ export default function ConseilRHPage() {
         domaines={["travail"]}
         contextLabel="Domaine : Droit du travail & social mauricien (WRA 2019, ERA 2008)"
         placeholder="Posez votre question RH/sociale, ou joignez un contrat de travail à analyser…"
+        reportTitle="Rapport de consultation RH & Social"
       />
     </div>
   )

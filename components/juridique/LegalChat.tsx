@@ -6,7 +6,7 @@
  * Mutualisé entre « Conseil juridique » et « Conseil RH & Social ».
  */
 import React, { useCallback, useEffect, useRef, useState } from "react"
-import { Send, Loader2, Scale, User, Paperclip, UploadCloud, FileText, X, Check } from "lucide-react"
+import { Send, Loader2, Scale, User, Paperclip, UploadCloud, FileText, X, Check, FileDown } from "lucide-react"
 import { useJuridiqueSociete } from "./JuridiqueSocieteProvider"
 import { renderLegalMarkdown } from "./renderLegalMarkdown"
 import type { DomaineJuridique } from "@/lib/juridique/referentielMauricien"
@@ -22,7 +22,7 @@ const ANALYZABLE = /\.(pdf|png|jpe?g|webp)$/i
 function cleanName(name: string) { return name.replace(/^\d+_/, "") }
 
 export function LegalChat({
-  icon, title, subtitle, suggestions, domaines, contextLabel, placeholder,
+  icon, title, subtitle, suggestions, domaines, contextLabel, placeholder, reportTitle,
 }: {
   icon: React.ReactNode
   title: string
@@ -31,6 +31,7 @@ export function LegalChat({
   domaines?: DomaineJuridique[]
   contextLabel?: string
   placeholder?: string
+  reportTitle?: string
 }) {
   const { societe } = useJuridiqueSociete()
   const [messages, setMessages] = useState<Msg[]>([])
@@ -40,6 +41,7 @@ export function LegalChat({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [showDocs, setShowDocs] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -111,7 +113,38 @@ export function LegalChat({
     } finally { setLoading(false) }
   }
 
+  async function exportReport() {
+    // Reconstitue les échanges (question utilisateur → analyse assistant).
+    const exchanges: Array<{ question: string; answer: string; sources?: Source[]; docs?: string[] }> = []
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].role === "user") {
+        const next = messages[i + 1]
+        if (next && next.role === "assistant") {
+          exchanges.push({ question: messages[i].content, answer: next.content, sources: next.sources, docs: next.docs })
+        }
+      }
+    }
+    if (exchanges.length === 0) return
+    setExporting(true)
+    try {
+      const res = await fetch("/api/juridique/rapport", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: reportTitle || "Rapport de consultation juridique",
+          societe: societe?.nom,
+          date: new Date().toISOString(),
+          exchanges,
+        }),
+      })
+      if (!res.ok) { alert("Échec de génération du rapport."); return }
+      const blob = await res.blob()
+      window.open(URL.createObjectURL(blob), "_blank")
+    } finally { setExporting(false) }
+  }
+
   const selectedCount = selected.size
+  const hasAnswers = messages.some((m) => m.role === "assistant")
 
   return (
     <div className="rounded-2xl bg-white border border-gray-100 shadow-sm flex flex-col" style={{ height: "calc(100vh - 220px)", minHeight: 460 }}>
@@ -124,14 +157,26 @@ export function LegalChat({
             {subtitle ? <p className="text-[11px] text-gray-400 leading-tight">{subtitle}</p> : null}
           </div>
         </div>
-        <button
-          onClick={() => setShowDocs((v) => !v)}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors"
-          style={{ borderColor: selectedCount ? GOLD : "#e5e7eb", color: selectedCount ? "#8a6d15" : "#6b7280", background: selectedCount ? "rgba(212,175,55,0.10)" : "white" }}
-        >
-          <Paperclip className="w-3.5 h-3.5" />
-          {selectedCount ? `${selectedCount} doc${selectedCount > 1 ? "s" : ""} à analyser` : "Documents"}
-        </button>
+        <div className="flex items-center gap-2">
+          {hasAnswers && (
+            <button
+              onClick={exportReport} disabled={exporting}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50"
+              style={{ background: NAVY }}
+              title="Exporter la consultation en rapport PDF"
+            >
+              {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} Rapport PDF
+            </button>
+          )}
+          <button
+            onClick={() => setShowDocs((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors"
+            style={{ borderColor: selectedCount ? GOLD : "#e5e7eb", color: selectedCount ? "#8a6d15" : "#6b7280", background: selectedCount ? "rgba(212,175,55,0.10)" : "white" }}
+          >
+            <Paperclip className="w-3.5 h-3.5" />
+            {selectedCount ? `${selectedCount} doc${selectedCount > 1 ? "s" : ""} à analyser` : "Documents"}
+          </button>
+        </div>
       </div>
 
       {/* Panneau documents */}
