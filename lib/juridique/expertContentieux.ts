@@ -22,7 +22,8 @@ import {
   TYPES_CONTENTIEUX,
   type DomaineJuridique,
 } from './referentielMauricien'
-import { retrieve, formatContextePrompt, formatCitations, type CitationSource } from './rag/retriever'
+import { formatContextePrompt, formatCitations, type CitationSource } from './rag/retriever'
+import { retrieveRag } from './rag/store'
 
 let _anthropic: Anthropic | null = null
 function anthropic(): Anthropic {
@@ -209,7 +210,7 @@ JSON attendu :
 }
 Réponds UNIQUEMENT le JSON.`
 
-  const passages = retrieve(faits.description, { k: 5 })
+  const passages = await retrieveRag(faits.description, { k: 5 })
   const resp = await anthropic().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1500,
@@ -254,7 +255,7 @@ JSON attendu :
 }
 Réponds UNIQUEMENT le JSON.`
 
-  const passages = retrieve(faits.description, { k: 6 })
+  const passages = await retrieveRag(faits.description, { k: 6 })
   const resp = await anthropic().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 3000,
@@ -317,7 +318,7 @@ export async function genererActe(
   documents?: DocAnalyse[],
 ): Promise<{ titre: string; corps: string }> {
   // RAG : ancrer l'acte sur les sources mauriciennes pertinentes.
-  const passages = retrieve(`${params.objet} ${params.faits} ${LABEL_ACTE[params.type_acte]}`, { k: 6 })
+  const passages = await retrieveRag(`${params.objet} ${params.faits} ${LABEL_ACTE[params.type_acte]}`, { k: 6 })
 
   const prompt = `Rédige un(e) « ${LABEL_ACTE[params.type_acte]} » complet et professionnel, conforme à la pratique mauricienne.
 POSTURE : ${POSTURE_ACTE[params.type_acte]}
@@ -359,7 +360,7 @@ export async function questionContentieux(params: {
   documents?: DocAnalyse[]
 }): Promise<{ texte: string; sources: CitationSource[] }> {
   // RAG : récupère les passages verrouillés pertinents et les injecte dans le system prompt.
-  const passages = retrieve(`${params.question} ${params.contexte || ''}`, { domaines: params.domaines, k: 6 })
+  const passages = await retrieveRag(`${params.question} ${params.contexte || ''}`, { domaines: params.domaines, k: 6 })
   const system = `${systemPrompt(params.domaines)}\n\n${formatContextePrompt(passages)}${docsNote(params.documents)}`
 
   const messages: Anthropic.MessageParam[] = []
