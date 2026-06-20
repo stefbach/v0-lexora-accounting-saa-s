@@ -10,14 +10,15 @@ const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
 type Urgence = "faible" | "moyenne" | "haute" | "critique"
+interface Source { ref: string; source: string; reference: string; titre: string; url?: string; maj: string }
 interface Qualification {
   type_contentieux: string; fondement_legal: string[]; juridiction_competente: string
-  prescription: string; urgence: Urgence; resume: string; pieces_a_reunir: string[]
+  prescription: string; urgence: Urgence; resume: string; pieces_a_reunir: string[]; sources?: Source[]
 }
 interface Evaluation {
   chances_succes: string; analyse: string; arguments_pour: string[]; arguments_adverses: string[]
   strategie_recommandee: string; etapes_procedure: Array<{ etape: string; delai: string; juridiction?: string }>
-  estimation_couts: string; risques: string[]; base_legale: string[]
+  estimation_couts: string; risques: string[]; base_legale: string[]; sources?: Source[]
 }
 
 const ACTES_GROUPES: { groupe: string; actes: { id: string; label: string }[] }[] = [
@@ -65,7 +66,7 @@ export default function ContentieuxPage() {
   const [qualif, setQualif] = useState<Qualification | null>(null)
   const [evalRes, setEvalRes] = useState<Evaluation | null>(null)
   const [acteType, setActeType] = useState("mise_en_demeure")
-  const [acte, setActe] = useState<{ titre: string; corps: string } | null>(null)
+  const [acte, setActe] = useState<{ titre: string; corps: string; sources?: Source[] } | null>(null)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set())
 
@@ -122,7 +123,7 @@ export default function ContentieuxPage() {
       const res = await fetch("/api/juridique/contentieux/pdf", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          titre: acte.titre, corps: acte.corps,
+          titre: acte.titre, corps: acte.corps, sources: acte.sources,
           objet: qualif?.resume || description.slice(0, 120),
           montant: montant ? Number(montant) : undefined, devise: "MUR",
           emetteur: { nom: societe?.nom || "Société", brn: societe?.brn || undefined, adresse: societe?.adresse || undefined },
@@ -210,6 +211,7 @@ export default function ContentieuxPage() {
               </ul>
             </div>
           ) : null}
+          <SourcesBlock sources={qualif.sources} />
         </div>
       )}
 
@@ -246,6 +248,7 @@ export default function ContentieuxPage() {
             </div>
           ) : null}
           <p className="text-xs text-gray-500">Coûts estimés : {evalRes.estimation_couts}</p>
+          <SourcesBlock sources={evalRes.sources} />
         </div>
       )}
 
@@ -276,6 +279,7 @@ export default function ContentieuxPage() {
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-800 whitespace-pre-wrap max-h-80 overflow-y-auto leading-relaxed">
               {acte.corps}
             </div>
+            <SourcesBlock sources={acte.sources} />
             <button onClick={downloadPdf} disabled={pdfLoading}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-40" style={{ background: "rgba(212,175,55,0.16)", color: "#8a6d15" }}>
               {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />} Télécharger en PDF professionnel
@@ -287,6 +291,22 @@ export default function ContentieuxPage() {
       <p className="text-[11px] text-gray-400 text-center">
         Projets de travail générés par IA — à faire valider et signer par un avocat / attorney inscrit avant tout envoi ou dépôt.
       </p>
+    </div>
+  )
+}
+
+function SourcesBlock({ sources }: { sources?: Source[] }) {
+  if (!sources || sources.length === 0) return null
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Sources verrouillées (RAG)</p>
+      <div className="flex flex-wrap gap-1.5">
+        {sources.map((s) => (
+          <span key={s.ref} title={`${s.titre} · revu ${s.maj}`} className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-gray-200 text-gray-700">
+            <span style={{ color: GOLD }}>{s.ref}</span> {s.source} {s.reference}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

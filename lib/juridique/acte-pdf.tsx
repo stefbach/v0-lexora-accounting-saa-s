@@ -49,6 +49,10 @@ const styles = StyleSheet.create({
   amountLabel: { fontSize: 8, color: C.muted, textTransform: 'uppercase', letterSpacing: 1 },
   amountValue: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.navy, marginTop: 2 },
 
+  srcAnnex: { marginTop: 18, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: C.border },
+  srcAnnexTitle: { fontSize: 8, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 },
+  srcAnnexItem: { fontSize: 8, color: C.text, marginBottom: 1.5 },
+
   signBlock: { marginTop: 30, alignItems: 'flex-end' },
   signName: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.navy },
   signFor: { fontSize: 9, color: C.muted },
@@ -71,6 +75,7 @@ export interface ActePdfData {
   emetteur: { nom: string; brn?: string; adresse?: string }
   destinataire: { nom: string; adresse?: string }
   signataire?: string
+  sources?: Array<{ ref: string; source: string; reference: string; titre: string; maj: string }>
 }
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
@@ -140,6 +145,16 @@ export function ActePdf({ data }: { data: ActePdfData }) {
             </Text>
           ))}
         </View>
+
+        {/* Annexe — Sources juridiques (verrouillage RAG) */}
+        {data.sources && data.sources.length > 0 ? (
+          <View style={styles.srcAnnex}>
+            <Text style={styles.srcAnnexTitle}>Sources juridiques (corpus mauricien)</Text>
+            {data.sources.map((s) => (
+              <Text key={s.ref} style={styles.srcAnnexItem}>[{s.ref}] {s.source} {s.reference} — {s.titre} (revu {s.maj})</Text>
+            ))}
+          </View>
+        ) : null}
 
         {/* Signature */}
         <View style={styles.signBlock}>
