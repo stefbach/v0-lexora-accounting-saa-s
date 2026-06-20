@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
-import { Scale, FileText, Users, ShieldCheck, Settings, LogOut, FileSignature, Menu, X, Gavel, MessageSquareText, FolderOpen, LayoutGrid, FolderKanban } from "lucide-react"
+import { Scale, FileText, Users, ShieldCheck, Settings, LogOut, FileSignature, Menu, X, Gavel, MessageSquareText, FolderOpen, LayoutGrid, FolderKanban, ArrowLeft } from "lucide-react"
 
 const LINKS = [
   { href: '/juridique', label: 'Tableau de bord', labelKey: 'comp.legal_sidebar.dashboard', icon: Scale, exact: true },
@@ -100,6 +100,14 @@ export function JuridiqueSidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
+        <Link
+          href="/redirect"
+          className="group relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-white/70 hover:text-white transition-all duration-200 mb-1"
+          style={{ border: "1px solid rgba(232,234,252,0.12)" }}
+        >
+          <ArrowLeft className="w-4 h-4 flex-shrink-0" />
+          <span className="relative">{t('comp.legal_sidebar.back', locale)}</span>
+        </Link>
         {LINKS.map(l => {
           const Icon = l.icon
           const active = isActive(l.href, l.exact)
