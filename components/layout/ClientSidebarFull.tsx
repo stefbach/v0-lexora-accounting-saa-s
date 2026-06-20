@@ -243,7 +243,12 @@ export function ClientSidebarFull() {
   // reconnaît l'utilisateur dans un rôle autorisé.
   const effectiveRoles = [profile?.role, societeRole].filter(Boolean) as string[]
   const locale = getLocale()
-  const [collapsed, setCollapsed] = useState<string[]>([])
+  // Accordéon : par défaut seules les TÊTES de section sont visibles (tout
+  // replié). On garde ouverte uniquement la section de la page active.
+  const [collapsed, setCollapsed] = useState<string[]>(() =>
+    MENU.filter((s) => !s.items.some((it) => pathname === it.href || pathname.startsWith(it.href + "/")))
+      .map((s) => s.section),
+  )
   const [activeModules, setActiveModules] = useState<ActiveModules>(DEFAULT_MODULES)
   const [mobileOpen, setMobileOpen] = useState(false)
 
