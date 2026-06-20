@@ -9,7 +9,7 @@ export default async function JuridiqueLayout({ children }: { children: React.Re
   if (!user) redirect('/auth/login')
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const role = profile?.role || ''
-  if (!['juridique', 'admin', 'super_admin', 'comptable', 'comptable_dedie', 'client_admin', 'direction'].includes(role)) {
+  if (!['juridique', 'admin', 'super_admin', 'comptable', 'comptable_dedie', 'client_admin', 'direction', 'rh', 'rh_manager'].includes(role)) {
     redirect('/redirect')
   }
   return (

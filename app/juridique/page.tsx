@@ -1,6 +1,6 @@
 "use client"
 import Link from "next/link"
-import { Scale, Gavel, FileSignature, FolderOpen, ShieldCheck, MessageSquareText, ArrowRight, BookOpen } from "lucide-react"
+import { Scale, Gavel, FileSignature, FolderOpen, ShieldCheck, MessageSquareText, ArrowRight, BookOpen, Users } from "lucide-react"
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
 import { LOIS_MAURICIENNES, JURIDICTIONS_MAURICIENNES, TYPES_CONTENTIEUX } from "@/lib/juridique/referentielMauricien"
 
@@ -14,6 +14,13 @@ const MODULES = [
     title: "Conseil juridique",
     desc: "Posez une question à l'avocat-conseil IA. Références mauriciennes citées, raisonnement structuré.",
     tag: "Avocat-conseil",
+  },
+  {
+    href: "/juridique/conseil-rh",
+    icon: Users,
+    title: "Conseil RH & Social",
+    desc: "Droit du travail mauricien (WRA 2019, ERA 2008) : discipline, licenciement, severance, PRGF. Analyse de contrats de travail.",
+    tag: "RH & Social",
   },
   {
     href: "/juridique/contentieux",

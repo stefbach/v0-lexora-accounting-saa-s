@@ -11,6 +11,7 @@ const LINKS = [
   { href: '/juridique', label: 'Tableau de bord', labelKey: 'comp.legal_sidebar.dashboard', icon: Scale, exact: true },
   { href: '/juridique/departements', label: 'Départements', labelKey: 'comp.legal_sidebar.departments', icon: LayoutGrid },
   { href: '/juridique/conseil', label: 'Conseil juridique', labelKey: 'comp.legal_sidebar.advice', icon: MessageSquareText },
+  { href: '/juridique/conseil-rh', label: 'Conseil RH & Social', labelKey: 'comp.legal_sidebar.advice_hr', icon: Users },
   { href: '/juridique/contentieux', label: 'Contentieux', labelKey: 'comp.legal_sidebar.litigation', icon: Gavel },
   { href: '/juridique/contrats', label: 'Générateur de contrats', labelKey: 'comp.legal_sidebar.contract_generator', icon: FileSignature },
   { href: '/juridique/documents', label: 'Documents', labelKey: 'comp.legal_sidebar.documents', icon: FolderOpen },

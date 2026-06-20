@@ -185,6 +185,7 @@ const MENU: MenuSection[] = [
       { href: "/juridique", label: "Département Juridique", labelKey: "comp.legal_sidebar.dashboard", icon: Scale, visibleForRoles: ["client_admin", "direction"] },
       { href: "/juridique/departements", label: "Départements", labelKey: "comp.legal_sidebar.departments", icon: Lightbulb, visibleForRoles: ["client_admin", "direction"] },
       { href: "/juridique/conseil", label: "Conseil juridique", labelKey: "comp.legal_sidebar.advice", icon: MessageCircle, visibleForRoles: ["client_admin", "direction"] },
+      { href: "/juridique/conseil-rh", label: "Conseil RH & Social", labelKey: "comp.legal_sidebar.advice_hr", icon: Users, visibleForRoles: ["client_admin", "direction", "rh", "rh_manager"] },
       { href: "/juridique/contentieux", label: "Contentieux", labelKey: "comp.legal_sidebar.litigation", icon: Gavel, visibleForRoles: ["client_admin", "direction"] },
       { href: "/juridique/contrats", label: "Générateur de contrats", labelKey: "comp.legal_sidebar.contract_generator", icon: FilePen, visibleForRoles: ["client_admin", "direction"] },
       { href: "/juridique/documents", label: "Documents", labelKey: "comp.legal_sidebar.documents", icon: FileText, visibleForRoles: ["client_admin", "direction"] },

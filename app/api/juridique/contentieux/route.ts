@@ -14,6 +14,47 @@ import {
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
+const BUCKET = 'documents'
+const MAX_DOCS = 6
+const MAX_TOTAL_BYTES = 24 * 1024 * 1024 // 24 Mo cumulés (avant base64)
+
+function mediaTypeFor(path: string): string | null {
+  const ext = path.split('.').pop()?.toLowerCase() || ''
+  if (ext === 'pdf') return 'application/pdf'
+  if (ext === 'png') return 'image/png'
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+  if (ext === 'webp') return 'image/webp'
+  return null // docx & autres : pas d'analyse native
+}
+
+/** Télécharge les pièces sélectionnées du storage et les encode en base64. */
+async function loadDocumentsFromStorage(
+  supabase: ReturnType<typeof getAdminClient>,
+  societeId: string | undefined,
+  paths: string[],
+): Promise<Array<{ name: string; media_type: string; data: string }>> {
+  if (!societeId || paths.length === 0) return []
+  const prefix = `juridique/${societeId}/`
+  const out: Array<{ name: string; media_type: string; data: string }> = []
+  let total = 0
+  for (const path of paths.slice(0, MAX_DOCS)) {
+    if (!path.startsWith(prefix)) continue // garde tenant : hors périmètre société
+    const media_type = mediaTypeFor(path)
+    if (!media_type) continue // type non analysable nativement (docx…)
+    const { data, error } = await supabase.storage.from(BUCKET).download(path)
+    if (error || !data) continue
+    const bytes = Buffer.from(await data.arrayBuffer())
+    total += bytes.length
+    if (total > MAX_TOTAL_BYTES) break
+    out.push({
+      name: path.split('/').pop()?.replace(/^\d+_/, '') || 'document',
+      media_type,
+      data: bytes.toString('base64'),
+    })
+  }
+  return out
+}
+
 /**
  * /api/juridique/contentieux — moteur du Département Juridique (contentieux).
  *
@@ -87,13 +128,19 @@ export async function POST(request: Request) {
     if (action === 'question') {
       const question = String((body as { question?: string }).question || '')
       if (!question) return NextResponse.json({ error: 'Question requise' }, { status: 400 })
+
+      // Analyse documentaire : télécharge les pièces sélectionnées depuis le storage.
+      const docPaths = (body as { document_paths?: string[] }).document_paths || []
+      const documents = await loadDocumentsFromStorage(supabase, societeId, docPaths)
+
       const { texte, sources } = await questionContentieux({
         question,
         contexte: (body as { contexte?: string }).contexte,
         domaines: (body as { domaines?: import('@/lib/juridique/referentielMauricien').DomaineJuridique[] }).domaines,
         historique: (body as { historique?: Array<{ role: 'user' | 'assistant'; content: string }> }).historique,
+        documents,
       })
-      return NextResponse.json({ reponse: texte, sources })
+      return NextResponse.json({ reponse: texte, sources, documents_analyses: documents.map((d) => d.name) })
     }
 
     return NextResponse.json({ error: 'Action inconnue' }, { status: 400 })

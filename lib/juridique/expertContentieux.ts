@@ -282,19 +282,47 @@ export async function questionContentieux(params: {
   contexte?: string
   domaines?: DomaineJuridique[]
   historique?: Array<{ role: 'user' | 'assistant'; content: string }>
+  /** Documents à analyser (PDF ou image), téléchargés depuis le storage. */
+  documents?: Array<{ name: string; media_type: string; data: string }>
 }): Promise<{ texte: string; sources: CitationSource[] }> {
   // RAG : récupère les passages verrouillés pertinents et les injecte dans le system prompt.
   const passages = retrieve(`${params.question} ${params.contexte || ''}`, { domaines: params.domaines, k: 6 })
-  const system = `${systemPrompt(params.domaines)}\n\n${formatContextePrompt(passages)}`
+  const docsNote = params.documents?.length
+    ? `\n\n## DOCUMENTS JOINTS\n${params.documents.length} document(s) sont joints à analyser. Analyse-les avec rigueur : identifie la nature, les parties, dates, montants, obligations et risques ; relie tes constats au droit mauricien (référentiel + sources RAG) ; signale toute clause problématique ou pièce manquante.`
+    : ''
+  const system = `${systemPrompt(params.domaines)}\n\n${formatContextePrompt(passages)}${docsNote}`
 
-  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = []
-  if (params.historique?.length) messages.push(...params.historique.slice(-10))
-  const q = params.contexte ? `[Contexte : ${params.contexte}]\n\n${params.question}` : params.question
-  messages.push({ role: 'user', content: q })
+  const messages: Anthropic.MessageParam[] = []
+  if (params.historique?.length) {
+    messages.push(...params.historique.slice(-10).map((m) => ({ role: m.role, content: m.content })))
+  }
+  const qText = params.contexte ? `[Contexte : ${params.contexte}]\n\n${params.question}` : params.question
+
+  if (params.documents?.length) {
+    // Dernier message = blocs de contenu (texte + documents/images natifs).
+    const blocks: Anthropic.ContentBlockParam[] = [{ type: 'text', text: qText }]
+    for (const d of params.documents) {
+      if (d.media_type === 'application/pdf') {
+        blocks.push({
+          type: 'document',
+          title: d.name,
+          source: { type: 'base64', media_type: 'application/pdf', data: d.data },
+        } as Anthropic.ContentBlockParam)
+      } else if (d.media_type.startsWith('image/')) {
+        blocks.push({
+          type: 'image',
+          source: { type: 'base64', media_type: d.media_type as 'image/png', data: d.data },
+        } as Anthropic.ContentBlockParam)
+      }
+    }
+    messages.push({ role: 'user', content: blocks })
+  } else {
+    messages.push({ role: 'user', content: qText })
+  }
 
   const resp = await anthropic().messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 2500,
+    max_tokens: 3000,
     system,
     messages,
   })
