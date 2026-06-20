@@ -5,10 +5,11 @@ import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
-import { Scale, FileText, Users, ShieldCheck, Settings, LogOut, FileSignature, Menu, X, Gavel, MessageSquareText, FolderOpen, LayoutGrid } from "lucide-react"
+import { Scale, FileText, Users, ShieldCheck, Settings, LogOut, FileSignature, Menu, X, Gavel, MessageSquareText, FolderOpen, LayoutGrid, FolderKanban } from "lucide-react"
 
 const LINKS = [
   { href: '/juridique', label: 'Tableau de bord', labelKey: 'comp.legal_sidebar.dashboard', icon: Scale, exact: true },
+  { href: '/juridique/dossiers', label: 'Dossiers', labelKey: 'comp.legal_sidebar.matters', icon: FolderKanban },
   { href: '/juridique/departements', label: 'Départements', labelKey: 'comp.legal_sidebar.departments', icon: LayoutGrid },
   { href: '/juridique/conseil', label: 'Conseil juridique', labelKey: 'comp.legal_sidebar.advice', icon: MessageSquareText },
   { href: '/juridique/conseil-rh', label: 'Conseil RH & Social', labelKey: 'comp.legal_sidebar.advice_hr', icon: Users },

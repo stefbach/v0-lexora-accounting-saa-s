@@ -91,6 +91,7 @@ export const componentsChunk = {
     // JuridiqueSidebar
     'comp.legal_sidebar.module_title': 'Département Juridique',
     'comp.legal_sidebar.dashboard': 'Tableau de bord',
+    'comp.legal_sidebar.matters': 'Dossiers',
     'comp.legal_sidebar.departments': 'Départements',
     'comp.legal_sidebar.advice': 'Conseil juridique',
     'comp.legal_sidebar.advice_hr': 'Conseil RH & Social',
@@ -216,6 +217,7 @@ export const componentsChunk = {
     // JuridiqueSidebar
     'comp.legal_sidebar.module_title': 'Legal Department',
     'comp.legal_sidebar.dashboard': 'Dashboard',
+    'comp.legal_sidebar.matters': 'Matters',
     'comp.legal_sidebar.departments': 'Practice areas',
     'comp.legal_sidebar.advice': 'Legal advice',
     'comp.legal_sidebar.advice_hr': 'HR & Labour advice',
