@@ -1,75 +1,39 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSbAdmin } from '@supabase/supabase-js'
+import { ym, genererPeriodes, isMraPayment, penaliteRetard } from '@/lib/accounting/tva-rattrapage'
 
 export const dynamic = 'force-dynamic'
 
-// ── Helpers période ──────────────────────────────────────────
-function ym(year: number, month: number) {
-  return `${year}-${String(month).padStart(2, '0')}`
+function getAdmin() {
+  return createSbAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
 }
 
-// Date limite MRA : 20 du mois qui suit la fin de la période
-function dateLimite(year: number, endMonth: number): string {
-  const m = endMonth === 12 ? 1 : endMonth + 1
-  const y = endMonth === 12 ? year + 1 : year
-  return `${y}-${String(m).padStart(2, '0')}-20`
+// Accès société : lien direct (user_societes, côté client/équipe) OU dossier
+// comptable (côté cabinet). Couvre /client/tva ET /comptable/tva. Lectures
+// ensuite faites via le client admin (RLS contournée APRÈS ce contrôle).
+async function checkSocieteAccess(authClient: any, admin: any, societe_id: string) {
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) return { ok: false as const, status: 401, error: 'Non autorisé' }
+  const [{ data: lien }, { data: dossier }] = await Promise.all([
+    admin.from('user_societes').select('societe_id').eq('user_id', user.id).eq('societe_id', societe_id).maybeSingle(),
+    admin.from('dossiers').select('id').eq('societe_id', societe_id).maybeSingle(),
+  ])
+  if (!lien && !dossier) return { ok: false as const, status: 403, error: 'Accès refusé' }
+  return { ok: true as const, user }
 }
 
-interface PeriodeAttendue {
-  periode: string          // YYYY-MM (mois, ou mois de fin du trimestre)
-  trimestre: string | null // YYYY-Qn pour le trimestriel
-  label: string            // libellé lisible
-  type: 'mensuel' | 'trimestriel'
-  mois: string[]           // mois YYYY-MM couverts (1 ou 3)
-  date_limite: string
-}
-
-// Génère la liste des périodes attendues entre deux mois inclus
-function genererPeriodes(
-  startY: number, startM: number,
-  endY: number, endM: number,
-  frequence: 'mensuelle' | 'trimestrielle',
-): PeriodeAttendue[] {
-  const out: PeriodeAttendue[] = []
-  if (frequence === 'mensuelle') {
-    let y = startY, m = startM
-    while (y < endY || (y === endY && m <= endM)) {
-      out.push({
-        periode: ym(y, m),
-        trimestre: null,
-        label: ym(y, m),
-        type: 'mensuel',
-        mois: [ym(y, m)],
-        date_limite: dateLimite(y, m),
-      })
-      m++; if (m > 12) { m = 1; y++ }
-    }
-  } else {
-    let y = startY
-    let q = Math.floor((startM - 1) / 3) + 1
-    const endQ = Math.floor((endM - 1) / 3) + 1
-    while (y < endY || (y === endY && q <= endQ)) {
-      const endMonthQ = q * 3
-      const mois = [endMonthQ - 2, endMonthQ - 1, endMonthQ].map(mm => ym(y, mm))
-      out.push({
-        periode: ym(y, endMonthQ),
-        trimestre: `${y}-Q${q}`,
-        label: `${y}-Q${q}`,
-        type: 'trimestriel',
-        mois,
-        date_limite: dateLimite(y, endMonthQ),
-      })
-      q++; if (q > 4) { q = 1; y++ }
-    }
-  }
-  return out
-}
+// Helpers période (ym, dateLimite, genererPeriodes), détection paiement MRA
+// (isMraPayment) et pénalité de retard (penaliteRetard) : importés depuis
+// lib/accounting/tva-rattrapage (logique pure, testée unitairement).
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    const authClient = await createClient()
 
     const { searchParams } = new URL(request.url)
     const societe_id = searchParams.get('societe_id')
@@ -79,12 +43,17 @@ export async function GET(request: Request) {
 
     if (!societe_id) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
+    // ── Contrôle d'accès (client OU comptable) puis lectures via admin ──
+    const supabase = getAdmin()
+    const access = await checkSocieteAccess(authClient, supabase, societe_id)
+    if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status })
+
     // ── Société : fréquence TVA, nom ─────────────────────────
     const { data: societe, error: socErr } = await supabase
       .from('societes')
       .select('id, nom, frequence_tva, assujetti_tva')
       .eq('id', societe_id)
-      .single()
+      .maybeSingle()
     if (socErr || !societe) {
       return NextResponse.json({ error: 'Société introuvable' }, { status: 404 })
     }
@@ -222,6 +191,31 @@ export async function GET(request: Request) {
       }
     }
 
+    // ── Paiements MRA détectés en banque (par libellé, au plus simple) ───────
+    // Un paiement TVA = un DÉBIT (sortie) dont le libellé bancaire évoque la
+    // MRA / la TVA. Détection volontairement simple ; le vrai rapprochement
+    // automatique est géré ailleurs (module rapprochement). On rattache chaque
+    // paiement au mois de sa date de transaction.
+    interface PaiementBanque { date: string; libelle: string; montant: number }
+    const paiementsParMois = new Map<string, PaiementBanque[]>()
+    {
+      const { data: txs } = await supabase
+        .from('transactions_bancaires')
+        .select('date_transaction, libelle_banque, debit')
+        .eq('societe_id', societe_id)
+        .gte('date_transaction', dateDebutSql)
+        .lte('date_transaction', dateFinSql)
+        .gt('debit', 0)
+      for (const tx of txs || []) {
+        const lib = String(tx.libelle_banque || '')
+        if (!isMraPayment(lib)) continue
+        const mois = String(tx.date_transaction).slice(0, 7)
+        const arr = paiementsParMois.get(mois) ?? []
+        arr.push({ date: String(tx.date_transaction).slice(0, 10), libelle: lib, montant: Number(tx.debit) || 0 })
+        paiementsParMois.set(mois, arr)
+      }
+    }
+
     // Net estimé pour un ensemble de mois : factures en priorité, sinon écritures
     function netteEstimee(mois: string[]): { net: number; nbFactures: number; source: 'factures' | 'ecritures' | 'aucune' } {
       let coll = 0, ded = 0, nbF = 0
@@ -266,6 +260,10 @@ export async function GET(request: Request) {
       }
       if (sourceData !== 'aucune' || (rec && rec.tva_nette != null)) nbAvecDonnees++
 
+      // Paiements MRA détectés en banque sur les mois couverts par la période.
+      const paiementsBanque = p.mois.flatMap(m => paiementsParMois.get(m) ?? [])
+      const totalPayeBanque = Math.round(paiementsBanque.reduce((s, x) => s + x.montant, 0) * 100) / 100
+
       const limite = new Date(p.date_limite)
       const enRetard = !declaree && aujourdhui > limite
 
@@ -276,11 +274,8 @@ export async function GET(request: Request) {
         if (tvaNette > 0) totalARegulariser += tvaNette
         if (enRetard && tvaNette > 0) {
           nbEnRetard++
-          const moisRetard = Math.max(
-            1,
-            Math.ceil((aujourdhui.getTime() - limite.getTime()) / (1000 * 60 * 60 * 24 * 30)),
-          )
-          totalPenalites += Math.round((tvaNette * 0.05 + tvaNette * 0.005 * moisRetard) * 100) / 100
+          const moisRetard = Math.ceil((aujourdhui.getTime() - limite.getTime()) / (1000 * 60 * 60 * 24 * 30))
+          totalPenalites += penaliteRetard(tvaNette, moisRetard)
         } else if (enRetard) {
           nbEnRetard++
         }
@@ -305,6 +300,8 @@ export async function GET(request: Request) {
         source_data: sourceData,
         is_rattrapage: rec?.is_rattrapage || false,
         source_saisie: rec?.source_saisie || null,
+        paiements_banque: paiementsBanque,
+        total_paye_banque: totalPayeBanque,
       }
     })
 
