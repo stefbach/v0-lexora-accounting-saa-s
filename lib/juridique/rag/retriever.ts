@@ -97,7 +97,7 @@ export function formatContextePrompt(passages: PassagePertinent[]): string {
     )
     .join('\n\n')
   return `## SOURCES VERROUILLÉES (RAG — corpus juridique mauricien)
-Fonde ta réponse EXCLUSIVEMENT sur ces passages. Cite-les sous la forme [S1], [S2]… en regard de chaque affirmation juridique. Si un point n'est pas couvert par ces sources, dis-le clairement et marque-le « [hors corpus — à vérifier] » plutôt que d'inventer.
+Fonde ta réponse EXCLUSIVEMENT sur ces passages. RÈGLE STRICTE : chaque affirmation juridique doit porter une citation [S1], [S2]… correspondant à ces sources, et tu dois terminer par une section « ## Sources » qui les liste. Tout point non couvert par ces sources doit être marqué « [hors corpus — à vérifier] » et présenté comme une hypothèse — jamais comme une certitude. N'invente aucune référence.
 
 ${blocs}`
 }
