@@ -90,6 +90,7 @@ export const componentsChunk = {
 
     // JuridiqueSidebar
     'comp.legal_sidebar.module_title': 'Département Juridique',
+    'comp.legal_sidebar.back': '← Retour à mon espace',
     'comp.legal_sidebar.dashboard': 'Tableau de bord',
     'comp.legal_sidebar.matters': 'Dossiers',
     'comp.legal_sidebar.departments': 'Départements',
@@ -216,6 +217,7 @@ export const componentsChunk = {
 
     // JuridiqueSidebar
     'comp.legal_sidebar.module_title': 'Legal Department',
+    'comp.legal_sidebar.back': '← Back to my space',
     'comp.legal_sidebar.dashboard': 'Dashboard',
     'comp.legal_sidebar.matters': 'Matters',
     'comp.legal_sidebar.departments': 'Practice areas',
