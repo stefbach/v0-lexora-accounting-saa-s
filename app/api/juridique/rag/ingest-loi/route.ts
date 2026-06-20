@@ -35,44 +35,47 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient()
     const provider = embeddingProvider()
-    const rapport: Array<{ key: string; chunks: number; embedded: number }> = []
+    const rapport: Array<{ key: string; chunks?: number; embedded?: number; erreur?: string }> = []
 
     for (const loi of cibles) {
-      const text = await fetchPdfText(loi.url)
-      const chunks = chunkLoi(text).slice(0, MAX_CHUNKS)
+      try {
+        const text = await fetchPdfText(loi.url)
+        const chunks = chunkLoi(text).slice(0, MAX_CHUNKS)
 
-      // Refresh : on supprime les anciens passages de cette source.
-      await supabase.from('juridique_rag_corpus').delete().like('slug', `${loi.key}#%`)
+        // Refresh : on supprime les anciens passages de cette source.
+        await supabase.from('juridique_rag_corpus').delete().like('slug', `${loi.key}#%`)
 
-      let embedded = 0
-      // Insertion par lots de 50 (embeddings calculés un par un).
-      const rows: Record<string, unknown>[] = []
-      for (let i = 0; i < chunks.length; i++) {
-        const c = chunks[i]
-        const emb = await embedText(`${loi.titre} ${c.reference}. ${c.texte}`, 'document')
-        if (emb) embedded++
-        const row: Record<string, unknown> = {
-          slug: `${loi.key}#${i + 1}`,
-          domaine: loi.domaine,
-          source: loi.source,
-          reference: c.reference,
-          titre: `${loi.titre} — ${c.reference}`,
-          texte: c.texte,
-          url: loi.url,
-          maj: loi.maj,
-          updated_at: new Date().toISOString(),
+        let embedded = 0
+        const rows: Record<string, unknown>[] = []
+        for (let i = 0; i < chunks.length; i++) {
+          const c = chunks[i]
+          const emb = await embedText(`${loi.titre} ${c.reference}. ${c.texte}`, 'document')
+          if (emb) embedded++
+          const row: Record<string, unknown> = {
+            slug: `${loi.key}#${i + 1}`,
+            domaine: loi.domaine,
+            source: loi.source,
+            reference: c.reference,
+            titre: `${loi.titre} — ${c.reference}`,
+            texte: c.texte,
+            url: loi.url,
+            maj: loi.maj,
+            updated_at: new Date().toISOString(),
+          }
+          const v = toPgvector(emb)
+          if (v) row.embedding = v
+          rows.push(row)
         }
-        const v = toPgvector(emb)
-        if (v) row.embedding = v
-        rows.push(row)
-      }
 
-      for (let i = 0; i < rows.length; i += 50) {
-        const batch = rows.slice(i, i + 50)
-        const { error } = await supabase.from('juridique_rag_corpus').upsert(batch, { onConflict: 'slug' })
-        if (error) return NextResponse.json({ error: `Upsert ${loi.key}: ${error.message}` }, { status: 500 })
+        for (let i = 0; i < rows.length; i += 50) {
+          const batch = rows.slice(i, i + 50)
+          const { error } = await supabase.from('juridique_rag_corpus').upsert(batch, { onConflict: 'slug' })
+          if (error) throw new Error(error.message)
+        }
+        rapport.push({ key: loi.key, chunks: chunks.length, embedded })
+      } catch (err) {
+        rapport.push({ key: loi.key, erreur: err instanceof Error ? err.message : 'échec' })
       }
-      rapport.push({ key: loi.key, chunks: chunks.length, embedded })
     }
 
     return NextResponse.json({ ok: true, provider: provider || 'aucun (mode lexical)', rapport })
