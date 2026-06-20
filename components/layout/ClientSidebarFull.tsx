@@ -179,6 +179,20 @@ const MENU: MenuSection[] = [
     ]
   },
   {
+    section: "Juridique", sectionKey: "comp.legal_sidebar.module_title",
+    requiredModule: "juridique",
+    items: [
+      { href: "/juridique", label: "Département Juridique", labelKey: "comp.legal_sidebar.dashboard", icon: Scale, visibleForRoles: ["client_admin", "direction"] },
+      { href: "/juridique/departements", label: "Départements", labelKey: "comp.legal_sidebar.departments", icon: Lightbulb, visibleForRoles: ["client_admin", "direction"] },
+      { href: "/juridique/conseil", label: "Conseil juridique", labelKey: "comp.legal_sidebar.advice", icon: MessageCircle, visibleForRoles: ["client_admin", "direction"] },
+      { href: "/juridique/conseil-rh", label: "Conseil RH & Social", labelKey: "comp.legal_sidebar.advice_hr", icon: Users, visibleForRoles: ["client_admin", "direction", "rh", "rh_manager"] },
+      { href: "/juridique/contentieux", label: "Contentieux", labelKey: "comp.legal_sidebar.litigation", icon: Gavel, visibleForRoles: ["client_admin", "direction"] },
+      { href: "/juridique/contrats", label: "Générateur de contrats", labelKey: "comp.legal_sidebar.contract_generator", icon: FilePen, visibleForRoles: ["client_admin", "direction"] },
+      { href: "/juridique/documents", label: "Documents", labelKey: "comp.legal_sidebar.documents", icon: FileText, visibleForRoles: ["client_admin", "direction"] },
+      { href: "/juridique/conformite", label: "Conformité & délais", labelKey: "comp.legal_sidebar.compliance", icon: ClipboardList, visibleForRoles: ["client_admin", "direction"] },
+    ]
+  },
+  {
     section: "RH & Paie", sectionKey: "hr.hr_payroll",
     requiredModule: "rh",
     items: [
@@ -252,7 +266,9 @@ export function ClientSidebarFull() {
       planModules = {
         comptabilite: m.comptabilite === true,
         rh: m.rh === true,
-        juridique: m.juridique === true,
+        // Juridique : module transverse actif par défaut (cf. DEFAULT_MODULES),
+        // visible sauf désactivation explicite dans le plan de la société.
+        juridique: m.juridique !== false,
         facturation: m.facturation === true,
         documents: m.documents === true,
         fiscal: m.fiscal === true,
@@ -327,6 +343,13 @@ export function ClientSidebarFull() {
         if (section.requiredRegime && section.requiredRegime.length > 0) {
           if (!section.requiredRegime.includes(currentRegime)) return false
         }
+        // Masquer une section dont AUCUN item n'est visible pour les rôles de
+        // l'utilisateur (évite un en-tête de section vide, ex. « Juridique »
+        // réservé à client_admin/direction affiché à un client_user).
+        const anyItemVisible = section.items.some(
+          it => !it.visibleForRoles || effectiveRoles.some(r => it.visibleForRoles!.includes(r)),
+        )
+        if (!anyItemVisible) return false
         return true
       })
 
