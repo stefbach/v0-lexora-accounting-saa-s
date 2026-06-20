@@ -17,7 +17,7 @@ import {
   Globe, Lightbulb, ClipboardList, Download, Upload, Calendar,
   CalendarDays, FilePlus2, SlidersHorizontal, Menu, X, FilePen, UserCircle,
   Sparkles, Package, Send, Repeat, MessageCircle, Mail, KeyRound, ArrowRightLeft,
-  TrendingUp
+  TrendingUp, FolderKanban
 } from "lucide-react"
 
 /* ------------------------------------------------------------------ */
@@ -183,6 +183,7 @@ const MENU: MenuSection[] = [
     requiredModule: "juridique",
     items: [
       { href: "/juridique", label: "Département Juridique", labelKey: "comp.legal_sidebar.dashboard", icon: Scale, visibleForRoles: ["client_admin", "direction"] },
+      { href: "/juridique/dossiers", label: "Dossiers", labelKey: "comp.legal_sidebar.matters", icon: FolderKanban, visibleForRoles: ["client_admin", "direction"] },
       { href: "/juridique/departements", label: "Départements", labelKey: "comp.legal_sidebar.departments", icon: Lightbulb, visibleForRoles: ["client_admin", "direction"] },
       { href: "/juridique/conseil", label: "Conseil juridique", labelKey: "comp.legal_sidebar.advice", icon: MessageCircle, visibleForRoles: ["client_admin", "direction"] },
       { href: "/juridique/conseil-rh", label: "Conseil RH & Social", labelKey: "comp.legal_sidebar.advice_hr", icon: Users, visibleForRoles: ["client_admin", "direction", "rh", "rh_manager"] },

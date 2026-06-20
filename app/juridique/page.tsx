@@ -1,13 +1,21 @@
 "use client"
 import Link from "next/link"
-import { Scale, Gavel, FileSignature, FolderOpen, ShieldCheck, MessageSquareText, ArrowRight, BookOpen, Users } from "lucide-react"
+import { Scale, Gavel, FileSignature, FolderOpen, ShieldCheck, MessageSquareText, ArrowRight, BookOpen, Users, FolderKanban } from "lucide-react"
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
+import { RagAdminPanel } from "@/components/juridique/RagAdminPanel"
 import { LOIS_MAURICIENNES, JURIDICTIONS_MAURICIENNES, TYPES_CONTENTIEUX } from "@/lib/juridique/referentielMauricien"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
 const MODULES = [
+  {
+    href: "/juridique/dossiers",
+    icon: FolderKanban,
+    title: "Dossiers",
+    desc: "Gérez vos dossiers et contentieux : parties, statut, pièces, analyses et actes — tout persisté et rattaché.",
+    tag: "Gestion",
+  },
   {
     href: "/juridique/conseil",
     icon: MessageSquareText,
@@ -119,6 +127,8 @@ export default function JuridiqueDashboard() {
           </div>
         </div>
       </div>
+
+      <RagAdminPanel />
 
       <p className="text-[11px] text-gray-400 text-center">
         Lexora n'exerce pas l'activité réglementée d'avocat. Les documents produits sont des projets de travail à faire

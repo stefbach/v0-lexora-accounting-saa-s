@@ -36,31 +36,38 @@ async function guard(societeId: string | null) {
 // GET — liste les pièces juridiques d'une société
 export async function GET(request: Request) {
   try {
-    const societeId = new URL(request.url).searchParams.get('societe_id')
+    const url = new URL(request.url)
+    const societeId = url.searchParams.get('societe_id')
+    const dossierId = url.searchParams.get('dossier_id')
     if (!societeId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
     const g = await guard(societeId)
     if (g.error) return g.error
     const { supabase } = g
 
-    const { data, error } = await supabase.storage.from(BUCKET).list(prefix(societeId), {
-      limit: 200,
-      sortBy: { column: 'created_at', order: 'desc' },
-    })
+    // Source de vérité = table juridique_pieces (métadonnées en base).
+    let q = supabase
+      .from('juridique_pieces')
+      .select('id, nom, storage_path, media_type, taille_bytes, categorie, dossier_id, created_at')
+      .eq('societe_id', societeId)
+      .order('created_at', { ascending: false })
+      .limit(300)
+    if (dossierId) q = q.eq('dossier_id', dossierId)
+    const { data, error } = await q
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    const files = (data || [])
-      .filter((f) => f.id) // exclure les "dossiers" virtuels
-      .map((f) => {
-        const path = `${prefix(societeId)}/${f.name}`
-        const { data: signed } = supabase.storage.from(BUCKET).getPublicUrl(path)
-        return {
-          name: f.name,
-          path,
-          size: (f.metadata as { size?: number } | null)?.size ?? null,
-          created_at: f.created_at,
-          url: signed?.publicUrl ?? null,
-        }
-      })
+    const files = (data || []).map((p) => {
+      const { data: signed } = supabase.storage.from(BUCKET).getPublicUrl(p.storage_path)
+      return {
+        id: p.id,
+        name: p.nom,
+        path: p.storage_path,
+        size: p.taille_bytes ?? null,
+        categorie: p.categorie,
+        dossier_id: p.dossier_id,
+        created_at: p.created_at,
+        url: signed?.publicUrl ?? null,
+      }
+    })
     return NextResponse.json({ files })
   } catch (e) {
     console.error('[juridique/documents GET]', e)
@@ -74,6 +81,8 @@ export async function POST(request: Request) {
     const form = await request.formData()
     const file = form.get('file') as File | null
     const societeId = String(form.get('societe_id') || '')
+    const dossierId = (form.get('dossier_id') as string | null) || null
+    const categorie = (form.get('categorie') as string | null) || 'piece'
     if (!file) return NextResponse.json({ error: 'Aucun fichier' }, { status: 400 })
     if (!societeId) return NextResponse.json({ error: 'societe_id requis' }, { status: 400 })
 
@@ -85,7 +94,7 @@ export async function POST(request: Request) {
 
     const g = await guard(societeId)
     if (g.error) return g.error
-    const { supabase } = g
+    const { supabase, user } = g
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
     const path = `${prefix(societeId)}/${Date.now()}_${safeName}`
@@ -96,6 +105,23 @@ export async function POST(request: Request) {
       upsert: false,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // Enregistre la pièce en base (source de vérité).
+    const { error: insErr } = await supabase.from('juridique_pieces').insert({
+      societe_id: societeId,
+      dossier_id: dossierId,
+      nom: file.name,
+      storage_path: path,
+      media_type: file.type || null,
+      taille_bytes: file.size,
+      categorie,
+      created_by: user?.id ?? null,
+    })
+    if (insErr) {
+      // rollback storage pour ne pas laisser de fichier orphelin
+      await supabase.storage.from(BUCKET).remove([path]).catch(() => null)
+      return NextResponse.json({ error: insErr.message }, { status: 500 })
+    }
 
     const { data: signed } = supabase.storage.from(BUCKET).getPublicUrl(path)
     return NextResponse.json({ ok: true, path, url: signed?.publicUrl ?? null })
@@ -122,6 +148,7 @@ export async function DELETE(request: Request) {
 
     const { error } = await supabase.storage.from(BUCKET).remove([path])
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await supabase.from('juridique_pieces').delete().eq('societe_id', societeId).eq('storage_path', path)
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('[juridique/documents DELETE]', e)
