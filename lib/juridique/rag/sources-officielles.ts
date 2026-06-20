@@ -102,6 +102,64 @@ export const SOURCES_LOIS: SourceLoi[] = [
     url: 'https://www.mcci.org/media/35745/code-de-commerce.pdf',
     maj: 'version consolidée',
   },
+  {
+    key: 'code-procedure-civile',
+    source: 'Code de Procédure Civile',
+    titre: 'Code de Procédure Civile (Mauricien)',
+    domaine: 'procedure',
+    url: 'https://www.mcci.org/media/35736/codedeprocedurecivile.pdf',
+    maj: 'version consolidée',
+  },
+  // ── Procédure / juridictions ──
+  {
+    key: 'courts-act',
+    source: 'Courts Act',
+    titre: 'Courts Act (Cap 168, Act 41 of 1945) — Revised Laws',
+    domaine: 'procedure',
+    url: 'https://attorneygeneral.govmu.org/Documents/Laws%20of%20Mauritius/A-Z%20Acts/C/Co/COURTS%20ACT,%20Cap%20168,%20(Act%2041%20of%201945).pdf',
+    maj: 'Revised Laws of Mauritius',
+  },
+  {
+    key: 'district-intermediate-courts',
+    source: 'DIC Act',
+    titre: 'District and Intermediate Courts (Civil Jurisdiction) Act — Revised Laws',
+    domaine: 'procedure',
+    url: 'https://attorneygeneral.govmu.org/Documents/Laws%20of%20Mauritius/A-Z%20Acts/D/DISTRICT%20AND%20INTERMEDIATE%20COURTS%20(CIVIL%20JURISDICTION)%20ACT,%20No%20Cap%20173.pdf',
+    maj: 'Revised Laws of Mauritius',
+  },
+  {
+    key: 'constitution',
+    source: 'Constitution',
+    titre: 'Constitution of Mauritius (GN 54 of 1968) — Revised Laws',
+    domaine: 'procedure',
+    url: 'https://attorneygeneral.govmu.org/Documents/Laws%20of%20Mauritius/A-Z%20Acts/C/Co/Constitution,%20GN%2054%20of%201968.pdf',
+    maj: 'Revised Laws of Mauritius',
+  },
+  // ── Anti-blanchiment / arbitrage / immobilier ──
+  {
+    key: 'fiamla-2002',
+    source: 'FIAMLA',
+    titre: 'Financial Intelligence and Anti-Money Laundering Act 2002',
+    domaine: 'financier',
+    url: 'https://www.fiumauritius.org/fiu/wp-content/uploads/2023/02/financial-intelligence-and-anti-money-laundering-act-2002.pdf',
+    maj: 'version FIU',
+  },
+  {
+    key: 'iaa-2008',
+    source: 'IAA 2008',
+    titre: 'International Arbitration Act 2008 (amendé 2013)',
+    domaine: 'arbitrage',
+    url: 'https://marc.mu/wp-content/uploads/2023/03/international-arbitration-act-2008-amended-2013.pdf',
+    maj: 'amendé 2013',
+  },
+  {
+    key: 'landlord-tenant',
+    source: 'L&T Act',
+    titre: 'Landlord and Tenant Act 1999 — Revised Laws',
+    domaine: 'immobilier',
+    url: 'https://attorneygeneral.govmu.org/Documents/Laws%20of%20Mauritius/A-Z%20Acts/L/La/LANDLORD%20AND%20TENANT%20ACT,%20No%206%20of%201999.pdf',
+    maj: 'Revised Laws of Mauritius',
+  },
 ]
 
 export function getSourceLoi(key: string): SourceLoi | undefined {
