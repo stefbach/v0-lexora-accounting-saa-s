@@ -76,6 +76,43 @@ function extractJSON<T>(text: string, fallback: T): T {
   return fallback
 }
 
+/** Document à analyser, téléchargé depuis le storage (base64). */
+export interface DocAnalyse {
+  name: string
+  media_type: string
+  data: string
+}
+
+/**
+ * Construit le contenu d'un message utilisateur : texte seul, ou texte + blocs
+ * document/image natifs (PDF, images) quand des pièces sont jointes.
+ */
+function userContent(text: string, documents?: DocAnalyse[]): string | Anthropic.ContentBlockParam[] {
+  if (!documents?.length) return text
+  const blocks: Anthropic.ContentBlockParam[] = [{ type: 'text', text }]
+  for (const d of documents) {
+    if (d.media_type === 'application/pdf') {
+      blocks.push({
+        type: 'document',
+        title: d.name,
+        source: { type: 'base64', media_type: 'application/pdf', data: d.data },
+      } as Anthropic.ContentBlockParam)
+    } else if (d.media_type.startsWith('image/')) {
+      blocks.push({
+        type: 'image',
+        source: { type: 'base64', media_type: d.media_type as 'image/png', data: d.data },
+      } as Anthropic.ContentBlockParam)
+    }
+  }
+  return blocks
+}
+
+function docsNote(documents?: DocAnalyse[]): string {
+  return documents?.length
+    ? `\n\n## DOCUMENTS JOINTS\n${documents.length} document(s) sont joints. Analyse-les avec rigueur (nature, parties, dates, montants, obligations, clauses à risque) et fonde tes constats dessus + le droit mauricien.`
+    : ''
+}
+
 // ============================================================
 // TYPES
 // ============================================================
@@ -113,13 +150,21 @@ export interface EvaluationDossier {
 }
 
 export type TypeActe =
+  // — Demande / attaque —
   | 'mise_en_demeure'
   | 'sommation'
   | 'statement_of_claim'
   | 'plaint_with_summons'
-  | 'affidavit'
   | 'lettre_avocat'
+  // — Défense / réponse —
+  | 'reponse_mise_en_demeure'
+  | 'courrier_defense'
+  | 'conclusions_defense'
+  | 'contestation_creance'
+  // — Amiable / divers —
+  | 'lettre_negociation'
   | 'protocole_accord'
+  | 'affidavit'
 
 export interface ParametresActe {
   type_acte: TypeActe
@@ -136,7 +181,7 @@ export interface ParametresActe {
 // ============================================================
 // 1. QUALIFICATION DU LITIGE
 // ============================================================
-export async function qualifierLitige(faits: FaitsLitige): Promise<QualificationLitige> {
+export async function qualifierLitige(faits: FaitsLitige, documents?: DocAnalyse[]): Promise<QualificationLitige> {
   const jurSuggestion = faits.montant_en_jeu
     ? juridictionPourMontant(faits.montant_en_jeu).nom
     : null
@@ -168,8 +213,8 @@ Réponds UNIQUEMENT le JSON.`
   const resp = await anthropic().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1500,
-    system: `${systemPrompt()}\n\n${formatContextePrompt(passages)}`,
-    messages: [{ role: 'user', content: prompt }],
+    system: `${systemPrompt()}\n\n${formatContextePrompt(passages)}${docsNote(documents)}`,
+    messages: [{ role: 'user', content: userContent(prompt, documents) }],
   })
 
   return extractJSON<QualificationLitige>(extractText(resp), {
@@ -186,7 +231,7 @@ Réponds UNIQUEMENT le JSON.`
 // ============================================================
 // 2. ÉVALUATION STRATÉGIQUE DU DOSSIER
 // ============================================================
-export async function evaluerDossier(faits: FaitsLitige): Promise<EvaluationDossier> {
+export async function evaluerDossier(faits: FaitsLitige, documents?: DocAnalyse[]): Promise<EvaluationDossier> {
   const prompt = `Évalue ce dossier de contentieux mauricien comme un avocat préparant sa stratégie. Réponds en JSON strict.
 
 FAITS : ${faits.description}
@@ -213,8 +258,8 @@ Réponds UNIQUEMENT le JSON.`
   const resp = await anthropic().messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 3000,
-    system: `${systemPrompt()}\n\n${formatContextePrompt(passages)}`,
-    messages: [{ role: 'user', content: prompt }],
+    system: `${systemPrompt()}\n\n${formatContextePrompt(passages)}${docsNote(documents)}`,
+    messages: [{ role: 'user', content: userContent(prompt, documents) }],
   })
 
   return extractJSON<EvaluationDossier>(extractText(resp), {
@@ -241,34 +286,62 @@ const LABEL_ACTE: Record<TypeActe, string> = {
   sommation: 'Sommation de payer',
   statement_of_claim: 'Statement of Claim',
   plaint_with_summons: 'Plaint with Summons',
-  affidavit: 'Affidavit',
   lettre_avocat: 'Lettre officielle',
+  reponse_mise_en_demeure: 'Réponse à mise en demeure',
+  courrier_defense: 'Courrier en défense',
+  conclusions_defense: 'Conclusions en défense',
+  contestation_creance: 'Contestation de créance',
+  lettre_negociation: 'Lettre de négociation amiable',
   protocole_accord: 'Protocole d’accord transactionnel',
+  affidavit: 'Affidavit',
 }
 
-export async function genererActe(params: ParametresActe): Promise<{ titre: string; corps: string }> {
+/** Posture de l'acte → oriente la rédaction (demande vs défense vs amiable). */
+const POSTURE_ACTE: Record<TypeActe, string> = {
+  mise_en_demeure: 'demande : sommer la partie adverse d’exécuter, fixer un délai et annoncer les suites.',
+  sommation: 'demande : sommation formelle de payer/faire, préalable à l’action.',
+  statement_of_claim: 'demande : exposé des prétentions devant la juridiction.',
+  plaint_with_summons: 'demande : acte introductif d’instance.',
+  lettre_avocat: 'neutre : courrier officiel ferme et argumenté.',
+  reponse_mise_en_demeure: 'DÉFENSE : répondre à une mise en demeure reçue — contester le bien-fondé, opposer les moyens de fait et de droit, refuser ou proposer.',
+  courrier_defense: 'DÉFENSE : faire valoir la position de notre client face à une réclamation, réfuter les griefs point par point.',
+  conclusions_defense: 'DÉFENSE : conclusions/mémoire en défense structuré (faits, moyens de droit, prétentions, demande de rejet).',
+  contestation_creance: 'DÉFENSE : contester une créance réclamée (prescription, absence de preuve, exécution, compensation).',
+  lettre_negociation: 'amiable : proposer un règlement transactionnel sans reconnaissance de responsabilité.',
+  protocole_accord: 'amiable : formaliser un accord transactionnel équilibré et exécutoire.',
+  affidavit: 'preuve : déclaration sous serment factuelle et précise.',
+}
+
+export async function genererActe(
+  params: ParametresActe,
+  documents?: DocAnalyse[],
+): Promise<{ titre: string; corps: string }> {
+  // RAG : ancrer l'acte sur les sources mauriciennes pertinentes.
+  const passages = retrieve(`${params.objet} ${params.faits} ${LABEL_ACTE[params.type_acte]}`, { k: 6 })
+
   const prompt = `Rédige un(e) « ${LABEL_ACTE[params.type_acte]} » complet et professionnel, conforme à la pratique mauricienne.
+POSTURE : ${POSTURE_ACTE[params.type_acte]}
 
 ÉMETTEUR (notre client) : ${params.societe.nom}${params.societe.brn ? ` (BRN ${params.societe.brn})` : ''}${params.societe.adresse ? `, ${params.societe.adresse}` : ''}
 DESTINATAIRE : ${params.partie_adverse.nom}${params.partie_adverse.adresse ? `, ${params.partie_adverse.adresse}` : ''}
 OBJET : ${params.objet}
-${params.montant ? `MONTANT RÉCLAMÉ : ${params.montant} ${params.devise || 'MUR'}` : ''}
-${params.delai_jours ? `DÉLAI ACCORDÉ : ${params.delai_jours} jours` : ''}
-FAITS : ${params.faits}
+${params.montant ? `MONTANT EN JEU : ${params.montant} ${params.devise || 'MUR'}` : ''}
+${params.delai_jours ? `DÉLAI : ${params.delai_jours} jours` : ''}
+FAITS / CONTEXTE : ${params.faits}
 ${params.fondement_legal?.length ? `FONDEMENT : ${params.fondement_legal.join(', ')}` : ''}
+${documents?.length ? `\nDes documents sont joints (ex. réclamation adverse, contrat, mise en demeure reçue) : appuie-toi dessus pour rédiger, cite-les et réfute/exploite leur contenu.` : ''}
 
 Exigences :
-- Ton ferme, courtois et juridiquement rigoureux.
-- Structure claire : exposé des faits, fondement légal (citer les références mauriciennes), demande/injonction, délai, conséquences à défaut.
-- Mentions obligatoires et formule de réserve de droits.
+- Ton adapté à la posture (ferme en demande ; argumenté et réfutateur en défense ; constructif en amiable).
+- Structure claire : exposé des faits, moyens de droit (citer les références mauriciennes des SOURCES ci-dessous), demande/position, délai s'il y a lieu, réserve de droits.
 - N'invente PAS de jurisprudence ; marque « [à vérifier] » toute référence incertaine.
-- Renvoie UNIQUEMENT le corps de l'acte en texte (sans en-tête de cabinet ni signature graphique — ils seront ajoutés au PDF). Pas de Markdown, du texte de courrier formel.`
+- Renvoie UNIQUEMENT le corps de l'acte en texte de courrier formel (sans en-tête de cabinet ni signature graphique — ajoutés au PDF). Pas de Markdown.`
 
   const resp = await anthropic().messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 3000,
-    system: systemPrompt(),
-    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 3500,
+    system: `${systemPrompt()}\n\n${formatContextePrompt(passages)}${docsNote(documents)}`,
+    messages: [{ role: 'user', content: userContent(prompt, documents) }],
   })
 
   return { titre: LABEL_ACTE[params.type_acte], corps: extractText(resp).trim() }
@@ -283,42 +356,18 @@ export async function questionContentieux(params: {
   domaines?: DomaineJuridique[]
   historique?: Array<{ role: 'user' | 'assistant'; content: string }>
   /** Documents à analyser (PDF ou image), téléchargés depuis le storage. */
-  documents?: Array<{ name: string; media_type: string; data: string }>
+  documents?: DocAnalyse[]
 }): Promise<{ texte: string; sources: CitationSource[] }> {
   // RAG : récupère les passages verrouillés pertinents et les injecte dans le system prompt.
   const passages = retrieve(`${params.question} ${params.contexte || ''}`, { domaines: params.domaines, k: 6 })
-  const docsNote = params.documents?.length
-    ? `\n\n## DOCUMENTS JOINTS\n${params.documents.length} document(s) sont joints à analyser. Analyse-les avec rigueur : identifie la nature, les parties, dates, montants, obligations et risques ; relie tes constats au droit mauricien (référentiel + sources RAG) ; signale toute clause problématique ou pièce manquante.`
-    : ''
-  const system = `${systemPrompt(params.domaines)}\n\n${formatContextePrompt(passages)}${docsNote}`
+  const system = `${systemPrompt(params.domaines)}\n\n${formatContextePrompt(passages)}${docsNote(params.documents)}`
 
   const messages: Anthropic.MessageParam[] = []
   if (params.historique?.length) {
     messages.push(...params.historique.slice(-10).map((m) => ({ role: m.role, content: m.content })))
   }
   const qText = params.contexte ? `[Contexte : ${params.contexte}]\n\n${params.question}` : params.question
-
-  if (params.documents?.length) {
-    // Dernier message = blocs de contenu (texte + documents/images natifs).
-    const blocks: Anthropic.ContentBlockParam[] = [{ type: 'text', text: qText }]
-    for (const d of params.documents) {
-      if (d.media_type === 'application/pdf') {
-        blocks.push({
-          type: 'document',
-          title: d.name,
-          source: { type: 'base64', media_type: 'application/pdf', data: d.data },
-        } as Anthropic.ContentBlockParam)
-      } else if (d.media_type.startsWith('image/')) {
-        blocks.push({
-          type: 'image',
-          source: { type: 'base64', media_type: d.media_type as 'image/png', data: d.data },
-        } as Anthropic.ContentBlockParam)
-      }
-    }
-    messages.push({ role: 'user', content: blocks })
-  } else {
-    messages.push({ role: 'user', content: qText })
-  }
+  messages.push({ role: 'user', content: userContent(qText, params.documents) })
 
   const resp = await anthropic().messages.create({
     model: CLAUDE_MODEL,

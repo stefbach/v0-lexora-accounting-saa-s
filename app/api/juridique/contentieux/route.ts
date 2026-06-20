@@ -87,18 +87,23 @@ export async function POST(request: Request) {
       }
     }
 
+    // Pièces sélectionnées à analyser (téléchargées du storage) — partagées
+    // par toutes les actions (qualification, évaluation, acte, conseil).
+    const docPaths = (body as { document_paths?: string[] }).document_paths || []
+    const documents = await loadDocumentsFromStorage(supabase, societeId, docPaths)
+
     if (action === 'qualifier') {
       const faits = (body as { faits?: FaitsLitige }).faits
       if (!faits?.description) return NextResponse.json({ error: 'Description requise' }, { status: 400 })
-      const qualification = await qualifierLitige(faits)
-      return NextResponse.json({ qualification })
+      const qualification = await qualifierLitige(faits, documents)
+      return NextResponse.json({ qualification, documents_analyses: documents.map((d) => d.name) })
     }
 
     if (action === 'evaluer') {
       const faits = (body as { faits?: FaitsLitige }).faits
       if (!faits?.description) return NextResponse.json({ error: 'Description requise' }, { status: 400 })
-      const evaluation = await evaluerDossier(faits)
-      return NextResponse.json({ evaluation })
+      const evaluation = await evaluerDossier(faits, documents)
+      return NextResponse.json({ evaluation, documents_analyses: documents.map((d) => d.name) })
     }
 
     if (action === 'generer_acte') {
@@ -121,17 +126,13 @@ export async function POST(request: Request) {
           }
         }
       }
-      const acte = await genererActe(params)
-      return NextResponse.json({ acte })
+      const acte = await genererActe(params, documents)
+      return NextResponse.json({ acte, documents_analyses: documents.map((d) => d.name) })
     }
 
     if (action === 'question') {
       const question = String((body as { question?: string }).question || '')
       if (!question) return NextResponse.json({ error: 'Question requise' }, { status: 400 })
-
-      // Analyse documentaire : télécharge les pièces sélectionnées depuis le storage.
-      const docPaths = (body as { document_paths?: string[] }).document_paths || []
-      const documents = await loadDocumentsFromStorage(supabase, societeId, docPaths)
 
       const { texte, sources } = await questionContentieux({
         question,

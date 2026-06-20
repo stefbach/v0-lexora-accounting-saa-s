@@ -3,6 +3,7 @@ import React, { useState } from "react"
 import { Gavel, Loader2, Scale, FileDown, Sparkles, AlertTriangle, CheckCircle2, Building2 } from "lucide-react"
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
 import { useJuridiqueSociete } from "@/components/juridique/JuridiqueSocieteProvider"
+import { DocumentPicker } from "@/components/juridique/DocumentPicker"
 import { TYPES_CONTENTIEUX } from "@/lib/juridique/referentielMauricien"
 
 const NAVY = "#0B0F2E"
@@ -19,12 +20,32 @@ interface Evaluation {
   estimation_couts: string; risques: string[]; base_legale: string[]
 }
 
-const ACTES = [
-  { id: "mise_en_demeure", label: "Mise en demeure" },
-  { id: "sommation", label: "Sommation de payer" },
-  { id: "lettre_avocat", label: "Lettre officielle" },
-  { id: "statement_of_claim", label: "Statement of Claim" },
-  { id: "protocole_accord", label: "Protocole d'accord" },
+const ACTES_GROUPES: { groupe: string; actes: { id: string; label: string }[] }[] = [
+  {
+    groupe: "Demande / attaque",
+    actes: [
+      { id: "mise_en_demeure", label: "Mise en demeure" },
+      { id: "sommation", label: "Sommation de payer" },
+      { id: "lettre_avocat", label: "Lettre officielle" },
+      { id: "statement_of_claim", label: "Statement of Claim" },
+    ],
+  },
+  {
+    groupe: "Défense / réponse",
+    actes: [
+      { id: "reponse_mise_en_demeure", label: "Réponse à mise en demeure" },
+      { id: "courrier_defense", label: "Courrier en défense" },
+      { id: "conclusions_defense", label: "Conclusions en défense" },
+      { id: "contestation_creance", label: "Contestation de créance" },
+    ],
+  },
+  {
+    groupe: "Amiable",
+    actes: [
+      { id: "lettre_negociation", label: "Lettre de négociation amiable" },
+      { id: "protocole_accord", label: "Protocole d'accord" },
+    ],
+  },
 ]
 
 const URGENCE_STYLE: Record<Urgence, { bg: string; color: string; label: string }> = {
@@ -46,6 +67,9 @@ export default function ContentieuxPage() {
   const [acteType, setActeType] = useState("mise_en_demeure")
   const [acte, setActe] = useState<{ titre: string; corps: string } | null>(null)
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set())
+
+  const docPaths = () => Array.from(selectedDocs)
 
   const faits = () => ({
     description, partie_adverse: adverse || undefined,
@@ -59,7 +83,7 @@ export default function ContentieuxPage() {
     try {
       const res = await fetch("/api/juridique/contentieux", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, faits: faits(), societe_id: societe?.id }),
+        body: JSON.stringify({ action, faits: faits(), societe_id: societe?.id, document_paths: docPaths() }),
       })
       const data = await res.json()
       if (action === "qualifier") setQualif(data.qualification || null)
@@ -74,7 +98,7 @@ export default function ContentieuxPage() {
       const res = await fetch("/api/juridique/contentieux", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "generer_acte", societe_id: societe?.id,
+          action: "generer_acte", societe_id: societe?.id, document_paths: docPaths(),
           params: {
             type_acte: acteType,
             societe: { nom: societe?.nom || "", brn: societe?.brn || undefined, adresse: societe?.adresse || undefined },
@@ -116,7 +140,7 @@ export default function ContentieuxPage() {
       <JuridiqueHeader
         icon={<Gavel className="w-6 h-6" style={{ color: GOLD }} />}
         title="Contentieux"
-        subtitle="Qualifiez un litige, évaluez vos chances et générez des actes — recouvrement, travail, commercial, fiscal, sociétés, immobilier, arbitrage."
+        subtitle="Outil clé en main : importez les pièces, qualifiez le litige, évaluez vos chances, puis rédigez vos courriers — en demande (mise en demeure, sommation) comme en défense (réponse, contestation) — ancrés sur le RAG mauricien, avec le PDF final."
       />
 
       {/* Saisie du litige */}
@@ -149,6 +173,7 @@ export default function ContentieuxPage() {
             </select>
           </div>
         </div>
+        <DocumentPicker societeId={societe?.id} selected={selectedDocs} onChange={setSelectedDocs} />
         <div className="flex flex-wrap gap-2">
           <button onClick={() => run("qualifier")} disabled={!!loading || !description.trim()}
             className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40" style={{ background: NAVY }}>
@@ -227,13 +252,18 @@ export default function ContentieuxPage() {
       {/* Générateur d'acte */}
       <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm space-y-3">
         <p className="font-bold text-sm" style={{ color: NAVY }}>Générer un acte</p>
+        <p className="text-xs text-gray-500">Demande, défense ou amiable — les pièces sélectionnées ci-dessus et le RAG mauricien alimentent la rédaction.</p>
         {!societe && <p className="text-xs text-amber-700 flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> Sélectionnez une société pour l'en-tête de l'acte.</p>}
         <div className="flex flex-wrap items-end gap-2">
           <div>
             <label className="text-xs font-semibold text-gray-600">Type d'acte</label>
             <select value={acteType} onChange={(e) => setActeType(e.target.value)}
               className="mt-1 rounded-xl border border-gray-200 px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#D4AF37]">
-              {ACTES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              {ACTES_GROUPES.map((g) => (
+                <optgroup key={g.groupe} label={g.groupe}>
+                  {g.actes.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                </optgroup>
+              ))}
             </select>
           </div>
           <button onClick={genererActe} disabled={!!loading || !description.trim() || !adverse.trim()}
