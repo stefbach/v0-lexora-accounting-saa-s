@@ -143,6 +143,8 @@ export interface QualificationLitige {
   urgence: 'faible' | 'moyenne' | 'haute' | 'critique'
   resume: string
   pieces_a_reunir: string[]
+  /** Citations du corpus RAG ayant fondé la qualification. */
+  sources?: CitationSource[]
 }
 
 export interface EvaluationDossier {
@@ -155,6 +157,8 @@ export interface EvaluationDossier {
   estimation_couts: string
   risques: string[]
   base_legale: string[]
+  /** Citations du corpus RAG ayant fondé l'évaluation. */
+  sources?: CitationSource[]
 }
 
 export type TypeActe =
@@ -225,7 +229,7 @@ Réponds UNIQUEMENT le JSON.`
     messages: [{ role: 'user', content: userContent(prompt, documents) }],
   })
 
-  return extractJSON<QualificationLitige>(extractText(resp), {
+  const qualification = extractJSON<QualificationLitige>(extractText(resp), {
     type_contentieux: faits.type_contentieux || 'commercial',
     fondement_legal: ['Code Civil', 'Code de Commerce'],
     juridiction_competente: jurSuggestion || 'Intermediate Court',
@@ -234,6 +238,8 @@ Réponds UNIQUEMENT le JSON.`
     resume: 'Qualification manuelle requise — relecture avocat recommandée.',
     pieces_a_reunir: ['Contrat / preuve de la créance', 'Correspondances', 'Factures'],
   })
+  qualification.sources = formatCitations(passages)
+  return qualification
 }
 
 // ============================================================
@@ -270,7 +276,7 @@ Réponds UNIQUEMENT le JSON.`
     messages: [{ role: 'user', content: userContent(prompt, documents) }],
   })
 
-  return extractJSON<EvaluationDossier>(extractText(resp), {
+  const evaluation = extractJSON<EvaluationDossier>(extractText(resp), {
     chances_succes: 'moderees',
     analyse: 'Analyse détaillée requise — relecture avocat recommandée.',
     arguments_pour: [],
@@ -284,6 +290,8 @@ Réponds UNIQUEMENT le JSON.`
     risques: ['Prescription', 'Solvabilité de la partie adverse'],
     base_legale: ['Code Civil', 'Code de Commerce'],
   })
+  evaluation.sources = formatCitations(passages)
+  return evaluation
 }
 
 // ============================================================
@@ -323,7 +331,7 @@ const POSTURE_ACTE: Record<TypeActe, string> = {
 export async function genererActe(
   params: ParametresActe,
   documents?: DocAnalyse[],
-): Promise<{ titre: string; corps: string }> {
+): Promise<{ titre: string; corps: string; sources: CitationSource[] }> {
   // RAG : ancrer l'acte sur les sources mauriciennes pertinentes.
   const passages = await retrieveRag(`${params.objet} ${params.faits} ${LABEL_ACTE[params.type_acte]}`, { k: 6 })
 
@@ -352,7 +360,7 @@ Exigences :
     messages: [{ role: 'user', content: userContent(prompt, documents) }],
   })
 
-  return { titre: LABEL_ACTE[params.type_acte], corps: extractText(resp).trim() }
+  return { titre: LABEL_ACTE[params.type_acte], corps: extractText(resp).trim(), sources: formatCitations(passages) }
 }
 
 // ============================================================

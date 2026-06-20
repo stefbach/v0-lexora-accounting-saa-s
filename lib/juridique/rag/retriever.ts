@@ -88,7 +88,8 @@ export function retrieve(
  */
 export function formatContextePrompt(passages: PassagePertinent[]): string {
   if (passages.length === 0) {
-    return '## SOURCES (RAG)\nAucun passage pertinent trouvé dans le corpus verrouillé. Signale explicitement que la réponse repose sur des connaissances générales à vérifier, sans citer de source comme confirmée.'
+    return `## SOURCES VERROUILLÉES (RAG — corpus juridique mauricien)
+AUCUN passage pertinent n'a été trouvé dans le corpus verrouillé. RÈGLE STRICTE : tu ne dois PAS émettre d'affirmation juridique au fond. Réponds uniquement que le corpus est insuffisant sur ce point, indique quelles informations ou pièces seraient nécessaires, et recommande l'escalade vers un avocat / attorney inscrit. N'utilise pas de connaissances générales non sourcées.`
   }
   const blocs = passages
     .map(
