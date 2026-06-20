@@ -5,11 +5,16 @@ import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { t, getLocale } from "@/lib/i18n"
-import { Scale, FileText, Users, ShieldCheck, Settings, LogOut, FileSignature, Menu, X } from "lucide-react"
+import { Scale, FileText, Users, ShieldCheck, Settings, LogOut, FileSignature, Menu, X, Gavel, MessageSquareText, FolderOpen, LayoutGrid } from "lucide-react"
 
 const LINKS = [
   { href: '/juridique', label: 'Tableau de bord', labelKey: 'comp.legal_sidebar.dashboard', icon: Scale, exact: true },
+  { href: '/juridique/departements', label: 'Départements', labelKey: 'comp.legal_sidebar.departments', icon: LayoutGrid },
+  { href: '/juridique/conseil', label: 'Conseil juridique', labelKey: 'comp.legal_sidebar.advice', icon: MessageSquareText },
+  { href: '/juridique/contentieux', label: 'Contentieux', labelKey: 'comp.legal_sidebar.litigation', icon: Gavel },
   { href: '/juridique/contrats', label: 'Générateur de contrats', labelKey: 'comp.legal_sidebar.contract_generator', icon: FileSignature },
+  { href: '/juridique/documents', label: 'Documents', labelKey: 'comp.legal_sidebar.documents', icon: FolderOpen },
+  { href: '/juridique/conformite', label: 'Conformité & délais', labelKey: 'comp.legal_sidebar.compliance', icon: ShieldCheck },
   { href: '/rh/employes', label: 'Employés (lecture)', labelKey: 'comp.legal_sidebar.employees_readonly', icon: Users },
 ]
 

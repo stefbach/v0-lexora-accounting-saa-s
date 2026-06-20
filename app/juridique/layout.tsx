@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { JuridiqueSidebar } from "@/components/layout/JuridiqueSidebar"
+import { JuridiqueSocieteProvider } from "@/components/juridique/JuridiqueSocieteProvider"
 
 export default async function JuridiqueLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -14,7 +15,11 @@ export default async function JuridiqueLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen bg-gray-50">
       <JuridiqueSidebar />
-      <main className="flex-1 overflow-auto md:ml-60">{children}</main>
+      <main className="flex-1 overflow-auto md:ml-60">
+        <JuridiqueSocieteProvider>
+          <div className="p-4 sm:p-6 max-w-6xl mx-auto">{children}</div>
+        </JuridiqueSocieteProvider>
+      </main>
     </div>
   )
 }

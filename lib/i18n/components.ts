@@ -89,8 +89,13 @@ export const componentsChunk = {
     'comp.rh_sidebar.back_client': 'Retour espace client',
 
     // JuridiqueSidebar
-    'comp.legal_sidebar.module_title': 'Module Juridique',
+    'comp.legal_sidebar.module_title': 'Département Juridique',
     'comp.legal_sidebar.dashboard': 'Tableau de bord',
+    'comp.legal_sidebar.departments': 'Départements',
+    'comp.legal_sidebar.advice': 'Conseil juridique',
+    'comp.legal_sidebar.litigation': 'Contentieux',
+    'comp.legal_sidebar.documents': 'Documents',
+    'comp.legal_sidebar.compliance': 'Conformité & délais',
     'comp.legal_sidebar.contract_generator': 'Générateur de contrats',
     'comp.legal_sidebar.employees_readonly': 'Employés (lecture)',
     'comp.legal_sidebar.my_profile': 'Mon profil',
@@ -208,8 +213,13 @@ export const componentsChunk = {
     'comp.rh_sidebar.back_client': 'Back to client area',
 
     // JuridiqueSidebar
-    'comp.legal_sidebar.module_title': 'Legal Module',
+    'comp.legal_sidebar.module_title': 'Legal Department',
     'comp.legal_sidebar.dashboard': 'Dashboard',
+    'comp.legal_sidebar.departments': 'Practice areas',
+    'comp.legal_sidebar.advice': 'Legal advice',
+    'comp.legal_sidebar.litigation': 'Litigation',
+    'comp.legal_sidebar.documents': 'Documents',
+    'comp.legal_sidebar.compliance': 'Compliance & deadlines',
     'comp.legal_sidebar.contract_generator': 'Contract Generator',
     'comp.legal_sidebar.employees_readonly': 'Employees (read-only)',
     'comp.legal_sidebar.my_profile': 'My Profile',

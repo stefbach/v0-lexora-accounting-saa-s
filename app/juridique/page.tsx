@@ -1,37 +1,122 @@
 "use client"
 import Link from "next/link"
-import { Card, CardContent } from "@/components/ui/card"
-import { ClientPageShell } from "@/components/layout/ClientPageShell"
-import { t, getLocale } from "@/lib/i18n"
+import { Scale, Gavel, FileSignature, FolderOpen, ShieldCheck, MessageSquareText, ArrowRight, BookOpen } from "lucide-react"
+import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
+import { LOIS_MAURICIENNES, JURIDICTIONS_MAURICIENNES, TYPES_CONTENTIEUX } from "@/lib/juridique/referentielMauricien"
 
-export default function JuridiquePage() {
-  const locale = getLocale()
+const NAVY = "#0B0F2E"
+const GOLD = "#D4AF37"
+
+const MODULES = [
+  {
+    href: "/juridique/conseil",
+    icon: MessageSquareText,
+    title: "Conseil juridique",
+    desc: "Posez une question à l'avocat-conseil IA. Références mauriciennes citées, raisonnement structuré.",
+    tag: "Avocat-conseil",
+  },
+  {
+    href: "/juridique/contentieux",
+    icon: Gavel,
+    title: "Contentieux",
+    desc: "Qualifiez un litige, évaluez vos chances, générez mises en demeure et actes — tous types de contentieux.",
+    tag: "Tous contentieux",
+  },
+  {
+    href: "/juridique/contrats",
+    icon: FileSignature,
+    title: "Contrats",
+    desc: "Génération de contrats de travail, NDA, baux et prestations conformes au droit mauricien.",
+    tag: "Rédaction",
+  },
+  {
+    href: "/juridique/documents",
+    icon: FolderOpen,
+    title: "Documents",
+    desc: "Coffre-fort des pièces : importez et classez contrats, actes, registres et correspondances.",
+    tag: "Coffre-fort",
+  },
+  {
+    href: "/juridique/conformite",
+    icon: ShieldCheck,
+    title: "Conformité & délais",
+    desc: "Calendrier des obligations légales, délais de prescription et échéances réglementaires (CA 2001, MRA, FSC).",
+    tag: "Compliance",
+  },
+]
+
+function StatCard({ value, label }: { value: string | number; label: string }) {
   return (
-    <ClientPageShell hideHero disableParticles>
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('pub.juridique.title', locale)}</h1>
-        <p className="text-sm text-gray-500">{t('pub.juridique.subtitle', locale)}</p>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        {[
-          { href: '/juridique/contrats', icon: '📄', label: t('pub.juridique.contracts', locale), desc: t('pub.juridique.contracts_desc', locale) },
-          { href: '/juridique/documents', icon: '📁', label: t('pub.juridique.documents', locale), desc: t('pub.juridique.documents_desc', locale) },
-          { href: '/juridique/conformite', icon: '✅', label: t('pub.juridique.compliance', locale), desc: t('pub.juridique.compliance_desc', locale) },
-          { href: '/rh/employes', icon: '👥', label: t('pub.juridique.employees', locale), desc: t('pub.juridique.employees_desc', locale) },
-        ].map(item => (
-          <Link key={item.href} href={item.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 border-l-[#0B0F2E]">
-              <CardContent className="p-5">
-                <p className="text-3xl mb-2">{item.icon}</p>
-                <p className="font-bold text-[#0B0F2E]">{item.label}</p>
-                <p className="text-xs text-gray-500 mt-1">{item.desc}</p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+    <div className="rounded-xl bg-white border border-gray-100 px-4 py-3 shadow-sm">
+      <p className="text-2xl font-bold" style={{ color: NAVY }}>{value}</p>
+      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
     </div>
-    </ClientPageShell>
+  )
+}
+
+export default function JuridiqueDashboard() {
+  return (
+    <div className="space-y-6">
+      <JuridiqueHeader
+        icon={<Scale className="w-6 h-6" style={{ color: GOLD }} />}
+        title="Département Juridique"
+        subtitle="Votre cabinet juridique mauricien augmenté par l'IA — conseil, contentieux, contrats et conformité. Chaque production est un projet à valider par un homme de loi."
+      />
+
+      {/* Stats référentiel */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard value={LOIS_MAURICIENNES.length} label="Lois & codes référencés" />
+        <StatCard value={JURIDICTIONS_MAURICIENNES.length} label="Juridictions couvertes" />
+        <StatCard value={TYPES_CONTENTIEUX.length} label="Types de contentieux" />
+        <StatCard value="🇲🇺" label="Droit mauricien (système mixte)" />
+      </div>
+
+      {/* Modules */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {MODULES.map((m) => {
+          const Icon = m.icon
+          return (
+            <Link key={m.href} href={m.href} className="group">
+              <div className="h-full rounded-2xl bg-white border border-gray-100 p-5 shadow-sm transition-all hover:shadow-md hover:border-[#D4AF37]/40 hover:-translate-y-0.5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="rounded-xl p-2.5" style={{ background: "rgba(11,15,46,0.06)" }}>
+                    <Icon className="w-5 h-5" style={{ color: NAVY }} />
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full" style={{ background: "rgba(212,175,55,0.14)", color: "#8a6d15" }}>
+                    {m.tag}
+                  </span>
+                </div>
+                <p className="font-bold text-[15px]" style={{ color: NAVY }}>{m.title}</p>
+                <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{m.desc}</p>
+                <div className="mt-3 flex items-center gap-1 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: GOLD }}>
+                  Ouvrir <ArrowRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </Link>
+          )
+        })}
+      </div>
+
+      {/* Bandeau référentiel */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <BookOpen className="w-5 h-5 mt-0.5" style={{ color: GOLD }} />
+          <div>
+            <p className="font-bold text-sm" style={{ color: NAVY }}>Un socle de connaissances mauricien</p>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+              Companies Act 2001, Workers' Rights Act 2019, Code Civil & Code de Commerce, Income Tax Act, DPA 2017,
+              FSA 2007, Insolvency Act 2009, International Arbitration Act 2008… Le département connaît les juridictions
+              (District / Intermediate Court, Commercial Division, Industrial Court, ARC, MARC, Privy Council) et les
+              délais de prescription applicables.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-gray-400 text-center">
+        Lexora n'exerce pas l'activité réglementée d'avocat. Les documents produits sont des projets de travail à faire
+        valider et signer par un avocat / attorney inscrit avant tout usage officiel.
+      </p>
+    </div>
   )
 }
