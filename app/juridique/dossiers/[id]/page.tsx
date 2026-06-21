@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { ArrowLeft, Loader2, FileText, UploadCloud, ExternalLink, Scale, MessageSquareText } from "lucide-react"
+import { ArrowLeft, Loader2, FileText, UploadCloud, ExternalLink, Scale, MessageSquareText, StickyNote, Plus, Trash2 } from "lucide-react"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -13,7 +13,7 @@ const TYPE_LABEL: Record<string, string> = { conseil: "Conseil", conseil_rh: "Co
 
 interface Dossier { id: string; societe_id: string; intitule: string; reference?: string; type_contentieux?: string; partie_adverse?: string; notre_role?: string; montant_en_jeu?: number; devise?: string; juridiction?: string; statut: string; urgence?: string; resume?: string }
 interface Piece { id: string; nom: string; storage_path: string; categorie?: string; created_at: string; url?: string | null }
-interface Consultation { id: string; type: string; titre?: string; created_at: string }
+interface Consultation { id: string; type: string; titre?: string; created_at: string; contenu?: any }
 
 export default function DossierDetailPage() {
   const params = useParams<{ id: string }>()
@@ -23,7 +23,13 @@ export default function DossierDetailPage() {
   const [consultations, setConsultations] = useState<Consultation[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [noteText, setNoteText] = useState("")
+  const [savingNote, setSavingNote] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Sépare les notes libres (type='note') des consultations/actes générés.
+  const notes = consultations.filter((c) => c.type === "note")
+  const actes = consultations.filter((c) => c.type !== "note")
 
   const load = useCallback(async () => {
     if (!id) return
@@ -43,6 +49,32 @@ export default function DossierDetailPage() {
     if (!dossier) return
     setDossier({ ...dossier, statut })
     await fetch(`/api/juridique/dossiers/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ statut }) })
+  }
+
+  async function addNote() {
+    if (!noteText.trim() || !dossier) return
+    setSavingNote(true)
+    try {
+      const res = await fetch("/api/juridique/consultations", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          societe_id: dossier.societe_id,
+          dossier_id: dossier.id,
+          type: "note",
+          titre: noteText.trim().slice(0, 80),
+          contenu: { texte: noteText.trim() },
+        }),
+      })
+      if (res.ok) { setNoteText(""); await load() }
+      else { const e = await res.json().catch(() => ({})); alert(e.error || "Échec de l'enregistrement de la note") }
+    } finally { setSavingNote(false) }
+  }
+
+  async function deleteNote(noteId: string) {
+    if (!confirm("Supprimer cette note ?")) return
+    const res = await fetch(`/api/juridique/consultations?id=${noteId}`, { method: "DELETE" })
+    if (res.ok) await load()
+    else { const e = await res.json().catch(() => ({})); alert(e.error || "Échec de la suppression") }
   }
 
   async function upload(files: FileList | null) {
@@ -109,13 +141,59 @@ export default function DossierDetailPage() {
         )}
       </div>
 
+      {/* Notes du dossier */}
+      <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+          <StickyNote className="w-4 h-4" style={{ color: GOLD }} />
+          <p className="font-bold text-sm" style={{ color: NAVY }}>Notes ({notes.length})</p>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex flex-col gap-2">
+            <textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              placeholder="Ajouter une note de suivi : échange téléphonique, point d'avancement, instruction client, prochaine échéance…"
+              rows={3}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#D4AF37] resize-y"
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={addNote}
+                disabled={savingNote || !noteText.trim()}
+                className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                style={{ background: NAVY }}
+              >
+                {savingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Enregistrer la note
+              </button>
+            </div>
+          </div>
+          {notes.length === 0 ? (
+            <p className="text-center text-sm text-gray-400 py-2">Aucune note. Consignez ici le suivi du dossier.</p>
+          ) : (
+            <ul className="space-y-2">
+              {notes.map((n) => (
+                <li key={n.id} className="group rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                  <div className="flex items-start gap-3">
+                    <p className="flex-1 text-sm text-gray-700 whitespace-pre-wrap break-words">{n.contenu?.texte || n.titre || "—"}</p>
+                    <button onClick={() => deleteNote(n.id)} className="p-1 text-gray-300 hover:text-red-500 transition-colors" aria-label="Supprimer la note">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1.5">{new Date(n.created_at).toLocaleString("fr-FR")}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
       {/* Consultations / actes */}
       <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
           <Scale className="w-4 h-4" style={{ color: GOLD }} />
-          <p className="font-bold text-sm" style={{ color: NAVY }}>Consultations & actes ({consultations.length})</p>
+          <p className="font-bold text-sm" style={{ color: NAVY }}>Consultations & actes ({actes.length})</p>
         </div>
-        {consultations.length === 0 ? (
+        {actes.length === 0 ? (
           <div className="px-5 py-6 text-center text-sm text-gray-400">
             Aucune consultation enregistrée.
             <div className="mt-2 flex justify-center gap-2">
@@ -125,7 +203,7 @@ export default function DossierDetailPage() {
           </div>
         ) : (
           <ul className="divide-y divide-gray-50">
-            {consultations.map((c) => (
+            {actes.map((c) => (
               <li key={c.id} className="px-5 py-2.5 flex items-center gap-3">
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{TYPE_LABEL[c.type] || c.type}</span>
                 <span className="flex-1 text-sm text-gray-700 truncate">{c.titre || "—"}</span>

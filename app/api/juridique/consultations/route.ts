@@ -48,6 +48,33 @@ export async function POST(request: Request) {
   }
 }
 
+// DELETE — supprimer une note / consultation (?id=...)
+export async function DELETE(request: Request) {
+  try {
+    const url = new URL(request.url)
+    const id = url.searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
+    const supabaseAuth = await createClient()
+    const { data: { user } } = await supabaseAuth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+    const supabase = getAdminClient()
+    // Vérifie l'accès via la société de la consultation.
+    const { data: row, error: e1 } = await supabase.from('juridique_consultations').select('societe_id').eq('id', id).single()
+    if (e1 || !row) return NextResponse.json({ error: 'Introuvable' }, { status: 404 })
+    try {
+      await assertSocieteAccess(supabase, user.id, row.societe_id)
+    } catch (e) {
+      if (e instanceof SocieteAccessError) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+      throw e
+    }
+    const { error } = await supabase.from('juridique_consultations').delete().eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
+  }
+}
+
 // GET — liste des consultations d'une société (option ?dossier_id=)
 export async function GET(request: Request) {
   try {

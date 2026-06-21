@@ -134,8 +134,10 @@ export default function ContratsPage() {
   const [step, setStep] = useState<StepId>('type')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState('')
+  const [sources, setSources] = useState<Array<{ ref: string; source: string; reference: string; titre: string; maj: string }>>([])
   const [societes, setSocietes] = useState<any[]>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [savedContractId, setSavedContractId] = useState<string | null>(null)
@@ -182,11 +184,24 @@ export default function ContratsPage() {
 
   const currentIdx = STEPS.findIndex(s => s.id === step)
 
+  // Lit une réponse fetch sans jamais crasher si le serveur renvoie du HTML
+  // (page d'erreur passerelle Vercel) au lieu du JSON attendu.
+  const readJsonSafe = async (res: Response): Promise<any> => {
+    const ct = res.headers.get("content-type") || ""
+    if (ct.includes("application/json")) return res.json()
+    const txt = await res.text().catch(() => "")
+    if (res.status === 504 || /timeout|timed out/i.test(txt)) {
+      throw new Error(t('pub.contrats.error_timeout', locale))
+    }
+    throw new Error(t('pub.contrats.error_server', locale))
+  }
+
   const handleGenerate = async () => {
     setStep('preview')
     setLoading(true)
     setError(null)
     setResult('')
+    setSources([])
     setSavedContractId(null)
     try {
       const body = {
@@ -207,16 +222,55 @@ export default function ContratsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
-      const data = await res.json()
+      const data = await readJsonSafe(res)
       if (!res.ok) {
         setError(data.error || t('pub.contrats.error_generation', locale))
         return
       }
       setResult(data.text || "")
+      setSources(Array.isArray(data.sources) ? data.sources : [])
     } catch (e: any) {
-      setError(t('pub.contrats.error_network', locale) + (e.message || ""))
+      setError(e.message || t('pub.contrats.error_network', locale))
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Métadonnées des parties pour le rendu PDF.
+  const contractTypeLabel = CONTRACT_TYPES.find(ct => ct.id === form.contractType)?.label || form.contractType
+  const handleDownloadPdf = async () => {
+    if (!result) return
+    setPdfLoading(true)
+    try {
+      const res = await fetch("/api/generate-contract/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: contractTypeLabel,
+          corps: result,
+          lieu: form.workLocation || undefined,
+          date: form.startDate || undefined,
+          employeur: { nom: form.empName, brn: form.empBrn, adresse: form.empAddr, representant: form.empRep, titre: form.empTitle },
+          contractant: { nom: form.eeName, nic: form.eeNic, adresse: form.eeAddr },
+          sources,
+        }),
+      })
+      if (!res.ok) {
+        const data = await readJsonSafe(res).catch(() => ({}))
+        alert(data.error || t('pub.contrats.error_pdf', locale))
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `contrat_${form.contractType}_${(form.eeName || 'projet').replace(/\s/g, '_')}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      alert(t('pub.contrats.error_pdf', locale) + (e.message ? ` (${e.message})` : ""))
+    } finally {
+      setPdfLoading(false)
     }
   }
 
@@ -239,7 +293,7 @@ export default function ContratsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
-      const data = await res.json()
+      const data = await readJsonSafe(res)
       if (!res.ok) { alert(data.error || t('pub.contrats.error_save', locale)); return }
       if (data.contract_id) {
         setSavedContractId(data.contract_id)
@@ -601,12 +655,16 @@ export default function ContratsPage() {
                     )}
                   </div>
                   {result && (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <Button variant="outline" size="sm" onClick={handleCopy}>
                         <Copy className="w-3 h-3 mr-1" /> {t('pub.contrats.copy', locale)}
                       </Button>
                       <Button variant="outline" size="sm" onClick={handleDownload}>
-                        <Download className="w-3 h-3 mr-1" /> {t('pub.contrats.download', locale)}
+                        <Download className="w-3 h-3 mr-1" /> {t('pub.contrats.download_txt', locale)}
+                      </Button>
+                      <Button size="sm" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ backgroundColor: GOLD, color: NAVY }}>
+                        {pdfLoading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <FileText className="w-3 h-3 mr-1" />}
+                        {t('pub.contrats.download_pdf', locale)}
                       </Button>
                       <Button size="sm" onClick={handleSave} disabled={saving || !societeId} style={{ backgroundColor: NAVY, color: GOLD }}>
                         {saving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
@@ -640,6 +698,24 @@ export default function ContratsPage() {
                   <pre className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-xs leading-relaxed whitespace-pre-wrap overflow-y-auto max-h-[600px] font-mono text-gray-800">
                     {loading && !result ? t('pub.contrats.generating_placeholder', locale) : result}
                   </pre>
+                )}
+
+                {result && sources.length > 0 && (
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Scale className="w-3.5 h-3.5" style={{ color: GOLD }} />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{t('pub.contrats.sources_title', locale)}</span>
+                    </div>
+                    <ul className="space-y-1">
+                      {sources.map((src) => (
+                        <li key={src.ref} className="text-xs text-gray-600">
+                          <span className="font-mono text-gray-400">[{src.ref}]</span>{" "}
+                          <span className="font-medium" style={{ color: NAVY }}>{src.source} {src.reference}</span> — {src.titre}
+                          <span className="text-gray-400"> ({src.maj})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </>
             )}

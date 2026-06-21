@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { callClaude } from '@/lib/claude'
+import { retrieveRag } from '@/lib/juridique/rag/store'
+import { formatContextePrompt, formatCitations, type CitationSource } from '@/lib/juridique/rag/retriever'
+import type { DomaineJuridique } from '@/lib/juridique/referentielMauricien'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// La génération d'un contrat complet (jusqu'à 8000 tokens) + le RAG peuvent
+// dépasser 60 s : on relève la limite pour éviter le timeout passerelle Vercel
+// (qui renvoyait une page d'erreur HTML non-JSON cassant le client).
+export const maxDuration = 300
 
 function getAdminClient() {
   return createSupabaseClient(
@@ -24,6 +30,17 @@ const CONTRACT_TYPES: Record<string, string> = {
   nda: "NDA / Confidentialite",
 }
 
+/** Domaines RAG pertinents selon le type de contrat (verrouillage des sources). */
+const CONTRACT_DOMAINES: Record<string, DomaineJuridique[]> = {
+  CDI: ['travail', 'fiscal'],
+  CDD: ['travail', 'fiscal'],
+  CDD_partiel: ['travail', 'fiscal'],
+  prestataire: ['commercial', 'civil', 'fiscal'],
+  client_saas: ['commercial', 'donnees', 'civil'],
+  client_service: ['commercial', 'civil'],
+  nda: ['donnees', 'commercial', 'civil'],
+}
+
 const LANG_INSTRUCTIONS: Record<string, string> = {
   fr: "Redige integralement en francais avec terminologie juridique mauricienne.",
   en: "Write entirely in formal English with Mauritian legal terminology.",
@@ -36,7 +53,7 @@ const JURISDICTIONS: Record<string, string> = {
   cv: "Cabo Verde",
 }
 
-function buildPrompt(form: any): string {
+function buildPrompt(form: any, ragContexte: string): string {
   const activeClauses: string[] = []
   // Required clauses (always present)
   activeClauses.push(
@@ -55,6 +72,8 @@ function buildPrompt(form: any): string {
   if (form.customClause?.trim()) activeClauses.push(`Clause personnalisee : ${form.customClause.trim()}`)
 
   return `Tu es un juriste expert en droit mauricien (Workers' Rights Act 2019, Employment Rights Act, Income Tax Act 1995, CSG Act, Data Protection Act 2017, Contract Act).
+
+${ragContexte}
 
 Redige un contrat complet et professionnel selon ces parametres :
 
@@ -93,14 +112,15 @@ ${form.benefits ? `Avantages complementaires : ${form.benefits}` : ''}
 ${activeClauses.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n')}
 
 ═══ INSTRUCTIONS DE REDACTION ═══
-1. Structure formelle avec numerotation des articles (Article 1, Article 2...)
-2. Referencer explicitement les textes de loi mauriciens applicables
-3. Format professionnel : en-tete, corps numerote, section signatures avec date et lieu
-4. Lieu de signature : ${form.signLocation || 'Flic en Flac, Republique de Maurice'}
-5. Utiliser [A COMPLETER] pour les champs non renseignes
+1. Structure formelle avec numerotation des articles. Commence chaque article par une ligne « Article 1 : Intitule » (l'intitule sera mis en valeur).
+2. Referencer explicitement les textes de loi mauriciens applicables. Appuie-toi EXCLUSIVEMENT sur les sources verrouillees ci-dessus : chaque renvoi a la loi doit porter une citation [S1], [S2]… correspondant a ces sources. N'invente aucune reference, aucun numero d'article de loi qui ne figure pas dans les sources.
+3. Format professionnel : preambule (« Entre les soussignes »), corps numerote, section signatures avec date et lieu.
+4. Lieu de signature : ${form.workLocation || 'Port-Louis, Republique de Maurice'}
+5. Utiliser [A COMPLETER] pour les champs non renseignes.
 6. ${LANG_INSTRUCTIONS[form.language] || LANG_INSTRUCTIONS.fr}
-7. Inclure une clause de divisibilite
-8. Terminer par les blocs de signature : employeur + employe + mention "Lu et approuve"
+7. Inclure une clause de divisibilite et une clause de loi applicable / juridiction competente.
+8. Terminer par les blocs de signature : employeur + employe + mention « Lu et approuve », PUIS une section « ## Sources » listant les sources [S1], [S2]… effectivement citees.
+9. N'emploie ni emoji ni symbole decoratif (le document est rendu en PDF Helvetica).
 
 Redige maintenant le contrat complet :`
 }
@@ -113,7 +133,8 @@ export async function POST(request: Request) {
     const { data: { user } } = await authClient.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Non autorise' }, { status: 401 })
 
-    const body = await request.json()
+    const body = await request.json().catch(() => null)
+    if (!body) return NextResponse.json({ error: 'Corps de requete invalide' }, { status: 400 })
     const { form, save_to_db = false, societe_id } = body
 
     if (!form || !form.contractType) {
@@ -127,14 +148,29 @@ export async function POST(request: Request) {
       }, { status: 503 })
     }
 
-    const prompt = buildPrompt(form)
-    if (prompt.length > 8000) {
+    // RAG — verrouillage des sources juridiques mauriciennes (corpus Supabase).
+    const typeLabel = CONTRACT_TYPES[form.contractType] || form.contractType
+    const domaines = CONTRACT_DOMAINES[form.contractType]
+    const ragQuery = `${typeLabel} ${form.jobTitle || ''} clauses obligatoires droit mauricien remuneration preavis rupture confidentialite donnees`
+    let sources: CitationSource[] = []
+    let ragContexte = ''
+    try {
+      const passages = await retrieveRag(ragQuery, { domaines, k: 6 })
+      ragContexte = formatContextePrompt(passages)
+      sources = formatCitations(passages)
+    } catch (ragErr) {
+      console.error('[generate-contract] RAG indisponible:', ragErr instanceof Error ? ragErr.message : ragErr)
+      ragContexte = '## SOURCES VERROUILLÉES (RAG)\nCorpus momentanément indisponible : limite-toi aux dispositions générales du droit mauricien dont tu es certain et signale explicitement les points à faire vérifier par un avocat.'
+    }
+
+    const prompt = buildPrompt(form, ragContexte)
+    if (prompt.length > 16000) {
       return NextResponse.json({ error: 'Parametres trop longs' }, { status: 400 })
     }
 
     // Generate with Claude
     const text = await callClaude(
-      "Tu es un juriste expert en droit mauricien. Tu rediges des contrats professionnels, complets et conformes au Workers' Rights Act 2019 et aux autres lois mauriciennes applicables.",
+      "Tu es un juriste expert en droit mauricien. Tu rediges des contrats professionnels, complets et conformes au Workers' Rights Act 2019 et aux autres lois mauriciennes applicables. Tu fondes chaque renvoi legal sur les sources verrouillees fournies et ne cites jamais une reference absente de ces sources.",
       prompt,
       8000
     )
@@ -176,10 +212,10 @@ export async function POST(request: Request) {
       contract_id = saved?.id || null
     }
 
-    return NextResponse.json({ text, contract_id })
+    return NextResponse.json({ text, contract_id, sources })
   } catch (e: any) {
     console.error('[generate-contract]', e)
-    return NextResponse.json({ error: e.message || 'Erreur' }, { status: 500 })
+    return NextResponse.json({ error: e.message || 'Erreur lors de la generation' }, { status: 500 })
   }
 }
 
