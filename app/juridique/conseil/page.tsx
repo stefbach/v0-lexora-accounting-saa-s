@@ -43,7 +43,8 @@ export default function ConseilPage() {
         icon={<Scale className="w-4 h-4" style={{ color: GOLD }} />}
         title={dep ? `Avocat-conseil — ${dep.nom}` : "Avocat-conseil"}
         subtitle="Droit mauricien · sources citées"
-        suggestions={SUGGESTIONS}
+        suggestions={dep?.exemples?.length ? dep.exemples : SUGGESTIONS}
+        emptyHint={dep ? `Vous consultez le département ${dep.nom}. ${dep.pitch}` : undefined}
         domaines={dep?.domaines}
         departement={dep?.id}
         contextLabel={dep ? `Département : ${dep.nom} (${dep.lois.join(", ")})` : undefined}

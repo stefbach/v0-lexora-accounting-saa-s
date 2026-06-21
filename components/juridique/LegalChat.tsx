@@ -22,7 +22,7 @@ const ANALYZABLE = /\.(pdf|png|jpe?g|webp)$/i
 function cleanName(name: string) { return name.replace(/^\d+_/, "") }
 
 export function LegalChat({
-  icon, title, subtitle, suggestions, domaines, departement, contextLabel, placeholder, reportTitle,
+  icon, title, subtitle, suggestions, domaines, departement, contextLabel, placeholder, reportTitle, emptyHint,
 }: {
   icon: React.ReactNode
   title: string
@@ -34,6 +34,8 @@ export function LegalChat({
   contextLabel?: string
   placeholder?: string
   reportTitle?: string
+  /** Phrase de contexte affichée dans l'état vide (ex. département sélectionné). */
+  emptyHint?: string
 }) {
   const { societe } = useJuridiqueSociete()
   const [messages, setMessages] = useState<Msg[]>([])
@@ -227,6 +229,9 @@ export function LegalChat({
               <Scale className="w-7 h-7" style={{ color: GOLD }} />
             </div>
             <p className="font-bold" style={{ color: NAVY }}>Comment puis-je vous aider ?</p>
+            {emptyHint ? (
+              <p className="text-xs mt-1 mb-1 max-w-md font-medium" style={{ color: "#8a6d15" }}>{emptyHint}</p>
+            ) : null}
             <p className="text-xs text-gray-500 mt-1 mb-5 max-w-md">
               Posez votre question ou joignez des documents à analyser. Tout avis est un projet à valider par un homme de loi.
             </p>
