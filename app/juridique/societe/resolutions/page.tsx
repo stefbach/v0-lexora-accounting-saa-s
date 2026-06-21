@@ -115,6 +115,22 @@ export default function ResolutionsPage() {
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-600">Décisions / ordre du jour</label>
+                <div className="flex flex-wrap gap-1.5 my-2">
+                  {[
+                    "Nomination d'un nouvel administrateur",
+                    "Révocation d'un dirigeant",
+                    "Distribution d'un dividende",
+                    "Ouverture d'un compte bancaire",
+                    "Changement de siège social",
+                    "Approbation d'une convention réglementée",
+                    "Octroi de pouvoirs / signature autorisée",
+                  ].map((d) => (
+                    <button key={d} type="button" onClick={() => setOrdre((o) => (o ? `${o}\n${d}` : d))}
+                      className="text-[11px] px-2.5 py-1 rounded-full border border-gray-200 text-gray-600 hover:border-[#D4AF37] hover:text-[#8a6d15] transition-colors">
+                      + {d}
+                    </button>
+                  ))}
+                </div>
                 <textarea value={ordre} onChange={(e) => setOrdre(e.target.value)} rows={5} className={`${input} resize-y`} placeholder="Ex. Nomination de M. X comme directeur, Distribution d'un dividende de MUR…, Ouverture d'un compte bancaire auprès de…, Approbation d'une convention réglementée…" />
               </div>
             </div>
