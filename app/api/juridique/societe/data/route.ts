@@ -29,11 +29,12 @@ export async function GET(request: Request) {
       throw e
     }
 
-    const [societeRes, actionnairesRes, adminsRes, dsRes, balanceRes] = await Promise.all([
-      supabase.from('societes').select('id, nom, brn, registered_office, adresse, ville, capital_social, nb_actions_total, devise_principale, date_incorporation, date_creation_legale, date_debut_exercice, date_fin_exercice, mois_cloture, nature_activite, type_activite').eq('id', societeId).single(),
+    const [societeRes, actionnairesRes, adminsRes, dsRes, boRes, balanceRes] = await Promise.all([
+      supabase.from('societes').select('id, nom, brn, registered_office, adresse, ville, capital_social, nb_actions_total, devise_principale, date_incorporation, date_creation_legale, date_debut_exercice, date_fin_exercice, mois_cloture, nature_activite, type_activite, fsc_license_number, fsc_license_expiry').eq('id', societeId).single(),
       supabase.from('actionnaires').select('nom, prenom, type_personne, nationalite, nb_actions, type_actions, valeur_nominale, pourcentage, date_entree, actif').eq('societe_id', societeId).eq('actif', true),
       supabase.from('administrateurs').select('nom, prenom, type, nationalite, nic, date_nomination, actif').eq('societe_id', societeId).eq('actif', true),
       supabase.from('directors_shareholders').select('nom_complet, role, nic, date_nomination, parts_sociales, pourcentage_capital, active').eq('societe_id', societeId).eq('active', true),
+      supabase.from('beneficial_owners').select('prenom, nom, nationalite, pays_residence, pct_detention, nature_controle, is_pep, effective_from, effective_to').eq('societe_id', societeId).is('effective_to', null),
       supabase.from('v_balance_compte_societe').select('classe, solde').eq('societe_id', societeId),
     ])
 
@@ -75,7 +76,14 @@ export async function GET(request: Request) {
       ? { produits, charges, resultat, disponible: true }
       : { produits: 0, charges: 0, resultat: 0, disponible: false }
 
-    return NextResponse.json({ societe: societeRes.data, associes, administrateurs, financials })
+    const beneficiaires = (boRes.data || []).map((b) => ({
+      nom: [b.prenom, b.nom].filter(Boolean).join(' ').trim(),
+      nationalite: b.nationalite, pays_residence: b.pays_residence,
+      pct_detention: b.pct_detention, nature_controle: b.nature_controle, is_pep: b.is_pep,
+      effective_from: b.effective_from,
+    }))
+
+    return NextResponse.json({ societe: societeRes.data, associes, administrateurs, beneficiaires, financials })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur' }, { status: 500 })
   }

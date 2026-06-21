@@ -11,7 +11,7 @@ export const maxDuration = 300
 
 interface PvBody {
   societe_id: string
-  type: 'ago' | 'age'
+  type: 'ago' | 'age' | 'ca'
   societe_nom?: string
   date?: string
   lieu?: string
@@ -32,10 +32,14 @@ interface PvBody {
 const TITRES: Record<string, string> = {
   ago: "Procès-verbal d'Assemblée Générale Ordinaire",
   age: "Procès-verbal d'Assemblée Générale Extraordinaire",
+  ca: "Procès-verbal de réunion du Conseil d'administration",
 }
+
+const CONSULT_TYPE: Record<string, string> = { ago: 'pv_ago', age: 'pv_age', ca: 'pv_ca' }
 
 function buildPvPrompt(b: PvBody, rag: string): string {
   const isAgo = b.type === 'ago'
+  const isCa = b.type === 'ca'
   const associes = (b.associes || []).map((a) => `- ${a.nom}${a.pourcentage != null ? ` (${a.pourcentage}%)` : ''}${a.nb_actions != null ? ` — ${a.nb_actions} actions` : ''}`).join('\n') || '[Associés à compléter]'
   const admins = (b.administrateurs || []).map((a) => `- ${a.nom}${a.type ? ` (${a.type})` : ''}`).join('\n') || '[Administrateurs à compléter]'
 
@@ -45,8 +49,20 @@ function buildPvPrompt(b: PvBody, rag: string): string {
 3. Quitus aux administrateurs
 4. Nomination / renouvellement du commissaire aux comptes (le cas échéant)
 5. Pouvoirs pour les formalités`
+    : isCa
+    ? `1. [Décisions du conseil à préciser : nomination/révocation de dirigeants, distribution de dividendes, conventions réglementées, ouverture de compte bancaire, transfert de siège…]
+2. Pouvoirs pour les formalités`
     : `1. [Résolutions extraordinaires à préciser : modification des statuts, du capital, de l'objet, du siège…]
 2. Pouvoirs pour les formalités`
+
+  const participantsBloc = isCa
+    ? `═══ ADMINISTRATEURS PRÉSENTS / REPRÉSENTÉS ═══
+${admins}`
+    : `═══ ASSOCIÉS / ACTIONNAIRES PRÉSENTS OU REPRÉSENTÉS ═══
+${associes}
+
+═══ ADMINISTRATEURS ═══
+${admins}`
 
   return `Tu es un secrétaire juridique (company secretary) expert du droit des sociétés mauricien (Companies Act 2001).
 
@@ -57,20 +73,16 @@ Rédige un ${TITRES[b.type]} complet, formel et conforme au Companies Act 2001, 
 ═══ SOCIÉTÉ ═══
 Dénomination : ${b.societe_nom || '[Société]'}
 Capital social : ${b.capital || '[Capital]'}
-Exercice concerné : ${b.exercice || '[Exercice]'}
+${isCa ? '' : `Exercice concerné : ${b.exercice || '[Exercice]'}`}
 
-═══ ASSEMBLÉE ═══
-Type : ${isAgo ? 'Assemblée Générale Ordinaire annuelle' : 'Assemblée Générale Extraordinaire'}
+═══ ${isCa ? 'RÉUNION DU CONSEIL' : 'ASSEMBLÉE'} ═══
+Type : ${isAgo ? 'Assemblée Générale Ordinaire annuelle' : isCa ? "Réunion du Conseil d'administration" : 'Assemblée Générale Extraordinaire'}
 Date : ${b.date || '[Date]'}${b.heure ? ` à ${b.heure}` : ''}
 Lieu : ${b.lieu || '[Lieu]'}
 Président de séance : ${b.president || '[Président]'}
 Secrétaire de séance : ${b.secretaire || '[Secrétaire]'}
 
-═══ ASSOCIÉS / ACTIONNAIRES PRÉSENTS OU REPRÉSENTÉS ═══
-${associes}
-
-═══ ADMINISTRATEURS ═══
-${admins}
+${participantsBloc}
 
 ${isAgo ? `═══ ÉLÉMENTS FINANCIERS ═══
 Résultat de l'exercice : ${b.resultat || '[Résultat]'}
@@ -81,9 +93,9 @@ Affectation proposée : ${b.affectation || 'Report à nouveau'}
 ${b.ordre_du_jour?.trim() || ordreDefaut}
 
 ═══ INSTRUCTIONS ═══
-1. Structure : en-tête de séance (constitution du bureau, vérification du quorum au regard du capital et des présents ci-dessus), rappel de l'ordre du jour, puis une section par résolution intitulée « Première résolution », « Deuxième résolution »…
+1. Structure : en-tête de séance (constitution du bureau, vérification du quorum ${isCa ? 'du conseil' : 'au regard du capital'} et des présents ci-dessus), rappel de l'ordre du jour, puis une section par ${isCa ? 'décision' : 'résolution'} intitulée « Première résolution », « Deuxième résolution »…
 2. Chaque résolution : exposé bref + texte de la résolution + résultat du vote (« adoptée à l'unanimité » par défaut, sauf indication contraire).
-3. ${isAgo ? "Pour l'approbation des comptes et l'affectation du résultat, reprends fidèlement les montants fournis." : "Rédige les résolutions extraordinaires demandées dans l'ordre du jour."}
+3. ${isAgo ? "Pour l'approbation des comptes et l'affectation du résultat, reprends fidèlement les montants fournis." : isCa ? "Rédige les décisions du conseil demandées dans l'ordre du jour." : "Rédige les résolutions extraordinaires demandées dans l'ordre du jour."}
 4. Appuie chaque référence légale UNIQUEMENT sur les sources verrouillées ci-dessus, avec citations [S1], [S2]… N'invente aucune référence.
 5. Termine le corps par la clôture de séance (heure de levée), PUIS une section « ## Sources » listant les sources citées. N'ajoute NI bloc de signature (ajouté automatiquement), NI mention « projet ».
 6. Pas de séparateurs décoratifs (pas de ═, ─, ***).`
@@ -111,7 +123,8 @@ export async function POST(request: Request) {
     let sources: CitationSource[] = []
     let rag = ''
     try {
-      const q = `${TITRES[b.type]} Companies Act 2001 assemblée générale ${b.type === 'ago' ? 'approbation comptes affectation résultat quitus' : 'modification statuts capital résolution extraordinaire'} quorum vote`
+      const sujet = b.type === 'ago' ? 'approbation comptes affectation résultat quitus' : b.type === 'ca' ? "conseil d'administration pouvoirs des administrateurs conventions réglementées dividendes" : 'modification statuts capital résolution extraordinaire'
+      const q = `${TITRES[b.type]} Companies Act 2001 ${b.type === 'ca' ? 'board of directors' : 'assemblée générale'} ${sujet} quorum vote`
       const passages = await retrieveRag(q, { domaines: ['societes', 'commercial'], k: 6 })
       rag = formatContextePrompt(passages)
       sources = formatCitations(passages)
@@ -129,7 +142,7 @@ export async function POST(request: Request) {
     if (b.save_to_db) {
       const { data: saved } = await supabase.from('juridique_consultations').insert({
         societe_id: b.societe_id,
-        type: b.type === 'ago' ? 'pv_ago' : 'pv_age',
+        type: CONSULT_TYPE[b.type] || 'pv',
         titre: `${TITRES[b.type]}${b.date ? ` — ${b.date}` : ''}`,
         contenu: { texte: text, meta: { date: b.date, lieu: b.lieu, exercice: b.exercice } },
         sources,
