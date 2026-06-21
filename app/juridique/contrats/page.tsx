@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   FileText, Users, Settings, Download, Copy, CheckCircle, Lock, AlertCircle, Loader2,
   Shield, Scale, Save, FileSignature, ArrowLeft, Briefcase, FileLock2, Cloud, Wrench, Handshake, Building2, Send,
+  GraduationCap, ShoppingCart, Truck, Landmark, Banknote, Home, Search,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
@@ -18,7 +19,13 @@ const GOLD = "#D4AF37"
 
 /* ─────────────────────────  MODÈLES  ───────────────────────── */
 
-type ContractTypeId = 'CDI' | 'CDD' | 'CDD_partiel' | 'prestataire' | 'client_saas' | 'client_service' | 'nda' | 'bail_commercial'
+type ContractTypeId =
+  | 'CDI' | 'CDD' | 'CDD_partiel' | 'stage'
+  | 'prestataire' | 'client_saas' | 'client_service' | 'nda' | 'vente' | 'distribution' | 'agence' | 'sous_traitance' | 'cgv' | 'partenariat'
+  | 'cession_actions' | 'pacte_actionnaires' | 'pret' | 'reconnaissance_dette'
+  | 'bail_commercial' | 'bail_habitation' | 'promesse_vente'
+
+type ContractFamily = 'Emploi' | 'Affaires' | 'Société' | 'Immobilier' | 'Finance'
 
 interface Template {
   id: ContractTypeId
@@ -26,18 +33,36 @@ interface Template {
   icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
   desc: string
   law: string
-  family: 'Emploi' | 'Affaires'
+  family: ContractFamily
 }
 
 const TEMPLATES: Template[] = [
+  // Emploi
   { id: 'CDI', label: 'Contrat de travail — CDI', icon: Briefcase, desc: "Engagement à durée indéterminée. Période d'essai, préavis, congés, cotisations sociales.", law: 'WRA 2019 s.11', family: 'Emploi' },
   { id: 'CDD', label: 'Contrat de travail — CDD', icon: Briefcase, desc: "Durée déterminée avec terme et conditions de renouvellement.", law: 'WRA 2019 s.12', family: 'Emploi' },
   { id: 'CDD_partiel', label: 'Travail à temps partiel', icon: Briefcase, desc: "Emploi à temps partiel : horaires réduits, droits au prorata.", law: 'WRA 2019 s.35', family: 'Emploi' },
+  { id: 'stage', label: 'Convention de stage', icon: GraduationCap, desc: "Stage / internship : objet pédagogique, gratification, durée, encadrement.", law: 'WRA 2019', family: 'Emploi' },
+  // Affaires
   { id: 'prestataire', label: 'Prestataire / Consultant', icon: Wrench, desc: "Mission indépendante, sans lien de subordination. Facturation, livrables, responsabilité.", law: 'Contract Act', family: 'Affaires' },
   { id: 'client_saas', label: 'Client SaaS / Abonnement', icon: Cloud, desc: "Abonnement logiciel : périmètre, disponibilité, données, résiliation.", law: 'ICT Act · DPA 2017', family: 'Affaires' },
   { id: 'client_service', label: 'Prestation de services', icon: Handshake, desc: "Prestation ponctuelle : objet, prix, délais, garanties.", law: 'Contract Act', family: 'Affaires' },
   { id: 'nda', label: 'NDA / Confidentialité', icon: FileLock2, desc: "Accord de non-divulgation : informations protégées, durée, sanctions.", law: 'DPA 2017', family: 'Affaires' },
-  { id: 'bail_commercial', label: 'Bail commercial', icon: Building2, desc: "Location de locaux commerciaux : loyer, durée, charges, dépôt, destination.", law: 'Code Civil · L&T Act', family: 'Affaires' },
+  { id: 'vente', label: 'Contrat de vente', icon: ShoppingCart, desc: "Vente de biens : objet, prix, livraison, transfert de propriété, garanties.", law: 'Sale of Goods Act', family: 'Affaires' },
+  { id: 'distribution', label: 'Contrat de distribution', icon: Truck, desc: "Distribution / revente : territoire, exclusivité, objectifs, résiliation.", law: 'Code de Commerce', family: 'Affaires' },
+  { id: 'agence', label: 'Agence commerciale', icon: Handshake, desc: "Mandat d'agent commercial : commissions, territoire, indemnité de fin.", law: 'Code de Commerce', family: 'Affaires' },
+  { id: 'sous_traitance', label: 'Sous-traitance', icon: Wrench, desc: "Sous-traitance : périmètre, qualité, responsabilité, confidentialité.", law: 'Contract Act', family: 'Affaires' },
+  { id: 'cgv', label: 'Conditions générales (CGV)', icon: FileText, desc: "Conditions générales de vente / prestation : prix, paiement, responsabilité.", law: 'Code Civil · ETA 2000', family: 'Affaires' },
+  { id: 'partenariat', label: 'Accord de partenariat', icon: Handshake, desc: "Partenariat / coentreprise : objet commun, apports, gouvernance, partage.", law: 'Code Civil · CA 2001', family: 'Affaires' },
+  // Société
+  { id: 'cession_actions', label: 'Cession d’actions / parts', icon: Landmark, desc: "Transfert d'actions ou de parts : prix, garanties, conditions, formalités ROC.", law: 'Companies Act 2001', family: 'Société' },
+  { id: 'pacte_actionnaires', label: 'Pacte d’actionnaires', icon: Users, desc: "Relations entre associés : gouvernance, transferts, sortie, préemption.", law: 'Companies Act 2001', family: 'Société' },
+  // Finance
+  { id: 'pret', label: 'Contrat de prêt', icon: Banknote, desc: "Prêt d'argent : montant, intérêts, échéancier, garanties, remboursement.", law: 'Code Civil', family: 'Finance' },
+  { id: 'reconnaissance_dette', label: 'Reconnaissance de dette', icon: Banknote, desc: "Reconnaissance de dette : montant dû, échéance, intérêts éventuels.", law: 'Code Civil art.1326', family: 'Finance' },
+  // Immobilier
+  { id: 'bail_commercial', label: 'Bail commercial', icon: Building2, desc: "Location de locaux commerciaux : loyer, durée, charges, dépôt, destination.", law: 'Code Civil · L&T Act', family: 'Immobilier' },
+  { id: 'bail_habitation', label: 'Bail d’habitation', icon: Home, desc: "Location à usage d'habitation : loyer, durée, dépôt, état des lieux.", law: 'Landlord & Tenant Act', family: 'Immobilier' },
+  { id: 'promesse_vente', label: 'Promesse de vente immobilière', icon: Home, desc: "Promesse / compromis : bien, prix, conditions suspensives, acompte, notaire.", law: 'Code Civil · Notaries Act', family: 'Immobilier' },
 ]
 
 const LANGUAGES = [
@@ -129,6 +154,124 @@ const STANDARD_CLAUSES: Record<ContractTypeId, { label: string; ref?: string }[]
     { label: 'Résiliation et clause résolutoire' },
     { label: 'Loi applicable et juridiction' },
   ],
+  stage: [
+    { label: 'Identification de l’entreprise et du stagiaire' },
+    { label: 'Objet et objectifs pédagogiques du stage' },
+    { label: 'Durée, horaires et lieu' },
+    { label: 'Gratification / indemnité de stage' },
+    { label: 'Encadrement (tuteur) et évaluation' },
+    { label: 'Confidentialité et propriété des travaux' },
+    { label: 'Conditions de fin et de rupture' },
+  ],
+  vente: [
+    { label: 'Identification du vendeur et de l’acheteur' },
+    { label: 'Désignation des biens vendus' },
+    { label: 'Prix et modalités de paiement' },
+    { label: 'Livraison et transfert de propriété', ref: 'Sale of Goods Act' },
+    { label: 'Garanties et conformité' },
+    { label: 'Transfert des risques' },
+    { label: 'Résolution et loi applicable' },
+  ],
+  distribution: [
+    { label: 'Identification des parties' },
+    { label: 'Produits et territoire concédés' },
+    { label: 'Exclusivité ou non-exclusivité' },
+    { label: 'Objectifs et conditions commerciales' },
+    { label: 'Durée, renouvellement et résiliation' },
+    { label: 'Responsabilité et propriété de marque' },
+    { label: 'Loi applicable et juridiction' },
+  ],
+  agence: [
+    { label: 'Identification du mandant et de l’agent' },
+    { label: 'Mission et pouvoirs de l’agent' },
+    { label: 'Territoire et clientèle' },
+    { label: 'Commissions et modalités de paiement' },
+    { label: 'Durée et résiliation' },
+    { label: 'Indemnité de fin de contrat' },
+    { label: 'Non-concurrence et loi applicable' },
+  ],
+  sous_traitance: [
+    { label: 'Identification du donneur d’ordre et du sous-traitant' },
+    { label: 'Périmètre des prestations sous-traitées' },
+    { label: 'Cahier des charges et niveau de qualité' },
+    { label: 'Prix, facturation et délais' },
+    { label: 'Responsabilité et assurance' },
+    { label: 'Confidentialité et propriété intellectuelle' },
+    { label: 'Résiliation et loi applicable' },
+  ],
+  cgv: [
+    { label: 'Champ d’application et acceptation' },
+    { label: 'Description des produits / services' },
+    { label: 'Prix, commande et paiement' },
+    { label: 'Livraison / exécution et délais' },
+    { label: 'Rétractation, retours et garanties' },
+    { label: 'Responsabilité et force majeure' },
+    { label: 'Données personnelles', ref: 'DPA 2017' },
+    { label: 'Loi applicable et règlement des litiges' },
+  ],
+  partenariat: [
+    { label: 'Identification des partenaires' },
+    { label: 'Objet et périmètre du partenariat' },
+    { label: 'Apports et contributions de chaque partie' },
+    { label: 'Gouvernance et prise de décision' },
+    { label: 'Partage des résultats / revenus' },
+    { label: 'Propriété intellectuelle et confidentialité' },
+    { label: 'Durée, sortie et résiliation' },
+  ],
+  cession_actions: [
+    { label: 'Identification du cédant et du cessionnaire' },
+    { label: 'Désignation des actions / parts cédées', ref: 'CA 2001' },
+    { label: 'Prix et modalités de paiement' },
+    { label: 'Déclarations et garanties du cédant' },
+    { label: 'Conditions suspensives (agrément, préemption)' },
+    { label: 'Transfert et formalités (registre, ROC)' },
+    { label: 'Loi applicable et juridiction' },
+  ],
+  pacte_actionnaires: [
+    { label: 'Identification des associés' },
+    { label: 'Gouvernance et droits de vote' },
+    { label: 'Clauses de transfert (préemption, agrément)' },
+    { label: 'Clauses de sortie (tag along / drag along)' },
+    { label: 'Information et reporting' },
+    { label: 'Non-concurrence et confidentialité' },
+    { label: 'Durée et résolution des différends' },
+  ],
+  pret: [
+    { label: 'Identification du prêteur et de l’emprunteur' },
+    { label: 'Montant et mise à disposition des fonds' },
+    { label: 'Intérêts et taux applicable' },
+    { label: 'Échéancier de remboursement' },
+    { label: 'Garanties / sûretés' },
+    { label: 'Défaut, exigibilité anticipée et pénalités' },
+    { label: 'Loi applicable' },
+  ],
+  reconnaissance_dette: [
+    { label: 'Identification du débiteur et du créancier' },
+    { label: 'Montant de la dette reconnue', ref: 'Code Civil art.1326' },
+    { label: 'Cause de la dette' },
+    { label: 'Échéance de remboursement' },
+    { label: 'Intérêts éventuels' },
+    { label: 'Mention manuscrite du montant en lettres et chiffres' },
+  ],
+  bail_habitation: [
+    { label: 'Identification du bailleur et du locataire' },
+    { label: 'Désignation du logement' },
+    { label: 'Durée du bail' },
+    { label: 'Loyer et modalités de paiement' },
+    { label: 'Dépôt de garantie' },
+    { label: 'État des lieux d’entrée et de sortie' },
+    { label: 'Obligations des parties et réparations' },
+    { label: 'Résiliation', ref: 'Landlord & Tenant Act' },
+  ],
+  promesse_vente: [
+    { label: 'Identification du promettant et du bénéficiaire' },
+    { label: 'Désignation du bien immobilier' },
+    { label: 'Prix de vente convenu' },
+    { label: 'Conditions suspensives (financement, titres)' },
+    { label: 'Acompte / indemnité d’immobilisation' },
+    { label: 'Délai de réalisation et passage chez le notaire', ref: 'Notaries Act' },
+    { label: 'Défaillance et loi applicable' },
+  ],
 }
 
 /* Options avancées activables (interrupteurs), filtrées par type. */
@@ -141,13 +284,20 @@ const ADVANCED_OPTIONS: { id: string; label: string; ref?: string; types: Contra
   { id: 'exclusivite', label: "Exclusivité", types: ['CDI', 'prestataire', 'client_saas'] },
   { id: 'sla', label: 'Niveaux de service (SLA)', types: ['client_saas', 'client_service'] },
   { id: 'penalites', label: 'Pénalités de retard', types: ['prestataire', 'client_service'] },
-  { id: 'force_majeure', label: 'Force majeure', types: ['prestataire', 'client_saas', 'client_service', 'nda', 'bail_commercial'] },
-  { id: 'revision_loyer', label: 'Révision / indexation du loyer', types: ['bail_commercial'], defaultOn: true },
-  { id: 'depot_garantie', label: 'Dépôt de garantie', types: ['bail_commercial'], defaultOn: true },
-  { id: 'sous_location', label: 'Sous-location autorisée', types: ['bail_commercial'] },
+  { id: 'force_majeure', label: 'Force majeure', types: ['prestataire', 'client_saas', 'client_service', 'nda', 'bail_commercial', 'vente', 'distribution', 'agence', 'sous_traitance', 'cgv', 'partenariat'] },
+  { id: 'revision_loyer', label: 'Révision / indexation du loyer', types: ['bail_commercial', 'bail_habitation'], defaultOn: true },
+  { id: 'depot_garantie', label: 'Dépôt de garantie', types: ['bail_commercial', 'bail_habitation'], defaultOn: true },
+  { id: 'sous_location', label: 'Sous-location autorisée', types: ['bail_commercial', 'bail_habitation'] },
+  { id: 'exclusivite_terr', label: 'Exclusivité territoriale', types: ['distribution', 'agence'], defaultOn: true },
+  { id: 'non_concurrence_aff', label: 'Non-concurrence', types: ['distribution', 'agence', 'sous_traitance', 'partenariat', 'cession_actions'] },
+  { id: 'interets', label: 'Intérêts conventionnels', types: ['pret', 'reconnaissance_dette'], defaultOn: true },
+  { id: 'suretes', label: 'Garanties / sûretés', types: ['pret'] },
+  { id: 'condition_financement', label: 'Condition suspensive de financement', types: ['promesse_vente'], defaultOn: true },
+  { id: 'preemption', label: 'Droit de préemption', types: ['cession_actions', 'pacte_actionnaires'] },
 ]
 
-const EMPLOYMENT = new Set<ContractTypeId>(['CDI', 'CDD', 'CDD_partiel'])
+const EMPLOYMENT = new Set<ContractTypeId>(['CDI', 'CDD', 'CDD_partiel', 'stage'])
+const LEASE = new Set<ContractTypeId>(['bail_commercial', 'bail_habitation'])
 
 interface ContractForm {
   contractType: ContractTypeId
@@ -177,7 +327,19 @@ function partyLabels(type: ContractTypeId): { a: string; b: string } {
     case 'client_saas': return { a: 'Prestataire (Éditeur)', b: 'Client abonné' }
     case 'client_service': return { a: 'Prestataire de services', b: 'Client' }
     case 'nda': return { a: 'Partie divulgatrice', b: 'Partie réceptrice' }
-    case 'bail_commercial': return { a: 'Bailleur', b: 'Preneur / Locataire' }
+    case 'bail_commercial': case 'bail_habitation': return { a: 'Bailleur', b: 'Preneur / Locataire' }
+    case 'stage': return { a: 'Entreprise d’accueil', b: 'Stagiaire' }
+    case 'vente': return { a: 'Vendeur', b: 'Acheteur' }
+    case 'distribution': return { a: 'Fournisseur / Concédant', b: 'Distributeur' }
+    case 'agence': return { a: 'Mandant', b: 'Agent commercial' }
+    case 'sous_traitance': return { a: 'Donneur d’ordre', b: 'Sous-traitant' }
+    case 'cgv': return { a: 'Vendeur / Prestataire', b: 'Client' }
+    case 'partenariat': return { a: 'Partenaire A', b: 'Partenaire B' }
+    case 'cession_actions': return { a: 'Cédant', b: 'Cessionnaire' }
+    case 'pacte_actionnaires': return { a: 'Associé A', b: 'Associé B' }
+    case 'pret': return { a: 'Prêteur', b: 'Emprunteur' }
+    case 'reconnaissance_dette': return { a: 'Créancier', b: 'Débiteur' }
+    case 'promesse_vente': return { a: 'Promettant (vendeur)', b: 'Bénéficiaire (acquéreur)' }
     default: return { a: 'Employeur', b: 'Employé' }
   }
 }
@@ -247,6 +409,7 @@ function StructuredContract({ text }: { text: string }) {
 
 export default function ContratsPage() {
   const [view, setView] = useState<'gallery' | 'form'>('gallery')
+  const [gallerySearch, setGallerySearch] = useState("")
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
@@ -429,26 +592,45 @@ export default function ContratsPage() {
 
   /* ───────────────  VUE GALERIE  ─────────────── */
   if (view === 'gallery') {
-    const families: Template['family'][] = ['Emploi', 'Affaires']
+    const FAMILY_LABELS: Record<ContractFamily, string> = {
+      Emploi: 'Contrats de travail', Affaires: "Contrats d'affaires", Société: 'Droit des sociétés', Immobilier: 'Immobilier & baux', Finance: 'Financier',
+    }
+    const families: ContractFamily[] = ['Emploi', 'Affaires', 'Société', 'Finance', 'Immobilier']
+    const q = gallerySearch.trim().toLowerCase()
+    const matches = (t: Template) => !q || `${t.label} ${t.desc} ${t.law}`.toLowerCase().includes(q)
+    const filtered = TEMPLATES.filter(matches)
     return (
       <ClientPageShell hideHero disableParticles>
         <div className="min-h-screen bg-gray-50">
           <div className="max-w-5xl mx-auto">
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-5">
               <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: NAVY }}>
                 <FileSignature className="w-5 h-5" style={{ color: GOLD }} />
               </div>
               <div>
                 <h1 className="text-xl font-bold" style={{ color: NAVY }}>Générateur de contrats</h1>
-                <p className="text-xs text-gray-500">Choisissez un modèle conforme au droit mauricien. Chaque contrat est sourcé et reste un projet à faire valider par un avocat.</p>
+                <p className="text-xs text-gray-500">{TEMPLATES.length} modèles conformes au droit mauricien — sourcés (RAG), personnalisables, exportables en PDF signable.</p>
               </div>
             </div>
 
-            {families.map(fam => (
+            {/* Recherche */}
+            <div className="relative mb-6">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={gallerySearch}
+                onChange={(e) => setGallerySearch(e.target.value)}
+                placeholder="Rechercher un modèle (ex. bail, NDA, cession, prêt, vente…)"
+                className="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-[#D4AF37]"
+              />
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="rounded-2xl bg-white border border-gray-100 p-10 text-center text-sm text-gray-400">Aucun modèle ne correspond à « {gallerySearch} ».</div>
+            ) : families.filter((fam) => filtered.some((t) => t.family === fam)).map(fam => (
               <div key={fam} className="mb-7">
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">{fam === 'Emploi' ? 'Contrats de travail' : "Contrats d'affaires"}</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">{FAMILY_LABELS[fam]}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {TEMPLATES.filter(t => t.family === fam).map(tpl => {
+                  {filtered.filter(t => t.family === fam).map(tpl => {
                     const Icon = tpl.icon
                     return (
                       <button key={tpl.id} onClick={() => selectTemplate(tpl.id)}
@@ -600,13 +782,13 @@ export default function ContratsPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="md:col-span-2"><Label className="text-xs">{form.contractType === 'bail_commercial' ? 'Désignation et destination des locaux' : 'Objet / mission'}</Label><Textarea className="mt-1 min-h-[72px]" value={form.objet} onChange={e => update('objet', e.target.value)} placeholder={form.contractType === 'nda' ? "Objet de l'échange d'informations confidentielles…" : form.contractType === 'bail_commercial' ? "Adresse et description des locaux, surface, usage commercial autorisé…" : "Décrivez la prestation, les livrables, le périmètre…"} /></div>
-                      <div><Label className="text-xs">{form.contractType === 'bail_commercial' ? 'Prise d\'effet du bail' : 'Date de début / signature'}</Label><Input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} /></div>
-                      <div><Label className="text-xs">{form.contractType === 'bail_commercial' ? 'Échéance du bail' : 'Date de fin / échéance'}</Label><Input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} /></div>
-                      {form.contractType !== 'nda' && <div><Label className="text-xs">{form.contractType === 'bail_commercial' ? 'Loyer mensuel (MUR)' : 'Contrepartie (MUR)'}</Label><Input value={form.montant} onChange={e => update('montant', e.target.value)} inputMode="decimal" /></div>}
+                      <div className="md:col-span-2"><Label className="text-xs">{LEASE.has(form.contractType) ? 'Désignation et destination des locaux' : 'Objet / mission'}</Label><Textarea className="mt-1 min-h-[72px]" value={form.objet} onChange={e => update('objet', e.target.value)} placeholder={form.contractType === 'nda' ? "Objet de l'échange d'informations confidentielles…" : LEASE.has(form.contractType) ? "Adresse et description des locaux, surface, usage commercial autorisé…" : "Décrivez la prestation, les livrables, le périmètre…"} /></div>
+                      <div><Label className="text-xs">{LEASE.has(form.contractType) ? 'Prise d\'effet du bail' : 'Date de début / signature'}</Label><Input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} /></div>
+                      <div><Label className="text-xs">{LEASE.has(form.contractType) ? 'Échéance du bail' : 'Date de fin / échéance'}</Label><Input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} /></div>
+                      {form.contractType !== 'nda' && <div><Label className="text-xs">{LEASE.has(form.contractType) ? 'Loyer mensuel (MUR)' : 'Contrepartie (MUR)'}</Label><Input value={form.montant} onChange={e => update('montant', e.target.value)} inputMode="decimal" /></div>}
                       {form.contractType !== 'nda' && (
                         <div>
-                          <Label className="text-xs">{form.contractType === 'bail_commercial' ? 'Périodicité du loyer' : 'Facturation'}</Label>
+                          <Label className="text-xs">{LEASE.has(form.contractType) ? 'Périodicité du loyer' : 'Facturation'}</Label>
                           <Select value={form.payFrequency} onValueChange={v => update('payFrequency', v)}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent><SelectItem value="À la livraison">À la livraison</SelectItem><SelectItem value="Mensuel">Mensuel</SelectItem><SelectItem value="Forfait">Forfait</SelectItem><SelectItem value="Échelonné">Échelonné</SelectItem></SelectContent>
