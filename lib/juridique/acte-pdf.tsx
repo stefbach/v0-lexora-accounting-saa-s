@@ -24,7 +24,7 @@ const styles = StyleSheet.create({
 
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', borderBottomWidth: 2, borderBottomColor: C.gold, paddingBottom: 12, marginBottom: 18 },
   firmName: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: C.navy, letterSpacing: 1 },
-  firmTag: { fontSize: 8, color: C.gold, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 2 },
+  firmTag: { fontSize: 7.5, color: C.gold, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
   issuerRight: { width: 220, alignItems: 'flex-end' },
   issuerName: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.navy, textAlign: 'right' },
   small: { fontSize: 8, color: C.muted, textAlign: 'right', lineHeight: 1.4 },
@@ -89,8 +89,18 @@ function fmtMontant(n?: number, devise = 'MUR'): string {
   return `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)} ${devise}`
 }
 
+/** Nettoie un texte pour Helvetica/WinAnsi : retire emojis, convertit symboles. */
+function clean(text: string): string {
+  return (text || '')
+    .replace(/[→⇒➔➜▶►]/g, '->')
+    .replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/≠/g, '!=')
+    .replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2B00}-\u{2BFF}\u{2300}-\u{23FF}\u{FE0F}\u{20E3}]/gu, '')
+    .replace(/ {2,}/g, ' ')
+}
+
 export function ActePdf({ data }: { data: ActePdfData }) {
-  const paragraphs = (data.corps || '').split(/\n\s*\n/).filter((p) => p.trim())
+  const paragraphs = (clean(data.corps) || '').split(/\n\s*\n/).filter((p) => p.trim())
 
   return (
     <Document title={`${data.titre}${data.reference ? ` — ${data.reference}` : ''}`}>
@@ -126,7 +136,7 @@ export function ActePdf({ data }: { data: ActePdfData }) {
         {/* Objet */}
         <View style={styles.objetRow}>
           <Text style={styles.objetLabel}>Objet :</Text>
-          <Text style={styles.objetText}>{data.objet || data.titre}</Text>
+          <Text style={styles.objetText}>{clean(data.objet || data.titre)}</Text>
         </View>
 
         {/* Montant mis en évidence */}
