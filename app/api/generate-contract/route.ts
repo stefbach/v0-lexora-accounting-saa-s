@@ -24,11 +24,24 @@ const CONTRACT_TYPES: Record<string, string> = {
   CDI: "Travail — CDI (Contrat a Duree Indeterminee)",
   CDD: "Travail — CDD (Contrat a Duree Determinee)",
   CDD_partiel: "Travail — Temps partiel",
+  stage: "Convention de stage",
   prestataire: "Prestataire / Consultant",
   client_saas: "Client SaaS / Abonnement",
   client_service: "Client — Prestation de services",
   nda: "NDA / Confidentialite",
+  vente: "Contrat de vente",
+  distribution: "Contrat de distribution",
+  agence: "Contrat d'agence commerciale",
+  sous_traitance: "Contrat de sous-traitance",
+  cgv: "Conditions generales de vente",
+  partenariat: "Accord de partenariat",
+  cession_actions: "Cession d'actions / de parts",
+  pacte_actionnaires: "Pacte d'actionnaires",
+  pret: "Contrat de pret",
+  reconnaissance_dette: "Reconnaissance de dette",
   bail_commercial: "Bail commercial",
+  bail_habitation: "Bail d'habitation",
+  promesse_vente: "Promesse de vente immobiliere",
 }
 
 /** Domaines RAG pertinents selon le type de contrat (verrouillage des sources). */
@@ -36,11 +49,24 @@ const CONTRACT_DOMAINES: Record<string, DomaineJuridique[]> = {
   CDI: ['travail', 'fiscal'],
   CDD: ['travail', 'fiscal'],
   CDD_partiel: ['travail', 'fiscal'],
+  stage: ['travail'],
   prestataire: ['commercial', 'civil', 'fiscal'],
   client_saas: ['commercial', 'donnees', 'civil'],
   client_service: ['commercial', 'civil'],
   nda: ['donnees', 'commercial', 'civil'],
+  vente: ['commercial', 'civil'],
+  distribution: ['commercial', 'civil'],
+  agence: ['commercial', 'civil'],
+  sous_traitance: ['commercial', 'civil'],
+  cgv: ['commercial', 'civil', 'donnees'],
+  partenariat: ['commercial', 'societes', 'civil'],
+  cession_actions: ['societes', 'commercial', 'fiscal'],
+  pacte_actionnaires: ['societes', 'commercial'],
+  pret: ['civil', 'financier', 'commercial'],
+  reconnaissance_dette: ['civil'],
   bail_commercial: ['immobilier', 'civil', 'commercial'],
+  bail_habitation: ['immobilier', 'civil'],
+  promesse_vente: ['immobilier', 'civil'],
 }
 
 const LANG_INSTRUCTIONS: Record<string, string> = {
@@ -55,7 +81,7 @@ const JURISDICTIONS: Record<string, string> = {
   cv: "Cabo Verde",
 }
 
-const EMPLOYMENT_TYPES = new Set(['CDI', 'CDD', 'CDD_partiel'])
+const EMPLOYMENT_TYPES = new Set(['CDI', 'CDD', 'CDD_partiel', 'stage'])
 
 /** Libellés des deux parties selon le type de contrat. */
 function partyLabels(type: string): { a: string; b: string } {
@@ -64,7 +90,19 @@ function partyLabels(type: string): { a: string; b: string } {
     case 'client_saas': return { a: 'PRESTATAIRE (EDITEUR DU SERVICE)', b: 'CLIENT ABONNE' }
     case 'client_service': return { a: 'PRESTATAIRE DE SERVICES', b: 'CLIENT' }
     case 'nda': return { a: 'PARTIE DIVULGATRICE', b: 'PARTIE RECEPTRICE' }
-    case 'bail_commercial': return { a: 'BAILLEUR', b: 'PRENEUR / LOCATAIRE' }
+    case 'bail_commercial': case 'bail_habitation': return { a: 'BAILLEUR', b: 'PRENEUR / LOCATAIRE' }
+    case 'stage': return { a: "ENTREPRISE D'ACCUEIL", b: 'STAGIAIRE' }
+    case 'vente': return { a: 'VENDEUR', b: 'ACHETEUR' }
+    case 'distribution': return { a: 'FOURNISSEUR / CONCEDANT', b: 'DISTRIBUTEUR' }
+    case 'agence': return { a: 'MANDANT', b: 'AGENT COMMERCIAL' }
+    case 'sous_traitance': return { a: "DONNEUR D'ORDRE", b: 'SOUS-TRAITANT' }
+    case 'cgv': return { a: 'VENDEUR / PRESTATAIRE', b: 'CLIENT' }
+    case 'partenariat': return { a: 'PARTENAIRE A', b: 'PARTENAIRE B' }
+    case 'cession_actions': return { a: 'CEDANT', b: 'CESSIONNAIRE' }
+    case 'pacte_actionnaires': return { a: 'ASSOCIE A', b: 'ASSOCIE B' }
+    case 'pret': return { a: 'PRETEUR', b: 'EMPRUNTEUR' }
+    case 'reconnaissance_dette': return { a: 'CREANCIER', b: 'DEBITEUR' }
+    case 'promesse_vente': return { a: 'PROMETTANT (VENDEUR)', b: 'BENEFICIAIRE (ACQUEREUR)' }
     default: return { a: 'EMPLOYEUR', b: 'EMPLOYE' }
   }
 }

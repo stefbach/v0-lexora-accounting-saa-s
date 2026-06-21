@@ -195,6 +195,24 @@ export default function AssembleesPage() {
 
               <div className="pt-3 border-t">
                 <label className="text-xs font-semibold text-gray-600">Ordre du jour {type === 'ago' ? '(laisser vide pour l\'ordre du jour standard)' : '(résolutions extraordinaires souhaitées)'}</label>
+                {type === 'age' && (
+                  <div className="flex flex-wrap gap-1.5 my-2">
+                    {[
+                      "Augmentation du capital social",
+                      "Réduction du capital social",
+                      "Modification de l'objet social",
+                      "Transfert du siège social",
+                      "Changement de dénomination",
+                      "Modification des statuts",
+                      "Dissolution anticipée",
+                    ].map((d) => (
+                      <button key={d} type="button" onClick={() => setOrdre((o) => (o ? `${o}\n${d}` : d))}
+                        className="text-[11px] px-2.5 py-1 rounded-full border border-gray-200 text-gray-600 hover:border-[#D4AF37] hover:text-[#8a6d15] transition-colors">
+                        + {d}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <textarea value={ordre} onChange={(e) => setOrdre(e.target.value)} rows={type === 'age' ? 5 : 3} className={`${input} resize-y`} placeholder={type === 'ago' ? "Approbation des comptes, affectation du résultat, quitus, nomination de l'auditeur…" : "Ex. Augmentation du capital social à MUR…, Modification de l'objet social, Transfert du siège…"} />
               </div>
             </div>
