@@ -4,7 +4,11 @@ import { Gavel, Loader2, Scale, FileDown, Sparkles, AlertTriangle, CheckCircle2,
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
 import { useJuridiqueSociete } from "@/components/juridique/JuridiqueSocieteProvider"
 import { DocumentPicker } from "@/components/juridique/DocumentPicker"
+import { LegalChat } from "@/components/juridique/LegalChat"
+import { DEPARTEMENTS } from "@/lib/juridique/departements"
 import { TYPES_CONTENTIEUX } from "@/lib/juridique/referentielMauricien"
+
+const CONTENTIEUX_DEP = DEPARTEMENTS.find((d) => d.id === "contentieux")
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -58,6 +62,7 @@ const URGENCE_STYLE: Record<Urgence, { bg: string; color: string; label: string 
 
 export default function ContentieuxPage() {
   const { societe } = useJuridiqueSociete()
+  const [mode, setMode] = useState<"chat" | "atelier">("chat")
   const [description, setDescription] = useState("")
   const [adverse, setAdverse] = useState("")
   const [montant, setMontant] = useState("")
@@ -144,6 +149,33 @@ export default function ContentieuxPage() {
         subtitle="Outil clé en main : importez les pièces, qualifiez le litige, évaluez vos chances, puis rédigez vos courriers — en demande (mise en demeure, sommation) comme en défense (réponse, contestation) — ancrés sur le RAG mauricien, avec le PDF final."
       />
 
+      {/* Bascule Assistant (chat) / Atelier (outils structurés) */}
+      <div className="flex gap-2">
+        {([["chat", "Assistant (chat)"], ["atelier", "Atelier — qualifier · évaluer · acte"]] as const).map(([id, lbl]) => (
+          <button key={id} onClick={() => setMode(id)}
+            className={`px-3.5 py-2 rounded-xl text-sm font-medium border transition-all ${mode === id ? "border-transparent text-[#0B0F2E]" : "border-gray-200 text-gray-500 hover:border-gray-300"}`}
+            style={mode === id ? { background: "rgba(212,175,55,0.16)" } : {}}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      {mode === "chat" && (
+        <LegalChat
+          icon={<Scale className="w-4 h-4" style={{ color: GOLD }} />}
+          title="Assistant contentieux"
+          subtitle="Droit mauricien · langage naturel · sources citées"
+          suggestions={CONTENTIEUX_DEP?.exemples ?? []}
+          domaines={CONTENTIEUX_DEP?.domaines}
+          departement="contentieux"
+          emptyHint={CONTENTIEUX_DEP ? `Assistant du département ${CONTENTIEUX_DEP.nom}. Décrivez votre litige en langage naturel ou joignez des pièces à analyser.` : undefined}
+          contextLabel="Département : Contentieux & Arbitrage"
+          placeholder="Décrivez votre litige, posez une question, ou joignez des pièces…"
+          reportTitle="Rapport de consultation — Contentieux"
+        />
+      )}
+
+      {mode === "atelier" && (<>
       {/* Saisie du litige */}
       <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm space-y-4">
         <div>
@@ -287,6 +319,7 @@ export default function ContentieuxPage() {
           </div>
         )}
       </div>
+      </>)}
 
       <p className="text-[11px] text-gray-400 text-center">
         Projets de travail générés par IA — à faire valider et signer par un avocat / attorney inscrit avant tout envoi ou dépôt.

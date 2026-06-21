@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, BookUser, Loader2, Building2, Download } from "lucide-react"
 import { useJuridiqueSociete } from "@/components/juridique/JuridiqueSocieteProvider"
+import { SocieteDocuments } from "@/components/juridique/SocieteDocuments"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -128,6 +129,13 @@ export default function RegistresPage() {
             )}
           </div>
           <p className="text-[11px] text-gray-400">Registres tenus conformément au Companies Act 2001. Les données proviennent des fiches société de Lexora — mettez-les à jour dans le module concerné si nécessaire.</p>
+
+          <SocieteDocuments
+            societeId={societe.id}
+            categorie="registre"
+            title="Documents associés aux registres"
+            hint="Joignez les pièces justificatives : certificats d'actions, statuts, déclarations UBO, extraits ROC…"
+          />
         </>
       )}
     </div>

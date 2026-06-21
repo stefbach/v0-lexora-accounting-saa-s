@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   FileText, Users, Settings, Download, Copy, CheckCircle, Lock, AlertCircle, Loader2,
-  Shield, Scale, Save, FileSignature, ArrowLeft, Briefcase, FileLock2, Cloud, Wrench, Handshake, Building2,
+  Shield, Scale, Save, FileSignature, ArrowLeft, Briefcase, FileLock2, Cloud, Wrench, Handshake, Building2, Send,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 
@@ -257,6 +257,9 @@ export default function ContratsPage() {
   const [societeId, setSocieteId] = useState<string>("")
   const [savedContractId, setSavedContractId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [refineInput, setRefineInput] = useState("")
+  const [refining, setRefining] = useState(false)
+  const [refineLog, setRefineLog] = useState<string[]>([])
 
   const [form, setForm] = useState<ContractForm>({
     contractType: 'CDI', language: 'fr', jurisdiction: 'mu',
@@ -335,7 +338,7 @@ export default function ContratsPage() {
   }
 
   async function handleGenerate() {
-    setLoading(true); setError(null); setResult(''); setSources([]); setSavedContractId(null)
+    setLoading(true); setError(null); setResult(''); setSources([]); setSavedContractId(null); setRefineLog([])
     try {
       const res = await fetch("/api/generate-contract", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -401,6 +404,27 @@ export default function ContratsPage() {
     if (!result) return
     navigator.clipboard.writeText(result)
     setCopied(true); setTimeout(() => setCopied(false), 1800)
+  }
+
+  async function handleRefine() {
+    const instruction = refineInput.trim()
+    if (!instruction || !result || refining) return
+    setRefining(true)
+    try {
+      const res = await fetch("/api/generate-contract/refine", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contract_type: form.contractType, current_text: result, instruction }),
+      })
+      const data = await readJsonSafe(res)
+      if (!res.ok) { alert(data.error || "Échec de la modification"); return }
+      setResult(data.text || result)
+      if (Array.isArray(data.sources) && data.sources.length) setSources(data.sources)
+      setRefineLog((l) => [...l, instruction])
+      setRefineInput("")
+      setSavedContractId(null)
+    } catch (e: any) {
+      alert(e.message || "Erreur réseau")
+    } finally { setRefining(false) }
   }
 
   /* ───────────────  VUE GALERIE  ─────────────── */
@@ -469,9 +493,9 @@ export default function ContratsPage() {
             <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ background: "rgba(212,175,55,0.14)", color: "#8a6d15" }}>{template.law}</span>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-5 items-start">
+          <div className="grid lg:grid-cols-5 gap-5 items-start">
             {/* ── Colonne formulaire ── */}
-            <div className="space-y-4">
+            <div className="space-y-4 lg:col-span-2">
               {/* Paramètres */}
               <Card>
                 <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -650,7 +674,7 @@ export default function ContratsPage() {
             </div>
 
             {/* ── Colonne aperçu ── */}
-            <div className="lg:sticky lg:top-4">
+            <div className="lg:sticky lg:top-4 lg:col-span-3">
               <Card className="min-h-[400px]">
                 <CardContent className="p-0">
                   <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-gray-100 flex-wrap">
@@ -686,8 +710,8 @@ export default function ContratsPage() {
                       </div>
                     )}
 
-                    {result && (
-                      <div className="max-h-[68vh] overflow-y-auto pr-1">
+                    {result && (<>
+                      <div className="max-h-[58vh] overflow-y-auto pr-1">
                         <StructuredContract text={result} />
                         {/* Bloc signatures (identités à signer) */}
                         <div className="mt-6 pt-3 border-t border-gray-100 grid grid-cols-2 gap-4">
@@ -720,7 +744,35 @@ export default function ContratsPage() {
                           </div>
                         )}
                       </div>
-                    )}
+
+                      {/* Chatbot de personnalisation du contrat */}
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5 flex items-center gap-1.5">
+                          <Settings className="w-3.5 h-3.5" style={{ color: GOLD }} /> Personnaliser le contrat
+                        </p>
+                        {refineLog.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {refineLog.map((r, i) => (
+                              <span key={i} className="inline-flex items-center gap-1 text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full"><CheckCircle className="w-3 h-3 text-green-500" />{r.length > 40 ? r.slice(0, 40) + '…' : r}</span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex items-end gap-2">
+                          <textarea
+                            value={refineInput}
+                            onChange={(e) => setRefineInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleRefine() } }}
+                            rows={1}
+                            placeholder="Ex. Ajoute une clause de télétravail 2 jours/semaine · Porte le préavis à 2 mois · Ajoute une prime de performance annuelle…"
+                            className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-[#D4AF37] max-h-28"
+                          />
+                          <Button onClick={handleRefine} disabled={refining || !refineInput.trim()} style={{ backgroundColor: NAVY, color: GOLD }}>
+                            {refining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                          </Button>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1.5">Décrivez en langage naturel les clauses à ajouter, retirer ou reformuler — le contrat est mis à jour et reste sourcé.</p>
+                      </div>
+                    </>)}
                   </div>
                 </CardContent>
               </Card>

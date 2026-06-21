@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, CalendarClock, Loader2, Building2, AlertTriangle, CheckCircle2, Clock } from "lucide-react"
 import { useJuridiqueSociete } from "@/components/juridique/JuridiqueSocieteProvider"
+import { SocieteDocuments } from "@/components/juridique/SocieteDocuments"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -100,6 +101,13 @@ export default function ObligationsPage() {
             Échéances calculées à titre indicatif à partir de la date de clôture et des informations de la société (Companies Act 2001, Income Tax Act, FSA 2007).
             Vérifiez les délais exacts applicables à votre type de société auprès du ROC / de la MRA / de la FSC.
           </p>
+
+          <SocieteDocuments
+            societeId={societe.id}
+            categorie="obligation"
+            title="Justificatifs de dépôt & preuves"
+            hint="Associez vos preuves de dépôt : annual return, états financiers, accusés MRA/ROC/FSC, PV d'AGM…"
+          />
         </>
       )}
     </div>
