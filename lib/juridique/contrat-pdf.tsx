@@ -24,10 +24,11 @@ const s = StyleSheet.create({
   page: { paddingTop: 44, paddingBottom: 64, paddingHorizontal: 46, fontSize: 10, fontFamily: 'Helvetica', color: C.text, lineHeight: 1.5 },
 
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', borderBottomWidth: 2, borderBottomColor: C.gold, paddingBottom: 12, marginBottom: 16 },
-  firmName: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: C.navy, letterSpacing: 1 },
-  firmTag: { fontSize: 7.5, color: C.gold, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
+  firmName: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: C.navy, letterSpacing: 0.5 },
+  firmTag: { fontSize: 7.5, color: C.gold, fontFamily: 'Helvetica-Bold', letterSpacing: 0.5, marginTop: 2 },
   metaRight: { alignItems: 'flex-end' },
   metaSmall: { fontSize: 8, color: C.muted, textAlign: 'right', lineHeight: 1.4 },
+  metaSmallLeft: { fontSize: 8, color: C.muted, textAlign: 'left', lineHeight: 1.4, marginTop: 1 },
 
   docTitle: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: C.navy, marginBottom: 3, textAlign: 'center' },
   docRef: { fontSize: 8.5, color: C.muted, textAlign: 'center', marginBottom: 12 },
@@ -152,14 +153,15 @@ export function ContratPdf({ data }: { data: ContratPdfData }) {
     <Document title={`${data.type}${data.reference ? ` — ${data.reference}` : ''}`}>
       <Page size="A4" style={s.page}>
         <View style={s.topBar} fixed>
-          <View>
-            <Text style={s.firmName}>LEXORA</Text>
-            <Text style={s.firmTag}>Département Juridique</Text>
+          <View style={{ maxWidth: 320 }}>
+            <Text style={s.firmName}>{(data.employeur.nom || 'Société').toUpperCase()}</Text>
+            {data.employeur.brn ? <Text style={s.firmTag}>BRN : {data.employeur.brn}</Text> : null}
+            {data.employeur.adresse ? <Text style={s.metaSmallLeft}>{data.employeur.adresse}</Text> : null}
+            <Text style={s.metaSmallLeft}>République de Maurice</Text>
           </View>
           <View style={s.metaRight}>
             <Text style={s.metaSmall}>Projet de contrat</Text>
             <Text style={s.metaSmall}>{(data.lieu || 'Port-Louis')}, {dateFr(data.date)}</Text>
-            <Text style={s.metaSmall}>République de Maurice</Text>
           </View>
         </View>
 

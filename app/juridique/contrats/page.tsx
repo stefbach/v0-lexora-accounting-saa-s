@@ -259,6 +259,14 @@ export default function ContratsPage() {
     setForm(prev => ({ ...prev, [field]: value }))
   }, [])
 
+  // Sélectionne une société et préremplit automatiquement la partie employeur
+  // avec les informations enregistrées (pas de ressaisie).
+  const selectSociete = useCallback((id: string) => {
+    setSocieteId(id)
+    const s: any = societes.find((x: any) => x.id === id)
+    if (s) setForm(f => ({ ...f, empName: s.nom || '', empBrn: s.brn || '', empAddr: s.adresse || '' }))
+  }, [societes])
+
   React.useEffect(() => {
     Promise.all([
       fetch("/api/client/societes").then(r => r.json()).catch(() => ({ societes: [] })),
@@ -451,7 +459,7 @@ export default function ContratsPage() {
                 <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <Label className="text-xs flex items-center gap-1"><Building2 className="w-3 h-3" /> Société</Label>
-                    <Select value={societeId} onValueChange={setSocieteId}>
+                    <Select value={societeId} onValueChange={selectSociete}>
                       <SelectTrigger className="mt-1"><SelectValue placeholder="—" /></SelectTrigger>
                       <SelectContent>{societes.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}</SelectContent>
                     </Select>
