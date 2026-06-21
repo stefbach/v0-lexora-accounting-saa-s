@@ -1,6 +1,6 @@
 "use client"
 import Link from "next/link"
-import { Scale, Gavel, FileSignature, FolderOpen, ShieldCheck, MessageSquareText, ArrowRight, BookOpen, Users, FolderKanban } from "lucide-react"
+import { Scale, Gavel, FileSignature, FolderOpen, ShieldCheck, MessageSquareText, ArrowRight, BookOpen, Users, FolderKanban, Landmark } from "lucide-react"
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
 import { RagAdminPanel } from "@/components/juridique/RagAdminPanel"
 import { RagStats } from "@/components/juridique/RagStats"
@@ -15,6 +15,13 @@ const MODULES = [
     title: "Dossiers",
     desc: "Gérez vos dossiers et contentieux : parties, statut, pièces, analyses et actes — tout persisté et rattaché.",
     tag: "Gestion",
+  },
+  {
+    href: "/juridique/societe",
+    icon: Landmark,
+    title: "Vie juridique de la société",
+    desc: "Secrétariat juridique : PV d'assemblées générales, résolutions et registres — préremplis avec associés, administrateurs et comptes.",
+    tag: "Corporate",
   },
   {
     href: "/juridique/conseil",

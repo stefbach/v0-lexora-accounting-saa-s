@@ -4,6 +4,7 @@ import Link from "next/link"
 import { FolderKanban, Plus, Loader2, Building2, ChevronRight, X } from "lucide-react"
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
 import { useJuridiqueSociete } from "@/components/juridique/JuridiqueSocieteProvider"
+import { SocieteDocuments } from "@/components/juridique/SocieteDocuments"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -156,6 +157,16 @@ export default function DossiersPage() {
               </ul>
             )}
           </div>
+
+          <p className="text-xs text-gray-400 px-1">
+            Astuce : ouvrez un dossier pour y rattacher ses pièces. Ci-dessous, stockez les documents juridiques généraux de la société (non rattachés à un dossier précis).
+          </p>
+          <SocieteDocuments
+            societeId={societe.id}
+            categorie="dossier"
+            title="Documents juridiques de la société"
+            hint="Importez ici tout document à conserver : courriers, contrats signés, décisions, correspondances…"
+          />
         </>
       )}
     </div>

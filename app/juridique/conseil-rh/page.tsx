@@ -28,6 +28,7 @@ export default function ConseilRHPage() {
         subtitle="Droit du travail mauricien · sources citées"
         suggestions={SUGGESTIONS}
         domaines={["travail"]}
+        departement="travail"
         contextLabel="Domaine : Droit du travail & social mauricien (WRA 2019, ERA 2008)"
         placeholder="Posez votre question RH/sociale, ou joignez un contrat de travail à analyser…"
         reportTitle="Rapport de consultation RH & Social"
