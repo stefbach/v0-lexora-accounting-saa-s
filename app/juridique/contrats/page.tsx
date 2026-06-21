@@ -18,7 +18,7 @@ const GOLD = "#D4AF37"
 
 /* ─────────────────────────  MODÈLES  ───────────────────────── */
 
-type ContractTypeId = 'CDI' | 'CDD' | 'CDD_partiel' | 'prestataire' | 'client_saas' | 'client_service' | 'nda'
+type ContractTypeId = 'CDI' | 'CDD' | 'CDD_partiel' | 'prestataire' | 'client_saas' | 'client_service' | 'nda' | 'bail_commercial'
 
 interface Template {
   id: ContractTypeId
@@ -37,6 +37,7 @@ const TEMPLATES: Template[] = [
   { id: 'client_saas', label: 'Client SaaS / Abonnement', icon: Cloud, desc: "Abonnement logiciel : périmètre, disponibilité, données, résiliation.", law: 'ICT Act · DPA 2017', family: 'Affaires' },
   { id: 'client_service', label: 'Prestation de services', icon: Handshake, desc: "Prestation ponctuelle : objet, prix, délais, garanties.", law: 'Contract Act', family: 'Affaires' },
   { id: 'nda', label: 'NDA / Confidentialité', icon: FileLock2, desc: "Accord de non-divulgation : informations protégées, durée, sanctions.", law: 'DPA 2017', family: 'Affaires' },
+  { id: 'bail_commercial', label: 'Bail commercial', icon: Building2, desc: "Location de locaux commerciaux : loyer, durée, charges, dépôt, destination.", law: 'Code Civil · L&T Act', family: 'Affaires' },
 ]
 
 const LANGUAGES = [
@@ -117,6 +118,17 @@ const STANDARD_CLAUSES: Record<ContractTypeId, { label: string; ref?: string }[]
     { label: 'Exclusions' },
     { label: 'Sanctions en cas de violation' },
   ],
+  bail_commercial: [
+    { label: 'Identification du bailleur et du preneur' },
+    { label: 'Désignation et destination des locaux' },
+    { label: 'Durée du bail et renouvellement' },
+    { label: 'Loyer, révision et modalités de paiement' },
+    { label: 'Dépôt de garantie' },
+    { label: 'Charges, taxes et entretien' },
+    { label: 'Obligations des parties et état des lieux' },
+    { label: 'Résiliation et clause résolutoire' },
+    { label: 'Loi applicable et juridiction' },
+  ],
 }
 
 /* Options avancées activables (interrupteurs), filtrées par type. */
@@ -129,7 +141,10 @@ const ADVANCED_OPTIONS: { id: string; label: string; ref?: string; types: Contra
   { id: 'exclusivite', label: "Exclusivité", types: ['CDI', 'prestataire', 'client_saas'] },
   { id: 'sla', label: 'Niveaux de service (SLA)', types: ['client_saas', 'client_service'] },
   { id: 'penalites', label: 'Pénalités de retard', types: ['prestataire', 'client_service'] },
-  { id: 'force_majeure', label: 'Force majeure', types: ['prestataire', 'client_saas', 'client_service', 'nda'] },
+  { id: 'force_majeure', label: 'Force majeure', types: ['prestataire', 'client_saas', 'client_service', 'nda', 'bail_commercial'] },
+  { id: 'revision_loyer', label: 'Révision / indexation du loyer', types: ['bail_commercial'], defaultOn: true },
+  { id: 'depot_garantie', label: 'Dépôt de garantie', types: ['bail_commercial'], defaultOn: true },
+  { id: 'sous_location', label: 'Sous-location autorisée', types: ['bail_commercial'] },
 ]
 
 const EMPLOYMENT = new Set<ContractTypeId>(['CDI', 'CDD', 'CDD_partiel'])
@@ -162,6 +177,7 @@ function partyLabels(type: ContractTypeId): { a: string; b: string } {
     case 'client_saas': return { a: 'Prestataire (Éditeur)', b: 'Client abonné' }
     case 'client_service': return { a: 'Prestataire de services', b: 'Client' }
     case 'nda': return { a: 'Partie divulgatrice', b: 'Partie réceptrice' }
+    case 'bail_commercial': return { a: 'Bailleur', b: 'Preneur / Locataire' }
     default: return { a: 'Employeur', b: 'Employé' }
   }
 }
@@ -361,6 +377,8 @@ export default function ContratsPage() {
           corps: result,
           lieu: form.workLocation || undefined,
           date: form.startDate || undefined,
+          labelA: labels.a,
+          labelB: labels.b,
           employeur: { nom: form.empName, brn: form.empBrn, adresse: form.empAddr, representant: form.empRep, titre: form.empTitle },
           contractant: { nom: form.eeName, nic: form.eeNic, adresse: form.eeAddr },
           sources,
@@ -558,13 +576,13 @@ export default function ContratsPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="md:col-span-2"><Label className="text-xs">Objet / mission</Label><Textarea className="mt-1 min-h-[72px]" value={form.objet} onChange={e => update('objet', e.target.value)} placeholder={form.contractType === 'nda' ? "Objet de l'échange d'informations confidentielles…" : "Décrivez la prestation, les livrables, le périmètre…"} /></div>
-                      <div><Label className="text-xs">Date de début / signature</Label><Input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} /></div>
-                      <div><Label className="text-xs">Date de fin / échéance</Label><Input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} /></div>
-                      {form.contractType !== 'nda' && <div><Label className="text-xs">Contrepartie (MUR)</Label><Input value={form.montant} onChange={e => update('montant', e.target.value)} inputMode="decimal" /></div>}
+                      <div className="md:col-span-2"><Label className="text-xs">{form.contractType === 'bail_commercial' ? 'Désignation et destination des locaux' : 'Objet / mission'}</Label><Textarea className="mt-1 min-h-[72px]" value={form.objet} onChange={e => update('objet', e.target.value)} placeholder={form.contractType === 'nda' ? "Objet de l'échange d'informations confidentielles…" : form.contractType === 'bail_commercial' ? "Adresse et description des locaux, surface, usage commercial autorisé…" : "Décrivez la prestation, les livrables, le périmètre…"} /></div>
+                      <div><Label className="text-xs">{form.contractType === 'bail_commercial' ? 'Prise d\'effet du bail' : 'Date de début / signature'}</Label><Input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} /></div>
+                      <div><Label className="text-xs">{form.contractType === 'bail_commercial' ? 'Échéance du bail' : 'Date de fin / échéance'}</Label><Input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} /></div>
+                      {form.contractType !== 'nda' && <div><Label className="text-xs">{form.contractType === 'bail_commercial' ? 'Loyer mensuel (MUR)' : 'Contrepartie (MUR)'}</Label><Input value={form.montant} onChange={e => update('montant', e.target.value)} inputMode="decimal" /></div>}
                       {form.contractType !== 'nda' && (
                         <div>
-                          <Label className="text-xs">Facturation</Label>
+                          <Label className="text-xs">{form.contractType === 'bail_commercial' ? 'Périodicité du loyer' : 'Facturation'}</Label>
                           <Select value={form.payFrequency} onValueChange={v => update('payFrequency', v)}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent><SelectItem value="À la livraison">À la livraison</SelectItem><SelectItem value="Mensuel">Mensuel</SelectItem><SelectItem value="Forfait">Forfait</SelectItem><SelectItem value="Échelonné">Échelonné</SelectItem></SelectContent>
@@ -671,6 +689,24 @@ export default function ContratsPage() {
                     {result && (
                       <div className="max-h-[68vh] overflow-y-auto pr-1">
                         <StructuredContract text={result} />
+                        {/* Bloc signatures (identités à signer) */}
+                        <div className="mt-6 pt-3 border-t border-gray-100 grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-[11px] font-semibold" style={{ color: NAVY }}>{labels.a}</p>
+                            <p className="text-[11px] text-gray-500">{form.empName || '[À compléter]'}</p>
+                            {form.empRep ? <p className="text-[11px] text-gray-500">{form.empRep}{form.empTitle ? `, ${form.empTitle}` : ''}</p> : null}
+                            <div className="mt-7 border-t border-gray-300 pt-1 text-[10px] text-gray-400">Signature</div>
+                            <p className="text-[10px] text-gray-400 mt-2">Fait à {form.workLocation || 'Port-Louis'}, le ____________</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-semibold" style={{ color: NAVY }}>{labels.b}</p>
+                            <p className="text-[11px] text-gray-500">{form.eeName || '[À compléter]'}</p>
+                            <p className="text-[11px] text-gray-600 mt-1.5">« Lu et approuvé »</p>
+                            <div className="mt-3 border-t border-gray-300 pt-1 text-[10px] text-gray-400">Signature</div>
+                            <p className="text-[10px] text-gray-400 mt-2">Fait à {form.workLocation || 'Port-Louis'}, le ____________</p>
+                          </div>
+                        </div>
+
                         {sources.length > 0 && (
                           <div className="mt-5 pt-3 border-t border-gray-100">
                             <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5"><Scale className="w-3.5 h-3.5" style={{ color: GOLD }} /> Sources juridiques citées</p>
@@ -683,9 +719,6 @@ export default function ContratsPage() {
                             </ul>
                           </div>
                         )}
-                        <p className="mt-4 text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2.5">
-                          PROJET — à faire relire et signer par un avocat / attorney inscrit avant tout usage officiel.
-                        </p>
                       </div>
                     )}
                   </div>

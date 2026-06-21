@@ -51,9 +51,14 @@ const s = StyleSheet.create({
   srcAnnexTitle: { fontSize: 8, color: C.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 },
   srcAnnexItem: { fontSize: 8, color: C.text, marginBottom: 1.5 },
 
-  footer: { position: 'absolute', bottom: 26, left: 46, right: 46, borderTopWidth: 1, borderTopColor: C.border, paddingTop: 6 },
-  draftBadge: { fontSize: 7.5, color: '#B45309', textAlign: 'center', fontFamily: 'Helvetica-Bold', marginBottom: 3 },
-  footerLegal: { fontSize: 7, color: C.muted, textAlign: 'center', lineHeight: 1.4 },
+  signRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 26, gap: 24 },
+  signCol: { flex: 1 },
+  signParty: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.navy },
+  signRole: { fontSize: 8, color: C.muted, marginTop: 1 },
+  signMention: { fontSize: 8, color: C.text, marginTop: 6 },
+  signLine: { marginTop: 30, borderTopWidth: 0.7, borderTopColor: C.text, paddingTop: 3, fontSize: 7.5, color: C.muted },
+  signDate: { fontSize: 8, color: C.muted, marginTop: 8 },
+
   pageNo: { position: 'absolute', bottom: 14, right: 46, fontSize: 7, color: C.muted },
 })
 
@@ -72,6 +77,8 @@ export interface ContratPdfData {
   corps: string
   lieu?: string
   date?: string
+  labelA?: string
+  labelB?: string
   employeur: ContratPdfParty
   contractant: ContratPdfParty
   sources?: ContratPdfSource[]
@@ -171,14 +178,14 @@ export function ContratPdf({ data }: { data: ContratPdfData }) {
         {/* Parties */}
         <View style={s.partiesRow}>
           <View style={s.partyBox}>
-            <Text style={s.partyLabel}>Employeur / Prestataire</Text>
+            <Text style={s.partyLabel}>{data.labelA || 'Employeur'}</Text>
             <Text style={s.partyName}>{data.employeur.nom || '[À compléter]'}</Text>
             {data.employeur.brn ? <Text style={s.partyLine}>BRN : {data.employeur.brn}</Text> : null}
             {data.employeur.adresse ? <Text style={s.partyLine}>{data.employeur.adresse}</Text> : null}
             {data.employeur.representant ? <Text style={s.partyLine}>Rep. : {data.employeur.representant}{data.employeur.titre ? `, ${data.employeur.titre}` : ''}</Text> : null}
           </View>
           <View style={s.partyBox}>
-            <Text style={s.partyLabel}>Employé / Cocontractant</Text>
+            <Text style={s.partyLabel}>{data.labelB || 'Cocontractant'}</Text>
             <Text style={s.partyName}>{data.contractant.nom || '[À compléter]'}</Text>
             {data.contractant.nic ? <Text style={s.partyLine}>NIC : {data.contractant.nic}</Text> : null}
             {data.contractant.adresse ? <Text style={s.partyLine}>{data.contractant.adresse}</Text> : null}
@@ -198,14 +205,24 @@ export function ContratPdf({ data }: { data: ContratPdfData }) {
           </View>
         ) : null}
 
-        <View style={s.footer} fixed>
-          <Text style={s.draftBadge}>
-            PROJET — contrat généré par le Département Juridique Lexora · relecture par un avocat / attorney requise avant signature
-          </Text>
-          <Text style={s.footerLegal}>
-            Lexora ne fournit pas de conseil juridique réglementé. Document à valeur de projet de travail. République de Maurice.
-          </Text>
+        {/* Signatures */}
+        <View style={s.signRow} wrap={false}>
+          <View style={s.signCol}>
+            <Text style={s.signParty}>{data.labelA || 'Employeur'}</Text>
+            <Text style={s.signRole}>{data.employeur.nom || '[À compléter]'}</Text>
+            {data.employeur.representant ? <Text style={s.signRole}>{data.employeur.representant}{data.employeur.titre ? `, ${data.employeur.titre}` : ''}</Text> : null}
+            <Text style={s.signLine}>Signature {data.employeur.representant ? '' : '(nom et qualité du signataire)'}</Text>
+            <Text style={s.signDate}>Fait à {data.lieu || 'Port-Louis'}, le _______________</Text>
+          </View>
+          <View style={s.signCol}>
+            <Text style={s.signParty}>{data.labelB || 'Cocontractant'}</Text>
+            <Text style={s.signRole}>{data.contractant.nom || '[À compléter]'}</Text>
+            <Text style={s.signMention}>« Lu et approuvé »</Text>
+            <Text style={s.signLine}>Signature</Text>
+            <Text style={s.signDate}>Fait à {data.lieu || 'Port-Louis'}, le _______________</Text>
+          </View>
         </View>
+
         <Text style={s.pageNo} render={({ pageNumber, totalPages }: any) => `${pageNumber} / ${totalPages}`} fixed />
       </Page>
     </Document>

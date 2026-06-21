@@ -28,6 +28,7 @@ const CONTRACT_TYPES: Record<string, string> = {
   client_saas: "Client SaaS / Abonnement",
   client_service: "Client — Prestation de services",
   nda: "NDA / Confidentialite",
+  bail_commercial: "Bail commercial",
 }
 
 /** Domaines RAG pertinents selon le type de contrat (verrouillage des sources). */
@@ -39,6 +40,7 @@ const CONTRACT_DOMAINES: Record<string, DomaineJuridique[]> = {
   client_saas: ['commercial', 'donnees', 'civil'],
   client_service: ['commercial', 'civil'],
   nda: ['donnees', 'commercial', 'civil'],
+  bail_commercial: ['immobilier', 'civil', 'commercial'],
 }
 
 const LANG_INSTRUCTIONS: Record<string, string> = {
@@ -62,6 +64,7 @@ function partyLabels(type: string): { a: string; b: string } {
     case 'client_saas': return { a: 'PRESTATAIRE (EDITEUR DU SERVICE)', b: 'CLIENT ABONNE' }
     case 'client_service': return { a: 'PRESTATAIRE DE SERVICES', b: 'CLIENT' }
     case 'nda': return { a: 'PARTIE DIVULGATRICE', b: 'PARTIE RECEPTRICE' }
+    case 'bail_commercial': return { a: 'BAILLEUR', b: 'PRENEUR / LOCATAIRE' }
     default: return { a: 'EMPLOYEUR', b: 'EMPLOYE' }
   }
 }
@@ -146,7 +149,7 @@ ${activeClauses.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n')}
 5. Utiliser [A COMPLETER] pour les champs non renseignes.
 6. ${LANG_INSTRUCTIONS[form.language] || LANG_INSTRUCTIONS.fr}
 7. Inclure une clause de divisibilite et une clause de loi applicable / juridiction competente.
-8. Terminer par les blocs de signature : ${isEmployment ? 'employeur + employe' : 'les deux parties'} + mention « Lu et approuve », PUIS une section « ## Sources » listant les sources [S1], [S2]… effectivement citees.
+8. N'ajoute NI bloc de signature, NI mention « Lu et approuve », NI clause de non-responsabilite / mention « projet » : ces elements sont ajoutes automatiquement au document. Termine le corps par le dernier article de fond, PUIS une section « ## Sources » listant les sources [S1], [S2]… effectivement citees.
 9. N'emploie ni emoji ni symbole decoratif (le document est rendu en PDF Helvetica).
 
 Redige maintenant le contrat complet :`
