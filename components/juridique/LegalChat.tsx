@@ -22,13 +22,15 @@ const ANALYZABLE = /\.(pdf|png|jpe?g|webp)$/i
 function cleanName(name: string) { return name.replace(/^\d+_/, "") }
 
 export function LegalChat({
-  icon, title, subtitle, suggestions, domaines, contextLabel, placeholder, reportTitle,
+  icon, title, subtitle, suggestions, domaines, departement, contextLabel, placeholder, reportTitle,
 }: {
   icon: React.ReactNode
   title: string
   subtitle?: string
   suggestions: string[]
   domaines?: DomaineJuridique[]
+  /** Identifiant du département → prompt engineering spécialisé côté serveur. */
+  departement?: string
   contextLabel?: string
   placeholder?: string
   reportTitle?: string
@@ -101,6 +103,7 @@ export function LegalChat({
             societe ? `Société cliente : ${societe.nom}${societe.brn ? ` (BRN ${societe.brn})` : ""}` : "",
           ].filter(Boolean).join(" · ") || undefined,
           domaines,
+          departement,
           historique: messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
           societe_id: societe?.id,
           document_paths: selPaths,

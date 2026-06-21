@@ -10,6 +10,7 @@ import {
   type FaitsLitige,
   type ParametresActe,
 } from '@/lib/juridique/expertContentieux'
+import { DEPARTEMENTS } from '@/lib/juridique/departements'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -134,10 +135,13 @@ export async function POST(request: Request) {
       const question = String((body as { question?: string }).question || '')
       if (!question) return NextResponse.json({ error: 'Question requise' }, { status: 400 })
 
+      const depId = (body as { departement?: string }).departement
+      const dep = depId ? DEPARTEMENTS.find((d) => d.id === depId) : undefined
       const { texte, sources } = await questionContentieux({
         question,
         contexte: (body as { contexte?: string }).contexte,
         domaines: (body as { domaines?: import('@/lib/juridique/referentielMauricien').DomaineJuridique[] }).domaines,
+        expert: dep?.expert,
         historique: (body as { historique?: Array<{ role: 'user' | 'assistant'; content: string }> }).historique,
         documents,
       })

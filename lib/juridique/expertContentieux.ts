@@ -34,8 +34,15 @@ function anthropic(): Anthropic {
 // ============================================================
 // SYSTEM PROMPT — Avocat-conseil contentieux
 // ============================================================
-function systemPrompt(domaines?: DomaineJuridique[]): string {
-  return `Tu es un avocat-conseil sénior du barreau mauricien, spécialiste du contentieux, avec 25 ans de pratique devant les juridictions de la République de Maurice. Tu raisonnes comme un cabinet d'avocats d'élite.
+function systemPrompt(domaines?: DomaineJuridique[], expert?: { persona?: string; focus?: string }): string {
+  const intro = expert?.persona
+    ? `${expert.persona} Tu raisonnes comme un cabinet d'avocats d'élite et tu réponds STRICTEMENT dans le périmètre de ton département.`
+    : "Tu es un avocat-conseil sénior du barreau mauricien, spécialiste du contentieux, avec 25 ans de pratique devant les juridictions de la République de Maurice. Tu raisonnes comme un cabinet d'avocats d'élite."
+  const specialisation = expert?.focus
+    ? `\n\n## SPÉCIALISATION DU DÉPARTEMENT (méthode prioritaire)\n${expert.focus}`
+    : ''
+  return `${intro}
+${specialisation}
 
 ${construireDigestReferentiel(domaines)}
 
@@ -370,13 +377,15 @@ export async function questionContentieux(params: {
   question: string
   contexte?: string
   domaines?: DomaineJuridique[]
+  /** Profil expert du département (prompt engineering ciblé). */
+  expert?: { persona?: string; focus?: string }
   historique?: Array<{ role: 'user' | 'assistant'; content: string }>
   /** Documents à analyser (PDF ou image), téléchargés depuis le storage. */
   documents?: DocAnalyse[]
 }): Promise<{ texte: string; sources: CitationSource[] }> {
   // RAG : récupère les passages verrouillés pertinents et les injecte dans le system prompt.
   const passages = await retrieveRag(`${params.question} ${params.contexte || ''}`, { domaines: params.domaines, k: 6 })
-  const system = `${systemPrompt(params.domaines)}\n\n${formatContextePrompt(passages)}${docsNote(params.documents)}`
+  const system = `${systemPrompt(params.domaines, params.expert)}\n\n${formatContextePrompt(passages)}${docsNote(params.documents)}`
 
   const messages: Anthropic.MessageParam[] = []
   if (params.historique?.length) {

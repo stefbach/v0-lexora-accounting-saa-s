@@ -45,6 +45,7 @@ export default function ConseilPage() {
         subtitle="Droit mauricien · sources citées"
         suggestions={SUGGESTIONS}
         domaines={dep?.domaines}
+        departement={dep?.id}
         contextLabel={dep ? `Département : ${dep.nom} (${dep.lois.join(", ")})` : undefined}
         placeholder="Décrivez votre question juridique, ou joignez des documents à analyser…"
         reportTitle={dep ? `Rapport de consultation — ${dep.nom}` : "Rapport de consultation juridique"}
