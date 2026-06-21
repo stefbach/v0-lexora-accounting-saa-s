@@ -42,6 +42,8 @@ describe('RAG retriever juridique', () => {
 
   it('retourne un message explicite quand aucun passage ne matche', () => {
     const ctx = formatContextePrompt([])
-    expect(ctx).toContain('Aucun passage pertinent')
+    // Message durci (FAILLE-3, #394) : interdiction d'émettre une affirmation
+    // juridique non sourcée quand le corpus ne renvoie rien.
+    expect(ctx).toContain('AUCUN passage pertinent')
   })
 })
