@@ -481,7 +481,7 @@ export default function ContratsPage() {
   return (
     <ClientPageShell hideHero disableParticles>
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           {/* En-tête */}
           <div className="flex items-center gap-3 mb-5 flex-wrap">
             <button onClick={() => setView('gallery')} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#0B0F2E]">
@@ -493,9 +493,9 @@ export default function ContratsPage() {
             <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ background: "rgba(212,175,55,0.14)", color: "#8a6d15" }}>{template.law}</span>
           </div>
 
-          <div className="grid lg:grid-cols-5 gap-5 items-start">
-            {/* ── Colonne formulaire ── */}
-            <div className="space-y-4 lg:col-span-2">
+          <div className="space-y-5">
+            {/* ── Formulaire ── */}
+            <div className="space-y-4">
               {/* Paramètres */}
               <Card>
                 <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -673,9 +673,10 @@ export default function ContratsPage() {
               </Button>
             </div>
 
-            {/* ── Colonne aperçu ── */}
-            <div className="lg:sticky lg:top-4 lg:col-span-3">
-              <Card className="min-h-[400px]">
+            {/* ── Aperçu (pleine largeur, affiché dès qu'il y a du contenu) ── */}
+            {(loading || result || error) && (
+            <div>
+              <Card className="min-h-[300px]">
                 <CardContent className="p-0">
                   <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-gray-100 flex-wrap">
                     <div className="flex items-center gap-2 text-sm">
@@ -711,7 +712,7 @@ export default function ContratsPage() {
                     )}
 
                     {result && (<>
-                      <div className="max-h-[58vh] overflow-y-auto pr-1">
+                      <div className="overflow-y-auto pr-1">
                         <StructuredContract text={result} />
                         {/* Bloc signatures (identités à signer) */}
                         <div className="mt-6 pt-3 border-t border-gray-100 grid grid-cols-2 gap-4">
@@ -777,6 +778,7 @@ export default function ContratsPage() {
                 </CardContent>
               </Card>
             </div>
+            )}
           </div>
         </div>
       </div>
