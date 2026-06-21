@@ -37,25 +37,28 @@ export default function ObligationsPage() {
   useEffect(() => { load() }, [load])
 
   const obligations = useMemo<Obligation[]>(() => {
-    if (!data) return []
-    const fin = data.date_fin_exercice ? new Date(data.date_fin_exercice) : null
+    const fin = data?.date_fin_exercice ? new Date(data.date_fin_exercice) : null
     const ye = fin && !isNaN(fin.getTime()) ? nextYearEnd(fin) : null
-    const list: Obligation[] = []
-    if (ye) {
-      const agm = addMonths(ye, 6)
-      list.push({ titre: 'Assemblée Générale annuelle (AGM)', desc: "Tenue de l'assemblée générale ordinaire d'approbation des comptes, dans les 6 mois suivant la clôture.", ref: 'Companies Act 2001 s.115', due: agm })
-      list.push({ titre: 'Dépôt des états financiers', desc: 'Établissement et approbation des comptes annuels de la société.', ref: 'Companies Act 2001 s.210-211', due: agm })
-      list.push({ titre: 'Annual Return (ROC)', desc: "Dépôt de l'annual return auprès du Registrar of Companies après l'AGM.", ref: 'Companies Act 2001 s.223', due: addDays(agm, 28) })
-      list.push({ titre: 'Déclaration de résultat (MRA)', desc: "Déclaration d'impôt sur les sociétés (income tax return) dans les 6 mois de la clôture.", ref: 'Income Tax Act', due: addMonths(ye, 6) })
-    }
-    if (data.fsc_license_expiry) {
-      list.push({ titre: 'Renouvellement de la licence FSC', desc: `Échéance de la licence${data.fsc_license_number ? ` n° ${data.fsc_license_number}` : ''} délivrée par la Financial Services Commission.`, ref: 'FSA 2007', due: new Date(data.fsc_license_expiry) })
-    }
-    return list.filter((o) => o.due && !isNaN(o.due.getTime())).sort((a, b) => (a.due!.getTime() - b.due!.getTime()))
+    const agm = ye ? addMonths(ye, 6) : null
+    // On affiche TOUJOURS le cadre des obligations ; les échéances sont
+    // calculées si la date de clôture est connue, sinon « à configurer ».
+    const list: Obligation[] = [
+      { titre: 'Assemblée Générale annuelle (AGM)', desc: "Assemblée générale ordinaire d'approbation des comptes, dans les 6 mois suivant la clôture de l'exercice.", ref: 'Companies Act 2001 s.115', due: agm },
+      { titre: 'Dépôt des états financiers', desc: 'Établissement et approbation des comptes annuels de la société.', ref: 'Companies Act 2001 s.210-211', due: agm },
+      { titre: 'Annual Return (ROC)', desc: "Dépôt de l'annual return auprès du Registrar of Companies après l'AGM.", ref: 'Companies Act 2001 s.223', due: agm ? addDays(agm, 28) : null },
+      { titre: 'Déclaration de résultat (MRA)', desc: "Déclaration d'impôt sur les sociétés (income tax return) dans les 6 mois de la clôture.", ref: 'Income Tax Act', due: ye ? addMonths(ye, 6) : null },
+      { titre: 'Renouvellement de la licence FSC', desc: `Renouvellement de la licence${data?.fsc_license_number ? ` n° ${data.fsc_license_number}` : ''} de la Financial Services Commission (si applicable).`, ref: 'FSA 2007', due: data?.fsc_license_expiry ? new Date(data.fsc_license_expiry) : null },
+    ]
+    return list.sort((a, b) => {
+      if (a.due && b.due) return a.due.getTime() - b.due.getTime()
+      if (a.due) return -1
+      if (b.due) return 1
+      return 0
+    })
   }, [data])
 
   const statut = (due: Date | null) => {
-    if (!due) return { label: '—', color: '#9CA3AF', bg: '#F3F4F6', icon: Clock }
+    if (!due) return { label: 'À configurer', color: '#6B7280', bg: '#F3F4F6', icon: Clock }
     const days = Math.ceil((due.getTime() - Date.now()) / 86400000)
     if (days < 0) return { label: `Échu (${-days} j)`, color: '#B91C1C', bg: '#FEE2E2', icon: AlertTriangle }
     if (days <= 60) return { label: `Dans ${days} j`, color: '#854D0E', bg: '#FEF9C3', icon: Clock }
@@ -73,12 +76,14 @@ export default function ObligationsPage() {
 
       {!societe ? (
         <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center text-sm text-gray-500"><Building2 className="w-6 h-6 mx-auto mb-2 text-gray-300" /> Sélectionnez une société.</div>
-      ) : !data?.date_fin_exercice && !loading ? (
-        <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center text-sm text-gray-500">
-          La date de clôture de l'exercice n'est pas renseignée pour cette société. Renseignez-la dans la fiche société pour calculer les échéances.
-        </div>
       ) : (
         <>
+          {!data?.date_fin_exercice && !loading && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>La date de clôture de l'exercice n'est pas renseignée pour cette société. Les obligations ci-dessous sont affichées ; renseignez la clôture dans la fiche société pour calculer automatiquement les échéances.</span>
+            </div>
+          )}
           <div className="rounded-2xl bg-white border border-gray-100 shadow-sm divide-y divide-gray-50">
             {obligations.map((o, i) => {
               const st = statut(o.due); const Icon = st.icon

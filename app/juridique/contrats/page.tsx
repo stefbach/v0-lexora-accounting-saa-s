@@ -711,7 +711,7 @@ export default function ContratsPage() {
                       </div>
                     )}
 
-                    {result && (<>
+                    {result && (
                       <div className="overflow-y-auto pr-1">
                         <StructuredContract text={result} />
                         {/* Bloc signatures (identités à signer) */}
@@ -745,40 +745,45 @@ export default function ContratsPage() {
                           </div>
                         )}
                       </div>
-
-                      {/* Chatbot de personnalisation du contrat */}
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5 flex items-center gap-1.5">
-                          <Settings className="w-3.5 h-3.5" style={{ color: GOLD }} /> Personnaliser le contrat
-                        </p>
-                        {refineLog.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mb-2">
-                            {refineLog.map((r, i) => (
-                              <span key={i} className="inline-flex items-center gap-1 text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full"><CheckCircle className="w-3 h-3 text-green-500" />{r.length > 40 ? r.slice(0, 40) + '…' : r}</span>
-                            ))}
-                          </div>
-                        )}
-                        <div className="flex items-end gap-2">
-                          <textarea
-                            value={refineInput}
-                            onChange={(e) => setRefineInput(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleRefine() } }}
-                            rows={1}
-                            placeholder="Ex. Ajoute une clause de télétravail 2 jours/semaine · Porte le préavis à 2 mois · Ajoute une prime de performance annuelle…"
-                            className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-[#D4AF37] max-h-28"
-                          />
-                          <Button onClick={handleRefine} disabled={refining || !refineInput.trim()} style={{ backgroundColor: NAVY, color: GOLD }}>
-                            {refining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                          </Button>
-                        </div>
-                        <p className="text-[10px] text-gray-400 mt-1.5">Décrivez en langage naturel les clauses à ajouter, retirer ou reformuler — le contrat est mis à jour et reste sourcé.</p>
-                      </div>
-                    </>)}
+                    )}
                   </div>
                 </CardContent>
               </Card>
             </div>
             )}
+
+            {/* Chatbot de personnalisation — toujours visible (actif après génération) */}
+            <Card>
+              <CardContent className="p-5">
+                <p className="text-sm font-semibold flex items-center gap-2 mb-1" style={{ color: NAVY }}>
+                  <Settings className="w-4 h-4" style={{ color: GOLD }} /> Affiner le contrat (assistant)
+                </p>
+                <p className="text-xs text-gray-500 mb-3">
+                  Décrivez en langage naturel les clauses à ajouter, retirer ou reformuler. Le contrat est régénéré complet et reste sourcé.
+                </p>
+                {refineLog.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {refineLog.map((r, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full"><CheckCircle className="w-3 h-3 text-green-500" />{r.length > 44 ? r.slice(0, 44) + '…' : r}</span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-end gap-2">
+                  <textarea
+                    value={refineInput}
+                    onChange={(e) => setRefineInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleRefine() } }}
+                    rows={1}
+                    disabled={!result}
+                    placeholder={result ? "Ex. Ajoute une clause de télétravail 2 j/sem · Porte le préavis à 2 mois · Ajoute une prime annuelle…" : "Générez d'abord un contrat, puis affinez-le ici…"}
+                    className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-[#D4AF37] max-h-28 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                  <Button onClick={handleRefine} disabled={refining || !result || !refineInput.trim()} style={{ backgroundColor: NAVY, color: GOLD }}>
+                    {refining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

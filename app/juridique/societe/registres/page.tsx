@@ -103,8 +103,8 @@ export default function RegistresPage() {
           <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
               <p className="font-bold text-sm" style={{ color: NAVY }}>{spec.titre}</p>
-              <button onClick={downloadPdf} disabled={pdfLoading || spec.rows.length === 0} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-40" style={{ background: NAVY }}>
-                {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF certifié
+              <button onClick={downloadPdf} disabled={pdfLoading} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-40" style={{ background: NAVY }}>
+                {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Générer le PDF certifié
               </button>
             </div>
             {spec.rows.length === 0 ? (
