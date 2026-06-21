@@ -53,23 +53,61 @@ const JURISDICTIONS: Record<string, string> = {
   cv: "Cabo Verde",
 }
 
+const EMPLOYMENT_TYPES = new Set(['CDI', 'CDD', 'CDD_partiel'])
+
+/** Libellés des deux parties selon le type de contrat. */
+function partyLabels(type: string): { a: string; b: string } {
+  switch (type) {
+    case 'prestataire': return { a: "DONNEUR D'ORDRE / CLIENT", b: 'PRESTATAIRE / CONSULTANT' }
+    case 'client_saas': return { a: 'PRESTATAIRE (EDITEUR DU SERVICE)', b: 'CLIENT ABONNE' }
+    case 'client_service': return { a: 'PRESTATAIRE DE SERVICES', b: 'CLIENT' }
+    case 'nda': return { a: 'PARTIE DIVULGATRICE', b: 'PARTIE RECEPTRICE' }
+    default: return { a: 'EMPLOYEUR', b: 'EMPLOYE' }
+  }
+}
+
 function buildPrompt(form: any, ragContexte: string): string {
+  const isEmployment = EMPLOYMENT_TYPES.has(form.contractType)
+  const labels = partyLabels(form.contractType)
+
+  // Clauses standard : fournies par le client selon le type ; repli employeur.
   const activeClauses: string[] = []
-  // Required clauses (always present)
-  activeClauses.push(
-    "Identification complete des parties (WRA s.11)",
-    "Duree et type de contrat (WRA s.12)",
-    "Remuneration et modalites de paiement (WRA s.24)",
-    "Heures de travail 45h/semaine max (WRA s.36)",
-    "Conges annuels 20 jours min (WRA s.47)",
-    "Conges maladie 15 jours/an (WRA s.49)",
-    "Cotisations sociales CSG/NSF",
-    "Retenue PAYE a la source (ITA 1995)",
-    "Conditions de rupture et preavis (WRA s.38-40)",
-  )
+  if (Array.isArray(form.standardClauses) && form.standardClauses.length) {
+    activeClauses.push(...form.standardClauses)
+  } else {
+    activeClauses.push(
+      'Identification complete des parties',
+      'Objet du contrat',
+      'Remuneration / contrepartie financiere',
+      'Duree et conditions de resiliation',
+      'Confidentialite',
+      'Loi applicable et juridiction competente',
+    )
+  }
   if (Array.isArray(form.clausesRecommended)) activeClauses.push(...form.clausesRecommended)
   if (Array.isArray(form.clausesOptional)) activeClauses.push(...form.clausesOptional)
   if (form.customClause?.trim()) activeClauses.push(`Clause personnalisee : ${form.customClause.trim()}`)
+
+  // Bloc conditions adapté au type de contrat.
+  const conditionsBloc = isEmployment
+    ? `Poste : ${form.jobTitle || '[INTITULE DU POSTE]'}
+Departement : ${form.jobDept || '[DEPARTEMENT]'}
+Date de debut : ${form.startDate || '[DATE DE DEBUT]'}
+${form.endDate ? `Date de fin : ${form.endDate}` : ''}
+Remuneration mensuelle brute : MUR ${form.salary || '[MONTANT]'}
+Frequence de paiement : ${form.payFrequency || 'Mensuel'}
+Periode d'essai : ${form.probation || '3 mois'}
+Preavis : ${form.noticePeriod || '1 mois'}
+Heures hebdomadaires : ${form.weeklyHours || '45'}h
+Lieu de travail : ${form.workLocation || 'Maurice'}
+Conges annuels : ${form.annualLeave || '20 jours (WRA 2019)'}
+${form.benefits ? `Avantages complementaires : ${form.benefits}` : ''}`
+    : `Objet / mission : ${form.objet || form.jobTitle || '[OBJET A COMPLETER]'}
+Date de debut / signature : ${form.startDate || '[DATE]'}
+${form.endDate ? `Date de fin / echeance : ${form.endDate}` : 'Duree : [A COMPLETER]'}
+${form.montant ? `Contrepartie financiere : MUR ${form.montant}` : 'Contrepartie financiere : [MONTANT A COMPLETER]'}
+${form.payFrequency ? `Modalites de facturation : ${form.payFrequency}` : ''}
+Lieu : ${form.workLocation || 'Maurice'}`
 
   return `Tu es un juriste expert en droit mauricien (Workers' Rights Act 2019, Employment Rights Act, Income Tax Act 1995, CSG Act, Data Protection Act 2017, Contract Act).
 
@@ -81,45 +119,34 @@ TYPE DE CONTRAT : ${CONTRACT_TYPES[form.contractType] || form.contractType}
 LANGUE : ${form.language}
 JURIDICTION : ${JURISDICTIONS[form.jurisdiction] || form.jurisdiction}
 
-═══ EMPLOYEUR / PRESTATAIRE ═══
-Raison sociale : ${form.empName || '[EMPLOYEUR A COMPLETER]'}
+═══ ${labels.a} ═══
+Raison sociale / nom : ${form.empName || '[A COMPLETER]'}
 N° BRN : ${form.empBrn || '[BRN]'}
 Adresse : ${form.empAddr || '[ADRESSE]'}
-Representant legal : ${form.empRep || '[REPRESENTANT]'}, ${form.empTitle || '[TITRE]'}
+Representant : ${form.empRep || '[REPRESENTANT]'}, ${form.empTitle || '[TITRE]'}
 
-═══ EMPLOYE / COCONTRACTANT ═══
-Nom complet : ${form.eeName || '[NOM COMPLET]'}
-NIC / Passeport : ${form.eeNic || '[NUMERO ID]'}
+═══ ${labels.b} ═══
+Nom complet / raison sociale : ${form.eeName || '[A COMPLETER]'}
+NIC / BRN / Passeport : ${form.eeNic || '[NUMERO ID]'}
 Adresse : ${form.eeAddr || '[ADRESSE]'}
 Email : ${form.eeEmail || '[EMAIL]'}
 Telephone : ${form.eePhone || '[TELEPHONE]'}
 
 ═══ CONDITIONS ═══
-Poste : ${form.jobTitle || '[INTITULE DU POSTE]'}
-Departement : ${form.jobDept || '[DEPARTEMENT]'}
-Date de debut : ${form.startDate || '[DATE DE DEBUT]'}
-${form.endDate ? `Date de fin : ${form.endDate}` : ''}
-Remuneration mensuelle brute : MUR ${form.salary || '[MONTANT]'}
-Frequence de paiement : ${form.payFrequency || 'Mensuel'}
-Periode d'essai : ${form.probation || '3 mois'}
-Preavis : ${form.noticePeriod || '1 mois'}
-Heures hebdomadaires : ${form.weeklyHours || '45'}h
-Lieu de travail : ${form.workLocation || 'Mauritius'}
-Conges annuels : ${form.annualLeave || '20 jours (WRA 2019)'}
-${form.benefits ? `Avantages complementaires : ${form.benefits}` : ''}
+${conditionsBloc}
 
 ═══ CLAUSES A INCLURE ═══
 ${activeClauses.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n')}
 
 ═══ INSTRUCTIONS DE REDACTION ═══
-1. Structure formelle avec numerotation des articles. Commence chaque article par une ligne « Article 1 : Intitule » (l'intitule sera mis en valeur).
+1. Structure formelle avec numerotation des articles. Commence chaque article par une ligne « Article 1 : Intitule » (l'intitule sera mis en valeur). N'utilise PAS de lignes de separation decoratives (pas de ═, ─, ***).
 2. Referencer explicitement les textes de loi mauriciens applicables. Appuie-toi EXCLUSIVEMENT sur les sources verrouillees ci-dessus : chaque renvoi a la loi doit porter une citation [S1], [S2]… correspondant a ces sources. N'invente aucune reference, aucun numero d'article de loi qui ne figure pas dans les sources.
-3. Format professionnel : preambule (« Entre les soussignes »), corps numerote, section signatures avec date et lieu.
+3. Format professionnel : preambule (« Entre les soussignes »), corps numerote par articles, section signatures avec date et lieu.
 4. Lieu de signature : ${form.workLocation || 'Port-Louis, Republique de Maurice'}
 5. Utiliser [A COMPLETER] pour les champs non renseignes.
 6. ${LANG_INSTRUCTIONS[form.language] || LANG_INSTRUCTIONS.fr}
 7. Inclure une clause de divisibilite et une clause de loi applicable / juridiction competente.
-8. Terminer par les blocs de signature : employeur + employe + mention « Lu et approuve », PUIS une section « ## Sources » listant les sources [S1], [S2]… effectivement citees.
+8. Terminer par les blocs de signature : ${isEmployment ? 'employeur + employe' : 'les deux parties'} + mention « Lu et approuve », PUIS une section « ## Sources » listant les sources [S1], [S2]… effectivement citees.
 9. N'emploie ni emoji ni symbole decoratif (le document est rendu en PDF Helvetica).
 
 Redige maintenant le contrat complet :`
