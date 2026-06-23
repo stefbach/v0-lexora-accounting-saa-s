@@ -167,8 +167,8 @@ export function ContratPdf({ data }: { data: ContratPdfData }) {
             <Text style={s.metaSmallLeft}>République de Maurice</Text>
           </View>
           <View style={s.metaRight}>
-            <Text style={s.metaSmall}>Projet de contrat</Text>
-            <Text style={s.metaSmall}>{(data.lieu || 'Port-Louis')}, {dateFr(data.date)}</Text>
+            <Text style={s.metaSmall}>{(data.lieu || 'Port-Louis')}</Text>
+            <Text style={s.metaSmall}>{dateFr(data.date)}</Text>
           </View>
         </View>
 
@@ -212,14 +212,14 @@ export function ContratPdf({ data }: { data: ContratPdfData }) {
             <Text style={s.signRole}>{data.employeur.nom || '[À compléter]'}</Text>
             {data.employeur.representant ? <Text style={s.signRole}>{data.employeur.representant}{data.employeur.titre ? `, ${data.employeur.titre}` : ''}</Text> : null}
             <Text style={s.signLine}>Signature {data.employeur.representant ? '' : '(nom et qualité du signataire)'}</Text>
-            <Text style={s.signDate}>Fait à {data.lieu || 'Port-Louis'}, le _______________</Text>
+            <Text style={s.signDate}>Fait à {data.lieu || 'Port-Louis'}, le {dateFr(data.date)}</Text>
           </View>
           <View style={s.signCol}>
             <Text style={s.signParty}>{data.labelB || 'Cocontractant'}</Text>
             <Text style={s.signRole}>{data.contractant.nom || '[À compléter]'}</Text>
             <Text style={s.signMention}>« Lu et approuvé »</Text>
             <Text style={s.signLine}>Signature</Text>
-            <Text style={s.signDate}>Fait à {data.lieu || 'Port-Louis'}, le _______________</Text>
+            <Text style={s.signDate}>Fait à {data.lieu || 'Port-Louis'}, le {dateFr(data.date)}</Text>
           </View>
         </View>
 
