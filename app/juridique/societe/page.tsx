@@ -17,6 +17,14 @@ const SECTIONS = [
     active: true,
   },
   {
+    href: "/juridique/societe/actes",
+    icon: FileText,
+    title: "Actes & documents",
+    desc: "Statuts, convocations d'AG, pouvoirs/procurations, certificats d'actions, nominations, démissions — générés et personnalisables via chatbot.",
+    tag: "Disponible",
+    active: true,
+  },
+  {
     href: "/juridique/societe/resolutions",
     icon: Gavel,
     title: "Résolutions du conseil",
