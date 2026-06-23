@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Gavel, Loader2, Building2, Users, Download, Save, CheckCircle, AlertCircle, Scale, FileSignature, Copy } from "lucide-react"
 import { useJuridiqueSociete } from "@/components/juridique/JuridiqueSocieteProvider"
+import { RefineChat } from "@/components/juridique/RefineChat"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -165,6 +166,9 @@ export default function ResolutionsPage() {
                   {sources.length > 0 && (<div className="mt-5 pt-3 border-t border-gray-100"><p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5"><Scale className="w-3.5 h-3.5" style={{ color: GOLD }} /> Sources juridiques citées</p><ul className="space-y-1">{sources.map((src) => <li key={src.ref} className="text-[11px] text-gray-500"><span className="font-mono text-gray-400">[{src.ref}]</span> <span className="font-medium" style={{ color: NAVY }}>{src.source} {src.reference}</span> — {src.titre}</li>)}</ul></div>)}
                 </div>)}
               </div>
+            </div>
+            <div className="mt-4">
+              <RefineChat text={result} domaines={['societes', 'commercial']} onUpdate={(t, s) => { setResult(t); if (s.length) setSources(s); setSaved(false) }} placeholder="Ex. Ajoute une décision d'ouverture de compte bancaire · Précise les pouvoirs délégués…" />
             </div>
           </div>
         </div>

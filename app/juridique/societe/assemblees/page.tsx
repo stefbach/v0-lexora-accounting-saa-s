@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Landmark, Loader2, Building2, Users, Download, Save, CheckCircle, AlertCircle, Scale, FileSignature, Copy } from "lucide-react"
 import { useJuridiqueSociete } from "@/components/juridique/JuridiqueSocieteProvider"
+import { RefineChat } from "@/components/juridique/RefineChat"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -272,6 +273,9 @@ export default function AssembleesPage() {
                   </div>
                 )}
               </div>
+            </div>
+            <div className="mt-4">
+              <RefineChat text={result} domaines={['societes', 'commercial']} onUpdate={(t, s) => { setResult(t); if (s.length) setSources(s); setSaved(false) }} placeholder="Ex. Ajoute une résolution de renouvellement de l'auditeur · Précise le quorum atteint · Ajoute une résolution de distribution…" />
             </div>
           </div>
         </div>
