@@ -19,13 +19,25 @@ const OBLIGATIONS = [
   { obligation: "CSG / NSF mensuel", echeance: "20 du mois suivant", autorite: "MRA", base: "CSG Act", cat: "Social" },
   { obligation: "Renouvellement licence FSC", echeance: "1 mois avant expiry", autorite: "FSC", base: "FSA 2007 s.20", cat: "Financier" },
   { obligation: "Rapport annuel FSC (GBL/AC)", echeance: "3 mois après clôture", autorite: "FSC", base: "FSC Guidelines", cat: "Financier" },
+  { obligation: "Audit légal des comptes (au-dessus du seuil)", echeance: "Avant l'AG annuelle", autorite: "ROC", base: "CA 2001 s.194-198", cat: "Sociétés" },
+  { obligation: "Registre des charges / sûretés", echeance: "À chaque charge", autorite: "ROC", base: "CA 2001 s.127", cat: "Sociétés" },
+  { obligation: "Documentation prix de transfert", echeance: "Avec la déclaration d'impôt", autorite: "MRA", base: "ITA · TP rules", cat: "Fiscal" },
+  { obligation: "TDS — versement à la source", echeance: "20 du mois suivant", autorite: "MRA", base: "ITA s.111", cat: "Fiscal" },
+  { obligation: "Return of Employees (annuel)", echeance: "15 août", autorite: "MRA", base: "ITA", cat: "Social" },
+  { obligation: "Substance return (GBC / PER 80%)", echeance: "Annuelle", autorite: "FSC / MRA", base: "ITA · FSA 2007", cat: "Financier" },
+  { obligation: "Évaluation des risques AML/CFT", echeance: "Annuelle (revue)", autorite: "FIU / FSC", base: "FIAMLA s.17", cat: "Financier" },
+  { obligation: "Renouvellement Occupation/Work Permit", echeance: "Avant expiration", autorite: "EDB", base: "Immigration / Non-Citizens Act", cat: "Social" },
 ]
 
 const CAT_COLOR: Record<string, string> = {
   "Sociétés": "#0B0F2E", "Fiscal": "#9A3412", "Social": "#047857", "Financier": "#6D28D9",
 }
 
+const CATEGORIES = ["Tous", "Sociétés", "Fiscal", "Social", "Financier"]
+
 export default function ConformitePage() {
+  const [cat, setCat] = React.useState("Tous")
+  const obligations = cat === "Tous" ? OBLIGATIONS : OBLIGATIONS.filter((o) => o.cat === cat)
   return (
     <div className="space-y-5">
       <JuridiqueHeader
@@ -37,9 +49,16 @@ export default function ConformitePage() {
 
       {/* Calendrier des obligations */}
       <div className="rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-          <CalendarClock className="w-4 h-4" style={{ color: GOLD }} />
-          <p className="font-bold text-sm" style={{ color: NAVY }}>Calendrier des obligations</p>
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap justify-between">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="w-4 h-4" style={{ color: GOLD }} />
+            <p className="font-bold text-sm" style={{ color: NAVY }}>Calendrier des obligations</p>
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {CATEGORIES.map((c) => (
+              <button key={c} onClick={() => setCat(c)} className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${cat === c ? "border-transparent text-[#0B0F2E]" : "border-gray-200 text-gray-500 hover:border-gray-300"}`} style={cat === c ? { background: "rgba(212,175,55,0.16)" } : {}}>{c}</button>
+            ))}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -52,7 +71,7 @@ export default function ConformitePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {OBLIGATIONS.map((o, i) => (
+              {obligations.map((o, i) => (
                 <tr key={i} className="hover:bg-gray-50">
                   <td className="px-5 py-2.5">
                     <div className="flex items-center gap-2">
