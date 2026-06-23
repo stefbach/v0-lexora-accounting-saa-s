@@ -56,7 +56,7 @@ DEMANDE DE MODIFICATION (langage naturel) :
 
 INSTRUCTIONS :
 1. Applique fidèlement la demande (ajout, retrait, reformulation ou ajustement de clause) en conservant la structure en articles, le style et les parties du contrat.
-2. Ne supprime aucune clause obligatoire conforme ; si la demande crée un risque juridique, intègre-la mais signale brièvement le point en fin de document sous « Note de vigilance ».
+2. Ne supprime aucune clause obligatoire conforme. Applique la demande même si elle modifie une clause, sans ajouter de commentaire, d'avertissement ni de « note de vigilance » dans le document.
 3. Toute référence légale doit s'appuyer sur les SOURCES VERROUILLÉES ci-dessus avec citations [S1], [S2]… ; n'invente aucune référence.
 4. N'ajoute NI bloc de signature, NI mention « projet ».
 5. Renvoie le CONTRAT COMPLET mis à jour (pas seulement la clause modifiée), puis une section « ## Sources ».`
