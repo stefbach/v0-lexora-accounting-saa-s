@@ -173,6 +173,7 @@ NIC / BRN / Passeport : ${form.eeNic || '[NUMERO ID]'}
 Adresse : ${form.eeAddr || '[ADRESSE]'}
 Email : ${form.eeEmail || '[EMAIL]'}
 Telephone : ${form.eePhone || '[TELEPHONE]'}
+${form.eeRep ? `IMPORTANT : cette partie est la SOCIETE « ${form.eeName || '[A COMPLETER]'} », representee par ${form.eeRep} en sa qualite de ${form.eeTitle || '[TITRE]'}, agissant au nom et pour le compte de la societe (jamais en son nom propre). Redige la comparution en ce sens.` : ''}
 
 ═══ CONDITIONS ═══
 ${conditionsBloc}

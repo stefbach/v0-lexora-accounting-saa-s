@@ -192,8 +192,15 @@ export function ContratPdf({ data }: { data: ContratPdfData }) {
           </View>
           <View style={s.partyBox}>
             <Text style={s.partyLabel}>{data.labelB || 'Cocontractant'}</Text>
-            <Text style={s.partyName}>{data.contractant.nom || '[À compléter]'}</Text>
-            {data.contractant.nic ? <Text style={s.partyLine}>NIC : {data.contractant.nic}</Text> : null}
+            {data.contractant.representant ? (
+              <>
+                <Text style={s.partyName}>{data.contractant.representant}{data.contractant.titre ? `, ${data.contractant.titre}` : ''}</Text>
+                <Text style={s.partyLine}>agissant pour {data.contractant.nom || '[À compléter]'}</Text>
+              </>
+            ) : (
+              <Text style={s.partyName}>{data.contractant.nom || '[À compléter]'}</Text>
+            )}
+            {data.contractant.nic ? <Text style={s.partyLine}>NIC / BRN : {data.contractant.nic}</Text> : null}
             {data.contractant.adresse ? <Text style={s.partyLine}>{data.contractant.adresse}</Text> : null}
           </View>
         </View>
@@ -228,7 +235,14 @@ export function ContratPdf({ data }: { data: ContratPdfData }) {
           </View>
           <View style={s.signCol}>
             <Text style={s.signParty}>{data.labelB || 'Cocontractant'}</Text>
-            <Text style={s.signRole}>{data.contractant.nom || '[À compléter]'}</Text>
+            {data.contractant.representant ? (
+              <>
+                <Text style={s.signParty}>{data.contractant.representant}{data.contractant.titre ? `, ${data.contractant.titre}` : ''}</Text>
+                <Text style={s.signRole}>Pour {data.contractant.nom || '[À compléter]'}</Text>
+              </>
+            ) : (
+              <Text style={s.signRole}>{data.contractant.nom || '[À compléter]'}</Text>
+            )}
             <Text style={s.signMention}>« Lu et approuvé »</Text>
             <Text style={s.signLine}>Signature</Text>
             <Text style={s.signDate}>Fait à {data.lieu || 'Port-Louis'}, le {dateFr(data.date)}</Text>

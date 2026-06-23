@@ -306,7 +306,7 @@ interface ContractForm {
   // Partie A
   empName: string; empBrn: string; empAddr: string; empRep: string; empTitle: string
   // Partie B
-  eeName: string; eeNic: string; eeAddr: string; eeEmail: string; eePhone: string
+  eeName: string; eeNic: string; eeAddr: string; eeEmail: string; eePhone: string; eeRep: string; eeTitle: string
   // Conditions emploi
   jobTitle: string; jobDept: string; startDate: string; endDate: string
   salary: string; payFrequency: string; probation: string; noticePeriod: string
@@ -427,7 +427,7 @@ export default function ContratsPage() {
   const [form, setForm] = useState<ContractForm>({
     contractType: 'CDI', language: 'fr', jurisdiction: 'mu',
     empName: '', empBrn: '', empAddr: '', empRep: '', empTitle: '',
-    eeName: '', eeNic: '', eeAddr: '', eeEmail: '', eePhone: '',
+    eeName: '', eeNic: '', eeAddr: '', eeEmail: '', eePhone: '', eeRep: '', eeTitle: '',
     jobTitle: '', jobDept: '', startDate: '', endDate: '',
     salary: '', payFrequency: 'Mensuel', probation: '3 mois',
     noticePeriod: '1 mois', weeklyHours: '45', workLocation: '',
@@ -546,7 +546,7 @@ export default function ContratsPage() {
           labelA: labels.a,
           labelB: labels.b,
           employeur: { nom: form.empName, brn: form.empBrn, adresse: form.empAddr, representant: form.empRep, titre: form.empTitle },
-          contractant: { nom: form.eeName, nic: form.eeNic, adresse: form.eeAddr },
+          contractant: { nom: form.eeName, nic: form.eeNic, adresse: form.eeAddr, representant: form.eeRep || undefined, titre: form.eeTitle || undefined },
           sources,
         }),
       })
@@ -727,7 +727,14 @@ export default function ContratsPage() {
                       <div className="md:col-span-2"><Label className="text-xs">Adresse</Label><Input value={form.eeAddr} onChange={e => update('eeAddr', e.target.value)} /></div>
                       <div><Label className="text-xs">Email</Label><Input type="email" value={form.eeEmail} onChange={e => update('eeEmail', e.target.value)} /></div>
                       <div><Label className="text-xs">Téléphone</Label><Input value={form.eePhone} onChange={e => update('eePhone', e.target.value)} /></div>
+                      {!isEmployment && (
+                        <>
+                          <div><Label className="text-xs">Représentant (si société)</Label><Input value={form.eeRep} onChange={e => update('eeRep', e.target.value)} placeholder="Prénom Nom" /></div>
+                          <div><Label className="text-xs">Qualité du représentant</Label><Input value={form.eeTitle} onChange={e => update('eeTitle', e.target.value)} placeholder="Directeur, Gérant…" /></div>
+                        </>
+                      )}
                     </div>
+                    {!isEmployment && <p className="text-[11px] text-gray-400 mt-1.5">Si la partie réceptrice est une société, renseignez son dirigeant et sa qualité : il signera au nom de la société.</p>}
                   </div>
                 </CardContent>
               </Card>
@@ -900,17 +907,22 @@ export default function ContratsPage() {
                         <div className="mt-6 pt-3 border-t border-gray-100 grid grid-cols-2 gap-4">
                           <div>
                             <p className="text-[11px] font-semibold" style={{ color: NAVY }}>{labels.a}</p>
-                            <p className="text-[11px] text-gray-500">{form.empName || '[À compléter]'}</p>
-                            {form.empRep ? <p className="text-[11px] text-gray-500">{form.empRep}{form.empTitle ? `, ${form.empTitle}` : ''}</p> : null}
+                            {form.empRep ? (<>
+                              <p className="text-[11px] text-gray-700 font-medium">{form.empRep}{form.empTitle ? `, ${form.empTitle}` : ''}</p>
+                              <p className="text-[11px] text-gray-500">Pour {form.empName || '[À compléter]'}</p>
+                            </>) : <p className="text-[11px] text-gray-500">{form.empName || '[À compléter]'}</p>}
                             <div className="mt-7 border-t border-gray-300 pt-1 text-[10px] text-gray-400">Signature</div>
-                            <p className="text-[10px] text-gray-400 mt-2">Fait à {form.workLocation || 'Port-Louis'}, le ____________</p>
+                            <p className="text-[10px] text-gray-400 mt-2">Fait à {form.workLocation || 'Port-Louis'}, le {new Date(form.startDate || Date.now()).toLocaleDateString('fr-FR')}</p>
                           </div>
                           <div>
                             <p className="text-[11px] font-semibold" style={{ color: NAVY }}>{labels.b}</p>
-                            <p className="text-[11px] text-gray-500">{form.eeName || '[À compléter]'}</p>
+                            {form.eeRep ? (<>
+                              <p className="text-[11px] text-gray-700 font-medium">{form.eeRep}{form.eeTitle ? `, ${form.eeTitle}` : ''}</p>
+                              <p className="text-[11px] text-gray-500">Pour {form.eeName || '[À compléter]'}</p>
+                            </>) : <p className="text-[11px] text-gray-500">{form.eeName || '[À compléter]'}</p>}
                             <p className="text-[11px] text-gray-600 mt-1.5">« Lu et approuvé »</p>
                             <div className="mt-3 border-t border-gray-300 pt-1 text-[10px] text-gray-400">Signature</div>
-                            <p className="text-[10px] text-gray-400 mt-2">Fait à {form.workLocation || 'Port-Louis'}, le ____________</p>
+                            <p className="text-[10px] text-gray-400 mt-2">Fait à {form.workLocation || 'Port-Louis'}, le {new Date(form.startDate || Date.now()).toLocaleDateString('fr-FR')}</p>
                           </div>
                         </div>
 
