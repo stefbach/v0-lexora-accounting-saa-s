@@ -165,6 +165,7 @@ Raison sociale / nom : ${form.empName || '[A COMPLETER]'}
 N° BRN : ${form.empBrn || '[BRN]'}
 Adresse : ${form.empAddr || '[ADRESSE]'}
 Representant : ${form.empRep || '[REPRESENTANT]'}, ${form.empTitle || '[TITRE]'}
+${form.empRep ? `IMPORTANT : cette partie est la SOCIETE « ${form.empName || '[A COMPLETER]'} », representee par ${form.empRep} en sa qualite de ${form.empTitle || '[TITRE]'}. Le signataire agit AU NOM ET POUR LE COMPTE de la societe (jamais en son nom propre). Redige la comparution en ce sens.` : ''}
 
 ═══ ${labels.b} ═══
 Nom complet / raison sociale : ${form.eeName || '[A COMPLETER]'}

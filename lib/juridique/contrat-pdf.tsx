@@ -179,10 +179,16 @@ export function ContratPdf({ data }: { data: ContratPdfData }) {
         <View style={s.partiesRow}>
           <View style={s.partyBox}>
             <Text style={s.partyLabel}>{data.labelA || 'Employeur'}</Text>
-            <Text style={s.partyName}>{data.employeur.nom || '[À compléter]'}</Text>
+            {data.employeur.representant ? (
+              <>
+                <Text style={s.partyName}>{data.employeur.representant}{data.employeur.titre ? `, ${data.employeur.titre}` : ''}</Text>
+                <Text style={s.partyLine}>agissant pour {data.employeur.nom || '[À compléter]'}</Text>
+              </>
+            ) : (
+              <Text style={s.partyName}>{data.employeur.nom || '[À compléter]'}</Text>
+            )}
             {data.employeur.brn ? <Text style={s.partyLine}>BRN : {data.employeur.brn}</Text> : null}
             {data.employeur.adresse ? <Text style={s.partyLine}>{data.employeur.adresse}</Text> : null}
-            {data.employeur.representant ? <Text style={s.partyLine}>Rep. : {data.employeur.representant}{data.employeur.titre ? `, ${data.employeur.titre}` : ''}</Text> : null}
           </View>
           <View style={s.partyBox}>
             <Text style={s.partyLabel}>{data.labelB || 'Cocontractant'}</Text>
@@ -209,8 +215,14 @@ export function ContratPdf({ data }: { data: ContratPdfData }) {
         <View style={s.signRow} wrap={false}>
           <View style={s.signCol}>
             <Text style={s.signParty}>{data.labelA || 'Employeur'}</Text>
-            <Text style={s.signRole}>{data.employeur.nom || '[À compléter]'}</Text>
-            {data.employeur.representant ? <Text style={s.signRole}>{data.employeur.representant}{data.employeur.titre ? `, ${data.employeur.titre}` : ''}</Text> : null}
+            {data.employeur.representant ? (
+              <>
+                <Text style={s.signParty}>{data.employeur.representant}{data.employeur.titre ? `, ${data.employeur.titre}` : ''}</Text>
+                <Text style={s.signRole}>Pour {data.employeur.nom || '[À compléter]'}</Text>
+              </>
+            ) : (
+              <Text style={s.signRole}>{data.employeur.nom || '[À compléter]'}</Text>
+            )}
             <Text style={s.signLine}>Signature {data.employeur.representant ? '' : '(nom et qualité du signataire)'}</Text>
             <Text style={s.signDate}>Fait à {data.lieu || 'Port-Louis'}, le {dateFr(data.date)}</Text>
           </View>
