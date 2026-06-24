@@ -76,7 +76,31 @@ export default function AssistantRedactionPage() {
     } catch (e: any) { setError(e.message || "Erreur réseau") } finally { setLoading(false) }
   }
 
-  function copy() { if (result) { navigator.clipboard.writeText(result); setCopied(true); setTimeout(() => setCopied(false), 1800) } }
+  // Conversion markdown léger → rendu/collage. Le **gras** devient du vrai
+  // gras (HTML), et le texte brut copié ne contient plus d'astérisques.
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  const toBoldHtml = (s: string) => esc(s).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*\n]+)\*/g, "<strong>$1</strong>")
+  const previewHtml = (t: string) => toBoldHtml(t) // les retours à la ligne sont gérés par white-space: pre-wrap
+  const toPlain = (t: string) => t.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*\n]+)\*/g, "$1")
+
+  async function copy() {
+    if (!result) return
+    const plain = toPlain(result)
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;white-space:pre-wrap">${toBoldHtml(result).replace(/\n/g, "<br>")}</div>`
+    try {
+      if (navigator.clipboard && typeof ClipboardItem !== "undefined") {
+        await navigator.clipboard.write([new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([plain], { type: "text/plain" }),
+        })])
+      } else {
+        await navigator.clipboard.writeText(plain)
+      }
+      setCopied(true); setTimeout(() => setCopied(false), 1800)
+    } catch {
+      try { await navigator.clipboard.writeText(plain); setCopied(true); setTimeout(() => setCopied(false), 1800) } catch { /* noop */ }
+    }
+  }
 
   async function downloadPdf() {
     if (!result) return
@@ -211,7 +235,7 @@ export default function AssistantRedactionPage() {
                   {loading && !result && <div className="space-y-2 animate-pulse">{Array.from({ length: 7 }).map((_, i) => <div key={i} className="h-3 rounded bg-gray-100" style={{ width: `${70 + (i % 3) * 10}%` }} />)}</div>}
                   {result && (
                     <>
-                      <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-gray-800 max-h-[60vh] overflow-y-auto">{result}</pre>
+                      <div className="whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-gray-800 max-h-[60vh] overflow-y-auto" dangerouslySetInnerHTML={{ __html: previewHtml(result) }} />
                       {sources.length > 0 && (
                         <div className="mt-4 pt-3 border-t border-gray-100">
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5"><Scale className="w-3.5 h-3.5" style={{ color: GOLD }} /> Sources mobilisées</p>
