@@ -82,7 +82,7 @@ ${b.destinataire?.nom ? `- Destinataire : ${b.destinataire.nom}` : ''}
 
 Consignes :
 1. ${formatInstr}
-2. Style clair, direct, sans fautes, sans formules creuses ni emojis. Adapte le registre au ton demandé.
+2. Style clair, direct, sans fautes, sans formules creuses ni emojis. Adapte le registre au ton demandé. Tu peux mettre en gras les éléments importants (montants, dates, références) en les entourant de **double astérisque** ; ils seront convertis en vrai gras (n'en abuse pas).
 3. Utilise [À COMPLETER] pour toute information manquante essentielle (montant, date, nom).${ragNote}
 4. Ne renvoie QUE le texte final, sans commentaire ni explication.`
 
