@@ -16,12 +16,15 @@ interface Source { ref: string; source: string; reference: string; titre: string
 
 export function RefineChat({
   text, domaines, onUpdate, placeholder, title = "Améliorer / personnaliser le document",
+  endpoint = "/api/juridique/societe/refine", extraPayload,
 }: {
   text: string
   domaines?: DomaineJuridique[]
   onUpdate: (newText: string, sources: Source[]) => void
   placeholder?: string
   title?: string
+  endpoint?: string
+  extraPayload?: Record<string, unknown>
 }) {
   const [input, setInput] = useState("")
   const [busy, setBusy] = useState(false)
@@ -32,9 +35,9 @@ export function RefineChat({
     if (!instruction || !text || busy) return
     setBusy(true)
     try {
-      const res = await fetch("/api/juridique/societe/refine", {
+      const res = await fetch(endpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ current_text: text, instruction, domaines }),
+        body: JSON.stringify({ current_text: text, instruction, domaines, ...extraPayload }),
       })
       const ct = res.headers.get("content-type") || ""
       const data = ct.includes("json") ? await res.json() : null
