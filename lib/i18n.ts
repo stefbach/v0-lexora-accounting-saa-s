@@ -23,6 +23,7 @@ const baseTranslations = {
     'nav.documents': 'Documents & OCR',
     'nav.users': 'Utilisateurs',
     'nav.team': 'Mon Équipe',
+    'nav.redaction_assistant': 'Assistant rédaction',
     'nav.alerts': 'Alertes',
     'nav.assistant': 'Espace Assistant',
 
@@ -322,6 +323,7 @@ const baseTranslations = {
     'nav.documents': 'Documents & OCR',
     'nav.users': 'Users',
     'nav.team': 'My Team',
+    'nav.redaction_assistant': 'Writing assistant',
     'nav.alerts': 'Alerts',
     'nav.assistant': 'Assistant Area',
 
