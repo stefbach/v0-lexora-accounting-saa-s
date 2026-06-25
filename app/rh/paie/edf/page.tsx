@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
+import { getAvailableExercicesFY, getCurrentExercice } from '@/lib/fiscal-years'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -52,12 +53,7 @@ const fmt = (n: number) =>
 
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
 
-const EXERCICES = [
-  'FY2022-2023',
-  'FY2023-2024',
-  'FY2024-2025',
-  'FY2025-2026'
-]
+const EXERCICES = getAvailableExercicesFY(4, 0)
 
 const STATUT_LABELS: Record<string, string> = {
   a_faire: 'À faire',
@@ -83,7 +79,7 @@ export default function EDFPage() {
 
   const [societes, setSocietes] = useState<Societe[]>([])
   const [selectedSocieteId, setSelectedSocieteId] = useState(societeIdParam || '')
-  const [exercice, setExercice] = useState('FY2024-2025')
+  const [exercice, setExercice] = useState(`FY${getCurrentExercice()}`)
   const [declaration, setDeclaration] = useState<DeclarationEDF | null>(null)
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)

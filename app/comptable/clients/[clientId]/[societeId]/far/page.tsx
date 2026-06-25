@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { getCurrentExercice } from "@/lib/fiscal-years"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -92,7 +93,7 @@ export default function FARPage() {
   const [loading, setLoading]     = useState(false)
   const [saving, setSaving]       = useState(false)
   const [calculating, setCalc]    = useState(false)
-  const [exercice, setExercice]   = useState("FY2024-2025")
+  const [exercice, setExercice]   = useState(`FY${getCurrentExercice()}`)
   const [showForm, setShowForm]   = useState(false)
   const [newActif, setNewActif]   = useState<NewActif>({
     actif_description: "", categorie: "computer_equipment",

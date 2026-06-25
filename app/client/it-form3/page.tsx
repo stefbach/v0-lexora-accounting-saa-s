@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { getCurrentExercice } from "@/lib/fiscal-years"
 import {
   Card,
   CardContent,
@@ -74,7 +75,7 @@ export default function ITForm3Page() {
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [mobile, setMobile] = useState("")
-  const [assessmentYear, setAssessmentYear] = useState("2026")
+  const [assessmentYear, setAssessmentYear] = useState(getCurrentExercice().split('-')[1])
   const [closingDate, setClosingDate] = useState("")
 
   // Accountant

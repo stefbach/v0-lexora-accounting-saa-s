@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { getCurrentExercice } from "@/lib/fiscal-years"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -71,7 +72,7 @@ export default function ITForm3Page() {
   const societeId = params.societeId as string
   const clientId  = params.clientId  as string
 
-  const [exercice, setExercice]   = useState("FY2024-2025")
+  const [exercice, setExercice]   = useState(`FY${getCurrentExercice()}`)
   const [loading, setLoading]     = useState(false)
   const [saving, setSaving]       = useState(false)
   const [refMRA, setRefMRA]       = useState("")

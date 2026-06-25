@@ -15,6 +15,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { getAvailableYears } from "@/lib/fiscal-years"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -70,7 +71,7 @@ const MOIS = [
   { val: "11", label: "Novembre" },
   { val: "12", label: "Décembre" },
 ]
-const ANNEES = ["2024", "2025", "2026", "2027"]
+const ANNEES = getAvailableYears(2, 1).map(String)
 
 function fmt(n: number): string {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })

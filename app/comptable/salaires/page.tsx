@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { getCurrentExercice } from "@/lib/fiscal-years"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,7 +29,7 @@ export default function SalairesPage() {
   const [selectedSociete, setSelectedSociete] = useState("all")
   const [loading, setLoading] = useState(false)
   const [ecritures, setEcritures] = useState<any[]>([])
-  const [exercice, setExercice] = useState("2025-2026")
+  const [exercice, setExercice] = useState(getCurrentExercice())
 
   useEffect(() => {
     fetch("/api/comptable/societes").then(r => r.json()).then(d => setSocietes(d.societes || []))

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { getAvailableYears } from "@/lib/fiscal-years"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -225,7 +226,7 @@ export default function ElaborationPaiePage() {
                 <label className="text-sm font-medium text-gray-700">{t('hr.elab.year', locale)}</label>
                 <Select value={year} onValueChange={setYear}>
                   <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                  <SelectContent>{[2024, 2025, 2026].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+                  <SelectContent>{getAvailableYears(3, 1).map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <Button onClick={handleStart} className="bg-[#0B0F2E] hover:bg-[#0B0F2E]/90 text-white">

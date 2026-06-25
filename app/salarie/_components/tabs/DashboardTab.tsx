@@ -1,5 +1,6 @@
 "use client"
 import type { useRouter } from "next/navigation"
+import { getUpcomingHolidays } from "@/lib/rh/mauritius-holidays"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -439,25 +440,8 @@ export function DashboardTab({
       )}
 
       {(() => {
-        const HOLIDAYS_2026 = [
-          { date: "2026-01-01", name: "New Year" },
-          { date: "2026-01-02", name: "New Year (2nd day)" },
-          { date: "2026-01-02", name: "Thaipoosam Cavadee" },
-          { date: "2026-02-01", name: "Abolition of Slavery" },
-          { date: "2026-02-15", name: "Maha Shivaratree" },
-          { date: "2026-02-17", name: "Chinese Spring Festival" },
-          { date: "2026-03-12", name: "Independence & Republic Day" },
-          { date: "2026-03-20", name: "Eid-Ul-Fitr" },
-          { date: "2026-04-03", name: "Ougadi" },
-          { date: "2026-05-01", name: "Labour Day" },
-          { date: "2026-08-15", name: "Assumption" },
-          { date: "2026-08-26", name: "Ganesh Chaturthi" },
-          { date: "2026-11-02", name: "Arrival of Indentured Labourers" },
-          { date: "2026-11-08", name: "Divali" },
-          { date: "2026-12-25", name: "Christmas" },
-        ]
         const today = new Date().toISOString().split("T")[0]
-        const upcoming = HOLIDAYS_2026.filter(h => h.date >= today).slice(0, 3)
+        const upcoming = getUpcomingHolidays(today, 3)
         if (upcoming.length === 0) return null
         return (
           <div className="space-y-2">
