@@ -11,6 +11,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { CheckCircle2, Clock, Lock, Plane } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 export type EligibilityStatus = "not_eligible" | "accruing" | "eligible"
 
@@ -44,23 +45,24 @@ export function computeDatePlus6Months(dateArrivee: string | null | undefined): 
 }
 
 export function EligibiliteBadge({ status }: { status: EligibilityStatus }) {
+  const locale = getLocale()
   if (status === "eligible") {
     return (
       <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 gap-1 font-medium">
-        <CheckCircle2 className="w-3 h-3" /> Droit plein
+        <CheckCircle2 className="w-3 h-3" /> {t('sal.elig.badge_droit_plein', locale)}
       </Badge>
     )
   }
   if (status === "accruing") {
     return (
       <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 gap-1 font-medium">
-        <Clock className="w-3 h-3" /> Acquisition
+        <Clock className="w-3 h-3" /> {t('sal.elig.badge_acquisition', locale)}
       </Badge>
     )
   }
   return (
     <Badge className="bg-gray-200 text-gray-600 hover:bg-gray-200 gap-1 font-medium">
-      <Lock className="w-3 h-3" /> Pas éligible
+      <Lock className="w-3 h-3" /> {t('sal.elig.badge_pas_eligible', locale)}
     </Badge>
   )
 }
@@ -82,6 +84,7 @@ export function EligibiliteBannerConges({
   alDroit: number
   slDroit: number
 }) {
+  const locale = getLocale()
   if (status === "not_eligible") {
     const date6m = computeDatePlus6Months(dateArrivee)
     return (
@@ -89,14 +92,13 @@ export function EligibiliteBannerConges({
         <CardContent className="p-4 flex items-start gap-3">
           <Lock className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
           <div className="text-sm text-red-900 space-y-1">
-            <p className="font-semibold">Vous n'êtes pas encore éligible aux congés annuels.</p>
+            <p className="font-semibold">{t('sal.elig.not_eligible_title', locale)}</p>
             <p>
-              Vous pourrez faire vos premières demandes à partir du{" "}
-              <strong>{formatDateFR(date6m)}</strong> (acquisition de 1 jour/mois jusqu'au
-              12<sup>e</sup> mois).
+              {t('sal.elig.not_eligible_first_request_prefix', locale)}{" "}
+              <strong>{formatDateFR(date6m)}</strong> {t('sal.elig.not_eligible_first_request_suffix', locale)}
             </p>
             <p className="text-xs opacity-80">
-              Loi mauricienne WRA 2019 : 6 mois minimum avant acquisition.
+              {t('sal.elig.wra2019_min', locale)}
             </p>
           </div>
         </CardContent>
@@ -109,13 +111,12 @@ export function EligibiliteBannerConges({
         <CardContent className="p-4 flex items-start gap-3">
           <Clock className="h-5 w-5 text-orange-600 mt-0.5 shrink-0" />
           <div className="text-sm text-orange-900 space-y-1">
-            <p className="font-semibold">Vous êtes en période d'acquisition.</p>
+            <p className="font-semibold">{t('sal.elig.accruing_title', locale)}</p>
             <p>
-              Vous avez <strong>{alDroit} AL</strong> et <strong>{slDroit} SL</strong> accumulés (max
-              6 chacun au 11<sup>e</sup> mois).
+              {t('sal.elig.accruing_have', locale)} <strong>{alDroit} AL</strong> {t('sal.elig.accruing_and', locale)} <strong>{slDroit} SL</strong> {t('sal.elig.accruing_accumulated', locale)}
             </p>
             <p>
-              Droit plein (22 AL + 15 SL) à partir du{" "}
+              {t('sal.elig.accruing_full_right_prefix', locale)}{" "}
               <strong>{formatDateFR(eligibilityDate)}</strong>.
             </p>
           </div>
@@ -148,6 +149,7 @@ export function VacationLeaveCard({
   vl_eligibility_status: VlEligibilityStatus
   vl_eligibility_date: string | null
 }) {
+  const locale = getLocale()
   if (vl_eligibility_status === "eligible") {
     const solde = vl_solde ?? 0
     const droit = vl_droit ?? 30
@@ -165,15 +167,15 @@ export function VacationLeaveCard({
               </div>
             </div>
             <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 gap-1 font-medium">
-              <CheckCircle2 className="w-3 h-3" /> Éligible
+              <CheckCircle2 className="w-3 h-3" /> {t('sal.elig.vl_eligible_badge', locale)}
             </Badge>
           </div>
           <p className="text-2xl font-bold text-purple-900">
-            {solde}<span className="text-sm font-normal text-purple-500">/{droit}j restants</span>
+            {solde}<span className="text-sm font-normal text-purple-500">/{droit}j {t('sal.elig.vl_remaining', locale)}</span>
           </p>
           <p className="text-[11px] text-purple-700">
-            Cycle : <strong>{formatDateFR(vl_cycle_debut)} → {formatDateFR(vl_cycle_fin)}</strong>
-            {(vl_pris ?? 0) > 0 && <> · Pris : <strong>{vl_pris}j</strong></>}
+            {t('sal.elig.vl_cycle', locale)} <strong>{formatDateFR(vl_cycle_debut)} → {formatDateFR(vl_cycle_fin)}</strong>
+            {(vl_pris ?? 0) > 0 && <> · {t('sal.elig.vl_taken', locale)} <strong>{vl_pris}j</strong></>}
           </p>
         </CardContent>
       </Card>
@@ -189,10 +191,10 @@ export function VacationLeaveCard({
             <p className="text-sm font-semibold text-gray-700">Vacation Leave (WRA S.47)</p>
           </div>
           <p className="text-xs text-gray-600">
-            Éligible à partir du <strong>{formatDateFR(vl_eligibility_date)}</strong> (5 ans d'ancienneté).
+            {t('sal.elig.vl_eligible_from_prefix', locale)} <strong>{formatDateFR(vl_eligibility_date)}</strong> {t('sal.elig.vl_eligible_from_suffix', locale)}
           </p>
           <p className="text-[10px] text-gray-500">
-            30 jours payés par cycle de 5 ans dès éligibilité.
+            {t('sal.elig.vl_acquisition_note', locale)}
           </p>
         </CardContent>
       </Card>
@@ -210,7 +212,7 @@ export function VacationLeaveCard({
             <Plane className="h-4 w-4 text-gray-400" />
             <p className="text-sm font-semibold text-gray-600">Vacation Leave (WRA S.47)</p>
           </div>
-          <p className="text-xs text-gray-500">Non applicable ({motif}).</p>
+          <p className="text-xs text-gray-500">{t('sal.elig.vl_not_applicable', locale)} ({motif}).</p>
         </CardContent>
       </Card>
     )
