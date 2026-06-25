@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2, CheckCircle2, Search } from "lucide-react"
+import { t as tr, getLocale } from "@/lib/i18n"
 
 export interface AffecterReglementFacture {
   id: string
@@ -64,6 +65,7 @@ export function AffecterReglementDialog({
   onOpenChange: (o: boolean) => void
   onDone?: () => void
 }) {
+  const locale = getLocale()
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [txs, setTxs] = useState<BankTx[]>([])
@@ -105,7 +107,7 @@ export function AffecterReglementDialog({
         })
         setTxs(candidates)
       } catch (e: any) {
-        setError(e?.message || "Erreur de chargement")
+        setError(e?.message || tr('cdlg.affect.load_error', locale))
       } finally {
         setLoading(false)
       }
@@ -203,8 +205,8 @@ export function AffecterReglementDialog({
         lastLettre = d?.lettre || lastLettre
       }
       setOkMsg(
-        `${done} règlement${done > 1 ? "s" : ""} affecté${done > 1 ? "s" : ""}` +
-          (lastLettre ? ` (lettre ${lastLettre})` : "")
+        `${done} ${done > 1 ? tr('cdlg.affect.partial_label_plural', locale) : tr('cdlg.affect.partial_label', locale)} ${done > 1 ? tr('cdlg.affect.affected_many', locale) : tr('cdlg.affect.affected_one', locale)}` +
+          (lastLettre ? ` (${tr('cdlg.affect.letter', locale)} ${lastLettre})` : "")
       )
       setBusy(false)
       onDone?.()
@@ -213,8 +215,10 @@ export function AffecterReglementDialog({
       setBusy(false)
       // Échec en cours de série : certains virements ont pu être affectés.
       setError(
-        (done > 0 ? `${done} règlement(s) affecté(s) puis échec : ` : "Échec du lettrage : ") +
-          (e?.message || "erreur")
+        (done > 0
+          ? `${done} ${tr('cdlg.affect.partial_label_plural', locale)} ${tr('cdlg.affect.affected_many', locale)} ${tr('cdlg.affect.err_then_fail', locale)} `
+          : `${tr('cdlg.affect.err_lettrage', locale)} `) +
+          (e?.message || tr('cdlg.affect.err_default', locale))
       )
       if (done > 0) onDone?.()
     }
@@ -226,10 +230,10 @@ export function AffecterReglementDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Affecter un ou plusieurs règlements</DialogTitle>
+          <DialogTitle>{tr('cdlg.affect.title', locale)}</DialogTitle>
           <DialogDescription>
-            Facture <span className="font-mono">{facture.numero_facture || facture.id.slice(0, 8)}</span>
-            {facture.tiers ? ` · ${facture.tiers}` : ""} · reste{" "}
+            {tr('cdlg.affect.invoice', locale)} <span className="font-mono">{facture.numero_facture || facture.id.slice(0, 8)}</span>
+            {facture.tiers ? ` · ${facture.tiers}` : ""} · {tr('cdlg.affect.remaining', locale)}{" "}
             <span className="font-mono font-medium">
               {fmt(remaining)} MUR{facture.devise && facture.devise !== "MUR" ? ` (${facture.devise})` : ""}
             </span>
@@ -241,18 +245,18 @@ export function AffecterReglementDialog({
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un virement (libellé, date)…"
+            placeholder={tr('cdlg.affect.search_placeholder', locale)}
             className="pl-8 h-9"
           />
         </div>
 
         {loading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 mr-2 inline animate-spin" /> Chargement des virements…
+            <Loader2 className="h-4 w-4 mr-2 inline animate-spin" /> {tr('cdlg.affect.loading', locale)}
           </p>
         ) : filtered.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            Aucun virement bancaire non rapproché {isClient ? "(crédit)" : "(débit)"} trouvé.
+            {isClient ? tr('cdlg.affect.none_credit', locale) : tr('cdlg.affect.none_debit', locale)}
           </p>
         ) : (
           <div className="rounded border bg-card divide-y max-h-72 overflow-y-auto">
@@ -279,7 +283,7 @@ export function AffecterReglementDialog({
                   </label>
                   {checked && (
                     <div className="mt-2 flex items-center gap-2 pl-7 text-xs">
-                      <span className="text-muted-foreground">Affecté (MUR)&nbsp;:</span>
+                      <span className="text-muted-foreground">{tr('cdlg.affect.allocated_label', locale)}</span>
                       <Input
                         type="number"
                         inputMode="decimal"
@@ -289,7 +293,7 @@ export function AffecterReglementDialog({
                         onChange={(e) => setAmounts((a) => ({ ...a, [t.id]: e.target.value }))}
                         className={`h-8 w-32 text-right font-mono ${over ? "border-rose-400" : ""}`}
                       />
-                      <span className="text-muted-foreground">/ virement {fmt(v)}</span>
+                      <span className="text-muted-foreground">{tr('cdlg.affect.per_transfer', locale)} {fmt(v)}</span>
                     </div>
                   )}
                 </div>
@@ -306,25 +310,25 @@ export function AffecterReglementDialog({
           >
             <div className="flex items-center justify-between">
               <span>
-                {selectedTxs.length} règlement{selectedTxs.length > 1 ? "s" : ""} · total affecté{" "}
+                {selectedTxs.length} {selectedTxs.length > 1 ? tr('cdlg.affect.summary_1_plural', locale) : tr('cdlg.affect.summary_1', locale)} · {tr('cdlg.affect.summary_total', locale)}{" "}
                 <span className="font-mono">{fmt(sumAlloc)} MUR</span>
               </span>
-              <span className="font-mono text-xs text-muted-foreground">solde {fmt(remaining)} MUR</span>
+              <span className="font-mono text-xs text-muted-foreground">{tr('cdlg.affect.summary_balance', locale)} {fmt(remaining)} MUR</span>
             </div>
             {!allocValid ? (
               <p className="text-[11px] text-rose-700 mt-1">
                 {!sumWithinSolde
-                  ? "Le total des règlements dépasse le solde de la facture. Décoche un virement ou réduis un montant."
+                  ? tr('cdlg.affect.err_exceeds', locale)
                   : !eachWithinTx
-                    ? "Un montant dépasse le virement sélectionné."
-                    : "Chaque montant affecté doit être strictement positif."}
+                    ? tr('cdlg.affect.err_over_tx', locale)
+                    : tr('cdlg.affect.err_positive', locale)}
               </p>
             ) : resteApres > 0.01 ? (
               <p className="text-[11px] text-amber-800 mt-1">
-                Paiement partiel — la facture restera « partiel » (reste {fmt(resteApres)} MUR).
+                {tr('cdlg.affect.partial_warn_1', locale)} {fmt(resteApres)} MUR{tr('cdlg.affect.partial_warn_2', locale)}
               </p>
             ) : (
-              <p className="text-[11px] text-green-700 mt-1">La facture sera soldée.</p>
+              <p className="text-[11px] text-green-700 mt-1">{tr('cdlg.affect.will_settle', locale)}</p>
             )}
           </div>
         )}
@@ -334,7 +338,7 @@ export function AffecterReglementDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            Annuler
+            {tr('cdlg.affect.cancel', locale)}
           </Button>
           <Button
             onClick={handleConfirm}
@@ -347,8 +351,8 @@ export function AffecterReglementDialog({
               <CheckCircle2 className="h-4 w-4 mr-1.5" />
             )}
             {selectedTxs.length > 1
-              ? `Affecter ${selectedTxs.length} règlements`
-              : "Affecter le règlement"}
+              ? `${tr('cdlg.affect.confirm_many', locale)} ${selectedTxs.length} ${tr('cdlg.affect.confirm_many_suffix', locale)}`
+              : tr('cdlg.affect.confirm_one', locale)}
           </Button>
         </DialogFooter>
       </DialogContent>

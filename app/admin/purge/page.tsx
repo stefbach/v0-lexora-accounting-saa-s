@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { CascadeDeleteButton } from "@/components/admin/CascadeDeleteButton"
 import { AlertTriangle, RefreshCw } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 type Societe = { id: string; nom: string }
 
@@ -34,6 +35,7 @@ export default function AdminPurgePage() {
 
   const [societes, setSocietes] = React.useState<Societe[]>([])
   const [societeId, setSocieteId] = React.useState<string>("")
+  const locale = getLocale()
 
   React.useEffect(() => {
     (async () => {
@@ -48,24 +50,20 @@ export default function AdminPurgePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="size-5" />
-            Purge admin — hard delete cascade
+            {t('cdlg.purge.title', locale)}
           </CardTitle>
           <CardDescription>
-            Suppression définitive de factures, écritures bancaires et documents
-            (avec leurs fichiers Storage). Cascade automatique sur les lignes,
-            paiements, lettrages et tables liées. Toutes les actions sont
-            journalisées dans <code>audit_trail</code>. Admin uniquement —
-            l'API refuse si le rôle est insuffisant.
+            {t('cdlg.purge.desc', locale)}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <label className="block text-sm font-medium mb-1">Société cible</label>
+          <label className="block text-sm font-medium mb-1">{t('cdlg.purge.target', locale)}</label>
           <select
             className="w-full max-w-md rounded-md border px-3 py-2 text-sm"
             value={societeId}
             onChange={(e) => setSocieteId(e.target.value)}
           >
-            <option value="">— Sélectionner une société —</option>
+            <option value="">{t('cdlg.purge.select_societe', locale)}</option>
             {societes.map((s) => (
               <option key={s.id} value={s.id}>{s.nom}</option>
             ))}
@@ -75,9 +73,9 @@ export default function AdminPurgePage() {
 
       <Tabs defaultValue="factures">
         <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="factures">Factures</TabsTrigger>
-          <TabsTrigger value="banque">Banque</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="factures">{t('cdlg.purge.tab_factures', locale)}</TabsTrigger>
+          <TabsTrigger value="banque">{t('cdlg.purge.tab_banque', locale)}</TabsTrigger>
+          <TabsTrigger value="documents">{t('cdlg.purge.tab_documents', locale)}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="factures">
@@ -102,6 +100,7 @@ function FacturesPurge({ societeId }: { societeId: string }) {
   const [typeFilter, setTypeFilter] = React.useState<"all" | "client" | "fournisseur">("all")
   const [search, setSearch] = React.useState("")
   const [loading, setLoading] = React.useState(false)
+  const locale = getLocale()
 
   const load = React.useCallback(async () => {
     if (!societeId) { setRows([]); setSelected(new Set()); return }
@@ -135,25 +134,25 @@ function FacturesPurge({ societeId }: { societeId: string }) {
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center gap-3">
-          <CardTitle className="text-base">Factures de la société ({rows.length})</CardTitle>
+          <CardTitle className="text-base">{t('cdlg.purge.fact_title', locale)} ({rows.length})</CardTitle>
           <div className="flex gap-2 ml-auto">
             <select
               className="rounded-md border px-2 py-1 text-sm"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as "all" | "client" | "fournisseur")}
             >
-              <option value="all">Tous types</option>
-              <option value="client">Clients</option>
-              <option value="fournisseur">Fournisseurs</option>
+              <option value="all">{t('cdlg.purge.fact_all_types', locale)}</option>
+              <option value="client">{t('cdlg.purge.fact_clients', locale)}</option>
+              <option value="fournisseur">{t('cdlg.purge.fact_fournisseurs', locale)}</option>
             </select>
             <Input
-              placeholder="Rechercher numéro ou tiers"
+              placeholder={t('cdlg.purge.fact_search', locale)}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-64"
             />
             <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-              <RefreshCw className="size-4 mr-1" /> Recharger
+              <RefreshCw className="size-4 mr-1" /> {t('cdlg.purge.reload', locale)}
             </Button>
             <CascadeDeleteButton
               type="facture"
@@ -167,7 +166,7 @@ function FacturesPurge({ societeId }: { societeId: string }) {
       <CardContent>
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            {societeId ? "Aucune facture" : "Sélectionner une société pour charger"}
+            {societeId ? t('cdlg.purge.fact_empty', locale) : t('cdlg.purge.select_to_load', locale)}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -178,15 +177,15 @@ function FacturesPurge({ societeId }: { societeId: string }) {
                     <Checkbox
                       checked={selected.size === rows.length && rows.length > 0}
                       onCheckedChange={toggleAll}
-                      aria-label="Tout sélectionner"
+                      aria-label={t('cdlg.purge.select_all', locale)}
                     />
                   </th>
-                  <th className="text-left p-2">Numéro</th>
-                  <th className="text-left p-2">Type</th>
-                  <th className="text-left p-2">Tiers</th>
-                  <th className="text-left p-2">Date</th>
-                  <th className="text-right p-2">Montant TTC</th>
-                  <th className="text-left p-2">Statut</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_numero', locale)}</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_type', locale)}</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_tiers', locale)}</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_date', locale)}</th>
+                  <th className="text-right p-2">{t('cdlg.purge.col_ttc', locale)}</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_statut', locale)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,6 +218,7 @@ function BanquePurge({ societeId }: { societeId: string }) {
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [search, setSearch] = React.useState("")
   const [loading, setLoading] = React.useState(false)
+  const locale = getLocale()
 
   const load = React.useCallback(async () => {
     if (!societeId) { setRows([]); setSelected(new Set()); return }
@@ -252,16 +252,16 @@ function BanquePurge({ societeId }: { societeId: string }) {
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center gap-3">
-          <CardTitle className="text-base">Écritures banque — journal BNQ ({rows.length})</CardTitle>
+          <CardTitle className="text-base">{t('cdlg.purge.banque_title', locale)} ({rows.length})</CardTitle>
           <div className="flex gap-2 ml-auto">
             <Input
-              placeholder="Rechercher ref_folio ou libellé"
+              placeholder={t('cdlg.purge.banque_search', locale)}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-64"
             />
             <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-              <RefreshCw className="size-4 mr-1" /> Recharger
+              <RefreshCw className="size-4 mr-1" /> {t('cdlg.purge.reload', locale)}
             </Button>
             <CascadeDeleteButton
               type="banque"
@@ -275,7 +275,7 @@ function BanquePurge({ societeId }: { societeId: string }) {
       <CardContent>
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            {societeId ? "Aucune écriture banque" : "Sélectionner une société"}
+            {societeId ? t('cdlg.purge.banque_empty', locale) : t('cdlg.purge.select_societe_short', locale)}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -288,13 +288,13 @@ function BanquePurge({ societeId }: { societeId: string }) {
                       onCheckedChange={toggleAll}
                     />
                   </th>
-                  <th className="text-left p-2">Date</th>
-                  <th className="text-left p-2">Ref folio</th>
-                  <th className="text-left p-2">Compte</th>
-                  <th className="text-left p-2">Libellé</th>
-                  <th className="text-right p-2">Débit</th>
-                  <th className="text-right p-2">Crédit</th>
-                  <th className="text-center p-2">Lettré</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_date', locale)}</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_ref_folio', locale)}</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_compte', locale)}</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_libelle', locale)}</th>
+                  <th className="text-right p-2">{t('cdlg.purge.col_debit', locale)}</th>
+                  <th className="text-right p-2">{t('cdlg.purge.col_credit', locale)}</th>
+                  <th className="text-center p-2">{t('cdlg.purge.col_lettre', locale)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -330,6 +330,7 @@ function DocumentsPurge({ societeId }: { societeId: string }) {
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [search, setSearch] = React.useState("")
   const [loading, setLoading] = React.useState(false)
+  const locale = getLocale()
 
   const load = React.useCallback(async () => {
     if (!societeId) { setRows([]); setSelected(new Set()); return }
@@ -370,16 +371,16 @@ function DocumentsPurge({ societeId }: { societeId: string }) {
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center gap-3">
-          <CardTitle className="text-base">Documents de la société ({rows.length})</CardTitle>
+          <CardTitle className="text-base">{t('cdlg.purge.doc_title', locale)} ({rows.length})</CardTitle>
           <div className="flex gap-2 ml-auto">
             <Input
-              placeholder="Rechercher nom fichier"
+              placeholder={t('cdlg.purge.doc_search', locale)}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-64"
             />
             <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-              <RefreshCw className="size-4 mr-1" /> Recharger
+              <RefreshCw className="size-4 mr-1" /> {t('cdlg.purge.reload', locale)}
             </Button>
             <CascadeDeleteButton
               type="document"
@@ -393,7 +394,7 @@ function DocumentsPurge({ societeId }: { societeId: string }) {
       <CardContent>
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            {societeId ? "Aucun document" : "Sélectionner une société"}
+            {societeId ? t('cdlg.purge.doc_empty', locale) : t('cdlg.purge.select_societe_short', locale)}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -406,10 +407,10 @@ function DocumentsPurge({ societeId }: { societeId: string }) {
                       onCheckedChange={toggleAll}
                     />
                   </th>
-                  <th className="text-left p-2">Nom du fichier</th>
-                  <th className="text-left p-2">Type</th>
-                  <th className="text-left p-2">Storage path</th>
-                  <th className="text-left p-2">Créé le</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_filename', locale)}</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_type', locale)}</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_storage', locale)}</th>
+                  <th className="text-left p-2">{t('cdlg.purge.col_created', locale)}</th>
                 </tr>
               </thead>
               <tbody>

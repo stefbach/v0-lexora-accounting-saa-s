@@ -15,37 +15,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
+import { t, getLocale } from "@/lib/i18n"
 
 type CascadeType = "facture" | "banque" | "document"
-
-const LABEL: Record<CascadeType, { singular: string; plural: string; cascade: string[] }> = {
-  facture: {
-    singular: "facture",
-    plural: "factures",
-    cascade: [
-      "lignes de facture",
-      "paiements et contacts liés",
-      "écritures comptables générées par cette facture",
-    ],
-  },
-  banque: {
-    singular: "écriture banque",
-    plural: "écritures banque",
-    cascade: [
-      "la contrepartie (même ref_folio) — sinon l'équilibre saute",
-      "le lettrage des contreparties hors périmètre (remis à NULL)",
-      "ligne de la table de staging transactions_bancaires si présente",
-    ],
-  },
-  document: {
-    singular: "document",
-    plural: "documents",
-    cascade: [
-      "fichier PDF dans le bucket Supabase Storage",
-      "références dans factures, écritures, relevés, transactions, dépenses, immobilisations",
-    ],
-  },
-}
 
 export interface CascadeDeleteButtonProps {
   type: CascadeType
@@ -74,10 +46,15 @@ export function CascadeDeleteButton({
   const [typed, setTyped] = React.useState("")
   const [busy, setBusy] = React.useState(false)
   const { toast } = useToast()
+  const locale = getLocale()
 
-  const meta = LABEL[type]
+  const cascadeLines: Record<CascadeType, string[]> = {
+    facture: [t('cdlg.cascade.facture.l1', locale), t('cdlg.cascade.facture.l2', locale), t('cdlg.cascade.facture.l3', locale)],
+    banque: [t('cdlg.cascade.banque.l1', locale), t('cdlg.cascade.banque.l2', locale), t('cdlg.cascade.banque.l3', locale)],
+    document: [t('cdlg.cascade.document.l1', locale), t('cdlg.cascade.document.l2', locale)],
+  }
   const n = ids.length
-  const noun = n === 1 ? meta.singular : meta.plural
+  const noun = n === 1 ? t(`cdlg.cascade.${type}.singular`, locale) : t(`cdlg.cascade.${type}.plural`, locale)
 
   const canSubmit = typed.trim().toUpperCase() === "SUPPRIMER" && n > 0 && !busy
 
@@ -95,17 +72,17 @@ export function CascadeDeleteButton({
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
         toast({
-          title: "Suppression refusée",
+          title: t('cdlg.cascade.toast_refused_title', locale),
           description: json?.error || `HTTP ${res.status}`,
           variant: "destructive",
         })
         return
       }
       toast({
-        title: `${json.deleted_ids?.length || 0} ${noun} supprimé(s)`,
+        title: `${json.deleted_ids?.length || 0} ${noun} ${t('cdlg.cascade.toast_deleted_suffix', locale)}`,
         description: json.failed?.length
-          ? `${json.failed.length} en échec — ouvrir la console pour le détail`
-          : "Cascade terminée.",
+          ? `${json.failed.length} ${t('cdlg.cascade.toast_failed', locale)}`
+          : t('cdlg.cascade.toast_done', locale),
       })
       if (json.failed?.length) console.warn("[cascade-delete] failed:", json.failed)
       onDeleted?.(json)
@@ -113,8 +90,8 @@ export function CascadeDeleteButton({
       setTyped("")
     } catch (e: unknown) {
       toast({
-        title: "Erreur réseau",
-        description: e instanceof Error ? e.message : "Échec inconnu",
+        title: t('cdlg.cascade.toast_network_title', locale),
+        description: e instanceof Error ? e.message : t('cdlg.cascade.toast_network_unknown', locale),
         variant: "destructive",
       })
     } finally {
@@ -131,11 +108,11 @@ export function CascadeDeleteButton({
         size={size}
         disabled={isDisabled}
         onClick={() => setOpen(true)}
-        title={isDisabled ? "Sélectionner au moins une ligne" : `Supprimer ${n} ${noun}`}
+        title={isDisabled ? t('cdlg.cascade.btn_select_one', locale) : `${t('cdlg.cascade.btn_delete_n', locale)} ${n} ${noun}`}
       >
         <Trash2 className="size-4" />
         {size !== "icon" && (
-          <span className="ml-1">{label ?? `Supprimer (${n})`}</span>
+          <span className="ml-1">{label ?? `${t('cdlg.cascade.btn_label', locale)} (${n})`}</span>
         )}
       </Button>
 
@@ -144,28 +121,27 @@ export function CascadeDeleteButton({
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="size-5 text-destructive" />
-              Suppression définitive — {n} {noun}
+              {t('cdlg.cascade.dialog_title', locale)} {n} {noun}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
                 <p>
-                  Cette action est <strong>irréversible</strong>. Les données sont
-                  effacées en dur (pas de soft delete, pas de corbeille).
+                  {t('cdlg.cascade.irreversible_1', locale)} <strong>{t('cdlg.cascade.irreversible_strong', locale)}</strong>{t('cdlg.cascade.irreversible_2', locale)}
                 </p>
                 <div>
-                  <p className="font-medium text-foreground">Sera également supprimé en cascade :</p>
+                  <p className="font-medium text-foreground">{t('cdlg.cascade.also_deleted', locale)}</p>
                   <ul className="mt-1 list-disc pl-5">
-                    {meta.cascade.map((line) => <li key={line}>{line}</li>)}
+                    {cascadeLines[type].map((line) => <li key={line}>{line}</li>)}
                   </ul>
                 </div>
                 <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2">
-                  ⚠️ Mauritius Companies Act exige 7 ans de rétention. Utilise cette
-                  fonction <strong>uniquement</strong> pour purger des données de test,
-                  des doublons d'import, ou une saisie cassée.
+                  {t('cdlg.cascade.retention_1', locale)}{" "}
+                  <strong>{t('cdlg.cascade.retention_strong', locale)}</strong>{" "}
+                  {t('cdlg.cascade.retention_2', locale)}
                 </div>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">
-                    Tapez <code className="text-foreground">SUPPRIMER</code> pour confirmer :
+                    {t('cdlg.cascade.type_1', locale)} <code className="text-foreground">{t('cdlg.cascade.type_code', locale)}</code> {t('cdlg.cascade.type_2', locale)}
                   </label>
                   <Input
                     autoFocus
@@ -179,13 +155,13 @@ export function CascadeDeleteButton({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Annuler</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>{t('cdlg.cascade.cancel', locale)}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => { e.preventDefault(); handleConfirm() }}
               disabled={!canSubmit}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {busy ? "Suppression en cours…" : "Supprimer définitivement"}
+              {busy ? t('cdlg.cascade.deleting', locale) : t('cdlg.cascade.confirm_delete', locale)}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

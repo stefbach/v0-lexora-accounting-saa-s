@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import { AlertTriangle, Undo2, Loader2 } from "lucide-react"
 import { notifySuccess, notifyError } from "@/lib/utils/toast"
+import { t, getLocale } from "@/lib/i18n"
 
 /**
  * FIX-DECOMPTA — Modale réutilisable de décomptabilisation d'un bulletin.
@@ -41,14 +42,14 @@ import { notifySuccess, notifyError } from "@/lib/utils/toast"
  *   - Le bouton "Confirmer" est disabled tant que la raison < 5 chars.
  */
 
-const TYPE_CORRECTIONS: { value: string; label: string }[] = [
-  { value: "erreur_calcul", label: "Erreur de calcul" },
-  { value: "modif_salaire", label: "Modification du salaire" },
-  { value: "correction_prorata", label: "Correction prorata / entrée-sortie" },
-  { value: "correction_conges", label: "Correction congés / absences" },
-  { value: "correction_primes", label: "Correction primes / OT" },
-  { value: "autre", label: "Autre" },
-]
+const TYPE_CORRECTION_VALUES = [
+  "erreur_calcul",
+  "modif_salaire",
+  "correction_prorata",
+  "correction_conges",
+  "correction_primes",
+  "autre",
+] as const
 
 interface DecomptaBulletinSummary {
   id: string
@@ -106,6 +107,7 @@ export function DecomptabilisationDialog({
   const [typeCorrection, setTypeCorrection] = useState<string>("")
   const [submitting, setSubmitting] = useState(false)
   const warningId = useId()
+  const locale = getLocale()
 
   const reset = () => {
     setRaison("")
@@ -137,7 +139,7 @@ export function DecomptabilisationDialog({
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         notifyError(
-          "Décomptabilisation refusée",
+          t('cdlg.decompta.err_refused', locale),
           data?.error || `HTTP ${res.status}`,
         )
         setSubmitting(false)
@@ -145,14 +147,14 @@ export function DecomptabilisationDialog({
       }
       notifySuccess(
         data?.requires_admin_approval
-          ? "Bulletin décomptabilisé — action tracée. Pensez à recomptabiliser après modification (validation admin recommandée)."
-          : "Bulletin décomptabilisé — modifiable à nouveau. Pensez à contre-passer les écritures comptables liées.",
+          ? t('cdlg.decompta.ok_admin', locale)
+          : t('cdlg.decompta.ok_normal', locale),
       )
       setOpen(false)
       reset()
       onSuccess?.()
     } catch (e: any) {
-      notifyError("Décomptabilisation — erreur réseau", e?.message || "")
+      notifyError(t('cdlg.decompta.err_network', locale), e?.message || "")
       setSubmitting(false)
     }
   }
@@ -164,7 +166,7 @@ export function DecomptabilisationDialog({
       className="h-7 text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-50"
     >
       <Undo2 className="w-3 h-3" />
-      Décomptabiliser
+      {t('cdlg.decompta.trigger', locale)}
     </Button>
   )
 
@@ -175,39 +177,38 @@ export function DecomptabilisationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
             <Undo2 className="w-5 h-5 text-amber-600" />
-            Décomptabiliser le bulletin
+            {t('cdlg.decompta.title', locale)}
           </DialogTitle>
           <DialogDescription>
-            Cette action déverrouille le bulletin pour permettre une
-            modification. Elle est tracée dans l’audit (WORM).
+            {t('cdlg.decompta.subtitle', locale)}
           </DialogDescription>
         </DialogHeader>
 
         {/* Récap bulletin */}
         <div className="rounded-md border bg-gray-50 p-3 text-sm space-y-1">
           <div className="flex justify-between">
-            <span className="text-gray-500">Employé</span>
+            <span className="text-gray-500">{t('cdlg.decompta.employee', locale)}</span>
             <span className="font-medium">{bulletin.employe_nom || "—"}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Période</span>
+            <span className="text-gray-500">{t('cdlg.decompta.period', locale)}</span>
             <span className="font-medium capitalize">
               {fmtPeriode(bulletin.periode)}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Salaire brut</span>
+            <span className="text-gray-500">{t('cdlg.decompta.brut', locale)}</span>
             <span className="font-mono">{fmtMUR(bulletin.salaire_brut)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-500">Salaire net</span>
+            <span className="text-gray-500">{t('cdlg.decompta.net', locale)}</span>
             <span className="font-mono font-semibold text-emerald-700">
               {fmtMUR(bulletin.salaire_net)}
             </span>
           </div>
           {bulletin.ecriture_id && (
             <div className="flex justify-between">
-              <span className="text-gray-500">Écriture liée</span>
+              <span className="text-gray-500">{t('cdlg.decompta.linked_entry', locale)}</span>
               <span className="font-mono text-xs text-gray-700">
                 {bulletin.ecriture_id.slice(0, 8)}…
               </span>
@@ -215,7 +216,7 @@ export function DecomptabilisationDialog({
           )}
           {bulletin.comptabilise_at && (
             <div className="flex justify-between">
-              <span className="text-gray-500">Comptabilisé le</span>
+              <span className="text-gray-500">{t('cdlg.decompta.accounted_on', locale)}</span>
               <span className="text-xs">
                 {new Date(bulletin.comptabilise_at).toLocaleDateString("fr-FR")}
               </span>
@@ -231,12 +232,11 @@ export function DecomptabilisationDialog({
         >
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold">Cette action est tracée.</p>
+            <p className="font-semibold">{t('cdlg.decompta.warning_title', locale)}</p>
             <p className="text-xs mt-0.5">
-              L’écriture comptable liée sera marquée pour reprise manuelle —
-              vous devrez la contre-passer (OD) ou la supprimer côté comptable.
-              Vous devrez ensuite <strong>recomptabiliser</strong> le bulletin
-              après modification.
+              {t('cdlg.decompta.warning_desc_1', locale)}{" "}
+              <strong>{t('cdlg.decompta.warning_recompta', locale)}</strong>{" "}
+              {t('cdlg.decompta.warning_desc_2', locale)}
             </p>
           </div>
         </div>
@@ -244,7 +244,7 @@ export function DecomptabilisationDialog({
         {/* Type de correction */}
         <div className="space-y-1.5">
           <Label htmlFor="decompta-type" className="text-sm">
-            Type de correction (optionnel)
+            {t('cdlg.decompta.type_label', locale)}
           </Label>
           <Select
             value={typeCorrection}
@@ -252,12 +252,12 @@ export function DecomptabilisationDialog({
             disabled={submitting}
           >
             <SelectTrigger id="decompta-type">
-              <SelectValue placeholder="Sélectionner…" />
+              <SelectValue placeholder={t('cdlg.decompta.type_placeholder', locale)} />
             </SelectTrigger>
             <SelectContent>
-              {TYPE_CORRECTIONS.map((t) => (
-                <SelectItem key={t.value} value={t.value}>
-                  {t.label}
+              {TYPE_CORRECTION_VALUES.map((v) => (
+                <SelectItem key={v} value={v}>
+                  {t(`cdlg.decompta.type.${v}`, locale)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -267,14 +267,14 @@ export function DecomptabilisationDialog({
         {/* Raison */}
         <div className="space-y-1.5">
           <Label htmlFor="decompta-raison" className="text-sm">
-            Raison de la décomptabilisation{" "}
+            {t('cdlg.decompta.reason_label', locale)}{" "}
             <span className="text-red-500">*</span>
           </Label>
           <Textarea
             id="decompta-raison"
             value={raison}
             onChange={(e) => setRaison(e.target.value.slice(0, 500))}
-            placeholder="Ex: Erreur de prorata détectée après vérification du contrat — recalcul nécessaire."
+            placeholder={t('cdlg.decompta.reason_placeholder', locale)}
             rows={3}
             disabled={submitting}
             aria-required="true"
@@ -283,10 +283,10 @@ export function DecomptabilisationDialog({
           <div className="flex justify-between text-[11px] text-gray-500">
             <span>
               {raison.trim().length < 5
-                ? `Minimum 5 caractères (actuellement ${raison.trim().length}).`
-                : "OK — raison suffisante."}
+                ? `${t('cdlg.decompta.reason_min', locale)} ${raison.trim().length}).`
+                : t('cdlg.decompta.reason_ok', locale)}
             </span>
-            <span>{remaining} restants</span>
+            <span>{remaining} {t('cdlg.decompta.remaining', locale)}</span>
           </div>
         </div>
 
@@ -297,7 +297,7 @@ export function DecomptabilisationDialog({
             onClick={() => handleOpenChange(false)}
             disabled={submitting}
           >
-            Annuler
+            {t('cdlg.decompta.cancel', locale)}
           </Button>
           <Button
             type="button"
@@ -308,7 +308,7 @@ export function DecomptabilisationDialog({
             {submitting && (
               <Loader2 className="w-4 h-4 animate-spin mr-2" aria-hidden />
             )}
-            Confirmer la décomptabilisation
+            {t('cdlg.decompta.confirm', locale)}
           </Button>
         </DialogFooter>
       </DialogContent>

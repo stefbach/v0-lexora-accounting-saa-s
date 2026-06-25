@@ -35,6 +35,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, Archive, BookOpen, Loader2, Search, Wrench } from "lucide-react"
 import { notifyError, notifySuccess } from "@/lib/utils/toast"
+import { t, getLocale } from "@/lib/i18n"
 
 interface BulletinSummary {
   id: string
@@ -102,6 +103,7 @@ function fmtDate(s: string | null): string {
 
 export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) {
   const [open, setOpen] = useState(false)
+  const locale = getLocale()
 
   // Archive flow state
   const [checkingArchive, setCheckingArchive] = useState(false)
@@ -137,7 +139,7 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError("Vérification archive échouée", data?.error || `HTTP ${res.status}`)
+        notifyError(t('cdlg.bull.err_archive_check', locale), data?.error || `HTTP ${res.status}`)
         setArchivePreview(null)
       } else {
         setArchivePreview({
@@ -148,7 +150,7 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
         })
       }
     } catch (e: any) {
-      notifyError("Erreur réseau", e?.message || "")
+      notifyError(t('cdlg.bull.network_error', locale), e?.message || "")
     } finally {
       setCheckingArchive(false)
     }
@@ -162,17 +164,15 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError("Restauration refusée", data?.error || `HTTP ${res.status}`)
+        notifyError(t('cdlg.bull.err_restore_refused', locale), data?.error || `HTTP ${res.status}`)
       } else {
-        notifySuccess(
-          "Bulletin restauré depuis l'archive — pensez à recomptabiliser si nécessaire.",
-        )
+        notifySuccess(t('cdlg.bull.restored_ok', locale))
         setOpen(false)
         resetAll()
         onSuccess?.()
       }
     } catch (e: any) {
-      notifyError("Erreur réseau", e?.message || "")
+      notifyError(t('cdlg.bull.network_error', locale), e?.message || "")
     } finally {
       setRestoring(false)
     }
@@ -189,7 +189,7 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError("Reconstruction échouée", data?.error || `HTTP ${res.status}`)
+        notifyError(t('cdlg.bull.err_reconstruct', locale), data?.error || `HTTP ${res.status}`)
         setReconstructPreview(null)
       } else {
         setReconstructPreview({
@@ -198,14 +198,14 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
         })
       }
     } catch (e: any) {
-      notifyError("Erreur réseau", e?.message || "")
+      notifyError(t('cdlg.bull.network_error', locale), e?.message || "")
     } finally {
       setPreviewingReconstruct(false)
     }
   }
 
   const replaceWithReconstruct = async () => {
-    if (!confirm("Remplacer le bulletin actuel par la version reconstituée ? L'actuel sera archivé.")) {
+    if (!confirm(t('cdlg.bull.confirm_replace', locale))) {
       return
     }
     setReplacing(true)
@@ -217,17 +217,15 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        notifyError("Remplacement refusé", data?.error || `HTTP ${res.status}`)
+        notifyError(t('cdlg.bull.err_replace_refused', locale), data?.error || `HTTP ${res.status}`)
       } else {
-        notifySuccess(
-          "Bulletin reconstitué et activé — pensez à recomptabiliser le bulletin reconstitué.",
-        )
+        notifySuccess(t('cdlg.bull.replaced_ok', locale))
         setOpen(false)
         resetAll()
         onSuccess?.()
       }
     } catch (e: any) {
-      notifyError("Erreur réseau", e?.message || "")
+      notifyError(t('cdlg.bull.network_error', locale), e?.message || "")
     } finally {
       setReplacing(false)
     }
@@ -240,7 +238,7 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
       className="h-7 text-xs gap-1 border-blue-300 text-blue-700 hover:bg-blue-50"
     >
       <Wrench className="w-3 h-3" />
-      Récupérer
+      {t('cdlg.bull.trigger', locale)}
     </Button>
   )
 
@@ -274,10 +272,10 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-[#0B0F2E]">
             <Wrench className="w-5 h-5 text-blue-600" />
-            Récupération du bulletin
+            {t('cdlg.bull.title', locale)}
           </DialogTitle>
           <DialogDescription>
-            Restauration depuis archive ou reconstitution depuis le grand livre.
+            {t('cdlg.bull.subtitle', locale)}
           </DialogDescription>
         </DialogHeader>
 
@@ -285,20 +283,20 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
         <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-sm">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
             <div>
-              <span className="text-gray-500">Salarié&nbsp;: </span>
+              <span className="text-gray-500">{t('cdlg.bull.employee', locale)}&nbsp;: </span>
               <span className="font-semibold">{bulletin.employe_nom || "—"}</span>
             </div>
             <div>
-              <span className="text-gray-500">Période&nbsp;: </span>
+              <span className="text-gray-500">{t('cdlg.bull.period', locale)}&nbsp;: </span>
               <span className="font-semibold">{bulletin.periode}</span>
             </div>
             <div>
-              <span className="text-gray-500">Net actuel&nbsp;: </span>
+              <span className="text-gray-500">{t('cdlg.bull.current_net', locale)}&nbsp;: </span>
               <span className="font-semibold">{fmtMUR(bulletin.salaire_net)}</span>
             </div>
             {bulletin.is_comptabilise && (
               <Badge variant="outline" className="border-amber-300 text-amber-700 bg-amber-50">
-                Comptabilisé
+                {t('cdlg.bull.accounted', locale)}
               </Badge>
             )}
           </div>
@@ -308,11 +306,11 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
         {blockedByComptabilise && (
           <Alert variant="destructive" className="border-amber-300 bg-amber-50 text-amber-900">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Bulletin verrouillé (comptabilisé)</AlertTitle>
+            <AlertTitle>{t('cdlg.bull.locked_title', locale)}</AlertTitle>
             <AlertDescription>
-              Décomptabilisez le bulletin d'abord via{" "}
-              <code className="text-xs">/rh/audit-decomptabilisation</code> ou le bouton{" "}
-              <em>Décomptabiliser</em> dans la liste avant toute récupération.
+              {t('cdlg.bull.locked_desc_1', locale)}{" "}
+              <code className="text-xs">/rh/audit-decomptabilisation</code> {t('cdlg.bull.locked_desc_2', locale)}{" "}
+              <em>{t('cdlg.bull.locked_decompta', locale)}</em> {t('cdlg.bull.locked_desc_3', locale)}
             </AlertDescription>
           </Alert>
         )}
@@ -323,10 +321,10 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Archive className="w-4 h-4 text-purple-600" />
-                Restaurer depuis archive
+                {t('cdlg.bull.card1_title', locale)}
               </CardTitle>
               <CardDescription>
-                Restaure la version précédente du bulletin (avant régénération).
+                {t('cdlg.bull.card1_desc', locale)}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -339,11 +337,11 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
               >
                 {checkingArchive ? (
                   <>
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Recherche…
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" /> {t('cdlg.bull.searching', locale)}
                   </>
                 ) : (
                   <>
-                    <Search className="w-3 h-3 mr-1" /> Vérifier les archives
+                    <Search className="w-3 h-3 mr-1" /> {t('cdlg.bull.check_archives', locale)}
                   </>
                 )}
               </Button>
@@ -352,15 +350,15 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
                 <div className="text-xs space-y-2">
                   {archivePreview.archive ? (
                     <div className="bg-purple-50 border border-purple-200 rounded p-2 space-y-1">
-                      <div className="font-medium text-purple-900">Archive trouvée</div>
+                      <div className="font-medium text-purple-900">{t('cdlg.bull.archive_found', locale)}</div>
                       <div>
-                        <span className="text-gray-500">Net archivé&nbsp;:</span>{" "}
+                        <span className="text-gray-500">{t('cdlg.bull.archived_net', locale)}</span>{" "}
                         <span className="font-mono font-semibold">
                           {fmtMUR(archivePreview.archive.salaire_net)}
                         </span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Archivé le&nbsp;:</span>{" "}
+                        <span className="text-gray-500">{t('cdlg.bull.archived_on', locale)}</span>{" "}
                         {fmtDate(archivePreview.archive.archived_at)}
                       </div>
                       {archivePreview.archive.archive_reason && (
@@ -371,7 +369,7 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
                     </div>
                   ) : (
                     <div className="text-gray-500 italic">
-                      Aucune archive trouvée pour ce bulletin.
+                      {t('cdlg.bull.no_archive', locale)}
                     </div>
                   )}
 
@@ -384,10 +382,10 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
                     >
                       {restoring ? (
                         <>
-                          <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Restauration…
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" /> {t('cdlg.bull.restoring', locale)}
                         </>
                       ) : (
-                        "Restaurer ce bulletin"
+                        t('cdlg.bull.restore_this', locale)
                       )}
                     </Button>
                   )}
@@ -407,10 +405,10 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-emerald-600" />
-                Reconstituer depuis grand livre
+                {t('cdlg.bull.card2_title', locale)}
               </CardTitle>
               <CardDescription>
-                Reconstruit le bulletin à partir des écritures comptables liées.
+                {t('cdlg.bull.card2_desc', locale)}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -423,11 +421,11 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
               >
                 {previewingReconstruct ? (
                   <>
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Lecture grand livre…
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" /> {t('cdlg.bull.reading_ledger', locale)}
                   </>
                 ) : (
                   <>
-                    <Search className="w-3 h-3 mr-1" /> Prévisualiser
+                    <Search className="w-3 h-3 mr-1" /> {t('cdlg.bull.preview', locale)}
                   </>
                 )}
               </Button>
@@ -438,28 +436,28 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
                     <table className="w-full">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-2 py-1 text-left">Champ</th>
-                          <th className="px-2 py-1 text-right">Actuel</th>
-                          <th className="px-2 py-1 text-right">Reconstitué</th>
-                          <th className="px-2 py-1 text-right">Diff</th>
+                          <th className="px-2 py-1 text-left">{t('cdlg.bull.col_field', locale)}</th>
+                          <th className="px-2 py-1 text-right">{t('cdlg.bull.col_current', locale)}</th>
+                          <th className="px-2 py-1 text-right">{t('cdlg.bull.col_reconstructed', locale)}</th>
+                          <th className="px-2 py-1 text-right">{t('cdlg.bull.col_diff', locale)}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
                         {compareRow(
-                          "Salaire brut",
+                          t('cdlg.bull.row_brut', locale),
                           null,
                           reconstructPreview.reconstructed.salaire_brut,
                         )}
-                        {compareRow("PAYE", null, reconstructPreview.reconstructed.paye_total)}
-                        {compareRow("NSF", null, reconstructPreview.reconstructed.nsf_total)}
-                        {compareRow("CSG", null, reconstructPreview.reconstructed.csg_total)}
+                        {compareRow(t('cdlg.bull.row_paye', locale), null, reconstructPreview.reconstructed.paye_total)}
+                        {compareRow(t('cdlg.bull.row_nsf', locale), null, reconstructPreview.reconstructed.nsf_total)}
+                        {compareRow(t('cdlg.bull.row_csg', locale), null, reconstructPreview.reconstructed.csg_total)}
                         {compareRow(
-                          "Retenues manuelles",
+                          t('cdlg.bull.row_manual', locale),
                           null,
                           reconstructPreview.reconstructed.retenues_manuelles,
                         )}
                         {compareRow(
-                          "Salaire net",
+                          t('cdlg.bull.row_net', locale),
                           reconstructPreview.current?.salaire_net ?? bulletin.salaire_net,
                           reconstructPreview.reconstructed.salaire_net,
                         )}
@@ -468,7 +466,7 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
                   </div>
 
                   <div className="text-[11px] text-gray-500">
-                    {reconstructPreview.reconstructed.ecritures_sources.length} écritures sources lues.
+                    {reconstructPreview.reconstructed.ecritures_sources.length} {t('cdlg.bull.sources_read_1', locale)}
                   </div>
 
                   <Button
@@ -479,10 +477,10 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
                   >
                     {replacing ? (
                       <>
-                        <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Remplacement…
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" /> {t('cdlg.bull.replacing', locale)}
                       </>
                     ) : (
-                      "Remplacer le bulletin actif"
+                      t('cdlg.bull.replace_active', locale)
                     )}
                   </Button>
                 </div>
@@ -493,7 +491,7 @@ export function BulletinRecoveryDialog({ bulletin, onSuccess, trigger }: Props) 
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => handleOpenChange(false)}>
-            Fermer
+            {t('cdlg.bull.close', locale)}
           </Button>
         </DialogFooter>
       </DialogContent>
