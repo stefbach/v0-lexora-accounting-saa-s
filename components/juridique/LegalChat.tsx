@@ -10,6 +10,7 @@ import { Send, Loader2, Scale, User, Paperclip, UploadCloud, FileText, X, Check,
 import { useJuridiqueSociete } from "./JuridiqueSocieteProvider"
 import { renderLegalMarkdown } from "./renderLegalMarkdown"
 import type { DomaineJuridique } from "@/lib/juridique/referentielMauricien"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -37,6 +38,7 @@ export function LegalChat({
   /** Phrase de contexte affichée dans l'état vide (ex. département sélectionné). */
   emptyHint?: string
 }) {
+  const locale = getLocale()
   const { societe } = useJuridiqueSociete()
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState("")
@@ -112,9 +114,9 @@ export function LegalChat({
         }),
       })
       const data = await res.json()
-      setMessages([...next, { role: "assistant", content: data.reponse || data.error || "Aucune réponse.", sources: data.sources || [], docs: data.documents_analyses || [] }])
+      setMessages([...next, { role: "assistant", content: data.reponse || data.error || t('cdlg.chat.no_reply', locale), sources: data.sources || [], docs: data.documents_analyses || [] }])
     } catch {
-      setMessages([...next, { role: "assistant", content: "Erreur de connexion. Réessayez." }])
+      setMessages([...next, { role: "assistant", content: t('cdlg.chat.error_conn', locale) }])
     } finally { setLoading(false) }
   }
 
@@ -142,7 +144,7 @@ export function LegalChat({
           exchanges,
         }),
       })
-      if (!res.ok) { alert("Échec de génération du rapport."); return }
+      if (!res.ok) { alert(t('cdlg.chat.err_report', locale)); return }
       const blob = await res.blob()
       window.open(URL.createObjectURL(blob), "_blank")
     } finally { setExporting(false) }
@@ -168,9 +170,9 @@ export function LegalChat({
               onClick={exportReport} disabled={exporting}
               className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50"
               style={{ background: NAVY }}
-              title="Exporter la consultation en rapport PDF"
+              title={t('cdlg.chat.rapport_pdf_title', locale)}
             >
-              {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} Rapport PDF
+              {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />} {t('cdlg.chat.rapport_pdf', locale)}
             </button>
           )}
           <button
@@ -179,7 +181,7 @@ export function LegalChat({
             style={{ borderColor: selectedCount ? GOLD : "#e5e7eb", color: selectedCount ? "#8a6d15" : "#6b7280", background: selectedCount ? "rgba(212,175,55,0.10)" : "white" }}
           >
             <Paperclip className="w-3.5 h-3.5" />
-            {selectedCount ? `${selectedCount} doc${selectedCount > 1 ? "s" : ""} à analyser` : "Documents"}
+            {selectedCount ? `${selectedCount} ${selectedCount > 1 ? t('cdlg.chat.docs_selected_plural', locale) : t('cdlg.chat.docs_selected', locale)}` : t('cdlg.chat.docs_label', locale)}
           </button>
         </div>
       </div>
@@ -188,18 +190,18 @@ export function LegalChat({
       {showDocs && (
         <div className="border-b border-gray-100 bg-gray-50 px-5 py-3 max-h-56 overflow-y-auto">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-gray-600">Pièces à analyser ({docs.length})</p>
+            <p className="text-xs font-semibold text-gray-600">{t('cdlg.chat.panel_title', locale)} ({docs.length})</p>
             <button
               onClick={() => inputRef.current?.click()} disabled={uploading || !societe}
               className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-white disabled:opacity-40"
               style={{ background: NAVY }}
             >
-              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />} Importer
+              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />} {t('cdlg.chat.import_btn', locale)}
             </button>
             <input ref={inputRef} type="file" multiple className="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload(e.target.files)} />
           </div>
           {docs.length === 0 ? (
-            <p className="text-xs text-gray-400 py-2">Aucune pièce analysable. Importez des PDF ou images.</p>
+            <p className="text-xs text-gray-400 py-2">{t('cdlg.chat.no_docs', locale)}</p>
           ) : (
             <ul className="space-y-1">
               {docs.map((d) => {
@@ -228,12 +230,12 @@ export function LegalChat({
             <div className="rounded-2xl p-3 mb-4" style={{ background: "rgba(212,175,55,0.12)" }}>
               <Scale className="w-7 h-7" style={{ color: GOLD }} />
             </div>
-            <p className="font-bold" style={{ color: NAVY }}>Comment puis-je vous aider ?</p>
+            <p className="font-bold" style={{ color: NAVY }}>{t('cdlg.chat.empty_title', locale)}</p>
             {emptyHint ? (
               <p className="text-xs mt-1 mb-1 max-w-md font-medium" style={{ color: "#8a6d15" }}>{emptyHint}</p>
             ) : null}
             <p className="text-xs text-gray-500 mt-1 mb-5 max-w-md">
-              Posez votre question ou joignez des documents à analyser. Tout avis est un projet à valider par un homme de loi.
+              {t('cdlg.chat.empty_disclaimer', locale)}
             </p>
             <div className="grid sm:grid-cols-2 gap-2 w-full max-w-2xl">
               {suggestions.map((s) => (
@@ -265,11 +267,11 @@ export function LegalChat({
                   </div>
                 )}
                 {m.role === "assistant" && m.docs && m.docs.length > 0 && (
-                  <p className="mt-1.5 text-[11px] text-gray-400">Documents analysés : {m.docs.join(", ")}</p>
+                  <p className="mt-1.5 text-[11px] text-gray-400">{t('cdlg.chat.docs_analysed', locale)} {m.docs.join(", ")}</p>
                 )}
                 {m.role === "assistant" && m.sources && m.sources.length > 0 && (
                   <div className="mt-2 rounded-xl border border-gray-100 bg-white px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Sources verrouillées (RAG)</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">{t('cdlg.chat.sources_label', locale)}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {m.sources.map((s) => (
                         <span key={s.ref} title={`${s.titre} · revu ${s.maj}`} className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-gray-200 text-gray-700">
@@ -290,7 +292,7 @@ export function LegalChat({
           <div className="flex gap-3">
             <div className="rounded-lg p-1.5 h-7 w-7" style={{ background: NAVY }}><Scale className="w-4 h-4" style={{ color: GOLD }} /></div>
             <div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-gray-500">
-              <Loader2 className="w-4 h-4 animate-spin" /> {selectedCount ? "Analyse des documents en cours…" : "Analyse en cours…"}
+              <Loader2 className="w-4 h-4 animate-spin" /> {selectedCount ? t('cdlg.chat.loading_docs', locale) : t('cdlg.chat.loading', locale)}
             </div>
           </div>
         )}
@@ -304,29 +306,29 @@ export function LegalChat({
             {docs.filter((d) => selected.has(d.path)).map((d) => (
               <span key={d.path} className="inline-flex items-center gap-1 text-[11px] bg-[#D4AF37]/12 text-[#8a6d15] px-2 py-0.5 rounded-full">
                 <FileText className="w-3 h-3" />{cleanName(d.name)}
-                <button onClick={() => toggle(d.path)} aria-label="Retirer"><X className="w-3 h-3" /></button>
+                <button onClick={() => toggle(d.path)} aria-label={t('cdlg.chat.remove_aria', locale)}><X className="w-3 h-3" /></button>
               </span>
             ))}
           </div>
         )}
         <div className="flex items-end gap-2">
-          <button onClick={() => setShowDocs((v) => !v)} className="rounded-xl p-2.5 border border-gray-200 text-gray-500 hover:text-[#0B0F2E]" aria-label="Joindre des documents">
+          <button onClick={() => setShowDocs((v) => !v)} className="rounded-xl p-2.5 border border-gray-200 text-gray-500 hover:text-[#0B0F2E]" aria-label={t('cdlg.chat.attach_aria', locale)}>
             <Paperclip className="w-4 h-4" />
           </button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input) } }}
-            placeholder={placeholder || "Décrivez votre question…"}
+            placeholder={placeholder || t('cdlg.chat.placeholder_default', locale)}
             rows={1}
             className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:border-[#D4AF37] max-h-32"
           />
-          <button onClick={() => send(input)} disabled={loading || !input.trim()} className="rounded-xl px-4 py-2.5 text-white disabled:opacity-40 transition-opacity" style={{ background: NAVY }} aria-label="Envoyer">
+          <button onClick={() => send(input)} disabled={loading || !input.trim()} className="rounded-xl px-4 py-2.5 text-white disabled:opacity-40 transition-opacity" style={{ background: NAVY }} aria-label={t('cdlg.chat.send_aria', locale)}>
             <Send className="w-4 h-4" />
           </button>
         </div>
         <p className="text-[10px] text-gray-400 mt-2 text-center">
-          Projet de travail — ne remplace pas la consultation d'un avocat / attorney inscrit au barreau mauricien.
+          {t('cdlg.chat.footer_disclaimer', locale)}
         </p>
       </div>
     </div>

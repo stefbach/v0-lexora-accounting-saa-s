@@ -15,15 +15,17 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Loader2, Send, Bot, X, CheckCircle2, XCircle, MessageCircle } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Msg { role: "user" | "assistant"; content: string }
 interface PendingAction { name: string; input: any; resume: string }
 
 export function FloatingAgentChat() {
+  const locale = getLocale()
   const { societeId } = useSocieteActive()
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<Msg[]>([
-    { role: "assistant", content: "Une question sur cette page ? Demandez-moi (ex: « ce solde 4511 est-il normal ? », « lettre l'avance du client X avec sa facture »)." },
+    { role: "assistant", content: t('cdlg.fagent.greeting', locale) },
   ])
   const [input, setInput] = useState("")
   const [busy, setBusy] = useState(false)
@@ -56,12 +58,12 @@ export function FloatingAgentChat() {
   }
   const confirm = () => {
     if (!pending) return
-    const next = [...messages, { role: "user" as const, content: "✅ Je confirme." }]
+    const next = [...messages, { role: "user" as const, content: t('cdlg.fagent.confirmed', locale) }]
     setMessages(next); callAgent(next, { name: pending.name, input: pending.input })
   }
   const cancel = () => {
     setPending(null)
-    setMessages(p => [...p, { role: "assistant", content: "Action annulée." }])
+    setMessages(p => [...p, { role: "assistant", content: t('cdlg.fagent.cancelled', locale) }])
   }
 
   if (!open) {
@@ -69,7 +71,7 @@ export function FloatingAgentChat() {
       <button
         onClick={() => setOpen(true)}
         className="fixed bottom-5 right-5 z-50 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 p-4 text-white shadow-2xl hover:scale-105 transition-transform"
-        title="Agent comptable"
+        title={t('cdlg.fagent.btn_title', locale)}
       >
         <MessageCircle className="h-6 w-6" />
       </button>
@@ -81,7 +83,7 @@ export function FloatingAgentChat() {
       <div className="flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-purple-50 to-indigo-50 rounded-t-2xl">
         <div className="flex items-center gap-2">
           <div className="rounded-lg bg-gradient-to-br from-purple-600 to-indigo-600 p-1.5 text-white"><Bot className="h-4 w-4" /></div>
-          <span className="font-semibold text-sm text-[#0B0F2E]">Agent comptable</span>
+          <span className="font-semibold text-sm text-[#0B0F2E]">{t('cdlg.fagent.title', locale)}</span>
         </div>
         <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700"><X className="h-4 w-4" /></button>
       </div>
@@ -94,11 +96,11 @@ export function FloatingAgentChat() {
         ))}
         {pending && (
           <Card className="border-amber-300 bg-amber-50 p-3">
-            <div className="text-xs font-medium text-amber-900 mb-1">Action à confirmer</div>
+            <div className="text-xs font-medium text-amber-900 mb-1">{t('cdlg.fagent.confirm_label', locale)}</div>
             <pre className="text-[11px] text-gray-700 whitespace-pre-wrap mb-2">{pending.resume}</pre>
             <div className="flex gap-2">
-              <Button size="sm" onClick={confirm} disabled={busy} className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs"><CheckCircle2 className="h-3 w-3 mr-1" />Confirmer</Button>
-              <Button size="sm" variant="outline" onClick={cancel} disabled={busy} className="h-7 text-xs"><XCircle className="h-3 w-3 mr-1" />Annuler</Button>
+              <Button size="sm" onClick={confirm} disabled={busy} className="bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs"><CheckCircle2 className="h-3 w-3 mr-1" />{t('cdlg.fagent.confirm_btn', locale)}</Button>
+              <Button size="sm" variant="outline" onClick={cancel} disabled={busy} className="h-7 text-xs"><XCircle className="h-3 w-3 mr-1" />{t('cdlg.fagent.cancel_btn', locale)}</Button>
             </div>
           </Card>
         )}
@@ -107,7 +109,7 @@ export function FloatingAgentChat() {
 
       <div className="flex gap-2 p-3 border-t">
         <Input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()}
-          placeholder="Posez votre question…" disabled={busy || !societeId} className="text-sm h-9" />
+          placeholder={t('cdlg.fagent.placeholder', locale)} disabled={busy || !societeId} className="text-sm h-9" />
         <Button onClick={send} disabled={busy || !input.trim() || !societeId} className="bg-[#0B0F2E] text-white h-9 px-3"><Send className="h-4 w-4" /></Button>
       </div>
     </div>
