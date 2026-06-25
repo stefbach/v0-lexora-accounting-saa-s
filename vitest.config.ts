@@ -176,6 +176,16 @@ export default defineConfig({
         'lib/accounting/period-lock.ts',
         // classification-engine.ts & validate-bank-currency.ts — RÉINTÉGRÉS au
         // gate (purs, couverts par leurs *.test.ts).
+        // lib/geo — external network adapters (OSM Nominatim, Postgres geocoding cache)
+        'lib/geo/**',
+        // lib/booking/emails — HTML email templates, no runtime branches
+        'lib/booking/emails.ts',
+        // lib/mcp — static whitelist config, no logic
+        'lib/mcp/**',
+        // lib/agent — DB-coupled agentic orchestrator (tool dispatchers, Claude
+        // tool_use loop). Integration-tested via the agent-chat API route; not
+        // suitable for unit coverage without full Supabase + Claude mocks.
+        'lib/agent/**',
         'lib/audit/intercompany-reconciliation.ts',
         'lib/jurisdictions/ohada/payroll/**',
         'lib/jurisdictions/ohada/statements/notes-annexes.ts',

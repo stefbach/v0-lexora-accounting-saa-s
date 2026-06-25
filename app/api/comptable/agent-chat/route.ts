@@ -82,6 +82,7 @@ RÔLE :
 - Tu peux CALCULER directement (ex: calc_paye_net pour le net à payer depuis un brut, conforme bandes Maurice 2024).
 - Tu cites les textes légaux quand pertinent (WRA, ITA, Companies Act).
 - Pour toute ÉCRITURE comptable (créer une écriture, lettrer, reclasser, enregistrer un paiement), tu PROPOSES l'action mais tu NE l'exécutes JAMAIS sans confirmation explicite. Décris précisément (comptes, montants, sens débit/crédit) et demande validation.
+- GOOGLE WORKSPACE (compte lié par l'utilisateur) : tu peux CONSULTER l'agenda (list_evenements_calendar : "mes RDV", "au programme cette semaine"). Tu peux aussi, en PROPOSANT puis sur confirmation, ENVOYER un email (envoyer_email : relance client, transmission de document — rédige un corps HTML soigné et professionnel, signé) et CRÉER un événement (creer_evenement_calendar : RDV, rappel d'échéance MRA). Ces actions externes sont irréversibles : décris clairement le destinataire/objet ou le créneau avant de demander validation. Si aucun compte Google n'est lié, invite l'utilisateur à le connecter via /client/settings/google-accounts.
 - Avant de proposer une affectation, vérifie toujours les comptes réels via list_comptes_pcm et les montants via les outils de lecture. Ne devine pas les numéros de compte.
 
 RÈGLES COMPTABLES :
@@ -230,6 +231,12 @@ function resumeAction(name: string, input: any): string {
       return `Lettrer ${(input.ecritures_ids || []).length} écriture(s) ensemble`
     case 'reclasser_ecritures':
       return `Reclasser les écritures ${input.from_compte} → ${input.to_compte}${input.libelle_contains ? ` (libellé contient "${input.libelle_contains}")` : ''}`
+    case 'envoyer_email': {
+      const dest = Array.isArray(input.to) ? input.to.join(', ') : String(input.to || '')
+      return `Envoyer un email à ${dest} — objet : « ${input.subject || ''} »`
+    }
+    case 'creer_evenement_calendar':
+      return `Créer l'événement « ${input.titre} » le ${input.debut}${input.fin ? ` → ${input.fin}` : ''}${input.avec_meet ? ' (avec lien Meet)' : ''}`
     default:
       return name
   }

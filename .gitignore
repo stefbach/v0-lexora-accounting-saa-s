@@ -36,3 +36,4 @@ tsconfig.tsbuildinfo
 # Coverage reports
 coverage/
 .vitest-cache/
+pnpm-lock.yaml

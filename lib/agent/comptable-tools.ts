@@ -14,6 +14,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { reclassEcritures } from '@/lib/pcm/reclass'
 import { enregistrerPaiement } from '@/lib/accounting/paiements-factures'
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
+import { sendGmail } from '@/lib/google/gmail-client'
+import { getGoogleAccount, googleCalendarFetch, extractMeetUrl } from '@/lib/google/calendar-client'
 
 /**
  * Clé déterministe courte pour l'idempotence de creer_ecriture : un même
@@ -34,6 +36,8 @@ export const READ_TOOLS = new Set([
   'list_bulletins', 'list_employes_rh', 'get_leave_balance_rh', 'get_mra_compliance', 'calc_paye_net',
   // Cross-channel (Expert ↔ Telegram) — mig 458
   'recall_other_channel',
+  // Google Workspace (lecture) — compte OAuth lib/google
+  'list_evenements_calendar',
 ])
 export const NOTIFY_TOOLS = new Set([
   // Actions externes mais SANS impact comptable → bypass confirmation classique.
@@ -44,6 +48,8 @@ export const WRITE_TOOLS = new Set([
   'creer_ecriture', 'lettrer_ecritures', 'reclasser_ecritures', 'enregistrer_paiement_facture',
   // Effets de bord externes (push Telegram, lien magique) — passent aussi par confirmation
   'notify_telegram', 'web_handoff_link',
+  // Google Workspace (effets de bord externes irréversibles) → confirmation obligatoire
+  'envoyer_email', 'creer_evenement_calendar',
 ])
 
 export const AGENT_TOOLS = [
@@ -273,6 +279,50 @@ export const AGENT_TOOLS = [
         context: { type: 'object', description: 'Meta libre (ex: facture_id, action proposée)' },
       },
       required: ['message'],
+    },
+  },
+
+  // ── Google Workspace (compte OAuth lié via /client/settings/google-accounts) ──
+  {
+    name: 'list_evenements_calendar',
+    description: 'Liste les prochains événements du Google Calendar lié à l\'utilisateur (RDV, échéances, réunions). Pour "qu\'ai-je au programme ?", "mes RDV cette semaine", "prochaine réunion". Nécessite un compte Google connecté.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        jours: { type: 'number', description: 'Fenêtre en jours à partir d\'aujourd\'hui (défaut 7, max 90)' },
+        max: { type: 'number', description: 'Nombre max d\'événements (défaut 10, max 25)' },
+      },
+    },
+  },
+  {
+    name: 'envoyer_email',
+    description: 'Envoie un email professionnel depuis le compte Gmail lié de l\'utilisateur (relance client, transmission de document, réponse). Pour "envoie un email à X", "relance ce client par email". L\'agent rédige un corps HTML soigné. ACTION EXTERNE IRRÉVERSIBLE → toujours confirmée par l\'utilisateur avant envoi.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        to: { type: 'array', items: { type: 'string' }, description: 'Destinataire(s) email' },
+        subject: { type: 'string', description: 'Objet de l\'email' },
+        html: { type: 'string', description: 'Corps de l\'email en HTML léger (paragraphes <p>, gras <b>). Soigné, professionnel, signé.' },
+        cc: { type: 'array', items: { type: 'string' }, description: 'Copie(s) (optionnel)' },
+        from_email: { type: 'string', description: 'Adresse expéditrice (optionnel : défaut = compte Google par défaut)' },
+      },
+      required: ['to', 'subject', 'html'],
+    },
+  },
+  {
+    name: 'creer_evenement_calendar',
+    description: 'Crée un événement dans le Google Calendar lié (RDV client, rappel d\'échéance MRA, réunion). Pour "planifie un RDV le 12 à 14h", "ajoute un rappel TVA le 20". ACTION EXTERNE → confirmée avant création. Dates au format ISO 8601 (ex: 2026-07-12T14:00:00).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        titre: { type: 'string', description: 'Titre de l\'événement' },
+        debut: { type: 'string', description: 'Début ISO 8601 (ex: 2026-07-12T14:00:00)' },
+        fin: { type: 'string', description: 'Fin ISO 8601 (optionnel : défaut +1h)' },
+        description: { type: 'string', description: 'Description / notes (optionnel)' },
+        invites: { type: 'array', items: { type: 'string' }, description: 'Emails des invités (optionnel)' },
+        avec_meet: { type: 'boolean', description: 'Ajouter un lien Google Meet (optionnel)' },
+      },
+      required: ['titre', 'debut'],
     },
   },
   {
@@ -692,6 +742,34 @@ export async function execReadTool(name: string, input: any, ctx: ExecCtx): Prom
       }
     }
 
+    case 'list_evenements_calendar': {
+      // Prochains événements du Google Calendar lié à l'utilisateur.
+      try {
+        const account = await getGoogleAccount(ctx.userId)
+        if (!account) {
+          return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
+        }
+        const jours = Math.min(90, Math.max(1, Number(input?.jours) || 7))
+        const max = Math.min(25, Math.max(1, Number(input?.max) || 10))
+        const timeMin = new Date().toISOString()
+        const timeMax = new Date(Date.now() + jours * 86_400_000).toISOString()
+        const data = await googleCalendarFetch(ctx.userId, account.account_email, '/calendars/primary/events', {
+          method: 'GET',
+          query: { timeMin, timeMax, singleEvents: 'true', orderBy: 'startTime', maxResults: max },
+        })
+        const events = (data?.items || []).map((e: any) => ({
+          titre: e.summary || '(sans titre)',
+          debut: e.start?.dateTime || e.start?.date,
+          fin: e.end?.dateTime || e.end?.date,
+          lieu: e.location || null,
+          meet: extractMeetUrl(e),
+        }))
+        return { ok: true, compte: account.account_email, nb: events.length, evenements: events }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || 'Erreur list_evenements_calendar' }
+      }
+    }
+
     default:
       return { error: `Outil lecture inconnu: ${name}` }
   }
@@ -970,6 +1048,67 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
         return { ok: true, token, url, target_canal: target, expires_at: expires }
       } catch (e: any) {
         return { ok: false, error: e?.message || 'Erreur web_handoff_link' }
+      }
+    }
+
+    case 'envoyer_email': {
+      // Envoi via le compte Gmail lié (scope gmail.send). Action confirmée en amont.
+      try {
+        const to = (Array.isArray(input?.to) ? input.to : [input?.to]).map((x: any) => String(x || '').trim()).filter(Boolean)
+        if (to.length === 0) return { ok: false, error: 'Destinataire (to) requis' }
+        const subject = String(input?.subject || '').trim()
+        const html = String(input?.html || '').trim()
+        if (!subject || !html) return { ok: false, error: 'subject et html requis' }
+
+        let from_email = String(input?.from_email || '').trim()
+        if (!from_email) {
+          const account = await getGoogleAccount(ctx.userId)
+          if (!account) return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
+          from_email = account.account_email
+        }
+        const cc = Array.isArray(input?.cc) ? input.cc.map((x: any) => String(x || '').trim()).filter(Boolean) : undefined
+        const res = await sendGmail(ctx.userId, { from_email, to, cc, subject, html })
+        return { ok: true, message_id: res.message_id, from: from_email, to, subject }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || 'Erreur envoyer_email' }
+      }
+    }
+
+    case 'creer_evenement_calendar': {
+      // Création d'événement dans le Calendar lié. Action confirmée en amont.
+      try {
+        const account = await getGoogleAccount(ctx.userId)
+        if (!account) return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
+        const titre = String(input?.titre || '').trim()
+        const debut = String(input?.debut || '').trim()
+        if (!titre || !debut) return { ok: false, error: 'titre et debut (ISO 8601) requis' }
+        const debutMs = Date.parse(debut)
+        if (Number.isNaN(debutMs)) return { ok: false, error: `Date de début invalide: "${debut}" (attendu ISO 8601)` }
+        const fin = String(input?.fin || '').trim() || new Date(debutMs + 3_600_000).toISOString()
+
+        const body: any = {
+          summary: titre,
+          description: input?.description ? String(input.description) : undefined,
+          start: { dateTime: new Date(debutMs).toISOString() },
+          end: { dateTime: new Date(Date.parse(fin)).toISOString() },
+        }
+        if (Array.isArray(input?.invites) && input.invites.length > 0) {
+          body.attendees = input.invites.map((e: any) => ({ email: String(e || '').trim() })).filter((a: any) => a.email)
+        }
+        if (input?.avec_meet) {
+          body.conferenceData = { createRequest: { requestId: `lexora-${Date.now()}`, conferenceSolutionKey: { type: 'hangoutsMeet' } } }
+        }
+        const created = await googleCalendarFetch(ctx.userId, account.account_email, '/calendars/primary/events', {
+          method: 'POST',
+          json: body,
+          query: input?.avec_meet ? { conferenceDataVersion: 1, sendUpdates: 'all' } : { sendUpdates: 'all' },
+        })
+        return {
+          ok: true, event_id: created?.id, titre, debut: body.start.dateTime, fin: body.end.dateTime,
+          lien: created?.htmlLink || null, meet: extractMeetUrl(created),
+        }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || 'Erreur creer_evenement_calendar' }
       }
     }
 
