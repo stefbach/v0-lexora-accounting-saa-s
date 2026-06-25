@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, AlertTriangle, CheckCircle2, Clock, FileSpreadsheet } from "lucide-react"
 import { toast } from "sonner"
 import { notifySuccess, notifyError } from "@/lib/utils/toast"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Cycle {
   employe_id: string
@@ -58,13 +59,15 @@ function dateFR(iso: string | null) {
 }
 
 function StatutBadge({ statut }: { statut: string }) {
-  if (statut === 'valide') return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100"><CheckCircle2 className="w-3 h-3 mr-1" />Validé</Badge>
-  if (statut === 'paye') return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100"><CheckCircle2 className="w-3 h-3 mr-1" />Payé</Badge>
-  if (statut === 'annule') return <Badge className="bg-gray-100 text-gray-500 hover:bg-gray-100">Annulé</Badge>
-  return <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100"><Clock className="w-3 h-3 mr-1" />En attente</Badge>
+  const locale = getLocale()
+  if (statut === 'valide') return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100"><CheckCircle2 className="w-3 h-3 mr-1" />{t('rhc.cil.statut_valide', locale)}</Badge>
+  if (statut === 'paye') return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100"><CheckCircle2 className="w-3 h-3 mr-1" />{t('rhc.cil.statut_paye', locale)}</Badge>
+  if (statut === 'annule') return <Badge className="bg-gray-100 text-gray-500 hover:bg-gray-100">{t('rhc.cil.statut_annule', locale)}</Badge>
+  return <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100"><Clock className="w-3 h-3 mr-1" />{t('rhc.cil.statut_attente', locale)}</Badge>
 }
 
 export function CashInLieuPanel() {
+  const locale = getLocale()
   const [loading, setLoading] = useState(true)
   const [cycles, setCycles] = useState<Cycle[]>([])
   const [historique, setHistorique] = useState<Paiement[]>([])
@@ -84,7 +87,7 @@ export function CashInLieuPanel() {
       const res = await fetch(`/api/admin/cash-in-lieu?jours_avance=${joursAvance}`)
       const data = await res.json()
       if (!res.ok) {
-        notifyError('Charger cash-in-lieu', data.error)
+        notifyError(t('rhc.cil.toast.load', locale), data.error)
         setCycles([])
         setHistorique([])
         return
@@ -92,7 +95,7 @@ export function CashInLieuPanel() {
       setCycles(data.cycles_a_clore || [])
       setHistorique(data.historique || [])
     } catch (e: unknown) {
-      notifyError('Erreur réseau', e)
+      notifyError(t('rhc.cil.toast.network', locale), e)
     } finally {
       setLoading(false)
     }
@@ -115,9 +118,9 @@ export function CashInLieuPanel() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) notifyError('Générer paiement', data.error)
+      if (!res.ok) notifyError(t('rhc.cil.toast.gen_paiement', locale), data.error)
       else {
-        notifySuccess(data.already_exists ? 'Paiement déjà créé' : `Paiement créé : ${fmt(data.montant_total)} MUR`)
+        notifySuccess(data.already_exists ? t('rhc.cil.toast.deja_cree', locale) : t('rhc.cil.toast.cree', locale).replace('{amt}', fmt(data.montant_total)))
         await load()
       }
     } finally {
@@ -140,13 +143,13 @@ export function CashInLieuPanel() {
       })
       const data = await res.json()
       if (!res.ok) {
-        notifyError('Générer paiements', data.error)
+        notifyError(t('rhc.cil.toast.gen_paiements', locale), data.error)
         return
       }
       if (dryRun) {
-        toast.info(`Dry-run : ${data.nb_eligibles} cycles, total ~${fmt(data.montant_total_estime)} MUR`)
+        toast.info(t('rhc.cil.toast.dryrun', locale).replace('{nb}', String(data.nb_eligibles)).replace('{amt}', fmt(data.montant_total_estime)))
       } else {
-        notifySuccess(`${data.nb_traites} paiements créés (${fmt(data.montant_total)} MUR), ${data.nb_erreurs} erreurs`)
+        notifySuccess(t('rhc.cil.toast.batch_done', locale).replace('{nb}', String(data.nb_traites)).replace('{amt}', fmt(data.montant_total)).replace('{err}', String(data.nb_erreurs)))
         await load()
       }
     } finally {
@@ -163,21 +166,21 @@ export function CashInLieuPanel() {
         body: JSON.stringify({ action: 'valider', paiement_id: paiementId }),
       })
       const data = await res.json()
-      if (!res.ok) notifyError('Valider paiement', data.error)
-      else { notifySuccess('Paiement validé'); await load() }
+      if (!res.ok) notifyError(t('rhc.cil.toast.valider', locale), data.error)
+      else { notifySuccess(t('rhc.cil.toast.valide', locale)); await load() }
     } finally {
       setActionLoading(null)
     }
   }
 
   const annuler = async (paiementId: string) => {
-    if (!confirm('Annuler ce paiement compensation ?')) return
+    if (!confirm(t('rhc.cil.confirm_annuler', locale))) return
     setActionLoading(paiementId)
     try {
       const res = await fetch(`/api/admin/cash-in-lieu?id=${paiementId}`, { method: 'DELETE' })
       const data = await res.json()
-      if (!res.ok) notifyError('Annuler paiement', data.error)
-      else { notifySuccess('Paiement annulé'); await load() }
+      if (!res.ok) notifyError(t('rhc.cil.toast.annuler', locale), data.error)
+      else { notifySuccess(t('rhc.cil.toast.annule', locale)); await load() }
     } finally {
       setActionLoading(null)
     }
@@ -190,10 +193,9 @@ export function CashInLieuPanel() {
         <CardHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
-              <CardTitle className="text-[#0B0F2E]">Cycles AL à clore — Cash-in-lieu (WRA S.45)</CardTitle>
+              <CardTitle className="text-[#0B0F2E]">{t('rhc.cil.title', locale)}</CardTitle>
               <p className="text-xs text-gray-500 mt-1">
-                Paiement compensatoire OBLIGATOIRE des jours d&apos;Annual Leave non pris en fin de cycle.
-                Section 45 WRA 2019 : <em>&quot;The worker shall be paid a normal day&apos;s pay&quot;</em>.
+                {t('rhc.cil.subtitle', locale)} <em>{t('rhc.cil.subtitle_quote', locale)}</em>.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -202,11 +204,11 @@ export function CashInLieuPanel() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="7">Dans 7 jours</SelectItem>
-                  <SelectItem value="30">Dans 30 jours</SelectItem>
-                  <SelectItem value="60">Dans 60 jours</SelectItem>
-                  <SelectItem value="90">Dans 90 jours</SelectItem>
-                  <SelectItem value="180">Dans 180 jours</SelectItem>
+                  <SelectItem value="7">{t('rhc.cil.dans_jours', locale).replace('{n}', '7')}</SelectItem>
+                  <SelectItem value="30">{t('rhc.cil.dans_jours', locale).replace('{n}', '30')}</SelectItem>
+                  <SelectItem value="60">{t('rhc.cil.dans_jours', locale).replace('{n}', '60')}</SelectItem>
+                  <SelectItem value="90">{t('rhc.cil.dans_jours', locale).replace('{n}', '90')}</SelectItem>
+                  <SelectItem value="180">{t('rhc.cil.dans_jours', locale).replace('{n}', '180')}</SelectItem>
                 </SelectContent>
               </Select>
               <input
@@ -214,14 +216,14 @@ export function CashInLieuPanel() {
                 className="h-9 px-2 text-xs border rounded"
                 value={periodeBulletin}
                 onChange={e => setPeriodeBulletin(e.target.value)}
-                title="Période bulletin pour injecter le paiement (1er du mois)"
+                title={t('rhc.cil.periode_title', locale)}
               />
               <Button onClick={() => genererTous(true)} disabled={actionLoading !== null} variant="outline" size="sm" className="text-xs">
-                Dry-run
+                {t('rhc.cil.dry_run', locale)}
               </Button>
               <Button onClick={() => genererTous(false)} disabled={actionLoading !== null} className="bg-purple-600 text-white text-xs">
                 {actionLoading === 'batch' && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                Générer tous
+                {t('rhc.cil.generer_tous', locale)}
               </Button>
             </div>
           </div>
@@ -230,20 +232,20 @@ export function CashInLieuPanel() {
           {loading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
           ) : cycles.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">Aucun cycle à clore dans les {joursAvance} prochains jours.</div>
+            <div className="text-center py-12 text-gray-500">{t('rhc.cil.aucun_cycle', locale).replace('{n}', joursAvance)}</div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Employé</TableHead>
-                    <TableHead>Société</TableHead>
-                    <TableHead className="text-xs">Cycle fin</TableHead>
-                    <TableHead className="text-xs text-center">J avant fin</TableHead>
-                    <TableHead className="text-center">AL solde</TableHead>
-                    <TableHead className="text-right">Montant estimé</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead>{t('rhc.cil.col_employe', locale)}</TableHead>
+                    <TableHead>{t('rhc.cil.col_societe', locale)}</TableHead>
+                    <TableHead className="text-xs">{t('rhc.cil.col_cycle_fin', locale)}</TableHead>
+                    <TableHead className="text-xs text-center">{t('rhc.cil.col_j_avant', locale)}</TableHead>
+                    <TableHead className="text-center">{t('rhc.cil.col_al_solde', locale)}</TableHead>
+                    <TableHead className="text-right">{t('rhc.cil.col_montant', locale)}</TableHead>
+                    <TableHead>{t('rhc.cil.col_statut', locale)}</TableHead>
+                    <TableHead className="text-right">{t('rhc.cil.col_action', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -265,16 +267,16 @@ export function CashInLieuPanel() {
                         </TableCell>
                         <TableCell>
                           {c.deja_paye ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Déjà payé</Badge>
+                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">{t('rhc.cil.deja_paye', locale)}</Badge>
                           ) : (
-                            <Badge variant="outline" className="text-xs">À traiter</Badge>
+                            <Badge variant="outline" className="text-xs">{t('rhc.cil.a_traiter', locale)}</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
                           {!c.deja_paye && (
                             <Button onClick={() => generer(c)} disabled={actionLoading === c.employe_id} size="sm" className="bg-purple-600 text-white text-xs h-7">
                               {actionLoading === c.employe_id && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-                              Générer
+                              {t('rhc.cil.generer', locale)}
                             </Button>
                           )}
                         </TableCell>
@@ -293,25 +295,25 @@ export function CashInLieuPanel() {
         <CardHeader>
           <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
             <FileSpreadsheet className="w-4 h-4" />
-            Historique des paiements compensation (100 derniers)
+            {t('rhc.cil.histo_title', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {historique.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 text-sm">Aucun paiement compensation enregistré.</div>
+            <div className="text-center py-8 text-gray-500 text-sm">{t('rhc.cil.histo_vide', locale)}</div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">Type</TableHead>
-                    <TableHead className="text-xs">Cycle</TableHead>
-                    <TableHead className="text-xs text-center">Jours</TableHead>
-                    <TableHead className="text-xs text-right">Montant</TableHead>
-                    <TableHead className="text-xs">Période bulletin</TableHead>
-                    <TableHead className="text-xs">Statut</TableHead>
-                    <TableHead className="text-xs">Créé le</TableHead>
-                    <TableHead className="text-right text-xs">Action</TableHead>
+                    <TableHead className="text-xs">{t('rhc.cil.col_type', locale)}</TableHead>
+                    <TableHead className="text-xs">{t('rhc.cil.col_cycle', locale)}</TableHead>
+                    <TableHead className="text-xs text-center">{t('rhc.cil.col_jours', locale)}</TableHead>
+                    <TableHead className="text-xs text-right">{t('rhc.cil.col_montant2', locale)}</TableHead>
+                    <TableHead className="text-xs">{t('rhc.cil.col_periode', locale)}</TableHead>
+                    <TableHead className="text-xs">{t('rhc.cil.col_statut', locale)}</TableHead>
+                    <TableHead className="text-xs">{t('rhc.cil.col_cree', locale)}</TableHead>
+                    <TableHead className="text-right text-xs">{t('rhc.cil.col_action', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -328,10 +330,10 @@ export function CashInLieuPanel() {
                         {p.statut === 'en_attente' && (
                           <div className="flex gap-1 justify-end">
                             <Button onClick={() => valider(p.id)} disabled={actionLoading === p.id} size="sm" variant="ghost" className="h-7 px-2 text-xs text-blue-700">
-                              Valider
+                              {t('rhc.cil.valider', locale)}
                             </Button>
                             <Button onClick={() => annuler(p.id)} disabled={actionLoading === p.id} size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-600">
-                              Annuler
+                              {t('rhc.cil.annuler', locale)}
                             </Button>
                           </div>
                         )}
