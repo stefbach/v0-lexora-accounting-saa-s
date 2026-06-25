@@ -17,6 +17,9 @@ import { accountChunk } from './i18n/account'
 import { clientbilanChunk } from './i18n/client_bilan'
 import { clientfacturesChunk } from './i18n/client_factures'
 import { clientmraChunk } from './i18n/client_mra'
+import { jurcontratsChunk } from './i18n/jur_contrats'
+import { jurdossiersChunk } from './i18n/jur_dossiers'
+import { jursocieteChunk } from './i18n/jur_societe'
 
 export type Locale = 'fr' | 'en'
 
@@ -645,6 +648,9 @@ const translations: Record<Locale, Record<string, string>> = {
     ...clientbilanChunk.fr,
     ...clientfacturesChunk.fr,
     ...clientmraChunk.fr,
+    ...jurcontratsChunk.fr,
+    ...jurdossiersChunk.fr,
+    ...jursocieteChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -667,6 +673,9 @@ const translations: Record<Locale, Record<string, string>> = {
     ...clientbilanChunk.en,
     ...clientfacturesChunk.en,
     ...clientmraChunk.en,
+    ...jurcontratsChunk.en,
+    ...jurdossiersChunk.en,
+    ...jursocieteChunk.en,
   },
 }
 
