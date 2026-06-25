@@ -14,6 +14,9 @@ import { mraExtChunk } from './i18n/mra_ext'
 import { salarieChunk } from './i18n/salarie'
 import { telegramChunk } from './i18n/telegram'
 import { accountChunk } from './i18n/account'
+import { clientbilanChunk } from './i18n/client_bilan'
+import { clientfacturesChunk } from './i18n/client_factures'
+import { clientmraChunk } from './i18n/client_mra'
 
 export type Locale = 'fr' | 'en'
 
@@ -639,6 +642,9 @@ const translations: Record<Locale, Record<string, string>> = {
     ...salarieChunk.fr,
     ...telegramChunk.fr,
     ...accountChunk.fr,
+    ...clientbilanChunk.fr,
+    ...clientfacturesChunk.fr,
+    ...clientmraChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -658,6 +664,9 @@ const translations: Record<Locale, Record<string, string>> = {
     ...salarieChunk.en,
     ...telegramChunk.en,
     ...accountChunk.en,
+    ...clientbilanChunk.en,
+    ...clientfacturesChunk.en,
+    ...clientmraChunk.en,
   },
 }
 
