@@ -24,6 +24,9 @@ import { comptableaChunk } from './i18n/comptable_a'
 import { comptablebChunk } from './i18n/comptable_b'
 import { adminaChunk } from './i18n/admin_a'
 import { adminbChunk } from './i18n/admin_b'
+import { compmarketChunk } from './i18n/comp_market'
+import { complayoutChunk } from './i18n/comp_layout'
+import { compdialogsChunk } from './i18n/comp_dialogs'
 
 export type Locale = 'fr' | 'en'
 
@@ -659,6 +662,9 @@ const translations: Record<Locale, Record<string, string>> = {
     ...comptablebChunk.fr,
     ...adminaChunk.fr,
     ...adminbChunk.fr,
+    ...compmarketChunk.fr,
+    ...complayoutChunk.fr,
+    ...compdialogsChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -688,6 +694,9 @@ const translations: Record<Locale, Record<string, string>> = {
     ...comptablebChunk.en,
     ...adminaChunk.en,
     ...adminbChunk.en,
+    ...compmarketChunk.en,
+    ...complayoutChunk.en,
+    ...compdialogsChunk.en,
   },
 }
 
