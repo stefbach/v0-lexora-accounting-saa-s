@@ -176,6 +176,10 @@ export default defineConfig({
         'lib/accounting/period-lock.ts',
         // classification-engine.ts & validate-bank-currency.ts — RÉINTÉGRÉS au
         // gate (purs, couverts par leurs *.test.ts).
+        // lib/agent — DB-coupled agentic orchestrator (tool dispatchers, Claude
+        // tool_use loop). Integration-tested via the agent-chat API route; not
+        // suitable for unit coverage without full Supabase + Claude mocks.
+        'lib/agent/**',
         'lib/audit/intercompany-reconciliation.ts',
         'lib/jurisdictions/ohada/payroll/**',
         'lib/jurisdictions/ohada/statements/notes-annexes.ts',
