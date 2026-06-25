@@ -63,7 +63,9 @@ const BOM_URL = 'https://www.bom.mu/markets/foreign-exchange/consolidated-indica
 // Mapping pays → code ISO 4217. BOM affiche "USA", "EMU", etc. dans la
 // première colonne, le code ISO étant dans la deuxième colonne. On ancre
 // l'extraction sur le code ISO (plus stable).
-const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CNY', 'INR'] as const
+// Depuis 2026 BOM publie aussi ZAR, SGD, CHF dans le tableau consolidé — on
+// les prend à la source officielle (meilleure traçabilité MRA que l'API tierce).
+const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CNY', 'INR', 'ZAR', 'SGD', 'CHF'] as const
 
 /**
  * Fetche et parse les taux BOM consolidés du jour.
@@ -108,42 +110,52 @@ export async function fetchBomRates(
 /**
  * Parse le tableau HTML des taux BOM.
  *
- * Le format attendu (mai 2026) :
- *   <tr>
- *     <td>USA</td><td>USD 1</td>
- *     <td>46.6792</td><td>46.6857</td>
- *     <td>46.5314</td><td>48.0791</td>
- *   </tr>
+ * Structure réelle (2026), table « cols-8 » :
+ *   Country | Currency | Buying(T.T, D.D, Notes) | Selling(T.T, Notes) | Date
+ *   <td …views-field-field-currency>USD 1</td>
+ *   <td …php>47.4964</td>   ← Buy  T.T
+ *   <td …php-1>47.4993</td> ← Buy  D.D
+ *   <td …php-2>47.3447</td> ← Buy  Notes
+ *   <td …php-3>48.9127</td> ← Sell T.T
+ *   <td …php-4>49.1551</td> ← Sell Notes
  *
- * On ancre sur le code ISO (3 lettres) + unité dans la deuxième cellule
- * pour rester tolérant aux changements de label pays.
+ * Le mid-rate comptable = (Buy T.T + Sell T.T) / 2 — soit nums[0] et nums[3].
+ *
+ * On ancre STRICTEMENT sur la cellule devise « CUR <unit> » suivie de son
+ * `</td>`, puis on lit les `<td>` numériques de CETTE ligne uniquement. On
+ * évite ainsi : (a) le menu déroulant pays en haut de page (qui utilise des
+ * noms de pays, pas « USD 1 »), (b) l'ancien bug du `\D+` en mode `s` qui
+ * balayait tout le document et mélangeait les colonnes.
  */
 export function parseBomTable(html: string): BomRate[] {
   const rates: BomRate[] = []
 
   for (const currency of SUPPORTED_CURRENCIES) {
-    // Capture : code ISO + unité, puis 4 nombres (buyTT, sellTT, notesBuy, notesSell)
-    // \s+ tolère les espaces / sauts de ligne entre les cellules.
-    // Le \D+ entre les nombres absorbe les balises </td><td>.
-    const pattern = new RegExp(
-      `${currency}\\s+(\\d+)` +
-      `\\D+(\\d+(?:\\.\\d+)?)` +
-      `\\D+(\\d+(?:\\.\\d+)?)` +
-      `\\D+(\\d+(?:\\.\\d+)?)` +
-      `\\D+(\\d+(?:\\.\\d+)?)`,
-      's',
+    // Ancre sur la cellule devise « CUR <unit> » + fermeture </td>.
+    const anchor = new RegExp(`${currency}\\s+(\\d+)\\s*</td>`)
+    const am = anchor.exec(html)
+    if (!am || am.index === undefined) continue
+
+    const unit = Number(am[1]) || 1
+
+    // Cellules numériques de la ligne (fenêtre bornée pour ne pas déborder
+    // sur la devise suivante).
+    const windowStart = am.index + am[0].length
+    const window = html.slice(windowStart, windowStart + 1600)
+    const nums = [...window.matchAll(/<td[^>]*>\s*(\d+(?:\.\d+)?)\s*<\/td>/g)].map(
+      (m) => Number(m[1]),
     )
-    const m = html.match(pattern)
-    if (!m) continue
+    if (nums.length < 2) continue
 
-    const unit = Number(m[1]) || 1
-    const buyTT = Number(m[2])
-    const sellTT = Number(m[3])
-    const notesBuy = Number(m[4])
-    const notesSell = Number(m[5])
+    // Format 5 colonnes (3 Buying + 2 Selling) : Sell T.T = index 3.
+    // Repli sur l'ancien format 4 colonnes (Buy T.T, Sell T.T, …) : index 1.
+    const isFiveCol = nums.length >= 5
+    const buyTT = nums[0]
+    const sellTT = isFiveCol ? nums[3] : nums[1]
+    const notesBuy = isFiveCol ? nums[2] : nums[2] ?? 0
+    const notesSell = isFiveCol ? nums[4] : nums[3] ?? 0
 
-    // Sanity check : les 4 valeurs doivent être positives et dans un ordre
-    // cohérent (buy <= sell). Sinon on rejette plutôt que de polluer la DB.
+    // Sanity check : valeurs positives et spread T.T cohérent.
     if (!isFinite(buyTT) || !isFinite(sellTT) || buyTT <= 0 || sellTT <= 0) continue
     if (Math.abs(buyTT - sellTT) / buyTT > 0.20) continue  // spread > 20% improbable
 
