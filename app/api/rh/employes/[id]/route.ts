@@ -237,7 +237,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             console.warn('[employes PATCH] bulletins_paie update skipped:', bulErr.message)
           } else {
             bulletinsUpdated = updatableIds.length
-            console.log(`[employes PATCH] salaire ${oldSalaire} → ${body.salaire_base} : ${bulletinsUpdated} bulletin(s) ${periodeStr} mis à jour, ${bulletinsLocked} verrouillé(s) ignoré(s)`)
+            console.warn(`[employes PATCH] salaire ${oldSalaire} → ${body.salaire_base} : ${bulletinsUpdated} bulletin(s) ${periodeStr} mis à jour, ${bulletinsLocked} verrouillé(s) ignoré(s)`)
           }
         }
       } catch (e: any) {

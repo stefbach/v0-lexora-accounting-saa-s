@@ -123,7 +123,7 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     // Generate all reports
-    console.log(
+    console.warn(
       `[Intercompany Reconciliation] Generating reports for ${startDate} to ${endDate}`
     )
 

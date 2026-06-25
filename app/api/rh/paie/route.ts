@@ -254,7 +254,7 @@ export async function GET(request: Request) {
   // Sprint 5 BUG A — traçabilité étape par étape pour identifier la
   // ligne qui provoque le 500. Les logs apparaissent dans Vercel Functions.
   const step = (label: string, extra?: any) =>
-    console.log(`[paie GET] ${label}`, extra !== undefined ? extra : '')
+    console.warn(`[paie GET] ${label}`, extra !== undefined ? extra : '')
   try {
     step('START')
     // FIX MCP : resolveUserAuth pour outil MCP `list_bulletins_paie` (session + X-Lexora-Api-Key).
@@ -448,7 +448,7 @@ export async function GET(request: Request) {
       total_refacture: enriched.reduce((s, b) => s + (Number(b.montant_refacture_mur) || 0), 0),
     }
 
-    console.log(`[paie GET] ${enriched.length} bulletins, periode=${periode}, societe=${societe_id || 'all'}`)
+    console.warn(`[paie GET] ${enriched.length} bulletins, periode=${periode}, societe=${societe_id || 'all'}`)
 
     // Migration 135 — exposer pointage_actif au client pour qu'il puisse
     // afficher le bandeau d'info correspondant. Lecture defensive :
@@ -727,7 +727,7 @@ export async function POST(request: Request) {
           supabase, emp.id, periodeStartSingle, periodeEndSingle,
         )
         if (otFromHeuresTravaillees > 0) {
-          console.log(
+          console.warn(
             `[paie/recalcul] OT-override employe=${emp.id} nom=${emp.nom} ` +
             `montant=${otFromHeuresTravaillees} (source=heures_travaillees, ignore pointages)`,
           )
@@ -825,7 +825,7 @@ export async function POST(request: Request) {
           supabase, emp.id, periodeStartSingle, periodeEndSingle,
         )
         if (unpaidImplSingle.jours > 0) {
-          console.log(
+          console.warn(
             `[paie] UL implicite (single) — ${emp.prenom} ${emp.nom} ${periodeStr}: ` +
             `+${unpaidImplSingle.jours}j (${unpaidImplSingle.motif})`,
           )
@@ -834,7 +834,7 @@ export async function POST(request: Request) {
       }
 
       if (joursUnpaidLeaveSingle > 0) {
-        console.log(`[paie] UL detected (single) — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeaveSingle}j`)
+        console.warn(`[paie] UL detected (single) — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeaveSingle}j`)
       }
 
       // INTÉGRATION 2 + Migration 135 — Absences injustifiées par JOUR
@@ -959,7 +959,7 @@ export async function POST(request: Request) {
       if (prorataSingle.ratio < 1) {
         const originalBase = salaire_base_mur
         salaire_base_mur = Math.round(salaire_base_mur * prorataSingle.ratio * 100) / 100
-        console.log(`[paie calculer] PRORATA ${emp.prenom} ${emp.nom} — ${prorataSingle.motif}, base ${originalBase} → ${salaire_base_mur}`)
+        console.warn(`[paie calculer] PRORATA ${emp.prenom} ${emp.nom} — ${prorataSingle.motif}, base ${originalBase} → ${salaire_base_mur}`)
       }
 
       // Bug A fix (cas Alicia Désiré sortie le 18) — détection explicite
@@ -1086,7 +1086,7 @@ export async function POST(request: Request) {
         })
         if (nbJoursOuvresMoisSingle > 0 && salaireBrutBaseSingle > 0) {
           montant_ul_single = Math.round(joursUnpaidLeaveSingle * (salaireBrutBaseSingle / nbJoursOuvresMoisSingle) * 100) / 100
-          console.log(`[paie] UL OK (single) ${emp.prenom} ${emp.nom} — ${joursUnpaidLeaveSingle}j × (${salaireBrutBaseSingle} / ${nbJoursOuvresMoisSingle}) = ${montant_ul_single} MUR`)
+          console.warn(`[paie] UL OK (single) ${emp.prenom} ${emp.nom} — ${joursUnpaidLeaveSingle}j × (${salaireBrutBaseSingle} / ${nbJoursOuvresMoisSingle}) = ${montant_ul_single} MUR`)
         } else {
           console.warn(`[paie] UL SKIP zero-guard (single) — ${emp.prenom} ${emp.nom} joursOuvres=${nbJoursOuvresMoisSingle} salaireBrut=${salaireBrutBaseSingle}`)
         }
@@ -1284,7 +1284,7 @@ export async function POST(request: Request) {
           if (ecrDelErr) {
             console.warn('[paie calculer] DELETE ecritures ancien bulletin failed:', ecrDelErr.message)
           } else if (count && count > 0) {
-            console.log(`[paie calculer] ${count} écritures OD-PAIE supprimées avant archivage du bulletin ${existingActive.id}`)
+            console.warn(`[paie calculer] ${count} écritures OD-PAIE supprimées avant archivage du bulletin ${existingActive.id}`)
           }
         }
         const { error: archErr } = await supabase
@@ -1483,15 +1483,15 @@ export async function POST(request: Request) {
       // Log filtered-out employees for debugging
       const excluded = allEmps.filter(e => !employes.includes(e))
       for (const e of excluded) {
-        console.log(`[paie batch] EXCLU: ${e.prenom} ${e.nom} — date_depart=${e.date_depart}, actif=${e.actif}`)
+        console.warn(`[paie batch] EXCLU: ${e.prenom} ${e.nom} — date_depart=${e.date_depart}, actif=${e.actif}`)
       }
       // Log all employees with their depart status for debugging
       for (const e of allEmps) {
         if (e.nom && (e.nom.toLowerCase().includes('godder') || e.nom.toLowerCase().includes('haggoo'))) {
-          console.log(`[paie batch] DEBUG ${e.prenom} ${e.nom}: date_depart=${JSON.stringify(e.date_depart)}, actif=${JSON.stringify(e.actif)}, exclure_mra=${JSON.stringify(e.exclure_mra)}, included=${employes.includes(e)}`)
+          console.warn(`[paie batch] DEBUG ${e.prenom} ${e.nom}: date_depart=${JSON.stringify(e.date_depart)}, actif=${JSON.stringify(e.actif)}, exclure_mra=${JSON.stringify(e.exclure_mra)}, included=${employes.includes(e)}`)
         }
       }
-      console.log(`[paie batch] ${employes.length} employes actifs sur ${allEmps.length} total pour societe=${societe_id}, periode=${periodeStr}`)
+      console.warn(`[paie batch] ${employes.length} employes actifs sur ${allEmps.length} total pour societe=${societe_id}, periode=${periodeStr}`)
 
       // Migration 135 — fetch pointage_actif UNE FOIS pour tout le batch
       // (toutes les écritures partagent la même société). Si OFF (défaut),
@@ -1509,7 +1509,7 @@ export async function POST(request: Request) {
           console.warn('[paie batch] pointage_actif exception:', e?.message || e)
         }
       }
-      console.log(`[paie batch] pointage_actif=${pointageActifBatch} pour societe=${societe_id}`)
+      console.warn(`[paie batch] pointage_actif=${pointageActifBatch} pour societe=${societe_id}`)
 
       // Get variables from request body if provided
       const requestVariables: Record<string, any> = {}
@@ -1785,7 +1785,7 @@ export async function POST(request: Request) {
             supabase, emp.id, periodeStart, periodeEnd,
           )
           if (unpaidImplBatch.jours > 0) {
-            console.log(
+            console.warn(
               `[paie] UL implicite — ${emp.prenom} ${emp.nom} ${periodeStr}: ` +
               `+${unpaidImplBatch.jours}j (${unpaidImplBatch.motif})`,
             )
@@ -1794,7 +1794,7 @@ export async function POST(request: Request) {
         }
 
         if (joursUnpaidLeave > 0) {
-          console.log(`[paie] UL detected — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeave}j (${(congesApprouves || []).filter(c => String(c.type_conge || '').trim().toUpperCase() === 'UL').map(c => `${c.date_debut}→${c.date_fin}`).join(', ')})`)
+          console.warn(`[paie] UL detected — ${emp.prenom} ${emp.nom} ${periodeStr}: ${joursUnpaidLeave}j (${(congesApprouves || []).filter(c => String(c.type_conge || '').trim().toUpperCase() === 'UL').map(c => `${c.date_debut}→${c.date_fin}`).join(', ')})`)
         }
 
         // Monthly OT threshold: standard hours minus sick leave hours
@@ -1839,7 +1839,7 @@ export async function POST(request: Request) {
             supabase, emp.id, periodeStartBatch, periodeEndBatch,
           )
           if (otFromHeuresTravaillees > 0) {
-            console.log(
+            console.warn(
               `[paie/recalcul] OT-override employe=${emp.id} nom=${emp.nom} ` +
               `montant=${otFromHeuresTravaillees} (source=heures_travaillees, ignore pointages)`,
             )
@@ -1961,7 +1961,7 @@ export async function POST(request: Request) {
         if (prorataBatch.ratio < 1) {
           const originalBase = salaire_base_mur
           salaire_base_mur = Math.round(salaire_base_mur * prorataBatch.ratio * 100) / 100
-          console.log(`[paie batch] PRORATA ${emp.prenom} ${emp.nom} — ${prorataBatch.motif}, base ${originalBase} → ${salaire_base_mur}`)
+          console.warn(`[paie batch] PRORATA ${emp.prenom} ${emp.nom} — ${prorataBatch.motif}, base ${originalBase} → ${salaire_base_mur}`)
         }
 
         // Sprint 14 FIX 5 — Bonus 13ème mois complet (WRA Art. 52 + Finance Act).
@@ -1994,7 +1994,7 @@ export async function POST(request: Request) {
           if (moisDansAnnee >= 8) bonusFactor = 1
           else if (moisDansAnnee >= 3) bonusFactor = moisDansAnnee / 12
           eoy_bonus_montant = Math.round(totalEmoluments * bonusFactor)
-          console.log(`[paie batch] EOY BONUS ${emp.prenom} ${emp.nom}: emoluments=${totalEmoluments} moisService=${moisService} moisDansAnnee=${moisDansAnnee} factor=${bonusFactor} bonus=${eoy_bonus_montant}`)
+          console.warn(`[paie batch] EOY BONUS ${emp.prenom} ${emp.nom}: emoluments=${totalEmoluments} moisService=${moisService} moisDansAnnee=${moisDansAnnee} factor=${bonusFactor} bonus=${eoy_bonus_montant}`)
         }
 
         const isHorsMRA = emp.exclure_mra === true
@@ -2063,7 +2063,7 @@ export async function POST(request: Request) {
           if (nbJoursOuvresMois > 0 && salaireBrutBaseBatch > 0) {
             montant_ul = Math.round(joursUnpaidLeave * (salaireBrutBaseBatch / nbJoursOuvresMois) * 100) / 100
             const tag = isHorsMRA ? ' [hors MRA — déduction net seule]' : ''
-            console.log(`[paie] UL OK ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutBaseBatch} / ${nbJoursOuvresMois}) = ${montant_ul} MUR${tag}`)
+            console.warn(`[paie] UL OK ${emp.prenom} ${emp.nom} — ${joursUnpaidLeave}j × (${salaireBrutBaseBatch} / ${nbJoursOuvresMois}) = ${montant_ul} MUR${tag}`)
           } else {
             ul_skip_reason = `joursOuvres=${nbJoursOuvresMois} salaireBrut=${salaireBrutBaseBatch}`
             console.warn(`[paie] UL SKIP zero-guard — ${emp.prenom} ${emp.nom} ${ul_skip_reason}`)
@@ -2155,7 +2155,7 @@ export async function POST(request: Request) {
                 solde_restant: Math.max(0, newSolde),
                 statut: newSolde <= 0 ? 'rembourse' : 'actif',
               }).eq('id', avanceActive.id)
-              console.log(`[paie batch] AVANCE ${emp.prenom} ${emp.nom}: -${avanceDeduction} MUR (solde restant: ${Math.max(0, newSolde)})`)
+              console.warn(`[paie batch] AVANCE ${emp.prenom} ${emp.nom}: -${avanceDeduction} MUR (solde restant: ${Math.max(0, newSolde)})`)
             }
           }
         } catch (e: any) {
@@ -2199,7 +2199,7 @@ export async function POST(request: Request) {
         const notesResume = isHorsMRA
           ? `Base: ${salaire_base_mur} [HORS MRA - Brut=Net=Base]${prorataDetail}`
           : `Base: ${salaire_base_mur}${prorataDetail}, Transport: ${transportAlloc}, Petrol: ${petrolAlloc}${phoneDetail}${busDetail}, OT: ${Math.round(total_ot_montant)}${nightDetail}, Primes var: ${primesVariables}${primesFixesDetail}${autoRulesDetail}, Absences: ${jours_absence_injust}j${ulDetail}`
-        console.log(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} phone=${phoneAlloc} bus=${busAlloc} OT=${Math.round(total_ot_montant)} primesVar=${primesVariables} primesFixes=${totalPrimesFixes} abs=${jours_absence_injust}j ul=${joursUnpaidLeave}j${mraTag}`)
+        console.warn(`[paie] ${emp.prenom} ${emp.nom}: base=${salaire_base_mur} transport=${transportAlloc} petrol=${petrolAlloc} phone=${phoneAlloc} bus=${busAlloc} OT=${Math.round(total_ot_montant)} primesVar=${primesVariables} primesFixes=${totalPrimesFixes} abs=${jours_absence_injust}j ul=${joursUnpaidLeave}j${mraTag}`)
 
         const bulletin: Record<string, any> = {
           employe_id: emp.id,
@@ -2260,7 +2260,7 @@ export async function POST(request: Request) {
           'jours_travailles', 'csg_patronal_bonus'
         ]
         for (const f of fieldsToRemove) delete (bulletin as any)[f]
-        console.log(`[paie batch] ${emp.nom} ${emp.prenom}: base=${salaire_base_mur}, brut=${resultat.salaire_brut}, net=${salaire_net_final}`)
+        console.warn(`[paie batch] ${emp.nom} ${emp.prenom}: base=${salaire_base_mur}, brut=${resultat.salaire_brut}, net=${salaire_net_final}`)
 
         // Try upsert first, fallback to select+update/insert if UNIQUE constraint is missing
         let saved: any = null
@@ -2287,7 +2287,7 @@ export async function POST(request: Request) {
           // dans auditRaisonsSkip pour traçabilité.
           if ((existing as any).comptabilise === true) {
             auditRaisonsSkip['comptabilise'] = (auditRaisonsSkip['comptabilise'] || 0) + 1
-            console.log(
+            console.warn(
               `[paie batch FIX-IMMUTABLE] SKIP ${emp.prenom} ${emp.nom} — bulletin comptabilisé ` +
               `(bulletin_id=${existing.id}, ecriture_id=${(existing as any).ecriture_id || 'n/a'})`,
             )
@@ -2296,12 +2296,12 @@ export async function POST(request: Request) {
           // F14 — skip si bulletin verrouille ou deja paye (immuables).
           if (existing.verrouille === true) {
             auditRaisonsSkip['verrouille'] = (auditRaisonsSkip['verrouille'] || 0) + 1
-            console.log(`[paie batch F14] SKIP ${emp.prenom} ${emp.nom} — bulletin verrouille`)
+            console.warn(`[paie batch F14] SKIP ${emp.prenom} ${emp.nom} — bulletin verrouille`)
             continue
           }
           if (existing.date_paiement) {
             auditRaisonsSkip['paye'] = (auditRaisonsSkip['paye'] || 0) + 1
-            console.log(`[paie batch F14] SKIP ${emp.prenom} ${emp.nom} — bulletin paye (${existing.date_paiement})`)
+            console.warn(`[paie batch F14] SKIP ${emp.prenom} ${emp.nom} — bulletin paye (${existing.date_paiement})`)
             continue
           }
           // Bug C fix (mig 425) — archive l'ancien plutôt que de l'écraser.
@@ -2333,7 +2333,7 @@ export async function POST(request: Request) {
             if (ecrDelErr) {
               console.warn('[paie batch] DELETE ecritures ancien bulletin failed:', ecrDelErr.message)
             } else if (count && count > 0) {
-              console.log(`[paie batch] ${count} écritures OD-PAIE supprimées avant archivage du bulletin ${existing.id}`)
+              console.warn(`[paie batch] ${count} écritures OD-PAIE supprimées avant archivage du bulletin ${existing.id}`)
             }
           }
 
@@ -2467,7 +2467,7 @@ export async function POST(request: Request) {
         console.warn('[paie batch F14] audit insert failed (non-blocking):', auditErr?.message || auditErr)
       }
 
-      console.log(`[paie batch F14] ${auditAction} — cibles=${(finalEmployes || []).length} updates=${auditNbUpdates} inserts=${auditNbInserts} skip=${auditNbSkip} erreurs=${auditNbErreurs} duree=${Date.now() - auditStart}ms`)
+      console.warn(`[paie batch F14] ${auditAction} — cibles=${(finalEmployes || []).length} updates=${auditNbUpdates} inserts=${auditNbInserts} skip=${auditNbSkip} erreurs=${auditNbErreurs} duree=${Date.now() - auditStart}ms`)
 
       return NextResponse.json({
         bulletins: bulletinsSauvegardes,

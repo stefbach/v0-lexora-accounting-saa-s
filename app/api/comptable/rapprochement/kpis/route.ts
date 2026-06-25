@@ -87,12 +87,12 @@ export async function GET(request: Request) {
       )
       factures = fb.data || []
       if (factures.length > 0) {
-        console.log(`[kpis] fallback dossier_id=${dossier.id} → ${factures.length} factures`)
+        console.warn(`[kpis] fallback dossier_id=${dossier.id} → ${factures.length} factures`)
       }
     }
 
     if (factures.length === 0) {
-      console.log(`[kpis] WARNING: 0 factures pour societe_id=${societe_id} dossier_id=${dossier?.id || 'n/a'}`)
+      console.warn(`[kpis] WARNING: 0 factures pour societe_id=${societe_id} dossier_id=${dossier?.id || 'n/a'}`)
     }
 
     // Calculer les KPIs

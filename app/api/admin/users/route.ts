@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
           if (retryError) {
             return NextResponse.json({ error: `Auto-fix appliqué mais retry échoue : ${retryError.message}` }, { status: 500 })
           }
-          console.log('[admin/users] Auto-fix role constraint OK, profile créé après retry')
+          console.warn('[admin/users] Auto-fix role constraint OK, profile créé après retry')
         } else {
           return NextResponse.json({
             error: `Le rôle "${role}" n'est pas autorisé par la base. Appelle POST /api/admin/fix-db ou lance supabase/migrations/261_team_leader_role.sql dans Supabase Studio.`,

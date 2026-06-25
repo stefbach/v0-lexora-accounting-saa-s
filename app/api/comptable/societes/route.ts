@@ -73,7 +73,7 @@ export async function GET() {
 
     // Pour TOUS les rôles: ajouter les sociétés via user_societes
     const { data: userSocietes } = await admin.from('user_societes').select('societe_id').eq('user_id', user.id)
-    console.log(`[comptable/societes] user=${user.id} role=${role} before_us=${societeMap.size} user_societes=${(userSocietes||[]).length}`)
+    console.warn(`[comptable/societes] user=${user.id} role=${role} before_us=${societeMap.size} user_societes=${(userSocietes||[]).length}`)
     if (userSocietes && userSocietes.length > 0) {
       const usIds = userSocietes.map(us => us.societe_id).filter(Boolean)
       if (usIds.length > 0) {
@@ -83,7 +83,7 @@ export async function GET() {
     }
 
     const result = Array.from(societeMap.values())
-    console.log(`[comptable/societes] returning ${result.length} societes for user ${user.id}`)
+    console.warn(`[comptable/societes] returning ${result.length} societes for user ${user.id}`)
     return NextResponse.json({ societes: result })
   } catch (e: any) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Erreur inconnue' }, { status: 500 })

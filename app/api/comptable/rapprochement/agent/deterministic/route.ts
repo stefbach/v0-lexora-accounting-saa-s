@@ -129,7 +129,7 @@ export async function POST(request: Request) {
     // Validation optionnelle du format du mois (YYYY-MM)
     const moisFilter = mois && /^\d{4}-\d{2}$/.test(mois) ? mois : null
     if (moisFilter) {
-      console.log(`[auto-classer] scope mensuel actif : ${moisFilter}`)
+      console.warn(`[auto-classer] scope mensuel actif : ${moisFilter}`)
     }
 
     // ── Load exchange rates ──

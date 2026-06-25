@@ -445,7 +445,7 @@ export async function handleMarquerPaye(deps: PostProcessingDeps) {
   if (insErr) {
     console.error('[marquer_paye] insertion failed:', insErr.message)
     if (/duplicate key value|unique constraint/i.test(String(insErr.message || ''))) {
-      console.log('[marquer_paye] already inserted previously, continuing to mark facture paye')
+      console.warn('[marquer_paye] already inserted previously, continuing to mark facture paye')
     } else {
       return NextResponse.json({
         error: `Erreur insertion écritures: ${insErr.message}`,
@@ -507,7 +507,7 @@ export async function handleMarquerPaye(deps: PostProcessingDeps) {
       nb_ecritures: 2,
     }, { status: 500 })
   }
-  console.log('[marquer_paye] facture updated:', factUpdData)
+  console.warn('[marquer_paye] facture updated:', factUpdData)
 
   return NextResponse.json({
     success: true,
@@ -534,7 +534,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
       return NextResponse.json({ error: `Compte "${compte_custom}" absent du plan comptable` }, { status: 400 })
     }
   }
-  console.log(`[classer_transaction] societe=${societe_id} tx=${transaction_id} classification=${classification}`)
+  console.warn(`[classer_transaction] societe=${societe_id} tx=${transaction_id} classification=${classification}`)
 
   const { data: releve, error: relErr } = await supabase
     .from('releves_bancaires').select('id, transactions_json, compte_bancaire_id').eq('id', releve_id).single()
@@ -549,7 +549,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
   const rates: Record<string, number> = await getTauxChange().catch(() => ({ MUR: 1, EUR: 46.50, USD: 44.80, GBP: 54.20 }))
   const txDevise = compteDeviseClasser
   const tauxDevise = rates[txDevise] || 1
-  console.log(`[classer_transaction] devise_compte=${txDevise} taux=${tauxDevise}`)
+  console.warn(`[classer_transaction] devise_compte=${txDevise} taux=${tauxDevise}`)
 
   const txIdx = parseInt(transaction_id.split('-').pop() || '0')
   const txs = [...(releve.transactions_json || [])]
@@ -632,7 +632,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
       error: `Relevé non mis à jour (0 ligne affectée). RLS bloquante ou relevé inexistant.`,
     }, { status: 500 })
   }
-  console.log(`[classer_transaction] releve ${releve_id} mis a jour, tx ${txIdx} classee en ${classification}`)
+  console.warn(`[classer_transaction] releve ${releve_id} mis a jour, tx ${txIdx} classee en ${classification}`)
 
   const CLASSE_COMPTES: Record<string, string> = {
     fournisseur: '401',
@@ -682,7 +682,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
         compte = COMPTE_GROUPE_451
         ctInterSocieteDest = detection.societe_dest_id
         ctInterSocieteScore = detection.score
-        console.log(
+        console.warn(
           `[classer_transaction] INTER-SOCIÉTÉS détecté ` +
           `(${detection.match_method}, score=${detection.score.toFixed(2)}) — ` +
           `compte forcé à 451, dest=${detection.societe_dest_id}`,
@@ -768,7 +768,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
         .neq('journal', 'BNQ')
     }
     if (nbEcrituresSupprimees > 0) {
-      console.log(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folios CL/CLS/BANK/TDS/MC, lettre=${oldLettre})`)
+      console.warn(`[classer_transaction] ${nbEcrituresSupprimees} anciennes ecritures supprimees (ref_folios CL/CLS/BANK/TDS/MC, lettre=${oldLettre})`)
     }
 
     // Reclassification factures.
@@ -784,7 +784,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
         })
         .in('id', oldFactureIds)
       if (!resetFacErr) {
-        console.log(`[classer_transaction] ${oldFactureIds.length} facture(s) remise(s) en_attente (classification devient ${classification})`)
+        console.warn(`[classer_transaction] ${oldFactureIds.length} facture(s) remise(s) en_attente (classification devient ${classification})`)
       }
       txs[txIdx] = { ...txs[txIdx], facture_id: null, facture_ids: undefined, rapprochement_multi: undefined, nb_factures: undefined }
       await supabase.from('releves_bancaires').update({ transactions_json: txs }).eq('id', releve_id)
@@ -815,7 +815,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
             .update({ solde: Math.round(newSolde * 100) / 100, updated_at: new Date().toISOString() })
             .eq('id', ccaId)
         }
-        console.log(`[classer_transaction] ${nbMvtsSupprimees} ancien(s) mouvement(s) CCA supprimé(s) sur ${ccaIds.length} compte(s) — soldes recalculés`)
+        console.warn(`[classer_transaction] ${nbMvtsSupprimees} ancien(s) mouvement(s) CCA supprimé(s) sur ${ccaIds.length} compte(s) — soldes recalculés`)
       }
     } catch (cleanupErr) {
       console.warn('[classer_transaction] CCA cleanup failed:', cleanupErr)
@@ -862,14 +862,14 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
           .eq('ref_folio', refFolio)
           .neq('numero_compte', '512')
         nbEcritures = (existing?.length || 0) + 1
-        console.log(`[classer_transaction] ecritures deja existantes (re-click) pour ref_folio=${refFolio}, mises a jour avec nouvelle classif=${classification}`)
+        console.warn(`[classer_transaction] ecritures deja existantes (re-click) pour ref_folio=${refFolio}, mises a jour avec nouvelle classif=${classification}`)
       } else {
         ecrituresError = insEcrErr.message
         console.error('[classer_transaction] insertion ecritures FAILED:', insEcrErr.message, insEcrErr)
       }
     } else {
       nbEcritures = insEcrData?.length || 2
-      console.log('[classer_transaction] ecritures inserees:', nbEcritures)
+      console.warn('[classer_transaction] ecritures inserees:', nbEcritures)
     }
 
     // Miroir inter-sociétés.
@@ -890,9 +890,9 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
           lettre_code: code,
         })
         if (mirrorRes.created) {
-          console.log(`[classer_transaction/inter] miroir créé dest=${ctInterSocieteDest} score=${ctInterSocieteScore.toFixed(2)}`)
+          console.warn(`[classer_transaction/inter] miroir créé dest=${ctInterSocieteDest} score=${ctInterSocieteScore.toFixed(2)}`)
         } else {
-          console.log(`[classer_transaction/inter] miroir non créé : ${mirrorRes.reason}`)
+          console.warn(`[classer_transaction/inter] miroir non créé : ${mirrorRes.reason}`)
         }
       } catch (mirrorErr: any) {
         console.warn('[classer_transaction/inter] miroir échoué (non-bloquant):', mirrorErr?.message)
@@ -971,7 +971,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
               .update({ solde: currentSolde + deltaSolde, updated_at: new Date().toISOString() })
               .eq('id', compteId)
             ccaSynced = true
-            console.log(`[classer_transaction] CCA synced: ${nomAssocie} type=${type} montant=${montant} nouveau_solde=${currentSolde + deltaSolde}`)
+            console.warn(`[classer_transaction] CCA synced: ${nomAssocie} type=${type} montant=${montant} nouveau_solde=${currentSolde + deltaSolde}`)
           }
         }
       }
@@ -1001,7 +1001,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
         learnError = 'Table classification_rules absente (migration 135 non appliquee)'
       } else if (existing) {
         patternSaved = true
-        console.log(`[classer_transaction] regle existe deja pour "${patternTiers}" -> ${classification}`)
+        console.warn(`[classer_transaction] regle existe deja pour "${patternTiers}" -> ${classification}`)
       } else {
         const ruleCode = `LEARN_${societe_id.substring(0, 8)}_${Date.now().toString(36)}`
         const { error: ruleErr } = await supabase.from('classification_rules').insert({
@@ -1022,7 +1022,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
           console.error('[classer_transaction] auto-learn insert FAILED:', ruleErr.message, ruleErr)
         } else {
           patternSaved = true
-          console.log(`[classer_transaction] auto-learn: regle ${ruleCode} creee pour tiers="${patternTiers}" -> ${classification}`)
+          console.warn(`[classer_transaction] auto-learn: regle ${ruleCode} creee pour tiers="${patternTiers}" -> ${classification}`)
         }
       }
     }
@@ -1047,7 +1047,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
       const currentTx = txs[txIdx]
       const rawTiers = currentTx.tiers_detecte || currentTx.tiers || ''
       const targetTiers = normalize(rawTiers)
-      console.log(`[classer_transaction] propagation demarree - raw="${rawTiers}" normalized="${targetTiers}"`)
+      console.warn(`[classer_transaction] propagation demarree - raw="${rawTiers}" normalized="${targetTiers}"`)
       if (!targetTiers || targetTiers.length < 3) {
         propagationError = `Tiers trop court pour propager (raw="${rawTiers}", normalized="${targetTiers}")`
       } else {
@@ -1195,7 +1195,7 @@ export async function handleClasserTransaction(deps: PostProcessingDeps) {
             await supabase.from('releves_bancaires').update({ transactions_json: relTxs }).eq('id', rel.id)
           }
         }
-        console.log(`[classer_transaction] propagation: ${nbPropagated} tx classees avec tiers "${targetTiers}" = ${classification}. Stats=`, propStats)
+        console.warn(`[classer_transaction] propagation: ${nbPropagated} tx classees avec tiers "${targetTiers}" = ${classification}. Stats=`, propStats)
       }
     } catch (e: any) {
       propagationError = e.message

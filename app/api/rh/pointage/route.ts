@@ -145,7 +145,7 @@ async function safeInsertPointage(supabase: ReturnType<typeof getAdminClient>, r
     console.error('[safeInsert] first try failed:', error.message)
     // Strip any columns mentioned in the error and retry
     const safe = stripMissingCols(record, error.message)
-    console.log('[safeInsert] retrying with:', Object.keys(safe))
+    console.warn('[safeInsert] retrying with:', Object.keys(safe))
     const retry = await supabase.from('pointages').insert(safe).select().single()
     if (retry.error) console.error('[safeInsert] retry also failed:', retry.error.message)
     return retry
@@ -158,7 +158,7 @@ async function safeUpdatePointage(supabase: ReturnType<typeof getAdminClient>, i
   if (error) {
     console.error('[safeUpdate] first try failed:', error.message)
     const safe = stripMissingCols(updates, error.message)
-    console.log('[safeUpdate] retrying with:', Object.keys(safe))
+    console.warn('[safeUpdate] retrying with:', Object.keys(safe))
     const retry = await supabase.from('pointages').update(safe).eq('id', id).select().single()
     if (retry.error) console.error('[safeUpdate] retry also failed:', retry.error.message)
     return retry
@@ -650,14 +650,14 @@ export async function POST(request: Request) {
           console.error('[POST entree insert fail]', error.message)
           return NextResponse.json({ error: error.message }, { status: 500 })
         }
-        console.log('[POST entree OK]', data?.id, 'heure_entree:', data?.heure_entree)
+        console.warn('[POST entree OK]', data?.id, 'heure_entree:', data?.heure_entree)
         return NextResponse.json({ pointage: data })
       }
     }
 
     if (type_pointage === 'sortie') {
       if (!existing || !existing.heure_entree) {
-        console.log('[POST sortie] no existing entry, existing:', existing?.id, 'heure_entree:', existing?.heure_entree)
+        console.warn('[POST sortie] no existing entry, existing:', existing?.id, 'heure_entree:', existing?.heure_entree)
         return NextResponse.json({ error: "Pas de pointage d'entree" }, { status: 400 })
       }
       if (existing.heure_sortie) {

@@ -281,7 +281,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
     for (let i = 0; i < path.length - 1; i++) ref = ref[path[i]]
     ref[path[path.length - 1]] = value
     next.total = recomputeTotal(next)
-    console.log('[depart.updateField]', { path, value, newTotal: next.total })
+    console.warn('[depart.updateField]', { path, value, newTotal: next.total })
     setBreakdown(next)
   }
 
@@ -292,7 +292,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
     if (!Array.isArray(next.lignes_extra)) next.lignes_extra = []
     next.lignes_extra.push({ libelle: newLibelle.trim(), montant })
     next.total = recomputeTotal(next)
-    console.log('[depart.addExtraLine]', {
+    console.warn('[depart.addExtraLine]', {
       libelle: newLibelle.trim(),
       montant,
       lignes_extra_count: next.lignes_extra.length,
@@ -307,7 +307,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
     const next = JSON.parse(JSON.stringify(breakdown))
     next.lignes_extra = (next.lignes_extra || []).filter((_: any, i: number) => i !== index)
     next.total = recomputeTotal(next)
-    console.log('[depart.removeExtraLine]', { index, remaining: next.lignes_extra.length, newTotal: next.total })
+    console.warn('[depart.removeExtraLine]', { index, remaining: next.lignes_extra.length, newTotal: next.total })
     setBreakdown(next)
   }
 
@@ -315,7 +315,7 @@ function BreakdownDisplay({ breakdown, setBreakdown, formData, onConfirm, confir
     const next = JSON.parse(JSON.stringify(breakdown))
     next.lignes_extra[index] = { ...next.lignes_extra[index], ...patch }
     next.total = recomputeTotal(next)
-    console.log('[depart.updateExtraLine]', { index, patch, newTotal: next.total })
+    console.warn('[depart.updateExtraLine]', { index, patch, newTotal: next.total })
     setBreakdown(next)
   }
 
@@ -1032,7 +1032,7 @@ export default function DepartPage() {
       // FIX-STC-TRIGGER236 — log avant POST pour vérifier que les valeurs
       // éditées (state React) atteignent bien le backend.
       try {
-        console.log('[depart.confirmerDepart] payload:', JSON.stringify({
+        console.warn('[depart.confirmerDepart] payload:', JSON.stringify({
           action: payload.action,
           employe_id: payload.employe_id,
           edited_by_user: editedByUser,

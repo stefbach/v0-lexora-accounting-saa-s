@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
           .maybeSingle()
         if (!hashErr && hashDup) existingDoc = hashDup
       } catch {
-        console.log('[upload] file_hash column not available, skipping hash dedup')
+        console.warn('[upload] file_hash column not available, skipping hash dedup')
       }
     }
 
@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
       const fresh = await fetchAndStoreRates()
       if (fresh.success) tauxChange = fresh.rates
     }
-    console.log('[upload] Exchange rates:', JSON.stringify(tauxChange))
+    console.warn('[upload] Exchange rates:', JSON.stringify(tauxChange))
 
     // Fetch user's sociétés for dynamic prompt injection
     let societeDetailsForPrompt: { id: string; nom: string; brn?: string | null; aliases?: string[] | null }[] = []
@@ -315,7 +315,7 @@ export async function POST(request: NextRequest) {
         if (headerRow) {
           xlsxHeaders = headerRow.map((c: any) => String(c).trim())
           isPayrollDetected = true
-          console.log(`[upload] Excel payroll detected locally. Headers: ${xlsxHeaders.slice(0, 10).join(', ')}`)
+          console.warn(`[upload] Excel payroll detected locally. Headers: ${xlsxHeaders.slice(0, 10).join(', ')}`)
         }
 
         if (xlsxText.length > 15000) xlsxText = xlsxText.substring(0, 15000)
@@ -325,7 +325,7 @@ export async function POST(request: NextRequest) {
 
       // If payroll detected, process locally without heavy AI call
       if (isPayrollDetected && xlsxRows.length > 3) {
-        console.log(`[upload] Processing payroll Excel locally: ${xlsxRows.length} rows`)
+        console.warn(`[upload] Processing payroll Excel locally: ${xlsxRows.length} rows`)
 
         // Find header row index
         const hIdx = xlsxRows.findIndex(row =>
@@ -418,7 +418,7 @@ export async function POST(request: NextRequest) {
         }
         typeDocument = 'payroll_report'
         extraction = parsed.extraction
-        console.log(`[upload] Payroll parsed locally: ${employes.length} employees, period ${detectedPeriode}`)
+        console.warn(`[upload] Payroll parsed locally: ${employes.length} employees, period ${detectedPeriode}`)
 
         messageContent = null // Skip AI call
       } else {
@@ -443,7 +443,7 @@ export async function POST(request: NextRequest) {
       /[_\-\s](mur|eur|usd|gbp)[_\-\s.]/i,
     ]
     if (isPdf && bankFilenamePatterns.some(p => p.test(fnameLower))) {
-      console.log(`[upload] Bank filename heuristic match: "${file.name}"`)
+      console.warn(`[upload] Bank filename heuristic match: "${file.name}"`)
       isLikelyBankStatement = true
     }
 
@@ -472,7 +472,7 @@ Respond with ONLY the type word. Nothing else.`,
         })
         const quickDetect = await quickStream.finalMessage()
         const quickText = quickDetect.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('').toLowerCase().trim()
-        console.log('[upload] Quick detection result:', quickText)
+        console.warn('[upload] Quick detection result:', quickText)
         isLikelyBankStatement = quickText.includes('releve_bancaire')
       } catch (e) { console.error('[upload] Quick detection error:', e) }
     }
@@ -483,7 +483,7 @@ Respond with ONLY the type word. Nothing else.`,
 
     // Skip AI if already parsed locally (e.g., Excel payroll)
     if (messageContent === null) {
-      console.log('[upload] Skipping AI call — already parsed locally')
+      console.warn('[upload] Skipping AI call — already parsed locally')
     } else if (isLikelyBankStatement && isPdf) {
       const bankSystemPrompt = injectSocietes(getSystemPrompt('releve_bancaire', tauxChange), societeDetailsForPrompt)
       const bankStream = anthropic.messages.stream({
@@ -498,7 +498,7 @@ Respond with ONLY the type word. Nothing else.`,
       })
       aiResponse = await bankStream.finalMessage()
       let bankText = aiResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
-      console.log('[upload] Raw Claude bank response length:', bankText.length, 'stop_reason:', aiResponse.stop_reason, 'first 500 chars:', bankText.substring(0, 500))
+      console.warn('[upload] Raw Claude bank response length:', bankText.length, 'stop_reason:', aiResponse.stop_reason, 'first 500 chars:', bankText.substring(0, 500))
 
       // Boucle de continuation pour les longs relevés (jusqu'à 5 itérations).
       // Chaque appel demande UNIQUEMENT les transactions manquantes en JSON
@@ -576,7 +576,7 @@ Respond with ONLY the type word. Nothing else.`,
           ? `La dernière transaction extraite était : { date: "${lastDate}", description: "${lastDescription.slice(0, 80)}" }. Reprends les transactions APRÈS celle-ci uniquement.`
           : `Tu as déjà extrait ${extraTransactions.length} transactions supplémentaires. Reprends APRÈS la dernière.`
 
-        console.log(`[upload] Bank continuation ${cont}/${MAX_CONTINUATIONS} — landmark: ${lastDate} / ${lastDescription?.slice(0, 50)}`)
+        console.warn(`[upload] Bank continuation ${cont}/${MAX_CONTINUATIONS} — landmark: ${lastDate} / ${lastDescription?.slice(0, 50)}`)
 
         try {
           const contStream = anthropic.messages.stream({
@@ -593,16 +593,16 @@ Respond with ONLY the type word. Nothing else.`,
           })
           const contResponse = await contStream.finalMessage()
           const contText = contResponse.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
-          console.log(`[upload] Continuation ${cont} response length: ${contText.length}, stop_reason: ${contResponse.stop_reason}`)
+          console.warn(`[upload] Continuation ${cont} response length: ${contText.length}, stop_reason: ${contResponse.stop_reason}`)
 
           const newTxs = tryParseTransactionsArray(contText)
           if (!newTxs || newTxs.length === 0) {
-            console.log(`[upload] Continuation ${cont}: 0 nouvelles transactions, arrêt boucle`)
+            console.warn(`[upload] Continuation ${cont}: 0 nouvelles transactions, arrêt boucle`)
             break
           }
           extraTransactions = extraTransactions.concat(newTxs)
           stopReason = contResponse.stop_reason
-          console.log(`[upload] Continuation ${cont}: ${newTxs.length} nouvelles tx (total extra=${extraTransactions.length})`)
+          console.warn(`[upload] Continuation ${cont}: ${newTxs.length} nouvelles tx (total extra=${extraTransactions.length})`)
         } catch (contErr: any) {
           console.warn(`[upload] Continuation ${cont} failed:`, contErr.message)
           break
@@ -663,7 +663,7 @@ Respond with ONLY the type word. Nothing else.`,
           for (let i = 0; i < openBraces; i++) jsonCandidate += '}'
           try {
             bankParsed = JSON.parse(jsonCandidate)
-            console.log('[upload] Bank JSON repaired from truncated response')
+            console.warn('[upload] Bank JSON repaired from truncated response')
           } catch { /* noop */ }
         }
       }
@@ -689,10 +689,10 @@ Respond with ONLY the type word. Nothing else.`,
             }
           }
           bankParsed[targetKey] = existing
-          console.log(`[upload] Merged ${added} extra transactions (skipped ${extraTransactions.length - added} doublons), total: ${existing.length}`)
+          console.warn(`[upload] Merged ${added} extra transactions (skipped ${extraTransactions.length - added} doublons), total: ${existing.length}`)
         }
 
-        console.log('[upload] Bank JSON parsed OK. Keys:', Object.keys(bankParsed).join(', '),
+        console.warn('[upload] Bank JSON parsed OK. Keys:', Object.keys(bankParsed).join(', '),
           'lignes:', Array.isArray(bankParsed.lignes) ? bankParsed.lignes.length : 0,
           'transactions:', Array.isArray(bankParsed.transactions) ? bankParsed.transactions.length : 0)
         // For bank statements: société = account holder (nom_societe/titulaire), NOT the bank name
@@ -735,13 +735,13 @@ Respond with ONLY the type word. Nothing else.`,
         (xlsxContent.match(/\d{3,6}\.\d{2}/g) || []).length > 10
 
       if (hasMultipleEmployees) {
-        console.log(`[upload] Excel reclassified: ${typeDocument} → payroll_report (detected multiple employees)`)
+        console.warn(`[upload] Excel reclassified: ${typeDocument} → payroll_report (detected multiple employees)`)
         typeDocument = 'payroll_report'
         parsed.routing = { ...parsed.routing, type_document: 'payroll_report' }
 
         // If extraction doesn't have employes array, re-process with specific prompt
         if (!extraction.employes || extraction.employes.length === 0) {
-          console.log('[upload] Re-processing Excel as payroll_report with specific prompt')
+          console.warn('[upload] Re-processing Excel as payroll_report with specific prompt')
           try {
             const payrollStream = anthropic.messages.stream({
               model: CLAUDE_CONFIG.model,
@@ -761,7 +761,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             if (prParsed.extraction?.employes?.length > 0) {
               extraction = prParsed.extraction
               parsed = prParsed
-              console.log(`[upload] Payroll re-parse OK: ${extraction.employes.length} employees`)
+              console.warn(`[upload] Payroll re-parse OK: ${extraction.employes.length} employees`)
             }
           } catch (e) {
             console.warn('[upload] Payroll re-parse failed:', e)
@@ -773,7 +773,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
     // Si le prompt générique a détecté un relevé bancaire mais n'a pas utilisé le prompt spécialisé
     // (isLikelyBankStatement était false), on relance avec le prompt spécialisé pour avoir les transactions
     if (typeDocument === 'releve_bancaire' && !isLikelyBankStatement && isPdf) {
-      console.log('[upload] Relevé bancaire détecté via prompt générique → retraitement spécialisé')
+      console.warn('[upload] Relevé bancaire détecté via prompt générique → retraitement spécialisé')
       try {
         const bankSystemPrompt = injectSocietes(getSystemPrompt('releve_bancaire', tauxChange), societeDetailsForPrompt)
         const bankStream2 = anthropic.messages.stream({
@@ -856,7 +856,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         console.warn(`[upload] LIGNES MANQUANTES: extrait ${nbExtracted}/${nbExpected} transactions du relevé`)
         extraction.lignes_manquantes = true
       }
-      console.log(`[upload] releve: ${nbExtracted} transactions extraites${nbExpected > 0 ? ` (${nbExpected} attendues)` : ''}`)
+      console.warn(`[upload] releve: ${nbExtracted} transactions extraites${nbExpected > 0 ? ` (${nbExpected} attendues)` : ''}`)
     }
 
     // Post-processing: validate nom_societe is NOT a bank name
@@ -937,7 +937,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
     // Apply validation
     const validation = validateAndCleanExtraction(extraction, typeDocument, uniqueUserSocietes)
-    console.log(`[upload] Extraction validation: société_id=${validation.societe_id}, confidence=${validation.confidence}, needs_confirmation=${validation.needs_confirmation}`)
+    console.warn(`[upload] Extraction validation: société_id=${validation.societe_id}, confidence=${validation.confidence}, needs_confirmation=${validation.needs_confirmation}`)
 
     // BUG 2 FIX — reject detectedSociete if it equals the uploader's name (OCR confused
     // the document signer/uploader with the actual société). Same for email local-part.
@@ -981,13 +981,13 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       const matchedSociete = uniqueUserSocietes.find(s => s.id === validation.societe_id)
       if (matchedSociete) {
         detectedSociete = matchedSociete.nom
-        console.log(`[upload] Société auto-matched via validation: ${detectedSociete}`)
+        console.warn(`[upload] Société auto-matched via validation: ${detectedSociete}`)
       }
     }
 
     // Compute extraction confidence
     const extractionConfidence = computeConfidence(extraction, typeDocument)
-    console.log(`[upload] Extraction confidence score: ${extractionConfidence}/100`)
+    console.warn(`[upload] Extraction confidence score: ${extractionConfidence}/100`)
 
     // If confidence too low (< 50), log warning
     if (extractionConfidence < 50) {
@@ -1036,11 +1036,11 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         if (matched && matched.id !== resolvedDossierId) {
           finalDossierId = matched.id
           await supabase.from('documents').update({ dossier_id: matched.id }).eq('id', doc.id)
-          console.log(`[upload] Re-routed to dossier ${matched.id} for société "${(matched.societe as any)?.nom}"`)
+          console.warn(`[upload] Re-routed to dossier ${matched.id} for société "${(matched.societe as any)?.nom}"`)
         }
       }
     } else if (detectedSociete && isBankName(detectedSociete)) {
-      console.log(`[upload] Detected société "${detectedSociete}" is a bank name — skipping société matching, needs confirmation`)
+      console.warn(`[upload] Detected société "${detectedSociete}" is a bank name — skipping société matching, needs confirmation`)
       needsSocieteConfirmation = true
     }
 
@@ -1108,7 +1108,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           }
 
           if (affectation) {
-            console.log(`[upload] Affectation auto: ${fournisseurName} → compte ${affectation.compte} (${affectation.libelle_compte || ''})`)
+            console.warn(`[upload] Affectation auto: ${fournisseurName} → compte ${affectation.compte} (${affectation.libelle_compte || ''})`)
 
             // Override the 6xx charge account in ecritures_comptables with the affectation compte
             if (Array.isArray(extraction.ecritures_comptables)) {
@@ -1255,7 +1255,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       let created = 0, updated = 0
 
       if (prSocieteId && empList.length > 0) {
-        console.log(`[upload] Payroll Report: ${empList.length} employés, période ${periodeStr}, société ${prSocieteId}`)
+        console.warn(`[upload] Payroll Report: ${empList.length} employés, période ${periodeStr}, société ${prSocieteId}`)
 
         for (const emp of empList) {
           const nom = (emp.nom || emp.last_name || '').toUpperCase().trim()
@@ -1327,7 +1327,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           }
         }
 
-        console.log(`[upload] Payroll Report processed: ${created} created, ${updated} updated, ${empList.length} total`)
+        console.warn(`[upload] Payroll Report processed: ${created} created, ${updated} updated, ${empList.length} total`)
 
         // Update document metadata
         await supabase.from('documents').update({
@@ -1386,7 +1386,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               bank_name: extraction.banque_employe || null,
             }).select('id').single()
             if (newEmp) employeId = newEmp.id
-            console.log(`[upload] Created employee from payslip: ${prenom} ${nom} → ${employeId}`)
+            console.warn(`[upload] Created employee from payslip: ${prenom} ${nom} → ${employeId}`)
           }
         }
 
@@ -1422,7 +1422,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             const { error: insertErr } = await supabase.from('bulletins_paie').insert(bulletinData)
             if (insertErr) console.warn('[upload] bulletin insert fallback:', insertErr)
           }
-          console.log(`[upload] Bulletin RH créé: ${empNom} période ${periodeStr}`)
+          console.warn(`[upload] Bulletin RH créé: ${empNom} période ${periodeStr}`)
         }
       }
     }
@@ -1465,7 +1465,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
           }
         }
 
-        console.log(`[upload] Charges sociales RH: ${organisme} période ${periodeStr}, ${details.length} lignes`)
+        console.warn(`[upload] Charges sociales RH: ${organisme} période ${periodeStr}, ${details.length} lignes`)
       }
     }
 
@@ -1572,7 +1572,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         // Si TVA applicable mais montant_tva=0, recalculer
         if (tvaApplicable && montantTVA === 0 && montantHT > 0) {
           montantTVAFinal = Math.round(montantHT * tauxTva / 100 * 100) / 100
-          console.log(`[upload] TVA recalculée: ${montantHT} × ${tauxTva}% = ${montantTVAFinal}`)
+          console.warn(`[upload] TVA recalculée: ${montantHT} × ${tauxTva}% = ${montantTVAFinal}`)
         }
         // Si TVA non applicable, forcer à 0
         if (!tvaApplicable) {
@@ -1581,7 +1581,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
 
         const montantTTCFinal = montantTVAFinal > 0 ? montantHT + montantTVAFinal : montantTTC
 
-        console.log(`[upload] Facture TVA: applicable=${tvaApplicable}, taux=${tauxTva}%, HT=${montantHT}, TVA=${montantTVAFinal}, TTC=${montantTTCFinal}, devise=${devise}, analyse="${extraction.analyse_tva || 'non fournie'}"`)
+        console.warn(`[upload] Facture TVA: applicable=${tvaApplicable}, taux=${tauxTva}%, HT=${montantHT}, TVA=${montantTVAFinal}, TTC=${montantTTCFinal}, devise=${devise}, analyse="${extraction.analyse_tva || 'non fournie'}"`)
 
         // ── Tiers annuaire lookup — auto-classify offshore/reverse_charge ──
         // Normalize tiers: extraction may return an object {nom, brn, vat_number}
@@ -1630,7 +1630,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
                 telephone: tiersTelephone,
                 adresse: tiersAdresse,
               })
-              console.log(`[upload] Tiers annuaire HIT: "${tiersName}" → offshore=${clientOffshoreFlag}, reverse_charge=${reverseChargeFlag} (verifie=${existingTiers.verifie})`)
+              console.warn(`[upload] Tiers annuaire HIT: "${tiersName}" → offshore=${clientOffshoreFlag}, reverse_charge=${reverseChargeFlag} (verifie=${existingTiers.verifie})`)
             } else {
               const created = await createTiersFromOcr(supabase, {
                 nom: tiersName,
@@ -1643,7 +1643,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
                 adresse: tiersAdresse,
               })
               if (created) {
-                console.log(`[upload] Tiers annuaire NEW: "${tiersName}" created (id=${created.id}, email=${tiersEmail || 'n/a'})`)
+                console.warn(`[upload] Tiers annuaire NEW: "${tiersName}" created (id=${created.id}, email=${tiersEmail || 'n/a'})`)
               }
             }
           } catch (e) {
@@ -1788,7 +1788,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         } else {
           factureCreated = true
           if (numeroWasRenamed) {
-            console.log(`[upload] facture inserée avec numéro suffixé "${appliedNumeroFacture}" (original "${originalNumero}" en collision)`)
+            console.warn(`[upload] facture inserée avec numéro suffixé "${appliedNumeroFacture}" (original "${originalNumero}" en collision)`)
           }
           // ⚠️ FIX (2026-05-03) — voir commentaire ligne 1163+ : pour les
           // factures, le bloc d'insertion d'écritures depuis extraction.ecritures_comptables
@@ -1849,7 +1849,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
                       tds_amount_mur: tdsResult.tds_amount_mur,
                       tds_period: periodeTds || null,
                     }).eq('id', insertedFacture.id)
-                    console.log(`[upload] TDS détectée : ${tdsResult.category} ${tdsResult.rate_pct}% → ${tdsResult.tds_amount_mur} MUR (facture ${insertedFacture.id})`)
+                    console.warn(`[upload] TDS détectée : ${tdsResult.category} ${tdsResult.rate_pct}% → ${tdsResult.tds_amount_mur} MUR (facture ${insertedFacture.id})`)
                   }
                 } catch (tdsErr: any) {
                   console.warn('[upload] détection TDS best-effort échouée:', tdsErr?.message)
@@ -1879,7 +1879,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
                   date_facture: (factureData.date_facture as string) || null,
                 })
                 if (tagging.per_category || tagging.related_party || tagging.ias21_translated) {
-                  console.log('[upload][GBC] auto-tagging appliqué:', tagging)
+                  console.warn('[upload][GBC] auto-tagging appliqué:', tagging)
                 }
                 if (tagging.warnings.length > 0) {
                   console.warn('[upload][GBC] warnings:', tagging.warnings)
@@ -1901,7 +1901,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
                           tds_category: cat, tds_rate_pct: calc.rate, tds_amount_mur: calc.amount,
                           tds_period: (factureData.date_facture as string)?.slice(0, 7) || null,
                         }).eq('id', insertedFacture.id)
-                        console.log(`[upload][TDS] auto: ${cat} ${calc.rate}% → ${calc.amount} MUR retenu`)
+                        console.warn(`[upload][TDS] auto: ${cat} ${calc.rate}% → ${calc.amount} MUR retenu`)
                       }
                     }
                   } catch (e: any) {
@@ -1917,7 +1917,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             }
           }
 
-          console.log(`[upload] Facture ${typeDocument} created: ${extraction.numero_reference || 'sans numéro'} — ${montantTTC} ${devise}`)
+          console.warn(`[upload] Facture ${typeDocument} created: ${extraction.numero_reference || 'sans numéro'} — ${montantTTC} ${devise}`)
         }
         } // close if (!factureCreateError)
       }
@@ -1996,7 +1996,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
       }
 
       const bankDevise: Currency = resolvedCurrency.currency
-      console.log(`[upload] Bank currency resolved: ${bankDevise} (source=${resolvedCurrency.source})`)
+      console.warn(`[upload] Bank currency resolved: ${bankDevise} (source=${resolvedCurrency.source})`)
       const bankName = extraction.banque || extraction.compte_bancaire || null
       // solde_cloture is CRITICAL (seeds rapprochement). parseAmount throws on garbage;
       // on échec, doc marqué erreur_ocr puis 400 (mêmes semantics que F6).
@@ -2048,17 +2048,17 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         // 1. Match by BRN — only within user's sociétés
         if (extractedBRN) {
           const { data: byBRN } = await supabase.from('societes').select('id, nom').eq('brn', extractedBRN).in('id', userSocieteIds.length > 0 ? userSocieteIds : ['_none_']).limit(1).maybeSingle()
-          if (byBRN) { bankSocieteId = byBRN.id; console.log(`[upload] Société by BRN ${extractedBRN} → ${byBRN.nom}`) }
+          if (byBRN) { bankSocieteId = byBRN.id; console.warn(`[upload] Société by BRN ${extractedBRN} → ${byBRN.nom}`) }
         }
         // 2. Match by IBAN on existing bank accounts — only within user's sociétés
         if (!bankSocieteId && extractedIBAN) {
           const { data: byIBAN } = await supabase.from('comptes_bancaires').select('id, societe_id').eq('iban', extractedIBAN).in('societe_id', userSocieteIds.length > 0 ? userSocieteIds : ['_none_']).limit(1).maybeSingle()
-          if (byIBAN) { bankSocieteId = byIBAN.societe_id; console.log(`[upload] Société by IBAN`) }
+          if (byIBAN) { bankSocieteId = byIBAN.societe_id; console.warn(`[upload] Société by IBAN`) }
         }
         // 3. Match by account number — only within user's sociétés
         if (!bankSocieteId && extractedNumeroCompte) {
           const { data: byNum } = await supabase.from('comptes_bancaires').select('id, societe_id').eq('numero_compte', extractedNumeroCompte).in('societe_id', userSocieteIds.length > 0 ? userSocieteIds : ['_none_']).limit(1).maybeSingle()
-          if (byNum) { bankSocieteId = byNum.societe_id; console.log(`[upload] Société by account number ${extractedNumeroCompte}`) }
+          if (byNum) { bankSocieteId = byNum.societe_id; console.warn(`[upload] Société by account number ${extractedNumeroCompte}`) }
         }
         // 4. Match by société name (fuzzy) — only against user's own sociétés, skip bank names
         if (!bankSocieteId && extractedNomSociete && extractedNomSociete !== 'INCONNU' && !isBankName(extractedNomSociete)) {
@@ -2068,7 +2068,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             const n = (s.nom || '').toLowerCase().replace(/ ltd| limited| sarl| sas/gi, '').trim()
             return n === sn || n.includes(sn) || sn.includes(n)
           })
-          if (matched) { bankSocieteId = matched.id; console.log(`[upload] Société by name "${extractedNomSociete}" → ${matched.nom}`) }
+          if (matched) { bankSocieteId = matched.id; console.warn(`[upload] Société by name "${extractedNomSociete}" → ${matched.nom}`) }
         }
         // 5. Fallback: user's dossier
         if (!bankSocieteId) {
@@ -2083,11 +2083,11 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
         if (correctDossier && correctDossier.id !== finalDossierId) {
           finalDossierId = correctDossier.id
           await supabase.from('documents').update({ dossier_id: correctDossier.id }).eq('id', doc.id)
-          console.log(`[upload] Rerouted to dossier ${correctDossier.id} for société ${bankSocieteId}`)
+          console.warn(`[upload] Rerouted to dossier ${correctDossier.id} for société ${bankSocieteId}`)
         }
       }
 
-      console.log(`[upload] Bank: name=${bankName}, societe=${bankSocieteId}, devise=${bankDevise}, solde=${solde}, IBAN=${extractedIBAN}, BRN=${extractedBRN}`)
+      console.warn(`[upload] Bank: name=${bankName}, societe=${bankSocieteId}, devise=${bankDevise}, solde=${solde}, IBAN=${extractedIBAN}, BRN=${extractedBRN}`)
 
       if (bankSocieteId) {
         // Normalize date fields: support all naming variants from both prompts
@@ -2174,7 +2174,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             existingBank = null // Force creation of new account instead
           } else {
             // SAFE UPDATE: never overwrite numero_compte if already set
-            console.log(`[upload] Updating existing bank account ${existingBank.id}: solde=${solde}, date=${normPeriodeFin}`)
+            console.warn(`[upload] Updating existing bank account ${existingBank.id}: solde=${solde}, date=${normPeriodeFin}`)
             const bankUpdate: Record<string, unknown> = {}
             if (solde !== null) bankUpdate.solde_actuel = solde
             if (normPeriodeFin) bankUpdate.date_dernier_releve = normPeriodeFin
@@ -2223,7 +2223,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             currencyConflict && normNumeroCompte ? `${normNumeroCompte}-${bankDevise}` : normNumeroCompte
           const suffixedIban =
             currencyConflict && extractedIBAN ? `${extractedIBAN}-${bankDevise}` : extractedIBAN
-          console.log(
+          console.warn(
             `[upload] Creating bank account (fallback${currencyConflict ? ', currency conflict' : ''}): ${finalBankName} for societe=${bankSocieteId} (devise=${bankDevise})`,
           )
           // ⚠️ AUTO-COMPTE-COMPTABLE (fix 2026-05-03) — onboarding scalable :
@@ -2305,7 +2305,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
             .limit(1).maybeSingle()
           if (anySocieteAcc && anySocieteAcc.societe_id === bankSocieteId) {
             bankAccount = anySocieteAcc
-            console.log(`[upload] Fallback account ${bankAccount.id} for societe ${bankSocieteId} (devise ${bankDevise})`)
+            console.warn(`[upload] Fallback account ${bankAccount.id} for societe ${bankSocieteId} (devise ${bankDevise})`)
           } else {
             console.warn(`[upload] No bank account at all for société ${bankSocieteId} — releve will not be stored`)
           }
@@ -2469,7 +2469,7 @@ ${typeof messageContent === 'string' ? messageContent : ''}` }],
               },
               { uploaded_by: user?.id ?? null, source: 'web' },
             )
-            console.log(
+            console.warn(
               `[upload] releve_bancaire ${upsertResult.replaced ? 'REPLACED' : 'created'}: v${upsertResult.version}, ${normalizedTransactions.length} transactions, societe=${bankSocieteId}, previous=${upsertResult.previous_id || 'none'}`,
             )
           } catch (e: any) {

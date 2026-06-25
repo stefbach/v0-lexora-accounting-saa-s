@@ -271,7 +271,7 @@ export async function resetCycleApresPaiement(
     const recompute = await getRecomputeSoldeCongesAll()
     const result = await recompute(supabase, employeId, dateRef)
     if (result) {
-      console.log(`[cash-in-lieu] Cycle reset OK pour ${employeId} → nouveau cycle ${result.periode_debut} → ${result.periode_fin}`)
+      console.warn(`[cash-in-lieu] Cycle reset OK pour ${employeId} → nouveau cycle ${result.periode_debut} → ${result.periode_fin}`)
       return dateRef
     }
     console.warn(`[cash-in-lieu] resetCycleApresPaiement : recompute a renvoye null pour ${employeId} ref=${dateRef}`)

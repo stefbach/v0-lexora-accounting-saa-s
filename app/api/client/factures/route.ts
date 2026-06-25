@@ -500,7 +500,7 @@ export async function POST(request: Request) {
               },
             },
           })
-          console.log(`[factures] Document record created for invoice ${finalNumero} (société: ${socData?.nom})`)
+          console.warn(`[factures] Document record created for invoice ${finalNumero} (société: ${socData?.nom})`)
         }
       }
     } catch (docErr: any) {
@@ -626,7 +626,7 @@ export async function PATCH(request: Request) {
               societe_detectee: newSoc?.nom || null,
             }).eq('id', doc.id)
           }
-          console.log(`[factures PATCH] Reassigned facture ${id} and ${linkedDocs?.length || 0} linked document(s) to societe ${updates.societe_id}`)
+          console.warn(`[factures PATCH] Reassigned facture ${id} and ${linkedDocs?.length || 0} linked document(s) to societe ${updates.societe_id}`)
         }
       } catch (e: any) {
         console.warn('[factures PATCH] Failed to update linked document societe:', e.message)
@@ -772,7 +772,7 @@ export async function DELETE(request: Request) {
         await supabase.from('documents').delete().eq('id', doc.id)
       }
       if (linkedDocs && linkedDocs.length > 0) {
-        console.log(`[factures DELETE] Removed ${linkedDocs.length} linked document(s) for facture ${id}`)
+        console.warn(`[factures DELETE] Removed ${linkedDocs.length} linked document(s) for facture ${id}`)
       }
     } catch (e: any) {
       console.warn('[factures DELETE] Failed to remove linked documents:', e.message)

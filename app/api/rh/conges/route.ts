@@ -1165,7 +1165,7 @@ export async function POST(request: Request) {
         }
       }
 
-      console.log(`[conges] Creating: type=${typeCongeFinal} (initial=${body.type_conge}), debut=${body.date_debut}, fin=${body.date_fin}, nb_jours=${nb_jours}`)
+      console.warn(`[conges] Creating: type=${typeCongeFinal} (initial=${body.type_conge}), debut=${body.date_debut}, fin=${body.date_fin}, nb_jours=${nb_jours}`)
 
       const { data, error } = await supabase.from('demandes_conges').insert({
         employe_id: body.employe_id,

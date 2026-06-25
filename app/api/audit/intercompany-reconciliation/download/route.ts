@@ -128,7 +128,7 @@ export async function GET(request: Request): Promise<Response> {
       )
     }
 
-    console.log(`[Download] Generating ${fileType} for ${startDate} to ${endDate}`)
+    console.warn(`[Download] Generating ${fileType} for ${startDate} to ${endDate}`)
 
     let content: string
     const config = FILE_CONFIGS[fileType]

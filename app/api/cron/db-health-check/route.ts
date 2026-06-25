@@ -221,7 +221,7 @@ export async function GET(request: Request) {
       const { data: run } = await supabase.from('health_check_runs').insert({
         anomalies, auto_fixed: autoFixed, needs_action: needsAction, duration_ms,
       }).select('id').single()
-      if (run) console.log(`[health-check] Run saved: ${run.id}`)
+      if (run) console.warn(`[health-check] Run saved: ${run.id}`)
     } catch (e) {
       console.warn('[health-check] Failed to save run:', e)
     }

@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   try {
     const summary = await runRelancesQuotidiennes(supabase, { source: 'cron' })
     const duree_ms = Date.now() - t0
-    console.log('[cron/relances-factures]', {
+    console.warn('[cron/relances-factures]', {
       ...summary,
       details: undefined,                       // évite logs verbeux
       nb_details: summary.details.length,

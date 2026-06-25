@@ -523,12 +523,12 @@ ${excelText}`
         s && me && (s === me || s.includes(me) || me.includes(s))
       if (matchesMe(dest) && !matchesMe(emet)) {
         if (typeDoc !== 'facture_fournisseur') {
-          console.log(`[process] override: dest='${dest}' = me → forcing facture_fournisseur (Claude said ${typeDoc})`)
+          console.warn(`[process] override: dest='${dest}' = me → forcing facture_fournisseur (Claude said ${typeDoc})`)
           typeDoc = 'facture_fournisseur'
         }
       } else if (matchesMe(emet) && !matchesMe(dest)) {
         if (typeDoc !== 'facture_client') {
-          console.log(`[process] override: emet='${emet}' = me → forcing facture_client (Claude said ${typeDoc})`)
+          console.warn(`[process] override: emet='${emet}' = me → forcing facture_client (Claude said ${typeDoc})`)
           typeDoc = 'facture_client'
         }
       }
@@ -855,7 +855,7 @@ ${excelText}`
               extraction,
             })
             if (releveRes.ok) {
-              console.log(
+              console.warn(
                 `[process] releve_bancaire: ${releveRes.nb_transactions} tx → releve ${releveRes.releve_id}, compte ${releveRes.compte_bancaire_id}${releveRes.created_account ? ' (compte créé)' : ''}`,
               )
             } else {
@@ -900,7 +900,7 @@ ${excelText}`
               statut: 'brouillon',
             })
             if (noteRes.ok) {
-              console.log(`[process] note_de_frais auto-créée ${noteRes.id} (${typeDoc}, catégorie=${categorieSuggeree || 'divers'})`)
+              console.warn(`[process] note_de_frais auto-créée ${noteRes.id} (${typeDoc}, catégorie=${categorieSuggeree || 'divers'})`)
             } else {
               console.warn(`[process] note_de_frais skip: ${noteRes.error}`)
             }

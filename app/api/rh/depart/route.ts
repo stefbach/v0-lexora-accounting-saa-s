@@ -294,7 +294,7 @@ export async function POST(request: Request) {
         p_date_reference: date_depart,
         p_policy_hors_wra: 'applique_wra_etendu',
       }
-      console.log('[VL debug] Calling get_vacation_leave_droit with:', vlRpcParams)
+      console.warn('[VL debug] Calling get_vacation_leave_droit with:', vlRpcParams)
 
       try {
         // ⚠️ La RPC retourne SETOF (TABLE) — il FAUT .maybeSingle() pour
@@ -304,7 +304,7 @@ export async function POST(request: Request) {
           .rpc('get_vacation_leave_droit', vlRpcParams)
           .maybeSingle()
 
-        console.log('[VL debug] RPC response:', { vlRow, vlErr })
+        console.warn('[VL debug] RPC response:', { vlRow, vlErr })
 
         if (vlRow) {
           const row = vlRow as { vl_droit?: number; eligibility_status?: string; vl_cycle_debut?: string; vl_cycle_fin?: string }
@@ -347,7 +347,7 @@ export async function POST(request: Request) {
       const vlRemaining = Math.round((vlDroit - vlTaken) * 100) / 100
       const vlPayout = r2(vlRemaining * dailySalary)
 
-      console.log('[VL debug] Final values:', {
+      console.warn('[VL debug] Final values:', {
         vlDroit, vlTaken, vlRemaining, vlPayout,
         vlEligibilityStatus, vlCycleDebut, vlCycleFin,
         ancienneteMonths: anciennete.totalMonths,
@@ -489,7 +489,7 @@ export async function POST(request: Request) {
       // Indispensable car le trigger mig 236 (BEFORE INSERT) écrasait
       // silencieusement salaire_net si brut ≠ net (cas des retenues manuelles).
       try {
-        console.log('[confirmer_depart] body received:', JSON.stringify({
+        console.warn('[confirmer_depart] body received:', JSON.stringify({
           action,
           employe_id,
           date_depart,
@@ -707,7 +707,7 @@ export async function POST(request: Request) {
           (Number(specialAlw2Adjusted) || 0) +
           (Number(preavisBulletin) || 0) +
           (Number(severanceBulletin) || 0)
-        console.log('[confirmer_depart] bulletin row to insert:', JSON.stringify({
+        console.warn('[confirmer_depart] bulletin row to insert:', JSON.stringify({
           employe_id,
           periode: periodeDate,
           salaire_base: salaireBaseBulletin,

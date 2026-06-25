@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   try {
     const summary = await runRecurrencesQuotidiennes(supabase)
     const duree_ms = Date.now() - t0
-    console.log('[cron/factures-recurrentes]', {
+    console.warn('[cron/factures-recurrentes]', {
       modeles_traites: summary.modeles_traites,
       factures_creees: summary.factures_creees,
       erreurs: summary.erreurs,

@@ -43,7 +43,7 @@ async function requireAdmin() {
 async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
-    console.log('[demande validate] RESEND_API_KEY absent, skip email:', to)
+    console.warn('[demande validate] RESEND_API_KEY absent, skip email:', to)
     return
   }
   try {

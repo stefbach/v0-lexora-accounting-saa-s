@@ -155,7 +155,7 @@ export async function GET(request: Request) {
     // Sort by date descending
     documents.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
-    console.log(`[documents GET] user=${user.id} role=${userProfile?.role} dossiers=${dossierIds.length} uploaders=${uploaderIds.length} docs=${documents.length}`)
+    console.warn(`[documents GET] user=${user.id} role=${userProfile?.role} dossiers=${dossierIds.length} uploaders=${uploaderIds.length} docs=${documents.length}`)
 
     return NextResponse.json({ documents, _debug: { dossierIds_count: dossierIds.length, uploaderIds_count: uploaderIds.length, total: documents.length } })
   } catch (e: any) {

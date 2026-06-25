@@ -323,23 +323,24 @@ export default function TVAPage() {
     const wb = XLSX.utils.book_new()
 
     if (type === "normale") {
+      // Use factures table (single source of truth, no OCR duplicates)
       const rows = [
-        ...clientInvoices.map((inv: any) => ({
-          "Date": inv.date || "—",
-          "N° Facture": inv.numero || "—",
-          "Tiers": inv.destinataire || inv.emetteur || "—",
-          "Montant HT": inv.montant_ht_mur ?? inv.montant_ht ?? 0,
-          "TVA 15%": inv.montant_tva_mur ?? inv.montant_tva ?? 0,
-          "Montant TTC": inv.montant_ttc_mur ?? inv.montant_ttc ?? 0,
+        ...facturesClientLocal.map((f: any) => ({
+          "Date": f.date_facture || "—",
+          "N° Facture": f.numero_facture || "—",
+          "Tiers": f.tiers || "—",
+          "Montant HT (MUR)": Number(f.montant_ht) || 0,
+          "TVA 15% (MUR)": Number(f.montant_tva) || 0,
+          "Montant TTC (MUR)": Number(f.montant_ttc) || 0,
           "Type": "Client",
         })),
-        ...localSupplierInvoices.map((inv: any) => ({
-          "Date": inv.date || "—",
-          "N° Facture": inv.numero || "—",
-          "Tiers": inv.emetteur || "—",
-          "Montant HT": inv.montant_ht_mur ?? inv.montant_ht ?? 0,
-          "TVA 15%": inv.montant_tva_mur ?? inv.montant_tva ?? 0,
-          "Montant TTC": inv.montant_ttc_mur ?? inv.montant_ttc ?? 0,
+        ...facturesFournisseurLocal.map((f: any) => ({
+          "Date": f.date_facture || "—",
+          "N° Facture": f.numero_facture || "—",
+          "Tiers": f.tiers || "—",
+          "Montant HT (MUR)": Number(f.montant_ht) || 0,
+          "TVA 15% (MUR)": Number(f.montant_tva) || 0,
+          "Montant TTC (MUR)": Number(f.montant_ttc) || 0,
           "Type": "Fournisseur local",
         })),
       ]
@@ -347,27 +348,29 @@ export default function TVAPage() {
       XLSX.utils.book_append_sheet(wb, ws, "TVA Normale")
       XLSX.writeFile(wb, `tva_normale_${period}_${dateStr}.xlsx`)
     } else if (type === "deductible") {
-      const rows = validLocalInvoices.map((inv: any) => ({
-        "Date": inv.date || "—",
-        "N° Facture": inv.numero || "—",
-        "Fournisseur": inv.emetteur || "—",
-        "Montant HT": inv.montant_ht_mur ?? inv.montant_ht ?? 0,
-        "TVA déductible": inv.montant_tva_mur ?? inv.montant_tva ?? 0,
-        "Montant TTC": inv.montant_ttc_mur ?? inv.montant_ttc ?? 0,
+      // TVA déductible = fournisseurs locaux avec TVA > 0 — source factures (pas OCR)
+      const deductibleRows = facturesFournisseurLocal.filter((f: any) => (Number(f.montant_tva) || 0) > 0)
+      const rows = deductibleRows.map((f: any) => ({
+        "Date": f.date_facture || "—",
+        "N° Facture": f.numero_facture || "—",
+        "Fournisseur": f.tiers || "—",
+        "Montant HT (MUR)": Number(f.montant_ht) || 0,
+        "TVA déductible (MUR)": Number(f.montant_tva) || 0,
+        "Montant TTC (MUR)": Number(f.montant_ttc) || 0,
       }))
       const ws = XLSX.utils.json_to_sheet(rows)
       XLSX.utils.book_append_sheet(wb, ws, "TVA Déductible")
       XLSX.writeFile(wb, `tva_deductible_${period}_${dateStr}.xlsx`)
     } else {
-      const rows = foreignSupplierInvoices.map((inv: any) => {
-        const ht = inv.montant_ht_mur ?? inv.montant_ht ?? 0
+      const rows = reverseChargeFacts.map((f: any) => {
+        const ht = Number(f.montant_ht) || 0
         return {
-          "Date": inv.date || "—",
-          "Fournisseur": inv.emetteur || "—",
-          "Devise": inv.devise || "—",
+          "Date": f.date_facture || "—",
+          "Fournisseur": f.tiers || "—",
+          "Devise": f.devise || "—",
           "Base HT (MUR)": ht,
-          "TVA collectée (15%)": ht * TVA_RATE,
-          "TVA déductible (15%)": ht * TVA_RATE,
+          "TVA collectée (15%)": Math.round(ht * TVA_RATE * 100) / 100,
+          "TVA déductible (15%)": Math.round(ht * TVA_RATE * 100) / 100,
         }
       })
       const ws = XLSX.utils.json_to_sheet(rows)
@@ -588,7 +591,7 @@ export default function TVAPage() {
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>3</td>
                 <td className="py-2">{t('mra.tva.box3', locale)}</td>
-                <td className="py-2 text-right font-medium">{formatMUR(validLocalInvoices.reduce((s: number, inv: any) => s + (inv.montant_ht_mur ?? inv.montant_ht ?? 0), 0))}</td>
+                <td className="py-2 text-right font-medium">{formatMUR(facturesFournisseurLocal.filter((f: any) => (Number(f.montant_tva) || 0) > 0).reduce((s: number, f: any) => s + (Number(f.montant_ht) || 0), 0))}</td>
               </tr>
               <tr className="border-b border-gray-100">
                 <td className="py-2 font-medium" style={{ color: NAVY }}>4</td>
@@ -689,14 +692,14 @@ export default function TVAPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base" style={{ color: NAVY }}>
               <MapPin className="h-5 w-5" style={{ color: GOLD }} />
-              {t('mra.tva.deductible_local', locale)} ({validLocalInvoices.length})
+              {t('mra.tva.deductible_local', locale)} ({facturesFournisseurLocal.filter((f: any) => (Number(f.montant_tva) || 0) > 0).length})
             </CardTitle>
             <p className="text-xs text-muted-foreground">
               {t('mra.tva.deductible_local_hint', locale)}
             </p>
           </CardHeader>
           <CardContent>
-            {validLocalInvoices.length > 0 ? (
+            {facturesFournisseurLocal.filter((f: any) => (Number(f.montant_tva) || 0) > 0).length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>

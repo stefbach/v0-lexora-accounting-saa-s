@@ -536,7 +536,7 @@ async function repair_purge_montants_amplifies(
     if (error) failed++
     else deleted += ids.length
   }
-  console.log('[repair/purge_montants_amplifies]', { suspects: suspects.length, deleted, failed, skipped: skippedLettrees.length })
+  console.warn('[repair/purge_montants_amplifies]', { suspects: suspects.length, deleted, failed, skipped: skippedLettrees.length })
   return {
     action: 'purge_montants_amplifies',
     status: failed === 0 ? 'pass' : 'fail',
@@ -640,7 +640,7 @@ async function repair_purge_classifications_bogus_npf_nsf(
     if (error) failed++
     else moved++
   }
-  console.log('[repair/purge_classifications_bogus_npf_nsf]', { detected: bogus.length, deleted, moved, failed, skipped: skippedLettrees.length })
+  console.warn('[repair/purge_classifications_bogus_npf_nsf]', { detected: bogus.length, deleted, moved, failed, skipped: skippedLettrees.length })
   return {
     action: 'purge_classifications_bogus_npf_nsf',
     status: failed === 0 ? 'pass' : 'fail',
@@ -704,7 +704,7 @@ async function repair_vider_580_vers_4710(
   if (error) {
     return { action: 'vider_580_vers_4710', status: 'fail', affected: 0, message: error.message }
   }
-  console.log('[repair/vider_580_vers_4710]', { moved: count, totalDebit, totalCredit, skipped: skippedLettrees.length })
+  console.warn('[repair/vider_580_vers_4710]', { moved: count, totalDebit, totalCredit, skipped: skippedLettrees.length })
   return {
     action: 'vider_580_vers_4710',
     status: 'pass', affected: count || 0,

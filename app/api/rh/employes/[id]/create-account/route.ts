@@ -153,7 +153,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     })
 
     // Audit log (jamais le password en clair).
-    console.log(
+    console.warn(
       `[create-account] OK employe=${emp.id} email=${emp.email} `
       + `auth_user_id=${newUserId} email_sent=${mail.ok} by=${user.id}`,
     )
