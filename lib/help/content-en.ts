@@ -458,30 +458,115 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
     title: 'Telegram bot permissions — Roles and capabilities',
     audience: 'client',
     intro:
-      "Configure who can use <b>@LexoraAgent_bot</b> and with which rights. You link employees (6-character code), set roles (Employee → Manager → HR → Accountant → Management), and refine capabilities. Full audit of every Telegram action.",
+      "This page governs <em>what the Lexora brain is allowed to do</em> when driven from Telegram. The bot <b>@LexoraAgent_bot</b> is one access point to the same engine as the web assistant (see <b>The Lexora assistant</b> and <b>The accounting agent</b>): it must therefore strictly frame who connects and within which scope. The model rests on the <b>principle of least privilege</b>: each user gets a role, and each role opens a precise set of capabilities. Every executed action is logged and auditable.",
     steps: [
-      { title: "1. Roles matrix", body: "<b>Employee</b>: see own payslips, clock in, request leave. <b>Manager</b>: + approve team leave. <b>HR</b>: + OT, bonuses, payroll. <b>Accountant</b>: + bank, invoices, MRA, journal entries. <b>Management</b>: EVERYTHING, including transfers, deletion, credentials." },
-      { title: "2. Members list", body: "<b>Members</b> table: users with a Lexora account linked to this company. Change role or customise capabilities (<b>Permissions</b> button)." },
-      { title: "3. HR employees not linked", body: "<b>HR employees</b> table: active employees without a Lexora account. Click <b>Generate code</b> to create account + Telegram code." },
-      { title: "4. Generate a code", body: "Choose role (default Employee), custom capabilities if needed. <b>Generate code</b> → 6-character code + link <code>t.me/LexoraAgent_bot?start=CODE</code> + ready-to-send message (WhatsApp, email, SMS).", warning: "Code expires after <b>15 minutes</b>. Otherwise regenerate." },
-      { title: "5. Employee activation", body: "They click the link or search the bot, type <b>/start CODE</b>. Instant activation. Bot greets by first name + announces role + suggests useful commands." },
-      { title: "6. Override capabilities", body: "<b>Permissions</b> button on a member → matrix of ~40 capabilities. Tick/untick finely. Override > default role." },
-      { title: "7. Audit", body: "Every action tracked in <code>telegram_actions</code>: who, when, what, amount. Column <em>Audit (30 days)</em>. CSV export for external audit." },
-      { title: "8. Revoke", body: "<b>Revoke</b> button on a member: token invalidated immediately. Useful on departures." },
+      { title: "1. Understand the role hierarchy", body: "Roles are ranked by increasing level: <b>Employee</b> (view own payslips, clock in, request leave) → <b>Manager</b> (+ approve team leave) → <b>HR</b> (+ overtime, bonuses, payroll) → <b>Accountant</b> (+ bank, invoices, MRA, journal entries) → <b>Management</b> (full scope, including transfers and deletions). A role can never grant another a level higher than its own." },
+      { title: "2. Who can configure", body: "Only high-level roles (Accountant, Management, company admin) can generate codes, change roles or revoke access. This is deliberate: delegating rights is itself a sensitive right." },
+      { title: "3. Members list", body: "The <b>Members</b> table lists users with a Lexora account linked to this company. From there you change a member's role or finely customise their capabilities via the <b>Permissions</b> button." },
+      { title: "4. HR employees not linked", body: "The <b>HR employees</b> table lists active staff without a Lexora account yet. Click <b>Generate code</b> to create their account and Telegram pairing code in one step." },
+      { title: "5. Generate a pairing code", body: "Choose the role (Employee by default) and, if needed, custom capabilities. Lexora produces a 6-character code, a <code>t.me/LexoraAgent_bot?start=CODE</code> link and a ready-to-send message (WhatsApp, email, SMS).", warning: "The code expires after <b>15 minutes</b>. Beyond that, regenerate it — an expired code links no account." },
+      { title: "6. Activation on the user side", body: "The user opens the link or searches the bot, then sends <b>/start CODE</b>. The account is paired instantly: their Telegram <code>chat_id</code> is bound to their Lexora <code>user_id</code> and the company. The bot greets them by first name and reminds them of their role." },
+      { title: "7. Fine-tune capabilities (override)", body: "The <b>Permissions</b> button opens a matrix of around forty capabilities. You can enable or remove a specific capability beyond the default role. The individual override takes precedence over the role — useful to open a targeted action without promoting the whole role." },
+      { title: "8. Audit of every action", body: "Any action taken through the bot is logged in <code>telegram_actions</code>: who, when, what, amount if any. The <em>Audit (30 days)</em> column shows recent history, exportable to CSV for an external review." },
+      { title: "9. Revoke an access", body: "The <b>Revoke</b> button immediately invalidates a member's token. Trigger it as soon as a collaborator leaves or whenever a code's confidentiality is in doubt." },
     ],
     pitfalls: [
-      "Missing email on the employee: cannot generate code.",
-      "Several employees with the same email: only one link possible.",
-      "Granting Management to a junior: risks (MRA submissions, MUR 1 M transfers).",
-      "Custom capabilities forgotten after role change: review after every change.",
-      "Code shared to the wrong WhatsApp number: someone else links. Revoke immediately.",
+      "Missing email on the employee record → cannot generate a code.",
+      "Several employees sharing the same email → only one pairing possible.",
+      "Granting Management to a junior profile → real risk (MRA submissions, multi-million MUR transfers).",
+      "Custom capabilities forgotten after a role change → re-check the matrix after every change.",
+      "Code sent to the wrong number → a third party can pair. Revoke without delay.",
     ],
     tips: [
-      "Destructive actions → recap + <em>Confirm</em>/<em>Cancel</em> buttons before execution.",
-      "Bot uses first name and role naturally in replies.",
-      "Practice: a collaborator can be linked to several client companies.",
-      "Enable <b>four-eyes validation</b> for transfers > MUR 500,000.",
-      "Multinationals: integrate SAML SSO (Settings → SSO) to manage roles centrally.",
+      "Sensitive actions (journal entries, transfers, deletions) always trigger a recap and <em>Confirm</em> / <em>Cancel</em> buttons before execution: least privilege is paired with human confirmation.",
+      "Enable <b>four-eyes validation</b> for transfers above MUR 500,000.",
+      "Practices: a collaborator can be paired to several client companies with a distinct role per company.",
+      "To understand concretely what the bot executes, also read <b>Driving Lexora via Telegram</b> and <b>Telegram bot configuration</b>.",
+    ],
+  },
+
+  // ========================================================================
+  // LEXORA BRAIN — ASSISTANT / CHATBOT
+  // ========================================================================
+  '/client/assistant': {
+    title: 'The Lexora assistant — The conversational brain',
+    audience: 'all',
+    intro:
+      "The Lexora assistant is the platform's <b>conversational brain</b>: an AI collaborator — a senior Mauritian accountant, HR and tax expert — that you query in natural language. It runs on a Claude model coupled with Lexora's internal tools, which lets it not only answer but <em>consult your real data</em> (invoices, balances, ledger, leave, MRA compliance) to produce reliable analysis and, on request, prepare documents. It is the same intelligence found in <b>The accounting agent</b> and in <b>Driving Lexora via Telegram</b> — here within a chat interface.",
+    steps: [
+      { title: "1. Ask your question in plain English", body: "Write as you would to a colleague: \"what is my VAT balance this month?\", \"summarise my cash position\", \"which WRA rules apply to a dismissal?\". No syntax to learn — the assistant understands intent." },
+      { title: "2. The assistant consults your data", body: "To answer, the brain calls <em>read</em> tools on your active company: invoice list, an account balance, the ledger, payslips, leave balance, deadlines and MRA compliance. The reply is grounded in your real figures, not generalities." },
+      { title: "3. Get analysis and explanations", body: "Beyond figures, the assistant explains: why VAT is due, how a net is computed from a gross, what a Mauritian tax or labour obligation requires. Ideal for a non-accountant director as well as a busy professional." },
+      { title: "4. Ask it to prepare a document or an action", body: "You can go further: \"prepare an invoice for client Dupont\", \"allocate this advance to invoice FA-2026-012\". The assistant then proposes the action and waits for your explicit validation before any write (see <b>The accounting agent</b> for the guardrail detail)." },
+      { title: "5. Continuity across channels", body: "Your exchanges are remembered. The brain can recall what was said on another channel (web or Telegram), so the conversation stays coherent wherever you resume." },
+    ],
+    pitfalls: [
+      "The assistant is support, not a signatory: <b>human verification is mandatory</b> before any official filing or payment.",
+      "An ambiguous question yields an approximate answer — specify the period, company or counterparty.",
+      "Always check which company is active: displayed figures concern that company only.",
+      "The AI can err on an edge legal case: for a sensitive point, have it confirmed by your accountant or an advisor.",
+    ],
+    tips: [
+      "Confidentiality: your questions and data stay within your Lexora tenant and serve to answer within your scope, not to train public models.",
+      "For deeper accounting automation (invoice extraction, journal entries, reconciliation), switch to <b>The accounting agent</b>.",
+      "To drive the same brain from your phone, see <b>Driving Lexora via Telegram</b> and <b>Telegram bot configuration</b>.",
+    ],
+  },
+
+  // ========================================================================
+  // LEXORA BRAIN — AUTONOMOUS ACCOUNTING AGENT
+  // ========================================================================
+  '/client/agent-comptable': {
+    title: 'The accounting agent — The brain that acts',
+    audience: 'all',
+    intro:
+      "The accounting agent is the <em>operational</em> facet of the Lexora brain: where the assistant answers and advises, the agent <b>executes accounting tasks</b> under control. It combines a Claude model with Lexora's internal tools in a reasoning loop: it analyses your request, consults the needed data, proposes a concrete action, then executes it only after your confirmation. It is a supervised autonomous collaborator, not an autopilot.",
+    steps: [
+      { title: "1. What it automates", body: "Invoice extraction (OCR), posting and reclassifying journal entries, letterage, recording payments, launching automatic bank reconciliation, closing analysis, deadline alerts. All these repetitive tasks it handles from a natural-language instruction." },
+      { title: "2. The read → propose → execute loop", body: "The agent distinguishes two tool families. <b>Read</b> tools (consult a balance, list entries) run freely. <b>Write</b> tools (create an entry, letterage, record a payment) never run alone: the agent prepares the action and submits it for validation." },
+      { title: "3. Human confirmation, the central guardrail", body: "Before any write, the agent shows a clear recap (what, on which accounts, what amount) with <em>Confirm</em> / <em>Cancel</em> buttons. Nothing is committed until you validate. This is the pivot of the collaboration: the AI does the work, the human keeps the decision." },
+      { title: "4. Collaboration with the human accountant", body: "The agent does not replace your accountant: it roughs out, prepares and proposes, while they validate and arbitrate complex cases. All entries stay traceable and auditable, like a manual entry." },
+      { title: "5. Scope and rights", body: "The agent acts within the active company's scope and according to the user's rights. Sensitive actions respect the role hierarchy: permissions are not bypassed by going through the agent." },
+    ],
+    pitfalls: [
+      "Never validate an entry without reading the recap: confirmation commits your books.",
+      "An imprecise instruction (\"post the entry\") may target the wrong account — give the counterparty, amount and document.",
+      "OCR on a blurry document stays imperfect: check the extracted amounts before posting.",
+      "The agent does not have the final tax word: a closing or a return must be reviewed by a professional.",
+    ],
+    tips: [
+      "For a simple question or analysis, the assistant suffices; switch to the agent when you want an action carried out.",
+      "Everything runs on the same intelligence: you can start a request on Telegram and finish it on the web (handoff link).",
+      "See also <b>The Lexora assistant</b>, <b>Driving Lexora via Telegram</b> and <b>Telegram bot permissions</b>.",
+    ],
+  },
+
+  // ========================================================================
+  // LEXORA BRAIN — TELEGRAM PILOTING
+  // ========================================================================
+  '/pilotage-telegram': {
+    title: 'Driving Lexora via Telegram — The pocket brain',
+    audience: 'all',
+    intro:
+      "Telegram turns Lexora into a <b>pocket collaborator</b>: the same brain (assistant + accounting agent) reachable from your phone, by chat or voice. Positioned as a genuine chief-of-staff, it covers personal productivity (calendar, emails, daily brief), operations (documents by photo) and finance (accounting, bank, invoices, HR, MRA). Messages are orchestrated in the background by N8N workflows that call the AI engine and Lexora tools.",
+    steps: [
+      { title: "1. Executive productivity", body: "Calendar and meetings via Google Calendar (slot suggestions, Meet invites, conflict handling), drafting emails in natural language or by dictation, and a <b>daily brief</b> each morning: today's agenda, tax deadlines, accounting anomalies, pending decisions." },
+      { title: "2. Documents by photo", body: "Snap a photo of an invoice or receipt: the bot ingests it, runs OCR and proposes creating the matching accounting record. The supporting document goes straight into your Lexora documents." },
+      { title: "3. Finance and operations in natural language", body: "Ask for a cash update, an invoice status, an employee's leave balance, MRA compliance, or trigger an accounting action. The bot mobilises the same tools as the web agent." },
+      { title: "4. Voice and plain language", body: "You can dictate: the voice note is transcribed, then handled like a text message. No technical command to memorise; a few system commands exist (/start, /society, /logout, /help) to manage the channel." },
+      { title: "5. Confirmation before any sensitive action", body: "As on the web, write actions (journal entry, transfer, deletion) trigger a recap and <em>Confirm</em> / <em>Cancel</em> buttons. Mobile piloting never relaxes the guardrails." },
+    ],
+    pitfalls: [
+      "The bot acts within your active company's scope: check which one is selected before an action.",
+      "A blurry photo degrades OCR: retake the shot if the extracted amounts look wrong.",
+      "The brief and alerts do not replace control: validate critical deadlines yourself.",
+      "Only drive from Telegram an account that is correctly paired and secured (see Bot configuration).",
+    ],
+    tips: [
+      "Security: the webhook is protected by a shared secret and sensitive actions travel through signed internal endpoints (HMAC-SHA256 + nonce, SEC-005). No unauthenticated message is executed.",
+      "Architecture: Telegram → Lexora webhook → N8N orchestration → AI engine (Claude models) + Lexora tools. Everything stays within your tenant.",
+      "To pair your account, see <b>Telegram bot configuration</b>; for per-user rights, see <b>Telegram bot permissions</b>.",
+      "On the web, the same brain lives in <b>The Lexora assistant</b> and <b>The accounting agent</b>.",
     ],
   },
 
@@ -1049,27 +1134,29 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
   // TELEGRAM CONFIG (personal)
   // ========================================================================
   '/client/telegram-config': {
-    title: 'Telegram configuration (personal)',
+    title: 'Telegram bot configuration (personal pairing)',
     audience: 'all',
     intro:
-      "Link your Lexora account to <b>@LexoraAgent_bot</b> on Telegram. Once linked, you can drive Lexora from your phone: create invoices, validate payroll, file VAT, check cash. Different from Bot Permissions which manages other users' rights — here it is YOUR personal link.",
+      "This page links <em>your</em> Lexora account to the Telegram channel <b>@LexoraAgent_bot</b>. Once paired, you reach the Lexora brain from your phone, in natural language: create an invoice, validate payroll, file VAT, check cash. Distinct from <b>Bot permissions</b>, which govern every user's rights: here it is only <em>your</em> personal link and how it is secured.",
     steps: [
-      { title: "1. Generate a code", body: "<b>Generate code</b>. 6-character code valid 15 min." },
-      { title: "2. Open Telegram", body: "On your phone, search <b>@LexoraAgent_bot</b> or use the provided link." },
-      { title: "3. Type /start CODE", body: "Start a conversation with the bot and send <b>/start ABCXYZ</b> (replace ABCXYZ with your code). Account linked." },
-      { title: "4. Test", body: "Send <em>hello</em>. Bot should greet you by first name + tell you how it can help per your role." },
-      { title: "5. Switch company", body: "If you manage several companies, the bot asks which to activate via <b>/society</b> or via menu." },
-      { title: "6. Unlink (optional)", body: "Unlink any time: <b>/logout</b> in chat or <b>Disconnect</b> button here." },
+      { title: "1. Generate your pairing code", body: "Click <b>Generate code</b>. Lexora produces a 6-character code, valid 15 minutes. This code binds your Lexora identity to a specific Telegram chat — it is strictly personal." },
+      { title: "2. Open the bot conversation", body: "On your phone, search <b>@LexoraAgent_bot</b> in Telegram or use the link shown on screen." },
+      { title: "3. Pair with /start CODE", body: "Send <b>/start ABCXYZ</b> (replace ABCXYZ with your code). Lexora checks the code, binds it to your Telegram <code>chat_id</code> and confirms pairing. Your role and capabilities are inherited from your account." },
+      { title: "4. Verify the pairing", body: "Send a simple <em>hello</em>. The bot should greet you by first name and tell you what it can do per your role. If so, the channel is operational." },
+      { title: "5. Select the active company", body: "If you manage several companies, the bot asks which one to activate — via <b>/society</b> or a menu. All following actions apply to the active company." },
+      { title: "6. Unlink if needed", body: "You can break the pairing any time: <b>/logout</b> in chat, or the <b>Disconnect</b> button on this page. The token is then invalidated." },
     ],
     pitfalls: [
-      "Expired code (> 15 min): regenerate.",
-      "Telegram number change: /logout on the old phone then reconnect with a new code.",
-      "Bot seems inactive after link: restart the conversation with /start (no code).",
+      "Expired code (beyond 15 minutes) → regenerate it, the old one links nothing.",
+      "Telegram number change: run /logout on the old device before re-pairing with a new code.",
+      "Bot inactive right after pairing: restart the conversation with /start (no code) to wake the channel.",
+      "Never share your code: anyone using it drives Lexora under your identity until revocation.",
     ],
     tips: [
-      "If managing several companies, /society lets you switch in one command.",
-      "Bot remembers your preferences (language, date format, default currency).",
-      "You can mute notifications by schedule (e.g. no message before 8am, no message after 8pm) via <em>memory_set</em>.",
+      "End-to-end security: the Telegram webhook is protected by a shared secret, and sensitive actions triggered from chat travel through signed internal endpoints (HMAC-SHA256 + anti-replay nonce, per SEC-005). No action runs on an unauthenticated message.",
+      "What travels: your messages, the attachments you send (invoice photos for OCR) and the brain's replies. Data stays within your Lexora tenant.",
+      "The bot remembers your preferences (language, date format, default currency) and you can mute notifications by time window.",
+      "For the capability detail and role assignment, see <b>Telegram bot permissions</b>; for everything the bot can do, see <b>Driving Lexora via Telegram</b>.",
     ],
   },
 

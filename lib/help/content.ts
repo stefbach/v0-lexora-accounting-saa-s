@@ -496,33 +496,118 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // TELEGRAM PERMISSIONS
   // ========================================================================
   '/client/telegram-permissions': {
-    title: 'Permissions Telegram Bot — Rôles et capabilities',
+    title: 'Permissions du bot Telegram — Rôles et capacités',
     audience: 'client',
     intro:
-      "Configure qui peut utiliser <b>@LexoraAgent_bot</b> et avec quels droits. Tu lies les employés (code 6 caractères), définis les rôles (Employé → Manager → RH → Comptable → Direction), et tu affines les capabilities. Audit complet de chaque action via Telegram.",
+      "Cette page gouverne <em>ce que le cerveau de Lexora a le droit de faire</em> lorsqu'il est piloté depuis Telegram. Le bot <b>@LexoraAgent_bot</b> est un point d'accès au même moteur que l'assistant web (voir <b>L'assistant Lexora</b> et <b>L'agent comptable</b>) : il faut donc encadrer strictement qui s'y connecte et avec quel périmètre. Le modèle repose sur le <b>principe du moindre privilège</b> : chaque utilisateur reçoit un rôle, et chaque rôle ouvre un jeu précis de capacités (<em>capabilities</em>). Toute action exécutée est tracée et auditable.",
     steps: [
-      { title: "1. Matrice des rôles", body: "<b>Employé</b> : voir bulletins, pointer, demander congé. <b>Manager</b> : + valider congés équipe. <b>RH</b> : + OT, primes, paie. <b>Comptable</b> : + banque, factures, MRA, écritures. <b>Direction</b> : TOUT, y compris virements, suppression, creds." },
-      { title: "2. Liste Membres", body: "Table <b>Membres</b> : utilisateurs avec compte Lexora rattachés à cette société. Change le rôle ou customise les capabilities (bouton <b>Permissions</b>)." },
-      { title: "3. Liste Employés RH non rattachés", body: "Table <b>Employés RH</b> : employés actifs sans compte Lexora. Clique <b>Générer code</b> pour créer compte + code Telegram." },
-      { title: "4. Génère un code", body: "Choisis rôle (défaut Employé), capabilities custom si besoin. <b>Générer code</b> → code 6 caractères + lien <code>t.me/LexoraAgent_bot?start=CODE</code> + message prêt (WhatsApp, email, SMS).", warning: "Code expire après <b>15 minutes</b>. Sinon regénère." },
-      { title: "5. Activation employé", body: "Il clique le lien ou cherche le bot, tape <b>/start CODE</b>. Compte activé instantanément. Bot salue par prénom + annonce rôle + propose commandes utiles." },
-      { title: "6. Override capabilities", body: "Bouton <b>Permissions</b> sur un membre → matrice ~40 capabilities. Coche/décoche finement. Override > rôle par défaut." },
-      { title: "7. Audit", body: "Chaque action tracée dans <code>telegram_actions</code> : qui, quand, quoi, montant. Colonne <em>Audit (30j)</em>. Export CSV pour audit externe." },
-      { title: "8. Révoque", body: "Bouton <b>Révoquer</b> sur un membre : token invalidé immédiatement. Utile au départ d'un employé." },
+      { title: "1. Comprends la hiérarchie des rôles", body: "Les rôles sont hiérarchisés par niveau croissant : <b>Employé</b> (consulter ses bulletins, pointer, demander un congé) → <b>Manager</b> (+ valider les congés de son équipe) → <b>RH</b> (+ heures sup, primes, paie) → <b>Comptable</b> (+ banque, factures, MRA, écritures) → <b>Direction</b> (périmètre complet, y compris virements et suppressions). Un rôle ne peut jamais accorder à un autre un niveau supérieur au sien." },
+      { title: "2. Qui peut configurer", body: "Seuls les rôles de niveau élevé (Comptable, Direction, administrateur de la société) peuvent générer des codes, changer des rôles ou révoquer un accès. C'est volontaire : la délégation de droits est elle-même un droit sensible." },
+      { title: "3. Liste des membres", body: "La table <b>Membres</b> recense les utilisateurs disposant d'un compte Lexora rattaché à cette société. Depuis cette liste, tu changes le rôle d'un membre ou tu personnalises finement ses capacités via le bouton <b>Permissions</b>." },
+      { title: "4. Employés RH non rattachés", body: "La table <b>Employés RH</b> liste les salariés actifs qui n'ont pas encore de compte Lexora. Clique <b>Générer un code</b> pour créer leur compte et leur code d'appairage Telegram en une étape." },
+      { title: "5. Génère un code d'appairage", body: "Choisis le rôle (Employé par défaut) et, au besoin, des capacités sur mesure. Lexora produit un code à 6 caractères, un lien <code>t.me/LexoraAgent_bot?start=CODE</code> et un message prêt à envoyer (WhatsApp, email, SMS).", warning: "Le code expire après <b>15 minutes</b>. Au-delà, regénère-le — un code expiré ne lie aucun compte." },
+      { title: "6. Activation côté utilisateur", body: "L'utilisateur ouvre le lien ou cherche le bot, puis envoie <b>/start CODE</b>. Le compte est appairé instantanément : son <code>chat_id</code> Telegram est associé à son <code>user_id</code> Lexora et à la société. Le bot le salue par son prénom et lui rappelle son rôle." },
+      { title: "7. Affine les capacités (override)", body: "Le bouton <b>Permissions</b> ouvre une matrice d'une quarantaine de capacités. Tu peux activer ou retirer une capacité précise au-delà du rôle par défaut. L'override individuel prime sur le rôle — utile pour ouvrir une action ciblée sans promouvoir tout le rôle." },
+      { title: "8. Audit de chaque action", body: "Toute action passée par le bot est journalisée dans <code>telegram_actions</code> : qui, quand, quoi, montant éventuel. La colonne <em>Audit (30 j)</em> donne l'historique récent, exportable en CSV pour un contrôle externe." },
+      { title: "9. Révoque un accès", body: "Le bouton <b>Révoquer</b> invalide immédiatement le jeton d'un membre. À déclencher dès le départ d'un collaborateur ou en cas de doute sur la confidentialité du code." },
     ],
     pitfalls: [
-      "Email manquant sur l'employé → impossible de générer code.",
-      "Plusieurs employés même email → un seul lien possible.",
-      "Donner Direction à un junior → risques (soumissions MRA, virements 1 M MUR).",
-      "Capabilities custom oubliées après changement de rôle → vérifie après chaque modif.",
-      "Code partagé au mauvais numéro WhatsApp → quelqu'un d'autre se lie. Révoque immédiatement.",
+      "Email manquant sur la fiche employé → impossible de générer un code.",
+      "Plusieurs employés partageant le même email → un seul appairage possible.",
+      "Attribuer Direction à un profil junior → risque réel (soumissions MRA, virements de plusieurs millions MUR).",
+      "Capacités personnalisées oubliées après un changement de rôle → revérifie la matrice après chaque modification.",
+      "Code envoyé au mauvais numéro → un tiers peut s'appairer. Révoque sans attendre.",
     ],
     tips: [
-      "Actions destructives → récap + boutons <em>Confirmer</em>/<em>Annuler</em> avant exécution.",
-      "Bot utilise prénom et rôle dans ses réponses naturellement.",
-      "Cabinets : un collaborateur peut être lié à plusieurs sociétés clients.",
-      "Active la <b>validation à 2 yeux</b> pour virements > 500 000 MUR.",
-      "Multinationales : intègre SSO SAML (Settings → SSO) pour gérer les rôles centralement.",
+      "Les actions sensibles (écritures, virements, suppressions) déclenchent toujours un récapitulatif et des boutons <em>Confirmer</em> / <em>Annuler</em> avant exécution : le moindre privilège est doublé d'une confirmation humaine.",
+      "Active la <b>validation à deux yeux</b> pour les virements supérieurs à 500 000 MUR.",
+      "Cabinets : un collaborateur peut être appairé à plusieurs sociétés clientes avec un rôle distinct par société.",
+      "Pour comprendre concrètement ce que le bot exécute, lis aussi <b>Pilotage via Telegram</b> et <b>Configuration du bot Telegram</b>.",
+    ],
+  },
+
+  // ========================================================================
+  // CERVEAU LEXORA — ASSISTANT / CHATBOT
+  // ========================================================================
+  '/client/assistant': {
+    title: "L'assistant Lexora — Le cerveau conversationnel",
+    audience: 'all',
+    intro:
+      "L'assistant Lexora est le <b>cerveau conversationnel</b> de la plateforme : un collaborateur IA expert-comptable, RH et fiscaliste mauricien, que tu interroges en langage naturel. Il s'appuie sur un modèle Claude couplé aux outils internes de Lexora, ce qui lui permet non seulement de répondre mais aussi de <em>consulter tes données réelles</em> (factures, soldes, grand-livre, congés, conformité MRA) pour produire des analyses fiables et, sur demande, préparer des documents. C'est la même intelligence que tu retrouves dans <b>L'agent comptable</b> et dans <b>Pilotage via Telegram</b> — ici dans une interface de discussion.",
+    steps: [
+      { title: "1. Pose ta question en français courant", body: "Écris comme à un collaborateur : « quel est mon solde de TVA ce mois-ci ? », « résume ma trésorerie », « quelles règles WRA pour un licenciement ? ». Pas de syntaxe à apprendre — l'assistant comprend l'intention." },
+      { title: "2. L'assistant consulte tes données", body: "Pour répondre, le cerveau appelle des outils de <em>lecture</em> sur ta société active : liste des factures, balance d'un compte, grand-livre, bulletins, solde de congés, échéances et conformité MRA. La réponse s'appuie sur tes chiffres réels, pas sur des généralités." },
+      { title: "3. Obtiens analyses et explications", body: "Au-delà des chiffres, l'assistant explique : pourquoi une TVA est due, comment se calcule un net à partir d'un brut, ce qu'impose une obligation fiscale ou sociale mauricienne. Idéal pour un dirigeant non-comptable comme pour un professionnel pressé." },
+      { title: "4. Demande la préparation d'un document ou d'une action", body: "Tu peux aller plus loin : « prépare une facture pour le client Dupont », « affecte cette avance à la facture FA-2026-012 ». L'assistant propose alors l'action et attend ta validation explicite avant toute écriture (voir <b>L'agent comptable</b> pour le détail des garde-fous)." },
+      { title: "5. Continuité entre canaux", body: "Tes échanges sont mémorisés. Le cerveau peut rappeler ce qui s'est dit sur un autre canal (web ou Telegram), pour que la conversation reste cohérente quel que soit l'endroit où tu reprends." },
+    ],
+    pitfalls: [
+      "L'assistant est un appui, pas un signataire : <b>vérification humaine obligatoire</b> avant toute déclaration officielle ou tout paiement.",
+      "Une question ambiguë donne une réponse approximative — précise la période, la société ou le tiers concerné.",
+      "Vérifie toujours quelle société est active : les chiffres affichés concernent cette société uniquement.",
+      "L'IA peut se tromper sur un cas de bord juridique : pour un point sensible, fais confirmer par ton comptable ou un conseil.",
+    ],
+    tips: [
+      "Confidentialité : tes questions et tes données restent dans ton tenant Lexora et servent à répondre dans ton périmètre, pas à entraîner des modèles publics.",
+      "Pour l'automatisation comptable poussée (extraction de factures, écritures, rapprochement), passe à <b>L'agent comptable</b>.",
+      "Pour piloter le même cerveau depuis ton téléphone, voir <b>Pilotage via Telegram</b> et <b>Configuration du bot Telegram</b>.",
+    ],
+  },
+
+  // ========================================================================
+  // CERVEAU LEXORA — AGENT COMPTABLE AUTONOME
+  // ========================================================================
+  '/client/agent-comptable': {
+    title: "L'agent comptable — Le cerveau qui agit",
+    audience: 'all',
+    intro:
+      "L'agent comptable est la facette <em>opérationnelle</em> du cerveau de Lexora : là où l'assistant répond et conseille, l'agent <b>exécute des tâches comptables</b> sous contrôle. Il combine un modèle Claude et les outils internes de Lexora dans une boucle de raisonnement : il analyse ta demande, consulte les données nécessaires, propose une action concrète, puis l'exécute uniquement après ta confirmation. C'est un collaborateur autonome encadré, pas un pilote automatique.",
+    steps: [
+      { title: "1. Ce qu'il automatise", body: "Extraction de factures (OCR), passation et reclassement d'écritures, lettrage, enregistrement de paiements, lancement du rapprochement bancaire automatique, analyse de clôture, alertes d'échéances. Autant de tâches répétitives qu'il prend en charge à partir d'une instruction en langage naturel." },
+      { title: "2. La boucle lecture → proposition → exécution", body: "L'agent distingue deux familles d'outils. Les outils de <b>lecture</b> (consulter une balance, lister des écritures) s'exécutent librement. Les outils d'<b>écriture</b> (créer une écriture, lettrer, enregistrer un paiement) ne s'exécutent jamais seuls : l'agent prépare l'action et la soumet à validation." },
+      { title: "3. La confirmation humaine, garde-fou central", body: "Avant toute écriture, l'agent affiche un récapitulatif clair (quoi, sur quels comptes, quel montant) avec des boutons <em>Confirmer</em> / <em>Annuler</em>. Rien n'est gravé tant que tu n'as pas validé. C'est le pivot de la collaboration : l'IA fait le travail, l'humain garde la décision." },
+      { title: "4. Collaboration avec le comptable humain", body: "L'agent ne remplace pas ton expert-comptable : il dégrossit, prépare et propose, lui valide et arbitre les cas complexes. Toutes les écritures restent traçables et auditables, comme une saisie manuelle." },
+      { title: "5. Périmètre et droits", body: "L'agent agit dans le périmètre de la société active et selon les droits de l'utilisateur. Les actions sensibles respectent la hiérarchie des rôles : on ne contourne pas les permissions en passant par l'agent." },
+    ],
+    pitfalls: [
+      "Ne valide jamais une écriture sans lire le récapitulatif : la confirmation engage ta comptabilité.",
+      "Une instruction imprécise (« passe l'écriture ») peut viser le mauvais compte — donne le tiers, le montant et la pièce.",
+      "L'OCR sur un document flou reste imparfait : contrôle les montants extraits avant de comptabiliser.",
+      "L'agent n'a pas le dernier mot fiscal : une clôture ou une déclaration doit être revue par un professionnel.",
+    ],
+    tips: [
+      "Pour une simple question ou une analyse, l'assistant suffit ; bascule sur l'agent quand tu veux qu'une action soit réalisée.",
+      "Tout passe par la même intelligence : tu peux démarrer une demande sur Telegram et la finir sur le web (lien de reprise).",
+      "Voir aussi <b>L'assistant Lexora</b>, <b>Pilotage via Telegram</b> et <b>Permissions du bot Telegram</b>.",
+    ],
+  },
+
+  // ========================================================================
+  // CERVEAU LEXORA — PILOTAGE TELEGRAM
+  // ========================================================================
+  '/pilotage-telegram': {
+    title: 'Pilotage via Telegram — Le cerveau de poche',
+    audience: 'all',
+    intro:
+      "Telegram transforme Lexora en <b>collaborateur de poche</b> : le même cerveau (assistant + agent comptable) accessible depuis ton téléphone, en discussion ou à la voix. Positionné comme un véritable assistant de direction, il couvre aussi bien la productivité personnelle (agenda, emails, brief quotidien) que les opérations (documents par photo) et la finance (comptabilité, banque, factures, RH, MRA). Les messages sont orchestrés en arrière-plan par des workflows N8N qui appellent le moteur IA et les outils Lexora.",
+    steps: [
+      { title: "1. Productivité de direction", body: "Agenda et rendez-vous via Google Agenda (proposition de créneaux, invitations Meet, gestion des conflits), rédaction d'emails en langage naturel ou par dictée, et un <b>brief quotidien</b> chaque matin : agenda du jour, échéances fiscales, anomalies comptables, décisions en attente." },
+      { title: "2. Documents par photo", body: "Prends en photo une facture ou un ticket : le bot l'ingère, lance l'OCR et propose la création de la pièce comptable correspondante. Le justificatif part directement dans tes documents Lexora." },
+      { title: "3. Finance et opérations en langage naturel", body: "Demande un point de trésorerie, l'état d'une facture, le solde de congés d'un salarié, la conformité MRA, ou déclenche une action comptable. Le bot mobilise les mêmes outils que l'agent web." },
+      { title: "4. Voix et langage courant", body: "Tu peux dicter : la note vocale est transcrite, puis traitée comme un message texte. Aucune commande technique à mémoriser ; quelques commandes système existent (/start, /societe, /logout, /help) pour gérer le canal." },
+      { title: "5. Confirmation avant toute action sensible", body: "Comme sur le web, les actions d'écriture (écriture comptable, virement, suppression) déclenchent un récapitulatif et des boutons <em>Confirmer</em> / <em>Annuler</em>. Le pilotage mobile n'allège jamais les garde-fous." },
+    ],
+    pitfalls: [
+      "Le bot agit dans le périmètre de ta société active : vérifie laquelle est sélectionnée avant une action.",
+      "Une photo floue dégrade l'OCR : reprends le cliché si les montants extraits semblent faux.",
+      "Le brief et les alertes ne remplacent pas le contrôle : valide toi-même les échéances critiques.",
+      "Ne pilote depuis Telegram qu'un compte correctement appairé et sécurisé (voir Configuration du bot).",
+    ],
+    tips: [
+      "Sécurité : le webhook est protégé par un secret partagé et les actions sensibles transitent par des endpoints internes signés (HMAC-SHA256 + nonce, SEC-005). Aucun message non authentifié n'est exécuté.",
+      "Architecture : Telegram → webhook Lexora → orchestration N8N → moteur IA (modèles Claude) + outils Lexora. Tout reste dans ton tenant.",
+      "Pour appairer ton compte, voir <b>Configuration du bot Telegram</b> ; pour les droits par utilisateur, voir <b>Permissions du bot Telegram</b>.",
+      "Sur le web, le même cerveau est dans <b>L'assistant Lexora</b> et <b>L'agent comptable</b>.",
     ],
   },
 
@@ -1090,27 +1175,29 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
   // CLIENT — TELEGRAM CONFIG (page personnelle, ≠ permissions société)
   // ========================================================================
   '/client/telegram-config': {
-    title: 'Configuration Telegram (personnelle)',
+    title: 'Configuration du bot Telegram (appairage personnel)',
     audience: 'all',
     intro:
-      "Lie ton compte Lexora à <b>@LexoraAgent_bot</b> sur Telegram. Une fois lié, tu peux piloter Lexora depuis ton téléphone : créer factures, valider paie, soumettre TVA, consulter trésorerie. Différent de Permissions Bot qui gère les droits des autres utilisateurs — ici c'est TON lien personnel.",
+      "Cette page relie <em>ton</em> compte Lexora au canal Telegram <b>@LexoraAgent_bot</b>. Une fois l'appairage fait, tu accèdes au cerveau de Lexora depuis ton téléphone, en langage naturel : créer une facture, valider la paie, soumettre la TVA, consulter la trésorerie. À distinguer des <b>Permissions du bot</b>, qui régissent les droits de l'ensemble des utilisateurs : ici, il s'agit uniquement de <em>ton</em> lien personnel et de la façon dont il est sécurisé.",
     steps: [
-      { title: "1. Génère un code", body: "Bouton <b>Générer un code</b>. Code 6 caractères valable 15 min." },
-      { title: "2. Ouvre Telegram", body: "Sur ton téléphone, cherche <b>@LexoraAgent_bot</b> ou utilise le lien fourni." },
-      { title: "3. Tape /start CODE", body: "Démarre conversation avec le bot et envoie <b>/start ABCXYZ</b> (remplace ABCXYZ par ton code). Compte lié." },
-      { title: "4. Teste", body: "Envoie <em>bonjour</em>. Bot doit te saluer par prénom + dire à quoi il peut t'aider selon ton rôle." },
-      { title: "5. Bascule de société", body: "Si tu gères plusieurs sociétés, le bot demande laquelle activer via <b>/societe</b> ou via menu." },
-      { title: "6. Délink (optionnel)", body: "Tu peux délink à tout moment : <b>/logout</b> dans la conversation ou bouton <b>Déconnecter</b> ici." },
+      { title: "1. Génère ton code d'appairage", body: "Clique <b>Générer un code</b>. Lexora produit un code à 6 caractères, valable 15 minutes. Ce code lie ton identité Lexora à un chat Telegram précis — il est strictement personnel." },
+      { title: "2. Ouvre la conversation du bot", body: "Sur ton téléphone, cherche <b>@LexoraAgent_bot</b> dans Telegram ou utilise le lien fourni à l'écran." },
+      { title: "3. Appaire avec /start CODE", body: "Envoie <b>/start ABCXYZ</b> (remplace ABCXYZ par ton code). Lexora vérifie le code, l'associe à ton <code>chat_id</code> Telegram et confirme l'appairage. Ton rôle et tes capacités sont hérités de ton compte." },
+      { title: "4. Vérifie l'appairage", body: "Envoie un simple <em>bonjour</em>. Le bot doit te saluer par ton prénom et t'indiquer ce qu'il peut faire selon ton rôle. Si c'est le cas, le canal est opérationnel." },
+      { title: "5. Sélectionne la société active", body: "Si tu gères plusieurs sociétés, le bot te demande laquelle activer — via <b>/societe</b> ou un menu. Toutes les actions suivantes s'appliquent à la société active." },
+      { title: "6. Délie le compte si besoin", body: "Tu peux rompre l'appairage à tout moment : <b>/logout</b> dans la conversation, ou le bouton <b>Déconnecter</b> sur cette page. Le jeton est alors invalidé." },
     ],
     pitfalls: [
-      "Code expiré (> 15 min) → regénère.",
-      "Changement de numéro Telegram : fais /logout sur l'ancien puis reconnecte avec un nouveau code.",
-      "Bot semble inactif après lien : redémarre la conversation avec /start (sans code).",
+      "Code expiré (au-delà de 15 minutes) → regénère-le, l'ancien ne lie plus rien.",
+      "Changement de numéro Telegram : fais /logout sur l'ancien appareil avant de réappairer avec un nouveau code.",
+      "Bot inactif juste après l'appairage : relance la conversation avec /start (sans code) pour réveiller le canal.",
+      "Ne partage jamais ton code : quiconque l'utilise pilote Lexora sous ton identité jusqu'à révocation.",
     ],
     tips: [
-      "Si tu gères plusieurs sociétés, /societe te permet de basculer en 1 commande.",
-      "Bot mémorise tes préférences (langue, format date, devise par défaut).",
-      "Tu peux désactiver les notifications par horaire (ex: pas avant 8h, pas après 20h) via <em>memory_set</em>.",
+      "Sécurité de bout en bout : le webhook Telegram est protégé par un secret partagé, et les actions sensibles déclenchées depuis le chat transitent par des endpoints internes signés (HMAC-SHA256 + nonce anti-rejeu, conforme SEC-005). Aucune action n'est exécutée sur un message non authentifié.",
+      "Ce qui transite : tes messages, les pièces jointes que tu envoies (photos de factures pour l'OCR) et les réponses du cerveau. Les données restent dans ton tenant Lexora.",
+      "Le bot mémorise tes préférences (langue, format de date, devise par défaut) et tu peux couper les notifications par plage horaire.",
+      "Pour le détail des capacités et l'attribution des rôles, voir <b>Permissions du bot Telegram</b> ; pour tout ce que le bot sait faire, voir <b>Pilotage via Telegram</b>.",
     ],
   },
 
