@@ -27,6 +27,11 @@ import { adminbChunk } from './i18n/admin_b'
 import { compmarketChunk } from './i18n/comp_market'
 import { complayoutChunk } from './i18n/comp_layout'
 import { compdialogsChunk } from './i18n/comp_dialogs'
+import { rhcongesChunk } from './i18n/rh_conges'
+import { rhplanningChunk } from './i18n/rh_planning'
+import { rhemployesChunk } from './i18n/rh_employes'
+import { rhpaieChunk } from './i18n/rh_paie'
+import { rhdiversChunk } from './i18n/rh_divers'
 
 export type Locale = 'fr' | 'en'
 
@@ -665,6 +670,11 @@ const translations: Record<Locale, Record<string, string>> = {
     ...compmarketChunk.fr,
     ...complayoutChunk.fr,
     ...compdialogsChunk.fr,
+    ...rhcongesChunk.fr,
+    ...rhplanningChunk.fr,
+    ...rhemployesChunk.fr,
+    ...rhpaieChunk.fr,
+    ...rhdiversChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -697,6 +707,11 @@ const translations: Record<Locale, Record<string, string>> = {
     ...compmarketChunk.en,
     ...complayoutChunk.en,
     ...compdialogsChunk.en,
+    ...rhcongesChunk.en,
+    ...rhplanningChunk.en,
+    ...rhemployesChunk.en,
+    ...rhpaieChunk.en,
+    ...rhdiversChunk.en,
   },
 }
 
