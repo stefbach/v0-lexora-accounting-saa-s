@@ -562,7 +562,7 @@ export default function CongesPage() {
   const [annulerMotif, setAnnulerMotif] = useState("")
   // Édition d'un congé (dates + catégorie) — action modifier_demande.
   const [editTarget, setEditTarget] = useState<CongeRecord | null>(null)
-  const [editFields, setEditFields] = useState<{ date_debut: string; date_fin: string; type_conge: string }>({ date_debut: "", date_fin: "", type_conge: "AL" })
+  const [editFields, setEditFields] = useState<{ date_debut: string; date_fin: string; type_conge: string; demi_journee: boolean; matin_ou_apres_midi: 'matin' | 'apres_midi' }>({ date_debut: "", date_fin: "", type_conge: "AL", demi_journee: false, matin_ou_apres_midi: 'matin' })
   const [editLoading, setEditLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -591,6 +591,10 @@ export default function CongesPage() {
   const canImposeCollectif = ['admin', 'super_admin', 'client_admin', 'rh', 'rh_manager', 'direction'].includes(userRole)
   // S1 — seuls RH et admin peuvent supprimer definitivement une demande
   const canSupprimer = ['admin', 'super_admin', 'rh', 'rh_manager'].includes(userRole)
+  // Team leaders peuvent aussi modifier (dates / catégorie / demi) — pas
+  // de suppression définitive pour eux. Le manager classique reste à
+  // discrétion RH (pas inclus par défaut).
+  const canModifier = ['admin', 'super_admin', 'rh', 'rh_manager', 'team_leader'].includes(userRole)
 
   // Calendar tab
   const [calendarConges, setCalendarConges] = useState<CongeRecord[]>([])
@@ -1020,13 +1024,15 @@ export default function CongesPage() {
     }
   }
 
-  // Ouvre le dialog d'édition d'un congé (dates + catégorie).
+  // Ouvre le dialog d'édition d'un congé (dates + catégorie + demi/full).
   const ouvrirEdition = (c: CongeRecord) => {
     setEditTarget(c)
     setEditFields({
       date_debut: String(c.date_debut || "").slice(0, 10),
       date_fin: String(c.date_fin || c.date_debut || "").slice(0, 10),
       type_conge: c.type_conge || "AL",
+      demi_journee: !!c.demi_journee,
+      matin_ou_apres_midi: (c.matin_ou_apres_midi === 'apres_midi') ? 'apres_midi' : 'matin',
     })
   }
 
@@ -1049,8 +1055,11 @@ export default function CongesPage() {
           action: "modifier_demande",
           id: editTarget.id,
           date_debut: editFields.date_debut,
-          date_fin: editFields.date_fin,
+          // Si demi-journée, on force date_fin = date_debut (cohérence backend).
+          date_fin: editFields.demi_journee ? editFields.date_debut : editFields.date_fin,
           type_conge: editFields.type_conge,
+          demi_journee: editFields.demi_journee,
+          matin_ou_apres_midi: editFields.demi_journee ? editFields.matin_ou_apres_midi : null,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -1667,13 +1676,13 @@ export default function CongesPage() {
                               >
                                 <XCircle className="w-4 h-4 mr-1" />Refuser
                               </Button>
-                              {/* Modifier le congé (dates + catégorie) — RH/admin */}
-                              {canSupprimer && (
+                              {/* Modifier le congé (dates + catégorie + demi) — RH/admin/team_leader */}
+                              {canModifier && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   className="text-blue-600 hover:bg-blue-50 h-8"
-                                  title="Modifier les dates ou la catégorie"
+                                  title="Modifier les dates, la catégorie ou demi/full"
                                   onClick={() => ouvrirEdition(c)}
                                 >
                                   <Pencil className="w-4 h-4 mr-1" />Modifier
@@ -1970,13 +1979,13 @@ export default function CongesPage() {
                                     Annuler
                                   </Button>
                                 )}
-                                {/* Modifier le congé (dates + catégorie) — RH/admin */}
-                                {canSupprimer && (
+                                {/* Modifier le congé (dates + catégorie + demi) — RH/admin/team_leader */}
+                                {canModifier && (
                                   <Button
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 text-xs text-blue-600 hover:bg-blue-50"
-                                    title="Modifier les dates ou la catégorie"
+                                    title="Modifier les dates, la catégorie ou demi/full"
                                     onClick={() => ouvrirEdition(c)}
                                   >
                                     <Pencil className="w-3.5 h-3.5 mr-1" />Modifier
@@ -2422,7 +2431,7 @@ export default function CongesPage() {
           <div className="space-y-4 py-2">
             <div>
               <Label>Catégorie</Label>
-              <Select value={editFields.type_conge} onValueChange={v => setEditFields(f => ({ ...f, type_conge: v }))}>
+              <Select value={editFields.type_conge} onValueChange={v => setEditFields(f => ({ ...f, type_conge: v, demi_journee: DEMI_JOURNEE_ALLOWED_TYPES.has(v) ? f.demi_journee : false }))}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(TYPE_LABELS).map(([k, v]) => (
@@ -2431,15 +2440,67 @@ export default function CongesPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Demi-journée — uniquement pour les types autorisés (AL/SL/CAR/UL) */}
+            {DEMI_JOURNEE_ALLOWED_TYPES.has(editFields.type_conge) && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={editFields.demi_journee}
+                    onChange={e => setEditFields(f => ({
+                      ...f,
+                      demi_journee: e.target.checked,
+                      // En basculant en demi, on force date_fin = date_debut.
+                      date_fin: e.target.checked ? f.date_debut : f.date_fin,
+                    }))}
+                    className="h-4 w-4 rounded"
+                  />
+                  Demi-journée (0,5 jour)
+                </label>
+                {editFields.demi_journee && (
+                  <div className="pl-6 flex items-center gap-4">
+                    <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name="edit-demi-moment"
+                        value="matin"
+                        checked={editFields.matin_ou_apres_midi === 'matin'}
+                        onChange={() => setEditFields(f => ({ ...f, matin_ou_apres_midi: 'matin' }))}
+                      />
+                      Matin (AM)
+                    </label>
+                    <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name="edit-demi-moment"
+                        value="apres_midi"
+                        checked={editFields.matin_ou_apres_midi === 'apres_midi'}
+                        onChange={() => setEditFields(f => ({ ...f, matin_ou_apres_midi: 'apres_midi' }))}
+                      />
+                      Après-midi (PM)
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Date de début</Label>
                 <Input type="date" className="mt-1" value={editFields.date_debut}
-                  onChange={e => setEditFields(f => ({ ...f, date_debut: e.target.value }))} />
+                  onChange={e => setEditFields(f => ({
+                    ...f,
+                    date_debut: e.target.value,
+                    // Si demi-journée, synchronise date_fin.
+                    date_fin: f.demi_journee ? e.target.value : f.date_fin,
+                  }))} />
               </div>
               <div>
-                <Label>Date de fin</Label>
-                <Input type="date" className="mt-1" value={editFields.date_fin}
+                <Label>Date de fin {editFields.demi_journee && <span className="text-[10px] text-gray-400">(même date)</span>}</Label>
+                <Input type="date" className="mt-1"
+                  value={editFields.demi_journee ? editFields.date_debut : editFields.date_fin}
+                  disabled={editFields.demi_journee}
                   onChange={e => setEditFields(f => ({ ...f, date_fin: e.target.value }))} />
               </div>
             </div>

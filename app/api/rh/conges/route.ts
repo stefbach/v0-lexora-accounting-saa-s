@@ -732,7 +732,7 @@ export async function POST(request: Request) {
     // ---- ACTION: creer (create leave request) ----
     // ---- ACTION: modifier_demande (edit pending leave request) ----
     if (action === 'modifier_demande') {
-      const { id, date_debut, date_fin, type_conge, motif, demi_journee } = body
+      const { id, date_debut, date_fin, type_conge, motif, demi_journee, matin_ou_apres_midi } = body
       if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 })
 
       // Check the request exists
@@ -762,6 +762,15 @@ export async function POST(request: Request) {
       if (date_fin !== undefined) updates.date_fin = date_fin
       if (type_conge !== undefined) updates.type_conge = type_conge
       if (motif !== undefined) updates.motif = motif
+      // Demi-journée : sauvegarde le flag + le moment (matin/après-midi).
+      // Si demi_journee = false explicite, on remet la demande en full
+      // (matin_ou_apres_midi = null pour cohérence).
+      if (demi_journee !== undefined) {
+        updates.demi_journee = !!demi_journee
+        updates.matin_ou_apres_midi = demi_journee
+          ? (matin_ou_apres_midi === 'apres_midi' ? 'apres_midi' : 'matin')
+          : null
+      }
 
       // Recalculate nb_jours if dates changed
       const newDebut = date_debut || existing.date_debut
