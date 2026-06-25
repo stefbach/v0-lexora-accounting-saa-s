@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { LexoraLogo } from "@/components/LexoraLogo"
 import { BrainOrb3DLazy } from "@/components/3d/BrainOrb3DLoader"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -34,111 +35,43 @@ const GOLD = "#D4AF37"
  * page — au lieu d'une liste à plat indistincte.
  */
 const SERVICES_PRODUCTIVITE = [
-  {
-    icon: CalendarDays,
-    title: "Agenda & rendez-vous",
-    desc: "Synchronisation Google Agenda. Propose des créneaux, crée des invitations Meet, gère les conflits, déplace les RDV à la demande.",
-    bullets: ["Connexion Google OAuth", "Proposition de créneaux", "Invitations Meet automatiques", "Gestion conflits"],
-  },
-  {
-    icon: Inbox,
-    title: "Emails & communications",
-    desc: "Rédige des emails en langage naturel ou par dictée. Synthétise vos messages reçus, propose des réponses contextualisées.",
-    bullets: ["Rédaction par voix", "Brouillon en 1 message", "Synthèse boîte de réception", "Suivi relances"],
-  },
-  {
-    icon: Bell,
-    title: "Brief quotidien",
-    desc: "Chaque matin, votre point de situation : rendez-vous, urgences, alertes financières, décisions en attente.",
-    bullets: ["Agenda du jour", "Échéances fiscales", "Anomalies comptables", "Décisions à valider"],
-  },
+  { icon: CalendarDays, key: "s1", titleKey: "tg.land.prod.s1.title", descKey: "tg.land.prod.s1.desc", bullets: ["tg.land.prod.s1.b1", "tg.land.prod.s1.b2", "tg.land.prod.s1.b3", "tg.land.prod.s1.b4"] },
+  { icon: Inbox, key: "s2", titleKey: "tg.land.prod.s2.title", descKey: "tg.land.prod.s2.desc", bullets: ["tg.land.prod.s2.b1", "tg.land.prod.s2.b2", "tg.land.prod.s2.b3", "tg.land.prod.s2.b4"] },
+  { icon: Bell, key: "s3", titleKey: "tg.land.prod.s3.title", descKey: "tg.land.prod.s3.desc", bullets: ["tg.land.prod.s3.b1", "tg.land.prod.s3.b2", "tg.land.prod.s3.b3", "tg.land.prod.s3.b4"] },
 ] as const
 
 const SERVICES_OPERATIONS = [
-  {
-    icon: Camera,
-    title: "Documents par photo",
-    desc: "Une photo de facture, ticket, contrat — l'IA extrait, classifie et archive. L'écriture comptable est pré-saisie en quelques secondes.",
-    bullets: ["OCR multi-langues", "Classification automatique", "Pré-affectation comptable", "Validation un clic"],
-  },
-  {
-    icon: Clock,
-    title: "Pointage & équipes",
-    desc: "Vos salariés pointent en envoyant un message avec photo et GPS. Gestion des absences, congés, planning sans changer d'app.",
-    bullets: ["Entrée / sortie en un message", "Photo + géolocalisation", "Validation congés", "Surveillance no-show"],
-  },
-  {
-    icon: PenLine,
-    title: "Contrats & juridique",
-    desc: "Dictez le contrat à rédiger — bail, vente, prestation, NDA. L'agent juridique génère un brouillon conforme au droit mauricien.",
-    bullets: ["32 types de contrats", "Droit mauricien intégré", "Génération en langage naturel", "Export PDF prêt à signer"],
-  },
+  { icon: Camera, key: "s1", titleKey: "tg.land.ops.s1.title", descKey: "tg.land.ops.s1.desc", bullets: ["tg.land.ops.s1.b1", "tg.land.ops.s1.b2", "tg.land.ops.s1.b3", "tg.land.ops.s1.b4"] },
+  { icon: Clock, key: "s2", titleKey: "tg.land.ops.s2.title", descKey: "tg.land.ops.s2.desc", bullets: ["tg.land.ops.s2.b1", "tg.land.ops.s2.b2", "tg.land.ops.s2.b3", "tg.land.ops.s2.b4"] },
+  { icon: PenLine, key: "s3", titleKey: "tg.land.ops.s3.title", descKey: "tg.land.ops.s3.desc", bullets: ["tg.land.ops.s3.b1", "tg.land.ops.s3.b2", "tg.land.ops.s3.b3", "tg.land.ops.s3.b4"] },
 ] as const
 
 const SERVICES_FINANCE = [
-  {
-    icon: Banknote,
-    title: "Banque temps réel",
-    desc: "Solde, dernières transactions, alertes solde bas. Rapprochement bancaire automatique sous votre supervision conversationnelle.",
-    bullets: ["Multi-banques Maurice", "Solde sur demande", "Alertes anomalies", "Validation rapprochement"],
-  },
-  {
-    icon: Receipt,
-    title: "Facturation client",
-    desc: "Créez une facture par dictée vocale. L'IA identifie le client, propose les lignes depuis votre catalogue et soumet à fiscalisation MRA.",
-    bullets: ["Voice-to-invoice", "Match contact existant", "Catalogue services", "Fiscalisation MRA optionnelle"],
-  },
-  {
-    icon: TrendingUp,
-    title: "Pilotage et anomalies",
-    desc: "Les agents IA Lex Banque et Lex Factures détectent les récurrences, les anomalies, les impayés. Ils vous remontent ce qui mérite votre attention.",
-    bullets: ["Détection récurrences", "Score santé entreprise", "Alertes impayés", "Recommandations IA"],
-  },
+  { icon: Banknote, key: "s1", titleKey: "tg.land.fin.s1.title", descKey: "tg.land.fin.s1.desc", bullets: ["tg.land.fin.s1.b1", "tg.land.fin.s1.b2", "tg.land.fin.s1.b3", "tg.land.fin.s1.b4"] },
+  { icon: Receipt, key: "s2", titleKey: "tg.land.fin.s2.title", descKey: "tg.land.fin.s2.desc", bullets: ["tg.land.fin.s2.b1", "tg.land.fin.s2.b2", "tg.land.fin.s2.b3", "tg.land.fin.s2.b4"] },
+  { icon: TrendingUp, key: "s3", titleKey: "tg.land.fin.s3.title", descKey: "tg.land.fin.s3.desc", bullets: ["tg.land.fin.s3.b1", "tg.land.fin.s3.b2", "tg.land.fin.s3.b3", "tg.land.fin.s3.b4"] },
 ] as const
 
 const AGENTS = [
-  { nom: "Lex Banque", role: "Rapprochement bancaire et lettrage automatique", icon: Banknote },
-  { nom: "Lex Factures", role: "Analyse récurrences et factures manquantes", icon: FileText },
-  { nom: "CLARA", role: "Assistant Paie & RH (Workers' Rights Act 2019)", icon: Users },
-  { nom: "Agent Juridique", role: "Rédaction de contrats (32 types, droit mauricien)", icon: Scale },
-  { nom: "Agent Compliance", role: "Suivi obligations MRA, ROC, FSC, TDS", icon: ShieldCheck },
-  { nom: "Agent GBC", role: "IFRS, Pillar Two, Transfer Pricing, consolidation", icon: Globe },
+  { nom: "Lex Banque", roleKey: "tg.land.agent.bank.role", icon: Banknote },
+  { nom: "Lex Factures", roleKey: "tg.land.agent.invoices.role", icon: FileText },
+  { nom: "CLARA", roleKey: "tg.land.agent.clara.role", icon: Users },
+  { nom: "Agent Juridique", roleKey: "tg.land.agent.legal.role", icon: Scale },
+  { nom: "Agent Compliance", roleKey: "tg.land.agent.compliance.role", icon: ShieldCheck },
+  { nom: "Agent GBC", roleKey: "tg.land.agent.gbc.role", icon: Globe },
 ] as const
 
 const CONVERSATIONS = [
-  {
-    user: "Bloque-moi 30 min mardi matin pour appeler le banquier",
-    bot: "Mardi 10h-10h30 disponible. Je crée l'événement \"Banquier MCB\" et j'invite ton équipe ?",
-    icon: CalendarDays,
-  },
-  {
-    user: "[photo facture EDM 3 850 MUR]",
-    bot: "Facture EDM identifiée. Compte 606 \"Énergie\". Écriture pré-saisie pour validation.",
-    icon: Camera,
-  },
-  {
-    user: "Réponds à Jean qu'on signe vendredi 14h chez le notaire",
-    bot: "Brouillon prêt. Ton : professionnel. Sujet : Signature 28/11. Je l'envoie ou tu relis ?",
-    icon: Mail,
-  },
-  {
-    user: "Solde MCB et urgences du jour",
-    bot: "MCB: 1 248 590 MUR. 3 factures impayées (148k MUR). TVA J-2. Réunion à 11h.",
-    icon: TrendingUp,
-  },
-  {
-    user: "Crée un contrat de bail 25 000 MUR/mois pour Jean Dupont",
-    bot: "Brouillon bail résidentiel généré. Dépôt 2 mois (Landlord Act). Preview en pièce jointe.",
-    icon: Scale,
-  },
-  {
-    user: "Quels congés à valider cette semaine ?",
-    bot: "3 demandes : Marie 5j Annual, Paul 1j Sick, Léa 2j UL. Tape /valider pour les approuver.",
-    icon: Users,
-  },
+  { userKey: "tg.land.conv.1.user", botKey: "tg.land.conv.1.bot", icon: CalendarDays },
+  { userKey: "tg.land.conv.2.user", botKey: "tg.land.conv.2.bot", icon: Camera },
+  { userKey: "tg.land.conv.3.user", botKey: "tg.land.conv.3.bot", icon: Mail },
+  { userKey: "tg.land.conv.4.user", botKey: "tg.land.conv.4.bot", icon: TrendingUp },
+  { userKey: "tg.land.conv.5.user", botKey: "tg.land.conv.5.bot", icon: Scale },
+  { userKey: "tg.land.conv.6.user", botKey: "tg.land.conv.6.bot", icon: Users },
 ] as const
 
 export default function PilotageTelegramPage() {
+  const locale = getLocale()
   return (
     <div className="min-h-screen text-white" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1a2659 50%, ${NAVY} 100%)` }}>
       {/* Nav */}
@@ -148,13 +81,13 @@ export default function PilotageTelegramPage() {
             <LexoraLogo size="md" />
           </Link>
           <div className="flex items-center gap-4 text-sm">
-            <Link href="/tarifs" className="text-white/80 hover:text-white">Tarifs</Link>
+            <Link href="/tarifs" className="text-white/80 hover:text-white">{t('tg.land.nav.pricing', locale)}</Link>
             <Link
               href="/inscription"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold hover:opacity-95"
               style={{ backgroundColor: GOLD, color: NAVY }}
             >
-              Commencer <ArrowRight className="h-3.5 w-3.5" />
+              {t('tg.land.nav.start', locale)} <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         </div>
@@ -180,7 +113,7 @@ export default function PilotageTelegramPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium"
                  style={{ backgroundColor: `${GOLD}15`, borderColor: `${GOLD}55`, color: GOLD }}>
               <Briefcase className="h-3.5 w-3.5" />
-              <span>Lexora x Telegram — Chief of Staff IA</span>
+              <span>{t('tg.land.badge', locale)}</span>
             </div>
           </div>
 
@@ -191,12 +124,12 @@ export default function PilotageTelegramPage() {
             {/* Labels qui orbitent visuellement autour de l'orbe (impression d'actions en cours) */}
             <div className="absolute inset-0 pointer-events-none hidden lg:block">
               {[
-                { label: "Agenda", x: "8%",  y: "20%", icon: CalendarDays },
-                { label: "Emails", x: "82%", y: "18%", icon: Inbox },
-                { label: "Banque", x: "5%",  y: "55%", icon: Banknote },
-                { label: "Contrats", x: "85%", y: "50%", icon: Scale },
-                { label: "OCR", x: "12%", y: "80%", icon: Camera },
-                { label: "RH", x: "80%", y: "78%", icon: Users },
+                { label: t('tg.land.orbit.agenda', locale), x: "8%",  y: "20%", icon: CalendarDays },
+                { label: t('tg.land.orbit.emails', locale), x: "82%", y: "18%", icon: Inbox },
+                { label: t('tg.land.orbit.bank', locale), x: "5%",  y: "55%", icon: Banknote },
+                { label: t('tg.land.orbit.contracts', locale), x: "85%", y: "50%", icon: Scale },
+                { label: t('tg.land.orbit.ocr', locale), x: "12%", y: "80%", icon: Camera },
+                { label: t('tg.land.orbit.hr', locale), x: "80%", y: "78%", icon: Users },
               ].map(l => {
                 const Icon = l.icon
                 return (
@@ -223,16 +156,14 @@ export default function PilotageTelegramPage() {
           {/* Titre + sous-titre */}
           <div className="relative text-center mt-6 md:-mt-4">
             <h1 className="text-4xl md:text-6xl font-black leading-tight">
-              Votre bras droit,<br />
+              {t('tg.land.hero.title1', locale)}<br />
               <span className="bg-gradient-to-r from-yellow-300 to-yellow-200 bg-clip-text text-transparent">
-                disponible 24 heures sur 24
+                {t('tg.land.hero.title2', locale)}
               </span>
             </h1>
 
             <p className="text-lg md:text-xl text-white/80 mt-6 max-w-3xl mx-auto leading-relaxed">
-              Lexora sur Telegram n'est pas un chatbot. C'est un <strong className="text-white">assistant de direction</strong> qui comprend votre business :
-              agenda, rendez-vous, emails, comptabilité, RH, banque, contrats. Tout ce que vous déléguiez à votre assistante,
-              en <strong className="text-white">langage naturel</strong>.
+              {t('tg.land.hero.subtitle.a', locale)} <strong className="text-white">{t('tg.land.hero.subtitle.b', locale)}</strong> {t('tg.land.hero.subtitle.c', locale)} <strong className="text-white">{t('tg.land.hero.subtitle.d', locale)}</strong>.
             </p>
 
             <div className="mt-10 flex items-center justify-center gap-3 flex-wrap">
@@ -241,23 +172,23 @@ export default function PilotageTelegramPage() {
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-bold hover:opacity-95 shadow-2xl"
                 style={{ backgroundColor: GOLD, color: NAVY, boxShadow: `0 10px 40px -10px ${GOLD}80` }}
               >
-                <Sparkles className="h-4 w-4" /> Activer mon assistant
+                <Sparkles className="h-4 w-4" /> {t('tg.land.hero.activate', locale)}
               </Link>
               <Link
                 href="/tarifs"
                 className="inline-flex items-center gap-2 border border-white/30 text-white px-6 py-3 rounded-lg hover:bg-white/10"
               >
-                Voir les tarifs <ChevronRight className="h-4 w-4" />
+                {t('tg.land.hero.seePricing', locale)} <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
 
             {/* Différenciateurs clés */}
             <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto">
               {[
-                { label: "Langage naturel", value: "0 commande à apprendre" },
-                { label: "Domaines couverts", value: "9 services intégrés" },
-                { label: "Agents experts IA", value: "6 spécialistes" },
-                { label: "Disponibilité", value: "24h / 7j" },
+                { label: t('tg.land.diff.naturalLabel', locale), value: t('tg.land.diff.naturalValue', locale) },
+                { label: t('tg.land.diff.domainsLabel', locale), value: t('tg.land.diff.domainsValue', locale) },
+                { label: t('tg.land.diff.agentsLabel', locale), value: t('tg.land.diff.agentsValue', locale) },
+                { label: t('tg.land.diff.availLabel', locale), value: t('tg.land.diff.availValue', locale) },
               ].map(s => (
                 <div key={s.label} className="rounded-xl p-4 border border-white/10" style={{ backgroundColor: "rgba(255,255,255,0.04)" }}>
                   <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: GOLD }}>{s.label}</p>
@@ -271,26 +202,29 @@ export default function PilotageTelegramPage() {
 
       {/* Catégorie 1 — Productivité personnelle */}
       <ServicesSection
-        eyebrow="Productivité personnelle"
-        title="Comme une assistante de direction"
-        subtitle="Agenda, emails, brief quotidien. Le travail invisible qui fait tourner une journée — délégué en un message."
+        locale={locale}
+        eyebrow={t('tg.land.prod.eyebrow', locale)}
+        title={t('tg.land.prod.title', locale)}
+        subtitle={t('tg.land.prod.subtitle', locale)}
         services={SERVICES_PRODUCTIVITE}
       />
 
       {/* Catégorie 2 — Opérations */}
       <ServicesSection
-        eyebrow="Opérations terrain"
-        title="Pour gérer vos équipes et vos documents"
-        subtitle="Pointage, contrats, paperasse — toujours à portée du téléphone."
+        locale={locale}
+        eyebrow={t('tg.land.ops.eyebrow', locale)}
+        title={t('tg.land.ops.title', locale)}
+        subtitle={t('tg.land.ops.subtitle', locale)}
         services={SERVICES_OPERATIONS}
         alt
       />
 
       {/* Catégorie 3 — Finance */}
       <ServicesSection
-        eyebrow="Pilotage financier"
-        title="La situation financière en temps réel"
-        subtitle="Banque, factures, indicateurs. Les bons chiffres, au bon moment, sans ouvrir l'application."
+        locale={locale}
+        eyebrow={t('tg.land.fin.eyebrow', locale)}
+        title={t('tg.land.fin.title', locale)}
+        subtitle={t('tg.land.fin.subtitle', locale)}
         services={SERVICES_FINANCE}
       />
 
@@ -300,12 +234,11 @@ export default function PilotageTelegramPage() {
           <div className="text-center mb-12">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold mb-3"
                  style={{ backgroundColor: `${GOLD}1F`, color: GOLD }}>
-              <Bot className="h-3.5 w-3.5" /> ÉQUIPE D'EXPERTS IA
+              <Bot className="h-3.5 w-3.5" /> {t('tg.land.agents.badge', locale).toUpperCase()}
             </div>
-            <h2 className="text-3xl md:text-4xl font-bold">Une équipe d'experts à votre disposition</h2>
+            <h2 className="text-3xl md:text-4xl font-bold">{t('tg.land.agents.title', locale)}</h2>
             <p className="text-white/70 mt-3 max-w-2xl mx-auto">
-              Six agents spécialisés qui dialoguent entre eux et avec vous via Telegram pour résoudre les problèmes complexes.
-              Vous parlez à l'assistant ; il oriente vers le bon expert.
+              {t('tg.land.agents.subtitle', locale)}
             </p>
           </div>
 
@@ -321,7 +254,7 @@ export default function PilotageTelegramPage() {
                     </div>
                     <div>
                       <h3 className="font-bold">{a.nom}</h3>
-                      <p className="text-xs text-white/70 mt-0.5">{a.role}</p>
+                      <p className="text-xs text-white/70 mt-0.5">{t(a.roleKey, locale)}</p>
                     </div>
                   </div>
                 </div>
@@ -335,8 +268,8 @@ export default function PilotageTelegramPage() {
       <section className="px-4 py-16">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold">Voici ce que vous pouvez demander</h2>
-            <p className="text-white/70 mt-3">Aucune commande à mémoriser. Vous parlez normalement.</p>
+            <h2 className="text-3xl md:text-4xl font-bold">{t('tg.land.conv.title', locale)}</h2>
+            <p className="text-white/70 mt-3">{t('tg.land.conv.subtitle', locale)}</p>
           </div>
 
           <div className="space-y-5">
@@ -348,16 +281,16 @@ export default function PilotageTelegramPage() {
                     <div className="max-w-md border border-white/20 rounded-2xl rounded-br-sm px-4 py-2.5 text-sm flex items-center gap-2"
                          style={{ background: `linear-gradient(135deg, ${NAVY}, #1a2659)` }}>
                       <Icon className="h-4 w-4 flex-shrink-0" style={{ color: GOLD }} />
-                      <span>{c.user}</span>
+                      <span>{t(c.userKey, locale)}</span>
                     </div>
                   </div>
                   <div className="flex justify-start">
                     <div className="max-w-md border rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm"
                          style={{ backgroundColor: `${GOLD}10`, borderColor: `${GOLD}55` }}>
                       <p className="text-xs font-semibold mb-1 flex items-center gap-1" style={{ color: GOLD }}>
-                        <Bot className="h-3 w-3" /> Lexora
+                        <Bot className="h-3 w-3" /> {t('tg.land.lexora', locale)}
                       </p>
-                      {c.bot}
+                      {t(c.botKey, locale)}
                     </div>
                   </div>
                 </div>
@@ -371,15 +304,15 @@ export default function PilotageTelegramPage() {
       <section className="px-4 py-16" style={{ backgroundColor: "rgba(0,0,0,0.25)" }}>
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold">Activation en trois minutes</h2>
-            <p className="text-white/70 mt-3">Pas d'application à installer. Telegram suffit.</p>
+            <h2 className="text-3xl md:text-4xl font-bold">{t('tg.land.act.title', locale)}</h2>
+            <p className="text-white/70 mt-3">{t('tg.land.act.subtitle', locale)}</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
             {[
-              { n: 1, icon: Smartphone, title: "Créez votre compte", desc: "Inscription Lexora en quelques minutes. Le module Telegram est inclus dans tous les plans." },
-              { n: 2, icon: MessageCircle, title: "Lancez le bot", desc: "Ouvrez Telegram, cherchez @LexoraBot, tapez /start. Connexion par email en un clic." },
-              { n: 3, icon: Zap, title: "Déléguez", desc: "Parlez normalement. L'assistant comprend, exécute, et vous tient au courant." },
+              { n: 1, icon: Smartphone, title: t('tg.land.act.s1.title', locale), desc: t('tg.land.act.s1.desc', locale) },
+              { n: 2, icon: MessageCircle, title: t('tg.land.act.s2.title', locale), desc: t('tg.land.act.s2.desc', locale) },
+              { n: 3, icon: Zap, title: t('tg.land.act.s3.title', locale), desc: t('tg.land.act.s3.desc', locale) },
             ].map(step => {
               const Icon = step.icon
               return (
@@ -387,7 +320,7 @@ export default function PilotageTelegramPage() {
                   <div className="inline-flex items-center justify-center w-14 h-14 rounded-full mb-3" style={{ backgroundColor: `${GOLD}20` }}>
                     <Icon className="h-7 w-7" style={{ color: GOLD }} />
                   </div>
-                  <p className="text-xs font-bold tracking-wider" style={{ color: GOLD }}>ÉTAPE {step.n}</p>
+                  <p className="text-xs font-bold tracking-wider" style={{ color: GOLD }}>{t('tg.land.act.step', locale).toUpperCase()} {step.n}</p>
                   <h3 className="text-lg font-bold mt-1">{step.title}</h3>
                   <p className="text-sm text-white/70 mt-2">{step.desc}</p>
                 </div>
@@ -400,10 +333,9 @@ export default function PilotageTelegramPage() {
       {/* CTA final */}
       <section className="px-4 py-20">
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold">Prêt à déléguer ?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold">{t('tg.land.cta.title', locale)}</h2>
           <p className="text-white/70 mt-3 text-lg">
-            Votre assistant de direction IA est inclus dans tous les plans Lexora.
-            Aucune configuration complexe, aucune app à installer.
+            {t('tg.land.cta.subtitle', locale)}
           </p>
           <div className="mt-10 flex items-center justify-center gap-3 flex-wrap">
             <Link
@@ -411,20 +343,20 @@ export default function PilotageTelegramPage() {
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-lg font-bold text-base hover:opacity-95"
               style={{ background: `linear-gradient(135deg, ${GOLD}, #f5d061)`, color: NAVY }}
             >
-              Activer mon assistant
+              {t('tg.land.cta.activate', locale)}
             </Link>
             <Link
               href="/tarifs"
               className="inline-flex items-center gap-2 border border-white/30 text-white px-8 py-3.5 rounded-lg hover:bg-white/10"
             >
-              Voir les tarifs
+              {t('tg.land.cta.seePricing', locale)}
             </Link>
           </div>
         </div>
       </section>
 
       <footer className="border-t border-white/10 py-6 px-4 text-center text-xs text-white/50">
-        <p>© Lexora · <Link href="/cgu" className="hover:text-white/80">CGU</Link> · <Link href="/cgv" className="hover:text-white/80">CGV</Link> · <Link href="/protection-donnees" className="hover:text-white/80">Confidentialité</Link></p>
+        <p>© Lexora · <Link href="/cgu" className="hover:text-white/80">{t('tg.land.footer.terms', locale)}</Link> · <Link href="/cgv" className="hover:text-white/80">{t('tg.land.footer.salesTerms', locale)}</Link> · <Link href="/protection-donnees" className="hover:text-white/80">{t('tg.land.footer.privacy', locale)}</Link></p>
       </footer>
     </div>
   )
@@ -434,12 +366,13 @@ export default function PilotageTelegramPage() {
  * Bloc d'une catégorie de services. Le param `alt` alterne le fond
  * pour créer du rythme visuel entre sections.
  */
-function ServicesSection({ eyebrow, title, subtitle, services, alt }: {
+function ServicesSection({ eyebrow, title, subtitle, services, alt, locale }: {
   eyebrow: string
   title: string
   subtitle: string
-  services: readonly { icon: any; title: string; desc: string; bullets: readonly string[] }[]
+  services: readonly { icon: any; key: string; titleKey: string; descKey: string; bullets: readonly string[] }[]
   alt?: boolean
+  locale: Locale
 }) {
   return (
     <section className="px-4 py-16 md:py-20" style={alt ? { backgroundColor: "rgba(0,0,0,0.25)" } : undefined}>
@@ -456,18 +389,18 @@ function ServicesSection({ eyebrow, title, subtitle, services, alt }: {
           {services.map(s => {
             const Icon = s.icon
             return (
-              <div key={s.title} className="rounded-2xl bg-white/5 border border-white/10 p-6 hover:border-white/30 transition-colors">
+              <div key={s.key} className="rounded-2xl bg-white/5 border border-white/10 p-6 hover:border-white/30 transition-colors">
                 <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl mb-4 border border-white/20"
                      style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
                   <Icon className="h-5 w-5" style={{ color: GOLD }} />
                 </div>
-                <h3 className="text-lg font-bold">{s.title}</h3>
-                <p className="text-sm text-white/70 mt-2 leading-relaxed">{s.desc}</p>
+                <h3 className="text-lg font-bold">{t(s.titleKey, locale)}</h3>
+                <p className="text-sm text-white/70 mt-2 leading-relaxed">{t(s.descKey, locale)}</p>
                 <ul className="mt-4 space-y-1.5">
                   {s.bullets.map(b => (
                     <li key={b} className="flex items-start gap-2 text-xs text-white/80">
                       <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: GOLD }} />
-                      <span>{b}</span>
+                      <span>{t(b, locale)}</span>
                     </li>
                   ))}
                 </ul>

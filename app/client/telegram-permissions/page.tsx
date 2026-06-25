@@ -6,20 +6,11 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Shield, MessageCircle, AlertCircle, CheckCircle2, XCircle, Activity, Users, Copy, Link2, Trash2, Settings2, RotateCcw } from "lucide-react"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
-import { t, getLocale } from "@/lib/i18n"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import { PageHelp } from "@/components/help/PageHelp"
 
-const ROLE_LABELS: Record<string, string> = {
-  employe: "Employé",
-  manager: "Manager",
-  rh: "RH",
-  comptable: "Comptable",
-  comptable_dedie: "Comptable dédié",
-  direction: "Direction",
-  client_admin: "Dirigeant client",
-  admin: "Administrateur",
-  super_admin: "Super Admin",
-}
+const roleLabel = (role: string, locale: Locale) => t(`tg.role.${role}`, locale)
+const capLabel = (cap: string, locale: Locale) => t(`tg.cap.${cap}`, locale)
 
 const ROLE_COLORS: Record<string, string> = {
   employe: "bg-slate-100 text-slate-700 border-slate-300",
@@ -55,33 +46,6 @@ const DEFAULT_CAPS_BY_ROLE: Record<string, string[]> = {
                  'create_invoice', 'compute_payroll', 'approve_payroll', 'export_mra', 'approve_team_leave',
                  'view_audit_log', 'manage_alerts_config'],
   admin: ['ALL'],
-}
-
-const CAPABILITY_LABELS: Record<string, string> = {
-  view_help: "Voir l'aide",
-  switch_societe: "Changer de société",
-  logout: "Déconnecter Telegram",
-  view_my_payslip: "Voir mon bulletin",
-  view_my_leave_balance: "Voir mes congés",
-  request_leave: "Demander congé",
-  view_team_kpis: "Voir KPIs équipe",
-  approve_team_leave: "Valider congés équipe",
-  view_team_pending: "Voir demandes en attente",
-  view_kpis: "Voir KPIs société",
-  view_bank: "Voir solde banque",
-  view_tax_calendar: "Échéances MRA",
-  create_invoice: "Créer facture",
-  reconcile_bank: "Rapprochement",
-  add_ot: "Ajouter OT",
-  add_bonus: "Ajouter prime",
-  compute_payroll: "Calculer paie",
-  approve_payroll: "🚨 Valider paie",
-  export_mra: "Exports MRA",
-  view_employees: "Voir employés",
-  manage_leave_settings: "Paramètres congés",
-  view_audit_log: "Audit log",
-  manage_alerts_config: "Config alertes",
-  ALL: "🔓 Tous les droits",
 }
 
 type PermissionsModalState = {
@@ -122,14 +86,14 @@ export default function TelegramPermissionsPage() {
     try {
       const r = await fetch(`/api/client/telegram-permissions?societe_id=${societeId}`, { cache: 'no-store' })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur')
+      if (!r.ok) throw new Error(j.error || t('tg.common.error', locale))
       setMembers(j.members || [])
       setEmployees(j.employees || [])
       setAllCapabilities(j.all_capabilities || [])
       setCapsOverrideSupported(j.capabilities_override_supported !== false)
       setRoleMatrix(j.role_matrix || {})
       setBotUsername(j.bot_username || 'LexoraBot')
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
+    } catch (e: any) { setError(e?.message || t('tg.common.error', locale)) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId])
 
@@ -222,10 +186,10 @@ export default function TelegramPermissionsPage() {
         }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur')
+      if (!r.ok) throw new Error(j.error || t('tg.common.error', locale))
       setPermsModal(null)
       await load()
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSavingPerms(false) }
+    } catch (e: any) { setError(e?.message || t('tg.common.error', locale)) } finally { setSavingPerms(false) }
   }
 
   const generateCode = async (employe_id: string, nom: string, role: string = 'employe') => {
@@ -244,7 +208,7 @@ export default function TelegramPermissionsPage() {
         }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur')
+      if (!r.ok) throw new Error(j.error || t('tg.common.error', locale))
       setCodeModal({ employe_id, nom, code: j.code, deep_link: j.deep_link, share_message: j.share_message })
       // Nettoie l'état pending pour cet employé (les caps sont maintenant en DB)
       setPendingCapsByEmpId(prev => {
@@ -253,7 +217,7 @@ export default function TelegramPermissionsPage() {
         return next
       })
       await load()
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setGeneratingFor(null) }
+    } catch (e: any) { setError(e?.message || t('tg.common.error', locale)) } finally { setGeneratingFor(null) }
   }
 
   const updateEmployeeRole = async (auth_user_id: string, newRole: string) => {
@@ -265,20 +229,20 @@ export default function TelegramPermissionsPage() {
         body: JSON.stringify({ user_id: auth_user_id, role: newRole }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur')
+      if (!r.ok) throw new Error(j.error || t('tg.common.error', locale))
       await load()
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSavingUserId(null) }
+    } catch (e: any) { setError(e?.message || t('tg.common.error', locale)) } finally { setSavingUserId(null) }
   }
 
   const unlinkEmployee = async (employe_id: string, nom: string) => {
-    if (!confirm(`Délier ${nom} de Telegram ? Il devra refaire /start CODE pour se reconnecter.`)) return
+    if (!confirm(`${t('tg.perms.unlinkConfirm1', locale)} ${nom} ${t('tg.perms.unlinkConfirm2', locale)}`)) return
     setError(null)
     try {
       const r = await fetch(`/api/client/telegram-permissions/employee-code?societe_id=${societeId}&employe_id=${employe_id}`, { method: 'DELETE' })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur')
+      if (!r.ok) throw new Error(j.error || t('tg.common.error', locale))
       await load()
-    } catch (e: any) { setError(e?.message || 'Erreur') }
+    } catch (e: any) { setError(e?.message || t('tg.common.error', locale)) }
   }
 
   const copyToClipboard = async (text: string, key: string) => {
@@ -298,20 +262,20 @@ export default function TelegramPermissionsPage() {
         body: JSON.stringify({ user_id, role: newRole }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Erreur')
+      if (!r.ok) throw new Error(j.error || t('tg.common.error', locale))
       await load()
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setSavingUserId(null) }
+    } catch (e: any) { setError(e?.message || t('tg.common.error', locale)) } finally { setSavingUserId(null) }
   }
 
-  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Aucune société sélectionnée.</div></div>
-  if (loading) return <div className="p-8 flex items-center gap-2 text-slate-500"><Loader2 className="animate-spin h-5 w-5" /> Chargement…</div>
+  if (!societeId) return <div className="p-8"><div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t('tg.perms.noSociete', locale)}</div></div>
+  if (loading) return <div className="p-8 flex items-center gap-2 text-slate-500"><Loader2 className="animate-spin h-5 w-5" /> {t('tg.perms.loading', locale)}</div>
 
   return (
     <div className="p-6 space-y-6 max-w-6xl">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Shield className="h-6 w-6 text-emerald-600" /> Permissions Telegram Bot</h1>
-          <p className="text-sm text-slate-500">Configure qui peut faire quoi via le bot Telegram Lexora. Les changements prennent effet immédiatement.</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Shield className="h-6 w-6 text-emerald-600" /> {t('tg.perms.title', locale)}</h1>
+          <p className="text-sm text-slate-500">{t('tg.perms.subtitle', locale)}</p>
         </div>
         <PageHelp />
       </div>
@@ -321,59 +285,50 @@ export default function TelegramPermissionsPage() {
       {/* ── Qui peut paramétrer le bot ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4 text-emerald-600" /> Qui peut accéder à cette page ?</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4 text-emerald-600" /> {t('tg.perms.accessTitle', locale)}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm space-y-3">
-          <p className="text-slate-600">
-            L'administration des permissions Telegram (génération de codes, attribution de rôles, personnalisation des droits)
-            est ouverte aux profils suivants :
-          </p>
+          <p className="text-slate-600">{t('tg.perms.accessIntro', locale)}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="border rounded p-3 bg-emerald-50/50">
               <div className="flex items-center gap-2 mb-1">
-                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300" variant="outline">Dirigeant client</Badge>
-                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300" variant="outline">Direction</Badge>
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300" variant="outline">{roleLabel('client_admin', locale)}</Badge>
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300" variant="outline">{roleLabel('direction', locale)}</Badge>
               </div>
               <p className="text-slate-700">
-                <strong>Propriétaire du compte.</strong> Accès complet : génère les codes de liaison Telegram,
-                modifie les rôles, personnalise les permissions individuelles, configure les alertes,
-                voit l'audit log.
+                <strong>{t('tg.perms.ownerTitle', locale)}</strong> {t('tg.perms.ownerDesc', locale)}
               </p>
             </div>
             <div className="border rounded p-3 bg-amber-50/50">
               <div className="flex items-center gap-2 mb-1">
-                <Badge className="bg-amber-100 text-amber-700 border-amber-300" variant="outline">RH</Badge>
+                <Badge className="bg-amber-100 text-amber-700 border-amber-300" variant="outline">{roleLabel('rh', locale)}</Badge>
               </div>
               <p className="text-slate-700">
-                <strong>Responsable RH.</strong> Donne et gère les accès Telegram aux employés (code de liaison,
-                rôle employé/manager), surtout pour le pointage, les bulletins de paie, les demandes de congés.
-                Idéal pour onboarder rapidement les nouveaux salariés.
+                <strong>{t('tg.perms.rhTitle', locale)}</strong> {t('tg.perms.rhDesc', locale)}
               </p>
             </div>
             <div className="border rounded p-3 bg-red-50/50">
               <div className="flex items-center gap-2 mb-1">
-                <Badge className="bg-red-100 text-red-700 border-red-300" variant="outline">Administrateur</Badge>
-                <Badge className="bg-purple-100 text-purple-700 border-purple-300" variant="outline">Super Admin</Badge>
+                <Badge className="bg-red-100 text-red-700 border-red-300" variant="outline">{roleLabel('admin', locale)}</Badge>
+                <Badge className="bg-purple-100 text-purple-700 border-purple-300" variant="outline">{roleLabel('super_admin', locale)}</Badge>
               </div>
               <p className="text-slate-700">
-                <strong>Équipe Lexora.</strong> Tous droits, toutes sociétés. Réservé au support.
+                <strong>{t('tg.perms.lexoraTitle', locale)}</strong> {t('tg.perms.lexoraDesc', locale)}
               </p>
             </div>
             <div className="border rounded p-3 bg-slate-50">
               <div className="flex items-center gap-2 mb-1">
-                <Badge className="bg-slate-100 text-slate-600 border-slate-300" variant="outline">Comptable</Badge>
-                <Badge className="bg-blue-100 text-blue-700 border-blue-300" variant="outline">Manager</Badge>
-                <Badge className="bg-slate-100 text-slate-600 border-slate-300" variant="outline">Employé</Badge>
+                <Badge className="bg-slate-100 text-slate-600 border-slate-300" variant="outline">{roleLabel('comptable', locale)}</Badge>
+                <Badge className="bg-blue-100 text-blue-700 border-blue-300" variant="outline">{roleLabel('manager', locale)}</Badge>
+                <Badge className="bg-slate-100 text-slate-600 border-slate-300" variant="outline">{roleLabel('employe', locale)}</Badge>
               </div>
               <p className="text-slate-700">
-                <strong>Pas d'accès à cette page.</strong> Ils utilisent le bot avec les droits que tu leur as
-                attribués (voir la matrice ci-dessous).
+                <strong>{t('tg.perms.noAccessTitle', locale)}</strong> {t('tg.perms.noAccessDesc', locale)}
               </p>
             </div>
           </div>
           <div className="text-xs text-slate-500 italic mt-2">
-            💡 La matrice détaillée des capabilities par rôle est en bas de page. Tu peux aussi sur-mesurer
-            par utilisateur via le bouton « Permissions » (override des défauts du rôle).
+            {t('tg.perms.matrixHint', locale)}
           </div>
         </CardContent>
       </Card>
@@ -382,22 +337,20 @@ export default function TelegramPermissionsPage() {
         <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5" />
           <div>
-            <strong>Migration DB manquante :</strong> les permissions personnalisées par utilisateur ne sont pas encore actives.
-            Exécute <code className="bg-amber-100 px-1 rounded">supabase/migrations/266_user_telegram_capabilities.sql</code> sur la base Supabase pour activer le bouton "Permissions".
-            En attendant, les rôles fonctionnent normalement avec leurs capabilities par défaut.
+            <strong>{t('tg.perms.migrationMissing', locale)}</strong> {t('tg.perms.migrationMissingDesc1', locale)} <code className="bg-amber-100 px-1 rounded">supabase/migrations/266_user_telegram_capabilities.sql</code> {t('tg.perms.migrationMissingDesc2', locale)}
           </div>
         </div>
       )}
 
       {/* ── Matrice rôles → capabilities ── */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Matrice des permissions par rôle</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t('tg.perms.matrixTitle', locale)}</CardTitle></CardHeader>
         <CardContent>
           <div className="space-y-3">
             {ALL_ROLES.map(r => roleMatrix[r] && (
               <div key={r} className="flex items-start gap-3 border-b pb-3 last:border-0">
                 <Badge className={`${ROLE_COLORS[r]} text-xs whitespace-nowrap`} variant="outline">
-                  {ROLE_LABELS[r]} <span className="opacity-50 ml-1">L{roleMatrix[r]?.level}</span>
+                  {roleLabel(r, locale)} <span className="opacity-50 ml-1">L{roleMatrix[r]?.level}</span>
                 </Badge>
                 <div className="flex-1">
                   <div className="text-sm text-slate-700">{roleMatrix[r]?.description}</div>
@@ -412,25 +365,25 @@ export default function TelegramPermissionsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center justify-between">
-            <span>Membres de la société ({members.length})</span>
-            <Button onClick={load} variant="outline" size="sm">Rafraîchir</Button>
+            <span>{t('tg.perms.membersTitle', locale)} ({members.length})</span>
+            <Button onClick={load} variant="outline" size="sm">{t('tg.perms.refresh', locale)}</Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
           {members.length === 0 ? (
-            <div className="text-sm text-slate-500 p-4 text-center">Aucun membre.</div>
+            <div className="text-sm text-slate-500 p-4 text-center">{t('tg.perms.noMembers', locale)}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b text-left text-xs uppercase text-slate-500">
                   <tr>
-                    <th className="py-2 px-2">Nom</th>
-                    <th className="py-2 px-2">Email</th>
-                    <th className="py-2 px-2">Telegram</th>
-                    <th className="py-2 px-2">Rôle</th>
-                    <th className="py-2 px-2">Capabilities effectives</th>
-                    <th className="py-2 px-2 text-right">Audit (30j)</th>
-                    <th className="py-2 px-2 text-right">Actions</th>
+                    <th className="py-2 px-2">{t('tg.perms.colName', locale)}</th>
+                    <th className="py-2 px-2">{t('tg.perms.colEmail', locale)}</th>
+                    <th className="py-2 px-2">{t('tg.perms.colTelegram', locale)}</th>
+                    <th className="py-2 px-2">{t('tg.perms.colRole', locale)}</th>
+                    <th className="py-2 px-2">{t('tg.perms.colCaps', locale)}</th>
+                    <th className="py-2 px-2 text-right">{t('tg.perms.colAudit', locale)}</th>
+                    <th className="py-2 px-2 text-right">{t('tg.perms.colActions', locale)}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -442,7 +395,7 @@ export default function TelegramPermissionsPage() {
                         {m.full_name}
                         {emp && (
                           <div className="text-[10px] text-slate-500 mt-0.5">
-                            Employé RH {emp.code ? `· ${emp.code}` : ''} {emp.poste ? `· ${emp.poste}` : ''}
+                            {t('tg.perms.rhEmployee', locale)} {emp.code ? `· ${emp.code}` : ''} {emp.poste ? `· ${emp.poste}` : ''}
                           </div>
                         )}
                       </td>
@@ -451,14 +404,14 @@ export default function TelegramPermissionsPage() {
                         {m.telegram?.linked ? (
                           <div className="flex items-center gap-1">
                             <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-xs">
-                              <MessageCircle className="h-3 w-3 mr-1" />@{m.telegram.telegram_username || m.telegram.firstname || 'lié'}
+                              <MessageCircle className="h-3 w-3 mr-1" />@{m.telegram.telegram_username || m.telegram.firstname || t('tg.perms.linked', locale)}
                             </Badge>
                             {!m.telegram.active_for_this_societe && (
-                              <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">autre société active</Badge>
+                              <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">{t('tg.perms.otherSocieteActive', locale)}</Badge>
                             )}
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-400">non lié</span>
+                          <span className="text-xs text-slate-400">{t('tg.perms.notLinked', locale)}</span>
                         )}
                       </td>
                       <td className="py-2 px-2">
@@ -469,7 +422,7 @@ export default function TelegramPermissionsPage() {
                           <SelectContent>
                             {ALL_ROLES.map(r => (
                               <SelectItem key={r} value={r}>
-                                {ROLE_LABELS[r]} <span className="opacity-50 ml-1 text-xs">L{roleMatrix[r]?.level}</span>
+                                {roleLabel(r, locale)} <span className="opacity-50 ml-1 text-xs">L{roleMatrix[r]?.level}</span>
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -478,9 +431,9 @@ export default function TelegramPermissionsPage() {
                       </td>
                       <td className="py-2 px-2">
                         <div className="flex flex-wrap items-center gap-1 max-w-md">
-                          {m.is_custom && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">personnalisé</Badge>}
+                          {m.is_custom && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">{t('tg.perms.custom', locale)}</Badge>}
                           {(m.effective_capabilities || []).slice(0, 6).map((c: string) => (
-                            <span key={c} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">{CAPABILITY_LABELS[c] || c}</span>
+                            <span key={c} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">{capLabel(c, locale)}</span>
                           ))}
                           {(m.effective_capabilities || []).length > 6 && <span className="text-[10px] text-slate-400">+{m.effective_capabilities.length - 6}</span>}
                         </div>
@@ -493,14 +446,14 @@ export default function TelegramPermissionsPage() {
                             {m.audit_stats.error > 0 && <span className="text-red-700 inline-flex items-center gap-0.5"><AlertCircle className="h-3 w-3" />{m.audit_stats.error}</span>}
                           </div>
                         ) : (
-                          <span className="text-[10px] text-slate-400">aucune action</span>
+                          <span className="text-[10px] text-slate-400">{t('tg.perms.noAction', locale)}</span>
                         )}
                       </td>
                       <td className="py-2 px-2 text-right">
                         <Button
                           onClick={() => openPermsModal(m.user_id, m.full_name, m.role, m.effective_capabilities || [], m.default_capabilities || [])}
                           variant="outline" size="sm">
-                          <Settings2 className="h-3 w-3 mr-1" /> Permissions
+                          <Settings2 className="h-3 w-3 mr-1" /> {t('tg.perms.permissions', locale)}
                         </Button>
                       </td>
                     </tr>
@@ -516,31 +469,29 @@ export default function TelegramPermissionsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center justify-between">
-            <span className="flex items-center gap-2"><Users className="h-4 w-4 text-blue-600" /> Employés RH non rattachés ({employeesNotYetMembers.length})</span>
-            <Button onClick={load} variant="outline" size="sm">Rafraîchir</Button>
+            <span className="flex items-center gap-2"><Users className="h-4 w-4 text-blue-600" /> {t('tg.perms.unlinkedEmployeesTitle', locale)} ({employeesNotYetMembers.length})</span>
+            <Button onClick={load} variant="outline" size="sm">{t('tg.perms.refresh', locale)}</Button>
           </CardTitle>
           <p className="text-xs text-slate-500 mt-1">
-            Employés actifs de la fiche RH qui ne sont pas encore membres de la société sur Lexora.
-            Génère un code Telegram pour les rattacher (compte Lexora créé automatiquement si email présent).
-            Les employés <em>déjà</em> membres apparaissent dans la table ci-dessus avec un badge "Employé RH".
+            {t('tg.perms.unlinkedEmployeesDesc', locale)}
           </p>
         </CardHeader>
         <CardContent>
           {employeesNotYetMembers.length === 0 ? (
-            <div className="text-sm text-slate-500 p-4 text-center">Tous les employés RH actifs sont déjà rattachés (cf. table Membres).</div>
+            <div className="text-sm text-slate-500 p-4 text-center">{t('tg.perms.allLinked', locale)}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b text-left text-xs uppercase text-slate-500">
                   <tr>
-                    <th className="py-2 px-2">Code</th>
-                    <th className="py-2 px-2">Nom complet</th>
-                    <th className="py-2 px-2">Poste</th>
-                    <th className="py-2 px-2">Email</th>
-                    <th className="py-2 px-2">Rôle Telegram</th>
-                    <th className="py-2 px-2">Capabilities</th>
-                    <th className="py-2 px-2">Telegram</th>
-                    <th className="py-2 px-2 text-right">Action</th>
+                    <th className="py-2 px-2">{t('tg.perms.colCode', locale)}</th>
+                    <th className="py-2 px-2">{t('tg.perms.colFullName', locale)}</th>
+                    <th className="py-2 px-2">{t('tg.perms.colPoste', locale)}</th>
+                    <th className="py-2 px-2">{t('tg.perms.colEmail', locale)}</th>
+                    <th className="py-2 px-2">{t('tg.perms.colTelegramRole', locale)}</th>
+                    <th className="py-2 px-2">{t('tg.perms.colCapsShort', locale)}</th>
+                    <th className="py-2 px-2">{t('tg.perms.colTelegram', locale)}</th>
+                    <th className="py-2 px-2 text-right">{t('tg.perms.colActions', locale)}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -551,7 +502,7 @@ export default function TelegramPermissionsPage() {
                       <td className="py-2 px-2 font-mono text-xs">{e.code || '—'}</td>
                       <td className="py-2 px-2 font-medium">{e.nom_complet}</td>
                       <td className="py-2 px-2 text-xs text-slate-600">{e.poste || '—'}</td>
-                      <td className="py-2 px-2 text-xs text-slate-600">{e.email || <span className="text-amber-700">manquant</span>}</td>
+                      <td className="py-2 px-2 text-xs text-slate-600">{e.email || <span className="text-amber-700">{t('tg.perms.emailMissing', locale)}</span>}</td>
                       <td className="py-2 px-2">
                         {e.has_auth_user && e.role ? (
                           // Employé déjà rattaché → éditable directement
@@ -566,7 +517,7 @@ export default function TelegramPermissionsPage() {
                               <SelectContent>
                                 {ALL_ROLES.map(r => (
                                   <SelectItem key={r} value={r}>
-                                    {ROLE_LABELS[r]} <span className="opacity-50 ml-1 text-xs">L{roleMatrix[r]?.level}</span>
+                                    {roleLabel(r, locale)} <span className="opacity-50 ml-1 text-xs">L{roleMatrix[r]?.level}</span>
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -584,7 +535,7 @@ export default function TelegramPermissionsPage() {
                             <SelectContent>
                               {ALL_ROLES.map(r => (
                                 <SelectItem key={r} value={r}>
-                                  {ROLE_LABELS[r]} <span className="opacity-50 ml-1 text-xs">L{roleMatrix[r]?.level}</span>
+                                  {roleLabel(r, locale)} <span className="opacity-50 ml-1 text-xs">L{roleMatrix[r]?.level}</span>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -599,13 +550,13 @@ export default function TelegramPermissionsPage() {
                             const isCustom = !!pendingCaps || e.is_custom
                             return (
                               <>
-                                {pendingCaps && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">pré-configuré</Badge>}
-                                {!pendingCaps && e.is_custom && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">personnalisé</Badge>}
+                                {pendingCaps && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">{t('tg.perms.preconfigured', locale)}</Badge>}
+                                {!pendingCaps && e.is_custom && <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-[10px]">{t('tg.perms.custom', locale)}</Badge>}
                                 {effective.slice(0, 4).map((c: string) => (
-                                  <span key={c} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">{CAPABILITY_LABELS[c] || c}</span>
+                                  <span key={c} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">{capLabel(c, locale)}</span>
                                 ))}
                                 {effective.length > 4 && <span className="text-[10px] text-slate-400">+{effective.length - 4}</span>}
-                                {effective.length === 0 && <span className="text-[10px] text-slate-400">aucune</span>}
+                                {effective.length === 0 && <span className="text-[10px] text-slate-400">{t('tg.perms.none', locale)}</span>}
                               </>
                             )
                           })()}
@@ -614,12 +565,12 @@ export default function TelegramPermissionsPage() {
                       <td className="py-2 px-2">
                         {e.telegram_status === 'linked' ? (
                           <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-xs">
-                            <MessageCircle className="h-3 w-3 mr-1" />@{e.telegram_username || 'lié'}
+                            <MessageCircle className="h-3 w-3 mr-1" />@{e.telegram_username || t('tg.perms.linked', locale)}
                           </Badge>
                         ) : e.telegram_status === 'pending_code' ? (
-                          <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">code en attente</Badge>
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">{t('tg.perms.codePending', locale)}</Badge>
                         ) : (
-                          <span className="text-xs text-slate-400">non lié</span>
+                          <span className="text-xs text-slate-400">{t('tg.perms.notLinked', locale)}</span>
                         )}
                       </td>
                       <td className="py-2 px-2 text-right">
@@ -629,14 +580,14 @@ export default function TelegramPermissionsPage() {
                             <Button
                               onClick={() => openPermsModal(e.auth_user_id, e.nom_complet, e.role, e.effective_capabilities || [], e.default_capabilities || [])}
                               variant="outline" size="sm">
-                              <Settings2 className="h-3 w-3 mr-1" /> Permissions
+                              <Settings2 className="h-3 w-3 mr-1" /> {t('tg.perms.permissions', locale)}
                             </Button>
                           ) : (
                             <Button
                               onClick={() => openPendingPermsModal(e.employe_id, e.nom_complet)}
                               variant="outline" size="sm">
                               <Settings2 className="h-3 w-3 mr-1" />
-                              Permissions {pendingCapsByEmpId[e.employe_id] && '✓'}
+                              {t('tg.perms.permissions', locale)} {pendingCapsByEmpId[e.employe_id] && <CheckCircle2 className="h-3 w-3 text-emerald-600" />}
                             </Button>
                           )}
                           {e.telegram_status === 'linked' ? (
@@ -644,7 +595,7 @@ export default function TelegramPermissionsPage() {
                               onClick={() => unlinkEmployee(e.employe_id, e.nom_complet)}
                               variant="outline" size="sm"
                               className="text-red-700 border-red-200 hover:bg-red-50">
-                              <Trash2 className="h-3 w-3 mr-1" /> Délier
+                              <Trash2 className="h-3 w-3 mr-1" /> {t('tg.perms.unlink', locale)}
                             </Button>
                           ) : (
                             <Button
@@ -654,7 +605,7 @@ export default function TelegramPermissionsPage() {
                               {generatingFor === e.employe_id
                                 ? <Loader2 className="h-3 w-3 animate-spin mr-1" />
                                 : <Link2 className="h-3 w-3 mr-1" />}
-                              Générer code
+                              {t('tg.perms.generateCode', locale)}
                             </Button>
                           )}
                         </div>
@@ -671,8 +622,7 @@ export default function TelegramPermissionsPage() {
       <div className="text-xs text-slate-500 flex items-start gap-2 p-3 rounded bg-slate-50 border border-slate-200">
         <Activity className="h-4 w-4 mt-0.5" />
         <div>
-          Chaque action effectuée par le bot Telegram (tool call) est tracée dans l'audit log <code>telegram_actions</code> avec :
-          chat_id, user_id, société, intent, résultat, statut (succès/refusé/erreur), durée. Permet la conformité AML/CFT et le débogage.
+          {t('tg.perms.auditNote', locale)} <code>telegram_actions</code> {t('tg.perms.auditNote2', locale)}
         </div>
       </div>
 
@@ -684,11 +634,11 @@ export default function TelegramPermissionsPage() {
               <div>
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   <Settings2 className="h-5 w-5 text-emerald-600" />
-                  Permissions de {permsModal.nom}
+                  {t('tg.perms.modalPermsOf', locale)} {permsModal.nom}
                 </h3>
                 <div className="text-xs text-slate-500 mt-1">
-                  Rôle actuel : <Badge className={`${ROLE_COLORS[permsModal.role]} text-xs ml-1`} variant="outline">{ROLE_LABELS[permsModal.role]}</Badge>
-                  <span className="ml-2">{permsModal.selected.size} capabilities cochées</span>
+                  {t('tg.perms.currentRole', locale)} : <Badge className={`${ROLE_COLORS[permsModal.role]} text-xs ml-1`} variant="outline">{roleLabel(permsModal.role, locale)}</Badge>
+                  <span className="ml-2">{permsModal.selected.size} {t('tg.perms.capsChecked', locale)}</span>
                 </div>
               </div>
               <button onClick={() => setPermsModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
@@ -697,15 +647,11 @@ export default function TelegramPermissionsPage() {
             <div className="rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
               {permsModal.mode === 'pending' ? (
                 <>
-                  <strong>Pré-configuration :</strong> cet employé n'a pas encore de compte Lexora. Les capabilities cochées
-                  ici seront appliquées au moment où tu cliqueras sur <em>"Générer code"</em>. Tu peux aussi laisser les
-                  defaults du rôle <strong>{ROLE_LABELS[permsModal.role]}</strong> et changer après-coup.
+                  <strong>{t('tg.perms.pendingInfoTitle', locale)}</strong> {t('tg.perms.pendingInfo1', locale)} <strong>{roleLabel(permsModal.role, locale)}</strong> {t('tg.perms.pendingInfo2', locale)}
                 </>
               ) : (
                 <>
-                  <strong>Mode personnalisé :</strong> coche/décoche pour overrider les permissions par défaut du rôle.
-                  Les capabilities ici cochées seront <em>les seules</em> autorisées via Telegram pour cet utilisateur.
-                  Clique <em>"Supprimer override"</em> pour revenir aux caps par défaut du rôle.
+                  <strong>{t('tg.perms.customInfoTitle', locale)}</strong> {t('tg.perms.customInfo', locale)}
                 </>
               )}
             </div>
@@ -730,8 +676,8 @@ export default function TelegramPermissionsPage() {
                     />
                     <div className="flex-1">
                       <div className="font-medium flex items-center gap-2">
-                        {CAPABILITY_LABELS[cap] || cap}
-                        {isDefault && <Badge className="bg-slate-100 text-slate-600 border-slate-300 text-[9px]">défaut rôle</Badge>}
+                        {capLabel(cap, locale)}
+                        {isDefault && <Badge className="bg-slate-100 text-slate-600 border-slate-300 text-[9px]">{t('tg.perms.defaultRole', locale)}</Badge>}
                       </div>
                       <div className="text-[10px] text-slate-500 font-mono">{cap}</div>
                     </div>
@@ -744,26 +690,26 @@ export default function TelegramPermissionsPage() {
               <Button
                 onClick={resetPermsToRole}
                 variant="outline" size="sm">
-                <RotateCcw className="h-3 w-3 mr-1" /> Re-cocher défaut rôle
+                <RotateCcw className="h-3 w-3 mr-1" /> {t('tg.perms.resetToRole', locale)}
               </Button>
               <div className="flex gap-2">
                 <Button
                   onClick={() => savePerms(true)}
                   disabled={savingPerms}
                   variant="outline" size="sm" className="text-amber-700 border-amber-200">
-                  {permsModal.mode === 'pending' ? 'Réinitialiser' : 'Supprimer override'}
+                  {permsModal.mode === 'pending' ? t('tg.perms.reset', locale) : t('tg.perms.removeOverride', locale)}
                 </Button>
                 <Button
                   onClick={() => setPermsModal(null)}
                   variant="outline" size="sm">
-                  Annuler
+                  {t('tg.perms.cancel', locale)}
                 </Button>
                 <Button
                   onClick={() => savePerms(false)}
                   disabled={savingPerms}
                   size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                   {savingPerms && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-                  {permsModal.mode === 'pending' ? 'Mémoriser pour rattachement' : 'Enregistrer'}
+                  {permsModal.mode === 'pending' ? t('tg.perms.saveForLink', locale) : t('tg.perms.save', locale)}
                 </Button>
               </div>
             </div>
@@ -778,26 +724,26 @@ export default function TelegramPermissionsPage() {
             <div className="flex items-start justify-between">
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <MessageCircle className="h-5 w-5 text-emerald-600" />
-                Code Telegram pour {codeModal.nom}
+                {t('tg.perms.codeModalTitle', locale)} {codeModal.nom}
               </h3>
               <button onClick={() => setCodeModal(null)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
             <div className="rounded border border-emerald-200 bg-emerald-50 p-4 space-y-2">
-              <div className="text-xs uppercase text-emerald-700 font-medium">Code de vérification</div>
+              <div className="text-xs uppercase text-emerald-700 font-medium">{t('tg.perms.verifCode', locale)}</div>
               <div className="flex items-center gap-2">
                 <code className="text-3xl font-mono font-bold tracking-wider text-emerald-900">{codeModal.code}</code>
                 <Button
                   onClick={() => copyToClipboard(codeModal.code, 'code')}
                   variant="outline" size="sm">
                   <Copy className="h-3 w-3 mr-1" />
-                  {copied === 'code' ? 'Copié !' : 'Copier'}
+                  {copied === 'code' ? t('tg.perms.copied', locale) : t('tg.perms.copy', locale)}
                 </Button>
               </div>
-              <div className="text-xs text-emerald-700">Expire dans 15 minutes</div>
+              <div className="text-xs text-emerald-700">{t('tg.perms.expires15', locale)}</div>
             </div>
 
             <div className="space-y-2">
-              <div className="text-xs uppercase text-slate-500 font-medium">Lien direct Telegram</div>
+              <div className="text-xs uppercase text-slate-500 font-medium">{t('tg.perms.deepLink', locale)}</div>
               <div className="flex items-center gap-2">
                 <input
                   readOnly
@@ -808,13 +754,13 @@ export default function TelegramPermissionsPage() {
                   onClick={() => copyToClipboard(codeModal.deep_link, 'link')}
                   variant="outline" size="sm">
                   <Copy className="h-3 w-3 mr-1" />
-                  {copied === 'link' ? 'Copié !' : 'Copier'}
+                  {copied === 'link' ? t('tg.perms.copied', locale) : t('tg.perms.copy', locale)}
                 </Button>
               </div>
             </div>
 
             <div className="space-y-2">
-              <div className="text-xs uppercase text-slate-500 font-medium">Message prêt à envoyer à l'employé</div>
+              <div className="text-xs uppercase text-slate-500 font-medium">{t('tg.perms.shareMessage', locale)}</div>
               <textarea
                 readOnly
                 value={codeModal.share_message}
@@ -825,13 +771,12 @@ export default function TelegramPermissionsPage() {
                 onClick={() => copyToClipboard(codeModal.share_message, 'msg')}
                 variant="outline" size="sm" className="w-full">
                 <Copy className="h-3 w-3 mr-1" />
-                {copied === 'msg' ? 'Copié dans le presse-papier !' : 'Copier le message complet'}
+                {copied === 'msg' ? t('tg.perms.copiedClipboard', locale) : t('tg.perms.copyFullMessage', locale)}
               </Button>
             </div>
 
             <div className="text-xs text-slate-500 border-t pt-3">
-              Si l'employé n'avait pas de compte Lexora, un compte vient d'être créé avec son email.
-              Il recevra aussi un email d'invitation pour définir son mot de passe.
+              {t('tg.perms.accountCreatedNote', locale)}
             </div>
           </div>
         </div>
