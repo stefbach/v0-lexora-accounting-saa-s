@@ -15,7 +15,7 @@ import { reclassEcritures } from '@/lib/pcm/reclass'
 import { enregistrerPaiement } from '@/lib/accounting/paiements-factures'
 import { checkPeriodLock } from '@/lib/accounting/period-lock'
 import { sendGmail } from '@/lib/google/gmail-client'
-import { getGoogleAccount, googleCalendarFetch, extractMeetUrl } from '@/lib/google/calendar-client'
+import { getGoogleAccount, listGoogleAccounts, googleCalendarFetch, extractMeetUrl } from '@/lib/google/calendar-client'
 
 /**
  * Clé déterministe courte pour l'idempotence de creer_ecriture : un même
@@ -285,18 +285,19 @@ export const AGENT_TOOLS = [
   // ── Google Workspace (compte OAuth lié via /client/settings/google-accounts) ──
   {
     name: 'list_evenements_calendar',
-    description: 'Liste les prochains événements du Google Calendar lié à l\'utilisateur (RDV, échéances, réunions). Pour "qu\'ai-je au programme ?", "mes RDV cette semaine", "prochaine réunion". Nécessite un compte Google connecté.',
+    description: 'Liste les prochains événements du Google Calendar lié à l\'utilisateur (RDV, échéances, réunions). Pour "qu\'ai-je au programme ?", "mes RDV cette semaine", "prochaine réunion". Si l\'utilisateur a plusieurs comptes Google et ne précise pas lequel, l\'outil retourne la liste des comptes disponibles pour que l\'agent demande lequel utiliser.',
     input_schema: {
       type: 'object' as const,
       properties: {
         jours: { type: 'number', description: 'Fenêtre en jours à partir d\'aujourd\'hui (défaut 7, max 90)' },
         max: { type: 'number', description: 'Nombre max d\'événements (défaut 10, max 25)' },
+        compte: { type: 'string', description: 'Adresse email du compte Google à utiliser (optionnel si un seul compte)' },
       },
     },
   },
   {
     name: 'envoyer_email',
-    description: 'Envoie un email professionnel depuis le compte Gmail lié de l\'utilisateur (relance client, transmission de document, réponse). Pour "envoie un email à X", "relance ce client par email". L\'agent rédige un corps HTML soigné. ACTION EXTERNE IRRÉVERSIBLE → toujours confirmée par l\'utilisateur avant envoi.',
+    description: 'Envoie un email professionnel depuis le compte Gmail lié de l\'utilisateur (relance client, transmission de document, réponse). Pour "envoie un email à X", "relance ce client par email". L\'agent rédige un corps HTML soigné. ACTION EXTERNE IRRÉVERSIBLE → toujours confirmée par l\'utilisateur avant envoi. Si plusieurs comptes Google liés et expéditeur non précisé, demander lequel utiliser.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -304,14 +305,14 @@ export const AGENT_TOOLS = [
         subject: { type: 'string', description: 'Objet de l\'email' },
         html: { type: 'string', description: 'Corps de l\'email en HTML léger (paragraphes <p>, gras <b>). Soigné, professionnel, signé.' },
         cc: { type: 'array', items: { type: 'string' }, description: 'Copie(s) (optionnel)' },
-        from_email: { type: 'string', description: 'Adresse expéditrice (optionnel : défaut = compte Google par défaut)' },
+        from_email: { type: 'string', description: 'Adresse email expéditrice — obligatoire si plusieurs comptes Google liés' },
       },
       required: ['to', 'subject', 'html'],
     },
   },
   {
     name: 'creer_evenement_calendar',
-    description: 'Crée un événement dans le Google Calendar lié (RDV client, rappel d\'échéance MRA, réunion). Pour "planifie un RDV le 12 à 14h", "ajoute un rappel TVA le 20". ACTION EXTERNE → confirmée avant création. Dates au format ISO 8601 (ex: 2026-07-12T14:00:00).',
+    description: 'Crée un événement dans le Google Calendar lié (RDV client, rappel d\'échéance MRA, réunion). Pour "planifie un RDV le 12 à 14h", "ajoute un rappel TVA le 20". ACTION EXTERNE → confirmée avant création. Dates au format ISO 8601 (ex: 2026-07-12T14:00:00). Si plusieurs comptes Google liés et compte non précisé, demander lequel utiliser.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -321,6 +322,7 @@ export const AGENT_TOOLS = [
         description: { type: 'string', description: 'Description / notes (optionnel)' },
         invites: { type: 'array', items: { type: 'string' }, description: 'Emails des invités (optionnel)' },
         avec_meet: { type: 'boolean', description: 'Ajouter un lien Google Meet (optionnel)' },
+        compte: { type: 'string', description: 'Adresse email du compte Google Calendar à utiliser (optionnel si un seul compte)' },
       },
       required: ['titre', 'debut'],
     },
@@ -743,12 +745,15 @@ export async function execReadTool(name: string, input: any, ctx: ExecCtx): Prom
     }
 
     case 'list_evenements_calendar': {
-      // Prochains événements du Google Calendar lié à l'utilisateur.
       try {
-        const account = await getGoogleAccount(ctx.userId)
-        if (!account) {
-          return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
+        const compteEmail = String(input?.compte || '').trim() || undefined
+        const accounts = await listGoogleAccounts(ctx.userId)
+        if (accounts.length === 0) return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
+        if (accounts.length > 1 && !compteEmail) {
+          return { ok: false, choix_compte: true, comptes: accounts.map(a => ({ email: a.account_email, label: a.label || a.account_email, defaut: a.is_default_for_calendar })), message: 'Plusieurs comptes Google liés. Lequel utiliser pour l\'agenda ?' }
         }
+        const account = compteEmail ? accounts.find(a => a.account_email === compteEmail) ?? null : accounts[0]
+        if (!account) return { ok: false, error: `Compte Google "${compteEmail}" introuvable.` }
         const jours = Math.min(90, Math.max(1, Number(input?.jours) || 7))
         const max = Math.min(25, Math.max(1, Number(input?.max) || 10))
         const timeMin = new Date().toISOString()
@@ -1052,7 +1057,6 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
     }
 
     case 'envoyer_email': {
-      // Envoi via le compte Gmail lié (scope gmail.send). Action confirmée en amont.
       try {
         const to = (Array.isArray(input?.to) ? input.to : [input?.to]).map((x: any) => String(x || '').trim()).filter(Boolean)
         if (to.length === 0) return { ok: false, error: 'Destinataire (to) requis' }
@@ -1062,9 +1066,12 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
 
         let from_email = String(input?.from_email || '').trim()
         if (!from_email) {
-          const account = await getGoogleAccount(ctx.userId)
-          if (!account) return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
-          from_email = account.account_email
+          const accounts = await listGoogleAccounts(ctx.userId)
+          if (accounts.length === 0) return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
+          if (accounts.length > 1) {
+            return { ok: false, choix_compte: true, comptes: accounts.map(a => ({ email: a.account_email, label: a.label || a.account_email, defaut: a.is_default_for_calendar })), message: 'Plusieurs comptes Gmail liés. Depuis lequel envoyer ?' }
+          }
+          from_email = accounts[0].account_email
         }
         const cc = Array.isArray(input?.cc) ? input.cc.map((x: any) => String(x || '').trim()).filter(Boolean) : undefined
         const res = await sendGmail(ctx.userId, { from_email, to, cc, subject, html })
@@ -1075,10 +1082,15 @@ export async function execWriteTool(name: string, input: any, ctx: ExecCtx): Pro
     }
 
     case 'creer_evenement_calendar': {
-      // Création d'événement dans le Calendar lié. Action confirmée en amont.
       try {
-        const account = await getGoogleAccount(ctx.userId)
-        if (!account) return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
+        const compteEmail = String(input?.compte || '').trim() || undefined
+        const accounts = await listGoogleAccounts(ctx.userId)
+        if (accounts.length === 0) return { ok: false, error: 'Aucun compte Google lié. Connecte-le via /client/settings/google-accounts.' }
+        if (accounts.length > 1 && !compteEmail) {
+          return { ok: false, choix_compte: true, comptes: accounts.map(a => ({ email: a.account_email, label: a.label || a.account_email, defaut: a.is_default_for_calendar })), message: 'Plusieurs comptes Google liés. Dans quel agenda créer l\'événement ?' }
+        }
+        const account = compteEmail ? accounts.find(a => a.account_email === compteEmail) ?? null : accounts[0]
+        if (!account) return { ok: false, error: `Compte Google "${compteEmail}" introuvable.` }
         const titre = String(input?.titre || '').trim()
         const debut = String(input?.debut || '').trim()
         if (!titre || !debut) return { ok: false, error: 'titre et debut (ISO 8601) requis' }

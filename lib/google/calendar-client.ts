@@ -52,6 +52,20 @@ export async function getGoogleAccount(
   return (data?.[0] as OAuthAccountRow) || null
 }
 
+/** Retourne tous les comptes Google actifs liés à l'utilisateur. */
+export async function listGoogleAccounts(user_id: string): Promise<OAuthAccountRow[]> {
+  const admin = getAdminClient()
+  const { data } = await admin
+    .from('user_oauth_accounts')
+    .select('*')
+    .eq('user_id', user_id)
+    .eq('provider', 'google')
+    .eq('active', true)
+    .order('is_default_for_calendar', { ascending: false })
+    .order('created_at', { ascending: true })
+  return (data || []) as OAuthAccountRow[]
+}
+
 /**
  * Retourne un access_token Google valide. Rafraîchit automatiquement si
  * expires_at < now() + 60s.
