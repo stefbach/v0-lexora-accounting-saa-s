@@ -2595,6 +2595,441 @@ export const HELP_CONTENT: Record<string, HelpEntry> = {
     ],
   },
 
+  // ========================================================================
+  // GBC — PARTIAL EXEMPTION REGIME (PER)
+  // ========================================================================
+  '/client/gbc-per': {
+    title: 'GBC — Partial Exemption Regime (80%)',
+    audience: 'all',
+    intro:
+      "Le <b>Partial Exemption Regime</b> (PER) permet à une <b>GBC</b> de bénéficier d'une exemption réputée (<em>deemed</em>) de <b>80%</b> sur certaines catégories de revenus. Combinée au taux nominal de <b>15%</b>, l'exemption ramène le taux effectif à <b>3%</b> sur ces revenus éligibles — à condition de respecter les exigences de substance (CIGA) à Maurice.",
+    steps: [
+      { title: "1. Revenus éligibles au 80%", body: "Catégories principales : <b>intérêts</b> (foreign source), <b>dividendes de source étrangère</b> non déjà exemptés sous le régime participation, revenus d'une <b>société de leasing</b>, profits d'une <b>permanent establishment</b> étrangère, revenus de <b>CIS / closed-end funds</b>, et revenus de gestion de collective investment schemes. Voir Income Tax Act (Sub-Part C) et le 2nd Schedule." },
+      { title: "2. Calcul du taux effectif", body: "Revenu éligible × 20% = base imposable, puis × 15% = impôt → <b>3% effectif</b>. Les 80% restants sont <em>deemed exempt</em>. Le reste des revenus (non éligibles) reste à 15%." },
+      { title: "3. Condition de substance (CIGA)", body: "Le PER n'est accordé que si la GBC démontre une <b>substance économique adéquate</b> : <em>Core Income-Generating Activities</em> conduites à Maurice, employés qualifiés en nombre adéquat, dépenses d'exploitation proportionnées. Voir fiche <em>/client/gbc-substance</em>." },
+      { title: "4. Exclusions", body: "Pas de cumul : un revenu déjà <b>fully exempt</b> (ex. dividende sous exemption participation) n'ouvre pas droit au 80%. Les revenus de source mauricienne et certains revenus passifs hors liste sont taxés à 15% plein. Pas de foreign tax credit en plus du 80% sur le même revenu (anti-double-dipping)." },
+      { title: "5. Documentation à conserver", body: "Ventilation des revenus par catégorie, preuve de la source étrangère, dossier CIGA, calcul du 80% dans la Form 3 (income tax return GBC). Audit annuel obligatoire." },
+    ],
+    pitfalls: [
+      "Appliquer le 80% sans dossier de substance → MRA refuse l'exemption, redressement à 15% plein + pénalités.",
+      "Cumuler 80% deemed exemption ET foreign tax credit sur le même revenu (interdit, anti-double-dipping).",
+      "Classer un revenu de source mauricienne comme éligible → requalification.",
+      "Oublier de ventiler par catégorie : sans ventilation claire la MRA peut refuser l'ensemble.",
+    ],
+    externalLinks: [
+      { label: "MRA — Income Tax Act", url: "https://www.mra.mu/index.php/taxes-duties/income-tax", description: "Régime d'imposition des sociétés et exemptions." },
+      { label: "FSC — Partial Exemption Guidelines", url: "https://www.fscmauritius.org" },
+      { label: "MRA — Companies (Form 3)", url: "https://www.mra.mu/index.php/eservices/corporate-tax" },
+    ],
+    tips: [
+      "Lexora ventile automatiquement le P&L par catégorie de revenu et calcule l'assiette à 3% vs 15%.",
+      "Tiens le dossier CIGA à jour en continu : la condition de substance est vérifiée chaque exercice, pas une fois pour toutes.",
+    ],
+  },
+
+  // ========================================================================
+  // GBC — SUBSTANCE / CIGA
+  // ========================================================================
+  '/client/gbc-substance': {
+    title: 'GBC — Substance économique (CIGA)',
+    audience: 'all',
+    intro:
+      "Pour conserver son statut fiscal et le <b>Partial Exemption Regime</b>, une GBC doit prouver une <b>substance économique</b> réelle à Maurice. La FSC vérifie que les <b>Core Income-Generating Activities (CIGA)</b> sont effectivement conduites localement, avec employés qualifiés, dépenses locales et gouvernance à Maurice.",
+    steps: [
+      { title: "1. CIGA conduites à Maurice", body: "Identifie et documente les activités génératrices de revenu cœur (ex. pour une holding : prise de décision sur les participations ; pour une société de financement : gestion du risque et négociation des prêts). Elles doivent être <b>dirigées et gérées</b> depuis Maurice." },
+      { title: "2. Employés qualifiés résidents", body: "Nombre <b>adéquat</b> d'employés qualifiés, résidents à Maurice, en rapport avec le niveau d'activité. Conserve CV, contrats, fiches de paie, preuves NSF/CSG. L'externalisation (outsourcing) à un Management Company mauricien est admise si supervisée et documentée." },
+      { title: "3. Dépenses opérationnelles locales (OPEX)", body: "Montant <b>minimum de dépenses</b> engagées à Maurice, proportionné à l'activité : loyer de bureau, honoraires de l'administrateur agréé, comptabilité, audit, conseil local." },
+      { title: "4. Conseil d'administration à Maurice", body: "Au moins <b>2 administrateurs résidents</b> à Maurice (exigence GBC). Réunions du board tenues à Maurice avec <b>PV signés</b>, quorum effectif, décisions stratégiques prises localement. Le siège de direction effective doit être à Maurice." },
+      { title: "5. Documentation et dépôt", body: "Constitue un dossier de substance annuel : organigramme, contrats employés, baux, PV de board, états de dépenses locales. Déclaré dans le filing FSC et tenu à disposition de la MRA." },
+    ],
+    pitfalls: [
+      "Board nominal sans réunion réelle à Maurice → siège de direction effective ailleurs, perte du régime.",
+      "Aucun employé local ni OPEX → la FSC peut juger la substance insuffisante.",
+      "Outsourcing non supervisé ni documenté → ne compte pas comme substance.",
+      "Décisions stratégiques prises hors de Maurice (par la maison-mère) → requalification de résidence fiscale.",
+    ],
+    externalLinks: [
+      { label: "FSC Mauritius", url: "https://www.fscmauritius.org", description: "Exigences de substance GBC." },
+      { label: "OECD — Substantial activities (BEPS Action 5)", url: "https://www.oecd.org/tax/beps/" },
+    ],
+    tips: [
+      "Lexora propose un module CIGA : checklist annuelle, stockage des PV de board, suivi des OPEX locaux et des effectifs.",
+      "Garde la preuve que ≥ 2 administrateurs résidents siègent réellement — c'est le point le plus contrôlé.",
+    ],
+  },
+
+  // ========================================================================
+  // GBC — TRANSFER PRICING
+  // ========================================================================
+  '/client/gbc-transfer-pricing': {
+    title: 'GBC — Transfer Pricing (prix de transfert)',
+    audience: 'all',
+    intro:
+      "Les transactions entre entités liées (intra-groupe) d'une GBC doivent respecter le principe de <b>pleine concurrence</b> (<em>arm's length</em>). Maurice s'aligne sur l'<b>OECD BEPS Action 13</b> : documentation Master File / Local File et, pour les grands groupes, Country-by-Country Reporting.",
+    steps: [
+      { title: "1. Principe de pleine concurrence", body: "Le prix d'une transaction intra-groupe doit être celui que des parties <b>indépendantes</b> auraient convenu. S'applique aux prêts intra-groupe (taux d'intérêt), management fees, royalties, refacturations de services, ventes de biens." },
+      { title: "2. Master File", body: "Vue d'ensemble du groupe MNE : structure organisationnelle, description des activités, actifs incorporels, financements intra-groupe, position financière et fiscale consolidée." },
+      { title: "3. Local File", body: "Détail des transactions de l'entité mauricienne avec les parties liées : montants, nature, analyse de comparabilité, méthode retenue et justification du caractère arm's length." },
+      { title: "4. Choix de la méthode", body: "Méthodes OECD : <b>CUP</b> (Comparable Uncontrolled Price — comparaison directe de prix), <b>TNMM</b> (Transactional Net Margin Method — marge nette sur un indicateur), <b>Cost Plus</b> (coût + marge), Resale Price, Profit Split. Choisis la plus appropriée à la transaction et documente le rejet des autres." },
+      { title: "5. CbCR (grands groupes)", body: "Si le groupe MNE consolidé dépasse <b>€750M</b> de chiffre d'affaires, un <b>Country-by-Country Report</b> est requis (revenus, impôts, effectifs par juridiction), échangé entre administrations." },
+    ],
+    pitfalls: [
+      "Prêt intra-groupe à taux 0% ou non marché → requalification, intérêts notionnels imposés.",
+      "Management fees sans contrat ni preuve de service rendu → déductibilité refusée.",
+      "Pas de Local File → la MRA peut écarter les prix déclarés et reconstituer la base.",
+      "Méthode choisie sans analyse de comparabilité documentée → contestable.",
+    ],
+    externalLinks: [
+      { label: "OECD Transfer Pricing Guidelines", url: "https://www.oecd.org/tax/transfer-pricing/", description: "Méthodes et standards arm's length." },
+      { label: "OECD BEPS Action 13", url: "https://www.oecd.org/tax/beps/beps-actions/action13/" },
+      { label: "MRA", url: "https://www.mra.mu" },
+    ],
+    tips: [
+      "Lexora génère un template Master File / Local File et trace toutes les transactions intra-groupe par contrepartie liée.",
+      "Pour un prêt intra-groupe, documente le taux par référence à un benchmark de marché (spread + base rate).",
+    ],
+  },
+
+  // ========================================================================
+  // GBC — BENEFICIAL OWNERSHIP (UBO)
+  // ========================================================================
+  '/client/gbc-ubo': {
+    title: 'GBC — Beneficial Ownership (UBO)',
+    audience: 'all',
+    intro:
+      "Toute GBC doit identifier et déclarer ses <b>bénéficiaires effectifs ultimes</b> (UBO) — les personnes physiques détenant ou contrôlant la société. Le seuil de déclaration est de <b>25%</b> (détention directe ou indirecte, ou contrôle). Le registre doit être tenu à jour et mis à jour rapidement après tout changement.",
+    steps: [
+      { title: "1. Définition de l'UBO", body: "Personne physique qui, directement ou indirectement, détient <b>≥ 25%</b> du capital ou des droits de vote, OU exerce un contrôle par d'autres moyens (pacte, droit de nomination des dirigeants). Toujours remonter jusqu'à une personne physique (cascade)." },
+      { title: "2. Détention indirecte (cascade)", body: "Calcule le pourcentage en multipliant les chaînes de détention à travers les holdings intermédiaires. Une personne détenant 50% d'une holding qui détient 60% de la GBC contrôle 30% indirect → UBO." },
+      { title: "3. Registre des UBO", body: "Tiens un registre : identité, nationalité, adresse, nature et étendue de l'intérêt, date d'acquisition. Conservé par la société et son administrateur agréé, à disposition des autorités." },
+      { title: "4. Mise à jour sous 14 jours", body: "Tout changement de bénéficiaire effectif doit être enregistré dans un <b>délai de 14 jours</b>. Le registre périmé est une infraction." },
+      { title: "5. FATCA Act / sanctions", body: "Le défaut de tenue ou de mise à jour du registre UBO constitue une infraction (Section 12 du Foreign Account Tax Compliance Act mauricien), passible d'amende. Les informations alimentent aussi les échanges CRS/FATCA." },
+    ],
+    pitfalls: [
+      "Ne déclarer que les actionnaires directs sans remonter la cascade jusqu'aux personnes physiques.",
+      "Registre non mis à jour dans les 14 jours après un changement de structure.",
+      "Oublier le contrôle 'par d'autres moyens' (pacte d'actionnaires, golden share) même sous 25%.",
+      "Confondre actionnaire personne morale et bénéficiaire effectif personne physique.",
+    ],
+    externalLinks: [
+      { label: "FSC Mauritius", url: "https://www.fscmauritius.org", description: "Obligations beneficial ownership." },
+      { label: "MRA — FATCA", url: "https://www.mra.mu/index.php/eservices/automatic-exchange-of-information" },
+    ],
+    tips: [
+      "Lexora calcule la cascade UBO automatiquement à partir des données KYC et de la structure de détention.",
+      "Configure une alerte : tout changement d'actionnariat déclenche le rappel des 14 jours.",
+    ],
+  },
+
+  // ========================================================================
+  // GBC — PILLAR TWO (GloBE)
+  // ========================================================================
+  '/client/gbc-pillar-two': {
+    title: 'GBC — Pillar Two / GloBE (Top-Up Tax 15%)',
+    audience: 'all',
+    intro:
+      "Le <b>Pillar Two</b> de l'OCDE impose un taux d'imposition effectif minimum de <b>15%</b> aux groupes multinationaux (MNE) dont le chiffre d'affaires consolidé dépasse <b>€750M</b>. Si l'ETR d'une juridiction est inférieur à 15%, un <b>Top-Up Tax</b> est dû pour combler l'écart. Une GBC à 3% effectif est directement concernée si elle appartient à un tel groupe.",
+    steps: [
+      { title: "1. Seuil d'application", body: "Groupes MNE avec un chiffre d'affaires consolidé annuel <b>≥ €750M</b> sur au moins 2 des 4 derniers exercices (test du Country-by-Country Report). En-dessous, Pillar Two ne s'applique pas." },
+      { title: "2. GloBE Income", body: "Pars du résultat comptable IFRS de chaque entité, puis applique les <b>ajustements GloBE</b> (retraitement des dividendes exclus, plus-values, impôts, éléments non-récurrents) pour obtenir le <em>GloBE Income or Loss</em>." },
+      { title: "3. Adjusted Covered Taxes", body: "Calcule les impôts couverts ajustés : impôt sur les bénéfices courant et différé éligible, après corrections (crédits d'impôt, impôts non couverts exclus)." },
+      { title: "4. ETR par juridiction", body: "<b>ETR = Adjusted Covered Taxes / GloBE Income</b>, agrégé <b>par juridiction</b> (jurisdictional blending). Une GBC mauricienne à 3% tire l'ETR Maurice sous 15%." },
+      { title: "5. Top-Up Tax", body: "Top-Up % = 15% − ETR juridictionnel ; appliqué à l'<em>Excess Profit</em> (GloBE Income − Substance-based Income Exclusion sur payroll et actifs corporels). Prélevé via IIR (mère), QDMTT (locale) ou UTPR." },
+      { title: "6. Substance-based Income Exclusion (SBIE)", body: "Réduit la base du Top-Up Tax d'un pourcentage de la masse salariale et de la valeur des actifs corporels — récompense la substance réelle (cohérent avec CIGA)." },
+    ],
+    pitfalls: [
+      "Croire qu'un taux mauricien à 3% est sans conséquence : le Top-Up Tax peut être prélevé à l'étranger (IIR de la mère) si Maurice n'a pas de QDMTT.",
+      "Confondre résultat comptable et GloBE Income (les ajustements sont nombreux).",
+      "Oublier l'agrégation par juridiction (jurisdictional blending) et raisonner entité par entité.",
+      "Négliger la SBIE et surévaluer le Top-Up Tax dû.",
+    ],
+    externalLinks: [
+      { label: "OECD — Pillar Two / GloBE Rules", url: "https://www.oecd.org/tax/beps/", description: "Model Rules et guidance administrative." },
+      { label: "MRA", url: "https://www.mra.mu" },
+    ],
+    tips: [
+      "Lexora dispose d'un module GloBE : calcul du GloBE Income, des Adjusted Covered Taxes et de l'ETR par juridiction.",
+      "Vérifie si la juridiction de la mère applique une IIR : c'est elle qui prélèvera le Top-Up si Maurice ne le fait pas.",
+    ],
+  },
+
+  // ========================================================================
+  // GBC — CRS / FATCA
+  // ========================================================================
+  '/client/gbc-crs-fatca': {
+    title: 'GBC — CRS / FATCA (échange automatique)',
+    audience: 'all',
+    intro:
+      "Les institutions financières mauriciennes, y compris certaines GBC, doivent déclarer chaque année les comptes détenus par des <b>non-résidents</b> dans le cadre du <b>CRS</b> (norme OCDE, multi-juridictions) et de <b>FATCA</b> (États-Unis). Les déclarations se font au format <b>XML</b> via les portails MRA / FSC, dans des échéances strictes.",
+    steps: [
+      { title: "1. Suis-je une Reporting Financial Institution ?", body: "Déterminé selon la classification CRS/FATCA (Custodial Institution, Depository Institution, Investment Entity, Specified Insurance Company). Beaucoup de fonds et structures d'investissement GBC sont des <em>Investment Entities</em> déclarantes." },
+      { title: "2. Due diligence des comptes", body: "Identifie la résidence fiscale de chaque titulaire (self-certification, indices), distingue comptes préexistants et nouveaux, individuels et entités. Pour FATCA : identifie les <em>US persons</em>." },
+      { title: "3. Format XML", body: "Les déclarations utilisent le schéma <b>CRS XML</b> (OECD) et le schéma <b>FATCA XML</b> (IRS). Données : titulaire, TIN, solde, revenus (intérêts, dividendes, produits de cession)." },
+      { title: "4. Soumission via portail MRA", body: "Dépôt sur le portail d'échange automatique d'informations de la <b>MRA</b> (AEOI). FATCA transite ensuite vers l'IRS via l'IGA Maurice-USA ; CRS vers les juridictions partenaires." },
+      { title: "5. Échéances", body: "La déclaration CRS/FATCA est annuelle. Respecte la date limite publiée par la MRA chaque année (vérifie le calendrier AEOI — voir lien). Le nil return peut être exigé même sans compte déclarable." },
+    ],
+    pitfalls: [
+      "Oublier le <em>nil return</em> quand il est requis (absence de déclaration = infraction même sans compte déclarable).",
+      "Self-certifications manquantes ou non validées → due diligence incomplète.",
+      "Erreur de schéma XML → rejet par le portail, dépôt réputé non fait à l'échéance.",
+      "Confondre résidence fiscale et nationalité du titulaire.",
+    ],
+    externalLinks: [
+      { label: "MRA — Automatic Exchange of Information", url: "https://www.mra.mu/index.php/eservices/automatic-exchange-of-information", description: "Portail AEOI, schémas et échéances." },
+      { label: "OECD — CRS", url: "https://www.oecd.org/tax/automatic-exchange/", description: "Norme commune de déclaration." },
+      { label: "FSC Mauritius", url: "https://www.fscmauritius.org" },
+    ],
+    tips: [
+      "Lexora collecte les self-certifications et génère les fichiers CRS/FATCA XML conformes aux schémas en vigueur.",
+      "Vérifie chaque année le calendrier AEOI de la MRA : la date limite peut varier.",
+    ],
+  },
+
+  // ========================================================================
+  // GBC — CONSOLIDATION IFRS 10
+  // ========================================================================
+  '/client/gbc-consolidation': {
+    title: 'GBC — Consolidation (IFRS 10)',
+    audience: 'all',
+    intro:
+      "Une holding GBC qui contrôle plusieurs entités doit présenter des <b>états financiers consolidés</b> selon <b>IFRS 10</b>. La consolidation regroupe les comptes de la mère et des filiales contrôlées comme une seule entité économique, après élimination des opérations intra-groupe.",
+    steps: [
+      { title: "1. Notion de contrôle", body: "IFRS 10 : une entité est consolidée si la holding la <b>contrôle</b> — pouvoir sur les activités pertinentes, exposition aux rendements variables, et capacité d'influer sur ces rendements. Le contrôle peut exister sans majorité des votes (de facto control)." },
+      { title: "2. Périmètre de consolidation", body: "Inclut toutes les filiales contrôlées (intégration globale). Les participations sous <em>influence notable</em> relèvent de l'IAS 28 (mise en équivalence), le contrôle conjoint de l'IFRS 11 — distinct du périmètre IFRS 10." },
+      { title: "3. Homogénéisation", body: "Aligne les méthodes comptables, la <b>monnaie fonctionnelle</b> (conversion IAS 21 des filiales étrangères : actifs/passifs au cours de clôture, résultat au cours moyen, écarts en OCI) et les dates de clôture." },
+      { title: "4. Éliminations intra-groupe", body: "Élimine : participations de la mère contre capitaux propres des filiales (avec goodwill / intérêts minoritaires), créances/dettes intra-groupe, ventes et achats intra-groupe, profits internes non réalisés sur stocks et immobilisations, dividendes intra-groupe." },
+      { title: "5. Intérêts minoritaires (NCI)", body: "Quote-part des actionnaires hors groupe dans les filiales non détenues à 100% : présentée séparément en capitaux propres et au résultat consolidé." },
+      { title: "6. États consolidés", body: "Produis bilan, compte de résultat, état du résultat global (OCI), tableau de variation des capitaux propres et tableau de flux de trésorerie consolidés, avec notes. Audit obligatoire pour la GBC." },
+    ],
+    pitfalls: [
+      "Oublier d'éliminer les profits internes non réalisés sur stocks/immobilisations → résultat consolidé gonflé.",
+      "Mauvaise conversion des filiales étrangères (cours de clôture vs cours moyen) → écarts de change erronés.",
+      "Consolider par intégration globale une entité sous simple influence notable (devrait être mise en équivalence).",
+      "Intérêts minoritaires mal calculés sur une filiale non détenue à 100%.",
+    ],
+    externalLinks: [
+      { label: "IFRS 10 — Consolidated Financial Statements", url: "https://www.ifrs.org/issued-standards/list-of-standards/ifrs-10-consolidated-financial-statements/" },
+      { label: "IAS 21 — Effets des variations des cours", url: "https://www.ifrs.org/issued-standards/list-of-standards/ias-21-the-effects-of-changes-in-foreign-exchange-rates/" },
+    ],
+    tips: [
+      "Lexora gère plusieurs entités liées et automatise les éliminations intra-groupe et la conversion IAS 21.",
+      "Définis la monnaie de présentation du groupe : la conversion des filiales en devises se fait vers cette monnaie.",
+    ],
+  },
+
+  // ========================================================================
+  // ROC — ANNUAL RETURN
+  // ========================================================================
+  '/client/annual-return': {
+    title: 'Annual Return — Registrar of Companies',
+    audience: 'all',
+    intro:
+      "Toute société mauricienne doit déposer chaque année un <b>Annual Return</b> auprès du <b>Registrar of Companies (CBRD)</b> en vertu du <b>Companies Act 2001</b>. Ce dépôt confirme les informations légales de la société (administrateurs, actionnaires, siège) et est distinct de la déclaration fiscale (MRA) et des états financiers.",
+    steps: [
+      { title: "1. Qu'est-ce que l'Annual Return", body: "Un état officiel des informations de la société à une date donnée : siège social, administrateurs, secrétaire, actionnaires et leurs participations, capital. Section 223 du Companies Act 2001." },
+      { title: "2. Qui dépose quoi", body: "Les <b>private companies</b> déposent un Annual Return simplifié ; certaines petites entreprises (small private companies) ont des obligations allégées. Les <b>public companies</b> ont des obligations étendues et déposent aussi les états financiers audités au Registrar." },
+      { title: "3. Échéance", body: "L'Annual Return est généralement déposé dans les <b>28 jours</b> suivant l'<em>annual meeting</em> (ou la date anniversaire selon le type de société). Vérifie la date propre à ta société sur le portail CBRD." },
+      { title: "4. Dépôt en ligne", body: "Dépôt via le <b>Companies and Businesses Registration Department (CBRD)</b>, portail companies.govmu.org. Paiement des <b>frais de dépôt</b> en ligne. Conserve l'accusé." },
+      { title: "5. Mises à jour à signaler", body: "Tout changement d'administrateurs, de siège ou de secrétaire entre deux returns doit être notifié séparément au Registrar (formulaires dédiés), pas seulement dans l'Annual Return." },
+    ],
+    pitfalls: [
+      "Confondre Annual Return (CBRD) avec la déclaration d'impôt (MRA) ou les comptes annuels — ce sont trois obligations distinctes.",
+      "Dépôt tardif → pénalités et risque de radiation (striking off) de la société.",
+      "Oublier de notifier un changement d'administrateur en cours d'année (en plus du return).",
+      "Informations actionnaires non à jour → return rejeté ou incohérent avec le registre UBO.",
+    ],
+    externalLinks: [
+      { label: "CBRD — Companies Registry", url: "https://companies.govmu.org", description: "Dépôt en ligne des Annual Returns." },
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/legislations.aspx" },
+      { label: "CBRD — BRN verification", url: "https://onlinebrd.govmu.org" },
+    ],
+    tips: [
+      "Lexora rappelle l'échéance de l'Annual Return et pré-remplit les informations à confirmer.",
+      "Vérifie la cohérence entre l'Annual Return (actionnaires) et le registre UBO (bénéficiaires effectifs).",
+    ],
+  },
+
+  // ========================================================================
+  // IFRS 16 — LEASES
+  // ========================================================================
+  '/client/leases': {
+    title: 'IFRS 16 — Contrats de location (Leases)',
+    audience: 'client',
+    intro:
+      "L'<b>IFRS 16</b> impose au preneur (lessee) de comptabiliser au bilan la quasi-totalité des contrats de location : un <b>actif au titre du droit d'utilisation</b> (right-of-use) et une <b>dette de location</b> (lease liability). Fini la distinction location simple / financement côté preneur : presque tout est capitalisé.",
+    steps: [
+      { title: "1. Identifier un contrat de location", body: "Un contrat contient une location s'il confère le <b>droit de contrôler l'usage</b> d'un actif identifié pendant une durée, en échange d'un paiement. Distingue d'un simple contrat de service." },
+      { title: "2. Évaluer la dette de location", body: "À la date de prise d'effet : <b>valeur actualisée des paiements de loyers futurs</b> (fixes, variables indexés, options d'achat probables, pénalités de résiliation). Actualisée au <b>taux implicite</b> du contrat ou, à défaut, au <b>taux d'emprunt marginal</b> du preneur." },
+      { title: "3. Comptabiliser le right-of-use asset", body: "Actif = dette de location initiale + paiements d'avance + coûts directs initiaux + coûts de remise en état − avantages reçus. Inscrit à l'actif immobilisé." },
+      { title: "4. Amortissement et charge d'intérêt", body: "Le right-of-use asset est <b>amorti</b> (généralement linéaire sur la durée du bail ou la durée d'utilité). La dette génère une <b>charge d'intérêt</b> décroissante. La charge totale est dégressive (plus élevée en début de bail)." },
+      { title: "5. Exemptions", body: "Deux exemptions optionnelles : locations de <b>courte durée</b> (≤ 12 mois sans option d'achat) et locations d'actifs de <b>faible valeur</b> (low-value, ex. petit matériel). Comptabilisées en charge linéaire, hors bilan." },
+      { title: "6. Réévaluations", body: "Réestime la dette en cas de modification du bail, de changement d'indice/taux ou de révision des options. Ajuste le right-of-use asset en contrepartie." },
+    ],
+    pitfalls: [
+      "Laisser des baux opérationnels hors bilan comme avant IFRS 16 (sauf exemptions) → bilan incomplet.",
+      "Utiliser un mauvais taux d'actualisation → dette et charge d'intérêt erronées.",
+      "Oublier les options de renouvellement raisonnablement certaines dans la durée du bail.",
+      "Ne pas réévaluer la dette après une modification de loyer indexé.",
+    ],
+    externalLinks: [
+      { label: "IFRS 16 — Leases", url: "https://www.ifrs.org/issued-standards/list-of-standards/ifrs-16-leases/" },
+    ],
+    tips: [
+      "Lexora calcule l'actualisation, l'échéancier dette/intérêt et l'amortissement du right-of-use asset.",
+      "Documente la justification du taux d'emprunt marginal retenu quand le taux implicite n'est pas connu.",
+    ],
+  },
+
+  // ========================================================================
+  // IFRS 9 — EXPECTED CREDIT LOSS (ECL)
+  // ========================================================================
+  '/client/ifrs9-ecl': {
+    title: 'IFRS 9 — Expected Credit Loss (ECL)',
+    audience: 'client',
+    intro:
+      "L'<b>IFRS 9</b> impose de provisionner les pertes de crédit <b>attendues</b> (Expected Credit Loss) de façon prospective, sans attendre la survenance d'un défaut. L'approche générale repose sur <b>3 stages</b> selon l'évolution du risque de crédit depuis l'origine.",
+    steps: [
+      { title: "1. Approche générale en 3 stages", body: "<b>Stage 1</b> : actifs sains → ECL à 12 mois. <b>Stage 2</b> : augmentation significative du risque (SICR) → ECL à maturité (lifetime). <b>Stage 3</b> : actif en défaut (credit-impaired) → ECL lifetime, intérêts calculés sur la valeur nette." },
+      { title: "2. SICR — Significant Increase in Credit Risk", body: "Détermine le passage Stage 1 → Stage 2 : dégradation de notation, impayés (présomption réfragable de SICR à <b>30 jours</b> de retard), détérioration des indicateurs. Le passage en défaut (Stage 3) est présumé à <b>90 jours</b>." },
+      { title: "3. Paramètres PD / LGD / EAD", body: "ECL = <b>PD × LGD × EAD</b> (actualisée). <b>PD</b> probabilité de défaut, <b>LGD</b> perte en cas de défaut (1 − taux de recouvrement), <b>EAD</b> exposition au moment du défaut. Stage 1 utilise une PD 12 mois, Stage 2/3 une PD lifetime." },
+      { title: "4. Information prospective (forward-looking)", body: "Intègre des scénarios <b>macro-économiques</b> pondérés (croissance, chômage, taux) qui ajustent PD et LGD. L'ECL n'est pas seulement historique : elle anticipe l'évolution attendue." },
+      { title: "5. Approche simplifiée (créances clients)", body: "Pour les <b>créances commerciales</b> et actifs sur contrat, IFRS 9 autorise une approche simplifiée : ECL lifetime directement via une <b>matrice de provisionnement</b> par tranche d'antériorité (aging), sans suivre les 3 stages." },
+      { title: "6. Disclosure IFRS 7", body: "Présente en annexe : rapprochement des provisions par stage, méthodologie, hypothèses macro, analyse de sensibilité et qualité de crédit du portefeuille (IFRS 7)." },
+    ],
+    pitfalls: [
+      "Attendre l'impayé pour provisionner (modèle 'incurred loss' de l'ancienne IAS 39) → non conforme.",
+      "Ignorer le forward-looking et ne provisionner que sur l'historique.",
+      "Confondre SICR (Stage 2) et défaut (Stage 3) — le premier ne suspend pas le calcul d'intérêt sur le brut.",
+      "Matrice de provisionnement non mise à jour avec les pertes réelles et les perspectives macro.",
+    ],
+    externalLinks: [
+      { label: "IFRS 9 — Financial Instruments", url: "https://www.ifrs.org/issued-standards/list-of-standards/ifrs-9-financial-instruments/" },
+      { label: "IFRS 7 — Disclosures", url: "https://www.ifrs.org/issued-standards/list-of-standards/ifrs-7-financial-instruments-disclosures/" },
+    ],
+    tips: [
+      "Lexora calcule l'ECL par stage, applique l'ajustement macro forward-looking et produit la matrice d'aging pour les créances clients.",
+      "Documente les seuils SICR retenus (30 jours, dégradation de notation) : ils doivent être cohérents d'un exercice à l'autre.",
+    ],
+  },
+
+  // ========================================================================
+  // SALARIÉ — PORTAIL
+  // ========================================================================
+  '/salarie': {
+    title: 'Mon espace salarié',
+    audience: 'all',
+    intro:
+      "Bienvenue dans ton <b>espace salarié</b> Lexora. Depuis ce portail tu pointes tes heures, demandes tes congés, déclares tes trajets et frais kilométriques, consultes tes fiches de paie et tes informations personnelles. Tout est centralisé et synchronisé avec le service RH.",
+    steps: [
+      { title: "1. Tableau de bord", body: "Vue d'ensemble : prochain jour travaillé, solde de congés restant, dernier bulletin disponible, demandes en attente de validation. C'est ton point de départ." },
+      { title: "2. Pointage", body: "Enregistre tes heures d'arrivée et de départ (clock-in / clock-out). Le système calcule tes heures travaillées et signale les heures supplémentaires. Pointe en début et fin de journée." },
+      { title: "3. Demandes de congés", body: "Soumets une demande de congé (annuel, maladie, spécial) en choisissant les dates. Le solde se met à jour automatiquement. Ta demande part en validation auprès de ton responsable." },
+      { title: "4. Trajets / frais kilométriques", body: "Déclare tes déplacements professionnels : trajet, distance, motif. Lexora calcule l'indemnité kilométrique selon le barème de l'entreprise. Joins un justificatif si demandé." },
+      { title: "5. Fiches de paie", body: "Consulte et télécharge tes bulletins de paie (PDF) mois par mois. Vérifie salaire brut, cotisations (NSF, CSG), PAYE retenu, net à payer." },
+      { title: "6. Ma fiche", body: "Consulte tes informations personnelles : coordonnées, contrat, RIB/IBAN de versement. Signale toute erreur au service RH — certaines données ne sont modifiables que par eux." },
+    ],
+    pitfalls: [
+      "Oublier de pointer en fin de journée → heures incomplètes, régularisation nécessaire.",
+      "Poser un congé sans solde suffisant → demande refusée ou congé sans solde.",
+      "Déclarer un trajet sans justificatif quand il est exigé → indemnité non validée.",
+      "Coordonnées bancaires erronées dans 'Ma fiche' → virement de salaire en échec.",
+    ],
+    tips: [
+      "Vérifie ton bulletin dès sa mise à disposition : signale toute anomalie au RH rapidement.",
+      "Anticipe tes demandes de congés : la validation par ton responsable prend un peu de temps.",
+    ],
+  },
+
+  // ========================================================================
+  // RH PAIE — EXPORTS MRA
+  // ========================================================================
+  '/rh/paie/exports-mra': {
+    title: 'Paie — Exports MRA (PAYE, NSF, CSG, PRGF)',
+    audience: 'comptable',
+    intro:
+      "Cet espace génère les fichiers de déclaration sociale et fiscale à soumettre à la <b>MRA</b> chaque mois : <b>PAYE</b> (impôt retenu à la source), <b>NSF</b> (National Savings Fund), <b>CSG</b> (Contribution Sociale Généralisée) et <b>PRGF</b> (Portable Retirement Gratuity Fund). La soumission se fait sur le portail MRA.",
+    steps: [
+      { title: "1. PAYE", body: "Impôt sur le revenu retenu à la source sur les salaires selon le barème en vigueur. Lexora génère le fichier PAYE (et le CSG/NSF return joint sur le même portail MRA) avec le détail par employé." },
+      { title: "2. NSF (National Savings Fund)", body: "Cotisation au fonds d'épargne national, part employeur + part salarié, sur la rémunération soumise. Inclus dans le return mensuel MRA." },
+      { title: "3. CSG (Contribution Sociale Généralisée)", body: "Remplace l'ex-NPF depuis sept. 2020. Cotisation employeur + salarié, taux dépendant du niveau de rémunération (palier de salaire). Déclarée mensuellement à la MRA." },
+      { title: "4. PRGF (Portable Retirement Gratuity Fund)", body: "Fonds de gratuité de retraite portable (Workers' Rights Act) : cotisation employeur pour les salariés éligibles, déclarée et payée à la MRA selon le calendrier PRGF." },
+      { title: "5. Génération et vérification", body: "Lexora produit les fichiers au format attendu par le portail MRA à partir des bulletins validés du mois. Vérifie les totaux par rubrique avant export." },
+      { title: "6. Soumission et paiement", body: "Dépose les fichiers sur le portail e-services de la MRA et règle les montants. Conserve l'accusé de réception pour l'audit." },
+    ],
+    pitfalls: [
+      "Soumettre après l'échéance (généralement le <b>20 du mois suivant</b> pour le return joint PAYE/CSG/NSF — vérifie la date exacte MRA) → pénalités et intérêts.",
+      "Exporter avant d'avoir validé tous les bulletins du mois → fichier incomplet.",
+      "Oublier une rubrique (PRGF, training levy) → return partiel, régularisation.",
+      "Ne pas conserver l'accusé MRA → preuve de dépôt manquante en cas de contrôle.",
+    ],
+    externalLinks: [
+      { label: "MRA — e-Services PAYE/CSG/NSF", url: "https://www.mra.mu/index.php/eservices/paye", description: "Soumission des returns mensuels." },
+      { label: "MRA — CSG", url: "https://www.mra.mu/index.php/taxes-duties/csg", description: "Contribution Sociale Généralisée." },
+    ],
+    tips: [
+      "Valide la paie du mois (voir /rh/paie/validation) avant de générer les exports : les fichiers en dépendent.",
+      "Vérifie chaque mois l'échéance exacte publiée par la MRA : le 20 est la règle générale mais peut être décalé (jour férié).",
+    ],
+  },
+
+  // ========================================================================
+  // RH PAIE — PARAMÈTRES
+  // ========================================================================
+  '/rh/paie/parametres': {
+    title: 'Paie — Paramètres (taux, barèmes, comptes)',
+    audience: 'comptable',
+    intro:
+      "Ici tu configures les <b>paramètres de calcul de la paie</b> : taux de cotisations (NSF, CSG, PRGF, training levy), barèmes PAYE, comptes comptables d'imputation et valeurs par défaut. Ces paramètres alimentent tous les bulletins — une erreur ici se propage à toute la paie.",
+    steps: [
+      { title: "1. Taux de cotisations", body: "Configure les taux <b>NSF</b>, <b>CSG</b> (par palier de salaire), <b>PRGF</b> et <b>training levy</b> (part employeur / salarié). Mets-les à jour à chaque changement réglementaire (Finance Act annuel)." },
+      { title: "2. Barèmes PAYE", body: "Paramètre les tranches d'imposition PAYE et l'<em>Income Exemption Threshold</em> (IET) en vigueur. Ces barèmes déterminent l'impôt retenu chaque mois." },
+      { title: "3. Comptes comptables", body: "Associe chaque rubrique de paie à un compte du plan comptable : charges de personnel (salaires bruts), cotisations sociales, dettes envers organismes (NSF, CSG, MRA), nets à payer." },
+      { title: "4. Valeurs par défaut", body: "Définis les valeurs par défaut applicables aux nouveaux salariés (horaire standard, indemnités, barème km) pour accélérer la création de fiches." },
+      { title: "5. Validation des paramètres", body: "Après toute modification, lance une paie de test sur un employé fictif pour vérifier que les taux et l'imputation comptable produisent le résultat attendu." },
+    ],
+    pitfalls: [
+      "Ne pas mettre à jour les taux après le Finance Act → cotisations et PAYE erronés sur toute la paie.",
+      "Mauvais compte comptable sur une rubrique → écritures de paie fausses, rapprochement impossible.",
+      "Modifier un taux en cours de mois sans recalculer les bulletins déjà générés.",
+      "Confondre part employeur et part salarié dans la configuration des taux.",
+    ],
+    externalLinks: [
+      { label: "MRA — Income Tax / PAYE", url: "https://www.mra.mu/index.php/taxes-duties/income-tax", description: "Barèmes PAYE et IET en vigueur." },
+      { label: "MRA — CSG", url: "https://www.mra.mu/index.php/taxes-duties/csg" },
+    ],
+    tips: [
+      "Renseigne les taux/barèmes officiels du Finance Act en cours — Lexora ne peut pas deviner une valeur réglementaire que tu n'as pas saisie.",
+      "Historise les changements de taux pour pouvoir recalculer une paie d'un mois antérieur correctement.",
+    ],
+  },
+
+  // ========================================================================
+  // RH PAIE — VALIDATION
+  // ========================================================================
+  '/rh/paie/validation': {
+    title: 'Paie — Validation et clôture du mois',
+    audience: 'comptable',
+    intro:
+      "Étape de contrôle <b>avant la clôture</b> du mois de paie. Tu vérifies chaque bulletin, détectes les anomalies, corriges puis <b>verrouilles</b> la paie. Une fois validée, la paie alimente les écritures comptables et les exports MRA — il faut donc qu'elle soit juste avant verrouillage.",
+    steps: [
+      { title: "1. Récapitulatif du mois", body: "Vue d'ensemble : nombre de bulletins, masse salariale brute, total cotisations, total net à payer. Compare avec le mois précédent pour repérer une variation anormale." },
+      { title: "2. Vérification des bulletins", body: "Contrôle bulletin par bulletin : salaire de base, heures sup, primes, congés payés, cotisations, PAYE, net. Vérifie les nouveaux entrants et les départs (prorata)." },
+      { title: "3. Détection des anomalies", body: "Lexora signale les écarts : net négatif, variation forte vs mois précédent, cotisation manquante, employé sans IBAN, taux incohérent. Traite chaque anomalie avant clôture." },
+      { title: "4. Corrections", body: "Reprends les bulletins en erreur (rubrique, taux, absence non saisie) et recalcule. Tant que la paie n'est pas verrouillée, les corrections sont libres." },
+      { title: "5. Verrouillage / clôture", body: "Une fois tout vérifié, <b>verrouille</b> le mois. Cela fige les bulletins, génère les écritures de paie et débloque les exports MRA. Toute correction ultérieure passera par une régularisation, pas une modification directe." },
+    ],
+    pitfalls: [
+      "Verrouiller avec une anomalie non traitée (net négatif, IBAN manquant) → paiement ou déclaration faux.",
+      "Ne pas comparer avec le mois précédent → erreur de masse salariale passée inaperçue.",
+      "Oublier le prorata des entrants/sortants du mois.",
+      "Modifier une paie après verrouillage en contournant la régularisation → incohérence compta/MRA.",
+    ],
+    tips: [
+      "Verrouille seulement quand toutes les anomalies sont à zéro : c'est la dernière barrière avant la compta et la MRA.",
+      "Garde une trace de qui a validé et quand : utile en cas de contrôle ou de litige salarié.",
+    ],
+  },
+
 }
 
 /**
