@@ -449,7 +449,7 @@ export default function ComptableDashboardPage() {
                     <UserCheck className="h-4 w-4" />
                   </div>
                   <CardTitle className="text-sm font-semibold" style={{ color: NAVY, fontFamily: "Poppins, sans-serif" }}>
-                    Mon equipe
+                    {t('cpta.dash_my_team', locale)}
                   </CardTitle>
                 </div>
                 <Link href="/comptable/equipe">
@@ -459,7 +459,7 @@ export default function ComptableDashboardPage() {
                     className="text-xs gap-1"
                     style={{ borderColor: "#D8DFED", color: NAVY }}
                   >
-                    Gerer <ArrowRight className="w-3 h-3" />
+                    {t('cpta.dash_manage', locale)} <ArrowRight className="w-3 h-3" />
                   </Button>
                 </Link>
               </div>
@@ -472,9 +472,9 @@ export default function ComptableDashboardPage() {
               ) : assistants.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
                   <UserCheck className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                  <p className="text-sm font-medium">Aucun collaborateur</p>
+                  <p className="text-sm font-medium">{t('cpta.dash_no_collab', locale)}</p>
                   <p className="text-xs mt-1">
-                    Ajoutez des collaborateurs depuis la page Mon Equipe.
+                    {t('cpta.dash_add_collab_hint', locale)}
                   </p>
                   <Link href="/comptable/equipe">
                     <Button
@@ -485,7 +485,7 @@ export default function ComptableDashboardPage() {
                         boxShadow: "0 6px 16px -6px rgba(212,175,55,0.55), inset 0 1px 0 rgba(255,255,255,0.4)",
                       }}
                     >
-                      Ajouter un collaborateur
+                      {t('cpta.dash_add_collab_btn', locale)}
                     </Button>
                   </Link>
                 </div>
@@ -494,9 +494,9 @@ export default function ComptableDashboardPage() {
                   <Table>
                     <TableHeader>
                       <TableRow style={{ background: "linear-gradient(180deg, #F8FAFF 0%, #F1F5FC 100%)" }}>
-                        <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Collaborateur</TableHead>
-                        <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Email</TableHead>
-                        <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>Clients assignes</TableHead>
+                        <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>{t('cpta.dash_col_collab', locale)}</TableHead>
+                        <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>{t('cpta.dash_col_email', locale)}</TableHead>
+                        <TableHead style={{ color: SECONDARY, fontWeight: 600 }}>{t('cpta.dash_col_assigned_clients', locale)}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -513,8 +513,7 @@ export default function ComptableDashboardPage() {
                               variant="outline"
                               style={{ borderColor: GOLD, color: NAVY }}
                             >
-                              {a.assignedClientCount} client
-                              {a.assignedClientCount !== 1 ? "s" : ""}
+                              {a.assignedClientCount} {a.assignedClientCount !== 1 ? t('cpta.dash_clients_plural', locale) : t('cpta.dash_client_singular', locale)}
                             </Badge>
                           </TableCell>
                         </TableRow>

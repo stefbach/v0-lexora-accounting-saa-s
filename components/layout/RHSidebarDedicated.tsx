@@ -55,7 +55,7 @@ const ALL_LINKS: NavLink[] = [
   { href: '/rh/historique-paie', label: 'Historique Paie', labelKey: 'comp.rh_sidebar.payroll_history', icon: Calendar, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'client_admin', 'comptable', 'comptable_dedie'] },
   // FIX-DECOMPTA — audit WORM des décomptabilisations. Visible aux rôles
   // autorisés à décomptabiliser (transparence) + comptable/super_admin.
-  { href: '/rh/audit-decomptabilisation', label: 'Audit décomptabilisations', icon: Shield, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'direction', 'client_admin'] },
+  { href: '/rh/audit-decomptabilisation', label: 'Audit décomptabilisations', labelKey: 'clay.decommit_audit', icon: Shield, roles: ['admin', 'super_admin', 'rh', 'rh_manager', 'direction', 'client_admin'] },
   // G6 — Exports légaux WRA S.116 : placés après 'Historique Paie' dans la
   // section paie/compliance. Réservés admin + rh (seuls rôles réels en DB).
   { href: '/rh/exports-legaux', label: 'Exports légaux (S.116)', labelKey: 'comp.rh_sidebar.legal_exports', icon: ShieldCheck, roles: ['admin', 'rh'] },

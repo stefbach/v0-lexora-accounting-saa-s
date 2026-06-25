@@ -284,7 +284,7 @@ export default function AdminDocumentsPage() {
                     <input
                       type="checkbox"
                       className="h-4 w-4 cursor-pointer"
-                      title="Tout (dé)sélectionner"
+                      title={t('adm2.docs.select_all_title', locale)}
                       checked={filtered.length > 0 && filtered.every(d => selectedIds.has(d.id))}
                       onChange={(e) => {
                         if (e.target.checked) setSelectedIds(new Set(filtered.map(d => d.id)))
@@ -330,9 +330,9 @@ export default function AdminDocumentsPage() {
                         variant="ghost"
                         size="sm"
                         className="text-[#9F1239] hover:text-[#9F1239] hover:bg-[#9F1239]/5"
-                        title="Supprimer le document (fichier + lignes liées)"
+                        title={t('adm2.docs.delete_title', locale)}
                         onClick={async () => {
-                          if (!confirm(`Supprimer "${doc.nom_fichier}" ?\n\nCela supprime le fichier du storage ET toutes les écritures/factures/relevés qui y sont liés. Action irréversible.`)) return
+                          if (!confirm(t('adm2.docs.delete_confirm', locale).replace('{name}', doc.nom_fichier))) return
                           try {
                             const res = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
                             if (res.ok) {

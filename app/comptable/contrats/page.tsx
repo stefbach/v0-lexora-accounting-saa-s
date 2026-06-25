@@ -47,14 +47,14 @@ interface Contrat {
   comptable?: { full_name: string }
 }
 
-const STATUT_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  brouillon: { label: 'Brouillon', color: 'bg-gray-100 text-gray-700', icon: <PenLine className="w-3 h-3" /> },
-  en_revision: { label: 'En révision', color: 'bg-yellow-100 text-yellow-700', icon: <Clock className="w-3 h-3" /> },
-  valide: { label: 'Validé', color: 'bg-blue-100 text-blue-700', icon: <CheckCircle2 className="w-3 h-3" /> },
-  envoye: { label: 'Envoyé', color: 'bg-purple-100 text-purple-700', icon: <Send className="w-3 h-3" /> },
-  signe: { label: 'Signé ✓', color: 'bg-green-100 text-green-700', icon: <CheckCircle2 className="w-3 h-3" /> },
-  archive: { label: 'Archivé', color: 'bg-gray-100 text-gray-500', icon: <Archive className="w-3 h-3" /> },
-  resilie: { label: 'Résilié', color: 'bg-red-100 text-red-700', icon: <FileText className="w-3 h-3" /> },
+const STATUT_CONFIG: Record<string, { labelKey: string; color: string; icon: React.ReactNode }> = {
+  brouillon: { labelKey: 'cptb.contrats.statut_brouillon', color: 'bg-gray-100 text-gray-700', icon: <PenLine className="w-3 h-3" /> },
+  en_revision: { labelKey: 'cptb.contrats.statut_en_revision', color: 'bg-yellow-100 text-yellow-700', icon: <Clock className="w-3 h-3" /> },
+  valide: { labelKey: 'cptb.contrats.statut_valide', color: 'bg-blue-100 text-blue-700', icon: <CheckCircle2 className="w-3 h-3" /> },
+  envoye: { labelKey: 'cptb.contrats.statut_envoye', color: 'bg-purple-100 text-purple-700', icon: <Send className="w-3 h-3" /> },
+  signe: { labelKey: 'cptb.contrats.statut_signe', color: 'bg-green-100 text-green-700', icon: <CheckCircle2 className="w-3 h-3" /> },
+  archive: { labelKey: 'cptb.contrats.statut_archive', color: 'bg-gray-100 text-gray-500', icon: <Archive className="w-3 h-3" /> },
+  resilie: { labelKey: 'cptb.contrats.statut_resilie', color: 'bg-red-100 text-red-700', icon: <FileText className="w-3 h-3" /> },
 }
 
 export default function ContratsPage() {
@@ -216,7 +216,7 @@ export default function ContratsPage() {
         </div>
         <Select value={filtreStatut} onValueChange={setFiltreStatut}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Statut" />
+            <SelectValue placeholder={t('cptb.contrats.statut_placeholder', locale)} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="tous">{t('cab.contrats.all_status', locale)}</SelectItem>
@@ -227,7 +227,7 @@ export default function ContratsPage() {
         </Select>
         <Select value={filtreType} onValueChange={setFiltreType}>
           <SelectTrigger className="w-48">
-            <SelectValue placeholder="Type" />
+            <SelectValue placeholder={t('cptb.contrats.type_placeholder', locale)} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="tous">{t('cab.contrats.all_types', locale)}</SelectItem>
@@ -237,7 +237,7 @@ export default function ContratsPage() {
           </SelectContent>
         </Select>
         <span className="text-sm text-gray-500 self-center ml-auto">
-          {total} contrat{total > 1 ? 's' : ''}
+          {total} {total > 1 ? t('cptb.contrats.count_plural', locale) : t('cptb.contrats.count_singular', locale)}
         </span>
       </div>
 
@@ -307,7 +307,7 @@ export default function ContratsPage() {
                     )}
                     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statutConfig.color}`}>
                       {statutConfig.icon}
-                      {statutConfig.label}
+                      {t(statutConfig.labelKey, locale)}
                     </span>
                     <span className="text-xs text-gray-400">
                       {new Date(contrat.created_at).toLocaleDateString('fr-FR')}

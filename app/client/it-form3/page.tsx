@@ -28,7 +28,7 @@ import {
 import { Calculator, FileText, Save, Download, Loader2, Upload, CheckCircle, AlertCircle } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
-import { t, getLocale } from "@/lib/i18n"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import { computeCSR } from "@/lib/accounting/mra-csr"
 
 const NAVY = "#0B0F2E"
@@ -38,28 +38,28 @@ function formatMUR(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " MUR"
 }
 
-const ISIC_SECTORS = [
-  { code: "A", label: "A - Agriculture, sylviculture et pêche" },
-  { code: "B", label: "B - Industries extractives" },
-  { code: "C", label: "C - Industrie manufacturière" },
-  { code: "D", label: "D - Production et distribution d'électricité, de gaz" },
-  { code: "E", label: "E - Distribution d'eau, assainissement" },
-  { code: "F", label: "F - Construction" },
-  { code: "G", label: "G - Commerce de gros et de détail" },
-  { code: "H", label: "H - Transports et entreposage" },
-  { code: "I", label: "I - Hébergement et restauration" },
-  { code: "J", label: "J - Information et communication" },
-  { code: "K", label: "K - Activités financières et d'assurance" },
-  { code: "L", label: "L - Activités immobilières" },
-  { code: "M", label: "M - Activités spécialisées, scientifiques et techniques" },
-  { code: "N", label: "N - Activités de services administratifs et de soutien" },
-  { code: "O", label: "O - Administration publique" },
-  { code: "P", label: "P - Enseignement" },
-  { code: "Q", label: "Q - Santé humaine et action sociale" },
-  { code: "R", label: "R - Arts, spectacles et activités récréatives" },
-  { code: "S", label: "S - Autres activités de services" },
-  { code: "T", label: "T - Activités des ménages en tant qu'employeurs" },
-  { code: "U", label: "U - Activités des organisations extraterritoriales" },
+const isicSectors = (locale: Locale) => [
+  { code: "A", label: `A - ${t('cmra.itf3.isic_a', locale)}` },
+  { code: "B", label: `B - ${t('cmra.itf3.isic_b', locale)}` },
+  { code: "C", label: `C - ${t('cmra.itf3.isic_c', locale)}` },
+  { code: "D", label: `D - ${t('cmra.itf3.isic_d', locale)}` },
+  { code: "E", label: `E - ${t('cmra.itf3.isic_e', locale)}` },
+  { code: "F", label: `F - ${t('cmra.itf3.isic_f', locale)}` },
+  { code: "G", label: `G - ${t('cmra.itf3.isic_g', locale)}` },
+  { code: "H", label: `H - ${t('cmra.itf3.isic_h', locale)}` },
+  { code: "I", label: `I - ${t('cmra.itf3.isic_i', locale)}` },
+  { code: "J", label: `J - ${t('cmra.itf3.isic_j', locale)}` },
+  { code: "K", label: `K - ${t('cmra.itf3.isic_k', locale)}` },
+  { code: "L", label: `L - ${t('cmra.itf3.isic_l', locale)}` },
+  { code: "M", label: `M - ${t('cmra.itf3.isic_m', locale)}` },
+  { code: "N", label: `N - ${t('cmra.itf3.isic_n', locale)}` },
+  { code: "O", label: `O - ${t('cmra.itf3.isic_o', locale)}` },
+  { code: "P", label: `P - ${t('cmra.itf3.isic_p', locale)}` },
+  { code: "Q", label: `Q - ${t('cmra.itf3.isic_q', locale)}` },
+  { code: "R", label: `R - ${t('cmra.itf3.isic_r', locale)}` },
+  { code: "S", label: `S - ${t('cmra.itf3.isic_s', locale)}` },
+  { code: "T", label: `T - ${t('cmra.itf3.isic_t', locale)}` },
+  { code: "U", label: `U - ${t('cmra.itf3.isic_u', locale)}` },
 ]
 
 export default function ITForm3Page() {
@@ -84,6 +84,7 @@ export default function ITForm3Page() {
   // PDF import
   const [importingPdf, setImportingPdf] = useState(false)
   const [importMessage, setImportMessage] = useState("")
+  const [importError, setImportError] = useState(false)
 
   // Business activity
   const [sector, setSector] = useState("")
@@ -215,6 +216,7 @@ export default function ITForm3Page() {
   const handleImportPdf = async (file: File) => {
     setImportingPdf(true)
     setImportMessage("")
+    setImportError(false)
     try {
       const formData = new FormData()
       formData.append("file", file)
@@ -253,10 +255,10 @@ export default function ITForm3Page() {
         }
         setImportMessage(t('mra.itform3.import_success', locale))
       } else {
-        setImportMessage(t('mra.itform3.import_error', locale))
+        setImportMessage(t('mra.itform3.import_error', locale)); setImportError(true)
       }
     } catch {
-      setImportMessage(t('mra.itform3.import_error', locale))
+      setImportMessage(t('mra.itform3.import_error', locale)); setImportError(true)
     } finally {
       setImportingPdf(false)
     }
@@ -392,8 +394,8 @@ export default function ITForm3Page() {
             </div>
           </div>
           {importMessage && (
-            <div className={`flex items-center gap-2 text-sm mt-3 ${importMessage.includes("Erreur") ? "text-red-600" : "text-green-700"}`}>
-              {importMessage.includes("Erreur") ? <AlertCircle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle className="w-4 h-4 flex-shrink-0" />}
+            <div className={`flex items-center gap-2 text-sm mt-3 ${importError ? "text-red-600" : "text-green-700"}`}>
+              {importError ? <AlertCircle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle className="w-4 h-4 flex-shrink-0" />}
               <span>{importMessage}</span>
             </div>
           )}
@@ -475,7 +477,7 @@ export default function ITForm3Page() {
                     <SelectValue placeholder={t('mra.itform3.placeholder_sector', locale)} />
                   </SelectTrigger>
                   <SelectContent>
-                    {ISIC_SECTORS.map(s => (
+                    {isicSectors(locale).map(s => (
                       <SelectItem key={s.code} value={s.code}>{s.label}</SelectItem>
                     ))}
                   </SelectContent>

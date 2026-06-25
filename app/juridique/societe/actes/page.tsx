@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ArrowLeft, FileText, Loader2, Building2, Download, Save, CheckCircle, AlertCircle, Scale, FileSignature, Copy } from "lucide-react"
 import { useJuridiqueSociete } from "@/components/juridique/JuridiqueSocieteProvider"
 import { RefineChat } from "@/components/juridique/RefineChat"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -11,17 +12,7 @@ const GOLD = "#D4AF37"
 interface Source { ref: string; source: string; reference: string; titre: string; maj: string }
 interface SocieteData { nom?: string; brn?: string; registered_office?: string; adresse?: string; capital_social?: number | null; devise_principale?: string }
 
-const ACTE_TYPES: { id: string; label: string; hint: string }[] = [
-  { id: 'statuts', label: "Statuts de société", hint: "Constitution : objet, capital, organes, gouvernance…" },
-  { id: 'convocation_ago', label: "Convocation AGO (annuelle)", hint: "Lettre de convocation à l'assemblée ordinaire" },
-  { id: 'convocation_age', label: "Convocation AGE (extraordinaire)", hint: "Lettre de convocation à l'assemblée extraordinaire" },
-  { id: 'pouvoir', label: "Pouvoir / Procuration (proxy)", hint: "Mandat de représentation et de vote" },
-  { id: 'certificat_actions', label: "Certificat d'actions", hint: "Share certificate au profit d'un actionnaire" },
-  { id: 'nomination_dirigeant', label: "Nomination d'un dirigeant", hint: "Acte de nomination d'un directeur" },
-  { id: 'demission_administrateur', label: "Démission d'administrateur", hint: "Lettre de démission + notification ROC" },
-  { id: 'transfert_siege', label: "Transfert de siège social", hint: "Décision de changement d'adresse" },
-  { id: 'attestation', label: "Attestation", hint: "Attestation officielle de la société" },
-]
+const ACTE_TYPE_IDS = ['statuts', 'convocation_ago', 'convocation_age', 'pouvoir', 'certificat_actions', 'nomination_dirigeant', 'demission_administrateur', 'transfert_siege', 'attestation'] as const
 
 function StructuredDoc({ text }: { text: string }) {
   const clean = (text || '').replace(/\r/g, '').replace(/^[═━─*]{3,}$/gm, '')
@@ -45,6 +36,8 @@ function StructuredDoc({ text }: { text: string }) {
 function fmtMUR(n?: number | null, dev = 'MUR') { return n == null ? '' : `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(n)} ${dev}` }
 
 export default function ActesPage() {
+  const locale = getLocale()
+  const ACTE_TYPES = ACTE_TYPE_IDS.map((id) => ({ id, label: t(`jurs.actes.type.${id}`, locale), hint: t(`jurs.actes.type.${id}.hint`, locale) }))
   const { societe } = useJuridiqueSociete()
   const [data, setData] = useState<SocieteData | null>(null)
   const [type, setType] = useState<string>('statuts')
@@ -69,8 +62,8 @@ export default function ActesPage() {
   }, [societe?.id])
   useEffect(() => { load() }, [load])
 
-  const label = ACTE_TYPES.find((a) => a.id === type)?.label || "Acte"
-  const readJson = async (r: Response) => { if ((r.headers.get("content-type") || "").includes("json")) return r.json(); throw new Error("Réponse serveur inattendue.") }
+  const label = ACTE_TYPES.find((a) => a.id === type)?.label || t('jurs.actes.docDefault', locale)
+  const readJson = async (r: Response) => { if ((r.headers.get("content-type") || "").includes("json")) return r.json(); throw new Error(t('jurs.actes.serverError', locale)) }
 
   function body(extra: Record<string, unknown> = {}) {
     return { societe_id: societe?.id, type, societe_nom: data?.nom || societe?.nom, capital: data?.capital_social != null ? fmtMUR(data.capital_social, data?.devise_principale) : undefined, objet, signataire, date, lieu, ...extra }
@@ -81,7 +74,7 @@ export default function ActesPage() {
     setLoading(true); setError(null); setResult(""); setSources([]); setSaved(false)
     try {
       const r = await fetch("/api/juridique/societe/acte", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body()) })
-      const d = await readJson(r); if (!r.ok) { setError(d.error || "Erreur"); return }
+      const d = await readJson(r); if (!r.ok) { setError(d.error || t('jurs.error', locale)); return }
       setResult(d.text || ""); setSources(d.sources || [])
     } catch (e: any) { setError(e.message) } finally { setLoading(false) }
   }
@@ -97,9 +90,9 @@ export default function ActesPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ societe: { nom: data?.nom || societe?.nom, brn: data?.brn, adresse: data?.registered_office || data?.adresse, capital: data?.capital_social != null ? fmtMUR(data.capital_social, data?.devise_principale) : undefined }, titre: label, sousTitre: data?.nom || societe?.nom, date, lieu, president: signataire, corps: result, sources }),
       })
-      if (!r.ok) { const d = await readJson(r).catch(() => ({})); alert(d.error || "Erreur PDF"); return }
+      if (!r.ok) { const d = await readJson(r).catch(() => ({})); alert(d.error || t('jurs.actes.pdfError', locale)); return }
       const blob = await r.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${type}_${(data?.nom || 'societe').replace(/\s/g, '_')}.pdf`; a.click(); URL.revokeObjectURL(url)
-    } catch (e: any) { alert("Erreur PDF " + (e.message || "")) } finally { setPdfLoading(false) }
+    } catch (e: any) { alert(t('jurs.actes.pdfError', locale) + " " + (e.message || "")) } finally { setPdfLoading(false) }
   }
 
   const input = "mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#D4AF37]"
@@ -107,63 +100,63 @@ export default function ActesPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3 flex-wrap">
-        <Link href="/juridique/societe" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#0B0F2E]"><ArrowLeft className="w-4 h-4" /> Vie de la société</Link>
+        <Link href="/juridique/societe" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#0B0F2E]"><ArrowLeft className="w-4 h-4" /> {t('jurs.back', locale)}</Link>
         <div className="h-4 w-px bg-gray-200" /><FileText className="w-5 h-5" style={{ color: NAVY }} />
-        <h1 className="text-lg font-bold" style={{ color: NAVY }}>Actes & documents de la société</h1>
+        <h1 className="text-lg font-bold" style={{ color: NAVY }}>{t('jurs.actes.title', locale)}</h1>
       </div>
 
       {!societe ? (
-        <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center text-sm text-gray-500"><Building2 className="w-6 h-6 mx-auto mb-2 text-gray-300" /> Sélectionnez une société.</div>
+        <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center text-sm text-gray-500"><Building2 className="w-6 h-6 mx-auto mb-2 text-gray-300" /> {t('jurs.selectSociete', locale)}</div>
       ) : (
         <div className="grid lg:grid-cols-2 gap-5 items-start">
           <div className="space-y-4">
             <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm space-y-3">
               <div>
-                <label className="text-xs font-semibold text-gray-600">Type de document</label>
+                <label className="text-xs font-semibold text-gray-600">{t('jurs.actes.docType', locale)}</label>
                 <select value={type} onChange={(e) => setType(e.target.value)} className={`${input} bg-white`}>
                   {ACTE_TYPES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
                 </select>
                 <p className="text-[11px] text-gray-400 mt-1">{ACTE_TYPES.find((a) => a.id === type)?.hint}</p>
               </div>
               <div>
-                <label className="text-xs font-semibold text-gray-600">Objet / détails</label>
-                <textarea value={objet} onChange={(e) => setObjet(e.target.value)} rows={4} className={`${input} resize-y`} placeholder="Précisez les éléments à intégrer (noms, montants, dates, adresses, ordre du jour…)." />
+                <label className="text-xs font-semibold text-gray-600">{t('jurs.actes.objet', locale)}</label>
+                <textarea value={objet} onChange={(e) => setObjet(e.target.value)} rows={4} className={`${input} resize-y`} placeholder={t('jurs.actes.objetPlaceholder', locale)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-semibold text-gray-600">Signataire</label><input value={signataire} onChange={(e) => setSignataire(e.target.value)} className={input} placeholder="Nom, qualité" /></div>
-                <div><label className="text-xs font-semibold text-gray-600">Date</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={input} /></div>
-                <div className="col-span-2"><label className="text-xs font-semibold text-gray-600">Lieu</label><input value={lieu} onChange={(e) => setLieu(e.target.value)} className={input} /></div>
+                <div><label className="text-xs font-semibold text-gray-600">{t('jurs.actes.signataire', locale)}</label><input value={signataire} onChange={(e) => setSignataire(e.target.value)} className={input} placeholder={t('jurs.actes.signatairePlaceholder', locale)} /></div>
+                <div><label className="text-xs font-semibold text-gray-600">{t('jurs.actes.date', locale)}</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={input} /></div>
+                <div className="col-span-2"><label className="text-xs font-semibold text-gray-600">{t('jurs.actes.lieu', locale)}</label><input value={lieu} onChange={(e) => setLieu(e.target.value)} className={input} /></div>
               </div>
             </div>
             <button onClick={generate} disabled={loading} className="w-full h-11 rounded-xl font-semibold inline-flex items-center justify-center disabled:opacity-50" style={{ background: NAVY, color: GOLD }}>
-              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Rédaction…</> : <><FileSignature className="w-4 h-4 mr-2" /> Générer le document</>}
+              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('jurs.actes.generating', locale)}</> : <><FileSignature className="w-4 h-4 mr-2" /> {t('jurs.actes.generate', locale)}</>}
             </button>
-            <RefineChat text={result} domaines={['societes', 'commercial']} onUpdate={(t, s) => { setResult(t); if (s.length) setSources(s); setSaved(false) }} placeholder="Ex. Ajoute une clause de quorum · Précise les pouvoirs du mandataire · Ajoute un article sur la cession d'actions…" />
+            <RefineChat text={result} domaines={['societes', 'commercial']} onUpdate={(tx, s) => { setResult(tx); if (s.length) setSources(s); setSaved(false) }} placeholder={t('jurs.actes.refinePlaceholder', locale)} />
           </div>
 
           <div className="lg:sticky lg:top-4">
             <div className="rounded-2xl bg-white border border-gray-100 shadow-sm min-h-[400px]">
               <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-gray-100 flex-wrap">
                 <div className="flex items-center gap-2 text-sm">
-                  {loading ? <><Loader2 className="w-4 h-4 animate-spin text-gray-400" /> <span className="text-gray-500">Génération…</span></> : result ? <><CheckCircle className="w-4 h-4 text-green-500" /> <span className="text-gray-600 font-medium">{label}</span></> : error ? <><AlertCircle className="w-4 h-4 text-red-500" /> <span className="text-red-600">Erreur</span></> : <><FileText className="w-4 h-4 text-gray-300" /> <span className="text-gray-400">Aperçu</span></>}
+                  {loading ? <><Loader2 className="w-4 h-4 animate-spin text-gray-400" /> <span className="text-gray-500">{t('jurs.generating', locale)}</span></> : result ? <><CheckCircle className="w-4 h-4 text-green-500" /> <span className="text-gray-600 font-medium">{label}</span></> : error ? <><AlertCircle className="w-4 h-4 text-red-500" /> <span className="text-red-600">{t('jurs.error', locale)}</span></> : <><FileText className="w-4 h-4 text-gray-300" /> <span className="text-gray-400">{t('jurs.preview', locale)}</span></>}
                 </div>
                 {result && (<div className="flex gap-1.5 flex-wrap">
-                  <button onClick={() => { navigator.clipboard.writeText(result); setCopied(true); setTimeout(() => setCopied(false), 1500) }} className="inline-flex items-center text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600">{copied ? <CheckCircle className="w-3.5 h-3.5 mr-1 text-green-500" /> : <Copy className="w-3.5 h-3.5 mr-1" />}{copied ? "Copié" : "Copier"}</button>
+                  <button onClick={() => { navigator.clipboard.writeText(result); setCopied(true); setTimeout(() => setCopied(false), 1500) }} className="inline-flex items-center text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600">{copied ? <CheckCircle className="w-3.5 h-3.5 mr-1 text-green-500" /> : <Copy className="w-3.5 h-3.5 mr-1" />}{copied ? t('jurs.copied', locale) : t('jurs.copy', locale)}</button>
                   <button onClick={pdf} disabled={pdfLoading} className="inline-flex items-center text-xs px-2.5 py-1.5 rounded-lg font-semibold" style={{ background: GOLD, color: NAVY }}>{pdfLoading ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}PDF</button>
-                  <button onClick={save} disabled={saving} className="inline-flex items-center text-xs px-2.5 py-1.5 rounded-lg font-semibold" style={{ background: NAVY, color: GOLD }}>{saving ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}Sauver</button>
+                  <button onClick={save} disabled={saving} className="inline-flex items-center text-xs px-2.5 py-1.5 rounded-lg font-semibold" style={{ background: NAVY, color: GOLD }}>{saving ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}{t('jurs.save', locale)}</button>
                 </div>)}
               </div>
               <div className="p-5">
-                {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-3"><strong>Erreur :</strong> {error}</div>}
-                {saved && <div className="p-2.5 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700 flex items-center gap-2 mb-3"><CheckCircle className="w-4 h-4" /> Document enregistré dans l'historique de la société.</div>}
-                {!result && !loading && !error && <div className="text-center py-20 text-gray-400"><FileText className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="text-sm">Choisissez un type de document et générez-le.</p></div>}
+                {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-3"><strong>{t('jurs.errorLabel', locale)}</strong> {error}</div>}
+                {saved && <div className="p-2.5 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700 flex items-center gap-2 mb-3"><CheckCircle className="w-4 h-4" /> {t('jurs.actes.saved', locale)}</div>}
+                {!result && !loading && !error && <div className="text-center py-20 text-gray-400"><FileText className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="text-sm">{t('jurs.actes.previewEmpty', locale)}</p></div>}
                 {loading && !result && <div className="space-y-2 animate-pulse">{Array.from({ length: 9 }).map((_, i) => <div key={i} className="h-3 rounded bg-gray-100" style={{ width: `${65 + (i % 4) * 9}%` }} />)}</div>}
                 {result && (
                   <div className="max-h-[68vh] overflow-y-auto pr-1">
                     <StructuredDoc text={result} />
                     {sources.length > 0 && (
                       <div className="mt-5 pt-3 border-t border-gray-100">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5"><Scale className="w-3.5 h-3.5" style={{ color: GOLD }} /> Sources juridiques citées</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5"><Scale className="w-3.5 h-3.5" style={{ color: GOLD }} /> {t('jurs.sourcesTitle', locale)}</p>
                         <ul className="space-y-1">{sources.map((src) => <li key={src.ref} className="text-[11px] text-gray-500"><span className="font-mono text-gray-400">[{src.ref}]</span> <span className="font-medium" style={{ color: NAVY }}>{src.source} {src.reference}</span> — {src.titre}</li>)}</ul>
                       </div>
                     )}

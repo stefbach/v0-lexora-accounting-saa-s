@@ -73,12 +73,14 @@ interface Alert {
   details?: any
 }
 
-const FREQ_LABELS: Record<string, { label: string; color: string }> = {
-  mensuel: { label: "Mensuel", color: "bg-blue-100 text-blue-700 border-blue-300" },
-  trimestriel: { label: "Trimestriel", color: "bg-cyan-100 text-cyan-700 border-cyan-300" },
-  annuel: { label: "Annuel", color: "bg-purple-100 text-purple-700 border-purple-300" },
-  irregulier: { label: "Irrégulier", color: "bg-slate-100 text-slate-700 border-slate-300" },
-  unique: { label: "Unique", color: "bg-zinc-100 text-zinc-700 border-zinc-300" },
+function getFreqLabels(locale: Locale): Record<string, { label: string; color: string }> {
+  return {
+    mensuel: { label: t('cfac.freq_monthly', locale), color: "bg-blue-100 text-blue-700 border-blue-300" },
+    trimestriel: { label: t('cfac.freq_quarterly', locale), color: "bg-cyan-100 text-cyan-700 border-cyan-300" },
+    annuel: { label: t('cfac.freq_yearly', locale), color: "bg-purple-100 text-purple-700 border-purple-300" },
+    irregulier: { label: t('cfac.freq_irregular', locale), color: "bg-slate-100 text-slate-700 border-slate-300" },
+    unique: { label: t('cfac.freq_unique', locale), color: "bg-zinc-100 text-zinc-700 border-zinc-300" },
+  }
 }
 
 function fmt(n: number): string {
@@ -167,7 +169,7 @@ export default function LexFacturesPage() {
         persistResolved(n)
         return n
       })
-      showToast("Alerte marquée comme résolue")
+      showToast(t('cfac.alert_marked_resolved', locale))
     },
     [persistResolved]
   )
@@ -197,12 +199,12 @@ export default function LexFacturesPage() {
         })
         const d = await res.json()
         if (!res.ok) {
-          showToast(d?.error || "Erreur action", "error")
+          showToast(d?.error || t('cfac.action_error', locale), "error")
           return false
         }
         return true
       } catch (e: any) {
-        showToast(e?.message || "Erreur réseau", "error")
+        showToast(e?.message || t('cfac.network_error', locale), "error")
         return false
       } finally {
         setActing(null)
@@ -217,10 +219,10 @@ export default function LexFacturesPage() {
         action: "tag_penalty",
         facture_id: factureId,
         montant_penalty: montantSupp,
-        raison: `Pénalité confirmée — ${tiers}`,
+        raison: t('cfac.penalty_confirmed', locale).replace('{tiers}', tiers),
       })
       if (ok) {
-        showToast("Pénalité taguée sur la facture")
+        showToast(t('cfac.penalty_tagged', locale))
         setTaggedFactures((prev) => {
           const n = new Set(prev)
           n.add(factureId)
@@ -240,7 +242,7 @@ export default function LexFacturesPage() {
         alert_code: code,
       })
       if (ok) {
-        showToast("Facture marquée comme normale")
+        showToast(t('cfac.invoice_marked_normal', locale))
         setTaggedFactures((prev) => {
           const n = new Set(prev)
           n.add(factureId)
@@ -263,13 +265,13 @@ export default function LexFacturesPage() {
       })
       const d = await res.json()
       if (!res.ok) {
-        showToast(d?.error || "Erreur Lex Factures", "error")
+        showToast(d?.error || t('cfac.lex_error', locale), "error")
         return
       }
       setResult(d)
-      showToast(`Lex Factures : score ${d.score}/100 — ${d.alerts.length} alerte(s)`)
+      showToast(t('cfac.lex_score_toast', locale).replace('{score}', String(d.score)).replace('{n}', String(d.alerts.length)))
     } catch (e: any) {
-      showToast(e?.message || "Erreur réseau", "error")
+      showToast(e?.message || t('cfac.network_error', locale), "error")
     } finally {
       setAnalyzing(false)
     }
@@ -475,6 +477,7 @@ export default function LexFacturesPage() {
 }
 
 function ScoreCard({ result }: { result: any }) {
+  const locale = getLocale()
   const score = result.score || 0
   const severity = result.severity
   const summary = result.summary || {}
@@ -494,19 +497,20 @@ function ScoreCard({ result }: { result: any }) {
             <Bot className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="font-bold">Lex Factures — Analyse</h3>
+            <h3 className="font-bold">{t('cfac.lex_analysis', locale)}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {summary.total_factures} factures · {summary.total_tiers} tiers ·{" "}
-              {summary.tiers_avec_recurrence} récurrent
-              {summary.tiers_avec_recurrence > 1 ? "s" : ""} · {summary.total_periodes_manquantes}{" "}
-              période(s) manquante(s) · {summary.total_factures_supplement} facture(s) avec
-              supplément
+              {t('cfac.summary_line', locale)
+                .replace('{factures}', String(summary.total_factures))
+                .replace('{tiers}', String(summary.total_tiers))
+                .replace('{recur}', String(summary.tiers_avec_recurrence))
+                .replace('{missing}', String(summary.total_periodes_manquantes))
+                .replace('{supp}', String(summary.total_factures_supplement))}
             </p>
           </div>
         </div>
         <div className="text-right">
           <div className={`text-4xl font-bold ${scoreColor}`}>{score}</div>
-          <div className="text-xs text-muted-foreground">/100 santé</div>
+          <div className="text-xs text-muted-foreground">{t('cfac.health_100', locale)}</div>
         </div>
       </div>
     </div>
@@ -540,13 +544,14 @@ function AlertsPanel({
   onConfirmPenalty: (factureId: string, montantSupp: number, tiers: string) => void
   onConfirmNormal: (factureId: string, code: string) => void
 }) {
+  const locale = getLocale()
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-600" />
-            Alertes ({alerts.length})
+            {t('cfac.alerts', locale)} ({alerts.length})
           </span>
           {resolvedCount > 0 && (
             <Button
@@ -558,12 +563,12 @@ function AlertsPanel({
               {showResolved ? (
                 <>
                   <EyeOff className="h-3.5 w-3.5 mr-1" />
-                  Masquer résolues ({resolvedCount})
+                  {t('cfac.hide_resolved', locale)} ({resolvedCount})
                 </>
               ) : (
                 <>
                   <Eye className="h-3.5 w-3.5 mr-1" />
-                  Voir résolues ({resolvedCount})
+                  {t('cfac.show_resolved', locale)} ({resolvedCount})
                 </>
               )}
             </Button>
@@ -573,7 +578,7 @@ function AlertsPanel({
       <CardContent className="space-y-2">
         {alerts.length === 0 && resolvedCount > 0 && (
           <p className="text-sm text-center py-4 text-muted-foreground">
-            Toutes les alertes ont été traitées
+            {t('cfac.all_alerts_handled', locale)}
           </p>
         )}
         {alerts.map((a, i) => {
@@ -612,11 +617,11 @@ function AlertsPanel({
                         : "bg-rose-50 text-rose-700 border-rose-300"
                     }`}
                   >
-                    {a.type === "client" ? "Client" : "Fournisseur"}
+                    {a.type === "client" ? t('cfac.client', locale) : t('cfac.supplier', locale)}
                   </Badge>
                   {isResolved && (
                     <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300">
-                      Résolue
+                      {t('cfac.resolved', locale)}
                     </Badge>
                   )}
                 </div>
@@ -639,12 +644,12 @@ function AlertsPanel({
                               {f.numero || f.id.slice(0, 8)}
                               {tagged && (
                                 <Badge className="ml-2 text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300">
-                                  taguée
+                                  {t('cfac.tagged', locale)}
                                 </Badge>
                               )}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                              {formatDate(f.date)} — supplément ~{supplement.toFixed(2)}
+                              {formatDate(f.date)} — {t('cfac.supplement_approx', locale)}{supplement.toFixed(2)}
                             </p>
                           </div>
                           {!tagged && (
@@ -662,7 +667,7 @@ function AlertsPanel({
                                 ) : (
                                   <AlertCircle className="h-3 w-3 mr-1" />
                                 )}
-                                Pénalité
+                                {t('cfac.penalty', locale)}
                               </Button>
                               <Button
                                 size="sm"
@@ -672,7 +677,7 @@ function AlertsPanel({
                                 onClick={() => onConfirmNormal(f.id, a.code)}
                               >
                                 <Check className="h-3 w-3 mr-1" />
-                                Normal
+                                {t('cfac.normal', locale)}
                               </Button>
                             </div>
                           )}
@@ -696,7 +701,7 @@ function AlertsPanel({
                           className="h-7 text-xs"
                         >
                           <FileText className="h-3 w-3 mr-1" />
-                          Créer la facture manquante
+                          {t('cfac.create_missing_invoice', locale)}
                         </Button>
                       </Link>
                     )}
@@ -705,7 +710,7 @@ function AlertsPanel({
                     >
                       <Button size="sm" variant="outline" className="h-7 text-xs">
                         <ArrowRight className="h-3 w-3 mr-1" />
-                        Voir factures du tiers
+                        {t('cfac.view_tiers_invoices', locale)}
                       </Button>
                     </Link>
                     <Button
@@ -715,7 +720,7 @@ function AlertsPanel({
                       onClick={() => onMarkResolved(a)}
                     >
                       <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Marquer résolu
+                      {t('cfac.mark_resolved', locale)}
                     </Button>
                   </div>
                 )}
@@ -729,7 +734,7 @@ function AlertsPanel({
                       onClick={() => onUnmarkResolved(a)}
                     >
                       <Eye className="h-3 w-3 mr-1" />
-                      Ré-afficher
+                      {t('cfac.reshow', locale)}
                     </Button>
                   </div>
                 )}
@@ -743,6 +748,8 @@ function AlertsPanel({
 }
 
 function TiersRow({ a }: { a: TiersAnalysis }) {
+  const locale = getLocale()
+  const FREQ_LABELS = getFreqLabels(locale)
   const [expanded, setExpanded] = useState(false)
   const freq = FREQ_LABELS[a.frequence_detectee] || FREQ_LABELS.unique
   const isClient = a.type === "client"
@@ -769,32 +776,32 @@ function TiersRow({ a }: { a: TiersAnalysis }) {
                   : "bg-rose-50 text-rose-700 border-rose-300"
               }`}
             >
-              {isClient ? "Client" : "Fournisseur"}
+              {isClient ? t('cfac.client', locale) : t('cfac.supplier', locale)}
             </Badge>
             <Badge className={`text-[10px] border ${freq.color}`}>{freq.label}</Badge>
             <span className="text-xs text-muted-foreground">
-              {a.nb_factures} facture{a.nb_factures > 1 ? "s" : ""}
+              {a.nb_factures} {a.nb_factures > 1 ? t('cfac.invoice_plural', locale) : t('cfac.invoice_singular', locale)}
             </span>
             {a.periodes_manquantes.length > 0 && (
               <Badge className="text-[10px] bg-red-100 text-red-700 border-red-300">
                 <Calendar className="h-3 w-3 mr-1" />
-                {a.periodes_manquantes.length} manquante{a.periodes_manquantes.length > 1 ? "s" : ""}
+                {a.periodes_manquantes.length} {a.periodes_manquantes.length > 1 ? t('cfac.missing_plural', locale) : t('cfac.missing_singular', locale)}
               </Badge>
             )}
             {a.factures_avec_supplement.length > 0 && (
               <Badge className="text-[10px] bg-amber-100 text-amber-700 border-amber-300">
-                {a.factures_avec_supplement.length} avec suppl.
+                {a.factures_avec_supplement.length} {t('cfac.with_suppl', locale)}
               </Badge>
             )}
           </div>
           <p className="text-sm mt-1 break-words font-medium">{a.tiers}</p>
           <p className="text-[11px] text-muted-foreground">
             {formatDate(a.date_debut)} → {formatDate(a.date_fin)}
-            {a.intervalle_median_jours > 0 && ` · cadence ~${a.intervalle_median_jours}j`}
+            {a.intervalle_median_jours > 0 && ` · ${t('cfac.cadence_approx', locale)}${a.intervalle_median_jours}j`}
           </p>
         </div>
         <div className="text-right flex-shrink-0 text-xs">
-          <p className="text-[10px] text-muted-foreground uppercase">Médian</p>
+          <p className="text-[10px] text-muted-foreground uppercase">{t('cfac.median', locale)}</p>
           <p className="font-mono font-medium">
             {fmt(a.montant_median)} {a.devise}
           </p>
@@ -804,7 +811,7 @@ function TiersRow({ a }: { a: TiersAnalysis }) {
                 a.montant_ecart_max_pct > 20 ? "text-red-700" : "text-amber-700"
               }`}
             >
-              écart max +{a.montant_ecart_max_pct.toFixed(1)}%
+              {t('cfac.max_gap', locale)}{a.montant_ecart_max_pct.toFixed(1)}%
             </p>
           )}
         </div>
@@ -814,7 +821,7 @@ function TiersRow({ a }: { a: TiersAnalysis }) {
           {a.periodes_manquantes.length > 0 && (
             <div>
               <p className="font-medium text-red-900 mb-1">
-                Périodes manquantes ({a.periodes_manquantes.length})
+                {t('cfac.missing_periods', locale)} ({a.periodes_manquantes.length})
               </p>
               <div className="flex flex-wrap gap-1">
                 {a.periodes_manquantes.map((p) => (
@@ -828,7 +835,7 @@ function TiersRow({ a }: { a: TiersAnalysis }) {
           {a.factures_avec_supplement.length > 0 && (
             <div>
               <p className="font-medium text-amber-900 mb-1">
-                Factures avec montant supérieur au médian ({a.factures_avec_supplement.length})
+                {t('cfac.invoices_above_median', locale)} ({a.factures_avec_supplement.length})
               </p>
               <div className="rounded border bg-white divide-y">
                 {a.factures_avec_supplement.map((f) => (
@@ -848,7 +855,7 @@ function TiersRow({ a }: { a: TiersAnalysis }) {
                           f.ecart_pct > 20 ? "text-red-700" : "text-amber-700"
                         }`}
                       >
-                        +{f.ecart_pct.toFixed(1)}% (médian {fmt(f.montant_attendu)})
+                        +{f.ecart_pct.toFixed(1)}% ({t('cfac.median_lc', locale)} {fmt(f.montant_attendu)})
                       </p>
                     </div>
                   </div>
@@ -860,7 +867,7 @@ function TiersRow({ a }: { a: TiersAnalysis }) {
             href={`/client/factures?search=${encodeURIComponent(a.tiers.slice(0, 30))}`}
             className="text-emerald-700 hover:underline inline-flex items-center gap-1"
           >
-            Voir les factures de ce tiers <ArrowRight className="h-3 w-3" />
+            {t('cfac.view_this_tiers_invoices', locale)} <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
       )}

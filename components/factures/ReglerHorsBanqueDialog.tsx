@@ -28,6 +28,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Loader2, Plus, X } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 export interface FactureAReglage {
   id: string
@@ -54,14 +55,15 @@ interface Props {
   onSuccess?: (info: { lettre: string; nbFactures: number; montantTotal: number }) => void
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  associe: "Associé",
-  societe_liee: "Société liée",
-  exploitant: "Exploitant",
-  tiers: "Tiers",
-}
-
 export function ReglerHorsBanqueDialog({ open, onClose, societeId, factures, onSuccess }: Props) {
+  const locale = getLocale()
+  const typeLabel = (type: string) =>
+    ({
+      associe: t('cdlg.rhb.type.associe', locale),
+      societe_liee: t('cdlg.rhb.type.societe_liee', locale),
+      exploitant: t('cdlg.rhb.type.exploitant', locale),
+      tiers: t('cdlg.rhb.type.tiers', locale),
+    } as Record<string, string>)[type] || type
   const [comptes, setComptes] = useState<CompteTiers[]>([])
   const [loadingComptes, setLoadingComptes] = useState(false)
   const [selectedCompteId, setSelectedCompteId] = useState<string>("")
@@ -102,9 +104,9 @@ export function ReglerHorsBanqueDialog({ open, onClose, societeId, factures, onS
 
   const handleSubmit = async () => {
     setError(null)
-    if (!selectedCompteId) return setError("Sélectionnez un compte de paiement")
-    if (!datePaiement) return setError("Date de paiement requise")
-    if (factures.length === 0) return setError("Aucune facture à régler")
+    if (!selectedCompteId) return setError(t('cdlg.rhb.err_select_compte', locale))
+    if (!datePaiement) return setError(t('cdlg.rhb.err_date', locale))
+    if (factures.length === 0) return setError(t('cdlg.rhb.err_no_facture', locale))
     setSubmitting(true)
     try {
       const res = await fetch("/api/comptable/factures/regler-hors-banque", {
@@ -120,7 +122,7 @@ export function ReglerHorsBanqueDialog({ open, onClose, societeId, factures, onS
       })
       const d = await res.json()
       if (!res.ok) {
-        setError(d?.error || `Erreur HTTP ${res.status}`)
+        setError(d?.error || `${t('cdlg.rhb.err_http', locale)} ${res.status}`)
         return
       }
       onSuccess?.({
@@ -130,7 +132,7 @@ export function ReglerHorsBanqueDialog({ open, onClose, societeId, factures, onS
       })
       onClose()
     } catch (e: any) {
-      setError(e?.message || "Erreur réseau")
+      setError(e?.message || t('cdlg.rhb.err_network', locale))
     } finally {
       setSubmitting(false)
     }
@@ -140,10 +142,9 @@ export function ReglerHorsBanqueDialog({ open, onClose, societeId, factures, onS
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Régler {factures.length} facture{factures.length > 1 ? "s" : ""} hors banque</DialogTitle>
+          <DialogTitle>{t('cdlg.rhb.title_1', locale)} {factures.length} {factures.length > 1 ? t('cdlg.rhb.title_invoices', locale) : t('cdlg.rhb.title_invoice', locale)} {t('cdlg.rhb.title_2', locale)}</DialogTitle>
           <DialogDescription>
-            Imputer le règlement sur un compte de tiers (associé, société liée, exploitant…).
-            Aucun mouvement bancaire ne sera créé.
+            {t('cdlg.rhb.subtitle', locale)}
           </DialogDescription>
         </DialogHeader>
 
@@ -151,7 +152,7 @@ export function ReglerHorsBanqueDialog({ open, onClose, societeId, factures, onS
           {/* Récap factures */}
           <div className="rounded-lg border bg-gray-50 p-3 max-h-48 overflow-y-auto">
             <div className="text-xs font-medium text-gray-600 mb-2">
-              Factures à régler ({factures.length}) — Total : {totalAregler.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MUR
+              {t('cdlg.rhb.recap_1', locale)} ({factures.length}) — {t('cdlg.rhb.recap_total', locale)} {totalAregler.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MUR
             </div>
             <ul className="space-y-1 text-sm">
               {factures.map(f => (
@@ -168,29 +169,29 @@ export function ReglerHorsBanqueDialog({ open, onClose, societeId, factures, onS
 
           {/* Sélecteur compte tiers */}
           <div className="space-y-2">
-            <Label htmlFor="compte_tiers">Compte de paiement</Label>
+            <Label htmlFor="compte_tiers">{t('cdlg.rhb.compte_label', locale)}</Label>
             <div className="flex gap-2">
               <Select value={selectedCompteId} onValueChange={setSelectedCompteId} disabled={loadingComptes}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder={loadingComptes ? "Chargement…" : "Choisir un compte tiers"} />
+                  <SelectValue placeholder={loadingComptes ? t('cdlg.rhb.loading', locale) : t('cdlg.rhb.choose_compte', locale)} />
                 </SelectTrigger>
                 <SelectContent>
                   {comptes.length === 0 && !loadingComptes ? (
                     <div className="px-3 py-6 text-center text-sm text-gray-500">
-                      Aucun compte tiers configuré.<br />Cliquez sur + pour en créer un.
+                      {t('cdlg.rhb.no_compte_1', locale)}<br />{t('cdlg.rhb.no_compte_2', locale)}
                     </div>
                   ) : (
                     comptes.map(c => (
                       <SelectItem key={c.id} value={c.id}>
                         <span className="font-mono mr-2 text-xs text-gray-500">{c.code_compte}</span>
                         {c.nom_compte}
-                        <span className="ml-2 text-xs text-gray-400">({TYPE_LABELS[c.type] || c.type})</span>
+                        <span className="ml-2 text-xs text-gray-400">({typeLabel(c.type)})</span>
                       </SelectItem>
                     ))
                   )}
                 </SelectContent>
               </Select>
-              <Button type="button" variant="outline" size="icon" onClick={() => setShowCreate(true)} title="Nouveau compte tiers">
+              <Button type="button" variant="outline" size="icon" onClick={() => setShowCreate(true)} title={t('cdlg.rhb.new_compte_tooltip', locale)}>
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
@@ -198,12 +199,12 @@ export function ReglerHorsBanqueDialog({ open, onClose, societeId, factures, onS
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="date_paiement">Date du règlement</Label>
+              <Label htmlFor="date_paiement">{t('cdlg.rhb.date_label', locale)}</Label>
               <Input id="date_paiement" type="date" value={datePaiement} onChange={e => setDatePaiement(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="libelle">Libellé (optionnel)</Label>
-              <Input id="libelle" value={libelle} onChange={e => setLibelle(e.target.value)} placeholder="ex: Avance Stéphane mai 2026" />
+              <Label htmlFor="libelle">{t('cdlg.rhb.libelle_label', locale)}</Label>
+              <Input id="libelle" value={libelle} onChange={e => setLibelle(e.target.value)} placeholder={t('cdlg.rhb.libelle_placeholder', locale)} />
             </div>
           </div>
 
@@ -216,10 +217,10 @@ export function ReglerHorsBanqueDialog({ open, onClose, societeId, factures, onS
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={submitting}>Annuler</Button>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>{t('cdlg.rhb.cancel', locale)}</Button>
           <Button onClick={handleSubmit} disabled={submitting || !selectedCompteId} className="bg-[#0B0F2E] text-white hover:bg-[#2a3a5a]">
             {submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-            Confirmer le règlement
+            {t('cdlg.rhb.confirm', locale)}
           </Button>
         </DialogFooter>
 
@@ -253,6 +254,7 @@ function CreateCompteTiersDialog({
   const [type, setType] = useState<string>("associe")
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const locale = getLocale()
 
   useEffect(() => {
     if (open) { setCode(""); setNom(""); setType("associe"); setErr(null) }
@@ -260,8 +262,8 @@ function CreateCompteTiersDialog({
 
   const handleCreate = async () => {
     setErr(null)
-    if (!/^[0-9]{3,8}$/.test(code)) return setErr("Code compte = 3 à 8 chiffres (ex: 455, 4551, 451)")
-    if (!nom.trim()) return setErr("Nom requis (ex: CCA Stéphane Bach)")
+    if (!/^[0-9]{3,8}$/.test(code)) return setErr(t('cdlg.rhb.create_err_code', locale))
+    if (!nom.trim()) return setErr(t('cdlg.rhb.create_err_nom', locale))
     setSaving(true)
     try {
       const res = await fetch("/api/comptable/comptes-paiement-tiers", {
@@ -270,10 +272,10 @@ function CreateCompteTiersDialog({
         body: JSON.stringify({ societe_id: societeId, code_compte: code, nom_compte: nom, type }),
       })
       const d = await res.json()
-      if (!res.ok) return setErr(d?.error || "Erreur création")
+      if (!res.ok) return setErr(d?.error || t('cdlg.rhb.create_err_create', locale))
       onCreated(d.compte)
     } catch (e: any) {
-      setErr(e?.message || "Erreur réseau")
+      setErr(e?.message || t('cdlg.rhb.err_network', locale))
     } finally {
       setSaving(false)
     }
@@ -283,39 +285,39 @@ function CreateCompteTiersDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Nouveau compte de paiement</DialogTitle>
-          <DialogDescription>Ajouter un compte tiers à la whitelist de cette société.</DialogDescription>
+          <DialogTitle>{t('cdlg.rhb.create_title', locale)}</DialogTitle>
+          <DialogDescription>{t('cdlg.rhb.create_subtitle', locale)}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label>Type</Label>
+            <Label>{t('cdlg.rhb.create_type', locale)}</Label>
             <Select value={type} onValueChange={setType}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="associe">Associé</SelectItem>
-                <SelectItem value="societe_liee">Société liée du groupe</SelectItem>
-                <SelectItem value="exploitant">Exploitant (carte perso)</SelectItem>
-                <SelectItem value="tiers">Autre tiers</SelectItem>
+                <SelectItem value="associe">{t('cdlg.rhb.create_type_associe', locale)}</SelectItem>
+                <SelectItem value="societe_liee">{t('cdlg.rhb.create_type_societe_liee', locale)}</SelectItem>
+                <SelectItem value="exploitant">{t('cdlg.rhb.create_type_exploitant', locale)}</SelectItem>
+                <SelectItem value="tiers">{t('cdlg.rhb.create_type_tiers', locale)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>Code compte (PCG)</Label>
-            <Input value={code} onChange={e => setCode(e.target.value)} placeholder="ex: 455, 4551, 451, 108" />
+            <Label>{t('cdlg.rhb.create_code', locale)}</Label>
+            <Input value={code} onChange={e => setCode(e.target.value)} placeholder={t('cdlg.rhb.create_code_placeholder', locale)} />
           </div>
           <div className="space-y-1">
-            <Label>Libellé</Label>
-            <Input value={nom} onChange={e => setNom(e.target.value)} placeholder="ex: CCA Stéphane Bach" />
+            <Label>{t('cdlg.rhb.create_libelle', locale)}</Label>
+            <Input value={nom} onChange={e => setNom(e.target.value)} placeholder={t('cdlg.rhb.create_libelle_placeholder', locale)} />
           </div>
           {err && (
             <div className="rounded-md bg-red-50 border border-red-200 p-2 text-sm text-red-700">{err}</div>
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Annuler</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>{t('cdlg.rhb.create_cancel', locale)}</Button>
           <Button onClick={handleCreate} disabled={saving} className="bg-[#0B0F2E] text-white">
             {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-            Créer
+            {t('cdlg.rhb.create_btn', locale)}
           </Button>
         </DialogFooter>
       </DialogContent>

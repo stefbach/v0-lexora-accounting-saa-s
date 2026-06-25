@@ -328,10 +328,10 @@ export default function AdminDashboardPage() {
                           </div>
                           <div className="flex items-center gap-2 ml-3 shrink-0">
                             <Badge variant="outline" className="text-xs" style={{ borderColor: GOLD, color: NAVY }}>
-                              {c.nb_clients} client{c.nb_clients !== 1 ? 's' : ''}
+                              {c.nb_clients} {c.nb_clients !== 1 ? t('adm2.dash.clients_many', locale) : t('adm2.dash.clients_one', locale)}
                             </Badge>
                             <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                              {c.nb_documents} doc{c.nb_documents !== 1 ? 's' : ''}
+                              {c.nb_documents} {c.nb_documents !== 1 ? t('adm2.dash.docs_many', locale) : t('adm2.dash.docs', locale)}
                             </Badge>
                           </div>
                         </div>
@@ -385,10 +385,10 @@ export default function AdminDashboardPage() {
                           </div>
                           <div className="flex items-center gap-2 ml-3 shrink-0">
                             <Badge variant="outline" className="text-xs" style={{ borderColor: GOLD, color: NAVY }}>
-                              {c.nb_societes} societe{c.nb_societes !== 1 ? 's' : ''}
+                              {c.nb_societes} {c.nb_societes !== 1 ? t('adm2.dash.societes_many', locale) : t('adm2.dash.societes_one', locale)}
                             </Badge>
                             <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
-                              {c.nb_documents} doc{c.nb_documents !== 1 ? 's' : ''}
+                              {c.nb_documents} {c.nb_documents !== 1 ? t('adm2.dash.docs_many', locale) : t('adm2.dash.docs', locale)}
                             </Badge>
                           </div>
                         </div>

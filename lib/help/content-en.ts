@@ -458,30 +458,115 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
     title: 'Telegram bot permissions — Roles and capabilities',
     audience: 'client',
     intro:
-      "Configure who can use <b>@LexoraAgent_bot</b> and with which rights. You link employees (6-character code), set roles (Employee → Manager → HR → Accountant → Management), and refine capabilities. Full audit of every Telegram action.",
+      "This page governs <em>what the Lexora brain is allowed to do</em> when driven from Telegram. The bot <b>@LexoraAgent_bot</b> is one access point to the same engine as the web assistant (see <b>The Lexora assistant</b> and <b>The accounting agent</b>): it must therefore strictly frame who connects and within which scope. The model rests on the <b>principle of least privilege</b>: each user gets a role, and each role opens a precise set of capabilities. Every executed action is logged and auditable.",
     steps: [
-      { title: "1. Roles matrix", body: "<b>Employee</b>: see own payslips, clock in, request leave. <b>Manager</b>: + approve team leave. <b>HR</b>: + OT, bonuses, payroll. <b>Accountant</b>: + bank, invoices, MRA, journal entries. <b>Management</b>: EVERYTHING, including transfers, deletion, credentials." },
-      { title: "2. Members list", body: "<b>Members</b> table: users with a Lexora account linked to this company. Change role or customise capabilities (<b>Permissions</b> button)." },
-      { title: "3. HR employees not linked", body: "<b>HR employees</b> table: active employees without a Lexora account. Click <b>Generate code</b> to create account + Telegram code." },
-      { title: "4. Generate a code", body: "Choose role (default Employee), custom capabilities if needed. <b>Generate code</b> → 6-character code + link <code>t.me/LexoraAgent_bot?start=CODE</code> + ready-to-send message (WhatsApp, email, SMS).", warning: "Code expires after <b>15 minutes</b>. Otherwise regenerate." },
-      { title: "5. Employee activation", body: "They click the link or search the bot, type <b>/start CODE</b>. Instant activation. Bot greets by first name + announces role + suggests useful commands." },
-      { title: "6. Override capabilities", body: "<b>Permissions</b> button on a member → matrix of ~40 capabilities. Tick/untick finely. Override > default role." },
-      { title: "7. Audit", body: "Every action tracked in <code>telegram_actions</code>: who, when, what, amount. Column <em>Audit (30 days)</em>. CSV export for external audit." },
-      { title: "8. Revoke", body: "<b>Revoke</b> button on a member: token invalidated immediately. Useful on departures." },
+      { title: "1. Understand the role hierarchy", body: "Roles are ranked by increasing level: <b>Employee</b> (view own payslips, clock in, request leave) → <b>Manager</b> (+ approve team leave) → <b>HR</b> (+ overtime, bonuses, payroll) → <b>Accountant</b> (+ bank, invoices, MRA, journal entries) → <b>Management</b> (full scope, including transfers and deletions). A role can never grant another a level higher than its own." },
+      { title: "2. Who can configure", body: "Only high-level roles (Accountant, Management, company admin) can generate codes, change roles or revoke access. This is deliberate: delegating rights is itself a sensitive right." },
+      { title: "3. Members list", body: "The <b>Members</b> table lists users with a Lexora account linked to this company. From there you change a member's role or finely customise their capabilities via the <b>Permissions</b> button." },
+      { title: "4. HR employees not linked", body: "The <b>HR employees</b> table lists active staff without a Lexora account yet. Click <b>Generate code</b> to create their account and Telegram pairing code in one step." },
+      { title: "5. Generate a pairing code", body: "Choose the role (Employee by default) and, if needed, custom capabilities. Lexora produces a 6-character code, a <code>t.me/LexoraAgent_bot?start=CODE</code> link and a ready-to-send message (WhatsApp, email, SMS).", warning: "The code expires after <b>15 minutes</b>. Beyond that, regenerate it — an expired code links no account." },
+      { title: "6. Activation on the user side", body: "The user opens the link or searches the bot, then sends <b>/start CODE</b>. The account is paired instantly: their Telegram <code>chat_id</code> is bound to their Lexora <code>user_id</code> and the company. The bot greets them by first name and reminds them of their role." },
+      { title: "7. Fine-tune capabilities (override)", body: "The <b>Permissions</b> button opens a matrix of around forty capabilities. You can enable or remove a specific capability beyond the default role. The individual override takes precedence over the role — useful to open a targeted action without promoting the whole role." },
+      { title: "8. Audit of every action", body: "Any action taken through the bot is logged in <code>telegram_actions</code>: who, when, what, amount if any. The <em>Audit (30 days)</em> column shows recent history, exportable to CSV for an external review." },
+      { title: "9. Revoke an access", body: "The <b>Revoke</b> button immediately invalidates a member's token. Trigger it as soon as a collaborator leaves or whenever a code's confidentiality is in doubt." },
     ],
     pitfalls: [
-      "Missing email on the employee: cannot generate code.",
-      "Several employees with the same email: only one link possible.",
-      "Granting Management to a junior: risks (MRA submissions, MUR 1 M transfers).",
-      "Custom capabilities forgotten after role change: review after every change.",
-      "Code shared to the wrong WhatsApp number: someone else links. Revoke immediately.",
+      "Missing email on the employee record → cannot generate a code.",
+      "Several employees sharing the same email → only one pairing possible.",
+      "Granting Management to a junior profile → real risk (MRA submissions, multi-million MUR transfers).",
+      "Custom capabilities forgotten after a role change → re-check the matrix after every change.",
+      "Code sent to the wrong number → a third party can pair. Revoke without delay.",
     ],
     tips: [
-      "Destructive actions → recap + <em>Confirm</em>/<em>Cancel</em> buttons before execution.",
-      "Bot uses first name and role naturally in replies.",
-      "Practice: a collaborator can be linked to several client companies.",
-      "Enable <b>four-eyes validation</b> for transfers > MUR 500,000.",
-      "Multinationals: integrate SAML SSO (Settings → SSO) to manage roles centrally.",
+      "Sensitive actions (journal entries, transfers, deletions) always trigger a recap and <em>Confirm</em> / <em>Cancel</em> buttons before execution: least privilege is paired with human confirmation.",
+      "Enable <b>four-eyes validation</b> for transfers above MUR 500,000.",
+      "Practices: a collaborator can be paired to several client companies with a distinct role per company.",
+      "To understand concretely what the bot executes, also read <b>Driving Lexora via Telegram</b> and <b>Telegram bot configuration</b>.",
+    ],
+  },
+
+  // ========================================================================
+  // LEXORA BRAIN — ASSISTANT / CHATBOT
+  // ========================================================================
+  '/client/assistant': {
+    title: 'The Lexora assistant — The conversational brain',
+    audience: 'all',
+    intro:
+      "The Lexora assistant is the platform's <b>conversational brain</b>: an AI collaborator — a senior Mauritian accountant, HR and tax expert — that you query in natural language. It runs on a Claude model coupled with Lexora's internal tools, which lets it not only answer but <em>consult your real data</em> (invoices, balances, ledger, leave, MRA compliance) to produce reliable analysis and, on request, prepare documents. It is the same intelligence found in <b>The accounting agent</b> and in <b>Driving Lexora via Telegram</b> — here within a chat interface.",
+    steps: [
+      { title: "1. Ask your question in plain English", body: "Write as you would to a colleague: \"what is my VAT balance this month?\", \"summarise my cash position\", \"which WRA rules apply to a dismissal?\". No syntax to learn — the assistant understands intent." },
+      { title: "2. The assistant consults your data", body: "To answer, the brain calls <em>read</em> tools on your active company: invoice list, an account balance, the ledger, payslips, leave balance, deadlines and MRA compliance. The reply is grounded in your real figures, not generalities." },
+      { title: "3. Get analysis and explanations", body: "Beyond figures, the assistant explains: why VAT is due, how a net is computed from a gross, what a Mauritian tax or labour obligation requires. Ideal for a non-accountant director as well as a busy professional." },
+      { title: "4. Ask it to prepare a document or an action", body: "You can go further: \"prepare an invoice for client Dupont\", \"allocate this advance to invoice FA-2026-012\". The assistant then proposes the action and waits for your explicit validation before any write (see <b>The accounting agent</b> for the guardrail detail)." },
+      { title: "5. Continuity across channels", body: "Your exchanges are remembered. The brain can recall what was said on another channel (web or Telegram), so the conversation stays coherent wherever you resume." },
+    ],
+    pitfalls: [
+      "The assistant is support, not a signatory: <b>human verification is mandatory</b> before any official filing or payment.",
+      "An ambiguous question yields an approximate answer — specify the period, company or counterparty.",
+      "Always check which company is active: displayed figures concern that company only.",
+      "The AI can err on an edge legal case: for a sensitive point, have it confirmed by your accountant or an advisor.",
+    ],
+    tips: [
+      "Confidentiality: your questions and data stay within your Lexora tenant and serve to answer within your scope, not to train public models.",
+      "For deeper accounting automation (invoice extraction, journal entries, reconciliation), switch to <b>The accounting agent</b>.",
+      "To drive the same brain from your phone, see <b>Driving Lexora via Telegram</b> and <b>Telegram bot configuration</b>.",
+    ],
+  },
+
+  // ========================================================================
+  // LEXORA BRAIN — AUTONOMOUS ACCOUNTING AGENT
+  // ========================================================================
+  '/client/agent-comptable': {
+    title: 'The accounting agent — The brain that acts',
+    audience: 'all',
+    intro:
+      "The accounting agent is the <em>operational</em> facet of the Lexora brain: where the assistant answers and advises, the agent <b>executes accounting tasks</b> under control. It combines a Claude model with Lexora's internal tools in a reasoning loop: it analyses your request, consults the needed data, proposes a concrete action, then executes it only after your confirmation. It is a supervised autonomous collaborator, not an autopilot.",
+    steps: [
+      { title: "1. What it automates", body: "Invoice extraction (OCR), posting and reclassifying journal entries, letterage, recording payments, launching automatic bank reconciliation, closing analysis, deadline alerts. All these repetitive tasks it handles from a natural-language instruction." },
+      { title: "2. The read → propose → execute loop", body: "The agent distinguishes two tool families. <b>Read</b> tools (consult a balance, list entries) run freely. <b>Write</b> tools (create an entry, letterage, record a payment) never run alone: the agent prepares the action and submits it for validation." },
+      { title: "3. Human confirmation, the central guardrail", body: "Before any write, the agent shows a clear recap (what, on which accounts, what amount) with <em>Confirm</em> / <em>Cancel</em> buttons. Nothing is committed until you validate. This is the pivot of the collaboration: the AI does the work, the human keeps the decision." },
+      { title: "4. Collaboration with the human accountant", body: "The agent does not replace your accountant: it roughs out, prepares and proposes, while they validate and arbitrate complex cases. All entries stay traceable and auditable, like a manual entry." },
+      { title: "5. Scope and rights", body: "The agent acts within the active company's scope and according to the user's rights. Sensitive actions respect the role hierarchy: permissions are not bypassed by going through the agent." },
+    ],
+    pitfalls: [
+      "Never validate an entry without reading the recap: confirmation commits your books.",
+      "An imprecise instruction (\"post the entry\") may target the wrong account — give the counterparty, amount and document.",
+      "OCR on a blurry document stays imperfect: check the extracted amounts before posting.",
+      "The agent does not have the final tax word: a closing or a return must be reviewed by a professional.",
+    ],
+    tips: [
+      "For a simple question or analysis, the assistant suffices; switch to the agent when you want an action carried out.",
+      "Everything runs on the same intelligence: you can start a request on Telegram and finish it on the web (handoff link).",
+      "See also <b>The Lexora assistant</b>, <b>Driving Lexora via Telegram</b> and <b>Telegram bot permissions</b>.",
+    ],
+  },
+
+  // ========================================================================
+  // LEXORA BRAIN — TELEGRAM PILOTING
+  // ========================================================================
+  '/pilotage-telegram': {
+    title: 'Driving Lexora via Telegram — The pocket brain',
+    audience: 'all',
+    intro:
+      "Telegram turns Lexora into a <b>pocket collaborator</b>: the same brain (assistant + accounting agent) reachable from your phone, by chat or voice. Positioned as a genuine chief-of-staff, it covers personal productivity (calendar, emails, daily brief), operations (documents by photo) and finance (accounting, bank, invoices, HR, MRA). Messages are orchestrated in the background by N8N workflows that call the AI engine and Lexora tools.",
+    steps: [
+      { title: "1. Executive productivity", body: "Calendar and meetings via Google Calendar (slot suggestions, Meet invites, conflict handling), drafting emails in natural language or by dictation, and a <b>daily brief</b> each morning: today's agenda, tax deadlines, accounting anomalies, pending decisions." },
+      { title: "2. Documents by photo", body: "Snap a photo of an invoice or receipt: the bot ingests it, runs OCR and proposes creating the matching accounting record. The supporting document goes straight into your Lexora documents." },
+      { title: "3. Finance and operations in natural language", body: "Ask for a cash update, an invoice status, an employee's leave balance, MRA compliance, or trigger an accounting action. The bot mobilises the same tools as the web agent." },
+      { title: "4. Voice and plain language", body: "You can dictate: the voice note is transcribed, then handled like a text message. No technical command to memorise; a few system commands exist (/start, /society, /logout, /help) to manage the channel." },
+      { title: "5. Confirmation before any sensitive action", body: "As on the web, write actions (journal entry, transfer, deletion) trigger a recap and <em>Confirm</em> / <em>Cancel</em> buttons. Mobile piloting never relaxes the guardrails." },
+    ],
+    pitfalls: [
+      "The bot acts within your active company's scope: check which one is selected before an action.",
+      "A blurry photo degrades OCR: retake the shot if the extracted amounts look wrong.",
+      "The brief and alerts do not replace control: validate critical deadlines yourself.",
+      "Only drive from Telegram an account that is correctly paired and secured (see Bot configuration).",
+    ],
+    tips: [
+      "Security: the webhook is protected by a shared secret and sensitive actions travel through signed internal endpoints (HMAC-SHA256 + nonce, SEC-005). No unauthenticated message is executed.",
+      "Architecture: Telegram → Lexora webhook → N8N orchestration → AI engine (Claude models) + Lexora tools. Everything stays within your tenant.",
+      "To pair your account, see <b>Telegram bot configuration</b>; for per-user rights, see <b>Telegram bot permissions</b>.",
+      "On the web, the same brain lives in <b>The Lexora assistant</b> and <b>The accounting agent</b>.",
     ],
   },
 
@@ -1049,27 +1134,29 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
   // TELEGRAM CONFIG (personal)
   // ========================================================================
   '/client/telegram-config': {
-    title: 'Telegram configuration (personal)',
+    title: 'Telegram bot configuration (personal pairing)',
     audience: 'all',
     intro:
-      "Link your Lexora account to <b>@LexoraAgent_bot</b> on Telegram. Once linked, you can drive Lexora from your phone: create invoices, validate payroll, file VAT, check cash. Different from Bot Permissions which manages other users' rights — here it is YOUR personal link.",
+      "This page links <em>your</em> Lexora account to the Telegram channel <b>@LexoraAgent_bot</b>. Once paired, you reach the Lexora brain from your phone, in natural language: create an invoice, validate payroll, file VAT, check cash. Distinct from <b>Bot permissions</b>, which govern every user's rights: here it is only <em>your</em> personal link and how it is secured.",
     steps: [
-      { title: "1. Generate a code", body: "<b>Generate code</b>. 6-character code valid 15 min." },
-      { title: "2. Open Telegram", body: "On your phone, search <b>@LexoraAgent_bot</b> or use the provided link." },
-      { title: "3. Type /start CODE", body: "Start a conversation with the bot and send <b>/start ABCXYZ</b> (replace ABCXYZ with your code). Account linked." },
-      { title: "4. Test", body: "Send <em>hello</em>. Bot should greet you by first name + tell you how it can help per your role." },
-      { title: "5. Switch company", body: "If you manage several companies, the bot asks which to activate via <b>/society</b> or via menu." },
-      { title: "6. Unlink (optional)", body: "Unlink any time: <b>/logout</b> in chat or <b>Disconnect</b> button here." },
+      { title: "1. Generate your pairing code", body: "Click <b>Generate code</b>. Lexora produces a 6-character code, valid 15 minutes. This code binds your Lexora identity to a specific Telegram chat — it is strictly personal." },
+      { title: "2. Open the bot conversation", body: "On your phone, search <b>@LexoraAgent_bot</b> in Telegram or use the link shown on screen." },
+      { title: "3. Pair with /start CODE", body: "Send <b>/start ABCXYZ</b> (replace ABCXYZ with your code). Lexora checks the code, binds it to your Telegram <code>chat_id</code> and confirms pairing. Your role and capabilities are inherited from your account." },
+      { title: "4. Verify the pairing", body: "Send a simple <em>hello</em>. The bot should greet you by first name and tell you what it can do per your role. If so, the channel is operational." },
+      { title: "5. Select the active company", body: "If you manage several companies, the bot asks which one to activate — via <b>/society</b> or a menu. All following actions apply to the active company." },
+      { title: "6. Unlink if needed", body: "You can break the pairing any time: <b>/logout</b> in chat, or the <b>Disconnect</b> button on this page. The token is then invalidated." },
     ],
     pitfalls: [
-      "Expired code (> 15 min): regenerate.",
-      "Telegram number change: /logout on the old phone then reconnect with a new code.",
-      "Bot seems inactive after link: restart the conversation with /start (no code).",
+      "Expired code (beyond 15 minutes) → regenerate it, the old one links nothing.",
+      "Telegram number change: run /logout on the old device before re-pairing with a new code.",
+      "Bot inactive right after pairing: restart the conversation with /start (no code) to wake the channel.",
+      "Never share your code: anyone using it drives Lexora under your identity until revocation.",
     ],
     tips: [
-      "If managing several companies, /society lets you switch in one command.",
-      "Bot remembers your preferences (language, date format, default currency).",
-      "You can mute notifications by schedule (e.g. no message before 8am, no message after 8pm) via <em>memory_set</em>.",
+      "End-to-end security: the Telegram webhook is protected by a shared secret, and sensitive actions triggered from chat travel through signed internal endpoints (HMAC-SHA256 + anti-replay nonce, per SEC-005). No action runs on an unauthenticated message.",
+      "What travels: your messages, the attachments you send (invoice photos for OCR) and the brain's replies. Data stays within your Lexora tenant.",
+      "The bot remembers your preferences (language, date format, default currency) and you can mute notifications by time window.",
+      "For the capability detail and role assignment, see <b>Telegram bot permissions</b>; for everything the bot can do, see <b>Driving Lexora via Telegram</b>.",
     ],
   },
 
@@ -2986,6 +3073,402 @@ export const HELP_CONTENT_EN: Record<string, HelpEntry> = {
     tips: [
       "Lock only when all anomalies are at zero: it is the last barrier before accounting and the MRA.",
       "Keep a record of who validated and when: useful in case of audit or employee dispute.",
+    ],
+  },
+
+  // ========================================================================
+  // LEGAL — FULL WORKSPACE (Mauritian law firm)
+  // ========================================================================
+  '/juridique': {
+    title: "Legal workspace — Overview",
+    audience: 'all',
+    intro:
+      "Central legal cockpit of the firm: <b>matters</b> (active cases), <b>contracts</b> (drafting and lifecycle), <b>litigation</b> (disputes before Mauritian courts), <b>advisory</b> (legal opinions and HR/employment advice), <b>compliance</b> (regulatory obligations, KYC/AML) and <b>corporate secretarial</b> (company life under the Companies Act 2001). All law applicable in Mauritius lives here: Companies Act 2001, Workers Rights Act 2019, Mauritian Civil Code, FSC for GBCs.",
+    steps: [
+      { title: "1. Identify your need", body: "Managing a <b>case</b> (open matter with documents and deadlines) → <em>Matters</em>. Drafting or tracking a <b>contract</b> → <em>Contracts</em>. In a <b>dispute</b> → <em>Litigation</em>. A <b>legal question</b> → <em>Advisory</em>. Running the <b>life of a company</b> → <em>Corporate secretarial</em>." },
+      { title: "2. Dashboard", body: "The page shows <b>upcoming deadlines</b> (Annual Return, hearings, renewals), active matters by status and compliance alerts. Corporate deadlines (AGM, accounts filing) surface automatically." },
+      { title: "3. Department organisation", body: "Matters are split across legal departments (corporate, employment, litigation, advisory) with owners and access rights. See <em>Departments</em>." },
+      { title: "4. Links to other modules", body: "<b>HR advisory</b> connects to the HR module (dismissal, discipline); <b>GBC compliance</b> links to the FSC dashboard; <b>litigation provisions</b> feed the accounts (IAS 37)." },
+    ],
+    pitfalls: [
+      "Treating an employment dispute as a commercial one: the court differs (Industrial Court vs Supreme Court).",
+      "Missing a corporate deadline (Annual Return, AGM) → penalties and risk of strike-off by the Registrar.",
+      "Not documenting opinions given → loss of traceability if the firm's liability is challenged.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Filings, Annual Return, entity search." },
+      { label: "Supreme Court of Mauritius", url: "https://supremecourt.govmu.org", description: "Commercial Division, case law." },
+      { label: "Industrial Court", url: "https://industrialcourt.govmu.org", description: "Employment litigation." },
+    ],
+    tips: [
+      "Always start by qualifying the nature of the matter (corporate / employment / commercial): it drives procedure and jurisdiction.",
+      "Enable deadline alerts: corporate secretarial work runs on strict statutory dates.",
+    ],
+  },
+
+  '/juridique/dossiers': {
+    title: "Legal matters — Opening and tracking",
+    audience: 'all',
+    intro:
+      "Central management of legal matters: opening a file, progress tracking, documents, deadlines and statuses. Each matter gathers all elements of a case (corporate, contractual, litigation or advisory) with a time-stamped history for traceability.",
+    steps: [
+      { title: "1. Open a matter", body: "<b>New matter</b> button: enter the entity/client involved, the nature (corporate / employment / commercial / advisory), the owner and the department. A unique matter number is assigned." },
+      { title: "2. Add documents", body: "Upload constitutions, contracts, correspondence, formal notices, pleadings. Each document is dated and versioned. Confidentiality is enforced by the department's access rights." },
+      { title: "3. Set deadlines", body: "Enter key dates (hearing, filing, response deadline, limitation period). Lexora generates upstream alerts. Watch the <b>limitation periods</b> under the Mauritian Civil Code." },
+      { title: "4. Track the status", body: "Statuses: <em>Open → In progress → On hold → Closed</em>. Every change is logged. A closed matter remains viewable and archived." },
+      { title: "5. Link to other modules", body: "A litigation matter can generate a provision (IAS 37); an employment matter links to the HR module; a corporate matter to company acts." },
+    ],
+    pitfalls: [
+      "Opening a matter with no owner or department → nobody tracks the deadlines.",
+      "Forgetting to record a limitation date → time-barred action, right lost.",
+      "Unversioned documents: you no longer know which contract version prevails.",
+    ],
+    tips: [
+      "Name matters consistently (entity - nature - year) to find them fast.",
+      "Close matters properly: a file left 'In progress' distorts activity statistics.",
+    ],
+  },
+
+  '/juridique/contrats': {
+    title: "Contracts — Drafting and lifecycle",
+    audience: 'all',
+    intro:
+      "Drafting, negotiating, signing and archiving contracts: <b>commercial</b>, <b>lease</b>, <b>service/consultancy</b>, <b>NDA</b>, distribution agreements, etc. Mauritian contract law rests on the <b>Mauritian Civil Code</b> (general law of obligations) supplemented by special statutes. Lexora handles the full lifecycle: template → drafting → review → signature → archiving → renewal deadlines.",
+    steps: [
+      { title: "1. Choose the type", body: "Select a template: <em>commercial contract</em>, <em>lease</em> (commercial or residential), <em>service agreement</em>, <em>NDA / confidentiality agreement</em>. Each template embeds standard Mauritian-law clauses." },
+      { title: "2. Draft the key clauses", body: "Subject matter, price/consideration, term, termination conditions, governing law and <b>jurisdiction clause</b> (often the Mauritian courts), optional arbitration clause, force majeure, confidentiality, penalties." },
+      { title: "3. Check validity", body: "Civil Code requirements: consent, capacity, certain object, lawful cause. Verify the signatory's authority (mandate, board resolution for a company)." },
+      { title: "4. Signature", body: "Handwritten or electronic signature (the Electronic Transactions Act 2000 recognises electronic signatures in Mauritius). Keep the signed original." },
+      { title: "5. Archiving and deadlines", body: "Archive the signed contract and set key dates: expiry, renewal/termination notice, price review. Lexora alerts before the deadline." },
+    ],
+    pitfalls: [
+      "Omitting the jurisdiction and governing-law clauses → uncertainty in a dispute.",
+      "Signatory without authority (no board resolution) → contract not binding on the company.",
+      "Commercial lease without registration / stamp duty → evidential and tax difficulties.",
+      "Letting an automatic renewal slip through for lack of a notice alert.",
+    ],
+    externalLinks: [
+      { label: "Registrar-General's Department", url: "https://rgd.govmu.org", description: "Registration of deeds and stamp duty." },
+      { label: "Mauritius Laws (AGO)", url: "https://attorneygeneral.govmu.org", description: "Consolidated statutes." },
+    ],
+    tips: [
+      "Keep a library of approved standard clauses (see /juridique/documents).",
+      "For recurring contracts, standardise an in-house template rather than starting from a file received by email.",
+    ],
+  },
+
+  '/juridique/contentieux': {
+    title: "Litigation & disputes — Procedure and provisions",
+    audience: 'all',
+    intro:
+      "Tracking of disputes before Mauritian courts. <b>Industrial Court</b> for employment litigation (dismissal, wages, discrimination), <b>Commercial Division of the Supreme Court</b> for commercial and corporate disputes, ordinary courts for the rest. Lexora tracks procedure, hearing deadlines and computes <b>litigation provisions (IAS 37)</b>.",
+    steps: [
+      { title: "1. Qualify the dispute", body: "Identify the subject matter: <b>employment</b> (Industrial Court) / <b>commercial</b> (Commercial Division, Supreme Court) / <b>civil</b> / <b>administrative</b>. The competent court follows." },
+      { title: "2. Open the procedural file", body: "Record the parties, the subject matter, the amount at stake, the appointed counsel (barrister/attorney). Upload plaint/defence, exhibits and submissions." },
+      { title: "3. Track deadlines", body: "Hearing dates, deadlines for filing submissions, appeal deadlines. Lexora alerts. Strictly observe <b>procedural deadlines</b> on pain of being time-barred." },
+      { title: "4. Assess the risk and provision", body: "Under <b>IAS 37</b>: if an outflow of resources is <em>probable</em> and can be estimated, recognise a <b>litigation provision</b> (Debit expense, Credit provision). If only <em>possible</em>, disclose in the notes (contingent liability)." },
+      { title: "5. Outcome and enforcement", body: "Judgment, settlement or discontinuance. Update the provision (reversal or adjustment) and enforce the decision." },
+    ],
+    pitfalls: [
+      "Filing before the wrong court (Supreme Court for a purely employment dispute that belongs to the Industrial Court).",
+      "Missing an appeal deadline (often short) → decision becomes final.",
+      "Not provisioning a probable dispute → financial statements not true and fair (IAS 37 non-compliance).",
+      "Provisioning a merely possible liability → overstatement of expenses.",
+    ],
+    externalLinks: [
+      { label: "Supreme Court — Commercial Division", url: "https://supremecourt.govmu.org", description: "Commercial and corporate disputes." },
+      { label: "Industrial Court", url: "https://industrialcourt.govmu.org", description: "Employment litigation." },
+    ],
+    tips: [
+      "Document the risk assessment (probable/possible/remote): it underpins the IAS 37 provision and the audit.",
+      "A well-priced settlement often costs less than a judgment plus fees and delays.",
+    ],
+  },
+
+  '/juridique/conseil': {
+    title: "Legal advisory — Opinion requests",
+    audience: 'all',
+    intro:
+      "Management of general legal opinion requests and the firm's knowledge base. A question comes in (from the client or internally), you <b>qualify</b> it, research the applicable law, and issue a traceable, reusable opinion. Gradually builds an internal base of precedents.",
+    steps: [
+      { title: "1. Record the request", body: "Who is asking, on which entity, the precise subject of the question, the urgency. An unwritten opinion does not exist: everything is traced." },
+      { title: "2. Qualify the question", body: "Classify by area: corporate, employment/HR, tax, commercial, compliance. If it is employment, route to <em>HR advisory</em>; if tax, to the tax modules." },
+      { title: "3. Research and draft the opinion", body: "Identify the texts (Companies Act, WRA, Civil Code, special statutes), the case law, and draft a structured opinion: facts → legal question → analysis → conclusion/recommendation." },
+      { title: "4. Issue and archive", body: "Send the opinion to the requester and archive it in the knowledge base. Index by keywords for reuse." },
+    ],
+    pitfalls: [
+      "Giving an untraced oral opinion → cannot be relied upon, liability risk.",
+      "Not dating the opinion: the law evolves, an old opinion may be obsolete.",
+      "Confusing advice with decision: the firm informs, the client decides.",
+    ],
+    tips: [
+      "Capitalise: each opinion enriches the knowledge base and speeds up the next ones.",
+      "Add a validity reservation (law in force at the date of the opinion).",
+    ],
+  },
+
+  '/juridique/conseil-rh': {
+    title: "Legal advisory — HR / employment",
+    audience: 'all',
+    intro:
+      "Advice on Mauritian employment law: <b>dismissal</b> (Workers Rights Act 2019), <b>discipline</b>, <b>harassment</b>, collective relations (Industrial Relations) and articulation with Lexora's HR module. Goal: secure employment decisions to avoid litigation before the Industrial Court.",
+    steps: [
+      { title: "1. Dismissal — ground and procedure", body: "The <b>WRA 2019</b> strictly governs termination. <b>Section 64</b> requires, where misconduct is alleged, a <b>prior disciplinary procedure</b>: written notification of the charges, the worker's right to be heard within a reasonable time, and a reasoned decision. A dismissal without valid cause or fair procedure is <em>unjustified</em>." },
+      { title: "2. Discipline", body: "Graduated warnings, hearing, the worker's right of reply. Document each step: the written record prevails before the Industrial Court." },
+      { title: "3. Harassment", body: "Handle any complaint seriously: confidential internal investigation, precautionary measures, sanction where appropriate. Harassment engages the employer's liability." },
+      { title: "4. Collective relations", body: "Collective bargaining, trade-union rights, Industrial Relations procedures. Comply with consultation obligations." },
+      { title: "5. HR module articulation", body: "The actual departure (notice calculation, s.70 severance, final settlement, PAYE Exit Statement) is run in the HR module — see /rh/depart. Legal advisory secures the ground and procedure <b>upstream</b>." },
+    ],
+    pitfalls: [
+      "Dismissing for misconduct without the s.64 disciplinary procedure → reclassified as unjustified dismissal, increased compensation.",
+      "No written record of warnings → the employer cannot prove the misconduct.",
+      "Treating a harassment complaint lightly → employer's liability engaged.",
+      "Confusing the 'advice/procedure' phase with the 'departure calculation' phase (HR module).",
+    ],
+    externalLinks: [
+      { label: "Workers Rights Act 2019", url: "https://labour.govmu.org/Documents/Legislations/WRA2019.pdf", description: "Reference text (s.64 procedure, s.70 severance)." },
+      { label: "Ministry of Labour", url: "https://labour.govmu.org", description: "Conciliation, mediation, employment texts." },
+      { label: "Industrial Court", url: "https://industrialcourt.govmu.org", description: "Employment litigation court." },
+    ],
+    tips: [
+      "Fair procedure (fair hearing) matters as much as the ground: get both right.",
+      "If the ground is doubtful, favour conciliation at the Ministry of Labour before litigation.",
+    ],
+  },
+
+  '/juridique/conformite': {
+    title: "Regulatory compliance",
+    audience: 'all',
+    intro:
+      "Management of legal and regulatory obligations by entity type: mandatory registers, <b>KYC/AML</b> (Financial Intelligence and Anti-Money Laundering Act), <b>FSC</b> obligations for GBCs, periodic filings. Goal: stay compliant at all times and be able to demonstrate it in case of inspection.",
+    steps: [
+      { title: "1. Obligations mapping", body: "Depending on the entity type (domestic company, GBC, Authorised Company, association), Lexora lists the applicable obligations: registers, filings, returns, licence renewals." },
+      { title: "2. KYC / AML", body: "Identification and verification of clients/beneficial owners (FIAMLA + AML/CFT Regulations). Keep KYC documents, monitor transactions, report suspicious transactions (STR) to the FIU where necessary." },
+      { title: "3. Mandatory registers", body: "Keep the statutory registers up to date (members, directors, charges, UBO) — see /juridique/societe/registres. Their absence is an offence." },
+      { title: "4. FSC obligations (GBC)", body: "For Global Business: FSC licence, substance (CIGA), FSC Annual Return, CRS/FATCA. See the GBC dashboard (/client/gbc-dashboard)." },
+      { title: "5. Tracking and evidence", body: "Each obligation has a status (up to date / overdue / upcoming). Keep supporting documents: compliance must be <b>demonstrable</b>." },
+    ],
+    pitfalls: [
+      "Incomplete KYC → business relationship blocked and AML risk (heavy sanctions).",
+      "UBO register not updated within deadlines → offence.",
+      "Confusing the obligations of a domestic company with those of a GBC (separate FSC regime).",
+      "Not keeping proof of compliance: being compliant is not enough, you must be able to prove it.",
+    ],
+    externalLinks: [
+      { label: "FSC Mauritius", url: "https://www.fscmauritius.org", description: "Regulator of Global Business and financial services." },
+      { label: "Financial Intelligence Unit", url: "https://fiumauritius.org", description: "Suspicious transaction reports (STR), AML/CFT." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Statutory registers and filings." },
+    ],
+    tips: [
+      "Treat compliance as a continuous process, not an annual chore.",
+      "A well-kept KYC/AML file is your best defence in case of inspection.",
+    ],
+  },
+
+  '/juridique/documents': {
+    title: "Legal document library",
+    audience: 'all',
+    intro:
+      "Repository of <b>templates</b> (contracts, constitutions, resolutions, minutes, letters), with <b>versioning</b>, <b>legal retention</b> and <b>confidentiality</b>. In Mauritius, accounting and employment documents are generally kept for <b>at least 10 years</b>; company registers are kept at the registered office for as long as the company exists. Centralise everything here to avoid scattered versions.",
+    steps: [
+      { title: "1. Templates", body: "Library of approved templates: standard contracts, constitutions, ordinary/special resolutions, meeting notices, minutes, formal-notice letters. Reuse rather than recreate." },
+      { title: "2. Versioning", body: "Each template/document has a dated version history. You always know which is the current version and who modified it." },
+      { title: "3. Legal retention", body: "Apply the periods: accounting and employment records <b>≥ 10 years</b>, contracts at least for their term plus the limitation period, company registers kept at the registered office for as long as the entity exists." },
+      { title: "4. Confidentiality", body: "Access rights by department/matter. Sensitive documents (litigation, M&A, individual HR) are visible only to authorised people." },
+    ],
+    pitfalls: [
+      "Obsolete templates used for lack of updating → clauses not compliant with the law in force.",
+      "Destroying a document before the end of the legal retention period.",
+      "Confidential documents accessible to everyone for lack of access rights → information leak.",
+    ],
+    tips: [
+      "Clearly mark the 'current' version of each template.",
+      "Link each document to its matter to find it by context.",
+    ],
+  },
+
+  '/juridique/departements': {
+    title: "Organisation by legal departments",
+    audience: 'all',
+    intro:
+      "Structure the firm into <b>departments</b> (corporate, employment/HR, litigation, advisory, compliance): allocation of matters, designation of <b>owners</b> and management of <b>access rights</b>. Ensures each case has a driver and that confidentiality is respected.",
+    steps: [
+      { title: "1. Create the departments", body: "Define the departments relevant to your firm and appoint an owner per department." },
+      { title: "2. Allocate matters", body: "Assign each matter to a department. Deadlines and alerts surface to the relevant owner." },
+      { title: "3. Access rights", body: "Members of a department see the matters within their scope. Sensitive matters can be further restricted. Consistent with the role hierarchy." },
+      { title: "4. Steering", body: "Workload view per department: active matters, upcoming deadlines, overdue matters." },
+    ],
+    pitfalls: [
+      "Matter not assigned to a department → nobody tracks it.",
+      "Access rights too broad: a member sees confidential matters outside their scope.",
+      "Owner not designated → deadline alerts have no recipient.",
+    ],
+    tips: [
+      "Align departments with jurisdictions/subject matter (employment→Industrial Court, corporate→ROC).",
+      "Periodically review access rights, especially after staff movements.",
+    ],
+  },
+
+  '/juridique/societe': {
+    title: "Corporate secretarial — Company life",
+    audience: 'all',
+    intro:
+      "Management of <b>corporate secretarial</b> work under the <b>Companies Act 2001</b>: company life (acts, meetings, resolutions, registers, obligations) and dealings with the <b>Registrar of Companies (ROC / CBRD)</b>. A Mauritian company must keep its registers, file its <b>Annual Return</b>, hold its <b>AGM</b> and notify changes to the Registrar.",
+    steps: [
+      { title: "1. Entity overview", body: "Legal form, directors, company secretary (mandatory for companies other than small private ones), registered office, capital, shareholding." },
+      { title: "2. Company acts", body: "Incorporation, constitutional changes, changes of directors/registered office: each gives rise to a filing with the Registrar. See /juridique/societe/actes." },
+      { title: "3. Meetings and resolutions", body: "Holding the AGM (within statutory deadlines), EGM if needed, ordinary/special resolutions. See /juridique/societe/assemblees and /resolutions." },
+      { title: "4. Registers and obligations", body: "Statutory registers kept at the registered office (members, directors, charges, UBO) and corporate deadlines (Annual Return, accounts filing). See /registres and /obligations." },
+    ],
+    pitfalls: [
+      "No company secretary where the company is required to have one → non-compliance.",
+      "Changes (director, registered office) not notified to the Registrar within the deadlines.",
+      "Registers kept somewhere other than the registered office without notifying the place of keeping.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Filings, Annual Return, entity search." },
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Reference text of company law." },
+    ],
+    tips: [
+      "Corporate secretarial work runs on statutory dates: rely on the deadline alerts.",
+      "Keep the registers up to date continuously, not the day before the AGM.",
+    ],
+  },
+
+  '/juridique/societe/actes': {
+    title: "Company acts",
+    audience: 'all',
+    intro:
+      "Management of company-life acts under the Companies Act 2001: <b>incorporation</b>, <b>constitutional changes</b> (constitution/articles, capital, name, objects) and <b>filings with the Registrar of Companies</b>. Each significant act must be notified to the ROC within statutory deadlines.",
+    steps: [
+      { title: "1. Incorporation", body: "Incorporation of a company with the Registrar: name (prior reservation), form (private/public, limited by shares/guarantee), constitution (optional; the statutory model applies otherwise), directors, secretary, registered office, shareholding." },
+      { title: "2. Constitutional changes", body: "Change of name, of objects, increase/reduction of capital, amendment of the constitution: decided by resolution (often a <b>special</b> one) then filed with the Registrar." },
+      { title: "3. Changes to notify", body: "Appointment/resignation of a director, change of secretary or registered office: notification to the ROC via the dedicated forms, within statutory deadlines (generally short, e.g. 28 days)." },
+      { title: "4. Filing and evidence", body: "Keep the Registrar's filing acknowledgement. It is the proof of enforceability against third parties." },
+    ],
+    pitfalls: [
+      "Amending the constitution without the required resolution (ordinary vs special) → irregular act.",
+      "Not filing a change with the Registrar within the deadline → penalties and unenforceability.",
+      "Reusing a name that is not reserved/already taken.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Incorporation, filings, forms." },
+    ],
+    tips: [
+      "Always check which majority (ordinary/special) is required before amending the constitution.",
+      "Keep the filing acknowledgement together with the minutes that decided the act.",
+    ],
+  },
+
+  '/juridique/societe/assemblees': {
+    title: "General meetings (AGM / EGM)",
+    audience: 'all',
+    intro:
+      "Organisation of shareholder meetings under the Companies Act 2001: <b>AGM</b> (annual meeting) and <b>EGM/special meeting</b> (extraordinary). The Companies Act requires the <b>AGM to be held within 6 months of the financial year-end</b> (and no more than 15 months between two AGMs). Notice, quorum, conduct and minutes are regulated.",
+    steps: [
+      { title: "1. Notice", body: "Statutory notice period to shareholders (generally <b>at least 14 days</b>), with the agenda. A written resolution may, in certain cases, replace a physical meeting." },
+      { title: "2. Quorum", body: "Check the quorum set by the constitution (failing which, the Companies Act default rule). Without quorum, decisions are void." },
+      { title: "3. AGM — statutory deadline", body: "Hold the AGM <b>within 6 months of the year-end</b>, not exceeding 15 months since the previous one. Typical agenda: accounts, report, appointment/re-election of directors and auditor, dividends." },
+      { title: "4. EGM", body: "Calling of an extraordinary meeting for specific decisions (constitutional change, exceptional transaction). May be requisitioned by shareholders holding the statutory threshold." },
+      { title: "5. Minutes", body: "Draft and keep the signed minutes: decisions, votes, attendance. To be kept in the company's registers." },
+    ],
+    pitfalls: [
+      "AGM held out of time (> 6 months after year-end) → Companies Act non-compliance.",
+      "Insufficient notice period → decisions open to challenge.",
+      "Quorum not met but decisions taken anyway → nullity.",
+      "Minutes unsigned or not kept → no proof of the decisions.",
+    ],
+    externalLinks: [
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Meeting rules, notice, quorum." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org" },
+    ],
+    tips: [
+      "Plan the AGM right after year-end to stay within the 6-month window.",
+      "For a small company, a written resolution avoids the logistics of a physical meeting.",
+    ],
+  },
+
+  '/juridique/societe/resolutions': {
+    title: "Resolutions — Ordinary & special",
+    audience: 'all',
+    intro:
+      "Management of shareholder/director decisions under the Companies Act 2001. Key distinction: <b>ordinary resolution</b> (simple majority, > 50%) vs <b>special resolution</b> (<b>75% majority</b>) required for important decisions (amending the constitution, change of name, reduction of capital, voluntary dissolution). <b>Special resolutions</b> must be filed with the <b>Registrar (CBRD)</b>.",
+    steps: [
+      { title: "1. Identify the required type", body: "<b>Ordinary</b> (> 50%): ordinary management. <b>Special</b> (≥ 75%): major constitutional changes, name, capital reduction, dissolution. The Companies Act/the constitution sets the requirement." },
+      { title: "2. Written resolution", body: "A written resolution signed by shareholders (to the required threshold) counts as a decision without a meeting, where the constitution allows it — handy for closely-held companies." },
+      { title: "3. Adoption", body: "At a meeting or by written resolution. Check the majority calculation on the votes cast / shares concerned." },
+      { title: "4. Filing of special resolutions", body: "<b>Special resolutions</b> are filed with the <b>Registrar of Companies (CBRD)</b> within the statutory deadline. Keep the filing acknowledgement." },
+      { title: "5. Archiving", body: "Keep all resolutions (ordinary and special) in the company's registers, signed and dated." },
+    ],
+    pitfalls: [
+      "Adopting by simple majority a decision requiring 75% → void resolution.",
+      "Forgetting to file a special resolution with the Registrar → unenforceable.",
+      "Written resolution used where the constitution does not allow it.",
+      "Wrong majority calculation (incorrect calculation base).",
+    ],
+    externalLinks: [
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Ordinary and special resolutions." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Filing of special resolutions." },
+    ],
+    tips: [
+      "Before any important decision, check the threshold (50% or 75%): it is the No. 1 source of error.",
+      "Number and date resolutions for a clean register.",
+    ],
+  },
+
+  '/juridique/societe/registres': {
+    title: "Mandatory statutory registers",
+    audience: 'all',
+    intro:
+      "Keeping the statutory registers required by the Companies Act 2001 (from <b>Section 190</b> onwards): <b>register of members/shareholders</b>, <b>register of directors and secretary</b>, <b>register of charges</b>, <b>register of beneficial owners (UBO)</b>. These registers are in principle <b>kept at the registered office</b> and accessible under the statutory conditions.",
+    steps: [
+      { title: "1. Register of members", body: "List of shareholders: identity, number and class of shares, dates of entry/exit, transfers. This register is the proof of shareholder status." },
+      { title: "2. Register of directors & secretary", body: "Identity, role, dates of appointment/cessation. Consistent with the filings made to the Registrar." },
+      { title: "3. Register of charges", body: "Security interests over the company's assets (pledges, mortgages). Registration of charges determines their enforceability." },
+      { title: "4. UBO register", body: "Beneficial owners (natural persons above the control threshold, typically > 25%). Prompt update after any change." },
+      { title: "5. Kept at the registered office", body: "Registers are kept at the <b>registered office</b> (or the place notified to the Registrar) for as long as the company exists, and kept up to date continuously." },
+    ],
+    pitfalls: [
+      "Registers not kept / not up to date → offence under the Companies Act.",
+      "Outdated UBO → non-compliance (and AML risk).",
+      "Unregistered charge → unenforceable against third parties and creditors.",
+      "Registers kept off-site without notifying the place of keeping.",
+    ],
+    externalLinks: [
+      { label: "Companies Act 2001", url: "https://companies.govmu.org/Pages/Legislations.aspx", description: "Section 190 onwards — registers." },
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org" },
+    ],
+    tips: [
+      "Update registers in real time: do not reconstruct them before an inspection.",
+      "The register of members prevails in a dispute over shareholder status.",
+    ],
+  },
+
+  '/juridique/societe/obligations': {
+    title: "Corporate obligations & deadlines",
+    audience: 'all',
+    intro:
+      "Dashboard of the company's periodic obligations under the Companies Act 2001: <b>Annual Return</b>, <b>accounts filing</b>, renewals (licences, registrations) and <b>deadline alerts</b>. The aim is never to miss a statutory date that would expose the company to penalties or strike-off by the Registrar.",
+    steps: [
+      { title: "1. Annual Return", body: "Annual filing with the Registrar confirming the company's information (directors, registered office, shareholding). Due date tracked automatically with an alert." },
+      { title: "2. Accounts filing", body: "Companies concerned file their financial statements (and the auditor's report where audit is required) with the Registrar within the statutory deadlines after year-end/AGM." },
+      { title: "3. AGM and other deadlines", body: "Reminder: AGM within 6 months of year-end (see /juridique/societe/assemblees). Corporate deadlines converge here in a single view." },
+      { title: "4. Renewals", body: "Licences, registrations, FSC licence for GBCs: Lexora tracks renewal dates and alerts upstream." },
+      { title: "5. Alerts and evidence", body: "Each obligation shows its status (upcoming / done / overdue). Keep filing acknowledgements as proof of compliance." },
+    ],
+    pitfalls: [
+      "Late Annual Return → penalties and, eventually, risk of strike-off by the Registrar.",
+      "Accounts not filed within deadlines → non-compliance and fines.",
+      "Forgotten licence renewal → business carried on without a valid title.",
+      "Not keeping filing acknowledgements → compliance not demonstrable.",
+    ],
+    externalLinks: [
+      { label: "Registrar of Companies (CBRD)", url: "https://companies.govmu.org", description: "Annual Return, accounts filing, deadlines." },
+      { label: "FSC Mauritius", url: "https://www.fscmauritius.org", description: "GBC licence renewal." },
+    ],
+    tips: [
+      "Synchronise corporate deadlines with the accounting calendar (year-end → AGM → filing).",
+      "Anticipate: an administrative strike-off is heavy to reverse (restoration).",
     ],
   },
 

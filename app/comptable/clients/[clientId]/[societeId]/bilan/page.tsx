@@ -99,11 +99,11 @@ export default function BilanOfficielPage() {
         ])
         if (cancelled) return
 
-        if (socRes.error) notifyError("Charger société", socRes.error.message)
+        if (socRes.error) notifyError(t('cptb.bilan.err_load_company', locale), socRes.error.message)
         setSocieteName(socRes.data?.nom || "—")
 
         if (exRes.error) {
-          notifyError("Charger exercices", exRes.error.message)
+          notifyError(t('cptb.bilan.err_load_exercises', locale), exRes.error.message)
           setExercises([])
         } else {
           const rows = (exRes.data || []) as ExerciceRow[]
@@ -144,7 +144,7 @@ export default function BilanOfficielPage() {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
           if (!cancelled) {
-            notifyError("Charger bilan", err?.error || res.statusText)
+            notifyError(t('cptb.bilan.err_load_balance', locale), err?.error || res.statusText)
             setBilan(null)
           }
           return
@@ -159,7 +159,7 @@ export default function BilanOfficielPage() {
         }
       } catch {
         if (!cancelled) {
-          notifyError("Charger bilan")
+          notifyError(t('cptb.bilan.err_load_balance', locale))
           setBilan(null)
         }
       } finally {
@@ -285,7 +285,7 @@ export default function BilanOfficielPage() {
       {!loadingBilan && !bilan && (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            Aucune écriture comptabilisée pour cet exercice.
+            {t('cptb.bilan.empty_no_entries', locale)}
           </CardContent>
         </Card>
       )}
@@ -469,7 +469,7 @@ export default function BilanOfficielPage() {
               </p>
               {tresorerieDetail.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">
-                  Aucun compte bancaire actif rattaché à cette société.
+                  {t('cptb.bilan.no_active_bank', locale)}
                 </p>
               ) : (
                 <Table>

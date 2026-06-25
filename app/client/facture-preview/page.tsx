@@ -144,11 +144,11 @@ function FacturePreviewContent() {
       const r = await fetch(`/api/client/factures/${data.id}/fiscalise`, { method: 'POST' })
       const j = await r.json()
       if (!r.ok || j.ok === false) {
-        setMraMsg({ kind: 'err', text: j.error || `Erreur fiscalisation (${r.status})` })
+        setMraMsg({ kind: 'err', text: j.error || t('cfac.fiscalise_error_status', locale).replace('{status}', String(r.status)) })
       } else {
         setMraMsg({
           kind: 'ok',
-          text: j.already_fiscalise ? 'Facture déjà fiscalisée.' : `Fiscalisée — IRN ${j.irn}`,
+          text: j.already_fiscalise ? t('cfac.already_fiscalised', locale) : t('cfac.fiscalised_irn', locale).replace('{irn}', j.irn),
         })
         setData(prev => prev ? {
           ...prev,
@@ -159,7 +159,7 @@ function FacturePreviewContent() {
         } : prev)
       }
     } catch (e: any) {
-      setMraMsg({ kind: 'err', text: e?.message || 'Erreur réseau' })
+      setMraMsg({ kind: 'err', text: e?.message || t('cfac.network_error', locale) })
     } finally {
       setMraLoading(false)
     }
@@ -288,7 +288,7 @@ function FacturePreviewContent() {
     }
   }, [loading, data, searchParams])
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><p>Chargement...</p></div>
+  if (loading) return <div className="flex items-center justify-center min-h-screen"><p>{t('cfac.loading', locale)}</p></div>
   if (!data) return <div className="flex items-center justify-center min-h-screen"><p className="text-gray-500">{t('inv.pv.no_invoice', locale)}</p></div>
 
   const s = data.settings || {} as InvoiceData["settings"]
@@ -376,16 +376,16 @@ function FacturePreviewContent() {
           {data.id && data.type_document !== 'devis' && (
             data.irn ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-green-100 text-green-800 border border-green-200">
-                ✓ MRA fiscalisée
+                ✓ {t('cfac.mra_fiscalised', locale)}
               </span>
             ) : (
               <button
                 onClick={handleFiscalise}
                 disabled={mraLoading}
                 className="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                title="Soumettre cette facture à la MRA EBS"
+                title={t('cfac.submit_mra_title', locale)}
               >
-                {mraLoading ? 'Fiscalisation…' : 'Fiscaliser MRA'}
+                {mraLoading ? t('cfac.fiscalising', locale) : t('cfac.fiscalise_mra', locale)}
               </button>
             )
           )}

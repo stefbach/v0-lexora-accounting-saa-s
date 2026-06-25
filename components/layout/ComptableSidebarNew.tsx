@@ -76,7 +76,7 @@ const CABINET_SECTIONS: NavSection[] = [
       // (la route reste accessible pour rétro-compat mais n'apparaît plus
       // dans le sidebar — un doublon avec /comptable/cabinet qui fait plus
       // que la liste : KPIs, tags, collaborateurs, mode "Acting as client").
-      { href: "/comptable/cabinet", label: "Mes Clients", icon: Users },
+      { href: "/comptable/cabinet", label: "Mes Clients", labelKey: "clay.my_clients", icon: Users },
       { href: "/comptable/equipe", label: "Mon Équipe", labelKey: "comptable.my_team", icon: UsersRound },
       { href: "/comptable/contrats", label: "Contrats clients", labelKey: "comp.cab_sidebar.client_contracts", icon: FilePen },
       { href: "/juridique/contrats", label: "Générateur IA (juridique)", labelKey: "comp.cab_sidebar.legal_ai_generator", icon: Gavel },
@@ -355,7 +355,7 @@ export function ComptableSidebarNew() {
               className="text-xs font-semibold hover:underline"
               style={{ color: "#E8EAFC" }}
             >
-              Santé PCM
+              {t('clay.pcm_health', locale)}
             </Link>
           )}
         </div>

@@ -52,7 +52,7 @@ export default function MraSftPage() {
     try {
       const r = await fetch(`/api/comptable/mra/sft?societe_id=${societeId}&year=${year}&threshold=${threshold}`).then(r => r.json())
       setData(r)
-    } catch (e: any) { setError(e?.message || 'Erreur') } finally { setLoading(false) }
+    } catch (e: any) { setError(e?.message || t('cmra.sft.error', locale)) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [societeId, year, threshold])
 
@@ -68,11 +68,11 @@ export default function MraSftPage() {
       fd.append('ack_pdf', submitFile)
       const r = await fetch('/api/comptable/mra/sft', { method: 'POST', body: fd })
       const j = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(j?.error || 'Échec soumission manuelle')
+      if (!r.ok) throw new Error(j?.error || t('cmra.sft.submit_failed', locale))
       setSubmitOpen(false); setSubmitAckRef(''); setSubmitFile(null)
       load()
     } catch (e: any) {
-      setError(e?.message || 'Erreur')
+      setError(e?.message || t('cmra.sft.error', locale))
     } finally {
       setSubmitting(false)
     }
@@ -137,39 +137,39 @@ export default function MraSftPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Upload className="h-4 w-4 text-slate-600" />
-            Soumission manuelle MRA (SFT {year})
+            {t('cmra.sft.manual_title', locale)} (SFT {year})
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-xs text-slate-600 mb-3">
-            Le SFT se dépose manuellement sur le portail{' '}
+            {t('cmra.sft.manual_intro_a', locale)}{' '}
             <a href="https://eservices8.mra.mu" target="_blank" rel="noopener noreferrer"
                className="text-indigo-600 hover:underline inline-flex items-center gap-1">
               MRA e-Services <ExternalLink className="h-3 w-3" />
             </a>.
-            Après dépôt, remontez ici la référence MRA et l'accusé PDF pour preuve réglementaire.
+            {t('cmra.sft.manual_intro_b', locale)}
           </p>
           {manualSub ? (
             <div className="rounded border border-emerald-200 bg-emerald-50 p-3 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-emerald-800">
                 <Check className="h-4 w-4" />
-                Déclaration {year} soumise manuellement
+                {t('cmra.sft.declared_manual_prefix', locale)}{year}{t('cmra.sft.declared_manual_suffix', locale)}
               </div>
               <div className="text-xs text-emerald-900 space-y-1">
-                <div><span className="font-semibold">Référence :</span> {manualSub.ack_ref}</div>
-                <div><span className="font-semibold">Date :</span> {new Date(manualSub.submitted_at).toLocaleString('fr-FR')}</div>
+                <div><span className="font-semibold">{t('cmra.sft.ref_label', locale)}</span> {manualSub.ack_ref}</div>
+                <div><span className="font-semibold">{t('cmra.sft.date_label', locale)}</span> {new Date(manualSub.submitted_at).toLocaleString('fr-FR')}</div>
                 <div className="flex items-center gap-1">
                   <FileText className="h-3 w-3" />
                   <span className="font-mono break-all">{manualSub.ack_pdf_path}</span>
                 </div>
               </div>
               <Button size="sm" variant="outline" onClick={() => setSubmitOpen(true)}>
-                Re-soumettre / mettre à jour
+                {t('cmra.sft.resubmit', locale)}
               </Button>
             </div>
           ) : (
             <Button onClick={() => setSubmitOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-              <Upload className="h-4 w-4 mr-2" />J'ai soumis sur le portail MRA
+              <Upload className="h-4 w-4 mr-2" />{t('cmra.sft.submitted_btn', locale)}
             </Button>
           )}
         </CardContent>
@@ -178,15 +178,14 @@ export default function MraSftPage() {
       <Dialog open={submitOpen} onOpenChange={(o) => { if (!submitting) setSubmitOpen(o) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmer la soumission manuelle SFT {year}</DialogTitle>
+            <DialogTitle>{t('cmra.sft.dialog_title_prefix', locale)}{year}</DialogTitle>
             <DialogDescription>
-              Renseignez la référence MRA et joignez l'accusé PDF (max 10MB). Toutes les
-              transactions SFT {year} de cette société seront marquées comme déclarées.
+              {t('cmra.sft.dialog_desc_a', locale)}{year}{t('cmra.sft.dialog_desc_b', locale)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
-              <label className="text-xs text-slate-600 block mb-1">Référence MRA *</label>
+              <label className="text-xs text-slate-600 block mb-1">{t('cmra.sft.field_ref', locale)}</label>
               <input
                 type="text"
                 value={submitAckRef}
@@ -196,7 +195,7 @@ export default function MraSftPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-slate-600 block mb-1">Accusé de réception PDF *</label>
+              <label className="text-xs text-slate-600 block mb-1">{t('cmra.sft.field_pdf', locale)}</label>
               <input
                 type="file"
                 accept="application/pdf"
@@ -211,14 +210,14 @@ export default function MraSftPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={submitting}>Annuler</Button>
+            <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={submitting}>{t('cmra.sft.cancel', locale)}</Button>
             <Button
               onClick={submitManual}
               disabled={submitting || !submitAckRef.trim() || !submitFile}
               className="bg-indigo-600 hover:bg-indigo-700 text-white"
             >
               {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              <Send className="h-4 w-4 mr-2" />Confirmer
+              <Send className="h-4 w-4 mr-2" />{t('cmra.sft.confirm', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

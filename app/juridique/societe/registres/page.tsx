@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ArrowLeft, BookUser, Loader2, Building2, Download, Plus, X, Trash2 } from "lucide-react"
 import { useJuridiqueSociete } from "@/components/juridique/JuridiqueSocieteProvider"
 import { SocieteDocuments } from "@/components/juridique/SocieteDocuments"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -16,21 +17,22 @@ interface ManualEntry { id: string; data: Record<string, string> }
 type RegKey = 'associes' | 'administrateurs' | 'beneficiaires'
 type Col = { key: string; label: string; width: number }
 
-const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('fr-FR') : '—'
-const fmtNum = (n?: number | null) => n == null ? '—' : new Intl.NumberFormat('fr-FR').format(n)
-
-const COLUMNS: Record<RegKey, Col[]> = {
-  associes: [{ key: 'nom', label: 'Nom', width: 28 }, { key: 'type', label: 'Type', width: 14 }, { key: 'nat', label: 'Nationalité', width: 16 }, { key: 'actions', label: 'Actions', width: 12 }, { key: 'pct', label: '%', width: 10 }, { key: 'vn', label: 'Val. nom.', width: 20 }],
-  administrateurs: [{ key: 'nom', label: 'Nom', width: 30 }, { key: 'type', label: 'Fonction', width: 20 }, { key: 'nat', label: 'Nationalité', width: 18 }, { key: 'nic', label: 'NIC', width: 17 }, { key: 'dn', label: 'Nomination', width: 15 }],
-  beneficiaires: [{ key: 'nom', label: 'Nom', width: 26 }, { key: 'nat', label: 'Nationalité', width: 16 }, { key: 'res', label: 'Résidence', width: 16 }, { key: 'pct', label: 'Détention', width: 12 }, { key: 'ctrl', label: 'Nature du contrôle', width: 22 }, { key: 'pep', label: 'PEP', width: 8 }],
-}
-const TITRES: Record<RegKey, string> = {
-  associes: 'Registre des associés / actionnaires',
-  administrateurs: 'Registre des administrateurs',
-  beneficiaires: 'Registre des bénéficiaires effectifs',
-}
-
 export default function RegistresPage() {
+  const locale = getLocale()
+  const dash = t('jurs.reg.dash', locale)
+  const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR') : dash
+  const fmtNum = (n?: number | null) => n == null ? dash : new Intl.NumberFormat(locale === 'en' ? 'en-GB' : 'fr-FR').format(n)
+
+  const COLUMNS: Record<RegKey, Col[]> = {
+    associes: [{ key: 'nom', label: t('jurs.reg.col.nom', locale), width: 28 }, { key: 'type', label: t('jurs.reg.col.type', locale), width: 14 }, { key: 'nat', label: t('jurs.reg.col.nationalite', locale), width: 16 }, { key: 'actions', label: t('jurs.reg.col.actions', locale), width: 12 }, { key: 'pct', label: t('jurs.reg.col.pct', locale), width: 10 }, { key: 'vn', label: t('jurs.reg.col.valNom', locale), width: 20 }],
+    administrateurs: [{ key: 'nom', label: t('jurs.reg.col.nom', locale), width: 30 }, { key: 'type', label: t('jurs.reg.col.fonction', locale), width: 20 }, { key: 'nat', label: t('jurs.reg.col.nationalite', locale), width: 18 }, { key: 'nic', label: t('jurs.reg.col.nic', locale), width: 17 }, { key: 'dn', label: t('jurs.reg.col.nomination', locale), width: 15 }],
+    beneficiaires: [{ key: 'nom', label: t('jurs.reg.col.nom', locale), width: 26 }, { key: 'nat', label: t('jurs.reg.col.nationalite', locale), width: 16 }, { key: 'res', label: t('jurs.reg.col.residence', locale), width: 16 }, { key: 'pct', label: t('jurs.reg.col.detention', locale), width: 12 }, { key: 'ctrl', label: t('jurs.reg.col.natureControle', locale), width: 22 }, { key: 'pep', label: t('jurs.reg.col.pep', locale), width: 8 }],
+  }
+  const TITRES: Record<RegKey, string> = {
+    associes: t('jurs.reg.titre.associes', locale),
+    administrateurs: t('jurs.reg.titre.administrateurs', locale),
+    beneficiaires: t('jurs.reg.titre.beneficiaires', locale),
+  }
   const { societe } = useJuridiqueSociete()
   const [data, setData] = useState<SocieteData | null>(null)
   const [associes, setAssocies] = useState<Associe[]>([])
@@ -65,9 +67,9 @@ export default function RegistresPage() {
 
   // Lignes issues des données source (lecture seule).
   const autoRows = useCallback((key: RegKey): Record<string, string>[] => {
-    if (key === 'associes') return associes.map((a) => ({ nom: a.nom, type: a.type_personne || '—', nat: a.nationalite || '—', actions: fmtNum(a.nb_actions), pct: a.pourcentage != null ? `${a.pourcentage}%` : '—', vn: fmtNum(a.valeur_nominale) }))
-    if (key === 'administrateurs') return admins.map((a) => ({ nom: a.nom, type: a.type || '—', nat: a.nationalite || '—', nic: a.nic || '—', dn: fmtDate(a.date_nomination) }))
-    return bo.map((b) => ({ nom: b.nom, nat: b.nationalite || '—', res: b.pays_residence || '—', pct: b.pct_detention != null ? `${b.pct_detention}%` : '—', ctrl: b.nature_controle || '—', pep: b.is_pep ? 'Oui' : 'Non' }))
+    if (key === 'associes') return associes.map((a) => ({ nom: a.nom, type: a.type_personne || dash, nat: a.nationalite || dash, actions: fmtNum(a.nb_actions), pct: a.pourcentage != null ? `${a.pourcentage}%` : dash, vn: fmtNum(a.valeur_nominale) }))
+    if (key === 'administrateurs') return admins.map((a) => ({ nom: a.nom, type: a.type || dash, nat: a.nationalite || dash, nic: a.nic || dash, dn: fmtDate(a.date_nomination) }))
+    return bo.map((b) => ({ nom: b.nom, nat: b.nationalite || dash, res: b.pays_residence || dash, pct: b.pct_detention != null ? `${b.pct_detention}%` : dash, ctrl: b.nature_controle || dash, pep: b.is_pep ? t('jurs.reg.yes', locale) : t('jurs.reg.no', locale) }))
   }, [associes, admins, bo])
 
   const totalCount = (key: RegKey) => autoRows(key).length + manual[key].length
@@ -81,15 +83,15 @@ export default function RegistresPage() {
         body: JSON.stringify({ societe_id: societe.id, registre: tab, data: addForm }),
       })
       if (res.ok) { setAddForm({}); setShowAdd(false); await loadManual() }
-      else { const e = await res.json().catch(() => ({})); alert(e.error || "Échec de l'ajout") }
+      else { const e = await res.json().catch(() => ({})); alert(e.error || t('jurs.reg.addFailed', locale)) }
     } finally { setSaving(false) }
   }
 
   async function deleteEntry(id: string) {
-    if (!confirm("Supprimer cette inscription ?")) return
+    if (!confirm(t('jurs.reg.confirmDelete', locale))) return
     const res = await fetch(`/api/juridique/societe/registre?id=${id}`, { method: "DELETE" })
     if (res.ok) await loadManual()
-    else { const e = await res.json().catch(() => ({})); alert(e.error || "Échec de la suppression") }
+    else { const e = await res.json().catch(() => ({})); alert(e.error || t('jurs.reg.deleteFailed', locale)) }
   }
 
   async function downloadPdf() {
@@ -102,7 +104,7 @@ export default function RegistresPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ societe: { nom: data.nom, brn: data.brn, adresse: data.registered_office || data.adresse }, titre: TITRES[tab], sousTitre: data.nom, columns: cols, rows }),
       })
-      if (!res.ok) { alert("Erreur PDF"); return }
+      if (!res.ok) { alert(t('jurs.actes.pdfError', locale)); return }
       const blob = await res.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${tab}_${(data.nom || 'societe').replace(/\s/g, '_')}.pdf`; a.click(); URL.revokeObjectURL(url)
     } finally { setPdfLoading(false) }
   }
@@ -114,20 +116,20 @@ export default function RegistresPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3 flex-wrap">
-        <Link href="/juridique/societe" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#0B0F2E]"><ArrowLeft className="w-4 h-4" /> Vie de la société</Link>
+        <Link href="/juridique/societe" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#0B0F2E]"><ArrowLeft className="w-4 h-4" /> {t('jurs.back', locale)}</Link>
         <div className="h-4 w-px bg-gray-200" /><BookUser className="w-5 h-5" style={{ color: NAVY }} />
-        <h1 className="text-lg font-bold" style={{ color: NAVY }}>Registres légaux</h1>
+        <h1 className="text-lg font-bold" style={{ color: NAVY }}>{t('jurs.reg.title', locale)}</h1>
         {loading && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
       </div>
 
       {!societe ? (
-        <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center text-sm text-gray-500"><Building2 className="w-6 h-6 mx-auto mb-2 text-gray-300" /> Sélectionnez une société.</div>
+        <div className="rounded-2xl bg-white border border-gray-100 p-8 text-center text-sm text-gray-500"><Building2 className="w-6 h-6 mx-auto mb-2 text-gray-300" /> {t('jurs.selectSociete', locale)}</div>
       ) : (
         <>
           <div className="flex gap-2 flex-wrap">
             {(['associes', 'administrateurs', 'beneficiaires'] as RegKey[]).map((k) => (
               <button key={k} onClick={() => { setTab(k); setShowAdd(false); setAddForm({}) }} className={`px-3.5 py-2 rounded-xl text-sm font-medium border transition-all ${tab === k ? "border-transparent text-[#0B0F2E]" : "border-gray-200 text-gray-500 hover:border-gray-300"}`} style={tab === k ? { background: "rgba(212,175,55,0.16)" } : {}}>
-                {k === 'associes' ? 'Associés / Actionnaires' : k === 'administrateurs' ? 'Administrateurs' : 'Bénéficiaires effectifs'} <span className="ml-1 text-xs opacity-60">({totalCount(k)})</span>
+                {k === 'associes' ? t('jurs.reg.tab.associes', locale) : k === 'administrateurs' ? t('jurs.reg.tab.administrateurs', locale) : t('jurs.reg.tab.beneficiaires', locale)} <span className="ml-1 text-xs opacity-60">({totalCount(k)})</span>
               </button>
             ))}
           </div>
@@ -137,10 +139,10 @@ export default function RegistresPage() {
               <p className="font-bold text-sm" style={{ color: NAVY }}>{TITRES[tab]}</p>
               <div className="flex gap-1.5">
                 <button onClick={() => setShowAdd((v) => !v)} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:border-[#D4AF37]">
-                  {showAdd ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />} {showAdd ? "Annuler" : "Ajouter une inscription"}
+                  {showAdd ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />} {showAdd ? t('jurs.reg.cancel', locale) : t('jurs.reg.addEntry', locale)}
                 </button>
                 <button onClick={downloadPdf} disabled={pdfLoading} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-40" style={{ background: NAVY }}>
-                  {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF certifié
+                  {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} {t('jurs.reg.pdfCertified', locale)}
                 </button>
               </div>
             </div>
@@ -157,14 +159,14 @@ export default function RegistresPage() {
                 </div>
                 <div className="flex justify-end mt-3">
                   <button onClick={addEntry} disabled={saving || !addForm[cols[0].key]?.trim()} className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-40" style={{ background: NAVY }}>
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Enregistrer l'inscription
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {t('jurs.reg.saveEntry', locale)}
                   </button>
                 </div>
               </div>
             )}
 
             {auto.length === 0 && manual[tab].length === 0 ? (
-              <p className="px-5 py-10 text-center text-sm text-gray-400">Aucune inscription. Ajoutez-en une, ou renseignez les associés/administrateurs dans la fiche société.</p>
+              <p className="px-5 py-10 text-center text-sm text-gray-400">{t('jurs.reg.noEntries', locale)}</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -177,13 +179,13 @@ export default function RegistresPage() {
                   <tbody>
                     {auto.map((row, i) => (
                       <tr key={`a${i}`} className="border-t border-gray-50">
-                        {cols.map((c) => <td key={c.key} className="px-4 py-2.5 text-gray-700">{row[c.key] || '—'}</td>)}
-                        <td className="px-3 py-2.5 text-[10px] text-gray-300">auto</td>
+                        {cols.map((c) => <td key={c.key} className="px-4 py-2.5 text-gray-700">{row[c.key] || dash}</td>)}
+                        <td className="px-3 py-2.5 text-[10px] text-gray-300">{t('jurs.reg.colAuto', locale)}</td>
                       </tr>
                     ))}
                     {manual[tab].map((m) => (
                       <tr key={m.id} className="border-t border-gray-50 bg-amber-50/30">
-                        {cols.map((c) => <td key={c.key} className="px-4 py-2.5 text-gray-700">{m.data[c.key] || '—'}</td>)}
+                        {cols.map((c) => <td key={c.key} className="px-4 py-2.5 text-gray-700">{m.data[c.key] || dash}</td>)}
                         <td className="px-3 py-2.5"><button onClick={() => deleteEntry(m.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button></td>
                       </tr>
                     ))}
@@ -192,13 +194,13 @@ export default function RegistresPage() {
               </div>
             )}
           </div>
-          <p className="text-[11px] text-gray-400">Registres tenus conformément au Companies Act 2001. Les lignes « auto » proviennent des fiches société de Lexora ; les inscriptions ajoutées ici sont conservées et incluses dans le PDF.</p>
+          <p className="text-[11px] text-gray-400">{t('jurs.reg.footer', locale)}</p>
 
           <SocieteDocuments
             societeId={societe.id}
             categorie="registre"
-            title="Documents associés aux registres"
-            hint="Joignez les pièces justificatives : certificats d'actions, statuts, déclarations UBO, extraits ROC…"
+            title={t('jurs.reg.docsTitle', locale)}
+            hint={t('jurs.reg.docsHint', locale)}
           />
         </>
       )}

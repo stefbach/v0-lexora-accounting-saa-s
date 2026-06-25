@@ -88,10 +88,12 @@ function MiniCalendar({
   year,
   month,
   holidayDates,
+  locale,
 }: {
   year: number
   month: number
   holidayDates: Map<string, { libelle: string; type: string }>
+  locale: Locale
 }) {
   const firstDay = new Date(year, month, 1)
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -107,8 +109,10 @@ function MiniCalendar({
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
 
   const monthNames = [
-    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+    t('rhpl.month_jan', locale), t('rhpl.month_feb', locale), t('rhpl.month_mar', locale),
+    t('rhpl.month_apr', locale), t('rhpl.month_may', locale), t('rhpl.month_jun', locale),
+    t('rhpl.month_jul', locale), t('rhpl.month_aug', locale), t('rhpl.month_sep', locale),
+    t('rhpl.month_oct', locale), t('rhpl.month_nov', locale), t('rhpl.month_dec', locale),
   ]
 
   const hasAnyHoliday = Array.from(holidayDates.keys()).some(d => {
@@ -124,7 +128,7 @@ function MiniCalendar({
         {monthNames[month]} {year}
       </div>
       <div className="grid grid-cols-7 gap-0.5 text-center">
-        {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
+        {[t('rhpl.dow_mon', locale), t('rhpl.dow_tue', locale), t('rhpl.dow_wed', locale), t('rhpl.dow_thu', locale), t('rhpl.dow_fri', locale), t('rhpl.dow_sat', locale), t('rhpl.dow_sun', locale)].map((d, i) => (
           <div key={i} className="text-[10px] font-medium text-gray-400 py-0.5">{d}</div>
         ))}
         {cells.map((day, i) => {
@@ -306,7 +310,7 @@ function HolidayCard({
             <Badge
               variant="outline"
               className="text-[10px] px-1.5 py-0 h-4 bg-emerald-50 text-emerald-700 border-emerald-200"
-              title="Les employés peuvent travailler ce jour férié (WRA 2019 art. 21)"
+              title={t('rhpl.work_allowed_title', locale)}
             >
               {t('rha.b.jf.work_majoration', locale).replace('{n}', String(holiday.majoration_pct ?? 100))}
             </Badge>
@@ -323,7 +327,7 @@ function HolidayCard({
               size="sm"
               onClick={onEdit}
               className="text-gray-500 hover:text-[#0B0F2E] hover:bg-gray-100 h-7 w-7 p-0"
-              title="Modifier (travail autorisé, majoration)"
+              title={t('rhpl.edit_title', locale)}
             >
               <Edit3 size={14} />
             </Button>
@@ -518,7 +522,7 @@ export default function JoursFeriesPage() {
       if (!res.ok || !data.success) {
         // Sprint 6 FIX 1 — surface le VRAI message au lieu de silently ignorer
         console.error('[jours-feries handleAdd]', res.status, data)
-        alert(`Impossible d'ajouter le jour férié : ${data?.error || `Erreur ${res.status}`}`)
+        alert(`${t('rhpl.add_failed', locale)} ${data?.error || `${t('rhpl.error', locale)} ${res.status}`}`)
         return
       }
       setDialogOpen(false)
@@ -528,7 +532,7 @@ export default function JoursFeriesPage() {
       await load()
     } catch (e: any) {
       console.error('[jours-feries handleAdd] exception', e)
-      alert(`Erreur réseau : ${e?.message || 'inconnue'}`)
+      alert(`${t('rhpl.network_error', locale)} ${e?.message || t('rhpl.unknown', locale)}`)
     } finally {
       setSaving(false)
     }
@@ -560,11 +564,11 @@ export default function JoursFeriesPage() {
           already_exists: existingDates.has(it.date),
         }))
       if (items.length === 0) {
-        setNagerError('Aucun jour férié trouvé pour Maurice cette année via Nager.Date.')
+        setNagerError(t('rhpl.nager_none_found', locale))
       }
       setNagerItems(items)
     } catch (e: any) {
-      setNagerError(`Erreur de chargement : ${e?.message || 'réseau'}. Vérifiez votre connexion ou réessayez plus tard.`)
+      setNagerError(`${t('rhpl.load_error', locale)} ${e?.message || t('rhpl.network', locale)}. ${t('rhpl.check_connection', locale)}`)
     } finally {
       setNagerLoading(false)
     }
@@ -577,7 +581,7 @@ export default function JoursFeriesPage() {
   const importSelectedNager = async () => {
     const selected = nagerItems.filter(it => it.selected && !it.already_exists)
     if (selected.length === 0) {
-      setNagerError('Aucun jour à importer sélectionné.')
+      setNagerError(t('rhpl.none_selected', locale))
       return
     }
     setNagerImporting(true)
@@ -600,7 +604,7 @@ export default function JoursFeriesPage() {
       setNagerItems([])
       await load()
     } catch (e: any) {
-      setNagerError(`Erreur d'import : ${e?.message || 'réseau'}`)
+      setNagerError(`${t('rhpl.import_error', locale)} ${e?.message || t('rhpl.network', locale)}`)
     } finally {
       setNagerImporting(false)
     }
@@ -631,13 +635,13 @@ export default function JoursFeriesPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data.error) {
-        setEditError(data.error || `Erreur ${res.status}`)
+        setEditError(data.error || `${t('rhpl.error', locale)} ${res.status}`)
         return
       }
       setEditingHoliday(null)
       await load()
     } catch (e: any) {
-      setEditError(e?.message || 'Erreur réseau')
+      setEditError(e?.message || t('rhpl.network_error_short', locale))
     } finally {
       setEditSaving(false)
     }
@@ -645,7 +649,7 @@ export default function JoursFeriesPage() {
 
   // Delete holiday
   const handleDelete = async (id: string) => {
-    if (!confirm("Supprimer ce jour férié ?")) return
+    if (!confirm(t('rhpl.confirm_delete', locale))) return
     await fetch("/api/rh/jours-feries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -860,6 +864,7 @@ export default function JoursFeriesPage() {
                           year={y}
                           month={m}
                           holidayDates={holidayDateMap}
+                          locale={locale}
                         />
                       ))
                     })()}
@@ -905,8 +910,7 @@ export default function JoursFeriesPage() {
           </DialogHeader>
           <div className="space-y-3 overflow-y-auto flex-1 pr-1">
             <p className="text-sm text-gray-600">
-              Source : <a href="https://date.nager.at/" target="_blank" rel="noopener" className="underline">Nager.Date</a> — jours fériés officiels Maurice.
-              Les fêtes pascales (Good Friday, Easter Monday) sont exclues automatiquement car NON fériées officielles à Maurice.
+              {t('rhpl.source_prefix', locale)} <a href="https://date.nager.at/" target="_blank" rel="noopener" className="underline">Nager.Date</a> {t('rhpl.source_desc', locale)}
             </p>
             {nagerLoading && (
               <div className="flex items-center gap-2 text-sm text-gray-500 py-6 justify-center">
@@ -923,7 +927,7 @@ export default function JoursFeriesPage() {
             {!nagerLoading && !nagerError && nagerItems.length > 0 && (
               <>
                 <div className="text-xs text-gray-500 pb-1">
-                  {nagerItems.filter(i => i.selected && !i.already_exists).length} à importer · {nagerItems.filter(i => i.already_exists).length} déjà en DB
+                  {nagerItems.filter(i => i.selected && !i.already_exists).length} {t('rhpl.to_import', locale)} · {nagerItems.filter(i => i.already_exists).length} {t('rhpl.already_in_db', locale)}
                 </div>
                 <div className="border rounded-lg divide-y max-h-[50vh] overflow-y-auto">
                   {nagerItems.map((it, idx) => (
@@ -992,8 +996,7 @@ export default function JoursFeriesPage() {
                   <span className="text-sm font-medium text-emerald-900">{t('rha.b.jf.work_authorized', locale)}</span>
                 </label>
                 <p className="text-xs text-emerald-800">
-                  Si activé : les employés peuvent pointer ce jour. WRA 2019 art. 21 —
-                  rémunération = salaire normal + majoration.
+                  {t('rhpl.work_authorized_help', locale)}
                 </p>
               </div>
               {editTravailAutorise && (
@@ -1008,7 +1011,7 @@ export default function JoursFeriesPage() {
                     step="1"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    100 = +100% = double salaire (défaut WRA 2019). Ajustez si votre société applique un autre taux.
+                    {t('rhpl.majoration_help', locale)}
                   </p>
                 </div>
               )}

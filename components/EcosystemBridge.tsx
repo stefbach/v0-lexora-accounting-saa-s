@@ -7,6 +7,7 @@
  */
 
 import * as React from "react"
+import { t, type Locale } from "@/lib/i18n"
 import { Reveal, StaggerGroup, StaggerItem, HoverLift } from "@/components/ui/motion"
 import {
   Banknote,
@@ -19,8 +20,6 @@ import {
   Zap,
   RadioTower,
 } from "lucide-react"
-
-type Locale = "fr" | "en"
 
 const BANKS = [
   { code: "MCB", color: "#E61E2A" },
@@ -35,55 +34,43 @@ const BANKS = [
 const INTEGRATIONS = [
   {
     icon: Banknote,
-    title: "7 banques mauriciennes",
-    titleEn: "7 Mauritian banks",
-    body: "Connexion sécurisée Internet Banking : MCB, SBM, ABC, MauBank, MyT Money, AfrAsia, Bank One. Scraping quotidien automatique des soldes et transactions. Credentials chiffrés AES-256-GCM.",
-    bodyEn: "Secure Internet Banking connection: MCB, SBM, ABC, MauBank, MyT Money, AfrAsia, Bank One. Daily automated balance & transaction scraping. AES-256-GCM encrypted credentials.",
+    titleKey: "cmkt.eco.int_banks_title",
+    bodyKey: "cmkt.eco.int_banks_body",
     color: "#4191FF",
     tag: "Open Banking",
   },
   {
     icon: Landmark,
-    title: "MRA — robot e-filing",
-    titleEn: "MRA — e-filing robot",
-    body: "Soumission automatisée VAT, PAYE, CSG, NSF, TDS, CIT, ROC, SFT, PRGF. Robot Playwright headless qui se connecte au portail MRA, dépose le CSV/XML, récupère l'accusé de réception.",
-    bodyEn: "Automated submission of VAT, PAYE, CSG, NSF, TDS, CIT, ROC, SFT, PRGF. Headless Playwright robot logs into MRA portal, uploads CSV/XML, retrieves acknowledgement.",
+    titleKey: "cmkt.eco.int_mra_title",
+    bodyKey: "cmkt.eco.int_mra_body",
     color: "#D4AF37",
     tag: "100% MRA",
   },
   {
     icon: Send,
-    title: "Telegram — bras droit IA",
-    titleEn: "Telegram — AI right hand",
-    body: "50+ outils branchés, OCR vision (Haiku 4.5), transcription voix (Whisper), boutons inline, mémoire conversationnelle. Pilotez Lexora comme on dicte à une assistante.",
-    bodyEn: "50+ wired tools, vision OCR (Haiku 4.5), voice transcription (Whisper), inline buttons, conversational memory. Drive Lexora like dictating to an assistant.",
+    titleKey: "cmkt.eco.int_telegram_title",
+    bodyKey: "cmkt.eco.int_telegram_body",
     color: "#2ECC8A",
     tag: "Chief of Staff",
   },
   {
     icon: Mail,
-    title: "Email multi-compte",
-    titleEn: "Multi-account email",
-    body: "SMTP, Resend, Gmail OAuth — chaque société peut câbler son propre compte d'envoi. Templates dynamiques par module (factures, relances, bulletins, contrats).",
-    bodyEn: "SMTP, Resend, Gmail OAuth — every company wires its own send account. Module-specific dynamic templates (invoices, dunning, payslips, contracts).",
+    titleKey: "cmkt.eco.int_email_title",
+    bodyKey: "cmkt.eco.int_email_body",
     color: "#4191FF",
     tag: "3 providers",
   },
   {
     icon: CalendarDays,
-    title: "Google Calendar OAuth",
-    titleEn: "Google Calendar OAuth",
-    body: "Multi-comptes Google par utilisateur. Création/modification d'événements, recherche de créneaux libres entre invités, lien Meet automatique. Tokens chiffrés.",
-    bodyEn: "Multi-Google accounts per user. Event create/edit, free-slot finder across attendees, auto Meet link. Encrypted tokens.",
+    titleKey: "cmkt.eco.int_gcal_title",
+    bodyKey: "cmkt.eco.int_gcal_body",
     color: "#D4AF37",
     tag: "OAuth 2.0",
   },
   {
     icon: Brain,
-    title: "Claude Code · Skills · MCP",
-    titleEn: "Claude Code · Skills · MCP",
-    body: "4 skills experts (IFRS 9 ECL, MRA-TDS, rapprochement, GBC Full IFRS) + 5 outils MCP (grand-livre, ECL, MRA, rapprochement, consolidation). Sonnet 4.6 + Haiku 4.5.",
-    bodyEn: "4 expert skills (IFRS 9 ECL, MRA-TDS, reconciliation, GBC Full IFRS) + 5 MCP tools (general ledger, ECL, MRA, reconciliation, consolidation). Sonnet 4.6 + Haiku 4.5.",
+    titleKey: "cmkt.eco.int_claude_title",
+    bodyKey: "cmkt.eco.int_claude_body",
     color: "#2ECC8A",
     tag: "Anthropic native",
   },
@@ -127,7 +114,7 @@ export function EcosystemBridge({ locale = "fr" }: { locale?: Locale }) {
             }}
           >
             <RadioTower className="h-3.5 w-3.5" />
-            {locale === "fr" ? "Écosystème connecté" : "Connected ecosystem"}
+            {t("cmkt.eco.badge", locale)}
           </span>
           <h2
             className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
@@ -139,37 +126,18 @@ export function EcosystemBridge({ locale = "fr" }: { locale?: Locale }) {
               lineHeight: 1.05,
             }}
           >
-            {locale === "fr" ? (
-              <>
-                Lexora parle déjà à{" "}
-                <span
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                    WebkitBackgroundClip: "text",
-                    backgroundClip: "text",
-                    color: "transparent",
-                  }}
-                >
-                  vos systèmes
-                </span>
-              </>
-            ) : (
-              <>
-                Lexora already talks to{" "}
-                <span
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
-                    WebkitBackgroundClip: "text",
-                    backgroundClip: "text",
-                    color: "transparent",
-                  }}
-                >
-                  your systems
-                </span>
-              </>
-            )}
+            {t("cmkt.eco.title_lead", locale)}{" "}
+            <span
+              style={{
+                backgroundImage:
+                  "linear-gradient(90deg, #4191FF 0%, #D4AF37 100%)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              {t("cmkt.eco.title_accent", locale)}
+            </span>
           </h2>
           <p
             className="mx-auto max-w-2xl text-base md:text-lg"
@@ -180,9 +148,7 @@ export function EcosystemBridge({ locale = "fr" }: { locale?: Locale }) {
               lineHeight: 1.7,
             }}
           >
-            {locale === "fr"
-              ? "Banques, MRA, Google, Telegram, Claude. Pas d'import CSV à la main, pas d'export à recopier. Lexora se branche, se synchronise, et s'occupe du reste."
-              : "Banks, MRA, Google, Telegram, Claude. No CSV imports by hand, no exports to copy. Lexora plugs in, syncs and handles the rest."}
+            {t("cmkt.eco.subtitle", locale)}
           </p>
         </Reveal>
 
@@ -211,7 +177,7 @@ export function EcosystemBridge({ locale = "fr" }: { locale?: Locale }) {
                 className="mb-3 text-[11px] font-bold uppercase tracking-widest"
                 style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
               >
-                {locale === "fr" ? "Vos banques, sans relever de pièges" : "Your banks, without lifting a finger"}
+                {t("cmkt.eco.banks_eyebrow", locale)}
               </div>
               <h3
                 className="mb-7 text-2xl font-bold md:text-3xl"
@@ -222,9 +188,7 @@ export function EcosystemBridge({ locale = "fr" }: { locale?: Locale }) {
                   letterSpacing: "-0.02em",
                 }}
               >
-                {locale === "fr"
-                  ? "7 banques mauriciennes synchronisées chaque nuit"
-                  : "7 Mauritian banks synced every night"}
+                {t("cmkt.eco.banks_heading", locale)}
               </h3>
 
               <div className="flex flex-wrap items-center justify-center gap-3 md:gap-4">
@@ -252,9 +216,9 @@ export function EcosystemBridge({ locale = "fr" }: { locale?: Locale }) {
 
               <div className="mt-8 grid gap-4 sm:grid-cols-3">
                 {[
-                  { icon: ShieldCheck, label: locale === "fr" ? "AES-256-GCM" : "AES-256-GCM" },
-                  { icon: Zap, label: locale === "fr" ? "Scrape automatique 02:00" : "Auto-scrape 02:00" },
-                  { icon: Brain, label: locale === "fr" ? "Détection d'anomalies IA" : "AI anomaly detection" },
+                  { icon: ShieldCheck, label: t("cmkt.eco.feat_aes", locale) },
+                  { icon: Zap, label: t("cmkt.eco.feat_scrape", locale) },
+                  { icon: Brain, label: t("cmkt.eco.feat_anomaly", locale) },
                 ].map((f) => (
                   <div
                     key={f.label}
@@ -281,7 +245,7 @@ export function EcosystemBridge({ locale = "fr" }: { locale?: Locale }) {
         {/* INTEGRATIONS GRID */}
         <StaggerGroup className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" staggerMs={70}>
           {INTEGRATIONS.map((it, i) => (
-            <StaggerItem key={it.title}>
+            <StaggerItem key={it.titleKey}>
               <HoverLift lift={6} className="h-full">
                 <article
                   className="group relative h-full overflow-hidden rounded-2xl p-7"
@@ -341,7 +305,7 @@ export function EcosystemBridge({ locale = "fr" }: { locale?: Locale }) {
                       letterSpacing: "-0.01em",
                     }}
                   >
-                    {locale === "fr" ? it.title : it.titleEn}
+                    {t(it.titleKey, locale)}
                   </h3>
                   <p
                     className="text-sm"
@@ -352,7 +316,7 @@ export function EcosystemBridge({ locale = "fr" }: { locale?: Locale }) {
                       lineHeight: 1.65,
                     }}
                   >
-                    {locale === "fr" ? it.body : it.bodyEn}
+                    {t(it.bodyKey, locale)}
                   </p>
                 </article>
               </HoverLift>

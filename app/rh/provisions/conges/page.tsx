@@ -150,18 +150,18 @@ export default function ProvisionsCongesPage() {
         body: JSON.stringify({ societe_id: societeId, date_snapshot: dateSnapshot }),
       })
       const d = await r.json()
-      if (!r.ok) { setFeedback(`❌ ${d.error || 'Erreur calcul'}`); return }
+      if (!r.ok) { setFeedback(`❌ ${d.error || t('rhc.prov.err_calcul', locale)}`); return }
       setSnapshotCalc(d.snapshot)
-    } catch (e: any) { setFeedback(`❌ ${e?.message || 'Erreur réseau'}`) }
+    } catch (e: any) { setFeedback(`❌ ${e?.message || t('rhc.prov.err_reseau', locale)}`) }
     finally { setCalculating(false) }
   }, [societeId, dateSnapshot])
 
   const handleComptabiliser = useCallback(async () => {
     if (!societeId || !isAdmin) return
     if (!confirm(
-      `Comptabiliser la provision pour ${libellePeriodeLocal(dateSnapshot)} ?\n\n` +
-      `Cette action génère 2 écritures comptables (journal OD).\n` +
-      (snapshotPrecedent ? `Le mois précédent (${snapshotPrecedent.date_snapshot}) sera extourné.` : ''),
+      t('rhc.prov.confirm_book_l1', locale).replace('{periode}', libellePeriodeLocal(dateSnapshot)) + `\n\n` +
+      t('rhc.prov.confirm_book_l2', locale) + `\n` +
+      (snapshotPrecedent ? t('rhc.prov.confirm_book_extourne', locale).replace('{date}', snapshotPrecedent.date_snapshot) : ''),
     )) return
     setComptabilizing(true)
     setFeedback(null)
@@ -172,25 +172,25 @@ export default function ProvisionsCongesPage() {
         body: JSON.stringify({ societe_id: societeId, date_snapshot: dateSnapshot }),
       })
       const d = await r.json()
-      if (!r.ok) { setFeedback(`❌ ${d.error || 'Erreur comptabilisation'}`); return }
-      setFeedback(`✅ Provision ${formaterMUR(d.provision_total_mur || 0)} comptabilisée`
-        + (d.extourne_precedent ? ' (extourne mois précédent inclus)' : ''))
+      if (!r.ok) { setFeedback(`❌ ${d.error || t('rhc.prov.err_compta', locale)}`); return }
+      setFeedback(t('rhc.prov.ok_book', locale).replace('{amt}', formaterMUR(d.provision_total_mur || 0))
+        + (d.extourne_precedent ? t('rhc.prov.ok_book_extourne', locale) : ''))
       loadHistorique()
       setSnapshotCalc(null)
-    } catch (e: any) { setFeedback(`❌ ${e?.message || 'Erreur réseau'}`) }
+    } catch (e: any) { setFeedback(`❌ ${e?.message || t('rhc.prov.err_reseau', locale)}`) }
     finally { setComptabilizing(false) }
   }, [societeId, dateSnapshot, isAdmin, snapshotPrecedent, loadHistorique])
 
   const handleAnnuler = useCallback(async (id: string) => {
     if (!isAdmin) return
-    if (!confirm('Annuler ce snapshot ? (soft delete, les écritures comptables sont conservées pour traçabilité)')) return
+    if (!confirm(t('rhc.prov.confirm_annuler', locale))) return
     setRowLoading(id)
     try {
       const r = await fetch(`/api/rh/provisions/conges/${id}`, { method: 'DELETE' })
       const d = await r.json()
-      if (!r.ok) { setFeedback(`❌ ${d.error || 'Erreur'}`); return }
+      if (!r.ok) { setFeedback(`❌ ${d.error || t('rhc.prov.err_generic', locale)}`); return }
       loadHistorique()
-    } catch (e: any) { setFeedback(`❌ ${e?.message || 'Erreur'}`) }
+    } catch (e: any) { setFeedback(`❌ ${e?.message || t('rhc.prov.err_generic', locale)}`) }
     finally { setRowLoading(null) }
   }, [isAdmin, loadHistorique])
 
@@ -373,23 +373,24 @@ export default function ProvisionsCongesPage() {
                 </div>
                 <div className="text-xs font-mono space-y-1">
                   <div className="flex justify-between border-b pb-1">
-                    <span>Journal OD · Pièce PRO-IAS19-{dateSnapshot.slice(0, 7).replace('-', '')}</span>
-                    <span>Date : {dateSnapshot}</span>
+                    <span>{t('rhc.prov.journal_piece', locale).replace('{ref}', dateSnapshot.slice(0, 7).replace('-', ''))}</span>
+                    <span>{t('rhc.prov.journal_date', locale).replace('{date}', dateSnapshot)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>64175 DÉBIT  Provision congés (charge)</span>
+                    <span>{t('rhc.prov.debit_charge', locale)}</span>
                     <span className="font-semibold">{formaterMUR(snapshotCalc.provision_total_mur)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>4287 CRÉDIT Provision congés (passif)</span>
+                    <span>{t('rhc.prov.credit_passif', locale)}</span>
                     <span className="font-semibold">{formaterMUR(snapshotCalc.provision_total_mur)}</span>
                   </div>
                   {snapshotPrecedent && (
                     <div className="flex items-center gap-2 text-amber-900 pt-2 border-t">
                       <RotateCcw className="h-3 w-3" />
                       <span>
-                        + extourne {snapshotPrecedent.date_snapshot} :
-                        {' '}{formaterMUR(snapshotPrecedent.provision_total_mur)} (inverse)
+                        {t('rhc.prov.extourne_ligne', locale)
+                          .replace('{date}', snapshotPrecedent.date_snapshot)
+                          .replace('{amt}', formaterMUR(snapshotPrecedent.provision_total_mur))}
                       </span>
                     </div>
                   )}
@@ -488,14 +489,8 @@ export default function ProvisionsCongesPage() {
             <div className="flex items-center gap-2 font-medium" style={{ color: NAVY }}>
               <AlertTriangle className="h-3 w-3" /> {t('rha.b.provc.reminder_title', locale)}
             </div>
-            <div>
-              Les congés payés accumulés doivent être provisionnés au fur et à mesure de leur acquisition.
-              Montant = jours acquis non pris × (salaire base × (1 + charges patronales) / 22).
-            </div>
-            <div>
-              La provision est extournée le mois suivant (contre-passation) et remplacée par la nouvelle :
-              le solde du compte 4287 reflète à tout moment la dette envers les employés.
-            </div>
+            <div>{t('rhc.prov.reminder_body1', locale)}</div>
+            <div>{t('rhc.prov.reminder_body2', locale)}</div>
           </CardContent>
         </Card>
       </div>

@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
+import { t, getLocale } from "@/lib/i18n"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Couleur = "vert" | "orange" | "rouge"
@@ -114,10 +115,10 @@ const fmt = (n: number) =>
     Number(n || 0)
   )
 
-const COULEUR_STYLE: Record<Couleur, { bg: string; ring: string; text: string; dot: string; label: string }> = {
-  vert:   { bg: "bg-emerald-50", ring: "ring-emerald-300", text: "text-emerald-700", dot: "bg-emerald-500", label: "Équilibré" },
-  orange: { bg: "bg-amber-50",   ring: "ring-amber-300",   text: "text-amber-700",   dot: "bg-amber-500",   label: "À surveiller" },
-  rouge:  { bg: "bg-red-50",     ring: "ring-red-300",     text: "text-red-700",     dot: "bg-red-500",     label: "Déséquilibré" },
+const COULEUR_STYLE: Record<Couleur, { bg: string; ring: string; text: string; dot: string; labelKey: string }> = {
+  vert:   { bg: "bg-emerald-50", ring: "ring-emerald-300", text: "text-emerald-700", dot: "bg-emerald-500", labelKey: "cpta.spcm_balanced" },
+  orange: { bg: "bg-amber-50",   ring: "ring-amber-300",   text: "text-amber-700",   dot: "bg-amber-500",   labelKey: "cpta.spcm_to_watch" },
+  rouge:  { bg: "bg-red-50",     ring: "ring-red-300",     text: "text-red-700",     dot: "bg-red-500",     labelKey: "cpta.spcm_unbalanced" },
 }
 
 function grandLivreLink(societeId: string, params: Record<string, string | undefined> = {}) {
@@ -128,6 +129,7 @@ function grandLivreLink(societeId: string, params: Record<string, string | undef
 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function SantePCMPage() {
+  const locale = getLocale()
   const [overview, setOverview] = useState<OverviewResponse | null>(null)
   const [detail, setDetail] = useState<DetailResponse | null>(null)
   const [societeId, setSocieteId] = useState<string>("")
@@ -147,7 +149,7 @@ export default function SantePCMPage() {
       const first = data.pire?.societe_id || data.societes[0]?.societe_id
       if (first && !societeId) setSocieteId(first)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur")
+      setError(e instanceof Error ? e.message : t('cpta.spcm_error', locale))
     } finally {
       setLoadingOverview(false)
     }
@@ -165,7 +167,7 @@ export default function SantePCMPage() {
       const data: DetailResponse = await res.json()
       setDetail(data)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur")
+      setError(e instanceof Error ? e.message : t('cpta.spcm_error', locale))
     } finally {
       setLoadingDetail(false)
     }
@@ -193,21 +195,21 @@ export default function SantePCMPage() {
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">Comptabilité</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">{t('cpta.spcm_eyebrow', locale)}</p>
           <h1 className="mt-1 text-2xl font-bold text-zinc-900 sm:text-3xl">
-            Santé du Plan Comptable
+            {t('cpta.spcm_title', locale)}
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-zinc-600">
-            Surveillance temps réel de l&apos;équilibre comptable. Toute incohérence sur
+            {t('cpta.spcm_intro_pre', locale)}
             <code className="mx-1 rounded bg-zinc-100 px-1 py-0.5 text-xs">ecritures_comptables_v2</code>
-            est détectée ici avant qu&apos;elle ne contamine les états financiers.
+            {t('cpta.spcm_intro_post', locale)}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {overview && overview.societes.length > 1 && (
             <Select value={societeId} onValueChange={setSocieteId}>
               <SelectTrigger className="w-[260px]">
-                <SelectValue placeholder="Sélectionner une société" />
+                <SelectValue placeholder={t('cpta.spcm_select_company', locale)} />
               </SelectTrigger>
               <SelectContent>
                 {overview.societes.map(s => (
@@ -232,7 +234,7 @@ export default function SantePCMPage() {
             ) : (
               <RefreshCw className="mr-2 h-4 w-4" />
             )}
-            Recharger
+            {t('cpta.spcm_reload', locale)}
           </Button>
         </div>
       </div>
@@ -256,19 +258,19 @@ export default function SantePCMPage() {
                 </div>
                 <div>
                   <p className={`text-xs font-medium uppercase tracking-wider ${style.text}`}>
-                    Indicateur global
+                    {t('cpta.spcm_global_indicator', locale)}
                   </p>
                   <p className={`text-2xl font-bold ${style.text}`}>
-                    {style.label}
+                    {t(style.labelKey, locale)}
                   </p>
                   <p className="mt-1 text-sm text-zinc-600">
-                    {synthese.nb_ecritures_total.toLocaleString("fr-FR")} écritures analysées
+                    {synthese.nb_ecritures_total.toLocaleString("fr-FR")} {t('cpta.spcm_entries_analyzed', locale)}
                   </p>
                 </div>
               </div>
               <div className="text-right">
                 <p className={`text-xs font-medium uppercase tracking-wider ${style.text}`}>
-                  Score santé
+                  {t('cpta.spcm_health_score', locale)}
                 </p>
                 <p className={`text-5xl font-bold tabular-nums ${style.text}`}>
                   {synthese.sante_score}
@@ -282,7 +284,7 @@ export default function SantePCMPage() {
 
       {loadingDetail && !detail && (
         <div className="flex items-center justify-center py-12 text-zinc-500">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Analyse en cours…
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t('cpta.spcm_analyzing', locale)}
         </div>
       )}
 
@@ -292,16 +294,16 @@ export default function SantePCMPage() {
           {/* 1. Déséquilibre global */}
           <CheckCard
             icon={<Scale className="h-5 w-5" />}
-            title="1. Déséquilibre global"
+            title={t('cpta.spcm_card1_title', locale)}
             ok={Math.abs(synthese.desequilibre_global) <= 1.0}
-            okText="SUM(débit) = SUM(crédit) (tolérance 1.00 MUR)"
-            problemText={`Écart de ${fmt(synthese.desequilibre_global)} MUR détecté`}
+            okText={t('cpta.spcm_card1_ok', locale)}
+            problemText={`${t('cpta.spcm_card1_problem_pre', locale)} ${fmt(synthese.desequilibre_global)} ${t('cpta.spcm_card1_problem_post', locale)}`}
           >
             <dl className="mt-3 space-y-1 text-sm">
-              <Row label="Total débit"  value={`${fmt(synthese.total_d_global)} MUR`} />
-              <Row label="Total crédit" value={`${fmt(synthese.total_c_global)} MUR`} />
+              <Row label={t('cpta.spcm_total_debit', locale)}  value={`${fmt(synthese.total_d_global)} MUR`} />
+              <Row label={t('cpta.spcm_total_credit', locale)} value={`${fmt(synthese.total_c_global)} MUR`} />
               <Row
-                label="Écart (D − C)"
+                label={t('cpta.spcm_gap_dc', locale)}
                 value={`${fmt(synthese.desequilibre_global)} MUR`}
                 emphasis={Math.abs(synthese.desequilibre_global) > 1}
               />
@@ -311,10 +313,10 @@ export default function SantePCMPage() {
           {/* 2. Déséquilibre par journal */}
           <CheckCard
             icon={<BookOpen className="h-5 w-5" />}
-            title="2. Journaux déséquilibrés"
+            title={t('cpta.spcm_card2_title', locale)}
             ok={synthese.nb_journaux_desequilibres === 0}
-            okText="Tous les journaux sont équilibrés"
-            problemText={`${synthese.nb_journaux_desequilibres} journal(aux) déséquilibré(s)`}
+            okText={t('cpta.spcm_card2_ok', locale)}
+            problemText={`${synthese.nb_journaux_desequilibres} ${t('cpta.spcm_card2_problem', locale)}`}
           >
             {detail.journaux.length > 0 ? (
               <ul className="mt-3 max-h-48 space-y-1 overflow-auto text-sm">
@@ -338,10 +340,10 @@ export default function SantePCMPage() {
           {/* 3. Folios déséquilibrés */}
           <CheckCard
             icon={<FileQuestion className="h-5 w-5" />}
-            title="3. Folios déséquilibrés"
+            title={t('cpta.spcm_card3_title', locale)}
             ok={synthese.nb_folios_desequilibres === 0}
-            okText="Chaque ref_folio est équilibré (|D − C| ≤ 0.01)"
-            problemText={`${synthese.nb_folios_desequilibres} folio(s) déséquilibré(s)`}
+            okText={t('cpta.spcm_card3_ok', locale)}
+            problemText={`${synthese.nb_folios_desequilibres} ${t('cpta.spcm_card3_problem', locale)}`}
           >
             {detail.folios.length > 0 ? (
               <ul className="mt-3 max-h-48 space-y-1 overflow-auto text-sm">
@@ -364,7 +366,7 @@ export default function SantePCMPage() {
                 ))}
                 {detail.folios.length > 10 && (
                   <li className="px-2 py-1 text-center text-xs text-zinc-400">
-                    + {detail.folios.length - 10} autres folios
+                    + {detail.folios.length - 10} {t('cpta.spcm_more_folios', locale)}
                   </li>
                 )}
               </ul>
@@ -374,10 +376,10 @@ export default function SantePCMPage() {
           {/* 4. Écritures orphelines */}
           <CheckCard
             icon={<FileX2 className="h-5 w-5" />}
-            title="4. Écritures orphelines"
+            title={t('cpta.spcm_card4_title', locale)}
             ok={synthese.nb_ecritures_orphelines === 0}
-            okText="Toutes les écritures ont un ref_folio"
-            problemText={`${synthese.nb_ecritures_orphelines} écriture(s) sans ref_folio`}
+            okText={t('cpta.spcm_card4_ok', locale)}
+            problemText={`${synthese.nb_ecritures_orphelines} ${t('cpta.spcm_card4_problem', locale)}`}
           >
             {detail.orphelines.length > 0 ? (
               <ul className="mt-3 max-h-48 space-y-1 overflow-auto text-sm">
@@ -397,7 +399,7 @@ export default function SantePCMPage() {
                 ))}
                 {detail.orphelines.length > 8 && (
                   <li className="px-2 py-1 text-center text-xs text-zinc-400">
-                    + {detail.orphelines.length - 8} autres écritures
+                    + {detail.orphelines.length - 8} {t('cpta.spcm_more_entries', locale)}
                   </li>
                 )}
               </ul>
@@ -407,10 +409,10 @@ export default function SantePCMPage() {
           {/* 5. Comptes hors PCG */}
           <CheckCard
             icon={<ShieldAlert className="h-5 w-5" />}
-            title="5. Comptes hors PCG Maurice"
+            title={t('cpta.spcm_card5_title', locale)}
             ok={synthese.nb_comptes_invalides === 0}
-            okText="Tous les comptes utilisés sont dans plan_comptable"
-            problemText={`${synthese.nb_comptes_invalides} compte(s) inconnu(s)`}
+            okText={t('cpta.spcm_card5_ok', locale)}
+            problemText={`${synthese.nb_comptes_invalides} ${t('cpta.spcm_card5_problem', locale)}`}
           >
             {detail.comptes_invalides.length > 0 ? (
               <ul className="mt-3 max-h-48 space-y-1 overflow-auto text-sm">
@@ -436,14 +438,14 @@ export default function SantePCMPage() {
             <CardContent className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
               <ExternalLink className="h-6 w-6 text-zinc-400" />
               <p className="text-sm font-medium text-zinc-700">
-                Investiguer dans le grand-livre
+                {t('cpta.spcm_investigate', locale)}
               </p>
               <p className="text-xs text-zinc-500">
-                Ouvrir toutes les écritures de cette société pour analyse manuelle.
+                {t('cpta.spcm_investigate_desc', locale)}
               </p>
               <Button asChild variant="outline" size="sm">
                 <Link href={grandLivreLink(synthese.societe_id)}>
-                  Ouvrir le grand-livre
+                  {t('cpta.spcm_open_ledger', locale)}
                 </Link>
               </Button>
             </CardContent>
@@ -453,7 +455,7 @@ export default function SantePCMPage() {
 
       {detail && (
         <p className="mt-6 text-right text-xs text-zinc-400">
-          Mis à jour : {new Date(detail.generated_at).toLocaleString("fr-FR")} · Données mises en cache 60 s.
+          {t('cpta.spcm_updated_at', locale)} {new Date(detail.generated_at).toLocaleString("fr-FR")} {t('cpta.spcm_cached', locale)}
         </p>
       )}
     </div>
@@ -481,7 +483,7 @@ function CheckCard({
             variant="outline"
             className={`ml-auto text-xs ${ok ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-amber-300 bg-amber-50 text-amber-700"}`}
           >
-            {ok ? "OK" : "Alerte"}
+            {ok ? "OK" : t('cpta.spcm_alert', getLocale())}
           </Badge>
         </CardTitle>
       </CardHeader>

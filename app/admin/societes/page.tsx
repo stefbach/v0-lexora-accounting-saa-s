@@ -844,10 +844,10 @@ export default function SocietesPage() {
                               <span className="text-sm">{s.comptable.full_name}</span>
                               <button
                                 type="button"
-                                title="Délier ce comptable"
+                                title={t('adm2.soc.unlink_comptable_title', locale)}
                                 className="text-[10px] px-1.5 py-0.5 rounded border border-amber-300 text-amber-700 hover:bg-amber-50"
                                 onClick={async () => {
-                                  if (!confirm(`Délier ${s.comptable!.full_name} de la société ${s.nom} ?`)) return
+                                  if (!confirm(t('adm2.soc.unlink_comptable_confirm', locale).replace('{name}', s.comptable!.full_name).replace('{societe}', s.nom))) return
                                   try {
                                     const r = await fetch("/api/admin/societes", {
                                       method: "PUT",

@@ -12,6 +12,26 @@ import { componentsChunk } from './i18n/components'
 import { invoicingExtChunk } from './i18n/invoicing_ext'
 import { mraExtChunk } from './i18n/mra_ext'
 import { salarieChunk } from './i18n/salarie'
+import { telegramChunk } from './i18n/telegram'
+import { accountChunk } from './i18n/account'
+import { clientbilanChunk } from './i18n/client_bilan'
+import { clientfacturesChunk } from './i18n/client_factures'
+import { clientmraChunk } from './i18n/client_mra'
+import { jurcontratsChunk } from './i18n/jur_contrats'
+import { jurdossiersChunk } from './i18n/jur_dossiers'
+import { jursocieteChunk } from './i18n/jur_societe'
+import { comptableaChunk } from './i18n/comptable_a'
+import { comptablebChunk } from './i18n/comptable_b'
+import { adminaChunk } from './i18n/admin_a'
+import { adminbChunk } from './i18n/admin_b'
+import { compmarketChunk } from './i18n/comp_market'
+import { complayoutChunk } from './i18n/comp_layout'
+import { compdialogsChunk } from './i18n/comp_dialogs'
+import { rhcongesChunk } from './i18n/rh_conges'
+import { rhplanningChunk } from './i18n/rh_planning'
+import { rhemployesChunk } from './i18n/rh_employes'
+import { rhpaieChunk } from './i18n/rh_paie'
+import { rhdiversChunk } from './i18n/rh_divers'
 
 export type Locale = 'fr' | 'en'
 
@@ -635,6 +655,26 @@ const translations: Record<Locale, Record<string, string>> = {
     ...invoicingExtChunk.fr,
     ...mraExtChunk.fr,
     ...salarieChunk.fr,
+    ...telegramChunk.fr,
+    ...accountChunk.fr,
+    ...clientbilanChunk.fr,
+    ...clientfacturesChunk.fr,
+    ...clientmraChunk.fr,
+    ...jurcontratsChunk.fr,
+    ...jurdossiersChunk.fr,
+    ...jursocieteChunk.fr,
+    ...comptableaChunk.fr,
+    ...comptablebChunk.fr,
+    ...adminaChunk.fr,
+    ...adminbChunk.fr,
+    ...compmarketChunk.fr,
+    ...complayoutChunk.fr,
+    ...compdialogsChunk.fr,
+    ...rhcongesChunk.fr,
+    ...rhplanningChunk.fr,
+    ...rhemployesChunk.fr,
+    ...rhpaieChunk.fr,
+    ...rhdiversChunk.fr,
   },
   en: {
     ...baseTranslations.en,
@@ -652,6 +692,26 @@ const translations: Record<Locale, Record<string, string>> = {
     ...invoicingExtChunk.en,
     ...mraExtChunk.en,
     ...salarieChunk.en,
+    ...telegramChunk.en,
+    ...accountChunk.en,
+    ...clientbilanChunk.en,
+    ...clientfacturesChunk.en,
+    ...clientmraChunk.en,
+    ...jurcontratsChunk.en,
+    ...jurdossiersChunk.en,
+    ...jursocieteChunk.en,
+    ...comptableaChunk.en,
+    ...comptablebChunk.en,
+    ...adminaChunk.en,
+    ...adminbChunk.en,
+    ...compmarketChunk.en,
+    ...complayoutChunk.en,
+    ...compdialogsChunk.en,
+    ...rhcongesChunk.en,
+    ...rhplanningChunk.en,
+    ...rhemployesChunk.en,
+    ...rhpaieChunk.en,
+    ...rhdiversChunk.en,
   },
 }
 

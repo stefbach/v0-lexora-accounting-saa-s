@@ -514,12 +514,12 @@ export default function FicheClientPage() {
                               if (!r.ok) throw new Error(j.error)
                               window.location.href = "/client/tableau-de-bord"
                             } catch (err: any) {
-                              alert(err?.message || "Erreur entrée dossier")
+                              alert(err?.message || t('cpta.clidet_enter_file_error', locale))
                             }
                           }}
-                          title="Bascule sur la vue client de ce dossier avec bandeau cabinet"
+                          title={t('cpta.clidet_enter_client_mode_tooltip', locale)}
                         >
-                          Entrer en mode client
+                          {t('cpta.clidet_enter_client_mode', locale)}
                           <ChevronRight className="h-3.5 w-3.5" />
                         </Button>
                         <Button

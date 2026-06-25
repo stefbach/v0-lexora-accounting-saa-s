@@ -20,6 +20,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { t } from "@/lib/i18n"
 import { AnimatedCounter } from "@/components/AnimatedCounter"
 import {
   StaggerGroup,
@@ -43,147 +44,88 @@ import {
 type Tier = {
   id: string
   icon: LucideIcon
-  badge: { fr: string; en: string }
-  name: { fr: string; en: string }
-  audience: { fr: string; en: string }
+  badgeKey: string
+  nameKey: string
+  audienceKey: string
   monthly: number // Rs/mo
-  features: { fr: string[]; en: string[] }
+  featureKeys: string[]
   popular?: boolean
-  cta?: { fr: string; en: string; href: string }
+  cta?: { key: string; href: string }
 }
 
 const TIERS: Tier[] = [
   {
     id: "solo",
     icon: Rocket,
-    badge: { fr: "Starter", en: "Starter" },
-    name: { fr: "Solo", en: "Solo" },
-    audience: {
-      fr: "Freelances, auto-entrepreneurs (1-3 personnes).",
-      en: "Freelancers, solo founders (1-3 people).",
-    },
+    badgeKey: "cmkt.pr.solo.badge",
+    nameKey: "cmkt.pr.solo.name",
+    audienceKey: "cmkt.pr.solo.audience",
     monthly: 2720,
-    features: {
-      fr: [
-        "Compta + Paie complètes",
-        "TIBOK Santé salariés · inclus",
-        "Jusqu'à 50 transactions / mois",
-        "OCR IA illimité",
-        "e-MRA : EDF5 basique",
-        "Assistant IA Telegram · en option (+Rs 990/mo)",
-        "500 Mo de stockage",
-      ],
-      en: [
-        "Full accounting + payroll",
-        "TIBOK employee health · included",
-        "Up to 50 transactions / month",
-        "Unlimited AI OCR",
-        "e-MRA: basic EDF5",
-        "Telegram AI Assistant · optional (+Rs 990/mo)",
-        "500 MB storage",
-      ],
-    },
+    featureKeys: [
+      "cmkt.pr.solo.f1",
+      "cmkt.pr.solo.f2",
+      "cmkt.pr.solo.f3",
+      "cmkt.pr.solo.f4",
+      "cmkt.pr.solo.f5",
+      "cmkt.pr.solo.f6",
+      "cmkt.pr.solo.f7",
+    ],
   },
   {
     id: "growth",
     icon: TrendingUp,
-    badge: { fr: "Meilleure valeur", en: "Best value" },
-    name: { fr: "Business", en: "Business" },
-    audience: {
-      fr: "Petites équipes en croissance (4-15 personnes).",
-      en: "Growing teams (4-15 people).",
-    },
+    badgeKey: "cmkt.pr.growth.badge",
+    nameKey: "cmkt.pr.growth.name",
+    audienceKey: "cmkt.pr.growth.audience",
     monthly: 4960,
-    features: {
-      fr: [
-        "Tout Solo, +",
-        "Assistant IA Telegram · Chief of Staff inclus",
-        "TIBOK Santé · téléconsultation illimitée",
-        "Jusqu'à 200 transactions / mois",
-        "e-MRA : EDF5 + VAT auto",
-        "Rapprochement bancaire auto",
-        "2 Go de stockage",
-      ],
-      en: [
-        "Everything in Solo, plus",
-        "Telegram AI Assistant · Chief of Staff included",
-        "TIBOK Health · unlimited telemedicine",
-        "Up to 200 transactions / month",
-        "e-MRA: EDF5 + auto VAT",
-        "Auto bank reconciliation",
-        "2 GB storage",
-      ],
-    },
+    featureKeys: [
+      "cmkt.pr.growth.f1",
+      "cmkt.pr.growth.f2",
+      "cmkt.pr.growth.f3",
+      "cmkt.pr.growth.f4",
+      "cmkt.pr.growth.f5",
+      "cmkt.pr.growth.f6",
+      "cmkt.pr.growth.f7",
+    ],
   },
   {
     id: "pme",
     icon: Crown,
-    badge: { fr: "Cœur de cible", en: "Most popular" },
-    name: { fr: "PME", en: "PME" },
-    audience: {
-      fr: "PME établies (16-50 personnes).",
-      en: "Established SMEs (16-50 people).",
-    },
+    badgeKey: "cmkt.pr.pme.badge",
+    nameKey: "cmkt.pr.pme.name",
+    audienceKey: "cmkt.pr.pme.audience",
     monthly: 10560,
     popular: true,
-    features: {
-      fr: [
-        "Tout Business, +",
-        "Assistant IA Telegram · multi-utilisateurs",
-        "TIBOK Santé · toute l'équipe couverte",
-        "Jusqu'à 500 transactions / mois",
-        "e-MRA : toutes déclarations",
-        "Multi-devises (EUR, USD, GBP)",
-        "Support prioritaire",
-        "10 Go de stockage",
-      ],
-      en: [
-        "Everything in Business, plus",
-        "Telegram AI Assistant · multi-user",
-        "TIBOK Health · whole team covered",
-        "Up to 500 transactions / month",
-        "e-MRA: all filings",
-        "Multi-currency (EUR, USD, GBP)",
-        "Priority support",
-        "10 GB storage",
-      ],
-    },
+    featureKeys: [
+      "cmkt.pr.pme.f1",
+      "cmkt.pr.pme.f2",
+      "cmkt.pr.pme.f3",
+      "cmkt.pr.pme.f4",
+      "cmkt.pr.pme.f5",
+      "cmkt.pr.pme.f6",
+      "cmkt.pr.pme.f7",
+      "cmkt.pr.pme.f8",
+    ],
   },
   {
     id: "enterprise",
     icon: Building2,
-    badge: { fr: "Enterprise", en: "Enterprise" },
-    name: { fr: "Enterprise", en: "Enterprise" },
-    audience: {
-      fr: "Grandes structures (50+ personnes).",
-      en: "Large organizations (50+ people).",
-    },
+    badgeKey: "cmkt.pr.enterprise.badge",
+    nameKey: "cmkt.pr.enterprise.name",
+    audienceKey: "cmkt.pr.enterprise.audience",
     monthly: 21200,
-    features: {
-      fr: [
-        "Tout PME, +",
-        "Assistant IA Telegram · workflows personnalisés",
-        "TIBOK Santé · suivi médecin du travail",
-        "Transactions illimitées",
-        "Audit trail e-MRA complet",
-        "API & intégrations sur mesure",
-        "Gestionnaire de compte dédié",
-        "Stockage illimité",
-      ],
-      en: [
-        "Everything in PME, plus",
-        "Telegram AI Assistant · custom workflows",
-        "TIBOK Health · occupational doctor",
-        "Unlimited transactions",
-        "Full e-MRA audit trail",
-        "Custom API & integrations",
-        "Dedicated account manager",
-        "Unlimited storage",
-      ],
-    },
+    featureKeys: [
+      "cmkt.pr.enterprise.f1",
+      "cmkt.pr.enterprise.f2",
+      "cmkt.pr.enterprise.f3",
+      "cmkt.pr.enterprise.f4",
+      "cmkt.pr.enterprise.f5",
+      "cmkt.pr.enterprise.f6",
+      "cmkt.pr.enterprise.f7",
+      "cmkt.pr.enterprise.f8",
+    ],
     cta: {
-      fr: "Contacter l'équipe",
-      en: "Contact sales",
+      key: "cmkt.pr.enterprise.cta",
       href: "/inscription?role=enterprise",
     },
   },
@@ -191,7 +133,7 @@ const TIERS: Tier[] = [
 
 function formatPrice(n: number): string {
   // Fr/Mauritian style: thousands with thin spaces.
-  return n.toLocaleString("fr-FR").replace(/\u202f/g, " ").replace(/,/g, " ")
+  return n.toLocaleString("fr-FR").replace(/ /g, " ").replace(/,/g, " ")
 }
 
 export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
@@ -223,7 +165,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
             }}
           >
             <Sparkles className="h-4 w-4" aria-hidden="true" />
-            {locale === "fr" ? "Grille tarifaire" : "Pricing grid"}
+            {t("cmkt.pr.eyebrow", locale)}
           </span>
           <h2
             className="mb-4 text-3xl font-bold tracking-tight md:text-5xl"
@@ -234,9 +176,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
               letterSpacing: "-0.02em",
             }}
           >
-            {locale === "fr"
-              ? "Des formules claires, sans surprise"
-              : "Simple plans, no surprises"}
+            {t("cmkt.pr.title", locale)}
           </h2>
           <p
             className="mx-auto max-w-2xl text-base md:text-lg"
@@ -247,9 +187,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
               lineHeight: 1.7,
             }}
           >
-            {locale === "fr"
-              ? "Chaque formule inclut les 7 modules — Compta, Paie, Juridique, Fiscal, Facturation, OCR et TIBOK Santé salariés — pilotés par les 6 agents IA. Payez uniquement ce dont vous avez besoin, faites évoluer votre plan quand vous grandissez."
-              : "Every plan includes all 7 modules — Accounting, Payroll, Legal, Tax, Invoicing, OCR and TIBOK employee health — driven by the 6 AI agents. Pay only for what you need, upgrade as you grow."}
+            {t("cmkt.pr.subtitle", locale)}
           </p>
         </Reveal>
 
@@ -261,11 +199,11 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
             const isPopular = !!tier.popular
             const Icon = tier.icon
             const defaultCta = {
-              fr: "Commencer",
-              en: "Get started",
+              key: "cmkt.pr.cta_default",
               href: "/tarifs",
             }
             const cta = tier.cta ?? defaultCta
+            const ctaLabel = t(cta.key, locale)
 
             return (
               <StaggerItem key={tier.id} className="h-full">
@@ -296,7 +234,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                       >
                         <span className="inline-flex items-center gap-1">
                           <Crown className="h-3 w-3" aria-hidden="true" />
-                          {locale === "fr" ? "Populaire" : "Popular"}
+                          {t("cmkt.pr.popular", locale)}
                         </span>
                       </div>
                     )}
@@ -347,7 +285,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                               fontFamily: "'Poppins', sans-serif",
                             }}
                           >
-                            {tier.badge[locale]}
+                            {t(tier.badgeKey, locale)}
                           </div>
                           <div
                             className="text-xl font-semibold"
@@ -357,7 +295,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                               fontWeight: 700,
                             }}
                           >
-                            {tier.name[locale]}
+                            {t(tier.nameKey, locale)}
                           </div>
                         </div>
                       </div>
@@ -372,7 +310,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                           lineHeight: 1.6,
                         }}
                       >
-                        {tier.audience[locale]}
+                        {t(tier.audienceKey, locale)}
                       </p>
 
                       {/* Price — animated entry on popular card */}
@@ -384,7 +322,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                             fontFamily: "'Poppins', sans-serif",
                           }}
                         >
-                          Rs
+                          {t("cmkt.pr.currency", locale)}
                         </span>
                         <span
                           className="text-4xl font-bold leading-none md:text-5xl"
@@ -408,7 +346,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                             fontFamily: "'Poppins', sans-serif",
                           }}
                         >
-                          {locale === "fr" ? "/ mois" : "/ month"}
+                          {t("cmkt.pr.per_month", locale)}
                         </span>
                       </div>
 
@@ -424,7 +362,8 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
 
                       {/* Features */}
                       <ul className="mb-7 space-y-2.5">
-                        {tier.features[locale].map((f, i) => {
+                        {tier.featureKeys.map((key, i) => {
+                          const f = t(key, locale)
                           // Highlight TIBOK (green) and Telegram (blue) lines.
                           const isTibok = /TIBOK/i.test(f)
                           const isTelegram = /telegram/i.test(f)
@@ -490,7 +429,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                                   borderRadius: "10px",
                                 }}
                               >
-                                {cta[locale]}
+                                {ctaLabel}
                                 <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
                               </Button>
                             </a>
@@ -507,7 +446,7 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
                                   borderRadius: "10px",
                                 }}
                               >
-                                {cta[locale]}
+                                {ctaLabel}
                                 <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
                               </Button>
                             </Link>
@@ -532,18 +471,14 @@ export function PricingShowcase({ locale }: { locale: "fr" | "en" }) {
               fontWeight: 300,
             }}
           >
-            <span>
-              {locale === "fr"
-                ? "Remise de 2 mois offerte en paiement annuel."
-                : "2 months free on annual billing."}
-            </span>
+            <span>{t("cmkt.pr.footnote", locale)}</span>
             <span aria-hidden="true" style={{ color: "#D4AF37" }}>·</span>
             <Link
               href="/tarifs"
               className="inline-flex items-center gap-1 font-medium transition-colors"
               style={{ color: "#4191FF" }}
             >
-              {locale === "fr" ? "Comparer toutes les formules" : "Compare all plans"}
+              {t("cmkt.pr.compare", locale)}
               <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
             </Link>
           </p>

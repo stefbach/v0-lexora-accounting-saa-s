@@ -259,7 +259,7 @@ export default function GrandLivrePage() {
             variant="outline"
             className="gap-2"
             disabled={!data?.ecritures?.length}
-            title="Exporter en Excel (xlsx)"
+            title={t('cptb.gl.export_excel_tooltip', locale)}
           >
             <Download className="w-4 h-4" /> Excel
           </Button>
@@ -276,7 +276,7 @@ export default function GrandLivrePage() {
             variant="outline"
             className="gap-2"
             disabled={!data?.ecritures?.length}
-            title="Exporter en PDF (A4 paysage, groupé par compte)"
+            title={t('cptb.gl.export_pdf_tooltip', locale)}
           >
             <Download className="w-4 h-4" /> PDF
           </Button>

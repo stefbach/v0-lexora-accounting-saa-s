@@ -12,6 +12,10 @@ import { Loader2, Download, CheckCheck } from "lucide-react"
 import { t, getLocale } from "@/lib/i18n"
 
 const JOURS_FR = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]
+const JOURS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+function jourLabel(dayIdx: number, loc: string) {
+  return loc === "en" ? JOURS_EN[dayIdx] : JOURS_FR[dayIdx]
+}
 const JOURS_FERIES_MU = [
   "01-01", "02-01", "12-03", "01-05", "09-05", "15-08", "02-11", "25-12"
 ]
@@ -192,21 +196,21 @@ export default function PointageMensuelPage() {
     await fetch(`/api/rh/pointage/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ absent_justifie: true, motif_absence: "Justifié par manager" })
+      body: JSON.stringify({ absent_justifie: true, motif_absence: t('rhpl.motif_manager', locale) })
     })
     load()
   }
 
   const exportCSV = () => {
-    const headers = ["Date","Jour","Entrée","Sortie","Heures norm.","OT 1.5x","OT 2x","Statut"]
+    const headers = [t('rhpl.col_date', locale),t('rhpl.col_day', locale),t('rhpl.col_in', locale),t('rhpl.col_out', locale),t('rhpl.csv_normalhours', locale),"OT 1.5x","OT 2x",t('rhpl.col_status', locale)]
     const lines = rows.map(r => {
       const d = new Date(r.date + "T12:00:00")
       const ot = calcOT(r.heure_entree, r.heure_sortie, isFerie(r.date))
       return [
-        r.date, JOURS_FR[d.getDay()],
+        r.date, jourLabel(d.getDay(), locale),
         r.heure_entree?.slice(0,5)||"", r.heure_sortie?.slice(0,5)||"",
         ot.normales.toFixed(2), ot.ot15.toFixed(2), ot.ot2.toFixed(2),
-        r.absent_justifie ? "Absent justifié" : r.absence_injustifiee ? "Absence injust." : isWeekend(r.date) ? "Week-end" : r.heure_entree ? "Travaillé" : "Absent"
+        r.absent_justifie ? t('rhpl.st_absentjustified', locale) : r.absence_injustifiee ? t('rhpl.st_absentunjustified', locale) : isWeekend(r.date) ? t('rhpl.st_weekend', locale) : r.heure_entree ? t('rhpl.st_worked', locale) : t('rhpl.st_absent', locale)
       ].join(";")
     })
     const csv = [headers.join(";"), ...lines].join("\n")
@@ -220,11 +224,11 @@ export default function PointageMensuelPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('rha.a.pointm.title', locale)}</h1>
-          <p className="text-sm text-gray-500">Corrections, validation OT, absences — source de vérité pour la paie</p>
+          <p className="text-sm text-gray-500">{t('rhpl.mensuel_subtitle', locale)}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <a href="/rh/pointage"><Button variant="outline" size="sm">⏰ Temps réel</Button></a>
-          <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-4 h-4 mr-2" />Export CSV</Button>
+          <a href="/rh/pointage"><Button variant="outline" size="sm">⏰ {t('rhpl.realtime', locale)}</Button></a>
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download className="w-4 h-4 mr-2" />{t('rhpl.exportcsv', locale)}</Button>
           {rowsAvecOT.length > 0 && (
             <Button
               size="sm"
@@ -235,7 +239,7 @@ export default function PointageMensuelPage() {
               {batchSaving
                 ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 : <CheckCheck className="w-4 h-4 mr-2" />}
-              Valider toutes les OT du mois ({rowsAvecOT.length})
+              {t('rhpl.validateallot', locale)} ({rowsAvecOT.length})
             </Button>
           )}
         </div>
@@ -244,14 +248,14 @@ export default function PointageMensuelPage() {
       {/* Résumé batch OT */}
       {batchResult && batchResult.success && (
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-sm text-orange-900">
-          <p className="font-semibold mb-1">✅ Validation batch terminée</p>
+          <p className="font-semibold mb-1">✅ {t('rhpl.batchdone', locale)}</p>
           <p>
-            <strong>{batchResult.summary?.total_heures}h</strong> validées pour{" "}
-            <strong>{batchResult.summary?.nb_employes}</strong> employés —
-            Total OT : <strong>{fmt(batchResult.summary?.montant_total ?? 0)}</strong>
+            <strong>{batchResult.summary?.total_heures}h</strong> {t('rhpl.validatedfor', locale)}{" "}
+            <strong>{batchResult.summary?.nb_employes}</strong> {t('rhpl.employees', locale)} —
+            {t('rhpl.totalot', locale)} : <strong>{fmt(batchResult.summary?.montant_total ?? 0)}</strong>
           </p>
           {batchResult.errors > 0 && (
-            <p className="text-orange-700 mt-1">{batchResult.errors} erreur(s) — voir console</p>
+            <p className="text-orange-700 mt-1">{batchResult.errors} {t('rhpl.errorssee', locale)}</p>
           )}
         </div>
       )}
@@ -260,32 +264,32 @@ export default function PointageMensuelPage() {
       <Card>
         <CardContent className="p-4 flex gap-3 flex-wrap">
           <Select value={societe} onValueChange={v => { setSociete(v); setEmploye("all") }}>
-            <SelectTrigger className="w-52"><SelectValue placeholder="Société" /></SelectTrigger>
+            <SelectTrigger className="w-52"><SelectValue placeholder={t('rhpl.company', locale)} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes sociétés</SelectItem>
+              <SelectItem value="all">{t('rhpl.allcompanies', locale)}</SelectItem>
               {societes.map(s => <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={employe} onValueChange={setEmploye}>
-            <SelectTrigger className="w-52"><SelectValue placeholder="Tous les employés" /></SelectTrigger>
+            <SelectTrigger className="w-52"><SelectValue placeholder={t('rhpl.allemployees', locale)} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous les employés</SelectItem>
+              <SelectItem value="all">{t('rhpl.allemployees', locale)}</SelectItem>
               {employes.map(e => <SelectItem key={e.id} value={e.id}>{e.prenom} {e.nom}</SelectItem>)}
             </SelectContent>
           </Select>
           <Input type="month" value={periode} onChange={e => setPeriode(e.target.value)} className="w-36" />
-          <Button onClick={load} className="bg-[#0B0F2E] text-white">Afficher</Button>
+          <Button onClick={load} className="bg-[#0B0F2E] text-white">{t('rhpl.display', locale)}</Button>
         </CardContent>
       </Card>
 
       {/* Légende */}
       <div className="flex gap-4 text-xs flex-wrap">
         {[
-          { color: "bg-green-200", label: "Jour normal complet" },
-          { color: "bg-orange-200", label: "OT détectées" },
-          { color: "bg-red-200", label: "Absence injustifiée" },
-          { color: "bg-blue-200", label: "Congé approuvé" },
-          { color: "bg-gray-200", label: "Week-end / Férié" },
+          { color: "bg-green-200", label: t('rhpl.legend_normal', locale) },
+          { color: "bg-orange-200", label: t('rhpl.legend_ot', locale) },
+          { color: "bg-red-200", label: t('rhpl.legend_unjustified', locale) },
+          { color: "bg-blue-200", label: t('rhpl.legend_leave', locale) },
+          { color: "bg-gray-200", label: t('rhpl.legend_weekend', locale) },
         ].map(l => (
           <div key={l.label} className="flex items-center gap-1">
             <div className={`w-3 h-3 rounded ${l.color}`} />
@@ -298,12 +302,12 @@ export default function PointageMensuelPage() {
       {recap && (
         <div className="grid grid-cols-6 gap-3">
           {[
-            { label: "Jours travaillés", v: recap.total_jours_travailles },
-            { label: "Heures normales", v: (recap.total_heures_normales?.toFixed(1) ?? "—") + "h" },
+            { label: t('rhpl.recap_workeddays', locale), v: recap.total_jours_travailles },
+            { label: t('rhpl.recap_normalhours', locale), v: (recap.total_heures_normales?.toFixed(1) ?? "—") + "h" },
             { label: "OT 1.5x", v: `${recap.total_ot_1_5x?.toFixed(1) ?? 0}h = ${recap.montant_ot_1_5x?.toLocaleString("fr-FR") ?? 0} MUR` },
             { label: "OT 2x", v: `${recap.total_ot_2x?.toFixed(1) ?? 0}h = ${recap.montant_ot_2x?.toLocaleString("fr-FR") ?? 0} MUR` },
-            { label: "Absences injust.", v: recap.nb_absences_injustifiees },
-            { label: "Congés pris", v: recap.nb_conges_pris },
+            { label: t('rhpl.recap_unjustified', locale), v: recap.nb_absences_injustifiees },
+            { label: t('rhpl.recap_leavetaken', locale), v: recap.nb_conges_pris },
           ].map(k => (
             <Card key={k.label}>
               <CardContent className="p-3">
@@ -319,29 +323,29 @@ export default function PointageMensuelPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-[#0B0F2E]">
-            Pointages — {periode} ({rows.length} entrées)
+            {t('rhpl.timesheets', locale)} — {periode} ({rows.length} {t('rhpl.entries', locale)})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" /></div>
           ) : rows.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">Aucun pointage pour cette période</div>
+            <div className="text-center py-12 text-gray-500">{t('rhpl.empty', locale)}</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Jour</TableHead>
-                  {employe === "all" && <TableHead>Employé</TableHead>}
-                  <TableHead>Entrée</TableHead>
-                  <TableHead>Sortie</TableHead>
-                  <TableHead>H. normales</TableHead>
+                  <TableHead>{t('rhpl.col_date', locale)}</TableHead>
+                  <TableHead>{t('rhpl.col_day', locale)}</TableHead>
+                  {employe === "all" && <TableHead>{t('rhpl.col_employee', locale)}</TableHead>}
+                  <TableHead>{t('rhpl.col_in', locale)}</TableHead>
+                  <TableHead>{t('rhpl.col_out', locale)}</TableHead>
+                  <TableHead>{t('rhpl.col_normalhours', locale)}</TableHead>
                   <TableHead>OT 1.5x</TableHead>
                   <TableHead>OT 2x</TableHead>
                   <TableHead>OT</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t('rhpl.col_status', locale)}</TableHead>
+                  <TableHead>{t('rhpl.col_actions', locale)}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -359,8 +363,8 @@ export default function PointageMensuelPage() {
                     <TableRow key={i} className={getRowColor(row)}>
                       <TableCell className="font-mono text-sm">{row.date}</TableCell>
                       <TableCell className="text-sm text-gray-600">
-                        {JOURS_FR[d.getDay()]}
-                        {ferie && <span className="ml-1 text-xs text-purple-600">🎌 Férié</span>}
+                        {jourLabel(d.getDay(), locale)}
+                        {ferie && <span className="ml-1 text-xs text-purple-600">🎌 {t('rhpl.holiday', locale)}</span>}
                       </TableCell>
                       {employe === "all" && (
                         <TableCell className="text-sm font-medium">{row.employe?.prenom} {row.employe?.nom}</TableCell>
@@ -374,7 +378,7 @@ export default function PointageMensuelPage() {
                       {/* ── Colonne OT avec badge ── */}
                       <TableCell>
                         {ferie && ot.total > 0 ? (
-                          <Badge variant="destructive" className="text-xs">Férié: {ot.total.toFixed(1)}h</Badge>
+                          <Badge variant="destructive" className="text-xs">{t('rhpl.holiday', locale)}: {ot.total.toFixed(1)}h</Badge>
                         ) : row.ot_valide ? (
                           <Badge className="bg-green-600 text-xs">
                             ✅ {((ot.ot15 + ot.ot2) || 0).toFixed(1)}h — {fmt(row.montant_ot ?? montantOT)}
@@ -387,14 +391,14 @@ export default function PointageMensuelPage() {
                       </TableCell>
 
                       <TableCell>
-                        {weekend ? <span className="text-xs text-gray-400">Week-end</span>
-                          : ferie ? <span className="text-xs text-purple-600">Férié</span>
-                          : row.type_absence === "conge_approuve" ? <span className="text-xs text-blue-600 font-medium">Congé</span>
-                          : row.absent_justifie ? <span className="text-xs text-blue-600">Absent justifié</span>
-                          : row.absence_injustifiee ? <span className="text-xs text-red-600 font-medium">Absent injust.</span>
-                          : !row.heure_entree ? <span className="text-xs text-red-500">Absent</span>
-                          : hasOT ? <span className="text-xs text-orange-600 font-medium">OT {row.ot_valide ? "✓ validées" : "en attente"}</span>
-                          : <span className="text-xs text-green-600">✓ Normal</span>}
+                        {weekend ? <span className="text-xs text-gray-400">{t('rhpl.st_weekend', locale)}</span>
+                          : ferie ? <span className="text-xs text-purple-600">{t('rhpl.holiday', locale)}</span>
+                          : row.type_absence === "conge_approuve" ? <span className="text-xs text-blue-600 font-medium">{t('rhpl.st_leave', locale)}</span>
+                          : row.absent_justifie ? <span className="text-xs text-blue-600">{t('rhpl.st_absentjustified', locale)}</span>
+                          : row.absence_injustifiee ? <span className="text-xs text-red-600 font-medium">{t('rhpl.st_absentunjustified', locale)}</span>
+                          : !row.heure_entree ? <span className="text-xs text-red-500">{t('rhpl.st_absent', locale)}</span>
+                          : hasOT ? <span className="text-xs text-orange-600 font-medium">OT {row.ot_valide ? t('rhpl.st_otvalidated', locale) : t('rhpl.st_otpending', locale)}</span>
+                          : <span className="text-xs text-green-600">✓ {t('rhpl.st_normal', locale)}</span>}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1 flex-wrap">
@@ -408,11 +412,11 @@ export default function PointageMensuelPage() {
                               className="h-6 text-xs px-2 text-orange-700 border-orange-300 hover:bg-orange-50"
                               onClick={() => setOtDialog(row)}
                             >
-                              ⏱️ Valider OT
+                              ⏱️ {t('rhpl.validateot', locale)}
                             </Button>
                           )}
                           {!weekend && !ferie && !row.heure_entree && !row.absent_justifie && (
-                            <Button size="sm" variant="outline" className="h-6 text-xs px-2 text-blue-700" onClick={() => justifierAbsence(row.id)}>🔒 Just.</Button>
+                            <Button size="sm" variant="outline" className="h-6 text-xs px-2 text-blue-700" onClick={() => justifierAbsence(row.id)}>🔒 {t('rhpl.justify', locale)}</Button>
                           )}
                         </div>
                       </TableCell>
@@ -429,19 +433,19 @@ export default function PointageMensuelPage() {
       <Dialog open={!!corrDialog} onOpenChange={open => !open && setCorrDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Corriger pointage — {corrDialog?.date} — {corrDialog?.employe?.prenom} {corrDialog?.employe?.nom}</DialogTitle>
+            <DialogTitle>{t('rhpl.dlg_corrtitle', locale)} — {corrDialog?.date} — {corrDialog?.employe?.prenom} {corrDialog?.employe?.nom}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Heure d'entrée</Label><Input type="time" value={corrEntree} onChange={e => setCorrEntree(e.target.value)} /></div>
-              <div><Label>Heure de sortie</Label><Input type="time" value={corrSortie} onChange={e => setCorrSortie(e.target.value)} /></div>
+              <div><Label>{t('rhpl.lbl_intime', locale)}</Label><Input type="time" value={corrEntree} onChange={e => setCorrEntree(e.target.value)} /></div>
+              <div><Label>{t('rhpl.lbl_outtime', locale)}</Label><Input type="time" value={corrSortie} onChange={e => setCorrSortie(e.target.value)} /></div>
             </div>
-            <div><Label>Motif de correction *</Label><Input value={corrMotif} onChange={e => setCorrMotif(e.target.value)} placeholder="Ex: Erreur saisie initiale..." /></div>
+            <div><Label>{t('rhpl.lbl_corrmotif', locale)}</Label><Input value={corrMotif} onChange={e => setCorrMotif(e.target.value)} placeholder={t('rhpl.ph_corrmotif', locale)} /></div>
             {corrEntree && corrSortie && (() => {
               const ot = calcOT(corrEntree + ":00", corrSortie + ":00", false)
               return (
                 <div className="bg-blue-50 p-3 rounded text-sm text-blue-800">
-                  <p>Heures calculées : <strong>{ot.normales.toFixed(1)}h normales</strong></p>
+                  <p>{t('rhpl.calchours', locale)} : <strong>{ot.normales.toFixed(1)}h {t('rhpl.normal', locale)}</strong></p>
                   {ot.ot15 > 0 && <p>+ <strong>{ot.ot15.toFixed(1)}h OT 1.5x</strong></p>}
                   {ot.ot2 > 0 && <p>+ <strong>{ot.ot2.toFixed(1)}h OT 2x</strong></p>}
                 </div>
@@ -449,9 +453,9 @@ export default function PointageMensuelPage() {
             })()}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCorrDialog(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setCorrDialog(null)}>{t('rhpl.cancel', locale)}</Button>
             <Button onClick={saveCorr} disabled={saving || !corrMotif} className="bg-[#0B0F2E] text-white">
-              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Sauvegarder
+              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{t('rhpl.save', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -461,7 +465,7 @@ export default function PointageMensuelPage() {
       <Dialog open={!!otDialog} onOpenChange={open => { if (!open) { setOtDialog(null); setOtResult(null) } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>⏱️ Valider les heures supplémentaires</DialogTitle>
+            <DialogTitle>⏱️ {t('rhpl.dlg_ottitle', locale)}</DialogTitle>
           </DialogHeader>
           {otDialog && (() => {
             const ferieRow = isFerie(otDialog.date)
@@ -473,41 +477,41 @@ export default function PointageMensuelPage() {
                 <p className="text-sm">
                   <strong>{otDialog.employe?.prenom} {otDialog.employe?.nom}</strong>
                   {" "}— {otDialog.date}
-                  {ferieRow && <Badge variant="destructive" className="ml-2 text-xs">Jour férié</Badge>}
+                  {ferieRow && <Badge variant="destructive" className="ml-2 text-xs">{t('rhpl.publicholiday', locale)}</Badge>}
                 </p>
                 <div className="bg-orange-50 p-4 rounded-lg space-y-1 text-sm">
-                  <p>Entrée : <strong>{otDialog.heure_entree?.slice(0,5)}</strong> — Sortie : <strong>{otDialog.heure_sortie?.slice(0,5)}</strong></p>
-                  <p>Heures effectives : <strong>{(ot.total).toFixed(2)}h</strong> (dont 1h pause déduite)</p>
-                  <p>Heures normales : <strong>{ot.normales.toFixed(2)}h</strong></p>
+                  <p>{t('rhpl.col_in', locale)} : <strong>{otDialog.heure_entree?.slice(0,5)}</strong> — {t('rhpl.col_out', locale)} : <strong>{otDialog.heure_sortie?.slice(0,5)}</strong></p>
+                  <p>{t('rhpl.effectivehours', locale)} : <strong>{(ot.total).toFixed(2)}h</strong> {t('rhpl.breakdeducted', locale)}</p>
+                  <p>{t('rhpl.recap_normalhours', locale)} : <strong>{ot.normales.toFixed(2)}h</strong></p>
                   {ot.ot15 > 0 && <p className="text-orange-700">OT 1.5x : <strong>{ot.ot15.toFixed(2)}h</strong></p>}
                   {ot.ot2 > 0 && <p className="text-red-700">OT 2x : <strong>{ot.ot2.toFixed(2)}h</strong></p>}
                   {montantEstime > 0 && (
                     <p className="font-semibold text-[#0B0F2E] pt-1 border-t border-orange-200">
-                      Montant estimé : {fmt(montantEstime)}
+                      {t('rhpl.estimatedamount', locale)} : {fmt(montantEstime)}
                     </p>
                   )}
                 </div>
                 {otResult?.success && (
                   <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
-                    ✅ OT validées — {fmt(otResult.ot?.montant_ot_total ?? 0)}
+                    ✅ {t('rhpl.otvalidated', locale)} — {fmt(otResult.ot?.montant_ot_total ?? 0)}
                   </div>
                 )}
                 {otResult && !otResult.success && (
                   <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
-                    ❌ Erreur : {otResult.error}
+                    ❌ {t('rhpl.error', locale)} : {otResult.error}
                   </div>
                 )}
-                <p className="text-xs text-gray-500">Ces heures seront intégrées dans le calcul du bulletin de paie.</p>
+                <p className="text-xs text-gray-500">{t('rhpl.payrollnote', locale)}</p>
               </div>
             )
           })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setOtDialog(null); setOtResult(null) }}>
-              {otResult?.success ? "Fermer" : "Annuler"}
+              {otResult?.success ? t('rhpl.close', locale) : t('rhpl.cancel', locale)}
             </Button>
             {!otResult?.success && (
               <Button onClick={validerOT} disabled={otSaving} className="bg-orange-600 text-white">
-                {otSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}✅ Confirmer les OT
+                {otSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}✅ {t('rhpl.confirmot', locale)}
               </Button>
             )}
           </DialogFooter>

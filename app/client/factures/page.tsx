@@ -163,7 +163,7 @@ export default function ClientFacturesPage() {
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        throw new Error(d?.error || 'Erreur export')
+        throw new Error(d?.error || t('cfac.export_error', locale))
       }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -175,7 +175,7 @@ export default function ClientFacturesPage() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (e: any) {
-      showToast(e?.message || 'Erreur export PDF', 'error')
+      showToast(e?.message || t('cfac.export_pdf_error', locale), 'error')
     } finally {
       setBatchExporting(false)
     }
@@ -352,14 +352,14 @@ export default function ClientFacturesPage() {
                 disabled={batchExporting || selectedIds.size === 0 || !societeId}
                 size="sm"
                 className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                title="Exporter les factures cochées dans un seul PDF (1 page récap + 1 page par facture)"
+                title={t('cfac.export_selected_title', locale)}
               >
                 {batchExporting ? (
                   <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                 ) : (
                   <Download className="h-4 w-4 mr-1.5" />
                 )}
-                Exporter PDF sélectionnés ({selectedIds.size})
+                {t('cfac.export_selected_pdf', locale)} ({selectedIds.size})
               </Button>
               <Link href="/client/nouvelle-facture">
                 <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md">
@@ -577,7 +577,7 @@ export default function ClientFacturesPage() {
           devise: horsBanqueFacture.devise,
         }] : []}
         onSuccess={(info) => {
-          showToast(`✓ Facture réglée (lettre ${info.lettre}) — ${info.montantTotal.toLocaleString("fr-FR")} MUR`, "success")
+          showToast(`✓ ${t('cfac.settled_toast', locale).replace('{lettre}', info.lettre).replace('{montant}', info.montantTotal.toLocaleString("fr-FR"))}`, "success")
           setHorsBanqueFacture(null)
           load()
         }}
@@ -616,7 +616,7 @@ function FactureList({
   const [validating, setValidating] = useState<string | null>(null)
 
   const validerBrouillon = async (f: Facture) => {
-    if (!confirm(`Valider la facture ${f.numero_facture || ''} ?\nElle passera en "En attente" et déclenchera les écritures comptables.`)) return
+    if (!confirm(t('cfac.validate_confirm', locale).replace('{num}', f.numero_facture || ''))) return
     setValidating(f.id)
     try {
       const res = await fetch('/api/client/factures', {
@@ -626,11 +626,11 @@ function FactureList({
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || 'Erreur validation')
+        throw new Error(d.error || t('cfac.validate_error', locale))
       }
       onReload?.()
     } catch (e: any) {
-      alert(`❌ ${e?.message || 'Erreur validation'}`)
+      alert(`❌ ${e?.message || t('cfac.validate_error', locale)}`)
     } finally {
       setValidating(null)
     }
@@ -639,11 +639,7 @@ function FactureList({
   /** Repasse une facture finalisée en brouillon (et supprime ses écritures
    *  comptables associées côté serveur — symétrique à la validation). */
   const repasserBrouillon = async (f: Facture) => {
-    if (!confirm(
-      `Repasser la facture ${f.numero_facture || ''} en brouillon ?\n\n` +
-      `Cela supprimera ses écritures comptables associées (grand livre).\n` +
-      `Tu pourras ensuite la modifier puis la re-valider.`
-    )) return
+    if (!confirm(t('cfac.to_draft_confirm', locale).replace('{num}', f.numero_facture || ''))) return
     setValidating(f.id)
     try {
       const res = await fetch('/api/client/factures', {
@@ -653,11 +649,11 @@ function FactureList({
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || 'Erreur')
+        throw new Error(d.error || t('cfac.generic_error', locale))
       }
       onReload?.()
     } catch (e: any) {
-      alert(`❌ ${e?.message || 'Erreur'}`)
+      alert(`❌ ${e?.message || t('cfac.generic_error', locale)}`)
     } finally {
       setValidating(null)
     }
@@ -668,23 +664,21 @@ function FactureList({
   const supprimerFacture = async (f: Facture) => {
     const isDraft = f.statut === 'brouillon'
     const message = isDraft
-      ? `Supprimer le brouillon ${f.numero_facture || ''} ?\nIl sera définitivement effacé.`
-      : `⚠️ Supprimer la facture ${f.numero_facture || ''} (${f.statut}) ?\n\n` +
-        `Ses écritures comptables seront aussi supprimées (cascade).\n` +
-        `Cette action est IRRÉVERSIBLE.`
+      ? t('cfac.delete_draft_confirm', locale).replace('{num}', f.numero_facture || '')
+      : t('cfac.delete_invoice_confirm', locale).replace('{num}', f.numero_facture || '').replace('{statut}', f.statut || '')
     if (!confirm(message)) return
-    if (!isDraft && !confirm('Confirmer la suppression définitive ?')) return
+    if (!isDraft && !confirm(t('cfac.delete_confirm_final', locale))) return
     setValidating(f.id)
     try {
       const url = isDraft ? `/api/client/factures?id=${f.id}` : `/api/client/factures?id=${f.id}&force=1`
       const res = await fetch(url, { method: 'DELETE' })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || 'Erreur suppression')
+        throw new Error(d.error || t('cfac.delete_error', locale))
       }
       onReload?.()
     } catch (e: any) {
-      alert(`❌ ${e?.message || 'Erreur suppression'}`)
+      alert(`❌ ${e?.message || t('cfac.delete_error', locale)}`)
     } finally {
       setValidating(null)
     }
@@ -724,7 +718,7 @@ function FactureList({
                 <Checkbox
                   checked={selectedIds?.has(f.id) ?? false}
                   onCheckedChange={() => onToggleSelect(f.id)}
-                  aria-label="Sélectionner cette facture pour l'export PDF"
+                  aria-label={t('cfac.select_for_export_aria', locale)}
                 />
               </div>
             )}
@@ -829,30 +823,30 @@ function FactureList({
                         size="sm"
                         variant="outline"
                         className="h-7 px-2 text-[11px] border-slate-300"
-                        title="Modifier ce brouillon"
+                        title={t('cfac.edit_draft_title', locale)}
                       >
-                        ✏️ Modifier
+                        ✏️ {t('cfac.edit', locale)}
                       </Button>
                     </Link>
                     <Button
                       size="sm"
                       variant="outline"
                       className="h-7 px-2 text-[11px] border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                      title="Valider et passer en En attente"
+                      title={t('cfac.validate_to_pending_title', locale)}
                       disabled={validating === f.id}
                       onClick={() => validerBrouillon(f)}
                     >
-                      {validating === f.id ? '…' : '✓ Valider'}
+                      {validating === f.id ? '…' : `✓ ${t('cfac.validate', locale)}`}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
                       className="h-7 px-2 text-[11px] border-red-300 text-red-700 hover:bg-red-50"
-                      title="Supprimer ce brouillon"
+                      title={t('cfac.delete_draft_title', locale)}
                       disabled={validating === f.id}
                       onClick={() => supprimerFacture(f)}
                     >
-                      🗑️ Supprimer
+                      🗑️ {t('cfac.delete', locale)}
                     </Button>
                   </>
                 )}
@@ -865,21 +859,21 @@ function FactureList({
                       size="sm"
                       variant="outline"
                       className="h-7 px-2 text-[11px] border-amber-300 text-amber-700 hover:bg-amber-50"
-                      title="Repasser en brouillon (supprime les écritures comptables associées)"
+                      title={t('cfac.to_draft_title', locale)}
                       disabled={validating === f.id}
                       onClick={() => repasserBrouillon(f)}
                     >
-                      {validating === f.id ? '…' : '↩ Brouillon'}
+                      {validating === f.id ? '…' : `↩ ${t('cfac.to_draft', locale)}`}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
                       className="h-7 px-2 text-[11px] border-red-300 text-red-700 hover:bg-red-50"
-                      title="Supprimer cette facture (cascade des écritures)"
+                      title={t('cfac.delete_invoice_title', locale)}
                       disabled={validating === f.id}
                       onClick={() => supprimerFacture(f)}
                     >
-                      🗑️ Supprimer
+                      🗑️ {t('cfac.delete', locale)}
                     </Button>
                   </>
                 )}
@@ -896,22 +890,22 @@ function FactureList({
                       size="sm"
                       variant="outline"
                       className="h-7 px-2 text-[11px]"
-                      title="Voir le PDF original"
+                      title={t('cfac.view_original_pdf_title', locale)}
                       onClick={() => window.open(`/api/documents/${f.document_id}/download`, '_blank')}
                     >
                       <Eye className="h-3 w-3 mr-1" />
-                      PDF original
+                      {t('cfac.original_pdf', locale)}
                     </Button>
                     {f.type_facture === 'client' && (
                       <Button
                         size="sm"
                         variant="outline"
                         className="h-7 px-2 text-[11px]"
-                        title="Aperçu au format Lexora (regénéré depuis les montants OCR)"
+                        title={t('cfac.lexora_format_title', locale)}
                         onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}`, '_blank')}
                       >
                         <Printer className="h-3 w-3 mr-1" />
-                        Format Lexora
+                        {t('cfac.lexora_format', locale)}
                       </Button>
                     )}
                   </>
@@ -921,17 +915,17 @@ function FactureList({
                       size="sm"
                       variant="outline"
                       className="h-7 px-2 text-[11px]"
-                      title="Aperçu de la facture"
+                      title={t('cfac.preview_title', locale)}
                       onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}`, '_blank')}
                     >
                       <Eye className="h-3 w-3 mr-1" />
-                      Aperçu
+                      {t('cfac.preview', locale)}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
                       className="h-7 px-2 text-[11px]"
-                      title="Imprimer / Sauvegarder en PDF"
+                      title={t('cfac.print_pdf_title', locale)}
                       onClick={() => window.open(`/client/facture-preview?facture_id=${f.id}&print=true`, '_blank')}
                     >
                       <Printer className="h-3 w-3 mr-1" />
@@ -956,10 +950,10 @@ function FactureList({
                   variant="outline"
                   className="h-7 px-2 text-[11px] mt-1 border-purple-300 text-purple-700 hover:bg-purple-50"
                   onClick={() => onReglerHorsBanque(f)}
-                  title="Régler via compte tiers (associé, société liée…)"
+                  title={t('cfac.off_bank_title', locale)}
                 >
                   <Wallet className="h-3 w-3 mr-1" />
-                  Hors banque
+                  {t('cfac.off_bank', locale)}
                 </Button>
               )}
               {canPay && onRapprocher && (
@@ -968,9 +962,9 @@ function FactureList({
                   variant="outline"
                   className="h-7 px-2 text-[11px] mt-1 border-blue-300 text-blue-700 hover:bg-blue-50"
                   onClick={() => onRapprocher(f)}
-                  title="Affecter un virement bancaire à cette facture"
+                  title={t('cfac.reconcile_title', locale)}
                 >
-                  💳 Rapprocher
+                  💳 {t('cfac.reconcile', locale)}
                 </Button>
               )}
               {/* Bouton MRA Fiscaliser — uniquement factures clients non

@@ -88,17 +88,17 @@ export default function MesClientsPage() {
                 <div className="flex gap-2 flex-wrap">
                   {s.docs_en_attente > 0 && (
                     <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
-                      📄 {s.docs_en_attente} doc{s.docs_en_attente > 1 ? 's' : ''} en attente
+                      📄 {s.docs_en_attente} {s.docs_en_attente > 1 ? t('cpta.mescli_docs_pending_plural', locale) : t('cpta.mescli_docs_pending_singular', locale)}
                     </span>
                   )}
                   {s.nb_dossiers_en_cours > 0 && (
                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                      📁 {s.nb_dossiers_en_cours} dossier{s.nb_dossiers_en_cours > 1 ? 's' : ''}
+                      📁 {s.nb_dossiers_en_cours} {s.nb_dossiers_en_cours > 1 ? t('cpta.mescli_files_plural', locale) : t('cpta.mescli_files_singular', locale)}
                     </span>
                   )}
                   {s.derniere_ecriture && (
                     <span className="text-xs text-gray-400">
-                      Dernière écriture : {new Date(s.derniere_ecriture).toLocaleDateString('fr-FR')}
+                      {t('cpta.mescli_last_entry', locale)} {new Date(s.derniere_ecriture).toLocaleDateString(locale === 'en' ? 'en-GB' : 'fr-FR')}
                     </span>
                   )}
                 </div>
@@ -106,18 +106,18 @@ export default function MesClientsPage() {
                 {/* Boutons rapides */}
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <Link href={`/comptable/grand-livre?societe_id=${s.id}`}>
-                    <Button variant="outline" size="sm" className="w-full text-xs">📒 Grand Livre</Button>
+                    <Button variant="outline" size="sm" className="w-full text-xs">📒 {t('cpta.mescli_ledger', locale)}</Button>
                   </Link>
                   <Link href={`/client/documents?societe_id=${s.id}`}>
                     <Button variant="outline" size="sm" className="w-full text-xs">
-                      📄 Documents {s.docs_en_attente > 0 && <span className="ml-1 bg-orange-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{s.docs_en_attente}</span>}
+                      📄 {t('cpta.mescli_documents', locale)} {s.docs_en_attente > 0 && <span className="ml-1 bg-orange-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{s.docs_en_attente}</span>}
                     </Button>
                   </Link>
                   <Link href={`/rh/paie?societe_id=${s.id}`}>
-                    <Button variant="outline" size="sm" className="w-full text-xs">👥 Paie</Button>
+                    <Button variant="outline" size="sm" className="w-full text-xs">👥 {t('cpta.mescli_payroll', locale)}</Button>
                   </Link>
                   <Link href={`/comptable/tva?societe_id=${s.id}`}>
-                    <Button variant="outline" size="sm" className="w-full text-xs">🏛️ TVA</Button>
+                    <Button variant="outline" size="sm" className="w-full text-xs">🏛️ {t('cpta.mescli_vat', locale)}</Button>
                   </Link>
                 </div>
               </CardContent>

@@ -112,14 +112,14 @@ export default function CabinetDashboardPage() {
         body: JSON.stringify({ societe_id: societeId }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || "Erreur entrée dossier")
-      showToast(`Entrée dans le dossier ${societeNom}`, "success")
+      if (!r.ok) throw new Error(j.error || t('cpta.cab_err_enter_file', locale))
+      showToast(`${t('cpta.cab_entered_file', locale)} ${societeNom}`, "success")
       // Petit délai pour laisser le toast s'afficher, puis bascule
       setTimeout(() => {
         window.location.href = "/client/tableau-de-bord"
       }, 400)
     } catch (e: any) {
-      showToast(e?.message || "Erreur", "error")
+      showToast(e?.message || t('cpta.cab_error', locale), "error")
       setEntering(null)
     }
   }
@@ -135,10 +135,10 @@ export default function CabinetDashboardPage() {
     try {
       const r = await fetch("/api/comptable/cabinet")
       const j = await r.json()
-      if (!r.ok) throw new Error(j.error || "Erreur chargement")
+      if (!r.ok) throw new Error(j.error || t('cpta.cab_err_loading', locale))
       setData(j)
     } catch (e: any) {
-      setError(e?.message || "Erreur")
+      setError(e?.message || t('cpta.cab_error', locale))
     } finally {
       setLoading(false)
     }
@@ -173,24 +173,24 @@ export default function CabinetDashboardPage() {
       const j = await r.json()
       if (!r.ok) throw new Error(j.error)
       setNewTagLibelle("")
-      showToast("Tag créé", "success")
+      showToast(t('cpta.cab_tag_created', locale), "success")
       load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur création tag", "error")
+      showToast(e?.message || t('cpta.cab_err_create_tag', locale), "error")
     } finally {
       setCreatingTag(false)
     }
   }
 
   async function deleteTag(tagId: string) {
-    if (!confirm("Supprimer ce tag ? Il sera retiré de tous les clients.")) return
+    if (!confirm(t('cpta.cab_confirm_delete_tag', locale))) return
     try {
       const r = await fetch(`/api/comptable/cabinet/tags?id=${tagId}`, { method: "DELETE" })
       if (!r.ok) throw new Error((await r.json()).error)
-      showToast("Tag supprimé")
+      showToast(t('cpta.cab_tag_deleted', locale))
       load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur", "error")
+      showToast(e?.message || t('cpta.cab_error', locale), "error")
     }
   }
 
@@ -200,7 +200,7 @@ export default function CabinetDashboardPage() {
       if (!r.ok) throw new Error((await r.json()).error)
       load()
     } catch (e: any) {
-      showToast(e?.message || "Erreur", "error")
+      showToast(e?.message || t('cpta.cab_error', locale), "error")
     }
   }
 
@@ -229,16 +229,16 @@ export default function CabinetDashboardPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Users className="h-6 w-6 text-[#0B0F2E]" />
-            Mes Clients
+            {t('cpta.cab_title', locale)}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {data.user_info.is_dirigeant
-              ? "Pilotage du portefeuille — KPIs, tags, collaborateurs, entrée dans le dossier"
-              : "Vos clients assignés"}
+              ? t('cpta.cab_subtitle_dirigeant', locale)
+              : t('cpta.cab_subtitle_collab', locale)}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load}>
-          <RefreshCw className="h-3.5 w-3.5 mr-1" /> Rafraîchir
+          <RefreshCw className="h-3.5 w-3.5 mr-1" /> {t('cpta.cab_refresh', locale)}
         </Button>
       </div>
 
@@ -246,26 +246,26 @@ export default function CabinetDashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
           icon={<Building2 className="h-4 w-4" />}
-          label="Clients gérés"
+          label={t('cpta.cab_kpi_clients', locale)}
           value={data.stats.nb_clients}
           tone="blue"
         />
         <KpiCard
           icon={<Users className="h-4 w-4" />}
-          label="Collaborateurs"
+          label={t('cpta.cab_kpi_collabs', locale)}
           value={data.stats.nb_collaborateurs}
           tone="purple"
         />
         <KpiCard
           icon={<TrendingUp className="h-4 w-4" />}
-          label="Total impayé"
+          label={t('cpta.cab_kpi_total_unpaid', locale)}
           value={fmtMur(data.stats.total_impaye_mur)}
           tone="rose"
           isText
         />
         <KpiCard
           icon={<AlertTriangle className="h-4 w-4" />}
-          label="Factures en retard"
+          label={t('cpta.cab_kpi_overdue', locale)}
           value={data.stats.total_factures_retard}
           tone="amber"
         />
@@ -274,17 +274,17 @@ export default function CabinetDashboardPage() {
       <Tabs defaultValue="clients">
         <TabsList>
           <TabsTrigger value="clients">
-            Clients
+            {t('cpta.cab_tab_clients', locale)}
             <Badge className="ml-2 bg-blue-100 text-blue-700 border-blue-200 text-[10px]">{data.stats.nb_clients}</Badge>
           </TabsTrigger>
           {data.user_info.is_dirigeant && (
             <TabsTrigger value="collaborateurs">
-              Collaborateurs
+              {t('cpta.cab_tab_collabs', locale)}
               <Badge className="ml-2 bg-purple-100 text-purple-700 border-purple-200 text-[10px]">{data.stats.nb_collaborateurs}</Badge>
             </TabsTrigger>
           )}
           <TabsTrigger value="tags">
-            Tags
+            {t('cpta.cab_tab_tags', locale)}
             <Badge className="ml-2 bg-gray-100 text-gray-700 border-gray-200 text-[10px]">{data.tags.length}</Badge>
           </TabsTrigger>
         </TabsList>
@@ -297,7 +297,7 @@ export default function CabinetDashboardPage() {
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Rechercher nom, BRN, VAT…"
+                    placeholder={t('cpta.cab_search_ph', locale)}
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     className="pl-9"
@@ -305,12 +305,12 @@ export default function CabinetDashboardPage() {
                 </div>
                 {data.tags.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs text-muted-foreground">Filtrer :</span>
+                    <span className="text-xs text-muted-foreground">{t('cpta.cab_filter', locale)}</span>
                     <button
                       onClick={() => setFilterTag("")}
                       className={`text-[11px] px-2 py-0.5 rounded border ${filterTag === "" ? "bg-[#0B0F2E] text-white border-[#0B0F2E]" : "bg-white text-gray-600 border-gray-200"}`}
                     >
-                      Tous
+                      {t('cpta.cab_all', locale)}
                     </button>
                     {data.tags.map(tag => (
                       <button
@@ -333,7 +333,7 @@ export default function CabinetDashboardPage() {
             <CardContent className="p-0">
               {filteredClients.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">
-                  Aucun client à afficher.
+                  {t('cpta.cab_no_client', locale)}
                 </p>
               ) : (
                 <div className="divide-y">
@@ -369,22 +369,22 @@ export default function CabinetDashboardPage() {
                           })}
                         </div>
                         <div className="mt-1 flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
-                          <span>CA YTD : <span className="font-medium text-emerald-700">{fmtMur(c.kpi.ca_ytd_mur)}</span></span>
+                          <span>{t('cpta.cab_ca_ytd', locale)} <span className="font-medium text-emerald-700">{fmtMur(c.kpi.ca_ytd_mur)}</span></span>
                           {c.kpi.montant_impaye_mur > 0 && (
-                            <span>Impayé : <span className="font-medium text-amber-700">{fmtMur(c.kpi.montant_impaye_mur)}</span></span>
+                            <span>{t('cpta.cab_unpaid', locale)} <span className="font-medium text-amber-700">{fmtMur(c.kpi.montant_impaye_mur)}</span></span>
                           )}
                           {c.kpi.nb_retard > 0 && (
-                            <span className="text-red-700">⚠ {c.kpi.nb_retard} en retard</span>
+                            <span className="text-red-700">⚠ {c.kpi.nb_retard} {t('cpta.cab_overdue_suffix', locale)}</span>
                           )}
                           {c.collaborateurs.length > 0 && (
                             <span className="flex items-center gap-1">
-                              <Shield className="h-3 w-3" />{c.collaborateurs.length} collab
+                              <Shield className="h-3 w-3" />{c.collaborateurs.length} {t('cpta.cab_collab_suffix', locale)}
                             </span>
                           )}
                         </div>
                         {data.tags.length > 0 && (
                           <div className="mt-2 flex items-center gap-1 flex-wrap">
-                            <span className="text-[10px] text-muted-foreground">Tags :</span>
+                            <span className="text-[10px] text-muted-foreground">{t('cpta.cab_tags_label', locale)}</span>
                             {data.tags.map(tag => {
                               const assigned = c.tag_ids.includes(tag.id)
                               return (
@@ -397,7 +397,7 @@ export default function CabinetDashboardPage() {
                                     color: assigned ? "white" : tag.couleur,
                                     borderColor: tag.couleur,
                                   }}
-                                  title={assigned ? "Retirer ce tag" : "Ajouter ce tag"}
+                                  title={assigned ? t('cpta.cab_remove_tag', locale) : t('cpta.cab_add_tag', locale)}
                                 >
                                   {assigned ? "✓" : "+"} {tag.libelle}
                                 </button>
@@ -412,16 +412,16 @@ export default function CabinetDashboardPage() {
                           className="h-7 text-[11px] bg-[#0B0F2E] hover:bg-[#2a3d6b]"
                           onClick={() => enterDossier(c.id, c.nom)}
                           disabled={entering === c.id}
-                          title="Bascule sur la vue client de ce dossier avec bandeau cabinet"
+                          title={t('cpta.cab_enter_file_title', locale)}
                         >
                           {entering === c.id ? (
-                            <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Ouverture…</>
+                            <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> {t('cpta.cab_opening', locale)}</>
                           ) : (
-                            <>Entrer dans le dossier <ChevronRight className="h-3 w-3 ml-1" /></>
+                            <>{t('cpta.cab_enter_file', locale)} <ChevronRight className="h-3 w-3 ml-1" /></>
                           )}
                         </Button>
                         <Link href={`/comptable/cabinet/${c.id}/notes`} className="text-[10px] text-blue-600 hover:underline flex items-center gap-1">
-                          <StickyNote className="h-3 w-3" /> Notes
+                          <StickyNote className="h-3 w-3" /> {t('cpta.cab_notes', locale)}
                         </Link>
                       </div>
                     </div>
@@ -439,11 +439,11 @@ export default function CabinetDashboardPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="h-4 w-4" /> Mes collaborateurs
+                    <Users className="h-4 w-4" /> {t('cpta.cab_my_collabs', locale)}
                   </CardTitle>
                   <Link href="/comptable/equipe">
                     <Button size="sm" variant="outline">
-                      <Plus className="h-3 w-3 mr-1" /> Inviter
+                      <Plus className="h-3 w-3 mr-1" /> {t('cpta.cab_invite', locale)}
                     </Button>
                   </Link>
                 </div>
@@ -451,7 +451,7 @@ export default function CabinetDashboardPage() {
               <CardContent className="p-0">
                 {data.collaborateurs.length === 0 ? (
                   <p className="py-10 text-center text-sm text-muted-foreground">
-                    Aucun collaborateur. Invite-en un depuis "Mon Équipe" en lui attribuant le rôle <code>comptable</code> ou <code>comptable_dedie</code>.
+                    {t('cpta.cab_no_collab_pre', locale)} <code>comptable</code> {t('cpta.cab_no_collab_or', locale)} <code>comptable_dedie</code>.
                   </p>
                 ) : (
                   <div className="divide-y">
@@ -462,17 +462,17 @@ export default function CabinetDashboardPage() {
                             <h4 className="font-semibold text-sm">{co.full_name || co.email}</h4>
                             <Badge variant="outline" className="text-[10px]">{co.role}</Badge>
                             {co.is_active === false && (
-                              <Badge className="text-[10px] bg-gray-100 text-gray-600 border-gray-300">Inactif</Badge>
+                              <Badge className="text-[10px] bg-gray-100 text-gray-600 border-gray-300">{t('cpta.cab_inactive', locale)}</Badge>
                             )}
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">{co.email}</p>
                           <p className="text-xs mt-1">
-                            Accès : {data.clients.filter(c => c.collaborateurs.some(a => a.collaborateur_id === co.id)).length} client(s)
+                            {t('cpta.cab_access', locale)} {data.clients.filter(c => c.collaborateurs.some(a => a.collaborateur_id === co.id)).length} {t('cpta.cab_clients_count', locale)}
                           </p>
                         </div>
                         <Link href={`/comptable/cabinet/collaborateurs/${co.id}`}>
                           <Button size="sm" variant="outline" className="h-7 text-[11px]">
-                            <Pencil className="h-3 w-3 mr-1" /> Gérer accès
+                            <Pencil className="h-3 w-3 mr-1" /> {t('cpta.cab_manage_access', locale)}
                           </Button>
                         </Link>
                       </div>
@@ -489,22 +489,22 @@ export default function CabinetDashboardPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <TagIcon className="h-4 w-4" /> Tags cabinet
+                <TagIcon className="h-4 w-4" /> {t('cpta.cab_tags_firm', locale)}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-end gap-2 flex-wrap">
                 <div className="flex-1 min-w-[200px]">
-                  <label className="text-xs text-muted-foreground">Libellé</label>
+                  <label className="text-xs text-muted-foreground">{t('cpta.cab_label_field', locale)}</label>
                   <Input
-                    placeholder="Ex : VIP, Lent payeur, Risque…"
+                    placeholder={t('cpta.cab_label_ph', locale)}
                     value={newTagLibelle}
                     onChange={e => setNewTagLibelle(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && createTag()}
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Couleur</label>
+                  <label className="text-xs text-muted-foreground">{t('cpta.cab_color', locale)}</label>
                   <input
                     type="color"
                     value={newTagColor}
@@ -513,13 +513,13 @@ export default function CabinetDashboardPage() {
                   />
                 </div>
                 <Button onClick={createTag} disabled={creatingTag || !newTagLibelle.trim()}>
-                  {creatingTag ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4 mr-1" /> Créer</>}
+                  {creatingTag ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4 mr-1" /> {t('cpta.cab_create', locale)}</>}
                 </Button>
               </div>
 
               {data.tags.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  Aucun tag. Crée-en un pour catégoriser tes clients (ex: VIP, Lent payeur).
+                  {t('cpta.cab_no_tag', locale)}
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-2">

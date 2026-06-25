@@ -198,7 +198,7 @@ function NouvelleFactureContent() {
       .then(r => r.json())
       .then(d => {
         const f = d.factures?.[0]
-        if (!f) { setError('Facture introuvable'); return }
+        if (!f) { setError(t('cfac.invoice_not_found', locale)); return }
         // Hydrate tous les champs du formulaire depuis la facture DB.
         setNumeroFacture(f.numero_facture || '')
         setReference(f.reference || '')
@@ -243,7 +243,7 @@ function NouvelleFactureContent() {
         }
         setEditingLoaded(true)
       })
-      .catch(() => setError('Erreur chargement facture'))
+      .catch(() => setError(t('cfac.invoice_load_error', locale)))
   }, [editingId, editingLoaded])
 
   // Templates IA — chargés par société (POST action=list).
@@ -543,7 +543,7 @@ function NouvelleFactureContent() {
           <Button variant="ghost" size="sm" onClick={() => router.push("/client/factures")}><ArrowLeft className="w-4 h-4 mr-1" />{t('inv.nf.back', locale)}</Button>
           <div>
             <h1 className="text-2xl font-bold" style={{ color: typeDocument === "avoir" ? "#DC2626" : "#0B0F2E" }}>
-              {editingId ? `Modifier ${numeroFacture || 'facture'}` : (typeDocument === "avoir" ? t('inv.nf.new_credit_note', locale) : typeDocument === "note_debit" ? t('inv.nf.new_debit_note', locale) : typeDocument === "devis" ? t('inv.nf.new_quote', locale) : t('inv.nf.new_invoice', locale))}
+              {editingId ? `${t('cfac.edit_prefix', locale)} ${numeroFacture || t('cfac.invoice_singular', locale)}` : (typeDocument === "avoir" ? t('inv.nf.new_credit_note', locale) : typeDocument === "note_debit" ? t('inv.nf.new_debit_note', locale) : typeDocument === "devis" ? t('inv.nf.new_quote', locale) : t('inv.nf.new_invoice', locale))}
             </h1>
             <p className="text-sm text-gray-500">{t('inv.nf.mra_compliant', locale)}</p>
           </div>

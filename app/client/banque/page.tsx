@@ -269,7 +269,7 @@ export default function ClientBanquePage() {
                 disabled={!societeId || loading}
                 size="sm"
                 className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                title="Exporter toutes les transactions bancaires au format Excel"
+                title={t('cfac.export_excel_title', locale)}
               >
                 <Download className="h-4 w-4 mr-1.5" />
                 Excel
@@ -414,7 +414,7 @@ export default function ClientBanquePage() {
                                 <AlertTriangle className="h-3 w-3 mr-1" />
                                 {Number.isFinite(days)
                                   ? t('acc.bnq.no_stmt_for_d', locale).replace('{d}', String(days))
-                                  : 'Aucun relevé'}
+                                  : t('cfac.no_statement', locale)}
                               </Badge>
                             )}
                           </div>
@@ -423,7 +423,7 @@ export default function ClientBanquePage() {
                           <Link href={`/client/banque/${c.id}`}>
                             <Button size="sm" variant="outline" className="w-full">
                               <ArrowRight className="h-4 w-4 mr-1.5" />
-                              Voir détail
+                              {t('cfac.view_detail', locale)}
                             </Button>
                           </Link>
                           <Link href="/client/rapprochement">
@@ -504,7 +504,7 @@ export default function ClientBanquePage() {
                                         </button>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        Ré-uploadé {(r.version ?? 1) - 1} fois — voir historique
+                                        {t('cfac.reuploaded_times', locale).replace('{n}', String((r.version ?? 1) - 1))}
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>

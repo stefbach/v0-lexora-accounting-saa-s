@@ -49,6 +49,7 @@ import {
   CartesianGrid,
 } from "recharts"
 import { useSocieteActive } from "@/components/client/SocieteActiveProvider"
+import { t, getLocale } from "@/lib/i18n"
 
 interface CompteBancaire {
   id: string
@@ -112,6 +113,7 @@ function fmtDate(d: string | null): string {
 }
 
 export default function ClientBanqueDetailPage() {
+  const locale = getLocale()
   const params = useParams<{ compte_id: string }>()
   const compteId = params?.compte_id
   const { societeId } = useSocieteActive()
@@ -141,8 +143,8 @@ export default function ClientBanqueDetailPage() {
           { cache: "no-store" }
         ),
       ])
-      if (!resComptes.ok) throw new Error("Erreur chargement comptes")
-      if (!resReleves.ok) throw new Error("Erreur chargement relevés")
+      if (!resComptes.ok) throw new Error(t('cfac.err_load_accounts', locale))
+      if (!resReleves.ok) throw new Error(t('cfac.err_load_statements', locale))
       const dComptes = await resComptes.json()
       const dReleves = await resReleves.json()
       const found: CompteBancaire | null =
@@ -155,7 +157,7 @@ export default function ClientBanqueDetailPage() {
       // ignore le param compte_id.
       setReleves(list.filter((r) => r.compte_bancaire_id === compteId))
     } catch (e: any) {
-      setError(e?.message || "Erreur inconnue")
+      setError(e?.message || t('cfac.unknown_error', locale))
     } finally {
       setLoading(false)
     }
@@ -255,19 +257,19 @@ export default function ClientBanqueDetailPage() {
   return (
     <ClientPageShell
       breadcrumbs={[
-        { label: "Espace client", href: "/client/tableau-de-bord" },
-        { label: "Banque", href: "/client/banque" },
-        { label: compte?.nom_compte || compte?.numero_compte || "Compte" },
+        { label: t('cfac.bc_client_space', locale), href: "/client/tableau-de-bord" },
+        { label: t('cfac.bc_bank', locale), href: "/client/banque" },
+        { label: compte?.nom_compte || compte?.numero_compte || t('cfac.bc_account', locale) },
       ]}
-      kicker="Comptabilité"
-      title={compte ? `${compte.banque} — ${compte.nom_compte || compte.numero_compte || ""}` : "Détail compte"}
-      subtitle="Vue détaillée du compte bancaire et de ses transactions"
+      kicker={t('cfac.kicker_accounting', locale)}
+      title={compte ? `${compte.banque} — ${compte.nom_compte || compte.numero_compte || ""}` : t('cfac.account_detail', locale)}
+      subtitle={t('cfac.account_subtitle', locale)}
       actions={
         <div className="flex items-center gap-2">
           <Link href="/client/banque">
             <Button variant="outline" size="sm">
               <ArrowLeft className="h-4 w-4 mr-1.5" />
-              Retour à la liste
+              {t('cfac.back_to_list', locale)}
             </Button>
           </Link>
           <Button
@@ -278,7 +280,7 @@ export default function ClientBanqueDetailPage() {
             className="border-blue-300 text-blue-700 hover:bg-blue-50"
           >
             <Download className="h-4 w-4 mr-1.5" />
-            Exporter Excel
+            {t('cfac.export_excel', locale)}
           </Button>
         </div>
       }
@@ -293,11 +295,11 @@ export default function ClientBanqueDetailPage() {
         {loading && !compte ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 className="animate-spin h-5 w-5 mr-2" />
-            Chargement…
+            {t('cfac.loading_ellipsis', locale)}
           </div>
         ) : !compte ? (
           <div className="p-6 text-sm text-muted-foreground border rounded-lg">
-            Compte introuvable ou inaccessible.
+            {t('cfac.account_unavailable', locale)}
           </div>
         ) : (
           <>
@@ -306,19 +308,19 @@ export default function ClientBanqueDetailPage() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Landmark className="h-5 w-5 text-blue-600" />
-                  Informations du compte
+                  {t('cfac.account_info', locale)}
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    Banque
+                    {t('cfac.bank', locale)}
                   </p>
                   <p className="font-medium">{compte.banque}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    Numéro
+                    {t('cfac.number', locale)}
                   </p>
                   <p className="font-mono text-sm">{compte.numero_compte || "—"}</p>
                 </div>
@@ -332,7 +334,7 @@ export default function ClientBanqueDetailPage() {
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    Devise
+                    {t('cfac.currency', locale)}
                   </p>
                   <Badge variant="outline" className="font-mono">
                     {compte.devise}
@@ -345,22 +347,22 @@ export default function ClientBanqueDetailPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <KpiCard
                 icon={<Hash className="h-4 w-4 text-blue-600" />}
-                label="Transactions"
+                label={t('cfac.transactions', locale)}
                 value={String(stats.nb)}
               />
               <KpiCard
                 icon={<TrendingDown className="h-4 w-4 text-red-600" />}
-                label="Débit total"
+                label={t('cfac.total_debit', locale)}
                 value={fmt(stats.debit, compte.devise)}
               />
               <KpiCard
                 icon={<TrendingUp className="h-4 w-4 text-emerald-600" />}
-                label="Crédit total"
+                label={t('cfac.total_credit', locale)}
                 value={fmt(stats.credit, compte.devise)}
               />
               <KpiCard
                 icon={<Wallet className="h-4 w-4 text-amber-600" />}
-                label="Solde net"
+                label={t('cfac.net_balance', locale)}
                 value={fmt(stats.net, compte.devise)}
               />
             </div>
@@ -368,12 +370,12 @@ export default function ClientBanqueDetailPage() {
             {/* Graphique 12 mois */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Solde sur 12 mois</CardTitle>
+                <CardTitle className="text-base">{t('cfac.balance_12m', locale)}</CardTitle>
               </CardHeader>
               <CardContent>
                 {chartData.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    Pas assez de relevés pour afficher l'historique.
+                    {t('cfac.not_enough_statements', locale)}
                   </p>
                 ) : (
                   <div style={{ width: "100%", height: 280 }}>
@@ -409,12 +411,12 @@ export default function ClientBanqueDetailPage() {
             {/* Filtres */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Filtres</CardTitle>
+                <CardTitle className="text-base">{t('cfac.filters', locale)}</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
                   <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    Date début
+                    {t('cfac.date_start', locale)}
                   </label>
                   <Input
                     type="date"
@@ -424,7 +426,7 @@ export default function ClientBanqueDetailPage() {
                 </div>
                 <div>
                   <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    Date fin
+                    {t('cfac.date_end', locale)}
                   </label>
                   <Input
                     type="date"
@@ -434,25 +436,25 @@ export default function ClientBanqueDetailPage() {
                 </div>
                 <div>
                   <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    Statut lettrage
+                    {t('cfac.lettering_status', locale)}
                   </label>
                   <Select value={filtreStatut} onValueChange={setFiltreStatut}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Tous</SelectItem>
-                      <SelectItem value="lettre">Lettré</SelectItem>
-                      <SelectItem value="non_lettre">Non-lettré</SelectItem>
+                      <SelectItem value="all">{t('cfac.all', locale)}</SelectItem>
+                      <SelectItem value="lettre">{t('cfac.lettered', locale)}</SelectItem>
+                      <SelectItem value="non_lettre">{t('cfac.not_lettered', locale)}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    Recherche
+                    {t('cfac.search', locale)}
                   </label>
                   <Input
-                    placeholder="Libellé / tiers…"
+                    placeholder={t('cfac.search_libelle_tiers', locale)}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
@@ -464,26 +466,26 @@ export default function ClientBanqueDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  Transactions du compte ({filtered.length})
+                  {t('cfac.account_transactions', locale)} ({filtered.length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {filtered.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    Aucune transaction pour ces filtres.
+                    {t('cfac.no_tx_filters', locale)}
                   </p>
                 ) : (
                   <div className="overflow-x-auto rounded border">
                     <table className="w-full text-xs">
                       <thead className="bg-muted/40">
                         <tr>
-                          <th className="text-left p-2 font-medium">Date</th>
-                          <th className="text-left p-2 font-medium">Libellé</th>
-                          <th className="text-left p-2 font-medium">Tiers</th>
-                          <th className="text-right p-2 font-medium">Débit</th>
-                          <th className="text-right p-2 font-medium">Crédit</th>
-                          <th className="text-center p-2 font-medium">Lettre</th>
-                          <th className="text-center p-2 font-medium">Statut</th>
+                          <th className="text-left p-2 font-medium">{t('cfac.col_date', locale)}</th>
+                          <th className="text-left p-2 font-medium">{t('cfac.col_libelle', locale)}</th>
+                          <th className="text-left p-2 font-medium">{t('cfac.col_tiers', locale)}</th>
+                          <th className="text-right p-2 font-medium">{t('cfac.col_debit', locale)}</th>
+                          <th className="text-right p-2 font-medium">{t('cfac.col_credit', locale)}</th>
+                          <th className="text-center p-2 font-medium">{t('cfac.col_letter', locale)}</th>
+                          <th className="text-center p-2 font-medium">{t('cfac.col_status', locale)}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -524,8 +526,7 @@ export default function ClientBanqueDetailPage() {
                     </table>
                     {filtered.length > 500 && (
                       <p className="text-[11px] text-muted-foreground p-2 text-center">
-                        Affichage limité à 500 lignes — utiliser l'export Excel
-                        pour la liste complète.
+                        {t('cfac.limited_500', locale)}
                       </p>
                     )}
                   </div>

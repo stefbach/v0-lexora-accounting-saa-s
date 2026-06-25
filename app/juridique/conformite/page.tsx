@@ -3,6 +3,7 @@ import React from "react"
 import { ShieldCheck, CalendarClock, Clock, BookOpen } from "lucide-react"
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
 import { LOIS_MAURICIENNES, DELAIS_PRESCRIPTION } from "@/lib/juridique/referentielMauricien"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -36,14 +37,15 @@ const CAT_COLOR: Record<string, string> = {
 const CATEGORIES = ["Tous", "Sociétés", "Fiscal", "Social", "Financier"]
 
 export default function ConformitePage() {
+  const locale = getLocale()
   const [cat, setCat] = React.useState("Tous")
   const obligations = cat === "Tous" ? OBLIGATIONS : OBLIGATIONS.filter((o) => o.cat === cat)
   return (
     <div className="space-y-5">
       <JuridiqueHeader
         icon={<ShieldCheck className="w-6 h-6" style={{ color: GOLD }} />}
-        title="Conformité & délais légaux"
-        subtitle="Calendrier des obligations récurrentes, délais de prescription et corpus légal applicable. Chaque échéance est rattachée à sa base légale."
+        title={t("jurd.conf.title", locale)}
+        subtitle={t("jurd.conf.subtitle", locale)}
         showSelector={false}
       />
 
@@ -52,11 +54,11 @@ export default function ConformitePage() {
         <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap justify-between">
           <div className="flex items-center gap-2">
             <CalendarClock className="w-4 h-4" style={{ color: GOLD }} />
-            <p className="font-bold text-sm" style={{ color: NAVY }}>Calendrier des obligations</p>
+            <p className="font-bold text-sm" style={{ color: NAVY }}>{t("jurd.conf.calendrier", locale)}</p>
           </div>
           <div className="flex gap-1.5 flex-wrap">
             {CATEGORIES.map((c) => (
-              <button key={c} onClick={() => setCat(c)} className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${cat === c ? "border-transparent text-[#0B0F2E]" : "border-gray-200 text-gray-500 hover:border-gray-300"}`} style={cat === c ? { background: "rgba(212,175,55,0.16)" } : {}}>{c}</button>
+              <button key={c} onClick={() => setCat(c)} className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${cat === c ? "border-transparent text-[#0B0F2E]" : "border-gray-200 text-gray-500 hover:border-gray-300"}`} style={cat === c ? { background: "rgba(212,175,55,0.16)" } : {}}>{t(`jurd.conf.cat.${c}`, locale)}</button>
             ))}
           </div>
         </div>
@@ -64,10 +66,10 @@ export default function ConformitePage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
-                <th className="px-5 py-2 font-semibold">Obligation</th>
-                <th className="px-3 py-2 font-semibold">Échéance</th>
-                <th className="px-3 py-2 font-semibold">Autorité</th>
-                <th className="px-3 py-2 font-semibold">Base légale</th>
+                <th className="px-5 py-2 font-semibold">{t("jurd.conf.colObligation", locale)}</th>
+                <th className="px-3 py-2 font-semibold">{t("jurd.conf.colEcheance", locale)}</th>
+                <th className="px-3 py-2 font-semibold">{t("jurd.conf.colAutorite", locale)}</th>
+                <th className="px-3 py-2 font-semibold">{t("jurd.conf.colBase", locale)}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -93,7 +95,7 @@ export default function ConformitePage() {
       <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-3">
           <Clock className="w-4 h-4" style={{ color: GOLD }} />
-          <p className="font-bold text-sm" style={{ color: NAVY }}>Délais de prescription</p>
+          <p className="font-bold text-sm" style={{ color: NAVY }}>{t("jurd.conf.prescription", locale)}</p>
         </div>
         <div className="grid sm:grid-cols-2 gap-2">
           {DELAIS_PRESCRIPTION.map((d, i) => (
@@ -112,7 +114,7 @@ export default function ConformitePage() {
       <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-3">
           <BookOpen className="w-4 h-4" style={{ color: GOLD }} />
-          <p className="font-bold text-sm" style={{ color: NAVY }}>Corpus légal référencé ({LOIS_MAURICIENNES.length})</p>
+          <p className="font-bold text-sm" style={{ color: NAVY }}>{t("jurd.conf.corpus", locale)} ({LOIS_MAURICIENNES.length})</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {LOIS_MAURICIENNES.map((l) => (
@@ -124,7 +126,7 @@ export default function ConformitePage() {
       </div>
 
       <p className="text-[11px] text-gray-400 text-center">
-        Calendrier indicatif — vérifiez les dates exactes selon la date de clôture et le statut de chaque entité.
+        {t("jurd.conf.disclaimer", locale)}
       </p>
     </div>
   )

@@ -10,21 +10,23 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Loader2, Plus, CheckCircle, Pencil, Trash2, Upload, FileSpreadsheet, AlertTriangle, X } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import * as XLSX from "xlsx"
-import { t, getLocale } from "@/lib/i18n"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 import { Switch } from "@/components/ui/switch"
 import { SectionOvertime } from "./_components/section-overtime"
 import { ImportPrimesDialog } from "./_components/import-primes-dialog"
 
-const TYPE_PRIME_LABELS: Record<string, string> = {
-  fixe: "Fixe",
-  variable_unitaire: "Variable par unite",
-  bonus_objectif: "Bonus objectif",
-  pourcentage: "% Salaire",
-  commission: "Commission",
-  meal_allowance: "Meal Allowance",
-  call_allowance: "Call Allowance",
-  astreinte: "Astreinte",
-  night_shift: "Night Shift Allowance (+15%)",
+function typePrimeLabels(locale: Locale): Record<string, string> {
+  return {
+    fixe: t('rhp.primes.type_fixe', locale),
+    variable_unitaire: t('rhp.primes.type_variable_unitaire', locale),
+    bonus_objectif: t('rhp.primes.type_bonus_objectif', locale),
+    pourcentage: t('rhp.primes.type_pourcentage', locale),
+    commission: t('rhp.primes.type_commission', locale),
+    meal_allowance: "Meal Allowance",
+    call_allowance: "Call Allowance",
+    astreinte: t('rhp.primes.type_astreinte', locale),
+    night_shift: "Night Shift Allowance (+15%)",
+  }
 }
 
 const STATUT_COLORS: Record<string, string> = {
@@ -37,6 +39,7 @@ function fmt(n: number) { return new Intl.NumberFormat("fr-FR", { maximumFractio
 
 export default function PrimesPage() {
   const locale = getLocale()
+  const TYPE_PRIME_LABELS = typePrimeLabels(locale)
   const [tab, setTab] = useState<"catalogue" | "saisie" | "regles">("catalogue")
   const [regles, setRegles] = useState<any[]>([])
   const [regleDialog, setRegleDialog] = useState(false)
@@ -110,7 +113,7 @@ export default function PrimesPage() {
     const requestUrl = `/api/rh/primes?${params}`
     try {
       const res = await fetch(requestUrl)
-      const body = await res.json().catch(() => ({ error: "Réponse non-JSON" }))
+      const body = await res.json().catch(() => ({ error: t('rhp.primes.err_non_json', locale) }))
       setSaisies(Array.isArray(body?.primes) ? body.primes : [])
       setSaisiesDebug({
         httpStatus: res.status,
@@ -127,7 +130,7 @@ export default function PrimesPage() {
         httpOk: false,
         requestUrl,
         rawBody: null,
-        errorMessage: `Erreur réseau : ${e?.message || e}`,
+        errorMessage: `${t('rhp.primes.err_reseau', locale)}${e?.message || e}`,
       })
     } finally { setLoading(false) }
   }, [societe, periode])
@@ -148,7 +151,7 @@ export default function PrimesPage() {
   }, [tab, loadCatalogue, loadSaisies, loadRegles])
 
   const creerRegle = async () => {
-    if (!regleForm.nom || societe === "all") { setRegleError("Nom et societe requis"); return }
+    if (!regleForm.nom || societe === "all") { setRegleError(t('rhp.primes.err_nom_societe', locale)); return }
     setSaving(true); setRegleError(null)
     try {
       const res = await fetch("/api/rh/primes/regles", {
@@ -169,13 +172,13 @@ export default function PrimesPage() {
   }
 
   const deleteRegle = async (id: string) => {
-    if (!confirm("Supprimer cette regle ?")) return
+    if (!confirm(t('rhp.primes.confirm_del_regle', locale))) return
     await fetch("/api/rh/primes/regles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "supprimer_regle", id }) })
     loadRegles()
   }
 
   const creerCatalogue = async () => {
-    if (!catForm.libelle || !catForm.type_prime) { setCatError("Libellé et type requis"); return }
+    if (!catForm.libelle || !catForm.type_prime) { setCatError(t('rhp.primes.err_libelle_type', locale)); return }
     setSaving(true); setCatError(null)
     try {
       const res = await fetch("/api/rh/primes", {
@@ -186,7 +189,7 @@ export default function PrimesPage() {
       setCatDialog(false)
       setCatForm({ code: "", libelle: "", type_prime: "fixe", montant_fixe: "", montant_par_unite: "", unite: "", pourcentage: "", bonus_objectif_montant: "", periode_application: "mensuel", postes_eligibles: "" })
       loadCatalogue()
-    } catch (e: unknown) { setCatError(e instanceof Error ? e.message : "Erreur") }
+    } catch (e: unknown) { setCatError(e instanceof Error ? e.message : t('rhp.primes.err_generic', locale)) }
     finally { setSaving(false) }
   }
 
@@ -217,7 +220,7 @@ export default function PrimesPage() {
   }, [saisieForm.prime_id, saisieForm.quantite, saisieForm.employe_id, catalogue, employes])
 
   const saisirPrime = async () => {
-    if (!saisieForm.employe_id || !saisieForm.prime_id) { setSaisieError("Employé et prime requis"); return }
+    if (!saisieForm.employe_id || !saisieForm.prime_id) { setSaisieError(t('rhp.primes.err_employe_prime', locale)); return }
     setSaving(true); setSaisieError(null)
     try {
       const res = await fetch("/api/rh/primes", {
@@ -228,7 +231,7 @@ export default function PrimesPage() {
       setSaisieDialog(false)
       setSaisieForm({ employe_id: "", prime_id: "", quantite: "", notes: "" })
       loadSaisies()
-    } catch (e: unknown) { setSaisieError(e instanceof Error ? e.message : "Erreur") }
+    } catch (e: unknown) { setSaisieError(e instanceof Error ? e.message : t('rhp.primes.err_generic', locale)) }
     finally { setSaving(false) }
   }
 
@@ -260,7 +263,7 @@ export default function PrimesPage() {
           notes: editForm.notes || null,
         }),
       })
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Erreur") }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || t('rhp.primes.err_generic', locale)) }
       setEditDialog(null)
       loadSaisies()
     } catch (e: any) { setEditError(e.message) }
@@ -268,13 +271,13 @@ export default function PrimesPage() {
   }
 
   const supprimerSaisie = async (id: string, employeName: string, primeLabel: string) => {
-    if (!confirm(`Supprimer la prime "${primeLabel}" de ${employeName} ?`)) return
+    if (!confirm(t('rhp.primes.confirm_del_saisie', locale).replace('{prime}', primeLabel).replace('{employe}', employeName))) return
     try {
       const res = await fetch(`/api/rh/primes/${id}`, { method: "DELETE" })
-      if (!res.ok) { const d = await res.json(); alert(d.error || "Erreur suppression"); return }
+      if (!res.ok) { const d = await res.json(); alert(d.error || t('rhp.primes.err_del', locale)); return }
       loadSaisies()
     } catch (e: any) {
-      alert("Erreur réseau: " + (e?.message || ""))
+      alert(t('rhp.primes.err_reseau', locale) + (e?.message || ""))
     }
   }
 
@@ -337,19 +340,19 @@ export default function PrimesPage() {
         return out
       }).filter((r: any) => (r.nom_complet || r.nom || r.prenom) && (r.montant || 0) !== 0)
       if (normalized.length === 0) {
-        setImportError("Aucune ligne valide trouvee. Le fichier doit contenir au moins : 'Nom' (ou 'Nom complet') et 'Montant'.")
+        setImportError(t('rhp.primes.import_no_valid', locale))
         return
       }
       setImportPreview(normalized)
     } catch (e: any) {
-      setImportError("Impossible de lire le fichier: " + (e.message || ""))
+      setImportError(t('rhp.primes.import_read_fail', locale) + (e.message || ""))
     }
   }
 
   const runImport = async () => {
-    if (!importPrimeId) { setImportError("Selectionnez une prime du catalogue"); return }
-    if (importPreview.length === 0) { setImportError("Aucune ligne a importer"); return }
-    if (societe === "all") { setImportError("Selectionnez une societe"); return }
+    if (!importPrimeId) { setImportError(t('rhp.primes.import_pick_prime', locale)); return }
+    if (importPreview.length === 0) { setImportError(t('rhp.primes.import_no_rows', locale)); return }
+    if (societe === "all") { setImportError(t('rhp.primes.import_pick_societe', locale)); return }
     setImportRunning(true)
     setImportError(null)
     try {
@@ -364,11 +367,11 @@ export default function PrimesPage() {
         })
       })
       const data = await res.json()
-      if (!res.ok) { setImportError(data.error || "Erreur import"); return }
+      if (!res.ok) { setImportError(data.error || t('rhp.primes.import_err', locale)); return }
       setImportResult(data)
       loadSaisies()
     } catch (e: any) {
-      setImportError("Erreur reseau: " + (e.message || ""))
+      setImportError(t('rhp.primes.err_reseau', locale) + (e.message || ""))
     } finally { setImportRunning(false) }
   }
 
@@ -448,17 +451,17 @@ export default function PrimesPage() {
                         <TableCell><span className="text-sm">{TYPE_PRIME_LABELS[p.type_prime] || p.type_prime}</span></TableCell>
                         <TableCell className="text-sm">
                           {p.type_prime === "fixe" && `${fmt(p.montant_fixe || 0)}`}
-                          {p.type_prime === "variable_unitaire" && `${fmt(p.montant_par_unite || 0)} / ${p.unite || "unité"}`}
+                          {p.type_prime === "variable_unitaire" && `${fmt(p.montant_par_unite || 0)} / ${p.unite || t('rhp.primes.unit_default', locale)}`}
                           {p.type_prime === "bonus_objectif" && `${fmt(p.bonus_objectif_montant || 0)}`}
-                          {p.type_prime === "pourcentage" && `${p.pourcentage}% du brut`}
-                          {p.type_prime === "commission" && `${fmt(p.montant_par_unite || 0)} / ${p.unite || "vente"}`}
+                          {p.type_prime === "pourcentage" && `${p.pourcentage}${t('rhp.primes.pct_brut', locale)}`}
+                          {p.type_prime === "commission" && `${fmt(p.montant_par_unite || 0)} / ${p.unite || t('rhp.primes.unit_vente', locale)}`}
                         </TableCell>
                         <TableCell className="text-sm text-gray-500 capitalize">{p.periode_application}</TableCell>
                         <TableCell>
                           <Switch checked={p.actif !== false} onCheckedChange={v => toggleActif(p.id, v)} />
                         </TableCell>
                         <TableCell>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Modifier">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title={t('rhp.primes.action_edit', locale)}>
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
                         </TableCell>
@@ -501,79 +504,79 @@ export default function PrimesPage() {
             const dbg = saisiesDebug.rawBody?._debug
             // Conclusion = un seul message qui dit la cause + le fix
             let conclusion: { titre: string; cause: string; fix: string; severity: "red" | "amber" } = {
-              titre: "Aucune prime trouvée pour cette période/société",
-              cause: "Soit il n'y en a vraiment pas, soit la requête API ne remonte rien.",
-              fix: "Si tu en as saisi récemment, vérifie qu'elles sont approuvées en BDD.",
+              titre: t('rhp.primes.diag_empty_title', locale),
+              cause: t('rhp.primes.diag_empty_cause', locale),
+              fix: t('rhp.primes.diag_empty_fix', locale),
               severity: "amber",
             }
             if (!saisiesDebug.httpOk) {
               if (saisiesDebug.httpStatus === 401) {
                 conclusion = {
-                  titre: "Session expirée",
-                  cause: "Tu n'es plus authentifié.",
-                  fix: "Reconnecte-toi (logout + login).",
+                  titre: t('rhp.primes.diag_401_title', locale),
+                  cause: t('rhp.primes.diag_401_cause', locale),
+                  fix: t('rhp.primes.diag_401_fix', locale),
                   severity: "red",
                 }
               } else if (saisiesDebug.httpStatus === 500) {
                 conclusion = {
-                  titre: "Erreur serveur",
-                  cause: saisiesDebug.errorMessage || "Erreur 500 sans message.",
-                  fix: "Vérifier SUPABASE_SERVICE_ROLE_KEY dans Vercel + logs serveur.",
+                  titre: t('rhp.primes.diag_500_title', locale),
+                  cause: saisiesDebug.errorMessage || t('rhp.primes.diag_500_cause', locale),
+                  fix: t('rhp.primes.diag_500_fix', locale),
                   severity: "red",
                 }
               } else {
                 conclusion = {
-                  titre: `Erreur HTTP ${saisiesDebug.httpStatus}`,
-                  cause: saisiesDebug.errorMessage || "Erreur réseau",
-                  fix: "Vérifier la connexion + l'URL de l'API.",
+                  titre: t('rhp.primes.diag_http_title', locale).replace('{status}', String(saisiesDebug.httpStatus)),
+                  cause: saisiesDebug.errorMessage || t('rhp.primes.diag_http_cause', locale),
+                  fix: t('rhp.primes.diag_http_fix', locale),
                   severity: "red",
                 }
               }
             } else if (dbg) {
               if (dbg.error) {
                 conclusion = {
-                  titre: "Erreur lors du chargement des primes",
+                  titre: t('rhp.primes.diag_load_title', locale),
                   cause: dbg.error,
-                  fix: "Le développeur a probablement besoin de corriger la requête API. Voir les détails techniques.",
+                  fix: t('rhp.primes.diag_load_fix', locale),
                   severity: "red",
                 }
               } else if (!dbg.using_admin_client) {
                 conclusion = {
-                  titre: "Variable SUPABASE_SERVICE_ROLE_KEY manquante sur Vercel",
-                  cause: "Le serveur n'a pas pu créer le client admin → la RLS bloque ton rôle.",
-                  fix: "Demander à l'admin de configurer SUPABASE_SERVICE_ROLE_KEY dans les env vars Vercel.",
+                  titre: t('rhp.primes.diag_norolekey_title', locale),
+                  cause: t('rhp.primes.diag_norolekey_cause', locale),
+                  fix: t('rhp.primes.diag_norolekey_fix', locale),
                   severity: "red",
                 }
               } else if (dbg.probe_error) {
                 conclusion = {
-                  titre: "Le client admin ne peut pas lire primes_variables_mois",
-                  cause: `Erreur Postgres : ${dbg.probe_error}`,
-                  fix: "Vérifier que la SERVICE_ROLE_KEY est la bonne (peut-être expirée ou copiée incorrectement).",
+                  titre: t('rhp.primes.diag_probe_title', locale),
+                  cause: t('rhp.primes.diag_probe_cause', locale).replace('{err}', dbg.probe_error),
+                  fix: t('rhp.primes.diag_probe_fix', locale),
                   severity: "red",
                 }
               } else if (dbg.probe_total_primes === 0) {
                 conclusion = {
-                  titre: "La table primes_variables_mois est vide (ou bloquée par RLS)",
-                  cause: "Même en mode admin, aucune prime n'est lisible dans toute la table.",
-                  fix: "Soit SERVICE_ROLE_KEY invalide, soit la table est vraiment vide. Vérifier directement en SQL.",
+                  titre: t('rhp.primes.diag_emptytable_title', locale),
+                  cause: t('rhp.primes.diag_emptytable_cause', locale),
+                  fix: t('rhp.primes.diag_emptytable_fix', locale),
                   severity: "red",
                 }
               } else if (dbg.nb_employes_societe === 0) {
                 conclusion = {
-                  titre: "Aucun employé visible pour cette société",
-                  cause: `${dbg.probe_total_primes} primes existent au total, mais la requête sur 'employes' filtrée par cette société renvoie 0.`,
-                  fix: "Soit la société n'a vraiment aucun employé, soit la RLS sur 'employes' bloque. Si bloque : configurer le mapping user_societes pour ton compte.",
+                  titre: t('rhp.primes.diag_noemp_title', locale),
+                  cause: t('rhp.primes.diag_noemp_cause', locale).replace('{total}', String(dbg.probe_total_primes)),
+                  fix: t('rhp.primes.diag_noemp_fix', locale),
                   severity: "red",
                 }
               } else {
                 // Admin OK, primes existent en table, employés visibles, mais 0 prime pour ce filtre
                 const periodesDB = dbg.periodes_existantes_en_db || []
-                const periodesAffichees = periodesDB.length > 0 ? periodesDB.join(', ') : 'aucune visible'
+                const periodesAffichees = periodesDB.length > 0 ? periodesDB.join(', ') : t('rhp.primes.diag_none_visible', locale)
                 const url = dbg.supabase_url_partial || '?'
                 conclusion = {
-                  titre: "L'API ne voit aucune prime pour cette période — mismatch BDD probable",
-                  cause: `Le serveur (URL: ${url}) voit ${dbg.probe_total_primes} primes au total et ${dbg.nb_employes_societe} employés DDS, MAIS aucune avec periode='${dbg.query_periode_filter}'. Périodes existantes côté API: [${periodesAffichees}]. Si '2026-05-01' n'est pas dans cette liste alors que tu sais qu'il devrait y être, c'est que Vercel hit une AUTRE base Supabase que celle que tu vois.`,
-                  fix: "1) Vérifier dans Vercel que NEXT_PUBLIC_SUPABASE_URL ET SUPABASE_SERVICE_ROLE_KEY pointent bien sur le projet 'dqepdoimpqhmuhkklxva'. 2) Sinon, regarder dans la liste 'Périodes existantes' ci-dessus quelle base Vercel utilise.",
+                  titre: t('rhp.primes.diag_mismatch_title', locale),
+                  cause: t('rhp.primes.diag_mismatch_cause', locale).replace('{url}', url).replace('{total}', String(dbg.probe_total_primes)).replace('{nbemp}', String(dbg.nb_employes_societe)).replace('{periode}', String(dbg.query_periode_filter)).replace('{periodes}', periodesAffichees),
+                  fix: t('rhp.primes.diag_mismatch_fix', locale),
                   severity: "red",
                 }
               }
@@ -586,14 +589,14 @@ export default function PrimesPage() {
                 <p className="font-bold text-base mb-2">
                   {conclusion.severity === "red" ? "🔴" : "🟠"} {conclusion.titre}
                 </p>
-                <p className="text-sm mb-1"><strong>Pourquoi :</strong> {conclusion.cause}</p>
-                <p className="text-sm"><strong>Solution :</strong> {conclusion.fix}</p>
+                <p className="text-sm mb-1"><strong>{t('rhp.primes.diag_why', locale)}</strong> {conclusion.cause}</p>
+                <p className="text-sm"><strong>{t('rhp.primes.diag_solution', locale)}</strong> {conclusion.fix}</p>
                 <details className="mt-2 text-xs">
-                  <summary className="cursor-pointer opacity-70 hover:opacity-100">Détails techniques (cliquer)</summary>
+                  <summary className="cursor-pointer opacity-70 hover:opacity-100">{t('rhp.primes.diag_tech', locale)}</summary>
                   <div className="mt-2 font-mono space-y-1 bg-white/60 p-2 rounded">
                     <p>URL : {saisiesDebug.requestUrl}</p>
-                    <p>HTTP : {saisiesDebug.httpStatus ?? "Erreur réseau"}</p>
-                    <p>Réponse : {JSON.stringify(saisiesDebug.rawBody)?.slice(0, 800) || "vide"}</p>
+                    <p>HTTP : {saisiesDebug.httpStatus ?? t('rhp.primes.diag_net_err', locale)}</p>
+                    <p>{t('rhp.primes.diag_response', locale)} {JSON.stringify(saisiesDebug.rawBody)?.slice(0, 800) || t('rhp.primes.diag_empty_val', locale)}</p>
                   </div>
                 </details>
               </div>
@@ -639,10 +642,10 @@ export default function PrimesPage() {
                                   <CheckCircle className="w-4 h-4 mr-1" />{t('rha.a.primes.approuver', locale)}
                                 </Button>
                               )}
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Modifier" onClick={() => openEditSaisie(s)}>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title={t('rhp.primes.action_edit', locale)} onClick={() => openEditSaisie(s)}>
                                 <Pencil className="w-4 h-4" />
                               </Button>
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" title="Supprimer"
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" title={t('rhp.primes.action_delete', locale)}
                                 onClick={() => supprimerSaisie(s.id, `${s.employe?.prenom ?? ''} ${s.employe?.nom ?? ''}`.trim(), s.prime?.libelle ?? '—')}>
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -714,14 +717,14 @@ export default function PrimesPage() {
                           </TableCell>
                           <TableCell className="font-semibold">{fmt(r.montant || 0)}</TableCell>
                           <TableCell className="text-sm text-gray-600">
-                            {r.type === "meal_allowance" && `Si OT >= ${r.conditions?.ot_min_heures || 1}h`}
-                            {r.type === "night_shift" && "Auto si heures de nuit (21h-6h), +15% base"}
-                            {r.type === "call_allowance" && "Si affecte astreinte"}
-                            {r.type === "astreinte" && "Si affecte astreinte"}
-                            {r.type === "fixe" && "Automatique chaque mois"}
+                            {r.type === "meal_allowance" && t('rhp.primes.cond_meal', locale).replace('{h}', String(r.conditions?.ot_min_heures || 1))}
+                            {r.type === "night_shift" && t('rhp.primes.cond_night', locale)}
+                            {r.type === "call_allowance" && t('rhp.primes.cond_astreinte', locale)}
+                            {r.type === "astreinte" && t('rhp.primes.cond_astreinte', locale)}
+                            {r.type === "fixe" && t('rhp.primes.cond_fixe', locale)}
                             {!["meal_allowance", "night_shift", "call_allowance", "astreinte", "fixe"].includes(r.type) && (r.description || "—")}
                           </TableCell>
-                          <TableCell className="text-sm text-gray-500 capitalize">{r.scope === "tous" ? "Tous" : `${r.scope}: ${r.scope_value || ""}`}</TableCell>
+                          <TableCell className="text-sm text-gray-500 capitalize">{r.scope === "tous" ? t('rhp.primes.scope_tous', locale) : `${r.scope}: ${r.scope_value || ""}`}</TableCell>
                           <TableCell><Switch checked={r.actif !== false} onCheckedChange={v => toggleRegle(r.id, v)} /></TableCell>
                           <TableCell>
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => deleteRegle(r.id)}>
@@ -741,58 +744,58 @@ export default function PrimesPage() {
       {/* Dialog nouvelle regle */}
       <Dialog open={regleDialog} onOpenChange={open => !open && setRegleDialog(false)}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Nouvelle regle automatique</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('rhp.primes.regle_dlg_title', locale)}</DialogTitle></DialogHeader>
           <div className="grid gap-3 py-2">
             {regleError && <p className="text-sm text-red-600">{regleError}</p>}
-            <div><Label>Nom de la regle *</Label>
+            <div><Label>{t('rhp.primes.regle_nom', locale)}</Label>
               <Input value={regleForm.nom} onChange={e => setRegleForm(f => ({ ...f, nom: e.target.value }))} placeholder="Ex: Meal Allowance OT" />
             </div>
-            <div><Label>Type *</Label>
+            <div><Label>{t('rhp.primes.lbl_type', locale)}</Label>
               <Select value={regleForm.type} onValueChange={v => setRegleForm(f => ({ ...f, type: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="meal_allowance">Meal Allowance (auto si OT)</SelectItem>
-                  <SelectItem value="night_shift">Night Shift Allowance (+15% base, auto)</SelectItem>
-                  <SelectItem value="call_allowance">Call Allowance (astreinte / disponibilite)</SelectItem>
-                  <SelectItem value="astreinte">Prime d&apos;astreinte</SelectItem>
-                  <SelectItem value="fixe">Prime fixe automatique</SelectItem>
-                  <SelectItem value="par_heure">Prime par heure OT</SelectItem>
-                  <SelectItem value="par_jour">Prime par jour travaille</SelectItem>
-                  <SelectItem value="pourcentage">% du salaire de base</SelectItem>
-                  <SelectItem value="par_anciennete">Prime d&apos;anciennete</SelectItem>
+                  <SelectItem value="meal_allowance">{t('rhp.primes.regletype_meal', locale)}</SelectItem>
+                  <SelectItem value="night_shift">{t('rhp.primes.regletype_night', locale)}</SelectItem>
+                  <SelectItem value="call_allowance">{t('rhp.primes.regletype_call', locale)}</SelectItem>
+                  <SelectItem value="astreinte">{t('rhp.primes.regletype_astreinte', locale)}</SelectItem>
+                  <SelectItem value="fixe">{t('rhp.primes.regletype_fixe', locale)}</SelectItem>
+                  <SelectItem value="par_heure">{t('rhp.primes.regletype_par_heure', locale)}</SelectItem>
+                  <SelectItem value="par_jour">{t('rhp.primes.regletype_par_jour', locale)}</SelectItem>
+                  <SelectItem value="pourcentage">{t('rhp.primes.regletype_pourcentage', locale)}</SelectItem>
+                  <SelectItem value="par_anciennete">{t('rhp.primes.regletype_anciennete', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Montant (MUR) *</Label>
+            <div><Label>{t('rhp.primes.lbl_montant_mur', locale)}</Label>
               <Input type="number" value={regleForm.montant} onChange={e => setRegleForm(f => ({ ...f, montant: e.target.value }))} placeholder="Ex: 200" />
             </div>
             {(regleForm.type === "meal_allowance" || regleForm.type === "par_heure") && (
-              <div><Label>Heures OT minimum pour declencher</Label>
+              <div><Label>{t('rhp.primes.regle_ot_min', locale)}</Label>
                 <Input type="number" value={regleForm.conditions_ot_min} onChange={e => setRegleForm(f => ({ ...f, conditions_ot_min: e.target.value }))} placeholder="1" />
-                <p className="text-[10px] text-gray-400 mt-1">La prime sera appliquee automatiquement si l&apos;employe a fait au moins ce nombre d&apos;heures sup dans le mois.</p>
+                <p className="text-[10px] text-gray-400 mt-1">{t('rhp.primes.regle_ot_min_hint', locale)}</p>
               </div>
             )}
-            <div><Label>Scope (qui recoit)</Label>
+            <div><Label>{t('rhp.primes.regle_scope', locale)}</Label>
               <Select value={regleForm.scope} onValueChange={v => setRegleForm(f => ({ ...f, scope: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="tous">Tous les employes</SelectItem>
-                  <SelectItem value="groupe">Par groupe</SelectItem>
-                  <SelectItem value="departement">Par departement</SelectItem>
-                  <SelectItem value="individuel">Individuel</SelectItem>
+                  <SelectItem value="tous">{t('rhp.primes.scope_tous_emp', locale)}</SelectItem>
+                  <SelectItem value="groupe">{t('rhp.primes.scope_groupe', locale)}</SelectItem>
+                  <SelectItem value="departement">{t('rhp.primes.scope_departement', locale)}</SelectItem>
+                  <SelectItem value="individuel">{t('rhp.primes.scope_individuel', locale)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {regleForm.scope !== "tous" && (
-              <div><Label>Valeur du scope ({regleForm.scope})</Label>
-                <Input value={regleForm.scope_value} onChange={e => setRegleForm(f => ({ ...f, scope_value: e.target.value }))} placeholder={regleForm.scope === "individuel" ? "Nom de l'employe" : "Nom du groupe/departement"} />
+              <div><Label>{t('rhp.primes.regle_scope_value', locale).replace('{scope}', regleForm.scope)}</Label>
+                <Input value={regleForm.scope_value} onChange={e => setRegleForm(f => ({ ...f, scope_value: e.target.value }))} placeholder={regleForm.scope === "individuel" ? t('rhp.primes.ph_nom_employe', locale) : t('rhp.primes.ph_nom_groupe', locale)} />
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRegleDialog(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setRegleDialog(false)}>{t('rhp.primes.cancel', locale)}</Button>
             <Button onClick={creerRegle} disabled={saving} className="bg-[#0B0F2E] text-white">
-              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Creer la regle
+              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{t('rhp.primes.regle_create', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -801,24 +804,24 @@ export default function PrimesPage() {
       {/* Dialog nouvelle prime catalogue */}
       <Dialog open={catDialog} onOpenChange={open => !open && setCatDialog(false)}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Nouvelle prime — Catalogue</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('rhp.primes.cat_dlg_title', locale)}</DialogTitle></DialogHeader>
           <div className="grid gap-3 py-2 max-h-[70vh] overflow-y-auto pr-2">
             {catError && <p className="text-sm text-red-600">{catError}</p>}
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Code (auto si vide)</Label><Input value={catForm.code} onChange={e => setCatForm(f => ({ ...f, code: e.target.value }))} placeholder="PRM-001" /></div>
-              <div><Label>Période</Label>
+              <div><Label>{t('rhp.primes.cat_code', locale)}</Label><Input value={catForm.code} onChange={e => setCatForm(f => ({ ...f, code: e.target.value }))} placeholder="PRM-001" /></div>
+              <div><Label>{t('rhp.primes.cat_periode', locale)}</Label>
                 <Select value={catForm.periode_application} onValueChange={v => setCatForm(f => ({ ...f, periode_application: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mensuel">Mensuel</SelectItem>
-                    <SelectItem value="trimestriel">Trimestriel</SelectItem>
-                    <SelectItem value="annuel">Annuel</SelectItem>
+                    <SelectItem value="mensuel">{t('rhp.primes.per_mensuel', locale)}</SelectItem>
+                    <SelectItem value="trimestriel">{t('rhp.primes.per_trimestriel', locale)}</SelectItem>
+                    <SelectItem value="annuel">{t('rhp.primes.per_annuel', locale)}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <div><Label>Libellé *</Label><Input value={catForm.libelle} onChange={e => setCatForm(f => ({ ...f, libelle: e.target.value }))} placeholder="Ex: Prime consultation TIBOK" /></div>
-            <div><Label>Type *</Label>
+            <div><Label>{t('rhp.primes.cat_libelle', locale)}</Label><Input value={catForm.libelle} onChange={e => setCatForm(f => ({ ...f, libelle: e.target.value }))} placeholder="Ex: Prime consultation TIBOK" /></div>
+            <div><Label>{t('rhp.primes.lbl_type', locale)}</Label>
               <Select value={catForm.type_prime} onValueChange={v => setCatForm(f => ({ ...f, type_prime: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -827,26 +830,26 @@ export default function PrimesPage() {
               </Select>
             </div>
             {catForm.type_prime === "fixe" && (
-              <div><Label>Montant mensuel (MUR)</Label><Input type="number" value={catForm.montant_fixe} onChange={e => setCatForm(f => ({ ...f, montant_fixe: e.target.value }))} /></div>
+              <div><Label>{t('rhp.primes.cat_montant_mensuel', locale)}</Label><Input type="number" value={catForm.montant_fixe} onChange={e => setCatForm(f => ({ ...f, montant_fixe: e.target.value }))} /></div>
             )}
             {(catForm.type_prime === "variable_unitaire" || catForm.type_prime === "commission") && (
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Montant par unité (MUR)</Label><Input type="number" value={catForm.montant_par_unite} onChange={e => setCatForm(f => ({ ...f, montant_par_unite: e.target.value }))} /></div>
-                <div><Label>Unité (ex: consultation)</Label><Input value={catForm.unite} onChange={e => setCatForm(f => ({ ...f, unite: e.target.value }))} placeholder="consultation" /></div>
+                <div><Label>{t('rhp.primes.cat_montant_unite', locale)}</Label><Input type="number" value={catForm.montant_par_unite} onChange={e => setCatForm(f => ({ ...f, montant_par_unite: e.target.value }))} /></div>
+                <div><Label>{t('rhp.primes.cat_unite', locale)}</Label><Input value={catForm.unite} onChange={e => setCatForm(f => ({ ...f, unite: e.target.value }))} placeholder="consultation" /></div>
               </div>
             )}
             {catForm.type_prime === "pourcentage" && (
-              <div><Label>Pourcentage du salaire brut (%)</Label><Input type="number" step="0.1" value={catForm.pourcentage} onChange={e => setCatForm(f => ({ ...f, pourcentage: e.target.value }))} placeholder="5" /></div>
+              <div><Label>{t('rhp.primes.cat_pourcentage', locale)}</Label><Input type="number" step="0.1" value={catForm.pourcentage} onChange={e => setCatForm(f => ({ ...f, pourcentage: e.target.value }))} placeholder="5" /></div>
             )}
             {catForm.type_prime === "bonus_objectif" && (
-              <div><Label>Montant bonus si objectif atteint (MUR)</Label><Input type="number" value={catForm.bonus_objectif_montant} onChange={e => setCatForm(f => ({ ...f, bonus_objectif_montant: e.target.value }))} /></div>
+              <div><Label>{t('rhp.primes.cat_bonus', locale)}</Label><Input type="number" value={catForm.bonus_objectif_montant} onChange={e => setCatForm(f => ({ ...f, bonus_objectif_montant: e.target.value }))} /></div>
             )}
-            <div><Label>Postes éligibles (séparés par virgule)</Label><Input value={catForm.postes_eligibles} onChange={e => setCatForm(f => ({ ...f, postes_eligibles: e.target.value }))} placeholder="Ex: Médecin, Infirmier (ou laisser vide = tous)" /></div>
+            <div><Label>{t('rhp.primes.cat_postes', locale)}</Label><Input value={catForm.postes_eligibles} onChange={e => setCatForm(f => ({ ...f, postes_eligibles: e.target.value }))} placeholder={t('rhp.primes.cat_postes_ph', locale)} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCatDialog(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setCatDialog(false)}>{t('rhp.primes.cancel', locale)}</Button>
             <Button onClick={creerCatalogue} disabled={saving} className="bg-[#0B0F2E] text-white">
-              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Créer la prime
+              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{t('rhp.primes.cat_create', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -859,7 +862,7 @@ export default function PrimesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-[#D4AF37]" />
-              Import Excel des primes — {periode}
+              {t('rhp.primes.import_title', locale)} {periode}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -874,9 +877,9 @@ export default function PrimesPage() {
               <>
                 {/* Step 1: Select prime */}
                 <div>
-                  <Label className="text-sm font-semibold mb-1 block">1. Selectionner la prime du catalogue *</Label>
+                  <Label className="text-sm font-semibold mb-1 block">{t('rhp.primes.import_step1', locale)}</Label>
                   <Select value={importPrimeId} onValueChange={setImportPrimeId}>
-                    <SelectTrigger><SelectValue placeholder="Choisir une prime..." /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('rhp.primes.ph_choisir_prime', locale)} /></SelectTrigger>
                     <SelectContent>
                       {catalogue.filter(p => p.actif !== false).map(p => (
                         <SelectItem key={p.id} value={p.id}>
@@ -889,7 +892,7 @@ export default function PrimesPage() {
 
                 {/* Step 2: File upload */}
                 <div>
-                  <Label className="text-sm font-semibold mb-1 block">2. Charger le fichier Excel *</Label>
+                  <Label className="text-sm font-semibold mb-1 block">{t('rhp.primes.import_step2', locale)}</Label>
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-5 text-center hover:border-[#D4AF37] transition-colors">
                     <input type="file" id="import-file" accept=".xlsx,.xls,.csv" className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }}
@@ -897,10 +900,10 @@ export default function PrimesPage() {
                     <label htmlFor="import-file" className="cursor-pointer">
                       <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
                       <p className="text-sm font-medium text-gray-700">
-                        {importFile ? importFile.name : "Cliquez pour selectionner un fichier Excel"}
+                        {importFile ? importFile.name : t('rhp.primes.import_click', locale)}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        Colonnes attendues : Nom, Prenom (ou Nom complet) + Montant + Quantite (optionnel)
+                        {t('rhp.primes.import_cols', locale)}
                       </p>
                     </label>
                   </div>
@@ -909,15 +912,15 @@ export default function PrimesPage() {
                 {/* Step 3: Preview */}
                 {importPreview.length > 0 && (
                   <div>
-                    <Label className="text-sm font-semibold mb-1 block">3. Apercu ({importPreview.length} lignes)</Label>
+                    <Label className="text-sm font-semibold mb-1 block">{t('rhp.primes.import_step3', locale).replace('{n}', String(importPreview.length))}</Label>
                     <div className="max-h-60 overflow-y-auto border rounded-lg">
                       <table className="w-full text-xs">
                         <thead className="bg-gray-50 sticky top-0">
                           <tr>
-                            <th className="p-2 text-left">Nom employe</th>
-                            <th className="p-2 text-right">Montant</th>
-                            <th className="p-2 text-right">Quantite</th>
-                            <th className="p-2 text-left">Notes</th>
+                            <th className="p-2 text-left">{t('rhp.primes.col_employe', locale)}</th>
+                            <th className="p-2 text-right">{t('rhp.primes.col_montant', locale)}</th>
+                            <th className="p-2 text-right">{t('rhp.primes.col_quantite', locale)}</th>
+                            <th className="p-2 text-left">{t('rhp.primes.col_notes', locale)}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -932,7 +935,7 @@ export default function PrimesPage() {
                         </tbody>
                       </table>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">Le systeme reconnaitra automatiquement les employes par leur nom (fuzzy matching).</p>
+                    <p className="text-xs text-gray-400 mt-1">{t('rhp.primes.import_fuzzy', locale)}</p>
                   </div>
                 )}
               </>
@@ -943,36 +946,36 @@ export default function PrimesPage() {
               <div className="space-y-3">
                 <div className="grid grid-cols-4 gap-2">
                   <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
-                    <p className="text-xs text-gray-500">Importes</p>
+                    <p className="text-xs text-gray-500">{t('rhp.primes.res_imported', locale)}</p>
                     <p className="text-2xl font-bold text-green-700">{importResult.summary?.matched || 0}</p>
                   </div>
                   <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-center">
-                    <p className="text-xs text-gray-500">Non reconnus</p>
+                    <p className="text-xs text-gray-500">{t('rhp.primes.res_unmatched', locale)}</p>
                     <p className="text-2xl font-bold text-orange-700">{importResult.summary?.unmatched || 0}</p>
                   </div>
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-center">
-                    <p className="text-xs text-gray-500">Erreurs</p>
+                    <p className="text-xs text-gray-500">{t('rhp.primes.res_errors', locale)}</p>
                     <p className="text-2xl font-bold text-red-700">{importResult.summary?.failed || 0}</p>
                   </div>
                   <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-center">
-                    <p className="text-xs text-gray-500">Total</p>
+                    <p className="text-xs text-gray-500">{t('rhp.primes.res_total', locale)}</p>
                     <p className="text-2xl font-bold text-gray-700">{importResult.summary?.total || 0}</p>
                   </div>
                 </div>
                 {importResult.unmatched?.length > 0 && (
                   <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                    <p className="text-xs font-bold text-orange-700 mb-1">Employes non reconnus :</p>
+                    <p className="text-xs font-bold text-orange-700 mb-1">{t('rhp.primes.res_unmatched_list', locale)}</p>
                     <ul className="text-xs text-orange-600 space-y-0.5">
                       {importResult.unmatched.slice(0, 10).map((u: any, i: number) => (
                         <li key={i}>• {u.searchName}</li>
                       ))}
-                      {importResult.unmatched.length > 10 && <li className="italic">... et {importResult.unmatched.length - 10} autres</li>}
+                      {importResult.unmatched.length > 10 && <li className="italic">{t('rhp.primes.res_and_more', locale).replace('{n}', String(importResult.unmatched.length - 10))}</li>}
                     </ul>
                   </div>
                 )}
                 {importResult.errors?.length > 0 && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-xs font-bold text-red-700 mb-1">Erreurs :</p>
+                    <p className="text-xs font-bold text-red-700 mb-1">{t('rhp.primes.res_errors_list', locale)}</p>
                     <ul className="text-xs text-red-600 space-y-0.5">
                       {importResult.errors.slice(0, 10).map((e: string, i: number) => <li key={i}>• {e}</li>)}
                     </ul>
@@ -984,15 +987,15 @@ export default function PrimesPage() {
           <DialogFooter>
             {importResult ? (
               <>
-                <Button variant="outline" onClick={resetImport}>Importer un autre fichier</Button>
-                <Button onClick={() => { setImportDialog(false); resetImport() }} className="bg-[#0B0F2E] text-white">Fermer</Button>
+                <Button variant="outline" onClick={resetImport}>{t('rhp.primes.import_another', locale)}</Button>
+                <Button onClick={() => { setImportDialog(false); resetImport() }} className="bg-[#0B0F2E] text-white">{t('rhp.primes.close', locale)}</Button>
               </>
             ) : (
               <>
-                <Button variant="outline" onClick={() => { setImportDialog(false); resetImport() }}>Annuler</Button>
+                <Button variant="outline" onClick={() => { setImportDialog(false); resetImport() }}>{t('rhp.primes.cancel', locale)}</Button>
                 <Button onClick={runImport} disabled={importRunning || importPreview.length === 0 || !importPrimeId} className="bg-[#D4AF37] text-white">
                   {importRunning && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                  Lancer l'import ({importPreview.length})
+                  {t('rhp.primes.import_run', locale).replace('{n}', String(importPreview.length))}
                 </Button>
               </>
             )}
@@ -1005,37 +1008,37 @@ export default function PrimesPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Modifier la prime — {editDialog?.employe?.prenom} {editDialog?.employe?.nom}
+              {t('rhp.primes.edit_dlg_title', locale)} {editDialog?.employe?.prenom} {editDialog?.employe?.nom}
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             {editError && <p className="text-sm text-red-600">{editError}</p>}
             <div className="text-sm text-gray-600 bg-gray-50 rounded p-2">
-              <p><strong>{editDialog?.prime?.libelle || '—'}</strong> · Période {periode}</p>
+              <p><strong>{editDialog?.prime?.libelle || '—'}</strong> · {t('rhp.primes.periode_label', locale)} {periode}</p>
               {editDialog?.integre_paie && (
                 <p className="text-amber-700 text-xs mt-1">
-                  ⚠️ Cette prime est déjà intégrée à la paie. La modification ne mettra pas automatiquement à jour le bulletin — relance le calcul paie après.
+                  {t('rhp.primes.edit_integre_warn', locale)}
                 </p>
               )}
             </div>
-            <div><Label>Quantité</Label>
+            <div><Label>{t('rhp.primes.lbl_quantite', locale)}</Label>
               <Input type="number" step="0.01" value={editForm.quantite}
                 onChange={e => setEditForm(f => ({ ...f, quantite: e.target.value }))} />
             </div>
-            <div><Label>Montant (MUR) *</Label>
+            <div><Label>{t('rhp.primes.lbl_montant_mur', locale)}</Label>
               <Input type="number" step="0.01" value={editForm.montant}
                 onChange={e => setEditForm(f => ({ ...f, montant: e.target.value }))} />
             </div>
-            <div><Label>Notes</Label>
+            <div><Label>{t('rhp.primes.col_notes', locale)}</Label>
               <Input value={editForm.notes}
                 onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="Ex: Correction commission Q1..." />
+                placeholder={t('rhp.primes.ph_edit_notes', locale)} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialog(null)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setEditDialog(null)}>{t('rhp.primes.cancel', locale)}</Button>
             <Button onClick={sauverEditSaisie} disabled={saving} className="bg-[#0B0F2E] text-white">
-              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Sauvegarder
+              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{t('rhp.primes.save', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1043,18 +1046,18 @@ export default function PrimesPage() {
 
       <Dialog open={saisieDialog} onOpenChange={open => !open && setSaisieDialog(false)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Saisir une prime — {periode}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('rhp.primes.saisie_dlg_title', locale)} {periode}</DialogTitle></DialogHeader>
           <div className="grid gap-3 py-2">
             {saisieError && <p className="text-sm text-red-600">{saisieError}</p>}
-            <div><Label>Employé *</Label>
+            <div><Label>{t('rhp.primes.lbl_employe', locale)}</Label>
               <Select value={saisieForm.employe_id} onValueChange={v => setSaisieForm(f => ({ ...f, employe_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rhp.primes.ph_choisir', locale)} /></SelectTrigger>
                 <SelectContent>{employes.map(e => <SelectItem key={e.id} value={e.id}>{e.prenom} {e.nom}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Prime du catalogue *</Label>
+            <div><Label>{t('rhp.primes.lbl_prime_cat', locale)}</Label>
               <Select value={saisieForm.prime_id} onValueChange={v => setSaisieForm(f => ({ ...f, prime_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Choisir une prime..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('rhp.primes.ph_choisir_prime', locale)} /></SelectTrigger>
                 <SelectContent>
                   {catalogue.filter(p => p.actif !== false).map(p => (
                     <SelectItem key={p.id} value={p.id}>{p.libelle} ({TYPE_PRIME_LABELS[p.type_prime]})</SelectItem>
@@ -1063,24 +1066,24 @@ export default function PrimesPage() {
               </Select>
             </div>
             {primeSelectionnee && (primeSelectionnee.type_prime === "variable_unitaire" || primeSelectionnee.type_prime === "commission") && (
-              <div><Label>Quantité ({primeSelectionnee.unite || "unités"})</Label>
+              <div><Label>{t('rhp.primes.lbl_quantite', locale)} ({primeSelectionnee.unite || t('rhp.primes.unites', locale)})</Label>
                 <Input type="number" value={saisieForm.quantite} onChange={e => setSaisieForm(f => ({ ...f, quantite: e.target.value }))} placeholder="Ex: 12" />
               </div>
             )}
             {saisieCalc !== null && (
               <div className="bg-[#0B0F2E]/5 border border-[#0B0F2E]/20 p-3 rounded-lg">
-                <p className="text-sm font-medium text-[#0B0F2E]">Montant calculé : <strong>{fmt(saisieCalc)}</strong></p>
+                <p className="text-sm font-medium text-[#0B0F2E]">{t('rhp.primes.montant_calcule', locale)} <strong>{fmt(saisieCalc)}</strong></p>
                 {primeSelectionnee && <p className="text-xs text-gray-500 mt-1">{TYPE_PRIME_LABELS[primeSelectionnee.type_prime]}</p>}
               </div>
             )}
-            <div><Label>Notes (optionnel)</Label>
-              <Input value={saisieForm.notes} onChange={e => setSaisieForm(f => ({ ...f, notes: e.target.value }))} placeholder="Ex: Bonus performance Q3..." />
+            <div><Label>{t('rhp.primes.lbl_notes_opt', locale)}</Label>
+              <Input value={saisieForm.notes} onChange={e => setSaisieForm(f => ({ ...f, notes: e.target.value }))} placeholder={t('rhp.primes.ph_saisie_notes', locale)} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSaisieDialog(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setSaisieDialog(false)}>{t('rhp.primes.cancel', locale)}</Button>
             <Button onClick={saisirPrime} disabled={saving} className="bg-[#0B0F2E] text-white">
-              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Calculer et Sauvegarder
+              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}{t('rhp.primes.saisie_save', locale)}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -30,13 +30,17 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { Reveal, StaggerGroup, StaggerItem, HoverLift } from "@/components/ui/motion"
+import { t } from "@/lib/i18n"
 
 type Pillar = {
   id: string
   icon: LucideIcon
-  name: { fr: string; en: string }
-  subtitle: { fr: string; en: string }
-  bullets: { fr: string[]; en: string[] }
+  /** i18n key (cmkt.fp.*) */
+  name: string
+  /** i18n key (cmkt.fp.*) */
+  subtitle: string
+  /** i18n keys (cmkt.fp.*) */
+  bullets: string[]
   accent: string
   accentSoft: string
   /** Grid position for the large layout (x/y inside a 2x2 + centered core). */
@@ -47,23 +51,13 @@ const PILLARS: Pillar[] = [
   {
     id: "compta",
     icon: BookOpen,
-    name: { fr: "Comptabilité", en: "Accounting" },
-    subtitle: {
-      fr: "Plan comptable mauricien natif",
-      en: "Native Mauritian chart of accounts",
-    },
-    bullets: {
-      fr: [
-        "Grand livre, balance, bilan & P&L",
-        "Rapprochement bancaire IA",
-        "Multi-devises · IFRS / IAS",
-      ],
-      en: [
-        "Ledger, trial balance, P&L",
-        "AI bank reconciliation",
-        "Multi-currency · IFRS / IAS",
-      ],
-    },
+    name: "cmkt.fp.compta_name",
+    subtitle: "cmkt.fp.compta_subtitle",
+    bullets: [
+      "cmkt.fp.compta_b1",
+      "cmkt.fp.compta_b2",
+      "cmkt.fp.compta_b3",
+    ],
     accent: "#4191FF",
     accentSoft: "rgba(65,145,255,0.14)",
     slot: "tl",
@@ -71,23 +65,13 @@ const PILLARS: Pillar[] = [
   {
     id: "ia",
     icon: Brain,
-    name: { fr: "Agents IA", en: "AI Agents" },
-    subtitle: {
-      fr: "6 agents spécialisés 24/7",
-      en: "6 specialized agents 24/7",
-    },
-    bullets: {
-      fr: [
-        "OCR & analyse de documents",
-        "Rédaction juridique guidée",
-        "Pilotage autonome des modules",
-      ],
-      en: [
-        "OCR & document analysis",
-        "Guided legal drafting",
-        "Autonomous module steering",
-      ],
-    },
+    name: "cmkt.fp.ia_name",
+    subtitle: "cmkt.fp.ia_subtitle",
+    bullets: [
+      "cmkt.fp.ia_b1",
+      "cmkt.fp.ia_b2",
+      "cmkt.fp.ia_b3",
+    ],
     accent: "#D4AF37",
     accentSoft: "rgba(212,175,55,0.14)",
     slot: "tr",
@@ -95,23 +79,13 @@ const PILLARS: Pillar[] = [
   {
     id: "rh",
     icon: Users,
-    name: { fr: "RH & Paie", en: "HR & Payroll" },
-    subtitle: {
-      fr: "Conforme WRA 2019",
-      en: "WRA 2019 compliant",
-    },
-    bullets: {
-      fr: [
-        "Bulletins PAYE, CSG, NSF",
-        "Congés, pointage, planning IA",
-        "Exports e-MRA en un clic",
-      ],
-      en: [
-        "PAYE, CSG, NSF payslips",
-        "Leave, attendance, AI scheduling",
-        "One-click e-MRA exports",
-      ],
-    },
+    name: "cmkt.fp.rh_name",
+    subtitle: "cmkt.fp.rh_subtitle",
+    bullets: [
+      "cmkt.fp.rh_b1",
+      "cmkt.fp.rh_b2",
+      "cmkt.fp.rh_b3",
+    ],
     accent: "#4191FF",
     accentSoft: "rgba(65,145,255,0.14)",
     slot: "bl",
@@ -119,23 +93,13 @@ const PILLARS: Pillar[] = [
   {
     id: "sante",
     icon: HeartPulse,
-    name: { fr: "Santé · TIBOK", en: "Health · TIBOK" },
-    subtitle: {
-      fr: "Téléconsultation salariés incluse",
-      en: "Employee telemedicine included",
-    },
-    bullets: {
-      fr: [
-        "Médecins partenaires à Maurice",
-        "Suivi santé & arrêts de travail",
-        "Unique sur le marché",
-      ],
-      en: [
-        "Partner doctors in Mauritius",
-        "Health tracking & sick leave",
-        "Unique in the market",
-      ],
-    },
+    name: "cmkt.fp.sante_name",
+    subtitle: "cmkt.fp.sante_subtitle",
+    bullets: [
+      "cmkt.fp.sante_b1",
+      "cmkt.fp.sante_b2",
+      "cmkt.fp.sante_b3",
+    ],
     accent: "#2ECC8A",
     accentSoft: "rgba(46,204,138,0.14)",
     slot: "br",
@@ -183,7 +147,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
             }}
           >
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            {locale === "fr" ? "Dispositif unique au monde" : "Unique worldwide"}
+            {t("cmkt.fp.badge", locale)}
           </span>
           <h2
             className="mb-4 text-3xl font-bold tracking-tight md:text-5xl"
@@ -194,37 +158,18 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
               letterSpacing: "-0.02em",
             }}
           >
-            {locale === "fr" ? (
-              <>
-                Quatre piliers.{" "}
-                <span
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(90deg, #4191FF 0%, #D4AF37 50%, #2ECC8A 100%)",
-                    WebkitBackgroundClip: "text",
-                    backgroundClip: "text",
-                    color: "transparent",
-                  }}
-                >
-                  Une seule plateforme.
-                </span>
-              </>
-            ) : (
-              <>
-                Four pillars.{" "}
-                <span
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(90deg, #4191FF 0%, #D4AF37 50%, #2ECC8A 100%)",
-                    WebkitBackgroundClip: "text",
-                    backgroundClip: "text",
-                    color: "transparent",
-                  }}
-                >
-                  One single platform.
-                </span>
-              </>
-            )}
+            {t("cmkt.fp.title_a", locale)}{" "}
+            <span
+              style={{
+                backgroundImage:
+                  "linear-gradient(90deg, #4191FF 0%, #D4AF37 50%, #2ECC8A 100%)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              {t("cmkt.fp.title_b", locale)}
+            </span>
           </h2>
           <p
             className="text-base md:text-lg"
@@ -235,9 +180,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
               lineHeight: 1.7,
             }}
           >
-            {locale === "fr"
-              ? "Comptabilité, intelligence artificielle, ressources humaines et santé salariés — intégrés dans un seul outil. Aucune autre plateforme ne combine ces quatre dimensions à Maurice."
-              : "Accounting, artificial intelligence, human resources, and employee health — integrated in one tool. No other platform combines these four dimensions in Mauritius."}
+            {t("cmkt.fp.intro", locale)}
           </p>
         </Reveal>
 
@@ -402,7 +345,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                               fontFamily: "'Poppins', sans-serif",
                             }}
                           >
-                            {locale === "fr" ? "Pilier" : "Pillar"} {num}
+                            {t("cmkt.fp.pillar", locale)} {num}
                           </div>
                           <div
                             className="text-3xl font-bold leading-none md:text-4xl"
@@ -428,7 +371,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                           letterSpacing: "-0.02em",
                         }}
                       >
-                        {p.name[locale]}
+                        {t(p.name, locale)}
                       </h3>
                       <p
                         className="relative mb-4 text-sm"
@@ -438,12 +381,12 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                           fontWeight: 500,
                         }}
                       >
-                        {p.subtitle[locale]}
+                        {t(p.subtitle, locale)}
                       </p>
 
                       {/* Bullets */}
                       <ul className="relative flex-1 space-y-2">
-                        {p.bullets[locale].map((b, j) => (
+                        {p.bullets.map((bKey, j) => (
                           <li
                             key={j}
                             className="flex items-start gap-2.5 text-sm"
@@ -457,7 +400,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                                 borderRadius: "2px",
                               }}
                             />
-                            <span>{b}</span>
+                            <span>{t(bKey, locale)}</span>
                           </li>
                         ))}
                       </ul>
@@ -481,7 +424,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                             style={{ backgroundColor: p.accent, boxShadow: `0 0 8px ${p.accent}` }}
                             aria-hidden="true"
                           />
-                          {locale === "fr" ? "Actif" : "Active"}
+                          {t("cmkt.fp.active", locale)}
                         </span>
                         <span
                           style={{
@@ -489,7 +432,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
                             fontFamily: "'Poppins', sans-serif",
                           }}
                         >
-                          {locale === "fr" ? "Intégré" : "Integrated"}
+                          {t("cmkt.fp.integrated", locale)}
                         </span>
                       </div>
                     </article>
@@ -511,9 +454,7 @@ export function FourPillars({ locale }: { locale: "fr" | "en" }) {
               lineHeight: 1.7,
             }}
           >
-            {locale === "fr"
-              ? "Quatre mondes qui dialoguent. La comptabilité nourrit la paie, la paie nourrit la santé, l'IA supervise l'ensemble."
-              : "Four worlds that talk to each other. Accounting feeds payroll, payroll feeds health, AI supervises everything."}
+            {t("cmkt.fp.footer", locale)}
           </p>
         </Reveal>
       </div>

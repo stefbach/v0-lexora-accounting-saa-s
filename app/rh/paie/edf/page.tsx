@@ -194,10 +194,10 @@ export default function EDFPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>
-            {t('rha.a.edf.title', locale)}
+            {t('rhpa.edf.title', locale)}
           </h1>
           <p className="text-muted-foreground mt-1">
-            {t('rha.a.edf.subtitle', locale)}
+            {t('rhpa.edf.subtitle', locale)}
           </p>
         </div>
         {declaration && (

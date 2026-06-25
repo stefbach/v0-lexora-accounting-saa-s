@@ -16,7 +16,7 @@ import {
   FileText as FileIcon, CheckCircle, AlertTriangle as AlertIcon, Pencil,
   Building2, Eye, Mail, Phone, BookOpen, Scale, Receipt,
 } from "lucide-react"
-import { t, getLocale } from '@/lib/i18n'
+import { t, getLocale, type Locale } from '@/lib/i18n'
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -138,10 +138,10 @@ interface SocieteData {
   financial: FinancialRaw | null
 }
 
-function stBadge(s: string) {
-  if (["paye","solde","rapproche","declare","conforme"].includes(s)) return <Badge className="bg-green-100 text-green-700">{({paye:"Payé",solde:"Soldé",rapproche:"Rapproché",declare:"Déclaré",conforme:"Conforme"} as Record<string,string>)[s]}</Badge>
-  if (["en_attente","a_declarer","a_verifier","a_payer","partiel"].includes(s)) return <Badge className="bg-orange-100 text-orange-700">{({en_attente:"En attente",a_declarer:"À déclarer",a_verifier:"À vérifier",a_payer:"À payer",partiel:"Partiel"} as Record<string,string>)[s]}</Badge>
-  if (["en_retard","impaye","non_identifie","ecart"].includes(s)) return <Badge className="bg-red-100 text-red-700">{({en_retard:"En retard",impaye:"Impayé",non_identifie:"Non identifié",ecart:"Écart détecté"} as Record<string,string>)[s]}</Badge>
+function stBadge(s: string, locale: Locale) {
+  if (["paye","solde","rapproche","declare","conforme"].includes(s)) return <Badge className="bg-green-100 text-green-700">{t(`cptb.soc.badge_${s}`, locale)}</Badge>
+  if (["en_attente","a_declarer","a_verifier","a_payer","partiel"].includes(s)) return <Badge className="bg-orange-100 text-orange-700">{t(`cptb.soc.badge_${s}`, locale)}</Badge>
+  if (["en_retard","impaye","non_identifie","ecart"].includes(s)) return <Badge className="bg-red-100 text-red-700">{t(`cptb.soc.badge_${s}`, locale)}</Badge>
   return <Badge variant="outline">{s}</Badge>
 }
 
@@ -711,7 +711,7 @@ export default function SocieteContextPage() {
                 <TableHead className="text-right">{t('cabclt.soc.col_ht', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_vat', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_ttc', locale)}</TableHead>
                 <TableHead>{t('cabclt.soc.col_due', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead>{t('cabclt.soc.col_account', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
-              <TableBody>{fournisseurs.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.fournisseur}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell><Badge variant="outline">{f.compte}</Badge></TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              <TableBody>{fournisseurs.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.fournisseur}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut, locale)}</TableCell><TableCell><Badge variant="outline">{f.compte}</Badge></TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
           )}
         </TabsContent>
@@ -727,7 +727,7 @@ export default function SocieteContextPage() {
                 <TableHead className="text-right">{t('cabclt.soc.col_ht', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_vat', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_ttc', locale)}</TableHead>
                 <TableHead>{t('cabclt.soc.col_due', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_delay', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
-              <TableBody>{facturesClients.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.client}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut)}</TableCell><TableCell className={`text-right ${f.jours>30?"text-red-600 font-bold":f.jours>0?"text-orange-600":""}`}>{f.jours>0?f.jours+t('cabclt.soc.days_short', locale):"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              <TableBody>{facturesClients.map((f,i)=>(<TableRow key={i}><TableCell className="font-medium">{f.client}</TableCell><TableCell>{f.numero}</TableCell><TableCell>{f.date}</TableCell><TableCell className="text-right">{fmt(f.ht)}</TableCell><TableCell className="text-right">{fmt(f.tva)}</TableCell><TableCell className="text-right font-semibold">{fmt(f.ttc)}</TableCell><TableCell>{f.echeance}</TableCell><TableCell>{stBadge(f.statut, locale)}</TableCell><TableCell className={`text-right ${f.jours>30?"text-red-600 font-bold":f.jours>0?"text-orange-600":""}`}>{f.jours>0?f.jours+t('cabclt.soc.days_short', locale):"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
           )}
         </TabsContent>
@@ -742,7 +742,7 @@ export default function SocieteContextPage() {
                 <TableHead>{t('cabclt.soc.col_date', locale)}</TableHead><TableHead>{t('cabclt.soc.col_label', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_debit', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_credit', locale)}</TableHead>
                 <TableHead>{t('cabclt.soc.col_party', locale)}</TableHead><TableHead>{t('cabclt.soc.col_account', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
-              <TableBody>{banque.map((b,i)=>(<TableRow key={i} className={b.statut==="non_identifie"?"bg-red-50":b.statut==="a_verifier"?"bg-orange-50":""}><TableCell>{b.date}</TableCell><TableCell className="font-medium">{b.libelle}</TableCell><TableCell className="text-right text-red-600">{b.debit>0?fmt(b.debit):""}</TableCell><TableCell className="text-right text-green-600">{b.credit>0?fmt(b.credit):""}</TableCell><TableCell>{b.tiers}</TableCell><TableCell><Badge variant="outline">{b.compte}</Badge></TableCell><TableCell>{stBadge(b.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              <TableBody>{banque.map((b,i)=>(<TableRow key={i} className={b.statut==="non_identifie"?"bg-red-50":b.statut==="a_verifier"?"bg-orange-50":""}><TableCell>{b.date}</TableCell><TableCell className="font-medium">{b.libelle}</TableCell><TableCell className="text-right text-red-600">{b.debit>0?fmt(b.debit):""}</TableCell><TableCell className="text-right text-green-600">{b.credit>0?fmt(b.credit):""}</TableCell><TableCell>{b.tiers}</TableCell><TableCell><Badge variant="outline">{b.compte}</Badge></TableCell><TableCell>{stBadge(b.statut, locale)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
           )}
         </TabsContent>
@@ -757,7 +757,7 @@ export default function SocieteContextPage() {
                 <TableHead>{t('cabclt.soc.col_employee', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_gross', locale)}</TableHead><TableHead className="text-right">CSG 3%</TableHead><TableHead className="text-right">NSF 1.5%</TableHead><TableHead className="text-right">PAYE</TableHead>
                 <TableHead className="text-right">{t('cabclt.soc.col_net', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_employer_cost', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
-              <TableBody>{salaires.map((s,i)=>(<TableRow key={i}><TableCell className="font-medium">{s.employe}</TableCell><TableCell className="text-right">{fmt(s.brut)}</TableCell><TableCell className="text-right">{fmt(s.csg)}</TableCell><TableCell className="text-right">{fmt(s.nsf)}</TableCell><TableCell className="text-right">{fmt(s.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(s.net)}</TableCell><TableCell className="text-right">{fmt(s.cout)}</TableCell><TableCell>{stBadge(s.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              <TableBody>{salaires.map((s,i)=>(<TableRow key={i}><TableCell className="font-medium">{s.employe}</TableCell><TableCell className="text-right">{fmt(s.brut)}</TableCell><TableCell className="text-right">{fmt(s.csg)}</TableCell><TableCell className="text-right">{fmt(s.nsf)}</TableCell><TableCell className="text-right">{fmt(s.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(s.net)}</TableCell><TableCell className="text-right">{fmt(s.cout)}</TableCell><TableCell>{stBadge(s.statut, locale)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
           )}
         </TabsContent>
@@ -773,7 +773,7 @@ export default function SocieteContextPage() {
                 <TableHead className="text-right">{t('cabclt.soc.col_nsf_e', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_nsf_p', locale)}</TableHead><TableHead className="text-right">Training</TableHead><TableHead className="text-right">PAYE</TableHead>
                 <TableHead className="text-right">{t('cabclt.soc.col_total', locale)}</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
-              <TableBody>{charges.map((c,i)=>(<TableRow key={i}><TableCell className="font-medium">{c.periode}</TableCell><TableCell className="text-right">{fmt(c.csg_e)}</TableCell><TableCell className="text-right">{fmt(c.csg_p)}</TableCell><TableCell className="text-right">{fmt(c.nsf_e)}</TableCell><TableCell className="text-right">{fmt(c.nsf_p)}</TableCell><TableCell className="text-right">{fmt(c.training)}</TableCell><TableCell className="text-right">{fmt(c.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(c.total)}</TableCell><TableCell>{stBadge(c.statut)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              <TableBody>{charges.map((c,i)=>(<TableRow key={i}><TableCell className="font-medium">{c.periode}</TableCell><TableCell className="text-right">{fmt(c.csg_e)}</TableCell><TableCell className="text-right">{fmt(c.csg_p)}</TableCell><TableCell className="text-right">{fmt(c.nsf_e)}</TableCell><TableCell className="text-right">{fmt(c.nsf_p)}</TableCell><TableCell className="text-right">{fmt(c.training)}</TableCell><TableCell className="text-right">{fmt(c.paye)}</TableCell><TableCell className="text-right font-semibold">{fmt(c.total)}</TableCell><TableCell>{stBadge(c.statut, locale)}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
           )}
         </TabsContent>
@@ -788,7 +788,7 @@ export default function SocieteContextPage() {
                 <TableHead>{t('cabclt.soc.col_month', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_collected', locale)}</TableHead><TableHead className="text-right">{t('cabclt.soc.col_deductible', locale)}</TableHead>
                 <TableHead className="text-right">{t('cabclt.soc.col_net_vat', locale)}</TableHead><TableHead>Deadline</TableHead><TableHead>{t('cabclt.soc.col_status', locale)}</TableHead><TableHead>{t('cabclt.soc.col_ref', locale)}</TableHead><TableHead></TableHead>
               </TableRow></TableHeader>
-              <TableBody>{tva.map((t,i)=>(<TableRow key={i}><TableCell className="font-medium">{t.mois}</TableCell><TableCell className="text-right">{fmt(t.collectee)}</TableCell><TableCell className="text-right">{fmt(t.deductible)}</TableCell><TableCell className="text-right font-semibold">{fmt(t.nette)}</TableCell><TableCell>{t.deadline}</TableCell><TableCell>{stBadge(t.statut)}</TableCell><TableCell className="text-xs text-muted-foreground">{t.ref||"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
+              <TableBody>{tva.map((t,i)=>(<TableRow key={i}><TableCell className="font-medium">{t.mois}</TableCell><TableCell className="text-right">{fmt(t.collectee)}</TableCell><TableCell className="text-right">{fmt(t.deductible)}</TableCell><TableCell className="text-right font-semibold">{fmt(t.nette)}</TableCell><TableCell>{t.deadline}</TableCell><TableCell>{stBadge(t.statut, locale)}</TableCell><TableCell className="text-xs text-muted-foreground">{t.ref||"—"}</TableCell><TableCell><Button variant="ghost" size="sm"><Pencil className="h-3.5 w-3.5" /></Button></TableCell></TableRow>))}</TableBody>
               </Table></CardContent></Card>
           )}
         </TabsContent>
@@ -1200,7 +1200,7 @@ export default function SocieteContextPage() {
                       ))}
                       {revenueDetails.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucun produit enregistre</TableCell>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">{t('cabclt.soc.no_revenue', locale)}</TableCell>
                         </TableRow>
                       )}
                       <TotLine label="TOTAL REVENUE" current={totalRevenue} />
@@ -1211,7 +1211,7 @@ export default function SocieteContextPage() {
                       ))}
                       {allExpenseGroups.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucune charge enregistree</TableCell>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">{t('cabclt.soc.no_expense', locale)}</TableCell>
                         </TableRow>
                       )}
                       <TotLine label="TOTAL EXPENSES" current={-totalExpenses} />

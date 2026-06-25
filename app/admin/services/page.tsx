@@ -32,6 +32,7 @@ import {
   Briefcase, Star, Building2,
 } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Plan {
   id: string
@@ -72,34 +73,20 @@ interface Subscription {
   modules_actifs: Record<string, boolean> | null
 }
 
-const MODULE_LABELS: Record<string, string> = {
-  documents: 'OCR & Documents IA',
-  comptabilite: 'Comptabilité Automatisée',
-  facturation: 'Facturation MRA',
-  rh: 'RH & Paie Maurice',
-  fiscal: 'Fiscal MRA',
-  alertes_ia: 'Alertes IA & Pilotage',
-  tibok: 'TIBOK Corporate',
-  telegram: 'Chief of Staff IA Telegram',
-  juridique: 'Juridique',
-  etats_financiers: 'États financiers',
-  employe_portal: 'Portail employé',
+function moduleLabel(key: string, locale: any): string {
+  const k = `adm2.plans.mod_${key}`
+  const v = t(k, locale)
+  return v === k ? key : v
 }
-
-const PACK_LABELS: Record<string, string> = {
-  compta: 'Comptabilité + Facturation',
-  paie: 'RH & Paie + TIBOK',
-  bundle: 'Pack Complet ERP',
-  cabinet: 'Cabinet comptable',
-  addon: 'Add-on',
-  legacy: 'Legacy',
-  autres: 'Plans disponibles',
+function packLabel(key: string, locale: any): string {
+  const k = `adm2.serv.pack_${key}`
+  const v = t(k, locale)
+  return v === k ? key : v
 }
-const TAILLE_LABELS: Record<string, string> = {
-  solo: 'Solo (1–3)',
-  petite: 'Petite (4–15)',
-  pme: 'PME (16–50)',
-  grande: 'Grande (50+)',
+function tailleLabel(key: string, locale: any): string {
+  const k = `adm2.serv.taille_${key}`
+  const v = t(k, locale)
+  return v === k ? key : v
 }
 
 function fmt(n: number | null | undefined) {
@@ -108,6 +95,7 @@ function fmt(n: number | null | undefined) {
 }
 
 export default function AdminServicesPage() {
+  const locale = getLocale()
   const [societes, setSocietes] = useState<Societe[]>([])
   const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
@@ -125,13 +113,13 @@ export default function AdminServicesPage() {
       setSocietes((sRes.societes || sRes.data || []) as Societe[])
       setPlans((pRes.plans || []).filter((p: Plan) => p.actif))
     } catch (e: any) {
-      setMsg({ type: 'error', text: e?.message || 'Erreur' })
+      setMsg({ type: 'error', text: e?.message || t('adm2.serv.err_generic', locale) })
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [locale])
   useEffect(() => { fetchAll() }, [fetchAll])
-  useEffect(() => { if (msg) { const t = setTimeout(() => setMsg(null), 4000); return () => clearTimeout(t) } }, [msg])
+  useEffect(() => { if (msg) { const timer = setTimeout(() => setMsg(null), 4000); return () => clearTimeout(timer) } }, [msg])
 
   const filtered = useMemo(() => {
     if (!search) return societes
@@ -149,10 +137,10 @@ export default function AdminServicesPage() {
     <ClientPageShell hideHero disableParticles>
     <div className="space-y-5 max-w-7xl mx-auto p-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#0B0F2E]">Abonnements clients</h1>
+        <h1 className="text-2xl font-bold text-[#0B0F2E]">{t('adm2.serv.title', locale)}</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Attribue à chaque société un plan du catalogue <Link href="/admin/plans" className="underline text-blue-700">/admin/plans</Link>{' '}
-          + add-ons optionnels. Le prix mensuel/annuel et les modules actifs sont automatiquement calculés et appliqués.
+          {t('adm2.serv.subtitle_1', locale)} <Link href="/admin/plans" className="underline text-blue-700">/admin/plans</Link>{' '}
+          {t('adm2.serv.subtitle_2', locale)}
         </p>
       </div>
 
@@ -166,25 +154,25 @@ export default function AdminServicesPage() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <Input value={search} onChange={e => setSearch(e.target.value)}
-               placeholder="Rechercher une société (nom ou BRN)…"
+               placeholder={t('adm2.serv.search_placeholder', locale)}
                className="pl-9 h-10" />
       </div>
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
       ) : filtered.length === 0 ? (
-        <Card><CardContent className="p-12 text-center text-gray-500">Aucune société.</CardContent></Card>
+        <Card><CardContent className="p-12 text-center text-gray-500">{t('adm2.serv.no_company', locale)}</CardContent></Card>
       ) : (
         <div className="bg-white border rounded-lg overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left">
               <tr>
-                <th className="px-4 py-2 font-semibold text-gray-600">Société</th>
-                <th className="px-4 py-2 font-semibold text-gray-600">Plan actuel</th>
-                <th className="px-4 py-2 font-semibold text-gray-600">Add-ons</th>
-                <th className="px-4 py-2 font-semibold text-gray-600">Périodicité</th>
-                <th className="px-4 py-2 font-semibold text-gray-600 text-right">Prix mensuel</th>
-                <th className="px-4 py-2 font-semibold text-gray-600 text-right">Action</th>
+                <th className="px-4 py-2 font-semibold text-gray-600">{t('adm2.serv.col_company', locale)}</th>
+                <th className="px-4 py-2 font-semibold text-gray-600">{t('adm2.serv.col_current_plan', locale)}</th>
+                <th className="px-4 py-2 font-semibold text-gray-600">{t('adm2.serv.col_addons', locale)}</th>
+                <th className="px-4 py-2 font-semibold text-gray-600">{t('adm2.serv.col_periodicity', locale)}</th>
+                <th className="px-4 py-2 font-semibold text-gray-600 text-right">{t('adm2.serv.col_monthly_price', locale)}</th>
+                <th className="px-4 py-2 font-semibold text-gray-600 text-right">{t('adm2.serv.col_action', locale)}</th>
               </tr>
             </thead>
             <tbody>
@@ -201,12 +189,12 @@ export default function AdminServicesPage() {
                       {plan ? (
                         <div className="flex items-center gap-1.5">
                           <Badge className="bg-blue-50 text-blue-800 text-[10px]">
-                            {plan.pack ? PACK_LABELS[plan.pack] : '—'}
-                            {plan.taille_entreprise && ` · ${TAILLE_LABELS[plan.taille_entreprise].split(' ')[0]}`}
+                            {plan.pack ? packLabel(plan.pack, locale) : '—'}
+                            {plan.taille_entreprise && ` · ${tailleLabel(plan.taille_entreprise, locale).split(' ')[0]}`}
                           </Badge>
                           <span className="text-sm font-medium">{plan.nom}</span>
                         </div>
-                      ) : <span className="text-xs text-amber-700">Pas d'abonnement</span>}
+                      ) : <span className="text-xs text-amber-700">{t('adm2.serv.no_subscription', locale)}</span>}
                     </td>
                     <td className="px-4 py-3">
                       {addons.length === 0 ? <span className="text-xs text-gray-400">—</span> :
@@ -222,7 +210,7 @@ export default function AdminServicesPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Button size="sm" variant="outline" onClick={() => setEditing(s)} className="h-8 text-xs">
-                        <Settings className="w-3.5 h-3.5 mr-1" /> Configurer
+                        <Settings className="w-3.5 h-3.5 mr-1" /> {t('adm2.serv.configure', locale)}
                       </Button>
                     </td>
                   </tr>
@@ -234,16 +222,16 @@ export default function AdminServicesPage() {
       )}
 
       {editing && (
-        <SubscriptionDialog societe={editing} plans={plans} onClose={() => setEditing(null)}
-                            onSaved={() => { setEditing(null); fetchAll(); setMsg({ type: 'success', text: 'Abonnement mis à jour.' }) }} />
+        <SubscriptionDialog societe={editing} plans={plans} locale={locale} onClose={() => setEditing(null)}
+                            onSaved={() => { setEditing(null); fetchAll(); setMsg({ type: 'success', text: t('adm2.serv.updated', locale) }) }} />
       )}
     </div>
     </ClientPageShell>
   )
 }
 
-function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
-  societe: Societe; plans: Plan[]; onClose: () => void; onSaved: () => void
+function SubscriptionDialog({ societe, plans, locale, onClose, onSaved }: {
+  societe: Societe; plans: Plan[]; locale: any; onClose: () => void; onSaved: () => void
 }) {
   const [planId, setPlanId] = useState<string | null>(societe.plan_id)
   const [addons, setAddons] = useState<string[]>(Array.isArray(societe.addons_actifs) ? societe.addons_actifs : [])
@@ -283,7 +271,7 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
   }
 
   const save = async () => {
-    if (!planId) { setError('Choisis un plan'); return }
+    if (!planId) { setError(t('adm2.serv.choose_plan', locale)); return }
     setSaving(true); setError(null)
     try {
       const res = await fetch(`/api/admin/societes/${societe.id}/subscription`, {
@@ -291,10 +279,10 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
         body: JSON.stringify({ plan_id: planId, addon_codes: addons, periodicite }),
       })
       const j = await res.json()
-      if (!res.ok) throw new Error(j.error || 'Erreur')
+      if (!res.ok) throw new Error(j.error || t('adm2.serv.err_generic', locale))
       onSaved()
     } catch (e: any) {
-      setError(e?.message || 'Erreur')
+      setError(e?.message || t('adm2.serv.err_generic', locale))
     } finally {
       setSaving(false)
     }
@@ -317,19 +305,19 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Building2 className="w-5 h-5" /> {societe.nom} — Abonnement
+            <Building2 className="w-5 h-5" /> {societe.nom} — {t('adm2.serv.subscription', locale)}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 mt-4">
           {/* Périodicité */}
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Périodicité de facturation</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">{t('adm2.serv.billing_periodicity', locale)}</p>
             <div className="inline-flex rounded-lg border p-1 bg-gray-50">
               {(['mensuelle', 'annuelle'] as const).map(p => (
                 <button key={p} onClick={() => setPeriodicite(p)}
                         className={`px-4 py-1.5 rounded text-sm ${periodicite === p ? 'bg-white shadow font-semibold' : 'text-gray-600'}`}>
-                  {p === 'mensuelle' ? 'Mensuelle' : 'Annuelle (économie 17%)'}
+                  {p === 'mensuelle' ? t('adm2.serv.monthly', locale) : t('adm2.serv.annual_saving', locale)}
                 </button>
               ))}
             </div>
@@ -338,7 +326,7 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
           {/* Plans par pack */}
           {(['compta', 'paie', 'bundle', 'cabinet', 'autres'] as const).map(pack => byPack[pack].length > 0 && (
             <div key={pack}>
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">{PACK_LABELS[pack]}</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">{packLabel(pack, locale)}</p>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                 {byPack[pack].map(p => {
                   const selected = planId === p.id
@@ -348,17 +336,17 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
                             className={`text-left p-3 rounded-lg border-2 transition-colors ${selected ? 'border-[#D4AF37] bg-amber-50' : 'border-gray-200 hover:border-gray-300'}`}>
                       <div className="flex items-center justify-between">
                         <p className="text-[10px] uppercase tracking-wider font-bold text-gray-500">
-                          {p.taille_entreprise ? TAILLE_LABELS[p.taille_entreprise] : p.pack}
+                          {p.taille_entreprise ? tailleLabel(p.taille_entreprise, locale) : p.pack}
                         </p>
                         {p.populaire && <Star className="w-3 h-3 text-amber-600 fill-amber-400" />}
                       </div>
                       <p className="font-semibold text-sm mt-1" style={{ color: '#0B0F2E' }}>{p.nom}</p>
                       {p.prix_visible !== false ? (
                         <p className="mt-1 text-sm font-bold">
-                          {fmt(prix)} <span className="text-[10px] text-gray-500 font-normal">MUR/{periodicite === 'annuelle' ? 'an' : 'mois'}</span>
+                          {fmt(prix)} <span className="text-[10px] text-gray-500 font-normal">MUR/{periodicite === 'annuelle' ? t('adm2.serv.per_year_short', locale) : t('adm2.serv.per_month_short', locale)}</span>
                         </p>
                       ) : (
-                        <p className="mt-1 text-xs italic text-gray-500">Tarif sur devis</p>
+                        <p className="mt-1 text-xs italic text-gray-500">{t('adm2.serv.quote_price', locale)}</p>
                       )}
                     </button>
                   )
@@ -370,7 +358,7 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
           {/* Add-ons */}
           {addonPlans.length > 0 && (
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Add-ons</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">{t('adm2.serv.addons', locale)}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {addonPlans.map(a => {
                   const checked = addons.includes(a.code)
@@ -381,7 +369,7 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
                       <div className="flex-1">
                         <p className="font-semibold text-sm">{a.nom}</p>
                         {a.description && <p className="text-[11px] text-gray-500 mt-0.5">{a.description}</p>}
-                        <p className="text-xs font-bold mt-1">+{fmt(prix)} MUR/{periodicite === 'annuelle' ? 'an' : 'mois'}</p>
+                        <p className="text-xs font-bold mt-1">+{fmt(prix)} MUR/{periodicite === 'annuelle' ? t('adm2.serv.per_year_short', locale) : t('adm2.serv.per_month_short', locale)}</p>
                       </div>
                     </label>
                   )
@@ -393,24 +381,24 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
           {/* Résumé */}
           {selectedPlan && (
             <div className="p-4 bg-[#0B0F2E] text-white rounded-lg">
-              <p className="text-xs uppercase tracking-wider text-amber-400 font-bold mb-2">Résumé de l'abonnement</p>
+              <p className="text-xs uppercase tracking-wider text-amber-400 font-bold mb-2">{t('adm2.serv.summary', locale)}</p>
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
-                  <p className="text-[10px] uppercase text-white/60">Prix mensuel</p>
-                  <p className="text-2xl font-bold text-amber-300">{fmt(prixMensuel)} <span className="text-xs text-white/60">MUR/mois</span></p>
+                  <p className="text-[10px] uppercase text-white/60">{t('adm2.serv.monthly_price', locale)}</p>
+                  <p className="text-2xl font-bold text-amber-300">{fmt(prixMensuel)} <span className="text-xs text-white/60">{t('adm2.serv.per_month', locale)}</span></p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase text-white/60">Facturé en {periodicite}</p>
-                  <p className="text-2xl font-bold text-amber-300">{fmt(prixPeriode)} <span className="text-xs text-white/60">MUR/{periodicite === 'annuelle' ? 'an' : 'mois'}</span></p>
+                  <p className="text-[10px] uppercase text-white/60">{t('adm2.serv.billed_in', locale).replace('{periodicite}', periodicite)}</p>
+                  <p className="text-2xl font-bold text-amber-300">{fmt(prixPeriode)} <span className="text-xs text-white/60">MUR/{periodicite === 'annuelle' ? t('adm2.serv.per_year_short', locale) : t('adm2.serv.per_month_short', locale)}</span></p>
                 </div>
               </div>
               <div>
-                <p className="text-[10px] uppercase text-white/60 mb-1">Modules actifs ({activeModuleKeys.length})</p>
+                <p className="text-[10px] uppercase text-white/60 mb-1">{t('adm2.serv.active_modules', locale).replace('{count}', String(activeModuleKeys.length))}</p>
                 <div className="flex flex-wrap gap-1">
-                  {activeModuleKeys.length === 0 ? <span className="text-xs text-white/40">Aucun</span> :
+                  {activeModuleKeys.length === 0 ? <span className="text-xs text-white/40">{t('adm2.serv.none', locale)}</span> :
                     activeModuleKeys.map(k => (
                       <span key={k} className="inline-block px-2 py-0.5 rounded text-[10px] bg-white/10 border border-white/20">
-                        {MODULE_LABELS[k] || k}
+                        {moduleLabel(k, locale)}
                       </span>
                     ))}
                 </div>
@@ -422,10 +410,10 @@ function SubscriptionDialog({ societe, plans, onClose, onSaved }: {
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button variant="outline" onClick={onClose}>{t('adm2.serv.cancel', locale)}</Button>
           <Button onClick={save} disabled={saving || !planId} className="bg-[#D4AF37] hover:bg-[#C9A630] text-[#0B0F2E]">
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-            Appliquer l'abonnement
+            {t('adm2.serv.apply', locale)}
           </Button>
         </DialogFooter>
       </DialogContent>

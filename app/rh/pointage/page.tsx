@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Clock, LogIn, LogOut, Users, Calendar, ChevronLeft, ChevronRight, X, AlertTriangle, CheckCircle, Coffee } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
-import { t, getLocale } from "@/lib/i18n"
+import { t, getLocale, type Locale } from "@/lib/i18n"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,35 +65,35 @@ function dureeFmt(min: number | null): string {
   return `${hrs}h${String(mins).padStart(2, "0")}`
 }
 
-function congeSuffix(p: Pointage): string {
+function congeSuffix(p: Pointage, locale: Locale): string {
   if (!p.demi_conge) return ""
-  const half = p.demi_conge_quand === "matin" ? "matin" : p.demi_conge_quand === "apres_midi" ? "après-midi" : ""
-  const type = p.type_conge ? p.type_conge : "congé"
+  const half = p.demi_conge_quand === "matin" ? t('rhpl.matin', locale) : p.demi_conge_quand === "apres_midi" ? t('rhpl.apres_midi', locale) : ""
+  const type = p.type_conge ? p.type_conge : t('rhpl.conge', locale)
   return half ? ` + ${type} ${half}` : ` + ${type}`
 }
 
-function statutLabel(p: Pointage): { text: string; variant: "present" | "pause" | "sorti" | "absent" | "none" | "conge" } {
+function statutLabel(p: Pointage, locale: Locale): { text: string; variant: "present" | "pause" | "sorti" | "absent" | "none" | "conge" } {
   // Full-day leave masque toujours le pointage.
-  if (p.en_conge) return { text: `En congé${p.type_conge ? ` (${p.type_conge})` : ""}`, variant: "conge" }
+  if (p.en_conge) return { text: `${t('rhpl.st_en_conge', locale)}${p.type_conge ? ` (${p.type_conge})` : ""}`, variant: "conge" }
   // Half-day : on garde le statut work normal et on suffixe le badge avec
   // le demi-congé. Si pas encore de pointage côté demi-jour travaillé, on
   // affiche "Demi-congé (X)" comme statut principal.
-  const suffix = congeSuffix(p)
-  if (p.heure_entree && p.heure_sortie) return { text: `Termine${suffix}`, variant: "sorti" }
+  const suffix = congeSuffix(p, locale)
+  if (p.heure_entree && p.heure_sortie) return { text: `${t('rhpl.st_termine', locale)}${suffix}`, variant: "sorti" }
   // Hotfix 190 — pointages.heure_pause_debut/fin reflète la dernière pause.
   // Si heure_pause_debut renseigné sans heure_pause_fin => pause en cours.
-  if (p.heure_entree && p.heure_pause_debut && !p.heure_pause_fin) return { text: `En pause${suffix}`, variant: "pause" }
-  if (p.heure_entree && !p.heure_sortie) return { text: `Present${suffix}`, variant: "present" }
-  if (p.absent_justifie) return { text: `Absent${suffix}`, variant: "absent" }
+  if (p.heure_entree && p.heure_pause_debut && !p.heure_pause_fin) return { text: `${t('rhpl.st_en_pause', locale)}${suffix}`, variant: "pause" }
+  if (p.heure_entree && !p.heure_sortie) return { text: `${t('rhpl.st_present', locale)}${suffix}`, variant: "present" }
+  if (p.absent_justifie) return { text: `${t('rhpl.st_absent', locale)}${suffix}`, variant: "absent" }
   if (p.demi_conge) {
     // Pas de pointage encore : afficher le demi-congé comme statut principal,
     // mais variant "conge" pour le visuel vert (l'employé a quand même
     // un demi-congé approuvé aujourd'hui).
-    const half = p.demi_conge_quand === "matin" ? "matin" : p.demi_conge_quand === "apres_midi" ? "après-midi" : ""
-    const type = p.type_conge || "congé"
-    return { text: half ? `Demi-${type} ${half}` : `Demi-${type}`, variant: "conge" }
+    const half = p.demi_conge_quand === "matin" ? t('rhpl.matin', locale) : p.demi_conge_quand === "apres_midi" ? t('rhpl.apres_midi', locale) : ""
+    const type = p.type_conge || t('rhpl.conge', locale)
+    return { text: half ? `${t('rhpl.st_demi', locale)}${type} ${half}` : `${t('rhpl.st_demi', locale)}${type}`, variant: "conge" }
   }
-  if (!p.heure_entree) return { text: "Non pointe", variant: "none" }
+  if (!p.heure_entree) return { text: t('rhpl.st_non_pointe', locale), variant: "none" }
   return { text: "--", variant: "none" }
 }
 
@@ -319,10 +319,10 @@ export default function PointagePage() {
       if (res.status === 409) {
         // Already clocked in/out
         setFeedbackType("warning")
-        setFeedbackMsg(data.message || "Deja pointe aujourd'hui")
+        setFeedbackMsg(data.message || t('rhpl.fb_deja_pointe', locale))
       } else if (!res.ok) {
         setFeedbackType("error")
-        setFeedbackMsg(data.message || data.error || "Erreur lors du pointage")
+        setFeedbackMsg(data.message || data.error || t('rhpl.fb_erreur', locale))
       } else {
         const emp = employes.find((e) => e.id === eid)
         const name = emp ? `${emp.prenom} ${emp.nom}` : ""
@@ -330,15 +330,15 @@ export default function PointagePage() {
 
         if (type === "entree") {
           setFeedbackType("success")
-          setFeedbackMsg(`Entree enregistree pour ${name} a ${timeStr}`)
+          setFeedbackMsg(`${t('rhpl.fb_entree_ok', locale)} ${name} ${t('rhpl.fb_a', locale)} ${timeStr}`)
         } else {
           const duree = data.pointage?.duree_minutes
-          const dureeStr = duree ? ` — Duree: ${dureeFmt(duree)}` : ""
+          const dureeStr = duree ? ` — ${t('rhpl.fb_duree', locale)}: ${dureeFmt(duree)}` : ""
           const otStr = data.pointage?.heures_sup && data.pointage.heures_sup > 0
-            ? ` (dont ${data.pointage.heures_sup.toFixed(1)}h sup.)`
+            ? ` (${t('rhpl.fb_dont', locale)} ${data.pointage.heures_sup.toFixed(1)}${t('rhpl.fb_h_sup', locale)})`
             : ""
           setFeedbackType("success")
-          setFeedbackMsg(`Sortie enregistree pour ${name} a ${timeStr}${dureeStr}${otStr}`)
+          setFeedbackMsg(`${t('rhpl.fb_sortie_ok', locale)} ${name} ${t('rhpl.fb_a', locale)} ${timeStr}${dureeStr}${otStr}`)
         }
 
         // Update local state immediately with the returned pointage
@@ -400,7 +400,7 @@ export default function PointagePage() {
     } catch (e) {
       console.error(e)
       setFeedbackType("error")
-      setFeedbackMsg("Erreur de connexion au serveur")
+      setFeedbackMsg(t('rhpl.fb_connexion', locale))
     } finally {
       setDoingPointage(false)
     }
@@ -793,7 +793,7 @@ export default function PointagePage() {
                 </div>
                 <div>
                   {(() => {
-                    const s = statutLabel(selectedEmployeePointage)
+                    const s = statutLabel(selectedEmployeePointage, locale)
                     return (
                       <span className={`inline-block px-4 py-2 rounded-full text-sm font-semibold border ${BADGE_CLASSES[s.variant]}`}>
                         {s.text}
@@ -840,25 +840,25 @@ export default function PointagePage() {
             </div>
           ) : sortedPointages.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
-              {societeId ? "Aucun employe dans cette societe" : "Selectionnez une societe"}
+              {societeId ? t('rhpl.empty_no_employe', locale) : t('rhpl.empty_no_societe', locale)}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
-                    <TableHead className="font-semibold text-[#0B0F2E]">Employe</TableHead>
-                    <TableHead className="font-semibold text-[#0B0F2E] text-center">Entree</TableHead>
-                    <TableHead className="font-semibold text-[#0B0F2E] text-center">Pause</TableHead>
-                    <TableHead className="font-semibold text-[#0B0F2E] text-center">Sortie</TableHead>
-                    <TableHead className="font-semibold text-[#0B0F2E] text-center">Heures</TableHead>
-                    <TableHead className="font-semibold text-[#0B0F2E] text-center">H. Sup</TableHead>
-                    <TableHead className="font-semibold text-[#0B0F2E] text-center">Statut</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E]">{t('rhpl.th_employe', locale)}</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">{t('rhpl.th_entree', locale)}</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">{t('rhpl.th_pause', locale)}</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">{t('rhpl.th_sortie', locale)}</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">{t('rhpl.th_heures', locale)}</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">{t('rhpl.th_hsup', locale)}</TableHead>
+                    <TableHead className="font-semibold text-[#0B0F2E] text-center">{t('rhpl.th_statut', locale)}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedPointages.map((p) => {
-                    const s = statutLabel(p)
+                    const s = statutLabel(p, locale)
                     const isOnLeave = !!p.en_conge
                     const canIn = !isOnLeave && !p.heure_entree
                     const canOut = !isOnLeave && !!p.heure_entree && !p.heure_sortie
@@ -893,7 +893,7 @@ export default function PointagePage() {
                               onClick={() => doPointage("entree", p.employe_id)}
                               className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                             >
-                              <LogIn className="w-3 h-3 mr-1" /> Pointer
+                              <LogIn className="w-3 h-3 mr-1" /> {t('rhpl.btn_pointer', locale)}
                             </Button>
                           )}
                         </TableCell>
@@ -906,7 +906,7 @@ export default function PointagePage() {
                             <Button size="sm" variant="outline" disabled={doingPointage}
                               onClick={() => doPointage("pause_debut", p.employe_id)}
                               className="text-[10px] h-6 border-amber-300 text-amber-600 hover:bg-amber-50">
-                              <Coffee className="w-3 h-3 mr-0.5" /> Pause
+                              <Coffee className="w-3 h-3 mr-0.5" /> {t('rhpl.btn_pause', locale)}
                             </Button>
                           ) : (
                             <span className="text-gray-300 text-xs">—</span>
@@ -923,7 +923,7 @@ export default function PointagePage() {
                               onClick={() => doPointage("sortie", p.employe_id)}
                               className="text-xs border-red-300 text-red-600 hover:bg-red-50"
                             >
-                              <LogOut className="w-3 h-3 mr-1" /> Pointer
+                              <LogOut className="w-3 h-3 mr-1" /> {t('rhpl.btn_pointer', locale)}
                             </Button>
                           ) : (
                             <span className="font-mono text-red-300">--:--</span>
@@ -964,13 +964,13 @@ export default function PointagePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-[#0B0F2E] text-base flex items-center gap-2">
               <Calendar className="w-5 h-5 text-[#D4AF37]" />
-              Calendrier mensuel
+              {t('rhpl.cal_title', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {!employeId ? (
               <div className="text-center py-8 text-gray-400">
-                Selectionnez un employe pour afficher son calendrier mensuel
+                {t('rhpl.cal_select_employe', locale)}
               </div>
             ) : (
               <div className="space-y-4">
@@ -993,9 +993,9 @@ export default function PointagePage() {
                 ) : (
                   <>
                     <div className="grid grid-cols-7 gap-1">
-                      {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d) => (
+                      {["rhpl.dow_lun", "rhpl.dow_mar", "rhpl.dow_mer", "rhpl.dow_jeu", "rhpl.dow_ven", "rhpl.dow_sam", "rhpl.dow_dim"].map((d) => (
                         <div key={d} className="text-center text-xs font-semibold text-gray-500 py-2">
-                          {d}
+                          {t(d, locale)}
                         </div>
                       ))}
                       {calendarData.weeks.flat().map((cell, i) => {
@@ -1043,16 +1043,16 @@ export default function PointagePage() {
 
                     <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
                       <span className="flex items-center gap-1">
-                        <span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-200" /> Present
+                        <span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-200" /> {t('rhpl.legend_present', locale)}
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-3 h-3 rounded bg-red-100 border border-red-200" /> Absent
+                        <span className="w-3 h-3 rounded bg-red-100 border border-red-200" /> {t('rhpl.legend_absent', locale)}
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-3 h-3 rounded bg-blue-100 border border-blue-200" /> Congé
+                        <span className="w-3 h-3 rounded bg-blue-100 border border-blue-200" /> {t('rhpl.legend_conge', locale)}
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-3 h-3 rounded bg-gray-100 border border-gray-200" /> Weekend
+                        <span className="w-3 h-3 rounded bg-gray-100 border border-gray-200" /> {t('rhpl.legend_weekend', locale)}
                       </span>
                     </div>
 
@@ -1073,26 +1073,26 @@ export default function PointagePage() {
                         {selectedDayPointage ? (
                           <div className="grid grid-cols-3 gap-4 text-center">
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Entree</p>
+                              <p className="text-xs text-gray-500 mb-1">{t('rhpl.day_entree', locale)}</p>
                               <p className="text-lg font-mono font-semibold text-emerald-700">
                                 {fmtHeure(selectedDayPointage.heure_entree)}
                               </p>
                             </div>
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Sortie</p>
+                              <p className="text-xs text-gray-500 mb-1">{t('rhpl.day_sortie', locale)}</p>
                               <p className="text-lg font-mono font-semibold text-red-600">
                                 {fmtHeure(selectedDayPointage.heure_sortie)}
                               </p>
                             </div>
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Duree</p>
+                              <p className="text-xs text-gray-500 mb-1">{t('rhpl.day_duree', locale)}</p>
                               <p className="text-lg font-mono font-semibold text-[#0B0F2E]">
                                 {dureeFmt(selectedDayPointage.duree_minutes)}
                               </p>
                             </div>
                           </div>
                         ) : (
-                          <p className="text-center text-gray-400 text-sm">Aucun pointage ce jour</p>
+                          <p className="text-center text-gray-400 text-sm">{t('rhpl.day_aucun', locale)}</p>
                         )}
                       </div>
                     )}
@@ -1105,7 +1105,7 @@ export default function PointagePage() {
       )}
 
       <p className="text-center text-xs text-gray-400">
-        Actualisation automatique toutes les 30 secondes
+        {t('rhpl.auto_refresh', locale)}
       </p>
     </div>
     </ClientPageShell>

@@ -8,6 +8,7 @@
 
 import * as React from "react"
 import { Reveal, StaggerGroup, StaggerItem, HoverLift } from "@/components/ui/motion"
+import { t, type Locale } from "@/lib/i18n"
 import {
   Layers,
   Globe,
@@ -20,35 +21,29 @@ import {
   Shield,
 } from "lucide-react"
 
-type Locale = "fr" | "en"
-
 const LAYERS = [
   {
     label: "PCM",
-    sub: "Plan Comptable Mauricien",
-    body: "Plan strict canonique — 7 classes, comptes 401/411/512/641, mapping bidirectionnel avec SYSCOHADA, validations R1-R7 par écriture.",
-    bodyEn: "Strict canonical chart — 7 classes, 401/411/512/641 accounts, bidirectional mapping with SYSCOHADA, R1-R7 validation per entry.",
+    subKey: "cmkt.eng.layer_pcm_sub",
+    bodyKey: "cmkt.eng.layer_pcm_body",
     color: "#4191FF",
   },
   {
     label: "SYSCOHADA",
-    sub: "17 pays OHADA",
-    body: "Système comptable OHADA révisé (AUDCIF 2017). 9 classes, 500+ comptes officiels, états financiers (Bilan, CR, TAFIRE, SMT, 35 notes annexes).",
-    bodyEn: "Revised OHADA accounting system (AUDCIF 2017). 9 classes, 500+ official accounts, financial statements (Balance Sheet, P&L, TAFIRE, SMT, 35 notes).",
+    subKey: "cmkt.eng.layer_syscohada_sub",
+    bodyKey: "cmkt.eng.layer_syscohada_body",
     color: "#D4AF37",
   },
   {
     label: "Full IFRS",
-    sub: "Pas IFRS for SMEs",
-    body: "IFRS 9 ECL (Stages 1/2/3, SICR, PD/LGD, macro scenarios), IFRS 15 Revenue, IFRS 16 Leases (RoU + liability), IFRS 10 Consolidation, IAS 21 Functional Currency, IAS 36/38, IFRS 13.",
-    bodyEn: "IFRS 9 ECL (Stages 1/2/3, SICR, PD/LGD, macro), IFRS 15 Revenue, IFRS 16 Leases (RoU + liability), IFRS 10 Consolidation, IAS 21 Functional Currency, IAS 36/38, IFRS 13.",
+    subKey: "cmkt.eng.layer_ifrs_sub",
+    bodyKey: "cmkt.eng.layer_ifrs_body",
     color: "#2ECC8A",
   },
   {
     label: "GBC",
-    sub: "Authorised Company / Global Business",
-    body: "PER 80% (7 catégories), Substance / CIGA (11 activités), Transfer Pricing (5 méthodes, CBCR), UBO + KYC, CRS/FATCA (50+ juridictions), BEPS Pillar Two GloBE, consolidation IFRS 10.",
-    bodyEn: "PER 80% (7 categories), Substance / CIGA (11 activities), Transfer Pricing (5 methods, CBCR), UBO + KYC, CRS/FATCA (50+ jurisdictions), BEPS Pillar Two GloBE, IFRS 10 consolidation.",
+    subKey: "cmkt.eng.layer_gbc_sub",
+    bodyKey: "cmkt.eng.layer_gbc_body",
     color: "#4191FF",
   },
 ]
@@ -57,35 +52,31 @@ const SKILLS = [
   {
     icon: BookOpenCheck,
     title: "lexora-ifrs9-ecl",
-    body: "Calcule l'Expected Credit Loss IFRS 9 sur tous vos clients. Affecte chaque tiers à un stage 1/2/3, applique PD/LGD sectoriels, surcharge macro-scenarios.",
-    bodyEn: "Computes IFRS 9 Expected Credit Loss across all your customers. Assigns each counterparty to stage 1/2/3, applies sector PD/LGD, overlays macro scenarios.",
+    bodyKey: "cmkt.eng.skill_ifrs9_body",
   },
   {
     icon: Scale,
     title: "lexora-mra-tds",
-    body: "Produit vos déclarations MRA (PAYE, NSF, CSG, TDS, IT Form 3). Génère CSV et XML conformes, calcule withholding sur paiements fournisseurs étrangers.",
-    bodyEn: "Produces your MRA filings (PAYE, NSF, CSG, TDS, IT Form 3). Generates compliant CSV and XML, computes withholding on foreign supplier payments.",
+    bodyKey: "cmkt.eng.skill_mra_body",
   },
   {
     icon: Network,
     title: "lexora-rapprochement-rules",
-    body: "Applique les règles déterministes R1-R7 du rapprochement bancaire mauricien : compte 580, lettrage 411/401, classification BNQ, refus de lettrage sur 6xxx/7xxx.",
-    bodyEn: "Applies Mauritian bank reconciliation rules R1-R7: account 580, 411/401 reconciliation, BNQ classification, no lettering on 6xxx/7xxx accounts.",
+    bodyKey: "cmkt.eng.skill_rappro_body",
   },
   {
     icon: Building2,
     title: "lexora-gbc-ifrs-complete",
-    body: "Raisonne sur les Global Business Companies mauriciennes en Full IFRS : Partial Exemption Regime, substance CIGA, Transfer Pricing, Pillar Two, BEPS, BO Register.",
-    bodyEn: "Reasons over Mauritian Global Business Companies in Full IFRS: Partial Exemption Regime, CIGA substance, Transfer Pricing, Pillar Two, BEPS, BO Register.",
+    bodyKey: "cmkt.eng.skill_gbc_body",
   },
 ]
 
 const MCP_TOOLS = [
-  { label: "get_grand_livre", desc: "Grand livre temps réel" },
-  { label: "compute_ifrs9_ecl", desc: "ECL IFRS 9 par contrepartie" },
-  { label: "mra_declarations", desc: "Pré-remplissage MRA" },
-  { label: "rapprochement_rules", desc: "Règles BNQ R1-R7" },
-  { label: "gbc_consolidation", desc: "Consolidation IFRS 10 GBC" },
+  { label: "get_grand_livre", descKey: "cmkt.eng.mcp_grand_livre_desc" },
+  { label: "compute_ifrs9_ecl", descKey: "cmkt.eng.mcp_ifrs9_desc" },
+  { label: "mra_declarations", descKey: "cmkt.eng.mcp_mra_desc" },
+  { label: "rapprochement_rules", descKey: "cmkt.eng.mcp_rappro_desc" },
+  { label: "gbc_consolidation", descKey: "cmkt.eng.mcp_gbc_desc" },
 ]
 
 export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
@@ -130,7 +121,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
             }}
           >
             <Cpu className="h-3.5 w-3.5" />
-            {locale === "fr" ? "Le moteur Lexora" : "The Lexora engine"}
+            {t("cmkt.eng.badge", locale)}
           </span>
           <h2
             className="mb-5 text-4xl font-bold tracking-tight md:text-6xl"
@@ -144,7 +135,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
           >
             {locale === "fr" ? (
               <>
-                Un cerveau{" "}
+                {t("cmkt.eng.title_pre", locale)}{" "}
                 <span
                   style={{
                     backgroundImage:
@@ -154,8 +145,9 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                     color: "transparent",
                   }}
                 >
-                  multi-référentiel
+                  {t("cmkt.eng.title_accent", locale)}
                 </span>
+                {t("cmkt.eng.title_post", locale)}
                 <br />
                 <span className="text-2xl md:text-4xl font-normal" style={{ color: "#A8AFC7" }}>
                   PCM · SYSCOHADA · Full IFRS · GBC
@@ -163,7 +155,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
               </>
             ) : (
               <>
-                A{" "}
+                {t("cmkt.eng.title_pre", locale)}{" "}
                 <span
                   style={{
                     backgroundImage:
@@ -173,9 +165,9 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                     color: "transparent",
                   }}
                 >
-                  multi-standard
-                </span>{" "}
-                brain
+                  {t("cmkt.eng.title_accent", locale)}
+                </span>
+                {t("cmkt.eng.title_post", locale)}
                 <br />
                 <span className="text-2xl md:text-4xl font-normal" style={{ color: "#A8AFC7" }}>
                   PCM · SYSCOHADA · Full IFRS · GBC
@@ -192,9 +184,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
               lineHeight: 1.7,
             }}
           >
-            {locale === "fr"
-              ? "Une seule plateforme. Quatre référentiels comptables nativement intégrés. Le moteur choisit la bonne norme selon la juridiction et le type d'entité — vous n'avez jamais à le configurer."
-              : "One platform. Four natively integrated accounting frameworks. The engine picks the right standard per jurisdiction and entity — you never configure it."}
+            {t("cmkt.eng.intro", locale)}
           </p>
         </Reveal>
 
@@ -236,7 +226,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                         fontFamily: "'Poppins', sans-serif",
                       }}
                     >
-                      {locale === "fr" ? `Couche ${String(i + 1).padStart(2, "0")}` : `Layer ${String(i + 1).padStart(2, "0")}`}
+                      {t("cmkt.eng.layer_word", locale)} {String(i + 1).padStart(2, "0")}
                     </div>
                     <h3
                       className="mb-1 text-2xl font-bold"
@@ -253,7 +243,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                       className="mb-4 text-xs uppercase tracking-widest"
                       style={{ color: l.color, fontFamily: "'Poppins', sans-serif" }}
                     >
-                      {l.sub}
+                      {t(l.subKey, locale)}
                     </div>
                     <p
                       className="text-sm"
@@ -264,7 +254,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                         lineHeight: 1.65,
                       }}
                     >
-                      {locale === "fr" ? l.body : l.bodyEn}
+                      {t(l.bodyKey, locale)}
                     </p>
                   </div>
                 </article>
@@ -285,7 +275,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
             }}
           >
             <Sparkles className="h-3 w-3" />
-            {locale === "fr" ? "Powered by Claude Code · Anthropic" : "Powered by Claude Code · Anthropic"}
+            Powered by Claude Code · Anthropic
           </span>
           <h3
             className="text-3xl font-bold md:text-4xl"
@@ -296,9 +286,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
               letterSpacing: "-0.02em",
             }}
           >
-            {locale === "fr"
-              ? "4 skills expertes + 5 outils MCP natifs"
-              : "4 expert skills + 5 native MCP tools"}
+            {t("cmkt.eng.skills_title", locale)}
           </h3>
           <p
             className="mx-auto mt-3 max-w-2xl text-base"
@@ -309,9 +297,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
               lineHeight: 1.7,
             }}
           >
-            {locale === "fr"
-              ? "Claude Code n'est pas un simple chatbot collé à Lexora. Il pilote vos écritures, vos déclarations, votre conformité. Chaque skill est une équipe d'experts qui connaît votre référentiel."
-              : "Claude Code isn't a chatbot pasted on Lexora. It drives your entries, filings and compliance. Each skill is an expert team that knows your standard."}
+            {t("cmkt.eng.skills_intro", locale)}
           </p>
         </Reveal>
 
@@ -365,7 +351,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                         lineHeight: 1.7,
                       }}
                     >
-                      {locale === "fr" ? s.body : s.bodyEn}
+                      {t(s.bodyKey, locale)}
                     </p>
                   </article>
                 </HoverLift>
@@ -400,7 +386,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                     className="text-[10px] font-bold uppercase tracking-widest"
                     style={{ color: "#D4AF37", fontFamily: "'Poppins', sans-serif" }}
                   >
-                    {locale === "fr" ? "Outils MCP natifs" : "Native MCP tools"}
+                    {t("cmkt.eng.mcp_kicker", locale)}
                   </div>
                   <h4
                     className="text-lg font-bold md:text-xl"
@@ -410,9 +396,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                       fontWeight: 700,
                     }}
                   >
-                    {locale === "fr"
-                      ? "Claude appelle directement votre comptabilité"
-                      : "Claude calls your accounting directly"}
+                    {t("cmkt.eng.mcp_title", locale)}
                   </h4>
                 </div>
               </div>
@@ -420,9 +404,9 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {MCP_TOOLS.map((t) => (
+              {MCP_TOOLS.map((tool) => (
                 <div
-                  key={t.label}
+                  key={tool.label}
                   className="rounded-xl p-3"
                   style={{
                     backgroundColor: "rgba(11,15,46,0.55)",
@@ -436,7 +420,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
                     }}
                   >
-                    {t.label}
+                    {tool.label}
                   </div>
                   <div
                     className="text-[11px]"
@@ -446,7 +430,7 @@ export function LexoraEngineCore({ locale = "fr" }: { locale?: Locale }) {
                       fontWeight: 400,
                     }}
                   >
-                    {t.desc}
+                    {t(tool.descKey, locale)}
                   </div>
                 </div>
               ))}

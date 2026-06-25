@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Loader2, Save, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react"
+import { t, getLocale } from "@/lib/i18n"
 
 interface Settings {
   raison_sociale: string
@@ -40,6 +41,7 @@ interface Settings {
 }
 
 export default function LexoraBillingSettingsPage() {
+  const locale = getLocale()
   const [s, setS] = useState<Settings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -61,10 +63,10 @@ export default function LexoraBillingSettingsPage() {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s),
       })
       const j = await res.json()
-      if (!res.ok) throw new Error(j.error || 'Erreur')
-      setMsg({ type: 'success', text: 'Paramètres enregistrés.' })
+      if (!res.ok) throw new Error(j.error || t('adm3.set.loading_error', locale))
+      setMsg({ type: 'success', text: t('adm3.set.saved', locale) })
     } catch (e: any) {
-      setMsg({ type: 'error', text: e?.message || 'Erreur' })
+      setMsg({ type: 'error', text: e?.message || t('adm3.set.loading_error', locale) })
     } finally {
       setSaving(false)
       setTimeout(() => setMsg(null), 4000)
@@ -72,7 +74,7 @@ export default function LexoraBillingSettingsPage() {
   }
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>
-  if (!s) return <div className="p-6">Pas de config trouvée.</div>
+  if (!s) return <div className="p-6">{t('adm3.set.no_config', locale)}</div>
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -80,13 +82,13 @@ export default function LexoraBillingSettingsPage() {
         <div className="flex items-center gap-3">
           <Link href="/admin/lexora-billing" className="text-gray-400 hover:text-gray-700"><ArrowLeft className="h-5 w-5" /></Link>
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>Paramètres émetteur (DDS)</h1>
-            <p className="text-sm text-gray-500 mt-1">Ces informations apparaissent en entête des factures et alimentent le footer bancaire.</p>
+            <h1 className="text-2xl font-bold" style={{ color: '#0B0F2E' }}>{t('adm3.set.title', locale)}</h1>
+            <p className="text-sm text-gray-500 mt-1">{t('adm3.set.subtitle', locale)}</p>
           </div>
         </div>
         <button onClick={save} disabled={saving}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white" style={{ backgroundColor: '#0B0F2E' }}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Enregistrer
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {t('adm3.set.save', locale)}
         </button>
       </div>
 
@@ -97,57 +99,57 @@ export default function LexoraBillingSettingsPage() {
         </div>
       )}
 
-      <Section title="Identité légale">
+      <Section title={t('adm3.set.sec_legal', locale)}>
         <Grid>
-          <Field label="Raison sociale"  value={s.raison_sociale} onChange={v => set({ raison_sociale: v })} />
-          <Field label="BRN"             value={s.brn || ''}      onChange={v => set({ brn: v })} />
-          <Field label="VAT Number"      value={s.vat_number || ''} onChange={v => set({ vat_number: v })} />
-          <Field label="Capital (MUR)"   type="number" value={String(s.capital_mur ?? '')} onChange={v => set({ capital_mur: v ? Number(v) : null })} />
-          <Field label="Adresse"         value={s.adresse || ''}  onChange={v => set({ adresse: v })} className="md:col-span-2" />
-          <Field label="Ville"           value={s.ville || ''}    onChange={v => set({ ville: v })} />
-          <Field label="Pays"            value={s.pays || ''}     onChange={v => set({ pays: v })} />
-          <Field label="Téléphone"       value={s.telephone || ''} onChange={v => set({ telephone: v })} />
-          <Field label="Email"           value={s.email || ''}    onChange={v => set({ email: v })} />
-          <Field label="Site web"        value={s.website || ''}  onChange={v => set({ website: v })} />
+          <Field label={t('adm3.set.f_raison', locale)}  value={s.raison_sociale} onChange={v => set({ raison_sociale: v })} />
+          <Field label={t('adm3.set.f_brn', locale)}     value={s.brn || ''}      onChange={v => set({ brn: v })} />
+          <Field label={t('adm3.set.f_vat', locale)}      value={s.vat_number || ''} onChange={v => set({ vat_number: v })} />
+          <Field label={t('adm3.set.f_capital', locale)}   type="number" value={String(s.capital_mur ?? '')} onChange={v => set({ capital_mur: v ? Number(v) : null })} />
+          <Field label={t('adm3.set.f_address', locale)}         value={s.adresse || ''}  onChange={v => set({ adresse: v })} className="md:col-span-2" />
+          <Field label={t('adm3.set.f_city', locale)}           value={s.ville || ''}    onChange={v => set({ ville: v })} />
+          <Field label={t('adm3.set.f_country', locale)}            value={s.pays || ''}     onChange={v => set({ pays: v })} />
+          <Field label={t('adm3.set.f_phone', locale)}       value={s.telephone || ''} onChange={v => set({ telephone: v })} />
+          <Field label={t('adm3.set.f_email', locale)}         value={s.email || ''}    onChange={v => set({ email: v })} />
+          <Field label={t('adm3.set.f_website', locale)}        value={s.website || ''}  onChange={v => set({ website: v })} />
         </Grid>
       </Section>
 
-      <Section title="Coordonnées bancaires (MUR)">
+      <Section title={t('adm3.set.sec_bank', locale)}>
         <Grid>
-          <Field label="Nom de la banque"  value={s.banque_nom || ''}    onChange={v => set({ banque_nom: v })} />
-          <Field label="Numéro de compte"  value={s.numero_compte || ''} onChange={v => set({ numero_compte: v })} />
-          <Field label="IBAN"              value={s.iban || ''}          onChange={v => set({ iban: v })} className="md:col-span-2" />
-          <Field label="SWIFT / BIC"       value={s.swift_bic || ''}     onChange={v => set({ swift_bic: v })} />
+          <Field label={t('adm3.set.f_bank_name', locale)}  value={s.banque_nom || ''}    onChange={v => set({ banque_nom: v })} />
+          <Field label={t('adm3.set.f_account_number', locale)}  value={s.numero_compte || ''} onChange={v => set({ numero_compte: v })} />
+          <Field label={t('adm3.set.f_iban', locale)}              value={s.iban || ''}          onChange={v => set({ iban: v })} className="md:col-span-2" />
+          <Field label={t('adm3.set.f_swift', locale)}       value={s.swift_bic || ''}     onChange={v => set({ swift_bic: v })} />
         </Grid>
       </Section>
 
-      <Section title="Intégration comptable">
+      <Section title={t('adm3.set.sec_accounting', locale)}>
         <Grid>
-          <Field label="Société DDS dans Lexora (societe_id)" value={s.societe_id || ''} onChange={v => set({ societe_id: v })} />
-          <Field label="Dossier comptable DDS (dossier_id)"    value={s.dossier_id || ''} onChange={v => set({ dossier_id: v })} />
-          <Field label="Compte client (411…)"  value={s.compte_client}  onChange={v => set({ compte_client: v })} />
-          <Field label="Compte produit (706…)" value={s.compte_produit} onChange={v => set({ compte_produit: v })} />
-          <Field label="Compte TVA (4457)"     value={s.compte_tva}     onChange={v => set({ compte_tva: v })} />
-          <Field label="Journal de vente"      value={s.journal_vente}  onChange={v => set({ journal_vente: v })} />
+          <Field label={t('adm3.set.f_societe_id', locale)} value={s.societe_id || ''} onChange={v => set({ societe_id: v })} />
+          <Field label={t('adm3.set.f_dossier_id', locale)}    value={s.dossier_id || ''} onChange={v => set({ dossier_id: v })} />
+          <Field label={t('adm3.set.f_compte_client', locale)}  value={s.compte_client}  onChange={v => set({ compte_client: v })} />
+          <Field label={t('adm3.set.f_compte_produit', locale)} value={s.compte_produit} onChange={v => set({ compte_produit: v })} />
+          <Field label={t('adm3.set.f_compte_tva', locale)}     value={s.compte_tva}     onChange={v => set({ compte_tva: v })} />
+          <Field label={t('adm3.set.f_journal_vente', locale)}      value={s.journal_vente}  onChange={v => set({ journal_vente: v })} />
         </Grid>
         <p className="text-xs text-gray-500 mt-3">
-          Sans `dossier_id` renseigné, les factures sont émises mais aucune écriture comptable n'est créée.
+          {t('adm3.set.accounting_note', locale)}
         </p>
       </Section>
 
-      <Section title="Facturation">
+      <Section title={t('adm3.set.sec_billing', locale)}>
         <Grid>
-          <Field label="Préfixe numéro"           value={s.invoice_prefix}                onChange={v => set({ invoice_prefix: v })} />
-          <Field label="Taux TVA par défaut (%)"  type="number" value={String(s.tva_rate_default)} onChange={v => set({ tva_rate_default: Number(v) || 0 })} />
-          <Field label="Délai paiement (jours)"   type="number" value={String(s.payment_terms_days)} onChange={v => set({ payment_terms_days: Number(v) || 30 })} />
+          <Field label={t('adm3.set.f_prefix', locale)}           value={s.invoice_prefix}                onChange={v => set({ invoice_prefix: v })} />
+          <Field label={t('adm3.set.f_tva_default', locale)}  type="number" value={String(s.tva_rate_default)} onChange={v => set({ tva_rate_default: Number(v) || 0 })} />
+          <Field label={t('adm3.set.f_payment_terms', locale)}   type="number" value={String(s.payment_terms_days)} onChange={v => set({ payment_terms_days: Number(v) || 30 })} />
         </Grid>
       </Section>
 
-      <Section title="Calendrier de relance">
-        <Field label="Étapes (en jours après échéance, séparés par des virgules)"
+      <Section title={t('adm3.set.sec_dunning', locale)}>
+        <Field label={t('adm3.set.f_dunning_schedule', locale)}
                value={(s.dunning_schedule || []).join(',')}
                onChange={v => set({ dunning_schedule: v.split(',').map(x => Number(x.trim())).filter(n => Number.isFinite(n)) })} />
-        <Field label="Canaux par défaut (email, telegram, sms, whatsapp)"
+        <Field label={t('adm3.set.f_dunning_channels', locale)}
                value={(s.dunning_channels || []).join(',')}
                onChange={v => set({ dunning_channels: v.split(',').map(x => x.trim()).filter(Boolean) })} className="mt-3" />
       </Section>

@@ -4,76 +4,77 @@ import { Scale, Gavel, FileSignature, FolderOpen, ShieldCheck, MessageSquareText
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
 import { RagAdminPanel } from "@/components/juridique/RagAdminPanel"
 import { RagStats } from "@/components/juridique/RagStats"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
 
-const MODULES = [
-  {
-    href: "/juridique/dossiers",
-    icon: FolderKanban,
-    title: "Dossiers",
-    desc: "Gérez vos dossiers et contentieux : parties, statut, pièces, analyses et actes — tout persisté et rattaché.",
-    tag: "Gestion",
-  },
-  {
-    href: "/juridique/societe",
-    icon: Landmark,
-    title: "Vie juridique de la société",
-    desc: "Secrétariat juridique : PV d'assemblées générales, résolutions et registres — préremplis avec associés, administrateurs et comptes.",
-    tag: "Corporate",
-  },
-  {
-    href: "/juridique/conseil",
-    icon: MessageSquareText,
-    title: "Conseil juridique",
-    desc: "Posez une question à l'avocat-conseil IA. Références mauriciennes citées, raisonnement structuré.",
-    tag: "Avocat-conseil",
-  },
-  {
-    href: "/juridique/conseil-rh",
-    icon: Users,
-    title: "Conseil RH & Social",
-    desc: "Droit du travail mauricien (WRA 2019, ERA 2008) : discipline, licenciement, severance, PRGF. Analyse de contrats de travail.",
-    tag: "RH & Social",
-  },
-  {
-    href: "/juridique/contentieux",
-    icon: Gavel,
-    title: "Contentieux",
-    desc: "Qualifiez un litige, évaluez vos chances, générez mises en demeure et actes — tous types de contentieux.",
-    tag: "Tous contentieux",
-  },
-  {
-    href: "/juridique/contrats",
-    icon: FileSignature,
-    title: "Contrats",
-    desc: "Génération de contrats de travail, NDA, baux et prestations conformes au droit mauricien.",
-    tag: "Rédaction",
-  },
-  {
-    href: "/juridique/documents",
-    icon: FolderOpen,
-    title: "Documents",
-    desc: "Coffre-fort des pièces : importez et classez contrats, actes, registres et correspondances.",
-    tag: "Coffre-fort",
-  },
-  {
-    href: "/juridique/conformite",
-    icon: ShieldCheck,
-    title: "Conformité & délais",
-    desc: "Calendrier des obligations légales, délais de prescription et échéances réglementaires (CA 2001, MRA, FSC).",
-    tag: "Compliance",
-  },
-]
-
 export default function JuridiqueDashboard() {
+  const locale = getLocale()
+  const MODULES = [
+    {
+      href: "/juridique/dossiers",
+      icon: FolderKanban,
+      title: t("jurd.mod.dossiers.title", locale),
+      desc: t("jurd.mod.dossiers.desc", locale),
+      tag: t("jurd.mod.dossiers.tag", locale),
+    },
+    {
+      href: "/juridique/societe",
+      icon: Landmark,
+      title: t("jurd.mod.societe.title", locale),
+      desc: t("jurd.mod.societe.desc", locale),
+      tag: t("jurd.mod.societe.tag", locale),
+    },
+    {
+      href: "/juridique/conseil",
+      icon: MessageSquareText,
+      title: t("jurd.mod.conseil.title", locale),
+      desc: t("jurd.mod.conseil.desc", locale),
+      tag: t("jurd.mod.conseil.tag", locale),
+    },
+    {
+      href: "/juridique/conseil-rh",
+      icon: Users,
+      title: t("jurd.mod.conseilrh.title", locale),
+      desc: t("jurd.mod.conseilrh.desc", locale),
+      tag: t("jurd.mod.conseilrh.tag", locale),
+    },
+    {
+      href: "/juridique/contentieux",
+      icon: Gavel,
+      title: t("jurd.mod.contentieux.title", locale),
+      desc: t("jurd.mod.contentieux.desc", locale),
+      tag: t("jurd.mod.contentieux.tag", locale),
+    },
+    {
+      href: "/juridique/contrats",
+      icon: FileSignature,
+      title: t("jurd.mod.contrats.title", locale),
+      desc: t("jurd.mod.contrats.desc", locale),
+      tag: t("jurd.mod.contrats.tag", locale),
+    },
+    {
+      href: "/juridique/documents",
+      icon: FolderOpen,
+      title: t("jurd.mod.documents.title", locale),
+      desc: t("jurd.mod.documents.desc", locale),
+      tag: t("jurd.mod.documents.tag", locale),
+    },
+    {
+      href: "/juridique/conformite",
+      icon: ShieldCheck,
+      title: t("jurd.mod.conformite.title", locale),
+      desc: t("jurd.mod.conformite.desc", locale),
+      tag: t("jurd.mod.conformite.tag", locale),
+    },
+  ]
   return (
     <div className="space-y-6">
       <JuridiqueHeader
         icon={<Scale className="w-6 h-6" style={{ color: GOLD }} />}
-        title="Département Juridique"
-        subtitle="Votre cabinet juridique mauricien augmenté par l'IA — conseil, contentieux, contrats et conformité. Chaque production est un projet à valider par un homme de loi."
+        title={t("jurd.dash.title", locale)}
+        subtitle={t("jurd.dash.subtitle", locale)}
       />
 
       {/* Base de connaissances réelle (corpus RAG live) */}
@@ -97,7 +98,7 @@ export default function JuridiqueDashboard() {
                 <p className="font-bold text-[15px]" style={{ color: NAVY }}>{m.title}</p>
                 <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{m.desc}</p>
                 <div className="mt-3 flex items-center gap-1 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: GOLD }}>
-                  Ouvrir <ArrowRight className="w-3.5 h-3.5" />
+                  {t("jurd.dash.open", locale)} <ArrowRight className="w-3.5 h-3.5" />
                 </div>
               </div>
             </Link>
@@ -110,12 +111,9 @@ export default function JuridiqueDashboard() {
         <div className="flex items-start gap-3">
           <BookOpen className="w-5 h-5 mt-0.5" style={{ color: GOLD }} />
           <div>
-            <p className="font-bold text-sm" style={{ color: NAVY }}>Un socle de connaissances mauricien</p>
+            <p className="font-bold text-sm" style={{ color: NAVY }}>{t("jurd.dash.kb.title", locale)}</p>
             <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-              Companies Act 2001, Workers' Rights Act 2019, Code Civil & Code de Commerce, Income Tax Act, DPA 2017,
-              FSA 2007, Insolvency Act 2009, International Arbitration Act 2008… Le département connaît les juridictions
-              (District / Intermediate Court, Commercial Division, Industrial Court, ARC, MARC, Privy Council) et les
-              délais de prescription applicables.
+              {t("jurd.dash.kb.desc", locale)}
             </p>
           </div>
         </div>
@@ -124,8 +122,7 @@ export default function JuridiqueDashboard() {
       <RagAdminPanel />
 
       <p className="text-[11px] text-gray-400 text-center">
-        Lexora n'exerce pas l'activité réglementée d'avocat. Les documents produits sont des projets de travail à faire
-        valider et signer par un avocat / attorney inscrit avant tout usage officiel.
+        {t("jurd.dash.disclaimer", locale)}
       </p>
     </div>
   )
