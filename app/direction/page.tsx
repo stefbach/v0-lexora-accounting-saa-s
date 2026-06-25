@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
+import { getCurrentExercice } from "@/lib/fiscal-years"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -16,7 +17,7 @@ export default function DirectionPage() {
   const locale = getLocale()
   const [societes, setSocietes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [exercice, setExercice] = useState("2024-2025")
+  const [exercice, setExercice] = useState(getCurrentExercice())
   const [cerveauOpen, setCerveauOpen] = useState(false)
   const [consolidation, setConsolidation] = useState<any>({})
 

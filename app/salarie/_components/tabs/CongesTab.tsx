@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { notifySuccess, notifyWarning } from "@/lib/utils/toast"
+import { t, getLocale } from "@/lib/i18n"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -26,6 +27,7 @@ const ACCEPTED_CERT_TYPES = ["application/pdf", "image/jpeg", "image/png", "imag
 // Extrait du monolithe page.tsx pendant le sprint-salarie V0.1.
 // Iso-fonctionnel.
 export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () => void }) {
+  const locale = getLocale()
   const [balances, setBalances] = useState<any>(null)
   const [history, setHistory] = useState<any[]>([])
   const [loadingH, setLoadingH] = useState(true)
@@ -76,24 +78,24 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
   }, [employe.id])
 
   const handleSubmit = async () => {
-    if (!dateDebut) { setError("Veuillez renseigner la date"); return }
+    if (!dateDebut) { setError(t('sal.conges.errDateRequise', locale)); return }
     const effectiveDateFin = demiJournee ? dateDebut : dateFin
-    if (!effectiveDateFin) { setError("Veuillez renseigner la date de fin"); return }
-    if (!demiJournee && dateFin < dateDebut) { setError("La date de fin doit être après la date de début"); return }
+    if (!effectiveDateFin) { setError(t('sal.conges.errDateFinRequise', locale)); return }
+    if (!demiJournee && dateFin < dateDebut) { setError(t('sal.conges.errDateFinApres', locale)); return }
     if (demiJournee && !DEMI_JOURNEE_ALLOWED.has(typeConge)) {
-      setError("Les demi-journées ne sont pas autorisées pour ce type de congé")
+      setError(t('sal.conges.errDemiJourneeNonAutorisee', locale))
       return
     }
     if (needsCertificat && !file) {
-      setError("Certificat médical obligatoire pour une demande SL > 3 jours")
+      setError(t('sal.conges.errCertificatObligatoire', locale))
       return
     }
     if (file && !ACCEPTED_CERT_TYPES.includes(file.type)) {
-      setError("Format de certificat non supporté : PDF, JPG, PNG ou WebP uniquement")
+      setError(t('sal.conges.errCertificatFormat', locale))
       return
     }
     if (file && file.size > MAX_CERT_BYTES) {
-      setError("Certificat trop volumineux (5 Mo maximum)")
+      setError(t('sal.conges.errCertificatVolumineux', locale))
       return
     }
     setSubmitting(true); setError(""); setSuccess("")
@@ -136,33 +138,33 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
           })
           if (!certRes.ok) {
             if (certRes.status === 404) {
-              toast.warning("Certificat non transmis", {
-                description: "L'endpoint d'upload est en cours de déploiement. Transmettez votre certificat au RH en parallèle.",
+              toast.warning(t('sal.conges.toastCertNonTransmisTitre', locale), {
+                description: t('sal.conges.toastCertNonTransmisDesc', locale),
               })
             } else {
               const err = await certRes.json().catch(() => ({}))
-              toast.error("Erreur upload certificat", { description: err.error || `HTTP ${certRes.status}` })
+              toast.error(t('sal.conges.toastCertErreurTitre', locale), { description: err.error || `HTTP ${certRes.status}` })
             }
           } else {
-            notifySuccess("Certificat médical transmis")
+            notifySuccess(t('sal.conges.toastCertTransmis', locale))
           }
         } catch {
-          notifyWarning("Certificat non transmis (réseau)")
+          notifyWarning(t('sal.conges.toastCertNonTransmisReseau', locale))
         }
       }
 
-      setSuccess(demiJournee ? "Demi-journée soumise avec succès" : "Demande soumise avec succès")
+      setSuccess(demiJournee ? t('sal.conges.successDemiJournee', locale) : t('sal.conges.successDemande', locale))
       setDateDebut(""); setDateFin(""); setMotif(""); setFile(null)
       setDemiJournee(false); setMatinOuApresMidi('matin')
       await refreshData()
       onRefresh()
       setTimeout(() => setSuccess(""), 4000)
-    } catch { setError("Erreur réseau") }
+    } catch { setError(t('sal.conges.errReseau', locale)) }
     setSubmitting(false)
   }
 
   const cancelDemande = async (id: string) => {
-    if (!window.confirm("Annuler cette demande de congé en attente ?")) return
+    if (!window.confirm(t('sal.conges.confirmAnnuler', locale))) return
     setCancellingId(id)
     setError(""); setSuccess("")
     try {
@@ -171,14 +173,14 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
         body: JSON.stringify({ action: "annuler", id }),
       })
       const data = await res.json()
-      if (!res.ok || data.error) setError(data.error || `Erreur HTTP ${res.status}`)
+      if (!res.ok || data.error) setError(data.error || `${t('sal.conges.errHttp', locale)} ${res.status}`)
       else {
-        setSuccess("Demande annulée")
+        setSuccess(t('sal.conges.successAnnulee', locale))
         await refreshData()
         onRefresh()
         setTimeout(() => setSuccess(""), 3000)
       }
-    } catch { setError("Erreur réseau") }
+    } catch { setError(t('sal.conges.errReseau', locale)) }
     setCancellingId(null)
   }
 
@@ -220,9 +222,9 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
   const canFillForm = !soldesMissing && (!requiresAnciennete || eligibilityStatus !== "not_eligible")
 
   const statutBadge = (s: string) => {
-    if (s === "approuve" || s === "approved") return <Badge style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>Approuvé</Badge>
-    if (s === "refuse" || s === "rejected") return <Badge style={{ backgroundColor: "#ef444420", color: "#ef4444" }}>Refusé</Badge>
-    return <Badge style={{ backgroundColor: "#f9731620", color: "#f97316" }}>En attente</Badge>
+    if (s === "approuve" || s === "approved") return <Badge style={{ backgroundColor: `${GREEN}20`, color: GREEN }}>{t('sal.conges.statutApprouve', locale)}</Badge>
+    if (s === "refuse" || s === "rejected") return <Badge style={{ backgroundColor: "#ef444420", color: "#ef4444" }}>{t('sal.conges.statutRefuse', locale)}</Badge>
+    return <Badge style={{ backgroundColor: "#f9731620", color: "#f97316" }}>{t('sal.conges.statutEnAttente', locale)}</Badge>
   }
 
   const typeLabel: Record<string, string> = { AL: "Local Leave", SL: "Sick Leave", VL: "Vacation Leave", MAT: "Maternity Leave", PAT: "Paternity Leave", SANS_SOLDE: "Leave Without Pay" }
@@ -234,7 +236,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
         // F5 — État d'erreur explicite. Pas de défauts silencieux (22/15).
         <Card className="rounded-xl shadow-sm border-red-200 bg-red-50">
           <CardContent className="p-4 text-sm text-red-700">
-            Impossible de charger vos soldes de congés. Contactez votre RH.
+            {t('sal.conges.soldesErreur', locale)}
           </CardContent>
         </Card>
       ) : (
@@ -250,15 +252,15 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
               </div>
               <div>
                 <p className="text-2xl font-bold" style={{ color: NAVY }}>{alRemaining}<span className="text-sm font-normal text-gray-400">j</span></p>
-                <p className="text-xs text-gray-500 mt-0.5">Local Leave restants / {alDroit}j</p>
+                <p className="text-xs text-gray-500 mt-0.5">{t('sal.conges.localLeaveRestants', locale)} / {alDroit}j</p>
               </div>
               <Progress value={alPct} className="h-2 rounded-full" style={{ backgroundColor: `${GREEN}20` }} />
               {(alImposeSociete > 0 || alPris > 0) && (
                 <div className="flex items-center justify-between text-[10px] text-gray-500 pt-1 border-t border-gray-100">
-                  <span>Pris: <strong className="text-gray-700">{alPris}j</strong></span>
-                  <span>· Moi: <strong className="text-gray-700">{alImposeEmploye}j</strong></span>
+                  <span>{t('sal.conges.pris', locale)} <strong className="text-gray-700">{alPris}j</strong></span>
+                  <span>· {t('sal.conges.moi', locale)} <strong className="text-gray-700">{alImposeEmploye}j</strong></span>
                   {alImposeSociete > 0 && (
-                    <span>· <span className="text-amber-700">Imposé: <strong>{alImposeSociete}j</strong></span></span>
+                    <span>· <span className="text-amber-700">{t('sal.conges.impose', locale)} <strong>{alImposeSociete}j</strong></span></span>
                   )}
                 </div>
               )}
@@ -274,13 +276,13 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
               </div>
               <div>
                 <p className="text-2xl font-bold" style={{ color: NAVY }}>{slRemaining}<span className="text-sm font-normal text-gray-400">j</span></p>
-                <p className="text-xs text-gray-500 mt-0.5">Sick Leave restants / {slDroit}j</p>
+                <p className="text-xs text-gray-500 mt-0.5">{t('sal.conges.sickLeaveRestants', locale)} / {slDroit}j</p>
               </div>
               <Progress value={slPct} className="h-2 rounded-full" style={{ backgroundColor: "#f9731620" }} />
             </CardContent>
           </Card>
         </div>
-        <p className="text-[11px] text-center text-gray-500">Période : {periodeLabel}</p>
+        <p className="text-[11px] text-center text-gray-500">{t('sal.conges.periode', locale)} {periodeLabel}</p>
         <EligibiliteBannerConges
           status={eligibilityStatus}
           eligibilityDate={balances?.eligibility_date ?? null}
@@ -301,13 +303,13 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
       )}
 
       <Card className={`rounded-xl shadow-sm ${!canFillForm ? "opacity-60" : ""}`}>
-        <CardHeader><CardTitle className="text-xl md:text-base" style={{ color: NAVY }}>Nouvelle demande</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-xl md:text-base" style={{ color: NAVY }}>{t('sal.conges.nouvelleDemande', locale)}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {success && <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700"><CheckCircle className="h-4 w-4" />{success}</div>}
           {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>}
 
           <div>
-            <Label className="text-sm font-medium mb-2 block">Type de conge</Label>
+            <Label className="text-sm font-medium mb-2 block">{t('sal.conges.typeConge', locale)}</Label>
             <div className="flex flex-wrap gap-2">
               {([
                 { value: "AL", label: "Local Leave", color: GREEN },
@@ -318,7 +320,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                   : []),
                 { value: "MAT", label: "Maternity", color: "#8b5cf6" },
                 { value: "PAT", label: "Paternity", color: BLUE },
-                { value: "SANS_SOLDE", label: "Sans solde", color: "#6b7280" },
+                { value: "SANS_SOLDE", label: t('sal.conges.sansSolde', locale), color: "#6b7280" },
               ]).map(opt => (
                 <button key={opt.value} onClick={() => setTypeConge(opt.value)}
                   disabled={soldesMissing}
@@ -346,7 +348,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                   }}
                   className="h-4 w-4 rounded"
                 />
-                Demi-journée (0,5 jour)
+                {t('sal.conges.demiJournee', locale)}
               </label>
               {demiJournee && (
                 <div className="pl-6 flex items-center gap-4">
@@ -359,7 +361,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                       checked={matinOuApresMidi === 'matin'}
                       onChange={() => setMatinOuApresMidi('matin')}
                     />
-                    Matin (AM)
+                    {t('sal.conges.matin', locale)}
                   </label>
                   <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                     <input
@@ -370,7 +372,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                       checked={matinOuApresMidi === 'apres_midi'}
                       onChange={() => setMatinOuApresMidi('apres_midi')}
                     />
-                    Après-midi (PM)
+                    {t('sal.conges.apresMidi', locale)}
                   </label>
                 </div>
               )}
@@ -379,7 +381,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>Date debut</Label>
+              <Label>{t('sal.conges.dateDebut', locale)}</Label>
               <Input
                 type="date"
                 value={dateDebut}
@@ -392,7 +394,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
               />
             </div>
             <div>
-              <Label>Date fin {demiJournee && <span className="text-[10px] text-gray-400">(même date que début)</span>}</Label>
+              <Label>{t('sal.conges.dateFin', locale)} {demiJournee && <span className="text-[10px] text-gray-400">{t('sal.conges.memeDate', locale)}</span>}</Label>
               <Input
                 type="date"
                 value={demiJournee ? dateDebut : dateFin}
@@ -404,13 +406,13 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
           </div>
 
           <div>
-            <Label>Motif (optionnel)</Label>
-            <Textarea value={motif} onChange={e => setMotif(e.target.value)} disabled={!canFillForm} placeholder="Raison de la demande..." rows={3} className="rounded-xl" />
+            <Label>{t('sal.conges.motifOptionnel', locale)}</Label>
+            <Textarea value={motif} onChange={e => setMotif(e.target.value)} disabled={!canFillForm} placeholder={t('sal.conges.motifPlaceholder', locale)} rows={3} className="rounded-xl" />
           </div>
 
           {needsCertificat && (
             <div>
-              <Label>Certificat médical (PDF/image)</Label>
+              <Label>{t('sal.conges.certificatLabel', locale)}</Label>
               <div
                 className={`mt-1 border-2 border-dashed rounded-lg p-6 text-center transition-colors ${dragOver ? "border-blue-400 bg-blue-50" : "border-gray-300"}`}
                 onDragOver={e => { e.preventDefault(); setDragOver(true) }}
@@ -426,7 +428,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                 ) : (
                   <div>
                     <Upload className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500">Glissez-déposez ou <label className="text-blue-600 cursor-pointer hover:underline">parcourir<input type="file" className="hidden" accept=".pdf,image/*" onChange={e => { if (e.target.files?.[0]) setFile(e.target.files[0]) }} /></label></p>
+                    <p className="text-sm text-gray-500">{t('sal.conges.glissezDeposez', locale)} <label className="text-blue-600 cursor-pointer hover:underline">{t('sal.conges.parcourir', locale)}<input type="file" className="hidden" accept=".pdf,image/*" onChange={e => { if (e.target.files?.[0]) setFile(e.target.files[0]) }} /></label></p>
                   </div>
                 )}
               </div>
@@ -436,35 +438,35 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
           <Button
             onClick={handleSubmit}
             disabled={submitting || !canFillForm}
-            title={!canFillForm ? `Vous n'êtes pas encore éligible à ce type de congé (${requiresAnciennete ? '6 mois d\'ancienneté minimum requis pour Local Leave / Vacation Leave' : 'soldes non chargés'})` : undefined}
+            title={!canFillForm ? `${t('sal.conges.nonEligibleTitre', locale)} (${requiresAnciennete ? t('sal.conges.nonEligibleAnciennete', locale) : t('sal.conges.nonEligibleSoldes', locale)})` : undefined}
             style={{ backgroundColor: NAVY }}
             className="w-full md:w-auto h-12 md:h-10 rounded-xl text-white text-base md:text-sm transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed"
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CalendarPlus className="h-4 w-4 mr-2" />}
-            Soumettre la demande
+            {t('sal.conges.soumettre', locale)}
           </Button>
         </CardContent>
       </Card>
 
       <Card className="rounded-xl shadow-sm">
-        <CardHeader><CardTitle className="text-xl md:text-base" style={{ color: NAVY }}>Historique</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-xl md:text-base" style={{ color: NAVY }}>{t('sal.conges.historique', locale)}</CardTitle></CardHeader>
         <CardContent>
           {loadingH ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
           ) : history.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">Aucune demande de conge</p>
+            <p className="text-gray-400 text-center py-8">{t('sal.conges.aucuneDemande', locale)}</p>
           ) : (
             <>
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-gray-500">
-                      <th className="pb-2 pr-3">Type</th>
-                      <th className="pb-2 pr-3">Dates</th>
-                      <th className="pb-2 pr-3">Jours</th>
-                      <th className="pb-2 pr-3">Statut</th>
-                      <th className="pb-2 pr-3">Motif</th>
-                      <th className="pb-2 text-right">Actions</th>
+                      <th className="pb-2 pr-3">{t('sal.conges.thType', locale)}</th>
+                      <th className="pb-2 pr-3">{t('sal.conges.thDates', locale)}</th>
+                      <th className="pb-2 pr-3">{t('sal.conges.thJours', locale)}</th>
+                      <th className="pb-2 pr-3">{t('sal.conges.thStatut', locale)}</th>
+                      <th className="pb-2 pr-3">{t('sal.conges.thMotif', locale)}</th>
+                      <th className="pb-2 text-right">{t('sal.conges.thActions', locale)}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -486,8 +488,8 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                                 </span>
                               )}
                               {c.impose_par_societe && (
-                                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title="Imposé par la société">
-                                  Imposé
+                                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200" title={t('sal.conges.imposeParSociete', locale)}>
+                                  {t('sal.conges.impose2', locale)}
                                 </span>
                               )}
                             </div>
@@ -508,7 +510,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                                 {cancellingId === c.id
                                   ? <Loader2 className="h-3 w-3 animate-spin" />
                                   : <X className="h-3 w-3" />}
-                                Annuler
+                                {t('sal.conges.annuler', locale)}
                               </button>
                             )}
                           </td>
@@ -537,7 +539,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                             </span>
                           )}
                           {c.impose_par_societe && (
-                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">Imposé</span>
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">{t('sal.conges.impose2', locale)}</span>
                           )}
                         </div>
                         {statutBadge(c.statut || c.status || "en_attente")}
@@ -557,7 +559,7 @@ export function CongesTab({ employe, onRefresh }: { employe: any; onRefresh: () 
                           {cancellingId === c.id
                             ? <Loader2 className="h-3 w-3 animate-spin" />
                             : <X className="h-3 w-3" />}
-                          Annuler
+                          {t('sal.conges.annuler', locale)}
                         </button>
                       )}
                     </div>

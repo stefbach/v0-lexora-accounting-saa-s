@@ -1,6 +1,7 @@
 "use client"
 import React, { useEffect, useState } from "react"
-import { Mail, FileText, Loader2, Copy, CheckCircle, Download, Sparkles, AlertCircle, Wand2, Scale } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Mail, FileText, Loader2, Copy, CheckCircle, Download, Sparkles, AlertCircle, Wand2, Scale, ArrowLeft } from "lucide-react"
 import { ClientPageShell } from "@/components/layout/ClientPageShell"
 import { RefineChat } from "@/components/juridique/RefineChat"
 
@@ -29,6 +30,7 @@ const EXEMPLES = [
 ]
 
 export default function AssistantRedactionPage() {
+  const router = useRouter()
   const [mode, setMode] = useState<'email' | 'courrier'>('email')
   const [brief, setBrief] = useState("")
   const [domaine, setDomaine] = useState('general')
@@ -124,6 +126,14 @@ export default function AssistantRedactionPage() {
         <div className="max-w-5xl mx-auto">
           {/* En-tête */}
           <div className="flex items-center gap-3 mb-5">
+            <button
+              onClick={() => router.back()}
+              aria-label="Retour"
+              title="Retour"
+              className="w-11 h-11 rounded-xl flex items-center justify-center border border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-[#0B0F2E] transition-all shrink-0"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
             <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: NAVY }}>
               <Wand2 className="w-5 h-5" style={{ color: GOLD }} />
             </div>

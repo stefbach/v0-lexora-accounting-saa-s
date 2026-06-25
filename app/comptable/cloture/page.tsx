@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { getCurrentExercice } from "@/lib/fiscal-years"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,8 +41,8 @@ export default function CloturePage() {
   const [societes, setSocietes] = useState<Societe[]>([])
   const [societeId, setSocieteId] = useState<string>("")
   const [periode, setPeriode] = useState<string>(() => new Date().toISOString().slice(0, 7))
-  const [exercice, setExercice] = useState<string>("2025-2026")
-  const [dateCloture, setDateCloture] = useState<string>("2026-06-30")
+  const [exercice, setExercice] = useState<string>(getCurrentExercice())
+  const [dateCloture, setDateCloture] = useState<string>(`${getCurrentExercice().split('-')[1]}-06-30`)
   const [tauxEUR, setTauxEUR] = useState<string>("54.50")
   const [tauxUSD, setTauxUSD] = useState<string>("45.20")
   const [tauxGBP, setTauxGBP] = useState<string>("65.10")

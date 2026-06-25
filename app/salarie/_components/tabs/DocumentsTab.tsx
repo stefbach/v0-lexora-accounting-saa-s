@@ -12,6 +12,7 @@ import {
   Upload, Paperclip, Eye, Inbox, Send,
 } from "lucide-react"
 import { NAVY, GOLD, BLUE, GREEN } from "../shared/constants"
+import { t, getLocale } from "@/lib/i18n"
 import {
   CATEGORIE_LABELS, EXTENSIONS_LISIBLES, TAILLE_MAX_OCTETS,
   formaterTaille, getIconeMimeType, validerFichier,
@@ -33,6 +34,7 @@ type SalarieDocument = {
 
 // DOC1 — Documents RH bidirectionnels + upload côté salarié.
 export function DocumentsTab({ employe: _employe }: { employe: any }) {
+  const locale = getLocale()
   const [docs, setDocs] = useState<SalarieDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -53,13 +55,13 @@ export function DocumentsTab({ employe: _employe }: { employe: any }) {
         const data = await res.json()
         if (cancelled) return
         if (!res.ok) {
-          setError(data.error || "Impossible de charger les documents")
+          setError(data.error || t('sal.documents.loadError', locale))
           setDocs([])
         } else {
           setDocs(data.documents || [])
         }
       } catch {
-        if (!cancelled) setError("Erreur réseau")
+        if (!cancelled) setError(t('sal.documents.networkError', locale))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -93,10 +95,10 @@ export function DocumentsTab({ employe: _employe }: { employe: any }) {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
             <Paperclip className="h-4 w-4" style={{ color: GOLD }} />
-            Documents RH
+            {t('sal.documents.title', locale)}
             {recusNonLus > 0 && (
               <Badge className="bg-red-500 text-white text-[10px] h-5">
-                {recusNonLus} non lu{recusNonLus > 1 ? 's' : ''}
+                {recusNonLus} {recusNonLus > 1 ? t('sal.documents.unreadPlural', locale) : t('sal.documents.unreadSingular', locale)}
               </Badge>
             )}
           </CardTitle>
@@ -104,7 +106,7 @@ export function DocumentsTab({ employe: _employe }: { employe: any }) {
             size="sm" className="text-white" style={{ backgroundColor: NAVY }}
             onClick={() => setUploadOpen(true)}
           >
-            <Upload className="h-3.5 w-3.5 mr-1.5" /> Envoyer un document
+            <Upload className="h-3.5 w-3.5 mr-1.5" /> {t('sal.documents.send', locale)}
           </Button>
         </CardHeader>
         <CardContent>
@@ -115,10 +117,10 @@ export function DocumentsTab({ employe: _employe }: { employe: any }) {
               {/* Reçus du RH */}
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5">
-                  <Inbox className="h-3.5 w-3.5" /> Reçus du RH ({recus.length})
+                  <Inbox className="h-3.5 w-3.5" /> {t('sal.documents.receivedFromHr', locale)} ({recus.length})
                 </p>
                 {recus.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">Aucun document reçu.</p>
+                  <p className="text-xs text-gray-400 italic">{t('sal.documents.noneReceived', locale)}</p>
                 ) : (
                   <div className="space-y-2">
                     {recus.map(d => <DocRhRow key={d.id} doc={d} onChange={() => setRefreshTick(t => t + 1)} />)}
@@ -129,10 +131,10 @@ export function DocumentsTab({ employe: _employe }: { employe: any }) {
               {/* Mes envois */}
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1.5">
-                  <Send className="h-3.5 w-3.5" /> Mes envois ({envois.length})
+                  <Send className="h-3.5 w-3.5" /> {t('sal.documents.mySends', locale)} ({envois.length})
                 </p>
                 {envois.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">Aucun document envoyé.</p>
+                  <p className="text-xs text-gray-400 italic">{t('sal.documents.noneSent', locale)}</p>
                 ) : (
                   <div className="space-y-2">
                     {envois.map(d => <DocRhRow key={d.id} doc={d} onChange={() => setRefreshTick(t => t + 1)} />)}
@@ -149,7 +151,7 @@ export function DocumentsTab({ employe: _employe }: { employe: any }) {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2" style={{ color: NAVY }}>
             <FolderOpen className="h-4 w-4" style={{ color: GOLD }} />
-            Mes documents officiels
+            {t('sal.documents.officialDocs', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -158,13 +160,13 @@ export function DocumentsTab({ employe: _employe }: { employe: any }) {
           ) : error ? (
             <p className="text-sm text-red-600 text-center py-8">{error}</p>
           ) : docs.length === 0 ? (
-            <p className="text-gray-400 text-center py-8 text-sm">Aucun document disponible.</p>
+            <p className="text-gray-400 text-center py-8 text-sm">{t('sal.documents.noneAvailable', locale)}</p>
           ) : (
             <div className="space-y-5">
               {contrats.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-2">
-                    <ShieldCheck className="h-3.5 w-3.5" style={{ color: GREEN }} /> Contrats
+                    <ShieldCheck className="h-3.5 w-3.5" style={{ color: GREEN }} /> {t('sal.documents.contracts', locale)}
                   </p>
                   <div className="space-y-2">
                     {contrats.map(d => <DocumentRow key={d.id} doc={d} />)}
@@ -174,7 +176,7 @@ export function DocumentsTab({ employe: _employe }: { employe: any }) {
               {bulletins.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-2">
-                    <CreditCard className="h-3.5 w-3.5" style={{ color: BLUE }} /> Bulletins de paie
+                    <CreditCard className="h-3.5 w-3.5" style={{ color: BLUE }} /> {t('sal.documents.payslips', locale)}
                   </p>
                   <div className="space-y-2">
                     {bulletins.map(d => <DocumentRow key={d.id} doc={d} />)}
@@ -197,6 +199,7 @@ export function DocumentsTab({ employe: _employe }: { employe: any }) {
 
 // ─── Ligne document RH (DOC1) ────────────────────────────────────────
 function DocRhRow({ doc, onChange }: { doc: DocumentRH; onChange: () => void }) {
+  const locale = getLocale()
   const [downloading, setDownloading] = useState(false)
   const icon = getIconeMimeType(doc.mime_type)
   const isIncoming = doc.direction === 'rh_vers_employe'
@@ -209,7 +212,7 @@ function DocRhRow({ doc, onChange }: { doc: DocumentRH; onChange: () => void }) 
       const res = await fetch(`/api/documents-rh/${doc.id}/url`)
       const data = await res.json()
       if (!res.ok || !data?.url) {
-        alert(data?.error || 'URL indisponible')
+        alert(data?.error || t('sal.documents.urlUnavailable', locale))
         return
       }
       window.open(data.url, '_blank')
@@ -236,16 +239,16 @@ function DocRhRow({ doc, onChange }: { doc: DocumentRH; onChange: () => void }) 
           <span>{formaterTaille(doc.taille_octets)}</span>
           <span>· {new Date(doc.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
           {doc.lien_demande_conge_id && (
-            <span className="italic">· lié à une demande</span>
+            <span className="italic">· {t('sal.documents.linkedToRequest', locale)}</span>
           )}
           {nonLu && (
-            <Badge className="bg-red-500 text-white text-[10px] py-0 px-1.5">Nouveau</Badge>
+            <Badge className="bg-red-500 text-white text-[10px] py-0 px-1.5">{t('sal.documents.new', locale)}</Badge>
           )}
         </div>
       </div>
       <Button size="sm" variant="outline" className="shrink-0 text-xs h-8" onClick={voir} disabled={downloading}>
         {downloading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
-        Voir
+        {t('sal.documents.view', locale)}
       </Button>
     </div>
   )
@@ -259,6 +262,7 @@ function UploadModal({
   onOpenChange: (v: boolean) => void
   onUploaded: () => void
 }) {
+  const locale = getLocale()
   const [file, setFile] = useState<File | null>(null)
   const [categorie, setCategorie] = useState<DocumentCategorie>('certificat_medical')
   const [description, setDescription] = useState("")
@@ -288,9 +292,9 @@ function UploadModal({
 
   const submit = async () => {
     setErreur(null)
-    if (!file) { setErreur('Aucun fichier sélectionné.'); return }
+    if (!file) { setErreur(t('sal.documents.noFileSelected', locale)); return }
     const v = validerFichier(file)
-    if (!v.valide) { setErreur(v.erreur || 'Fichier invalide'); return }
+    if (!v.valide) { setErreur(v.erreur || t('sal.documents.invalidFile', locale)); return }
 
     setSubmitting(true)
     try {
@@ -304,14 +308,14 @@ function UploadModal({
       const res = await fetch('/api/documents-rh/upload', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) {
-        setErreur(data?.error || `Erreur ${res.status}`)
+        setErreur(data?.error || `${t('sal.documents.errorPrefix', locale)} ${res.status}`)
         return
       }
       onUploaded()
       reset()
       onOpenChange(false)
     } catch (e: any) {
-      setErreur(e?.message || 'Erreur réseau')
+      setErreur(e?.message || t('sal.documents.networkError', locale))
     } finally {
       setSubmitting(false)
     }
@@ -321,32 +325,32 @@ function UploadModal({
     <Dialog open={open} onOpenChange={v => { if (!v) reset(); onOpenChange(v) }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle style={{ color: NAVY }}>Envoyer un document au RH</DialogTitle>
+          <DialogTitle style={{ color: NAVY }}>{t('sal.documents.uploadTitle', locale)}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
           <div>
-            <Label className="text-sm">Catégorie</Label>
+            <Label className="text-sm">{t('sal.documents.category', locale)}</Label>
             <Select value={categorie} onValueChange={v => setCategorie(v as DocumentCategorie)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="certificat_medical">Certificat médical</SelectItem>
-                <SelectItem value="justificatif_conge">Justificatif congé</SelectItem>
-                <SelectItem value="piece_identite">Pièce d&apos;identité</SelectItem>
-                <SelectItem value="autre">Autre</SelectItem>
+                <SelectItem value="certificat_medical">{t('sal.documents.catMedical', locale)}</SelectItem>
+                <SelectItem value="justificatif_conge">{t('sal.documents.catLeaveProof', locale)}</SelectItem>
+                <SelectItem value="piece_identite">{t('sal.documents.catId', locale)}</SelectItem>
+                <SelectItem value="autre">{t('sal.documents.catOther', locale)}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
-            <Label className="text-sm">Description (optionnel)</Label>
-            <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Ex: Certificat pour SL 15-18 avril" />
+            <Label className="text-sm">{t('sal.documents.description', locale)}</Label>
+            <Input value={description} onChange={e => setDescription(e.target.value)} placeholder={t('sal.documents.descriptionPlaceholder', locale)} />
           </div>
           {demandes.length > 0 && (
             <div>
-              <Label className="text-sm">Lier à une demande de congé (optionnel)</Label>
+              <Label className="text-sm">{t('sal.documents.linkToLeave', locale)}</Label>
               <Select value={lienDemandeId} onValueChange={setLienDemandeId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">— Aucune liaison —</SelectItem>
+                  <SelectItem value="none">{t('sal.documents.noLink', locale)}</SelectItem>
                   {demandes.map(d => (
                     <SelectItem key={d.id} value={d.id}>
                       {d.type_conge} · {d.date_debut}
@@ -357,14 +361,14 @@ function UploadModal({
             </div>
           )}
           <div>
-            <Label className="text-sm">Fichier</Label>
+            <Label className="text-sm">{t('sal.documents.file', locale)}</Label>
             <Input
               type="file"
               accept={EXTENSIONS_LISIBLES.replace(/\s/g, '')}
               onChange={e => setFile(e.target.files?.[0] || null)}
             />
             <p className="text-[11px] text-gray-400 mt-1">
-              Max {formaterTaille(TAILLE_MAX_OCTETS)}. Acceptés : {EXTENSIONS_LISIBLES}.
+              {t('sal.documents.max', locale)} {formaterTaille(TAILLE_MAX_OCTETS)}. {t('sal.documents.accepted', locale)} {EXTENSIONS_LISIBLES}.
             </p>
             {file && (
               <p className="text-xs text-gray-600 mt-1">
@@ -377,10 +381,10 @@ function UploadModal({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('sal.documents.cancel', locale)}</Button>
           <Button onClick={submit} disabled={submitting || !file} style={{ backgroundColor: NAVY, color: 'white' }}>
             {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Envoyer
+            {t('sal.documents.submit', locale)}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -389,16 +393,17 @@ function UploadModal({
 }
 
 function DocumentRow({ doc }: { doc: SalarieDocument }) {
+  const locale = getLocale()
   const icon = doc.categorie === 'contrat'
     ? <FileText className="h-4 w-4" style={{ color: GREEN }} />
     : <CreditCard className="h-4 w-4" style={{ color: BLUE }} />
   const accent = doc.categorie === 'contrat' ? GREEN : BLUE
   const statutLabel: Record<string, string> = {
-    signe: "Signé ✓✓",
-    signe_employe: "En attente employeur",
-    valide: "Validé",
-    paye: "Payé",
-    declare_mra: "Déclaré MRA",
+    signe: `${t('sal.documents.statutSigne', locale)} ✓✓`,
+    signe_employe: t('sal.documents.statutSigneEmploye', locale),
+    valide: t('sal.documents.statutValide', locale),
+    paye: t('sal.documents.statutPaye', locale),
+    declare_mra: t('sal.documents.statutDeclareMra', locale),
   }
   return (
     <div className="flex items-center gap-3 p-3 rounded-xl border bg-white" style={{ borderLeft: `3px solid ${accent}` }}>

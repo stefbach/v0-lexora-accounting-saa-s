@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Calendar, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { NAVY, GOLD, BLUE } from "../shared/constants"
+import { t, getLocale } from "@/lib/i18n"
 
 // Sprint salarie V2.3 — ajout du sélecteur de mois (prev/next +
 // dropdown "mois en cours"). Sprint V2.4 — passe ?merge_leaves=1 à
@@ -27,6 +28,7 @@ function currentPeriode(): string {
 }
 
 export function PlanningTab({ employe }: { employe: any }) {
+  const locale = getLocale()
   const [periode, setPeriode] = useState<string>(currentPeriode())
   const [rawPlanning, setRawPlanning] = useState<any[]>([])
   const [rawLeaves, setRawLeaves] = useState<any[]>([])
@@ -73,7 +75,7 @@ export function PlanningTab({ employe }: { employe: any }) {
   // l'employé reste marqué travaillant le jour férié. Si le jour est en
   // repos, on affiche "Férié" au lieu d'un simple "Repos".
   const planning = useMemo(() => {
-    const leaveLabels: Record<string, string> = { AL: "Local Leave", SL: "Sick Leave", MAT: "Maternité", PAT: "Paternité", SANS_SOLDE: "Sans solde" }
+    const leaveLabels: Record<string, string> = { AL: "Local Leave", SL: "Sick Leave", MAT: t('sal.planning.maternity', locale), PAT: t('sal.planning.paternity', locale), SANS_SOLDE: t('sal.planning.unpaid', locale) }
 
     // 1. Congés approuvés → map jour → type
     const leaveDays = new Map<number, string>()
@@ -95,7 +97,7 @@ export function PlanningTab({ employe }: { employe: any }) {
       if (!dStr.startsWith(periode)) continue
       if (employe.societe_id && jf.societe_id && jf.societe_id !== employe.societe_id) continue
       const day = parseInt(dStr.slice(8, 10), 10)
-      if (day >= 1 && day <= 31) ferieDays.set(day, jf.libelle || "Jour férié")
+      if (day >= 1 && day <= 31) ferieDays.set(day, jf.libelle || t('sal.planning.public_holiday', locale))
     }
 
     // 3. Index des lignes planning par jour
@@ -109,14 +111,14 @@ export function PlanningTab({ employe }: { employe: any }) {
     //    idempotent, et garantit la présence des jours sans ligne planning)
     for (const [d, lt] of leaveDays) {
       const base = byDay.get(d) || { employe_id: employe.id, jour: d }
-      byDay.set(d, { ...base, shift: leaveLabels[lt] || "Congé", leave_type: lt, est_repos: false, heure_debut: null, heure_fin: null, heures_prevues: 0 })
+      byDay.set(d, { ...base, shift: leaveLabels[lt] || t('sal.planning.leave', locale), leave_type: lt, est_repos: false, heure_debut: null, heure_fin: null, heures_prevues: 0 })
     }
 
     // 5. Annoter les jours fériés (ne JAMAIS effacer le shift)
     for (const [d, lbl] of ferieDays) {
       const base = byDay.get(d)
       if (base) byDay.set(d, { ...base, ferie: true, ferie_label: lbl })
-      else byDay.set(d, { employe_id: employe.id, jour: d, shift: "Repos", est_repos: true, ferie: true, ferie_label: lbl })
+      else byDay.set(d, { employe_id: employe.id, jour: d, shift: t('sal.planning.rest', locale), est_repos: true, ferie: true, ferie_label: lbl })
     }
 
     return Array.from(byDay.values())
@@ -166,32 +168,32 @@ export function PlanningTab({ employe }: { employe: any }) {
           </Button>
           {!isCurrentMonth && (
             <Button variant="ghost" size="sm" onClick={() => setPeriode(currentPeriode())} className="text-xs">
-              Mois en cours
+              {t('sal.planning.current_month', locale)}
             </Button>
           )}
         </div>
         <div className="flex gap-2">
-          <Badge className="text-xs px-2 py-1" style={{ backgroundColor: `${BLUE}15`, color: BLUE }}>{workDays.length}j travail</Badge>
-          <Badge className="text-xs px-2 py-1 bg-gray-100 text-gray-500">{reposDays.length}j repos</Badge>
+          <Badge className="text-xs px-2 py-1" style={{ backgroundColor: `${BLUE}15`, color: BLUE }}>{workDays.length + "j " + t('sal.planning.work_short', locale)}</Badge>
+          <Badge className="text-xs px-2 py-1 bg-gray-100 text-gray-500">{reposDays.length + "j " + t('sal.planning.rest_short', locale)}</Badge>
         </div>
       </div>
 
       <div className="grid grid-cols-4 gap-2">
         <div className="rounded-2xl p-3 text-center" style={{ backgroundColor: `${BLUE}10` }}>
           <p className="text-xl font-bold" style={{ color: BLUE }}>{workDays.length}</p>
-          <p className="text-[10px] text-gray-500">Travail</p>
+          <p className="text-[10px] text-gray-500">{t('sal.planning.work', locale)}</p>
         </div>
         <div className="rounded-2xl p-3 text-center" style={{ backgroundColor: `${GOLD}10` }}>
           <p className="text-xl font-bold" style={{ color: GOLD }}>{totalHours}h</p>
-          <p className="text-[10px] text-gray-500">Heures</p>
+          <p className="text-[10px] text-gray-500">{t('sal.planning.hours', locale)}</p>
         </div>
         <div className="rounded-2xl p-3 text-center" style={{ backgroundColor: "#3b82f610" }}>
           <p className="text-xl font-bold text-blue-600">{leaveDaysCount.length}</p>
-          <p className="text-[10px] text-gray-500">Congés</p>
+          <p className="text-[10px] text-gray-500">{t('sal.planning.leaves', locale)}</p>
         </div>
         <div className="rounded-2xl p-3 text-center bg-gray-50">
           <p className="text-xl font-bold text-gray-400">{reposDays.length}</p>
-          <p className="text-[10px] text-gray-500">Repos</p>
+          <p className="text-[10px] text-gray-500">{t('sal.planning.rest', locale)}</p>
         </div>
       </div>
 
@@ -205,8 +207,8 @@ export function PlanningTab({ employe }: { employe: any }) {
         <Card className="rounded-2xl">
           <CardContent className="py-12 text-center">
             <Calendar className="h-12 w-12 mx-auto text-gray-200 mb-4" />
-            <p className="text-gray-400 font-medium">Aucun planning publié</p>
-            <p className="text-xs text-gray-300 mt-1">Le planning sera visible une fois publié par le RH</p>
+            <p className="text-gray-400 font-medium">{t('sal.planning.none_published', locale)}</p>
+            <p className="text-xs text-gray-300 mt-1">{t('sal.planning.none_published_hint', locale)}</p>
           </CardContent>
         </Card>
       ) : (
@@ -250,26 +252,26 @@ export function PlanningTab({ employe }: { employe: any }) {
                     isFerie ? (
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm">🎌</span>
-                        <p className="text-sm font-semibold text-amber-700">Férié — {p.ferie_label}</p>
+                        <p className="text-sm font-semibold text-amber-700">{t('sal.planning.holiday_prefix', locale)}{p.ferie_label}</p>
                       </div>
                     ) : (
-                      <p className="text-sm font-medium text-gray-400">Repos</p>
+                      <p className="text-sm font-medium text-gray-400">{t('sal.planning.rest', locale)}</p>
                     )
                   ) : isLeave ? (
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm">{style?.icon}</span>
                       <p className="text-sm font-semibold" style={{ color: style?.text }}>{p.shift}</p>
                       {isFerie && (
-                        <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">Férié</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">{t('sal.planning.holiday_badge', locale)}</span>
                       )}
                     </div>
                   ) : (
                     <>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm">{style?.icon}</span>
-                        <p className="text-sm font-semibold" style={{ color: style?.text }}>{p.shift || "Travail"}</p>
+                        <p className="text-sm font-semibold" style={{ color: style?.text }}>{p.shift || t('sal.planning.work', locale)}</p>
                         {isFerie && (
-                          <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200" title={p.ferie_label}>Férié</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200" title={p.ferie_label}>{t('sal.planning.holiday_badge', locale)}</span>
                         )}
                       </div>
                       {p.heure_debut && (
@@ -278,7 +280,7 @@ export function PlanningTab({ employe }: { employe: any }) {
                         </p>
                       )}
                       {isFerie && (
-                        <p className="text-[11px] text-amber-700 mt-0.5">{p.ferie_label} — jour travaillé</p>
+                        <p className="text-[11px] text-amber-700 mt-0.5">{p.ferie_label}{t('sal.planning.worked_day_suffix', locale)}</p>
                       )}
                     </>
                   )}

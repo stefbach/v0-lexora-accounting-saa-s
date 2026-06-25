@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { SalarieSidebar } from "@/components/layout/SalarieSidebar"
+import { FloatingPageHelp } from "@/components/help/FloatingPageHelp"
 
 /**
  * Layout for the Espace Salarié (employee self-service portal).
@@ -60,6 +61,7 @@ export default async function SalarieLayout({ children }: { children: React.Reac
     <div className="flex min-h-screen bg-gray-50">
       <SalarieSidebar />
       <main className="flex-1 overflow-auto md:ml-60">{children}</main>
+      <FloatingPageHelp />
     </div>
   )
 }

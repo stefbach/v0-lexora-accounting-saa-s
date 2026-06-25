@@ -181,7 +181,25 @@ export default function TVAPage() {
   const tvaRecords: any[] = data?.tvaRecords ?? []
   const invoices: any[] = data?.extractedInvoices ?? []
   const factures: any[] = data?.factures ?? []
-  const creditReporte = 0
+
+  // Crédit TVA reporté (Box 5 MRA VAT3) = excédent de taxe déductible de la
+  // période précédente. Reconstruit depuis tva_mensuelle : si le net de la
+  // période N-1 (collectée − déductible − crédit déjà reporté) est négatif,
+  // sa valeur absolue se reporte sur la période courante. La colonne tva_nette
+  // étant tronquée à max(0) en base, on recalcule le net réel à partir des
+  // totaux persistés pour ne pas perdre la magnitude du crédit.
+  const currentPeriodStart = periodMode === "mensuel" ? selectedMonth : getPeriodDates().debut.slice(0, 7)
+  const prevTvaRecord = tvaRecords
+    .filter((r: any) => typeof r.periode === "string" && r.periode < currentPeriodStart)
+    .sort((a: any, b: any) => String(b.periode).localeCompare(String(a.periode)))[0]
+  const creditReporte = (() => {
+    if (!prevTvaRecord) return 0
+    const prevNet =
+      (Number(prevTvaRecord.tva_collectee) || 0) -
+      (Number(prevTvaRecord.tva_deductible) || 0) -
+      (Number(prevTvaRecord.credit_reporte) || 0)
+    return prevNet < 0 ? Math.round(Math.abs(prevNet) * 100) / 100 : 0
+  })()
 
   // Helper : convertit un montant HT en MUR. Préférence à `montant_mur` qui
   // est déjà calculé à l'OCR (taux du jour). Sinon recalcule via taux_change.

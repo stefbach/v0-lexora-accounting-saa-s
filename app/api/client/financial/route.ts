@@ -312,7 +312,10 @@ export async function GET(request: Request) {
       supabase.from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at, societe_detectee')
         .in('dossier_id', dossierIds).eq('statut', 'traite').order('created_at', { ascending: false }),
       supabase.from('comptes_bancaires').select('*').in('societe_id', societeIds).eq('actif', true),
-      supabase.from('tva_mensuelle').select('*').in('societe_id', societeIds).order('periode', { ascending: false }),
+      // Fenêtre bornée (24 dernières périodes) : couvre l'historique utile au
+      // report de crédit TVA d'une période sur l'autre sans charger tous les
+      // exercices. Le report à nouveau lit la période N-1 dans cette liste.
+      supabase.from('tva_mensuelle').select('*').in('societe_id', societeIds).order('periode', { ascending: false }).limit(24),
       facturesQuery,
       supabase.from('releves_bancaires').select('id, transactions_json, date_debut, date_fin, compte_bancaire_id')
         .in('societe_id', societeIds).is('superseded_by_id', null).order('date_fin', { ascending: false }),

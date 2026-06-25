@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { getAvailableYears } from "@/lib/fiscal-years"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -41,7 +42,7 @@ interface CompteSolde {
   nb_ecritures: number
 }
 
-const ANNEES = ["2023", "2024", "2025", "2026", "2027"]
+const ANNEES = getAvailableYears(3, 1).map(String)
 
 function fmt(n: number): string {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })

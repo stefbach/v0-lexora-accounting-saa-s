@@ -66,9 +66,16 @@ export async function GET(request: Request) {
 
     // ⚠️ V2 ONLY (mig 230). V1 ecritures_comptables est une vue sur V2 — on lit V2 directement.
     // V2 a societe_id directement → on filtre par societe_id (évite la duplication LEFT JOIN dossiers pour sociétés multi-dossiers).
+    // Le seul consommateur des écritures ci-dessous est le calcul TVA borné au
+    // MOIS COURANT — on filtre donc la requête sur ce mois pour éviter de
+    // charger tous les exercices (perf + pas de mélange inter-exercices).
+    const nowForRange = new Date()
+    const monthStart = `${nowForRange.getFullYear()}-${String(nowForRange.getMonth() + 1).padStart(2, '0')}-01`
+    const monthEnd = `${nowForRange.getFullYear()}-${String(nowForRange.getMonth() + 1).padStart(2, '0')}-31`
     const [ecrituresAll, documentsRes, comptesRes] = await Promise.all([
       fetchAllPaginated<any>(() =>
         supabase.from('ecritures_comptables_v2').select('*').in('societe_id', societeIds)
+          .gte('date_ecriture', monthStart).lte('date_ecriture', monthEnd)
           .order('date_ecriture', { ascending: false })
       ),
       supabase.from('documents').select('id, nom_fichier, type_document, statut, n8n_result, created_at, societe_detectee')

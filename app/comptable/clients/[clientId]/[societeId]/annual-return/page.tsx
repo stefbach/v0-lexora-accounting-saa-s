@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
+import { getAvailableYears } from '@/lib/fiscal-years'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -303,7 +304,7 @@ export default function AnnualReturnPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[2023, 2024, 2025, 2026].map(y => (
+              {getAvailableYears(3, 1).map(y => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
             </SelectContent>

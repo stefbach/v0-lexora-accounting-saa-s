@@ -1,5 +1,6 @@
 "use client"
 import type { useRouter } from "next/navigation"
+import { getUpcomingHolidays } from "@/lib/rh/mauritius-holidays"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,6 +17,7 @@ import {
   type VlEligibilityStatus,
 } from "../shared/conges-eligibilite"
 import { useEffect, useState } from "react"
+import { t, getLocale } from "@/lib/i18n"
 
 type Router = ReturnType<typeof useRouter>
 
@@ -35,6 +37,7 @@ export function DashboardTab({
   doPunch: (type: string) => void
   router: Router
 }) {
+  const locale = getLocale()
   const lastBulletin = bulletins.length > 0 ? bulletins[0] : null
   const estimatedNet = lastBulletin?.salaire_net || 0
   const estimatedBase = lastBulletin?.salaire_base || 0
@@ -65,7 +68,7 @@ export function DashboardTab({
   const eligibilityStatus: EligibilityStatus = (conges?.eligibility_status as EligibilityStatus) || "eligible"
   const periodeLabel = formatPeriodeFR(conges?.periode_debut, conges?.periode_fin)
   const notEligibleMessage = eligibilityStatus === "not_eligible"
-    ? `Éligibilité le ${formatDateFR(computeDatePlus6Months(conges?.date_arrivee))} (6 mois d'ancienneté)`
+    ? t('sal.dashboard.eligible_on', locale) + " " + formatDateFR(computeDatePlus6Months(conges?.date_arrivee)) + " " + t('sal.dashboard.seniority_6months', locale)
     : null
 
   // PO1 — résumé sessions du jour (timeline + session en cours pour
@@ -137,7 +140,7 @@ export function DashboardTab({
     const per = lastBulletin.periode || ""
     const mIdx = parseInt(per.slice(5, 7), 10) - 1
     const yr = per.slice(0, 4)
-    notifications.push({ icon: Bell, text: `Bulletin ${MONTH_NAMES_FR[mIdx] || ""} ${yr} disponible`, time: lastBulletin.created_at ? new Date(lastBulletin.created_at).toLocaleDateString("fr-FR") : "" })
+    notifications.push({ icon: Bell, text: t('sal.dashboard.payslip_prefix', locale) + " " + (MONTH_NAMES_FR[mIdx] || "") + " " + yr + " " + t('sal.dashboard.available_suffix', locale), time: lastBulletin.created_at ? new Date(lastBulletin.created_at).toLocaleDateString("fr-FR") : "" })
   }
 
   return (
@@ -150,12 +153,12 @@ export function DashboardTab({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold" style={{ color: NAVY }}>
-                {contratsASigner === 1 ? "Un contrat vous attend" : `${contratsASigner} contrats vous attendent`}
+                {contratsASigner === 1 ? t('sal.dashboard.one_contract_waiting', locale) : contratsASigner + " " + t('sal.dashboard.contracts_waiting', locale)}
               </p>
-              <p className="text-xs text-gray-500">Merci de le{contratsASigner > 1 ? "s" : ""} relire et signer depuis l&apos;onglet « Contrats ».</p>
+              <p className="text-xs text-gray-500">{contratsASigner > 1 ? t('sal.dashboard.review_sign_plural', locale) : t('sal.dashboard.review_sign_singular', locale)}</p>
             </div>
             <Button size="sm" onClick={() => router.push("/salarie#contrats")} style={{ backgroundColor: GOLD, color: NAVY }} className="shrink-0 h-9 font-semibold">
-              Signer
+              {t('sal.dashboard.sign', locale)}
             </Button>
           </CardContent>
         </Card>
@@ -175,23 +178,23 @@ export function DashboardTab({
                 </div>
                 <div className="flex-1 space-y-1 text-sm">
                   <p className="font-semibold text-pink-900">
-                    {g.statut === 'declaree' && 'Grossesse enregistrée'}
-                    {g.statut === 'conge_en_cours' && 'Congé maternité en cours'}
-                    {g.statut === 'retour_effectue' && 'Congé maternité terminé'}
+                    {g.statut === 'declaree' && t('sal.dashboard.pregnancy_registered', locale)}
+                    {g.statut === 'conge_en_cours' && t('sal.dashboard.maternity_ongoing', locale)}
+                    {g.statut === 'retour_effectue' && t('sal.dashboard.maternity_ended', locale)}
                   </p>
                   <div className="text-xs text-pink-800 space-y-0.5">
                     {g.date_presume_accouchement && (
-                      <p>Date prévue : <strong>{fmt(g.date_presume_accouchement)}</strong></p>
+                      <p>{t('sal.dashboard.due_date', locale)} <strong>{fmt(g.date_presume_accouchement)}</strong></p>
                     )}
                     {g.conge_mat_debut && g.conge_mat_fin && (
-                      <p>Congé maternité : <strong>{fmt(g.conge_mat_debut)} → {fmt(g.conge_mat_fin)}</strong></p>
+                      <p>{t('sal.dashboard.maternity_leave', locale)} <strong>{fmt(g.conge_mat_debut)} → {fmt(g.conge_mat_fin)}</strong></p>
                     )}
                     {g.allocation_naissance_payee && (
-                      <p className="text-emerald-700">✓ Allocation naissance 3 000 MUR versée</p>
+                      <p className="text-emerald-700">✓ {t('sal.dashboard.birth_allowance_prefix', locale)} 3 000 MUR {t('sal.dashboard.birth_allowance_suffix', locale)}</p>
                     )}
                   </div>
                   <p className="text-[10px] text-pink-600 pt-1">
-                    Protection WRA 2019 Sections 52 &amp; 64. Pour toute modification, contactez le RH.
+                    {t('sal.dashboard.wra_protection_52_64', locale)}
                   </p>
                 </div>
               </div>
@@ -214,12 +217,12 @@ export function DashboardTab({
                 </div>
                 <div className="flex-1 space-y-1 text-sm">
                   <p className="font-semibold text-blue-900">
-                    Congé paternité ({p.conge_paye ? '4 semaines payées' : '4 semaines non payées'})
+                    {t('sal.dashboard.paternity_leave', locale)} ({p.conge_paye ? t('sal.dashboard.four_weeks_paid', locale) : t('sal.dashboard.four_weeks_unpaid', locale)})
                   </p>
                   <div className="text-xs text-blue-800 space-y-0.5">
-                    <p>Naissance : <strong>{fmt(p.date_naissance_enfant)}</strong></p>
+                    <p>{t('sal.dashboard.birth', locale)} <strong>{fmt(p.date_naissance_enfant)}</strong></p>
                     {p.conge_pat_debut && p.conge_pat_fin && (
-                      <p>Congé : <strong>{fmt(p.conge_pat_debut)} → {fmt(p.conge_pat_fin)}</strong></p>
+                      <p>{t('sal.dashboard.leave', locale)} <strong>{fmt(p.conge_pat_debut)} → {fmt(p.conge_pat_fin)}</strong></p>
                     )}
                   </div>
                   <p className="text-[10px] text-blue-600 pt-1">WRA 2019 Section 53.</p>
@@ -234,7 +237,7 @@ export function DashboardTab({
         <Card className="overflow-hidden rounded-xl shadow-sm" style={{ border: `2px solid ${GOLD}30` }}>
           <CardContent className="p-4 md:p-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-gray-500">Prochain salaire estimé</p>
+              <p className="text-sm text-gray-500">{t('sal.dashboard.next_salary', locale)}</p>
               <div className="h-8 w-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${GOLD}15` }}>
                 <CreditCard className="h-4 w-4" style={{ color: GOLD }} />
               </div>
@@ -242,11 +245,11 @@ export function DashboardTab({
             <p className="text-3xl md:text-2xl font-bold font-mono mb-1" style={{ color: NAVY }}>~MRs {fmt(estimatedNet)}</p>
             {estimatedBase > 0 && (
               <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-1">
-                <span>Base: {fmt(estimatedBase)}</span>
-                {estimatedBrut > estimatedBase && <span>| Brut: {fmt(estimatedBrut)}</span>}
+                <span>{t('sal.dashboard.base', locale)} {fmt(estimatedBase)}</span>
+                {estimatedBrut > estimatedBase && <span>| {t('sal.dashboard.gross', locale)} {fmt(estimatedBrut)}</span>}
               </div>
             )}
-            <p className="text-xs" style={{ color: GOLD }}>Versement le {lastDayOfMonth()}</p>
+            <p className="text-xs" style={{ color: GOLD }}>{t('sal.dashboard.paid_on', locale)} {lastDayOfMonth()}</p>
           </CardContent>
         </Card>
       )}
@@ -265,7 +268,7 @@ export function DashboardTab({
               disabled={punching || !!sessionEnCours}
               className="h-12 md:h-14 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm md:text-base disabled:opacity-40"
             >
-              <LogIn className="h-5 w-5 mr-2" /> Entrée
+              <LogIn className="h-5 w-5 mr-2" /> {t('sal.dashboard.clock_in', locale)}
             </Button>
             {isEnPause ? (
               <Button
@@ -273,7 +276,7 @@ export function DashboardTab({
                 disabled={punching}
                 className="h-12 md:h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm md:text-base"
               >
-                <Coffee className="h-5 w-5 mr-2" /> Reprendre
+                <Coffee className="h-5 w-5 mr-2" /> {t('sal.dashboard.resume', locale)}
               </Button>
             ) : (
               <Button
@@ -281,7 +284,7 @@ export function DashboardTab({
                 disabled={punching || !isEnTravail}
                 className="h-12 md:h-14 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm md:text-base disabled:opacity-40"
               >
-                <Coffee className="h-5 w-5 mr-2" /> Pause
+                <Coffee className="h-5 w-5 mr-2" /> {t('sal.dashboard.break', locale)}
               </Button>
             )}
             <Button
@@ -289,7 +292,7 @@ export function DashboardTab({
               disabled={punching || !isEnTravail}
               className="h-12 md:h-14 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm md:text-base disabled:opacity-40"
             >
-              <LogOut className="h-5 w-5 mr-2" /> Sortie
+              <LogOut className="h-5 w-5 mr-2" /> {t('sal.dashboard.clock_out', locale)}
             </Button>
           </div>
 
@@ -298,7 +301,7 @@ export function DashboardTab({
           {hasAnySession && (
             <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
-                Journée en cours
+                {t('sal.dashboard.current_day', locale)}
               </p>
               <div className="space-y-1.5">
                 {sessionsData.sessions.map((s: any) => {
@@ -311,10 +314,10 @@ export function DashboardTab({
                       <span className="font-mono text-gray-700">{fmtTime(s.heure_debut)}</span>
                       <span className="text-gray-400">→</span>
                       <span className="font-mono text-gray-700">
-                        {isOuverte ? <span className="italic text-blue-600">en cours</span> : fmtTime(s.heure_fin)}
+                        {isOuverte ? <span className="italic text-blue-600">{t('sal.dashboard.ongoing', locale)}</span> : fmtTime(s.heure_fin)}
                       </span>
                       <span className="ml-auto text-xs text-gray-500">
-                        {isTravail ? 'Travail' : 'Pause'}
+                        {isTravail ? t('sal.dashboard.work', locale) : t('sal.dashboard.break', locale)}
                         {duree ? ` · ${duree}` : isOuverte ? ' · …' : ''}
                       </span>
                     </div>
@@ -323,12 +326,12 @@ export function DashboardTab({
               </div>
               <div className="mt-3 pt-2 border-t border-gray-200 flex gap-4 text-xs text-gray-600">
                 <span>
-                  <span className="font-semibold" style={{ color: NAVY }}>Travaillé :</span>{' '}
+                  <span className="font-semibold" style={{ color: NAVY }}>{t('sal.dashboard.worked', locale)}</span>{' '}
                   <span className="font-mono">{formatMin(sessionsData.total_travail_minutes)}</span>
-                  {isEnTravail ? <span className="italic text-blue-600"> (+ en cours)</span> : null}
+                  {isEnTravail ? <span className="italic text-blue-600"> {t('sal.dashboard.plus_ongoing', locale)}</span> : null}
                 </span>
                 <span>
-                  <span className="font-semibold" style={{ color: NAVY }}>Pauses :</span>{' '}
+                  <span className="font-semibold" style={{ color: NAVY }}>{t('sal.dashboard.breaks', locale)}</span>{' '}
                   <span className="font-mono">{formatMin(sessionsData.total_pause_minutes)}</span>
                 </span>
               </div>
@@ -337,7 +340,7 @@ export function DashboardTab({
 
           {!hasAnySession && (
             <p className="text-xs text-center text-gray-400 italic">
-              Aucune session aujourd&apos;hui — cliquez sur <span className="font-semibold text-emerald-700">Entrée</span> pour commencer.
+              {t('sal.dashboard.no_session_prefix', locale)} <span className="font-semibold text-emerald-700">{t('sal.dashboard.clock_in', locale)}</span> {t('sal.dashboard.no_session_suffix', locale)}
             </p>
           )}
 
@@ -350,7 +353,7 @@ export function DashboardTab({
         // qui masqueraient un vrai problème DB.
         <Card className="rounded-xl shadow-sm border-red-200 bg-red-50">
           <CardContent className="p-4 text-sm text-red-700">
-            Impossible de charger vos soldes de congés. Contactez votre RH.
+            {t('sal.dashboard.balances_error', locale)}
           </CardContent>
         </Card>
       ) : (
@@ -369,8 +372,8 @@ export function DashboardTab({
                   <span className="text-lg font-bold" style={{ color: NAVY }}>{alRemaining}j</span>
                 </div>
               </div>
-              <p className="font-medium text-sm" style={{ color: NAVY }}>Conges annuels</p>
-              <p className="text-xs text-gray-400">sur {alTotal}j</p>
+              <p className="font-medium text-sm" style={{ color: NAVY }}>{t('sal.dashboard.annual_leave', locale)}</p>
+              <p className="text-xs text-gray-400">{t('sal.dashboard.out_of', locale)} {alTotal}j</p>
               <div className="mt-2"><EligibiliteBadge status={eligibilityStatus} /></div>
             </CardContent>
           </Card>
@@ -388,12 +391,12 @@ export function DashboardTab({
                 </div>
               </div>
               <p className="font-medium text-sm" style={{ color: NAVY }}>Sick Leave</p>
-              <p className="text-xs text-gray-400">sur {slTotal}j</p>
+              <p className="text-xs text-gray-400">{t('sal.dashboard.out_of', locale)} {slTotal}j</p>
               <div className="mt-2"><EligibiliteBadge status={eligibilityStatus} /></div>
             </CardContent>
           </Card>
         </div>
-        <p className="text-[11px] text-center text-gray-500">Période : {periodeLabel}</p>
+        <p className="text-[11px] text-center text-gray-500">{t('sal.dashboard.period', locale)} {periodeLabel}</p>
         {notEligibleMessage && (
           <p className="text-[11px] text-center text-gray-500 italic">{notEligibleMessage}</p>
         )}
@@ -411,7 +414,7 @@ export function DashboardTab({
 
       {annonces.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-1">Communications</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-1">{t('sal.dashboard.communications', locale)}</p>
           {annonces.slice(0, 3).map((a: any) => {
             const typeStyles: Record<string, { bg: string; border: string; icon: string; text: string }> = {
               urgent: { bg: "#dc262608", border: "#dc2626", icon: "🚨", text: "#dc2626" },
@@ -430,7 +433,7 @@ export function DashboardTab({
                     <p className="text-xs text-gray-500 mt-1 line-clamp-2">{a.contenu}</p>
                     <p className="text-[10px] text-gray-400 mt-1.5">{new Date(a.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}</p>
                   </div>
-                  {a.priorite >= 2 && <Badge className="bg-red-100 text-red-700 text-[10px] flex-shrink-0">Urgent</Badge>}
+                  {a.priorite >= 2 && <Badge className="bg-red-100 text-red-700 text-[10px] flex-shrink-0">{t('sal.dashboard.urgent', locale)}</Badge>}
                 </div>
               </div>
             )
@@ -439,29 +442,12 @@ export function DashboardTab({
       )}
 
       {(() => {
-        const HOLIDAYS_2026 = [
-          { date: "2026-01-01", name: "New Year" },
-          { date: "2026-01-02", name: "New Year (2nd day)" },
-          { date: "2026-01-02", name: "Thaipoosam Cavadee" },
-          { date: "2026-02-01", name: "Abolition of Slavery" },
-          { date: "2026-02-15", name: "Maha Shivaratree" },
-          { date: "2026-02-17", name: "Chinese Spring Festival" },
-          { date: "2026-03-12", name: "Independence & Republic Day" },
-          { date: "2026-03-20", name: "Eid-Ul-Fitr" },
-          { date: "2026-04-03", name: "Ougadi" },
-          { date: "2026-05-01", name: "Labour Day" },
-          { date: "2026-08-15", name: "Assumption" },
-          { date: "2026-08-26", name: "Ganesh Chaturthi" },
-          { date: "2026-11-02", name: "Arrival of Indentured Labourers" },
-          { date: "2026-11-08", name: "Divali" },
-          { date: "2026-12-25", name: "Christmas" },
-        ]
         const today = new Date().toISOString().split("T")[0]
-        const upcoming = HOLIDAYS_2026.filter(h => h.date >= today).slice(0, 3)
+        const upcoming = getUpcomingHolidays(today, 3)
         if (upcoming.length === 0) return null
         return (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-1">Prochains jours fériés</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 px-1">{t('sal.dashboard.upcoming_holidays', locale)}</p>
             {upcoming.map((h, i) => {
               const d = new Date(h.date + "T12:00:00")
               const daysUntil = Math.ceil((d.getTime() - new Date().getTime()) / 86400000)
@@ -478,7 +464,7 @@ export function DashboardTab({
                     <p className="text-xs text-gray-400">{d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</p>
                   </div>
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md flex-shrink-0" style={{ backgroundColor: daysUntil <= 7 ? `${GOLD}15` : "#f3f4f6", color: daysUntil <= 7 ? GOLD : "#9ca3af" }}>
-                    {daysUntil === 0 ? "Aujourd'hui" : daysUntil === 1 ? "Demain" : `J-${daysUntil}`}
+                    {daysUntil === 0 ? t('sal.dashboard.today', locale) : daysUntil === 1 ? t('sal.dashboard.tomorrow', locale) : `J-${daysUntil}`}
                   </span>
                 </div>
               )
@@ -489,10 +475,10 @@ export function DashboardTab({
 
       <div className="grid grid-cols-2 gap-3">
         {([
-          { icon: FileText, label: "Mes bulletins", onClick: () => router.push("/salarie#bulletins"), color: BLUE, bg: `linear-gradient(135deg, ${BLUE}08, ${BLUE}15)` },
-          { icon: CalendarPlus, label: "Demander un conge", onClick: () => router.push("/salarie#conges"), color: GREEN, bg: `linear-gradient(135deg, ${GREEN}08, ${GREEN}15)` },
-          { icon: HeartPulse, label: "Mon Espace Sante", onClick: () => router.push("/salarie#sante"), color: "#7c3aed", bg: "linear-gradient(135deg, #7c3aed08, #7c3aed15)" },
-          { icon: Calendar, label: "Mon planning", onClick: () => router.push("/salarie#planning"), color: GOLD, bg: `linear-gradient(135deg, ${GOLD}08, ${GOLD}15)` },
+          { icon: FileText, label: t('sal.dashboard.my_payslips', locale), onClick: () => router.push("/salarie#bulletins"), color: BLUE, bg: `linear-gradient(135deg, ${BLUE}08, ${BLUE}15)` },
+          { icon: CalendarPlus, label: t('sal.dashboard.request_leave', locale), onClick: () => router.push("/salarie#conges"), color: GREEN, bg: `linear-gradient(135deg, ${GREEN}08, ${GREEN}15)` },
+          { icon: HeartPulse, label: t('sal.dashboard.my_health_space', locale), onClick: () => router.push("/salarie#sante"), color: "#7c3aed", bg: "linear-gradient(135deg, #7c3aed08, #7c3aed15)" },
+          { icon: Calendar, label: t('sal.dashboard.my_schedule', locale), onClick: () => router.push("/salarie#planning"), color: GOLD, bg: `linear-gradient(135deg, ${GOLD}08, ${GOLD}15)` },
         ] as const).map((action, i) => (
           <Card key={i}
             className="cursor-pointer rounded-xl shadow-sm transition-all duration-200 hover:shadow-md active:scale-[0.97] border-0"
@@ -512,7 +498,7 @@ export function DashboardTab({
         <Card className="hidden md:block rounded-xl shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2" style={{ color: NAVY }}>
-              <Bell className="h-4 w-4" /> Notifications récentes
+              <Bell className="h-4 w-4" /> {t('sal.dashboard.recent_notifications', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-2">
