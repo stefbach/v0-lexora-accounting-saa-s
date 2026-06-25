@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
 import { DEPARTEMENTS } from "@/lib/juridique/departements"
+import { t, getLocale } from "@/lib/i18n"
 
 const NAVY = "#0B0F2E"
 const GOLD = "#D4AF37"
@@ -16,12 +17,13 @@ const ICONS: Record<string, LucideIcon> = {
 }
 
 export default function DepartementsPage() {
+  const locale = getLocale()
   return (
     <div className="space-y-5">
       <JuridiqueHeader
         icon={<Scale className="w-6 h-6" style={{ color: GOLD }} />}
-        title="Départements du cabinet"
-        subtitle="Un service juridique complet : corporate, commercial, travail, fiscal, données, IP, réglementaire, contentieux, immobilier et gouvernance IA. Chaque département s'appuie sur le corpus mauricien verrouillé."
+        title={t("jurd.dep.title", locale)}
+        subtitle={t("jurd.dep.subtitle", locale)}
         showSelector={false}
       />
 
@@ -39,7 +41,7 @@ export default function DepartementsPage() {
               <p className="text-xs text-gray-500 leading-relaxed">{d.pitch}</p>
 
               <div className="mt-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Prestations</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">{t("jurd.dep.prestations", locale)}</p>
                 <ul className="text-xs text-gray-600 space-y-0.5">
                   {d.prestations.slice(0, 4).map((p) => (
                     <li key={p} className="flex gap-1.5"><span style={{ color: GOLD }}>•</span>{p}</li>
@@ -58,7 +60,7 @@ export default function DepartementsPage() {
                 className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
                 style={{ background: NAVY }}
               >
-                Consulter ce département <ArrowRight className="w-3.5 h-3.5" />
+                {t("jurd.dep.consulter", locale)} <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
           )
@@ -66,7 +68,7 @@ export default function DepartementsPage() {
       </div>
 
       <p className="text-[11px] text-gray-400 text-center">
-        Cabinet augmenté par l'IA — les prestations produisent des projets à valider par un avocat / attorney inscrit.
+        {t("jurd.dep.disclaimer", locale)}
       </p>
     </div>
   )

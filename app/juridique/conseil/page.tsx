@@ -4,17 +4,18 @@ import { MessageSquareText, Scale } from "lucide-react"
 import { JuridiqueHeader } from "@/components/juridique/JuridiqueHeader"
 import { LegalChat } from "@/components/juridique/LegalChat"
 import { DEPARTEMENTS } from "@/lib/juridique/departements"
+import { t, getLocale } from "@/lib/i18n"
 
 const GOLD = "#D4AF37"
 
-const SUGGESTIONS = [
-  "Un client ne paie pas une facture de 350 000 MUR depuis 4 mois. Quelles sont mes options ?",
-  "Quel délai de prescription pour une créance commerciale à Maurice ?",
-  "Comment contester une cotisation MRA jugée excessive ?",
-  "Analyse ce contrat et signale les clauses à risque (joindre le document).",
-]
-
 export default function ConseilPage() {
+  const locale = getLocale()
+  const SUGGESTIONS = [
+    t("jurd.conseil.s1", locale),
+    t("jurd.conseil.s2", locale),
+    t("jurd.conseil.s3", locale),
+    t("jurd.conseil.s4", locale),
+  ]
   const [dep, setDep] = useState<(typeof DEPARTEMENTS)[number] | null>(null)
 
   useEffect(() => {
@@ -26,14 +27,14 @@ export default function ConseilPage() {
     <div className="space-y-4">
       <JuridiqueHeader
         icon={<MessageSquareText className="w-6 h-6" style={{ color: GOLD }} />}
-        title={dep ? `Conseil — ${dep.nom}` : "Conseil juridique"}
-        subtitle="Interrogez l'avocat-conseil IA sur le droit mauricien. Réponses structurées avec références citées et analyse de documents."
+        title={dep ? `${t("jurd.conseil.titlePrefix", locale)} ${dep.nom}` : t("jurd.conseil.title", locale)}
+        subtitle={t("jurd.conseil.subtitle", locale)}
       />
 
       {dep && (
         <div className="flex items-center gap-2 -mt-1 text-xs">
           <span className="font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(212,175,55,0.16)", color: "#8a6d15" }}>
-            Département : {dep.nom}
+            {t("jurd.conseil.departement", locale)} {dep.nom}
           </span>
           <span className="text-gray-400">{dep.lois.join(" · ")}</span>
         </div>
@@ -41,15 +42,15 @@ export default function ConseilPage() {
 
       <LegalChat
         icon={<Scale className="w-4 h-4" style={{ color: GOLD }} />}
-        title={dep ? `Avocat-conseil — ${dep.nom}` : "Avocat-conseil"}
-        subtitle="Droit mauricien · sources citées"
+        title={dep ? `${t("jurd.conseil.avocatPrefix", locale)} ${dep.nom}` : t("jurd.conseil.avocat", locale)}
+        subtitle={t("jurd.conseil.chatSubtitle", locale)}
         suggestions={dep?.exemples?.length ? dep.exemples : SUGGESTIONS}
-        emptyHint={dep ? `Vous consultez le département ${dep.nom}. ${dep.pitch}` : undefined}
+        emptyHint={dep ? `${t("jurd.conseil.emptyHintPrefix", locale)} ${dep.nom}. ${dep.pitch}` : undefined}
         domaines={dep?.domaines}
         departement={dep?.id}
-        contextLabel={dep ? `Département : ${dep.nom} (${dep.lois.join(", ")})` : undefined}
-        placeholder="Décrivez votre question juridique, ou joignez des documents à analyser…"
-        reportTitle={dep ? `Rapport de consultation — ${dep.nom}` : "Rapport de consultation juridique"}
+        contextLabel={dep ? `${t("jurd.conseil.contextLabelPrefix", locale)} ${dep.nom} (${dep.lois.join(", ")})` : undefined}
+        placeholder={t("jurd.conseil.placeholder", locale)}
+        reportTitle={dep ? `${t("jurd.conseil.reportTitlePrefix", locale)} ${dep.nom}` : t("jurd.conseil.reportTitle", locale)}
       />
     </div>
   )
