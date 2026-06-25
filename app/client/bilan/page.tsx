@@ -152,7 +152,7 @@ function TotalRow({ label, current, prev, grand = false }: { label: string; curr
 }
 
 /* ── Balance Sheet Table ── */
-function BalanceSheetTable({ data, prevData, exercice, prevExercice }: { data: any; prevData: any; exercice: string; prevExercice: string }) {
+function BalanceSheetTable({ data, prevData, exercice, prevExercice, locale }: { data: any; prevData: any; exercice: string; prevExercice: string; locale: Locale }) {
   const immobilisations = data?.immobilisations ?? 0
   const creancesClients = data?.creances ?? 0
   const tresorerie = data?.totalBankMUR ?? 0
@@ -195,43 +195,43 @@ function BalanceSheetTable({ data, prevData, exercice, prevExercice }: { data: a
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-1/2">Poste</TableHead>
+          <TableHead className="w-1/2">{t('cbil.col_poste', locale)}</TableHead>
           <TableHead className="text-right">{exercice} (MUR)</TableHead>
           <TableHead className="text-right">{prevExercice} (MUR)</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        <SectionHeader label="NON-CURRENT ASSETS" />
-        <SubItem label="Property, Plant & Equipment" current={immobilisations} prev={pImmo} />
-        <SubItem label="Intangible Assets" current={0} prev={prevData ? 0 : undefined} />
-        <TotalRow label="Total Non-Current Assets" current={totalNonCurrentAssets} prev={pNonCurrent} />
+        <SectionHeader label={t('cbil.sec.non_current_assets', locale)} />
+        <SubItem label={t('cbil.row.ppe', locale)} current={immobilisations} prev={pImmo} />
+        <SubItem label={t('cbil.row.intangible', locale)} current={0} prev={prevData ? 0 : undefined} />
+        <TotalRow label={t('cbil.row.total_non_current_assets', locale)} current={totalNonCurrentAssets} prev={pNonCurrent} />
 
-        <SectionHeader label="CURRENT ASSETS" />
-        <SubItem label="Trade Receivables" current={creancesClients} prev={pCreances} />
-        <SubItem label="Cash & Bank" current={tresorerie} prev={pTreso} />
-        <TotalRow label="Total Current Assets" current={totalCurrentAssets} prev={pCurrentAssets} />
+        <SectionHeader label={t('cbil.sec.current_assets', locale)} />
+        <SubItem label={t('cbil.row.trade_receivables', locale)} current={creancesClients} prev={pCreances} />
+        <SubItem label={t('cbil.row.cash_bank', locale)} current={tresorerie} prev={pTreso} />
+        <TotalRow label={t('cbil.row.total_current_assets', locale)} current={totalCurrentAssets} prev={pCurrentAssets} />
 
-        <TotalRow label="TOTAL ASSETS" current={totalAssets} prev={pTotalAssets} grand />
+        <TotalRow label={t('cbil.row.total_assets', locale)} current={totalAssets} prev={pTotalAssets} grand />
 
-        <SectionHeader label="EQUITY" />
-        <SubItem label="Share Capital" current={capitauxPropres} prev={pCapitaux} />
-        <SubItem label="Retained Earnings" current={retainedEarnings} prev={pRetained} />
-        <TotalRow label="Total Equity" current={totalEquity} prev={pEquity} />
+        <SectionHeader label={t('cbil.sec.equity', locale)} />
+        <SubItem label={t('cbil.row.share_capital', locale)} current={capitauxPropres} prev={pCapitaux} />
+        <SubItem label={t('cbil.row.retained_earnings', locale)} current={retainedEarnings} prev={pRetained} />
+        <TotalRow label={t('cbil.row.total_equity', locale)} current={totalEquity} prev={pEquity} />
 
-        <SectionHeader label="CURRENT LIABILITIES" />
-        <SubItem label="Trade Payables" current={dettesFournisseurs} prev={pDettesFourn} />
-        <SubItem label="VAT Payable" current={dettesFiscales} prev={pDettesFisc} />
-        <SubItem label="CSG/NSF/PAYE Payable" current={dettesSociales} prev={pDettesSoc} />
-        <TotalRow label="Total Current Liabilities" current={totalCurrentLiabilities} prev={pCurrentLiab} />
+        <SectionHeader label={t('cbil.sec.current_liabilities', locale)} />
+        <SubItem label={t('cbil.row.trade_payables', locale)} current={dettesFournisseurs} prev={pDettesFourn} />
+        <SubItem label={t('cbil.row.vat_payable', locale)} current={dettesFiscales} prev={pDettesFisc} />
+        <SubItem label={t('cbil.row.csg_payable', locale)} current={dettesSociales} prev={pDettesSoc} />
+        <TotalRow label={t('cbil.row.total_current_liabilities', locale)} current={totalCurrentLiabilities} prev={pCurrentLiab} />
 
-        <TotalRow label="TOTAL EQUITY & LIABILITIES" current={totalEquityAndLiabilities} prev={pTotal} grand />
+        <TotalRow label={t('cbil.row.total_equity_liabilities', locale)} current={totalEquityAndLiabilities} prev={pTotal} grand />
       </TableBody>
     </Table>
   )
 }
 
 /* ── Profit & Loss Table ── */
-function ProfitLossTable({ data, prevData, exercice, prevExercice }: { data: any; prevData: any; exercice: string; prevExercice: string }) {
+function ProfitLossTable({ data, prevData, exercice, prevExercice, locale }: { data: any; prevData: any; exercice: string; prevExercice: string; locale: Locale }) {
   const revenueByAccount: Record<string, number> = data?.revenueByAccount ?? {}
   const expensesByAccount: Record<string, number> = data?.expensesByAccount ?? {}
   const totalRevenue = data?.totalRevenue ?? 0
@@ -260,24 +260,24 @@ function ProfitLossTable({ data, prevData, exercice, prevExercice }: { data: any
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-1/2">Poste</TableHead>
+          <TableHead className="w-1/2">{t('cbil.col_poste', locale)}</TableHead>
           <TableHead className="text-right">{exercice} (MUR)</TableHead>
           <TableHead className="text-right">{prevExercice} (MUR)</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        <SectionHeader label="REVENUE" />
+        <SectionHeader label={t('cbil.sec.revenue', locale)} />
         {revenueDetails.map(([prefix, amount]) => (
-          <SubItem key={prefix} label={REVENUE_LABELS[prefix] || `Compte ${prefix}x`} current={amount} prev={prevData ? (prevRevenueByAccount[prefix] ?? 0) : undefined} />
+          <SubItem key={prefix} label={REVENUE_LABELS[prefix] || t('cbil.account_label', locale).replace('{prefix}', prefix)} current={amount} prev={prevData ? (prevRevenueByAccount[prefix] ?? 0) : undefined} />
         ))}
         {revenueDetails.length === 0 && (
           <TableRow>
-            <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucun produit enregistre</TableCell>
+            <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">{t('cbil.row.no_revenue', locale)}</TableCell>
           </TableRow>
         )}
-        <TotalRow label="TOTAL REVENUE" current={totalRevenue} prev={prevTotalRevenue} />
+        <TotalRow label={t('cbil.row.total_revenue', locale)} current={totalRevenue} prev={prevTotalRevenue} />
 
-        <SectionHeader label="OPERATING EXPENSES" />
+        <SectionHeader label={t('cbil.sec.operating_expenses', locale)} />
         {allExpenseGroups.map((group) => {
           const prevGroup = prevExpenseGroups.find(g => g.label === group.label)
           return (
@@ -286,14 +286,14 @@ function ProfitLossTable({ data, prevData, exercice, prevExercice }: { data: any
         })}
         {allExpenseGroups.length === 0 && (
           <TableRow>
-            <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">Aucune charge enregistree</TableCell>
+            <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">{t('cbil.row.no_expenses', locale)}</TableCell>
           </TableRow>
         )}
-        <TotalRow label="TOTAL EXPENSES" current={-totalExpenses} prev={prevTotalExpenses !== undefined ? -prevTotalExpenses : undefined} />
+        <TotalRow label={t('cbil.row.total_expenses', locale)} current={-totalExpenses} prev={prevTotalExpenses !== undefined ? -prevTotalExpenses : undefined} />
 
-        <TotalRow label="PROFIT BEFORE TAX" current={profitBeforeTax} prev={pProfitBefore} />
-        <SubItem label="Income Tax (15%)" current={-incomeTax} prev={pIncomeTax !== undefined ? -pIncomeTax : undefined} />
-        <TotalRow label="NET PROFIT" current={netProfit} prev={pNetProfit} grand />
+        <TotalRow label={t('cbil.row.profit_before_tax', locale)} current={profitBeforeTax} prev={pProfitBefore} />
+        <SubItem label={t('cbil.row.income_tax', locale)} current={-incomeTax} prev={pIncomeTax !== undefined ? -pIncomeTax : undefined} />
+        <TotalRow label={t('cbil.row.net_profit', locale)} current={netProfit} prev={pNetProfit} grand />
       </TableBody>
     </Table>
   )
@@ -336,6 +336,7 @@ export default function BilanPage() {
   }, [exercice])
 
   const handleImportPdf = async (file: File) => {
+    const locale = getLocale()
     setImportingPdf(true)
     setImportMessage(null)
     try {
@@ -345,7 +346,7 @@ export default function BilanPage() {
       formData.append("hint", "Bilan comptable - Balance Sheet - Profit & Loss - Financial Statements Mauritius")
       const res = await fetch("/api/documents/upload", { method: "POST", body: formData })
       if (!res.ok) {
-        setImportMessage({ type: "error", text: "Erreur lors de l'import du PDF." })
+        setImportMessage({ type: "error", text: t('cbil.import_error', locale) })
         return
       }
       const result = await res.json()
@@ -369,13 +370,16 @@ export default function BilanPage() {
         setPrevData(ocrPrevData)
         setImportMessage({
           type: "success",
-          text: `Donnees N-1 extraites : CA ${fmt(ocrPrevData.totalRevenue)}, Charges ${fmt(ocrPrevData.totalExpenses)}, Tresorerie ${fmt(ocrPrevData.totalBankMUR)}`
+          text: t('cbil.import_success', locale)
+            .replace('{ca}', fmt(ocrPrevData.totalRevenue))
+            .replace('{ch}', fmt(ocrPrevData.totalExpenses))
+            .replace('{tr}', fmt(ocrPrevData.totalBankMUR))
         })
       } else {
-        setImportMessage({ type: "error", text: "Aucune donnee financiere trouvee dans le PDF." })
+        setImportMessage({ type: "error", text: t('cbil.import_no_data', locale) })
       }
     } catch {
-      setImportMessage({ type: "error", text: "Erreur lors de l'import du PDF." })
+      setImportMessage({ type: "error", text: t('cbil.import_error', locale) })
     } finally {
       setImportingPdf(false)
     }
@@ -452,16 +456,18 @@ export default function BilanPage() {
   const selectedSocieteName = selectedSoc?.nom || "—"
   const missingFields: string[] = []
   if (selectedSoc) {
-    if (!selectedSoc.date_incorporation) missingFields.push("Date d'incorporation")
-    if (!selectedSoc.capital_social) missingFields.push("Capital social")
-    if (!selectedSoc.contact_name && !selectedSoc.directeur) missingFields.push("Nom du directeur")
+    if (!selectedSoc.date_incorporation) missingFields.push(t('cbil.missing.date_incorporation', locale))
+    if (!selectedSoc.capital_social) missingFields.push(t('cbil.missing.capital_social', locale))
+    if (!selectedSoc.contact_name && !selectedSoc.directeur) missingFields.push(t('cbil.missing.directeur', locale))
   }
 
   // Period labels for PDF
   const periodEnd = viewMode === "mensuel" && selectedMonth
     ? (() => { const [y, m] = selectedMonth.split("-").map(Number); const last = new Date(y, m, 0).getDate(); return `${last} ${new Date(y, m - 1).toLocaleDateString("fr-FR", { month: "long" })} ${y}` })()
     : exercice ? `30 Juin ${exercice.split("-")[1]}` : ""
-  const periodLabel = viewMode === "mensuel" ? `Pour le mois de ${periodEnd}` : `For the year ended ${periodEnd}`
+  const periodLabel = viewMode === "mensuel"
+    ? t('cbil.period_monthly', locale).replace('{end}', periodEnd)
+    : t('cbil.period_yearly', locale).replace('{end}', periodEnd)
 
   return (
     <ClientPageShell hideHero disableParticles>
@@ -476,15 +482,15 @@ export default function BilanPage() {
 
       {/* Context subtitle */}
       <p className="text-xs text-gray-400 no-print">
-        Consolidation de tous les comptes de la société sélectionnée — conforme au Companies Act 2001
+        {t('cbil.context_subtitle', locale)}
       </p>
 
       {/* Missing info warning */}
       {missingFields.length > 0 && (
         <div className="p-3 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-800 no-print">
-          <p className="font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4" />Informations manquantes pour le bilan légal :</p>
+          <p className="font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4" />{t('cbil.missing_info_title', locale)}</p>
           <ul className="list-disc ml-8 mt-1 text-xs">{missingFields.map(f => <li key={f}>{f}</li>)}</ul>
-          <p className="text-xs mt-1">Complétez ces informations dans <Link href={`/client/societe?id=${societeId}`} className="underline">Fiche Société</Link>.</p>
+          <p className="text-xs mt-1">{t('cbil.complete_info_prefix', locale)} <Link href={`/client/societe?id=${societeId}`} className="underline">{t('cbil.company_sheet', locale)}</Link>.</p>
         </div>
       )}
 
@@ -493,14 +499,14 @@ export default function BilanPage() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="flex rounded-lg border overflow-hidden">
-              <button onClick={() => setViewMode("exercice")} className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "exercice" ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Exercice</button>
-              <button onClick={() => setViewMode("mensuel")} className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "mensuel" ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Mensuel</button>
+              <button onClick={() => setViewMode("exercice")} className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "exercice" ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>{t('cbil.view_exercice', locale)}</button>
+              <button onClick={() => setViewMode("mensuel")} className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "mensuel" ? "bg-[#0B0F2E] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>{t('cbil.view_mensuel', locale)}</button>
             </div>
             {viewMode === "exercice" && availableExercices.length > 0 && (
               <>
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <Select value={exercice} onValueChange={setExercice}>
-                  <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder="Exercice" /></SelectTrigger>
+                  <SelectTrigger className="w-[160px] h-9"><SelectValue placeholder={t('cbil.exercice_placeholder', locale)} /></SelectTrigger>
                   <SelectContent>{availableExercices.map(ex => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}</SelectContent>
                 </Select>
               </>
@@ -514,7 +520,7 @@ export default function BilanPage() {
                 disabled={purging}
                 onClick={async () => {
                   if (!societeId) return
-                  const msg = `Supprimer TOUTES les écritures de l'exercice ${prevExercice} ?\n\nCela supprimera les données parasites (soldes d'ouverture, artefacts) de la colonne N-1.\n\nCette action est irréversible.`
+                  const msg = t('cbil.purge_confirm', locale).replace('{ex}', prevExercice)
                   if (!confirm(msg)) return
                   setPurging(true)
                   try {
@@ -525,17 +531,17 @@ export default function BilanPage() {
                     })
                     const d = await res.json()
                     if (res.ok) {
-                      alert(`${d.deleted || 0} écriture(s) supprimée(s) pour ${prevExercice}`)
+                      alert(t('cbil.purge_done', locale).replace('{n}', String(d.deleted || 0)).replace('{ex}', prevExercice))
                       setPrevData(null)
                       window.location.reload()
                     } else {
-                      alert(d.error || 'Erreur')
+                      alert(d.error || t('cbil.error', locale))
                     }
                   } catch (e: any) { alert(e.message) }
                   finally { setPurging(false) }
                 }}
               >
-                {purging ? '...' : `🗑 Purger ${prevExercice}`}
+                {purging ? '...' : t('cbil.purge_btn', locale).replace('{ex}', prevExercice)}
               </Button>
             )}
             {viewMode === "mensuel" && (
@@ -566,7 +572,7 @@ export default function BilanPage() {
           className="no-print flex items-center gap-2"
         >
           <Download className="h-4 w-4" />
-          Télécharger PDF
+          {t('cbil.download_pdf', locale)}
         </Button>
 
         {/* Exports XLSX / PDF cabinet — endpoints serveur officiels */}
@@ -579,10 +585,10 @@ export default function BilanPage() {
           disabled={!societeId}
           variant="outline"
           className="no-print flex items-center gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-          title="P&L cascade IFRS multi-feuilles avec formules de sous-totaux"
+          title={t('cbil.pnl_excel_title', locale)}
         >
           <Download className="h-4 w-4" />
-          P&L Excel
+          {t('cbil.pnl_excel', locale)}
         </Button>
         <Button
           onClick={() => {
@@ -593,10 +599,10 @@ export default function BilanPage() {
           disabled={!societeId}
           variant="outline"
           className="no-print flex items-center gap-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-          title="Compte de résultat PDF signable (IFRS for SMEs / Companies Act 2001 Maurice)"
+          title={t('cbil.pnl_pdf_ifrs_title', locale)}
         >
           <Download className="h-4 w-4" />
-          P&L PDF IFRS
+          {t('cbil.pnl_pdf_ifrs', locale)}
         </Button>
       </div>
 
@@ -607,9 +613,9 @@ export default function BilanPage() {
             <div className="flex items-center gap-2">
               <Upload className="w-5 h-5" style={{ color: GOLD }} />
               <div>
-                <p className="text-sm font-semibold" style={{ color: NAVY }}>Données de l&apos;année précédente (optionnel)</p>
+                <p className="text-sm font-semibold" style={{ color: NAVY }}>{t('cbil.prev_year_data', locale)}</p>
                 <p className="text-xs text-gray-500">
-                  Si vous avez un bilan de l&apos;année précédente, uploadez-le pour afficher la comparaison N-1 dans le tableau.
+                  {t('cbil.prev_year_help', locale)}
                 </p>
               </div>
             </div>
@@ -634,7 +640,7 @@ export default function BilanPage() {
                 className="flex items-center gap-2"
               >
                 {importingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                {importingPdf ? "Import en cours..." : "Importer le bilan précédent"}
+                {importingPdf ? t('cbil.importing', locale) : t('cbil.import_prev_bilan', locale)}
               </Button>
             </div>
           </div>
@@ -682,15 +688,15 @@ export default function BilanPage() {
                 <div
                   className="no-print flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800"
                   role="status"
-                  aria-label={`Bilan N-1 ${prevExercice} figé${generatedFmt ? ` le ${generatedFmt}` : ""}`}
+                  aria-label={t('cbil.prev_snapshot_aria', locale).replace('{ex}', prevExercice).replace('{on}', generatedFmt ? t('cbil.prev_snapshot_on', locale).replace('{date}', generatedFmt) : "")}
                 >
                   <Camera className="h-4 w-4 shrink-0" aria-hidden="true" />
                   <span>
-                    Bilan N-1 ({prevExercice}) figé
-                    {generatedFmt ? ` le ${generatedFmt}` : ""}.
+                    {t('cbil.prev_snapshot_label', locale).replace('{ex}', prevExercice)}
+                    {generatedFmt ? t('cbil.prev_snapshot_on', locale).replace('{date}', generatedFmt) : ""}.
                   </span>
                   <Badge variant="outline" className="border-blue-300 bg-white text-blue-700">
-                    Snapshot
+                    {t('cbil.snapshot_badge', locale)}
                   </Badge>
                 </div>
               )
@@ -699,14 +705,14 @@ export default function BilanPage() {
               <div
                 className="no-print flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
                 role="status"
-                aria-label={`Bilan N-1 ${prevExercice} calculé en temps réel (exercice ouvert)`}
+                aria-label={t('cbil.prev_live_aria', locale).replace('{ex}', prevExercice)}
               >
                 <RefreshIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>
-                  Bilan N-1 ({prevExercice}) calculé en temps réel (exercice ouvert).
+                  {t('cbil.prev_live_label', locale).replace('{ex}', prevExercice)}
                 </span>
                 <Badge variant="outline" className="border-gray-300 bg-white text-gray-600">
-                  Live
+                  {t('cbil.live_badge', locale)}
                 </Badge>
               </div>
             )
@@ -716,7 +722,7 @@ export default function BilanPage() {
           <div className="text-center space-y-1">
             <h1 className="text-2xl font-bold">{selectedSocieteName.toUpperCase()}</h1>
             <p className="text-sm text-muted-foreground">
-              Prepared in accordance with IFRS for SMEs &mdash; Companies Act 2001 Mauritius
+              {t('cbil.prepared_ifrs', locale)}
             </p>
           </div>
 
@@ -724,24 +730,24 @@ export default function BilanPage() {
           <div id="bilan-content">
             <div className="hidden print:block mb-4">
               <h2 className="text-lg font-bold" style={{ color: "#0B0F2E" }}>{societe?.nom || ""}</h2>
-              <p className="text-sm text-gray-500">Bilan — {viewMode === "mensuel" ? selectedMonth : `Exercice ${exercice}`}</p>
-              <p className="text-xs text-gray-400">Préparé conformément aux IFRS pour PME (Companies Act 2001 — Maurice)</p>
+              <p className="text-sm text-gray-500">{t('cbil.pdf_header_bilan', locale)} — {viewMode === "mensuel" ? selectedMonth : t('cbil.pdf_exercice', locale).replace('{ex}', exercice)}</p>
+              <p className="text-xs text-gray-400">{t('cbil.pdf_prepared_ifrs_fr', locale)}</p>
             </div>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>
-              <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
-              <TabsTrigger value="profit-loss">Profit &amp; Loss</TabsTrigger>
+              <TabsTrigger value="balance-sheet">{t('cbil.tab_balance_sheet', locale)}</TabsTrigger>
+              <TabsTrigger value="profit-loss">{t('cbil.tab_profit_loss', locale)}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="balance-sheet">
               <div className="border rounded-lg overflow-hidden">
-                <BalanceSheetTable data={data} prevData={prevData} exercice={exercice} prevExercice={prevExercice} />
+                <BalanceSheetTable data={data} prevData={prevData} exercice={exercice} prevExercice={prevExercice} locale={locale} />
               </div>
             </TabsContent>
 
             <TabsContent value="profit-loss">
               <div className="border rounded-lg overflow-hidden">
-                <ProfitLossTable data={data} prevData={prevData} exercice={exercice} prevExercice={prevExercice} />
+                <ProfitLossTable data={data} prevData={prevData} exercice={exercice} prevExercice={prevExercice} locale={locale} />
               </div>
             </TabsContent>
           </Tabs>
@@ -750,7 +756,7 @@ export default function BilanPage() {
           {/* Footer */}
           <div className="text-center py-4 print:py-2">
             <p className="text-xs text-muted-foreground italic">
-              All amounts are in Mauritian Rupees (MUR)
+              {t('cbil.amounts_in_mur', locale)}
             </p>
           </div>
         </>

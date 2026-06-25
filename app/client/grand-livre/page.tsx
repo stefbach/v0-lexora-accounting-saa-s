@@ -416,7 +416,7 @@ export default function ClientGrandLivrePage() {
                 variant="outline"
                 size="sm"
                 className="border-rose-300 text-rose-700 hover:bg-rose-50"
-                title="Exporter le grand-livre au format PDF (A4 paysage, groupé par compte)"
+                title={t('cbil.gl_export_pdf_title', locale)}
               >
                 <Download className="h-4 w-4 mr-1.5" />
                 PDF
@@ -439,14 +439,14 @@ export default function ClientGrandLivrePage() {
                 onClick={() => handleAudit({ explain: true })}
                 disabled={!societeId || auditing}
                 className="border-purple-300 text-purple-700 hover:bg-purple-50"
-                title="Lance l'audit + génère une explication IA détaillée"
+                title={t('cbil.gl_audit_ai_title', locale)}
               >
                 {auditing ? (
                   <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                 ) : (
                   <Sparkles className="h-4 w-4 mr-1.5" />
                 )}
-                {auditing ? 'Analyse IA...' : 'Audit + Explication IA'}
+                {auditing ? t('cbil.gl_ai_analyzing', locale) : t('cbil.gl_audit_ai', locale)}
               </Button>
             </div>
           </div>
@@ -667,7 +667,7 @@ function AuditPanel({ audit, locale }: { audit: AuditResult; locale: Locale }) {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2 text-purple-900">
               <Sparkles className="h-5 w-5 text-purple-600" />
-              Analyse IA — Lex Livre
+              {t('cbil.gl_ai_analysis', locale)}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -771,7 +771,7 @@ function AuditPanel({ audit, locale }: { audit: AuditResult; locale: Locale }) {
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2 text-red-700">
             <AlertTriangle className="h-4 w-4" />
-            Comptes contribuant à l'écart de balance
+            {t('cbil.gl_drilldown_title', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -792,18 +792,18 @@ function AuditPanel({ audit, locale }: { audit: AuditResult; locale: Locale }) {
     {/* Bloc 2 — Résumé TVA */}
     {audit.tva_summary && (audit.tva_summary.ttc_collectee !== 0 || audit.tva_summary.ttc_deductible !== 0) && (
       <Card>
-        <CardHeader><CardTitle className="text-sm">Résumé TVA</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-sm">{t('cbil.gl_vat_summary', locale)}</CardTitle></CardHeader>
         <CardContent className="text-sm">
           <div className="grid grid-cols-2 gap-2">
-            <div>TVA collectée (4457)</div>
+            <div>{t('cbil.gl_vat_collected', locale)}</div>
             <div className="font-mono text-right">{audit.tva_summary.ttc_collectee.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR</div>
-            <div>TVA déductible (4456)</div>
+            <div>{t('cbil.gl_vat_deductible', locale)}</div>
             <div className="font-mono text-right">{audit.tva_summary.ttc_deductible.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR</div>
-            <div>TVA à payer (4455)</div>
+            <div>{t('cbil.gl_vat_payable', locale)}</div>
             <div className="font-mono text-right font-semibold">{audit.tva_summary.a_payer.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR</div>
             {Math.abs(audit.tva_summary.ecart_calcul) > 1 && (
               <>
-                <div className="text-rose-700">Écart calcul</div>
+                <div className="text-rose-700">{t('cbil.gl_calc_gap', locale)}</div>
                 <div className="font-mono text-right text-rose-700">{audit.tva_summary.ecart_calcul.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR</div>
               </>
             )}
@@ -816,14 +816,14 @@ function AuditPanel({ audit, locale }: { audit: AuditResult; locale: Locale }) {
     {audit.tiers_inverses && audit.tiers_inverses.length > 0 && (
       <Card className="border-amber-200">
         <CardHeader>
-          <CardTitle className="text-sm">Tiers avec solde inversé ({audit.tiers_inverses.length})</CardTitle>
+          <CardTitle className="text-sm">{t('cbil.gl_reversed_parties', locale).replace('{n}', String(audit.tiers_inverses.length))}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-gray-500 mb-2">Clients en créditeur (acomptes reçus) ou fournisseurs en débiteur (acomptes versés). À reclasser en 4191/4091.</p>
+          <p className="text-xs text-gray-500 mb-2">{t('cbil.gl_reversed_parties_help', locale)}</p>
           <div className="divide-y text-sm">
             {audit.tiers_inverses.slice(0, 5).map((tiers, i: number) => (
               <div key={i} className="flex justify-between py-1.5">
-                <span><span className="font-mono">{tiers.numero}</span> — {tiers.sens === 'client_crediteur' ? 'Client créditeur' : 'Fournisseur débiteur'}</span>
+                <span><span className="font-mono">{tiers.numero}</span> — {tiers.sens === 'client_crediteur' ? t('cbil.gl_client_creditor', locale) : t('cbil.gl_supplier_debtor', locale)}</span>
                 <span className="font-mono">{tiers.solde.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MUR</span>
               </div>
             ))}
@@ -838,13 +838,13 @@ function AuditPanel({ audit, locale }: { audit: AuditResult; locale: Locale }) {
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2 text-amber-700">
             <AlertTriangle className="h-4 w-4" />
-            Dates suspectes
+            {t('cbil.gl_suspect_dates', locale)}
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm space-y-2">
           {audit.ecritures_futures && audit.ecritures_futures.length > 0 && (
             <div>
-              <div className="font-medium text-amber-800 mb-1">Écritures dans le futur ({audit.ecritures_futures.length})</div>
+              <div className="font-medium text-amber-800 mb-1">{t('cbil.gl_future_entries', locale).replace('{n}', String(audit.ecritures_futures.length))}</div>
               <div className="divide-y text-xs">
                 {audit.ecritures_futures.slice(0, 5).map((e, i: number) => (
                   <div key={i} className="flex justify-between py-1 gap-2">
@@ -858,7 +858,7 @@ function AuditPanel({ audit, locale }: { audit: AuditResult; locale: Locale }) {
           )}
           {audit.ecritures_weekend_ferie && audit.ecritures_weekend_ferie > 0 ? (
             <div className="text-xs text-amber-800">
-              <span className="font-semibold">{audit.ecritures_weekend_ferie}</span> écriture(s) datée(s) sur un weekend ou jour férié.
+              <span className="font-semibold">{audit.ecritures_weekend_ferie}</span> {t('cbil.gl_weekend_entries', locale)}
             </div>
           ) : null}
         </CardContent>
@@ -869,10 +869,10 @@ function AuditPanel({ audit, locale }: { audit: AuditResult; locale: Locale }) {
     {audit.bulletins_orphelins !== undefined && audit.bulletins_orphelins > 0 && (
       <Card className="border-orange-200">
         <CardHeader>
-          <CardTitle className="text-sm text-orange-700">{audit.bulletins_orphelins} bulletin(s) de paie sans écritures</CardTitle>
+          <CardTitle className="text-sm text-orange-700">{t('cbil.gl_orphan_payslips', locale).replace('{n}', String(audit.bulletins_orphelins))}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-700">Ces bulletins sont marqués comptabilisés mais n'ont pas d'écritures correspondantes en DB. Régénère-les via la page Paie ou le bouton ci-dessous.</p>
+          <p className="text-sm text-gray-700">{t('cbil.gl_orphan_payslips_help', locale)}</p>
         </CardContent>
       </Card>
     )}
@@ -915,9 +915,9 @@ function EcrituresDetail({
           <Link
             href={`/client/ecritures?compte=${encodeURIComponent(compte)}`}
             className="text-[11px] underline text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
-            title="Ouvrir ces écritures sur la page d'édition (Modifier / Supprimer)"
+            title={t('cbil.gl_edit_link_title', locale)}
           >
-            ✏️ Modifier
+            {t('cbil.gl_edit_link', locale)}
           </Link>
         </div>
       </div>
